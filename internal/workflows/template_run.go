@@ -461,10 +461,7 @@ func (s *session) fetchSource() error {
 	// A clone of a large repository can outlast the default one-minute budget,
 	// so FetchSource gets a longer one of its own rather than raising the
 	// default for every other activity in the run.
-	ctx := workflow.WithActivityOptions(s.ctx, workflow.ActivityOptions{
-		StartToCloseTimeout: 3 * time.Minute,
-		RetryPolicy:         defaultRunRetryPolicy,
-	})
+	ctx := workflow.WithStartToCloseTimeout(s.ctx, 3*time.Minute)
 	var output domain.FetchSourceActivityOutput
 	if err := ExecuteStep(ctx, s.run, domain.TemplateRunStepFetchingSource, domain.FetchSourceActivityName, domain.FetchSourceActivityInput{
 		RunID:             s.run.input.RunID,
@@ -507,10 +504,7 @@ func (s *session) transferPlan(step domain.TemplateRunStep, activityName string,
 
 	// A saved plan can run to tens of megabytes, more than the default budget
 	// is sized for.
-	ctx := workflow.WithActivityOptions(s.ctx, workflow.ActivityOptions{
-		StartToCloseTimeout: 5 * time.Minute,
-		RetryPolicy:         defaultRunRetryPolicy,
-	})
+	ctx := workflow.WithStartToCloseTimeout(s.ctx, 5*time.Minute)
 	return ExecuteStep(ctx, s.run, step, activityName, domain.PlanArtifactActivityInput{
 		TenantID:      s.run.input.TenantID,
 		RunID:         s.run.input.RunID,
@@ -540,11 +534,9 @@ func (s *session) terraform(command domain.TerraformCommandType) (domain.RunTerr
 	// from one whose executor is gone: without it, a dead executor is
 	// indistinguishable from a slow apply until the whole Terraform timeout
 	// expires.
-	ctx := workflow.WithActivityOptions(s.ctx, workflow.ActivityOptions{
-		StartToCloseTimeout: s.run.terraformTimeout(),
-		HeartbeatTimeout:    domain.TerraformHeartbeatTimeout,
-		RetryPolicy:         terraformRetryPolicy,
-	})
+	ctx := workflow.WithStartToCloseTimeout(s.ctx, s.run.terraformTimeout())
+	ctx = workflow.WithHeartbeatTimeout(ctx, domain.TerraformHeartbeatTimeout)
+	ctx = workflow.WithRetryPolicy(ctx, *terraformRetryPolicy)
 	var output domain.RunTerraformActivityOutput
 	if err := ExecuteStep(ctx, s.run, terraformCommandSteps[command], domain.RunTerraformActivityName, domain.RunTerraformActivityInput{
 		RunID:             s.run.input.RunID,
