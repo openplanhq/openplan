@@ -24,7 +24,7 @@ func (repo *txRepo) AppendAuditEvent(ctx context.Context, event domain.SecurityA
 	return appendAuditEvent(ctx, repo.tx, event)
 }
 
-func (repo *txRepo) CreateTemplateRun(ctx context.Context, run domain.TemplateRun) error {
+func (repo *txRepo) CreateTemplateRun(ctx context.Context, run domain.TemplateRun) (int, error) {
 	return createTemplateRun(ctx, repo.tx, run)
 }
 
@@ -36,8 +36,8 @@ func (repo *txRepo) ApproveTemplateRun(ctx context.Context, approval domain.Temp
 	return approveTemplateRun(ctx, repo.tx, approval)
 }
 
-func (repo *txRepo) RequestTemplateRunCancellation(ctx context.Context, cancellation domain.TemplateRunCancellation) error {
-	return requestTemplateRunCancellation(ctx, repo.tx, cancellation)
+func (repo *txRepo) DiscardTemplateRun(ctx context.Context, discard domain.TemplateRunDiscard) (bool, error) {
+	return discardTemplateRun(ctx, repo.tx, discard)
 }
 
 // txEnqueuer enqueues inside the caller's transaction. This is the entire

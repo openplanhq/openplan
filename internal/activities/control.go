@@ -14,6 +14,28 @@ type ControlStore interface {
 	LogMetadataRecorder
 	CredentialReader
 	CredentialDecryptor
+	PlanKeyStore
+	PlanRecorder
+}
+
+// PlanKeyStore holds the key each run's saved plan is encrypted with.
+type PlanKeyStore interface {
+	// CreatePlanKey returns the run's plan key, making one if it has none.
+	CreatePlanKey(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) ([]byte, error)
+	// PlanKey returns the run's plan key, failing if it has none: once a run
+	// is terminal its key is gone, and nothing can open its saved plan.
+	PlanKey(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) ([]byte, error)
+}
+
+// PlanRecorder records the two steps between a run's plan and its apply.
+type PlanRecorder interface {
+	// FinishTemplatePlan records a finished plan and decides what follows it.
+	FinishTemplatePlan(ctx context.Context, input domain.FinishPlanActivityInput) (domain.PlanOutcome, error)
+	// BeginTemplateApply claims a run for its apply phase by moving it to
+	// running: an approved run, or with autoApprove a queued one. It reports
+	// true for a run it already claimed, so a retried claim is idempotent, and
+	// false when the run is no longer in a state this claim can take.
+	BeginTemplateApply(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, autoApprove bool) (bool, error)
 }
 
 // LogMetadataRecorder persists the metadata row for an uploaded phase log.
@@ -42,6 +64,23 @@ func NewControlActivities(store ControlStore, tokens GitHubTokenSource) *Control
 func (activities *ControlActivities) RecordTemplateRunStatus(ctx context.Context, input domain.TemplateRunStatusActivityInput) error {
 	if err := activities.store.RecordTemplateRunStatus(ctx, input); err != nil {
 		return fmt.Errorf("record template run status: %w", err)
+	}
+	return nil
+}
+
+// RecordTemplateRunStep records the step a running run has started.
+func (activities *ControlActivities) RecordTemplateRunStep(ctx context.Context, input domain.TemplateRunStepActivityInput) error {
+	if err := activities.store.RecordTemplateRunStep(ctx, input); err != nil {
+		return fmt.Errorf("record template run step: %w", err)
+	}
+	return nil
+}
+
+// RecordTemplateRunEvent records something a running run did to its stack
+// template: an apply that is now live, or a destroy starting or done.
+func (activities *ControlActivities) RecordTemplateRunEvent(ctx context.Context, input domain.TemplateRunEventActivityInput) error {
+	if err := activities.store.RecordTemplateRunEvent(ctx, input); err != nil {
+		return fmt.Errorf("record template run event: %w", err)
 	}
 	return nil
 }
@@ -93,4 +132,45 @@ func (activities *ControlActivities) SealSourceToken(ctx context.Context, input 
 		return domain.SealSourceTokenActivityOutput{}, fmt.Errorf("seal source token: %w", err)
 	}
 	return domain.SealSourceTokenActivityOutput{SealedToken: sealed, FetchHint: hint}, nil
+}
+
+// SealPlanKey seals the key a run's saved plan is encrypted with to the run's
+// key on the executor now holding it. The plan phase creates the key; the
+// apply phase, usually on another executor, gets the same key sealed to its
+// own run key.
+func (activities *ControlActivities) SealPlanKey(ctx context.Context, input domain.SealPlanKeyActivityInput) (domain.SealPlanKeyActivityOutput, error) {
+	var key []byte
+	var err error
+	if input.Create {
+		key, err = activities.store.CreatePlanKey(ctx, input.TenantID, input.RunID)
+	} else {
+		key, err = activities.store.PlanKey(ctx, input.TenantID, input.RunID)
+	}
+	if err != nil {
+		return domain.SealPlanKeyActivityOutput{}, fmt.Errorf("plan key: %w", err)
+	}
+	sealed, err := runseal.Seal(input.PublicKey, key)
+	if err != nil {
+		return domain.SealPlanKeyActivityOutput{}, fmt.Errorf("seal plan key: %w", err)
+	}
+	return domain.SealPlanKeyActivityOutput{SealedPlanKey: sealed}, nil
+}
+
+// FinishPlan records a finished plan and reports what follows: completion, a
+// wait for approval, or, for an auto-approved run, its apply.
+func (activities *ControlActivities) FinishPlan(ctx context.Context, input domain.FinishPlanActivityInput) (domain.PlanOutcome, error) {
+	outcome, err := activities.store.FinishTemplatePlan(ctx, input)
+	if err != nil {
+		return "", fmt.Errorf("finish plan: %w", err)
+	}
+	return outcome, nil
+}
+
+// BeginApply claims a run for its apply phase.
+func (activities *ControlActivities) BeginApply(ctx context.Context, input domain.BeginApplyActivityInput) (domain.BeginApplyActivityOutput, error) {
+	claimed, err := activities.store.BeginTemplateApply(ctx, input.TenantID, input.RunID, input.AutoApprove)
+	if err != nil {
+		return domain.BeginApplyActivityOutput{}, fmt.Errorf("begin apply: %w", err)
+	}
+	return domain.BeginApplyActivityOutput{Claimed: claimed}, nil
 }

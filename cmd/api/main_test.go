@@ -241,8 +241,9 @@ func TestRegisterControlRegistersWorkflowsAndControlActivities(t *testing.T) {
 	registerControl(worker, &recordingStore{}, nil)
 
 	wantWorkflows := map[string]bool{
-		domain.TemplateRunWorkflowName:  true,
-		domain.TemplateSyncWorkflowName: true,
+		domain.TemplatePlanWorkflowName:  true,
+		domain.TemplateApplyWorkflowName: true,
+		domain.TemplateSyncWorkflowName:  true,
 	}
 	if !reflect.DeepEqual(worker.workflows, wantWorkflows) {
 		t.Fatalf("workflows = %v, want %v", worker.workflows, wantWorkflows)
@@ -252,7 +253,13 @@ func TestRegisterControlRegistersWorkflowsAndControlActivities(t *testing.T) {
 		domain.RecordTemplateRunLogActivityName:             true,
 		domain.SealRunCredentialsActivityName:               true,
 		domain.SealSourceTokenActivityName:                  true,
+		domain.SealPlanKeyActivityName:                      true,
+		domain.FinishPlanActivityName:                       true,
+		domain.BeginApplyActivityName:                       true,
+		domain.RecordTemplateRunStepActivityName:            true,
+		domain.RecordTemplateRunEventActivityName:           true,
 		domain.RecordTemplateRegistrationStatusActivityName: true,
+		domain.RecordTemplateRegistrationStepActivityName:   true,
 		domain.SyncTemplateActivityName:                     true,
 	}
 	if !reflect.DeepEqual(worker.activities, wantActivities) {
@@ -268,8 +275,7 @@ func assertAPIQueueSpecs(t *testing.T, registry *queue.SpecRegistry) {
 	for _, kind := range []queue.Kind{
 		app.KindStartTemplateRun,
 		app.KindStartTemplateSync,
-		app.KindSignalRunApproval,
-		app.KindSignalRunCancellation,
+		app.KindStartTemplateApply,
 	} {
 		if _, ok := registry.Spec(kind); !ok {
 			t.Fatalf("queue spec registry missing %q", kind)
@@ -442,8 +448,8 @@ func TestRunMigratesRealPostgresWhenDSNIsSet(t *testing.T) {
 	// neither of which it asserts anything about. Everything it does assert,
 	// migrations and wiring, still runs against the real Postgres.
 	deps := defaultAPIDependencies()
-	deps.newAuthorization = func(_ context.Context, _ postgresPool, storeName string) (*authorization.Authorization, error) {
-		return authorization.NewWithDatastore(context.Background(), memory.New(), storeName)
+	deps.newAuthorization = func(ctx context.Context, _ postgresPool, storeName string) (*authorization.Authorization, error) {
+		return authorization.NewWithDatastore(ctx, memory.New(), storeName)
 	}
 	// Nor does it assert anything about Temporal, which it would otherwise need
 	// running. The queue loop still runs for real against Postgres.
@@ -796,8 +802,8 @@ func (recordingStore) ListTemplateRevisions(context.Context, domain.TenantID) ([
 	return nil, nil
 }
 
-func (recordingStore) CreateTemplateRun(context.Context, domain.TemplateRun) error {
-	return nil
+func (recordingStore) CreateTemplateRun(context.Context, domain.TemplateRun) (int, error) {
+	return 0, nil
 }
 
 func (recordingStore) CreateTemplateRegistration(context.Context, domain.TemplateRegistration) error {
@@ -808,8 +814,24 @@ func (recordingStore) ApproveTemplateRun(context.Context, domain.TemplateRunAppr
 	return nil
 }
 
-func (recordingStore) RequestTemplateRunCancellation(context.Context, domain.TemplateRunCancellation) error {
-	return nil
+func (recordingStore) DiscardTemplateRun(context.Context, domain.TemplateRunDiscard) (bool, error) {
+	return false, nil
+}
+
+func (recordingStore) CreatePlanKey(context.Context, domain.TenantID, domain.TemplateRunID) ([]byte, error) {
+	return nil, nil
+}
+
+func (recordingStore) PlanKey(context.Context, domain.TenantID, domain.TemplateRunID) ([]byte, error) {
+	return nil, nil
+}
+
+func (recordingStore) FinishTemplatePlan(context.Context, domain.FinishPlanActivityInput) (domain.PlanOutcome, error) {
+	return "", nil
+}
+
+func (recordingStore) BeginTemplateApply(context.Context, domain.TenantID, domain.TemplateRunID, bool) (bool, error) {
+	return false, nil
 }
 
 func (recordingStore) GetTemplateRun(context.Context, domain.TenantID, domain.TemplateRunID) (domain.TemplateRun, error) {
@@ -828,15 +850,23 @@ func (recordingStore) ListTemplateRunLogs(context.Context, domain.TenantID, doma
 	return nil, nil
 }
 
-func (recordingStore) ReconcileTemplateRunCancellation(context.Context, domain.TenantID, domain.TemplateRunID, string) error {
-	return nil
-}
-
 func (recordingStore) GetTemplateRegistration(context.Context, domain.TenantID, domain.TemplateRegistrationID) (domain.TemplateRegistration, error) {
 	return domain.TemplateRegistration{}, nil
 }
 
 func (recordingStore) RecordTemplateRegistrationStatus(context.Context, domain.TemplateRegistrationStatusActivityInput) error {
+	return nil
+}
+
+func (recordingStore) RecordTemplateRegistrationStep(context.Context, domain.TemplateRegistrationStepActivityInput) error {
+	return nil
+}
+
+func (recordingStore) RecordTemplateRunStep(context.Context, domain.TemplateRunStepActivityInput) error {
+	return nil
+}
+
+func (recordingStore) RecordTemplateRunEvent(context.Context, domain.TemplateRunEventActivityInput) error {
 	return nil
 }
 
@@ -1012,14 +1042,14 @@ type recordingControlWorker struct {
 	stopped    bool
 }
 
-func (worker *recordingControlWorker) RegisterWorkflowWithOptions(_ interface{}, options workflow.RegisterOptions) {
+func (worker *recordingControlWorker) RegisterWorkflowWithOptions(_ any, options workflow.RegisterOptions) {
 	if worker.workflows == nil {
 		worker.workflows = map[string]bool{}
 	}
 	worker.workflows[options.Name] = true
 }
 
-func (worker *recordingControlWorker) RegisterActivityWithOptions(_ interface{}, options activity.RegisterOptions) {
+func (worker *recordingControlWorker) RegisterActivityWithOptions(_ any, options activity.RegisterOptions) {
 	if worker.activities == nil {
 		worker.activities = map[string]bool{}
 	}
@@ -1054,11 +1084,7 @@ func (recordingAPIDispatcher) StartTemplateSync(context.Context, domain.Template
 	return nil
 }
 
-func (recordingAPIDispatcher) ApproveTemplateRun(context.Context, domain.TenantID, domain.TemplateRunID, domain.ApprovalSignal) error {
-	return nil
-}
-
-func (recordingAPIDispatcher) CancelTemplateRun(context.Context, domain.TenantID, domain.TemplateRunID, domain.CancelSignal) error {
+func (recordingAPIDispatcher) StartTemplateApply(context.Context, domain.TemplateRunWorkflowInput) error {
 	return nil
 }
 
@@ -1099,7 +1125,7 @@ func TestRunStopsControlPlaneWhenContextIsCanceled(t *testing.T) {
 	// account through OpenFGA first, and a context cancelled mid-seed fails the
 	// run rather than shutting it down.
 	serving := make(chan struct{})
-	deps.apiDependencies.listenAndServe = func(ctx context.Context, address string, handler http.Handler) error {
+	deps.listenAndServe = func(ctx context.Context, address string, handler http.Handler) error {
 		close(serving)
 		return listenAndServe(ctx, address, handler)
 	}

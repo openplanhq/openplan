@@ -227,8 +227,8 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	// Template run decision routes.
 	// Records approval for a waiting template run.
 	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/template-runs/{run_id}/approval", server.handleApproveRun)
-	// Requests cancellation for a running template run.
-	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/template-runs/{run_id}/cancellation", server.handleCancelRun)
+	// Discards a template run's plan waiting for approval.
+	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/template-runs/{run_id}/discard", server.handleDiscardRun)
 	server.handler = server.mux
 	return server
 }
@@ -302,7 +302,7 @@ func (server *Server) now() time.Time {
 
 func (server *Server) debugf(format string, args ...any) {
 	if server.debug {
-		log.Printf("[DEBUG] "+format, args...)
+		log.Printf("[DEBUG] "+format, args...) //nolint:gosec // callers pass constant formats
 	}
 }
 
@@ -355,21 +355,21 @@ func (server *Server) handleSearchUsers(response http.ResponseWriter, request *h
 		first = v
 	}
 
-	max := 20
+	limit := 20
 	if raw := request.URL.Query().Get("max"); raw != "" {
 		v, err := strconv.Atoi(raw)
 		if err != nil || v < 1 || v > 50 {
 			writeError(response, http.StatusBadRequest, "invalid_request", "max must be an integer between 1 and 50")
 			return
 		}
-		max = v
+		limit = v
 	}
 
 	users, err := server.service.SearchUsers(request.Context(), app.SearchUsersCommand{
 		TenantID: domain.TenantID(request.PathValue("tenant_id")),
 		Query:    q,
 		First:    first,
-		Max:      max,
+		Max:      limit,
 	})
 	if err != nil {
 		server.debugf("handleSearchUsers error: %v", err)
@@ -380,7 +380,7 @@ func (server *Server) handleSearchUsers(response http.ResponseWriter, request *h
 	writeJSON(response, http.StatusOK, searchUsersResponse{
 		Users: users,
 		First: first,
-		Max:   max,
+		Max:   limit,
 	})
 }
 
@@ -472,7 +472,7 @@ func (server *Server) handleCreateStack(response http.ResponseWriter, request *h
 		return
 	}
 
-	caps, err := app.ResolveStackCapabilities(request.Context(), server.service.Authorization, domain.StackID(stack.ID))
+	caps, err := app.ResolveStackCapabilities(request.Context(), server.service.Authorization, stack.ID)
 	if err != nil {
 		writeAppError(response, err)
 		return
@@ -553,6 +553,8 @@ func (server *Server) handleListStackCredentials(response http.ResponseWriter, r
 }
 
 // handleDeleteStackCredential deletes one Stack-scoped credential after authorization.
+//
+//nolint:dupl // Stack and stack-template scopes stay separate handlers, like their routes.
 func (server *Server) handleDeleteStackCredential(response http.ResponseWriter, request *http.Request) {
 	server.debugf("credential delete request scope=stack tenant_id=%s stack_id=%s credential_id=%s", request.PathValue("tenant_id"), request.PathValue("stack_id"), request.PathValue("credential_id"))
 	err := server.service.DeleteCredential(request.Context(), app.DeleteCredentialCommand{
@@ -605,6 +607,8 @@ func (server *Server) handleListStackTemplateCredentials(response http.ResponseW
 }
 
 // handleDeleteStackTemplateCredential deletes one StackTemplate-scoped credential after authorization.
+//
+//nolint:dupl // Stack and stack-template scopes stay separate handlers, like their routes.
 func (server *Server) handleDeleteStackTemplateCredential(response http.ResponseWriter, request *http.Request) {
 	server.debugf("credential delete request scope=stack_template tenant_id=%s stack_template_id=%s credential_id=%s", request.PathValue("tenant_id"), request.PathValue("stack_template_id"), request.PathValue("credential_id"))
 	err := server.service.DeleteCredential(request.Context(), app.DeleteCredentialCommand{
@@ -709,6 +713,7 @@ func (server *Server) handleStartTemplateRun(response http.ResponseWriter, reque
 		TenantID:        domain.TenantID(request.PathValue("tenant_id")),
 		StackTemplateID: domain.StackTemplateID(request.PathValue("stack_template_id")),
 		Operation:       domain.OperationType(body.Operation),
+		AutoApprove:     body.AutoApprove,
 	})
 	if err != nil {
 		writeAppError(response, err)
@@ -791,13 +796,13 @@ func (server *Server) handleApproveRun(response http.ResponseWriter, request *ht
 	response.WriteHeader(http.StatusNoContent)
 }
 
-func (server *Server) handleCancelRun(response http.ResponseWriter, request *http.Request) {
-	var body cancelRunRequest
+func (server *Server) handleDiscardRun(response http.ResponseWriter, request *http.Request) {
+	var body discardRunRequest
 	if !decodeRequestBody(response, request, &body) {
 		return
 	}
 
-	err := server.service.CancelRun(request.Context(), app.CancelRunCommand{
+	err := server.service.DiscardRun(request.Context(), app.DiscardRunCommand{
 		TenantID: domain.TenantID(request.PathValue("tenant_id")),
 		RunID:    domain.TemplateRunID(request.PathValue("run_id")),
 		Reason:   body.Reason,
@@ -853,6 +858,10 @@ type upgradeStackTemplateRequest struct {
 
 type startTemplateRunRequest struct {
 	Operation string `json:"operation"`
+	// AutoApprove applies straight away, with no saved plan and no approval.
+	// Only an apply run takes it, and it needs approve access on the stack as
+	// well as operate access.
+	AutoApprove bool `json:"auto_approve"`
 }
 
 type credentialRequest struct {
@@ -863,7 +872,7 @@ type credentialRequest struct {
 
 type approveRunRequest struct{}
 
-type cancelRunRequest struct {
+type discardRunRequest struct {
 	Reason string `json:"reason"`
 }
 
@@ -907,8 +916,8 @@ type stackTemplateResponse struct {
 	Config           map[string]any `json:"config"`
 	LastAppliedRunID string         `json:"last_applied_run_id"`
 	LastAppliedAt    string         `json:"last_applied_at,omitempty"`
-	LastPlannedRunID string         `json:"last_planned_run_id"`
-	LastPlannedAt    string         `json:"last_planned_at,omitempty"`
+	PendingPlanRunID string         `json:"pending_plan_run_id"`
+	PendingPlanAt    string         `json:"pending_plan_at,omitempty"`
 	// PlanState and LiveState are the two derived comparisons. The snapshot
 	// configs they are derived from are deliberately not returned: the client
 	// re-deriving the comparison is the mistake this replaced.
@@ -997,7 +1006,7 @@ func newStackTemplateResponse(view app.StackTemplateView) stackTemplateResponse 
 		DisplayName:                   view.DisplayName,
 		Config:                        config,
 		LastAppliedRunID:              string(stackTemplate.LastAppliedRunID),
-		LastPlannedRunID:              string(stackTemplate.LastPlannedRunID),
+		PendingPlanRunID:              string(stackTemplate.PendingPlanRunID),
 		PlanState:                     string(stackTemplate.PlanState()),
 		LiveState:                     string(stackTemplate.LiveState()),
 		CreatedBy:                     string(stackTemplate.CreatedBy),
@@ -1006,8 +1015,8 @@ func newStackTemplateResponse(view app.StackTemplateView) stackTemplateResponse 
 	if !stackTemplate.LastAppliedAt.IsZero() {
 		response.LastAppliedAt = stackTemplate.LastAppliedAt.Format(time.RFC3339Nano)
 	}
-	if !stackTemplate.LastPlannedAt.IsZero() {
-		response.LastPlannedAt = stackTemplate.LastPlannedAt.Format(time.RFC3339Nano)
+	if !stackTemplate.PendingPlanAt.IsZero() {
+		response.PendingPlanAt = stackTemplate.PendingPlanAt.Format(time.RFC3339Nano)
 	}
 	return response
 }
@@ -1091,13 +1100,13 @@ func writeAppError(response http.ResponseWriter, err error) {
 	case errors.Is(err, app.ErrStackTemplatePlanStale):
 		writeError(response, http.StatusConflict, "plan_stale", err.Error())
 	// Its own code, because the client can act on this one too: the run it is
-	// competing with is visible, so it can wait for it or cancel it. It also tells
+	// competing with is visible, so it can wait for it or discard it. It also tells
 	// the client its view of the run history is stale and worth refetching.
 	case errors.Is(err, app.ErrTemplateRunInFlight):
 		writeError(response, http.StatusConflict, "run_in_flight", err.Error())
 	case errors.Is(err, app.ErrStackTemplateNotRunnable),
 		errors.Is(err, app.ErrRunNotApprovable),
-		errors.Is(err, app.ErrRunNotCancelable),
+		errors.Is(err, app.ErrRunNotDiscardable),
 		errors.Is(err, app.ErrDuplicateStackSlug),
 		errors.Is(err, app.ErrTemplateNotInstallable),
 		errors.Is(err, app.ErrStackTemplateConfigInvalid),
@@ -1118,7 +1127,8 @@ func writeAppError(response http.ResponseWriter, err error) {
 func writeJSON(response http.ResponseWriter, status int, body any) {
 	response.Header().Set("Content-Type", "application/json")
 	response.WriteHeader(status)
-	_ = json.NewEncoder(response).Encode(body)
+	// The status is already sent, so a failed encode has no one left to tell.
+	_ = json.NewEncoder(response).Encode(body) //nolint:errchkjson // see above
 }
 
 func writeError(response http.ResponseWriter, status int, code string, message string) {

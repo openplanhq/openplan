@@ -13,35 +13,41 @@ export type TemplateRevisionStatus =
   | "active"
   | "invalid";
 
+// A run's lifecycle state. What a running run is doing is its step.
 export type TemplateRunStatus =
   | "queued"
-  | "locked"
-  | "workspace_prepared"
-  | "source_fetched"
-  | "workspace_selected"
+  | "running"
   | "waiting_approval"
   | "approved"
-  | "cancel_requested"
-  | "canceling"
-  | "canceled"
-  | "lock_released"
   | "completed"
   | "failed"
-  | "init_started"
-  | "init_finished"
-  | "plan_started"
-  | "plan_finished"
-  | "apply_started"
-  | "apply_finished"
-  | "destroy_started"
-  | "destroy_finished";
+  | "canceled";
 
+// What a run is doing, or, once it ended, what it was doing last. Nothing
+// about what the run may do next depends on it.
+export type TemplateRunStep =
+  | "waiting_for_executor"
+  | "preparing_workspace"
+  | "fetching_source"
+  | "restoring_plan"
+  | "initializing"
+  | "selecting_workspace"
+  | "planning"
+  | "saving_plan"
+  | "applying";
+
+// "apply" survives only on runs from before saved plans; a run is started as a
+// plan or a destroy, and approving its plan is what applies it.
 export type Operation = "plan" | "apply" | "destroy";
 
 export interface ApiErrorBody {
   error: string;
   message: string;
 }
+
+// What a sync is doing, or, once it ended, what it was doing last. Nothing
+// about what the registration may do next depends on it.
+export type TemplateRegistrationStep = "syncing";
 
 export interface TemplateRegistration {
   id: string;
@@ -51,6 +57,8 @@ export interface TemplateRegistration {
   source_ref: string;
   root_path: string;
   status: TemplateRegistrationStatus;
+  // Empty until the sync starts its first step.
+  step: TemplateRegistrationStep | "";
   template_revision_id: string;
   resolved_commit_sha: string;
   requested_by: string;
@@ -114,8 +122,8 @@ export interface StackTemplate {
   config: Record<string, unknown>;
   last_applied_run_id: string;
   last_applied_at?: string;
-  last_planned_run_id: string;
-  last_planned_at?: string;
+  pending_plan_run_id: string;
+  pending_plan_at?: string;
   plan_state: PlanState;
   live_state: LiveState;
   created_by: string;
@@ -143,6 +151,12 @@ export interface CredentialMetadata {
   created_at: string;
 }
 
+export interface PlanSummary {
+  add: number;
+  change: number;
+  destroy: number;
+}
+
 export interface TemplateRun {
   id: string;
   tenant_id: string;
@@ -157,10 +171,20 @@ export interface TemplateRun {
   backend_type: string;
   backend_config_hash: string;
   status: TemplateRunStatus;
+  // Empty until the run starts its first step.
+  step: TemplateRunStep | "";
   trigger_actor: string;
   started_at: string;
   completed_at?: string;
   error_summary: string;
+  // Counts runs within one stack template, from 1. Shown as "Run #N".
+  run_number: number;
+  // An apply run that applies straight away, with no saved plan and no
+  // approval.
+  auto_approve: boolean;
+  // What the plan would change, or, for an auto-approved apply, what it
+  // changed. Null until a plan with changes, or the apply, finishes.
+  plan_summary: PlanSummary | null;
 }
 
 export interface TemplateRunLog {

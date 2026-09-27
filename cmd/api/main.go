@@ -64,12 +64,11 @@ type controlStore interface {
 	queue.Enqueuer
 	activities.ControlStore
 	activities.TemplateSyncStore
-	app.TemplateRunCancellationReconciler
 }
 
 type temporalWorker interface {
-	RegisterWorkflowWithOptions(interface{}, workflow.RegisterOptions)
-	RegisterActivityWithOptions(interface{}, activity.RegisterOptions)
+	RegisterWorkflowWithOptions(any, workflow.RegisterOptions)
+	RegisterActivityWithOptions(any, activity.RegisterOptions)
 	Start() error
 	Stop()
 }
@@ -161,9 +160,9 @@ func sessionStore(store appRepositories) (authn.SessionStore, error) {
 
 func main() {
 	ctx, stop := shutdownContext()
-	defer stop()
-
-	if err := run(ctx, os.Getenv); err != nil {
+	err := run(ctx, os.Getenv)
+	stop()
+	if err != nil {
 		writeStartupError(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -245,7 +244,7 @@ func defaultAPIDependencies() apiDependencies {
 			return temporal.NewDispatcher(temporalClient, options)
 		},
 		newQueueController: func(store controlStore, dispatcher app.WorkflowDispatcher) (queueController, error) {
-			registry, err := app.NewQueueRegistry(dispatcher, store)
+			registry, err := app.NewQueueRegistry(dispatcher)
 			if err != nil {
 				return nil, err
 			}
@@ -256,8 +255,11 @@ func defaultAPIDependencies() apiDependencies {
 }
 
 func registerControl(worker temporalWorker, store controlStore, gitHubTokens activities.GitHubTokenSource) {
-	worker.RegisterWorkflowWithOptions(workflows.TemplateRunWorkflow, workflow.RegisterOptions{
-		Name: domain.TemplateRunWorkflowName,
+	worker.RegisterWorkflowWithOptions(workflows.TemplatePlanWorkflow, workflow.RegisterOptions{
+		Name: domain.TemplatePlanWorkflowName,
+	})
+	worker.RegisterWorkflowWithOptions(workflows.TemplateApplyWorkflow, workflow.RegisterOptions{
+		Name: domain.TemplateApplyWorkflowName,
 	})
 	worker.RegisterWorkflowWithOptions(workflows.TemplateSyncWorkflow, workflow.RegisterOptions{
 		Name: domain.TemplateSyncWorkflowName,
@@ -266,6 +268,12 @@ func registerControl(worker temporalWorker, store controlStore, gitHubTokens act
 	control := activities.NewControlActivities(store, gitHubTokens)
 	worker.RegisterActivityWithOptions(control.RecordTemplateRunStatus, activity.RegisterOptions{
 		Name: domain.RecordTemplateRunStatusActivityName,
+	})
+	worker.RegisterActivityWithOptions(control.RecordTemplateRunStep, activity.RegisterOptions{
+		Name: domain.RecordTemplateRunStepActivityName,
+	})
+	worker.RegisterActivityWithOptions(control.RecordTemplateRunEvent, activity.RegisterOptions{
+		Name: domain.RecordTemplateRunEventActivityName,
 	})
 	worker.RegisterActivityWithOptions(control.RecordTemplateRunLog, activity.RegisterOptions{
 		Name: domain.RecordTemplateRunLogActivityName,
@@ -276,10 +284,22 @@ func registerControl(worker temporalWorker, store controlStore, gitHubTokens act
 	worker.RegisterActivityWithOptions(control.SealSourceToken, activity.RegisterOptions{
 		Name: domain.SealSourceTokenActivityName,
 	})
+	worker.RegisterActivityWithOptions(control.SealPlanKey, activity.RegisterOptions{
+		Name: domain.SealPlanKeyActivityName,
+	})
+	worker.RegisterActivityWithOptions(control.FinishPlan, activity.RegisterOptions{
+		Name: domain.FinishPlanActivityName,
+	})
+	worker.RegisterActivityWithOptions(control.BeginApply, activity.RegisterOptions{
+		Name: domain.BeginApplyActivityName,
+	})
 
 	sync := activities.NewTemplateSyncActivities(store, activities.WithTemplateSyncTokenSource(gitHubTokens))
 	worker.RegisterActivityWithOptions(sync.RecordTemplateRegistrationStatus, activity.RegisterOptions{
 		Name: domain.RecordTemplateRegistrationStatusActivityName,
+	})
+	worker.RegisterActivityWithOptions(sync.RecordTemplateRegistrationStep, activity.RegisterOptions{
+		Name: domain.RecordTemplateRegistrationStepActivityName,
 	})
 	worker.RegisterActivityWithOptions(sync.SyncTemplate, activity.RegisterOptions{
 		Name: domain.SyncTemplateActivityName,
@@ -318,7 +338,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 		if err != nil {
 			return fmt.Errorf("create token verifier: %w", err)
 		}
-		defer oidcVerifier.Close(context.Background())
+		defer oidcVerifier.Close(context.WithoutCancel(ctx))
 		verifier, logoutTokenVerifier = oidcVerifier, oidcVerifier
 
 		oidcFlow, err := authn.NewFlow(authn.FlowConfig{
@@ -541,7 +561,8 @@ func startControlPlane(ctx context.Context, cfg config.APIConfig, deps apiDepend
 }
 
 func listenAndServe(ctx context.Context, address string, handler http.Handler) error {
-	listener, err := net.Listen("tcp", address)
+	var listenConfig net.ListenConfig
+	listener, err := listenConfig.Listen(ctx, "tcp", address)
 	if err != nil {
 		return err
 	}
@@ -549,11 +570,15 @@ func listenAndServe(ctx context.Context, address string, handler http.Handler) e
 
 	server := &http.Server{
 		Handler: handler,
+		// Bounds how long a client may take to send its headers, so slow
+		// clients cannot hold connections open indefinitely.
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	go func() {
 		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		// ctx is already done here; shutdown needs a live context of its own.
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
 		_ = server.Shutdown(shutdownCtx)
 	}()

@@ -24,7 +24,6 @@ func TestOperationTypeValid(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -48,7 +47,6 @@ func TestIDValid(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -70,7 +68,6 @@ func TestTemplateRevisionStatusValid(t *testing.T) {
 	}
 
 	for _, status := range validStatuses {
-		status := status
 		t.Run(string(status), func(t *testing.T) {
 			t.Parallel()
 
@@ -97,7 +94,6 @@ func TestTemplateRegistrationStatusValid(t *testing.T) {
 	}
 
 	for _, status := range validStatuses {
-		status := status
 		t.Run(string(status), func(t *testing.T) {
 			t.Parallel()
 
@@ -136,7 +132,6 @@ func TestTemplateRunStatusValid(t *testing.T) {
 	}
 
 	for _, status := range AllTemplateRunStatuses {
-		status := status
 		t.Run(string(status), func(t *testing.T) {
 			t.Parallel()
 
@@ -212,7 +207,6 @@ func TestTemplateRunStatusTerminal(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -246,8 +240,8 @@ func TestStackTemplateWorkspaceStable(t *testing.T) {
 func TestWorkflowNames(t *testing.T) {
 	t.Parallel()
 
-	if TemplateRunWorkflowName != "TemplateRunWorkflow" {
-		t.Fatalf("TemplateRunWorkflowName = %q", TemplateRunWorkflowName)
+	if TemplatePlanWorkflowName != "TemplatePlanWorkflow" {
+		t.Fatalf("TemplatePlanWorkflowName = %q", TemplatePlanWorkflowName)
 	}
 
 	if TemplateSyncWorkflowName != "TemplateSyncWorkflow" {
@@ -282,7 +276,7 @@ func TestTemplateRunWorkflowInputUsesTraitTypes(t *testing.T) {
 		RunID:           TemplateRunID("run_123"),
 		TenantID:        TenantID("tenant_123"),
 		StackTemplateID: StackTemplateID("stack_template_123"),
-		Operation:       OperationApply,
+		Operation:       OperationDestroy,
 		SelectedRef:     "main",
 		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
 		RepoOwner:       "acme",
@@ -290,8 +284,8 @@ func TestTemplateRunWorkflowInputUsesTraitTypes(t *testing.T) {
 		RootPath:        "modules/vpc",
 	}
 
-	if input.Operation != OperationApply {
-		t.Fatalf("Operation = %q, want %q", input.Operation, OperationApply)
+	if input.Operation != OperationDestroy {
+		t.Fatalf("Operation = %q, want %q", input.Operation, OperationDestroy)
 	}
 
 	if input.WorkspaceName == "" {
@@ -327,14 +321,32 @@ func templateRegistrationID(id string) TemplateRegistrationID {
 	return TemplateRegistrationID(id)
 }
 
-func TestSignalNames(t *testing.T) {
+func TestTemplateRunStepValid(t *testing.T) {
 	t.Parallel()
 
-	if ApprovalSignalName != "approval" {
-		t.Fatalf("ApprovalSignalName = %q", ApprovalSignalName)
+	for _, step := range AllTemplateRunSteps {
+		if !step.Valid() {
+			t.Errorf("%q is listed but not valid", step)
+		}
 	}
+	for _, step := range []TemplateRunStep{"", "cloning", "plan_started"} {
+		if step.Valid() {
+			t.Errorf("%q is valid, want invalid", step)
+		}
+	}
+}
 
-	if CancelSignalName != "cancel" {
-		t.Fatalf("CancelSignalName = %q", CancelSignalName)
+func TestTemplateRegistrationStepValid(t *testing.T) {
+	t.Parallel()
+
+	for _, step := range AllTemplateRegistrationSteps {
+		if !step.Valid() {
+			t.Errorf("%q is listed but not valid", step)
+		}
+	}
+	for _, step := range []TemplateRegistrationStep{"", "cloning", "running"} {
+		if step.Valid() {
+			t.Errorf("%q is valid, want invalid", step)
+		}
 	}
 }
