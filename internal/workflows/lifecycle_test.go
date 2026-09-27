@@ -5,25 +5,30 @@ import (
 	"go/parser"
 	"go/token"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
 
-// statusWriters are the activities that write a status, each with the one
-// function allowed to schedule it. BeginApply and FinishPlan are here because
-// they move a run's status as part of their own work.
-var statusWriters = map[string]string{
-	"RecordTemplateRunStatusActivityName":          "(*run).lifecycle",
-	"BeginApplyActivityName":                       "(*run).lifecycle",
-	"FinishPlanActivityName":                       "(*run).lifecycle",
-	"RecordTemplateRegistrationStatusActivityName": "(*registration).lifecycle",
+// statusWriters are the activities that write a status, and the helpers that
+// schedule one, each with the functions allowed to name it. BeginApply and
+// FinishPlan are here because they move a run's status as part of their own
+// work; setStatus and failOnError because they write it for the run's two
+// lifecycles.
+var statusWriters = map[string][]string{
+	"RecordTemplateRunStatusActivityName":          {"(*run).setStatus"},
+	"setStatus":                                    {"(*planWorkflow).lifecycle", "(*applyWorkflow).lifecycle", "(*run).failOnError"},
+	"failOnError":                                  {"(*planWorkflow).lifecycle", "(*applyWorkflow).lifecycle"},
+	"BeginApplyActivityName":                       {"(*applyWorkflow).lifecycle"},
+	"FinishPlanActivityName":                       {"(*planWorkflow).lifecycle"},
+	"RecordTemplateRegistrationStatusActivityName": {"(*registration).lifecycle"},
 }
 
-// TestOnlyLifecycleWritesStatus pins that a workflow's status is written in one
-// place: every activity that writes it is named only in its lifecycle, so
-// reading lifecycle is reading every status change. It also fails when a
-// guarded name appears nowhere, so a renamed activity cannot leave it passing
-// while guarding nothing.
+// TestOnlyLifecycleWritesStatus pins that a workflow's status is written in
+// its lifecycles: every activity that writes it is named only there, or in a
+// helper only they call, so reading the lifecycles is reading every status
+// change. It also fails when a guarded name appears nowhere, so a renamed
+// activity cannot leave it passing while guarding nothing.
 func TestOnlyLifecycleWritesStatus(t *testing.T) {
 	t.Parallel()
 
@@ -56,8 +61,8 @@ func TestOnlyLifecycleWritesStatus(t *testing.T) {
 					return true
 				}
 				seen[sel.Sel.Name] = true
-				if owner != want {
-					t.Errorf("%s: %s names %s; only %s may write status", fset.Position(sel.Pos()), owner, sel.Sel.Name, want)
+				if !slices.Contains(want, owner) {
+					t.Errorf("%s: %s names %s; only %v may write status", fset.Position(sel.Pos()), owner, sel.Sel.Name, want)
 				}
 				return true
 			})
@@ -70,8 +75,8 @@ func TestOnlyLifecycleWritesStatus(t *testing.T) {
 	}
 }
 
-// funcName names a function as the guard reports it: (*run).lifecycle for a
-// method, lifecycle for a function.
+// funcName names a function as the guard reports it: (*planWorkflow).lifecycle
+// for a method, lifecycle for a function.
 func funcName(fn *ast.FuncDecl) string {
 	if fn.Recv == nil || len(fn.Recv.List) == 0 {
 		return fn.Name.Name
