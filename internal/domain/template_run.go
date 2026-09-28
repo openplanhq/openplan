@@ -175,6 +175,45 @@ const (
 	TemplateRunDestroyed TemplateRunEvent = "destroyed"
 )
 
+// TemplateRunExecutionStatus is where one workflow execution of a run, or one
+// step of it, stands: running, or finished one way or the other.
+type TemplateRunExecutionStatus string
+
+const (
+	TemplateRunExecutionRunning   TemplateRunExecutionStatus = "running"
+	TemplateRunExecutionSucceeded TemplateRunExecutionStatus = "succeeded"
+	TemplateRunExecutionFailed    TemplateRunExecutionStatus = "failed"
+)
+
+// TemplateRunWorkflowExecution is one workflow that carried a run: its plan,
+// or its apply. An approved apply run has both; a plan run and an
+// auto-approved apply run have one.
+type TemplateRunWorkflowExecution struct {
+	Phase      RunPhase `json:"phase"`
+	WorkflowID string   `json:"workflow_id"`
+	// Actor is who started this execution: the run's requester for a plan or
+	// an auto-approved apply, and its approver for an approved apply.
+	Actor  UserID                     `json:"actor"`
+	Status TemplateRunExecutionStatus `json:"status"`
+	// FinishedAt reads as the zero time while the execution runs.
+	StartedAt    time.Time `json:"started_at"`
+	FinishedAt   time.Time `json:"finished_at"`
+	ErrorSummary string    `json:"error_summary"`
+	// Summary is what a plan would change, or what an apply did. Nil for a
+	// plan with no changes, and until it is known.
+	Summary *PlanSummary               `json:"summary"`
+	Steps   []TemplateRunStepExecution `json:"steps"`
+}
+
+// TemplateRunStepExecution is one step a workflow execution ran. A step runs
+// until the next one starts, or until its execution ends.
+type TemplateRunStepExecution struct {
+	Step       TemplateRunStep            `json:"step"`
+	Status     TemplateRunExecutionStatus `json:"status"`
+	StartedAt  time.Time                  `json:"started_at"`
+	FinishedAt time.Time                  `json:"finished_at"`
+}
+
 // TemplateRun is one Terraform operation against a StackTemplate.
 type TemplateRun struct {
 	ID                 TemplateRunID      `json:"id"`
@@ -191,21 +230,32 @@ type TemplateRun struct {
 	BackendConfigHash  string             `json:"backend_config_hash"`
 	Status             TemplateRunStatus  `json:"status"`
 	// Step is what the run is doing, or, once it ended, what it was doing
-	// last. Empty until the run starts its first step.
+	// last: the latest step of the workflow execution that started last.
+	// Empty until that execution starts a step.
 	Step         TemplateRunStep `json:"step"`
 	TriggerActor UserID          `json:"trigger_actor"`
-	StartedAt    time.Time       `json:"started_at"`
-	CompletedAt  time.Time       `json:"completed_at"`
-	ErrorSummary string          `json:"error_summary"`
+	// CreatedAt is when the run was requested. When work started is its
+	// executions' StartedAt.
+	CreatedAt   time.Time `json:"created_at"`
+	CompletedAt time.Time `json:"completed_at"`
+	// ErrorSummary is why the run failed: its failed workflow execution's
+	// error. Empty otherwise.
+	ErrorSummary string `json:"error_summary"`
 	// RunNumber counts runs within one stack template, from 1. It is what
 	// people see and what URLs carry; ID stays the identity everywhere else.
 	RunNumber int `json:"run_number"`
 	// AutoApprove means the trigger actor asked an apply run to apply straight
 	// away, with no saved plan and without waiting for anyone to approve it.
 	AutoApprove bool `json:"auto_approve"`
-	// PlanSummary is what the saved plan would change. Nil until a plan with
-	// changes has finished.
+	// PlanSummary is what the plan would change, from the run's plan
+	// execution, or, for an auto-approved apply, which has no plan, what the
+	// apply changed. Nil until known, and for a plan with no changes.
 	PlanSummary *PlanSummary `json:"plan_summary"`
+	// Executions are the workflows that carried the run, in the order they
+	// started, each with its steps. Only a read of one run fills them, empty
+	// for a run no workflow has carried yet; a list leaves them nil, which
+	// omits the field.
+	Executions []TemplateRunWorkflowExecution `json:"executions,omitzero"`
 }
 
 // TemplateRunLog records the object-store location for one run phase log.

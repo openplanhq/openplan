@@ -227,7 +227,7 @@ func TestApplyClaimAndDiscardExcludeEachOther(t *testing.T) {
 
 	// Claimed first: there is no plan left to discard.
 	seedPlanRun(t, ctx, pool, "run_claimed", domain.OperationApply, domain.TemplateRunApproved)
-	claimed, err := store.BeginTemplateApply(ctx, "tenant_123", "run_claimed", false)
+	claimed, err := store.BeginTemplateApply(ctx, "tenant_123", "run_claimed", false, "template-run/tenant_123/run_claimed/apply")
 	if err != nil || !claimed {
 		t.Fatalf("BeginTemplateApply = %v, %v; want claimed", claimed, err)
 	}
@@ -251,7 +251,7 @@ func TestApplyClaimAndDiscardExcludeEachOther(t *testing.T) {
 	if err != nil || !discarded {
 		t.Fatalf("discard before claim = %v, %v; want discarded", discarded, err)
 	}
-	claimed, err = store.BeginTemplateApply(ctx, "tenant_123", "run_canceled", false)
+	claimed, err = store.BeginTemplateApply(ctx, "tenant_123", "run_canceled", false, "template-run/tenant_123/run_canceled/apply")
 	if err != nil || claimed {
 		t.Fatalf("BeginTemplateApply after discard = %v, %v; want not claimed", claimed, err)
 	}
@@ -294,10 +294,10 @@ func TestAutoApprovedApplyIsClaimedFromQueued(t *testing.T) {
 	seedStackWithTemplate(t, ctx, store)
 
 	seedAutoApprovedRun(t, ctx, pool, "run_auto", domain.TemplateRunQueued)
-	if claimed, err := store.BeginTemplateApply(ctx, "tenant_123", "run_auto", false); err != nil || claimed {
+	if claimed, err := store.BeginTemplateApply(ctx, "tenant_123", "run_auto", false, "template-run/tenant_123/run_auto/apply"); err != nil || claimed {
 		t.Fatalf("approved claim of an auto-approved run = %v, %v; want not claimed", claimed, err)
 	}
-	if claimed, err := store.BeginTemplateApply(ctx, "tenant_123", "run_auto", true); err != nil || !claimed {
+	if claimed, err := store.BeginTemplateApply(ctx, "tenant_123", "run_auto", true, "template-run/tenant_123/run_auto/apply"); err != nil || !claimed {
 		t.Fatalf("BeginTemplateApply = %v, %v; want claimed", claimed, err)
 	}
 	if runStatus(t, ctx, pool, "run_auto") != domain.TemplateRunRunning {
@@ -308,7 +308,7 @@ func TestAutoApprovedApplyIsClaimedFromQueued(t *testing.T) {
 	}
 
 	seedPlanRun(t, ctx, pool, "run_approved", domain.OperationApply, domain.TemplateRunApproved)
-	if claimed, err := store.BeginTemplateApply(ctx, "tenant_123", "run_approved", true); err != nil || claimed {
+	if claimed, err := store.BeginTemplateApply(ctx, "tenant_123", "run_approved", true, "template-run/tenant_123/run_approved/apply"); err != nil || claimed {
 		t.Fatalf("auto-approved claim of an approved run = %v, %v; want not claimed", claimed, err)
 	}
 }
@@ -331,9 +331,12 @@ func TestTerminalRunsDropTheirPlanKeyAndPendingPlan(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	// Approved, then its apply workflow fails before it claims the run.
+	approve(t, ctx, store, "run_123")
 
 	if err := store.RecordTemplateRunStatus(ctx, domain.TemplateRunStatusActivityInput{
 		TenantID: "tenant_123", RunID: "run_123", StackTemplateID: "stack_template_123", Operation: domain.OperationApply, Status: domain.TemplateRunFailed,
+		Phase: domain.RunPhaseApply, WorkflowID: "template-run/tenant_123/run_123/apply",
 	}); err != nil {
 		t.Fatalf("RecordTemplateRunStatus returned error: %v", err)
 	}
@@ -495,7 +498,7 @@ func TestBeginTemplateApplyClaimIsIdempotent(t *testing.T) {
 	seedPlanRun(t, ctx, pool, "run_123", domain.OperationApply, domain.TemplateRunApproved)
 
 	for attempt := 1; attempt <= 2; attempt++ {
-		claimed, err := store.BeginTemplateApply(ctx, "tenant_123", "run_123", false)
+		claimed, err := store.BeginTemplateApply(ctx, "tenant_123", "run_123", false, "template-run/tenant_123/run_123/apply")
 		if err != nil {
 			t.Fatal(err)
 		}

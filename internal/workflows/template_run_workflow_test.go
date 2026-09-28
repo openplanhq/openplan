@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/vishu42/tflive/internal/domain"
 	"go.temporal.io/sdk/activity"
+	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/converter"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/testsuite"
@@ -1612,5 +1613,99 @@ func TestTemplatePlanWorkflowKeepsItsErrorWhenItsFailureCannotBeRecorded(t *test
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("workflow error = %q, want it to mention %q", err, want)
 		}
+	}
+}
+
+// Each workflow tells the control plane which execution of the run it is,
+// and which Temporal workflow carries it, on every status write and on its
+// claim.
+func TestTemplateRunWorkflowsRecordTheirPhaseAndWorkflowID(t *testing.T) {
+	t.Parallel()
+
+	for _, testCase := range []struct {
+		name       string
+		workflow   any
+		operation  domain.OperationType
+		phase      domain.RunPhase
+		workflowID string
+	}{
+		{name: "plan", workflow: TemplatePlanWorkflow, operation: domain.OperationPlan, phase: domain.RunPhasePlan, workflowID: "template-run/tenant_123/run_123"},
+		{name: "apply", workflow: TemplateApplyWorkflow, operation: domain.OperationApply, phase: domain.RunPhaseApply, workflowID: "template-run/tenant_123/run_123/apply"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			env := newTemplateRunWorkflowTestEnvironment(t)
+			env.SetStartWorkflowOptions(client.StartWorkflowOptions{ID: testCase.workflowID})
+			var statuses []domain.TemplateRunStatusActivityInput
+			var claims []domain.BeginApplyActivityInput
+			env.OnActivity(domain.RecordTemplateRunStatusActivityName, mock.Anything, mock.Anything).
+				Return(func(_ context.Context, input domain.TemplateRunStatusActivityInput) error {
+					statuses = append(statuses, input)
+					return nil
+				})
+			env.OnActivity(domain.BeginApplyActivityName, mock.Anything, mock.Anything).
+				Return(func(_ context.Context, input domain.BeginApplyActivityInput) (domain.BeginApplyActivityOutput, error) {
+					claims = append(claims, input)
+					return domain.BeginApplyActivityOutput{Claimed: true}, nil
+				})
+
+			env.ExecuteWorkflow(testCase.workflow, templateRunWorkflowInput(testCase.operation))
+
+			assertWorkflowCompleted(t, env)
+			if len(statuses) == 0 {
+				t.Fatal("no status write")
+			}
+			for _, status := range statuses {
+				if status.Phase != testCase.phase || status.WorkflowID != testCase.workflowID {
+					t.Fatalf("status write = %#v, want phase %q and workflow %q", status, testCase.phase, testCase.workflowID)
+				}
+			}
+			if testCase.phase == domain.RunPhaseApply && (len(claims) != 1 || claims[0].WorkflowID != testCase.workflowID) {
+				t.Fatalf("claims = %#v, want one by %q", claims, testCase.workflowID)
+			}
+		})
+	}
+}
+
+// An approved apply and a destroy record what their command did with the
+// event that ends them, as an auto-approved apply always has.
+func TestTemplateApplyWorkflowRecordsTheCountsItsCommandReports(t *testing.T) {
+	t.Parallel()
+
+	for _, testCase := range []struct {
+		operation domain.OperationType
+		command   domain.TerraformCommandType
+		event     domain.TemplateRunEvent
+	}{
+		{operation: domain.OperationApply, command: domain.TerraformCommandApply, event: domain.TemplateRunApplied},
+		{operation: domain.OperationDestroy, command: domain.TerraformCommandDestroy, event: domain.TemplateRunDestroyed},
+	} {
+		t.Run(string(testCase.operation), func(t *testing.T) {
+			t.Parallel()
+
+			env := newTemplateRunWorkflowTestEnvironment(t)
+			counts := domain.PlanSummary{Add: 1, Change: 2, Destroy: 3}
+			summaries := map[domain.TemplateRunEvent]*domain.PlanSummary{}
+			env.OnActivity(domain.RunTerraformActivityName, mock.Anything, mock.Anything).
+				Return(func(_ context.Context, input domain.RunTerraformActivityInput) (domain.RunTerraformActivityOutput, error) {
+					if input.Command == testCase.command {
+						return domain.RunTerraformActivityOutput{HasChanges: true, Summary: counts}, nil
+					}
+					return domain.RunTerraformActivityOutput{}, nil
+				})
+			env.OnActivity(domain.RecordTemplateRunEventActivityName, mock.Anything, mock.Anything).
+				Return(func(_ context.Context, input domain.TemplateRunEventActivityInput) error {
+					summaries[input.Event] = input.Summary
+					return nil
+				})
+
+			env.ExecuteWorkflow(TemplateApplyWorkflow, templateRunWorkflowInput(testCase.operation))
+
+			assertWorkflowCompleted(t, env)
+			if got := summaries[testCase.event]; got == nil || *got != counts {
+				t.Fatalf("%s summary = %#v, want the command's counts", testCase.event, got)
+			}
+		})
 	}
 }

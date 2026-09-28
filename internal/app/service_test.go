@@ -663,8 +663,8 @@ func TestStartTemplateRunCreatesQueuedRunWithoutDispatchingWorkflow(t *testing.T
 		t.Fatalf("run.ResolvedCommitSHA = %q, want sha-2", run.ResolvedCommitSHA)
 	}
 
-	if !run.StartedAt.Equal(now) {
-		t.Fatalf("run.StartedAt = %v, want %v", run.StartedAt, now)
+	if !run.CreatedAt.Equal(now) {
+		t.Fatalf("run.CreatedAt = %v, want %v", run.CreatedAt, now)
 	}
 
 	if stackTemplates.gotTenantID != domain.TenantID("tenant_123") {
@@ -1683,6 +1683,7 @@ func TestGetTemplateRunReturnsTenantScopedRun(t *testing.T) {
 			Operation:       domain.OperationPlan,
 			Status:          domain.TemplateRunCompleted,
 		},
+		executions: []domain.TemplateRunWorkflowExecution{{Phase: domain.RunPhasePlan, Status: domain.TemplateRunExecutionSucceeded}},
 	}
 	service := NewService(Service{
 		Authorization:  testPlatformAuthorizer(t),
@@ -1707,6 +1708,9 @@ func TestGetTemplateRunReturnsTenantScopedRun(t *testing.T) {
 	}
 	if runs.gotGetRunID != domain.TemplateRunID("run_123") {
 		t.Fatalf("run lookup = %q, want run_123", runs.gotGetRunID)
+	}
+	if len(run.Executions) != 1 || run.Executions[0].Phase != domain.RunPhasePlan {
+		t.Fatalf("executions = %#v, want the run's plan", run.Executions)
 	}
 }
 
@@ -2340,6 +2344,7 @@ type recordingTemplateRunRepository struct {
 	created                domain.TemplateRun
 	run                    domain.TemplateRun
 	list                   []domain.TemplateRun
+	executions             []domain.TemplateRunWorkflowExecution
 	approval               domain.TemplateRunApproval
 	gotGetTenantID         domain.TenantID
 	gotGetRunID            domain.TemplateRunID
@@ -2368,6 +2373,10 @@ func (repository *recordingTemplateRunRepository) GetTemplateRun(_ context.Conte
 		return domain.TemplateRun{}, repository.getErr
 	}
 	return repository.run, nil
+}
+
+func (repository *recordingTemplateRunRepository) ListTemplateRunExecutions(context.Context, domain.TenantID, domain.TemplateRunID) ([]domain.TemplateRunWorkflowExecution, error) {
+	return repository.executions, nil
 }
 
 func (repository *recordingTemplateRunRepository) ListTemplateRuns(_ context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID) ([]domain.TemplateRun, error) {

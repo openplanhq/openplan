@@ -150,8 +150,8 @@ export default function RunDetailScreen() {
             <div>
               <dt>Started</dt>
               <dd>
-                <time dateTime={run.started_at} title={run.started_at}>
-                  {formatDateTime(run.started_at)}
+                <time dateTime={run.created_at} title={run.created_at}>
+                  {formatDateTime(run.created_at)}
                 </time>
               </dd>
             </div>

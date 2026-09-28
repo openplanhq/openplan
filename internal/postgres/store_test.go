@@ -1548,9 +1548,8 @@ func TestCreateTemplateRunPersistsRunFields(t *testing.T) {
 		BackendConfigHash:  "backend_hash_123",
 		Status:             domain.TemplateRunQueued,
 		TriggerActor:       requesterSubject,
-		StartedAt:          startedAt,
+		CreatedAt:          startedAt,
 		CompletedAt:        completedAt,
-		ErrorSummary:       "previous error summary",
 	}
 
 	if _, err := store.CreateTemplateRun(ctx, run); err != nil {
@@ -1574,9 +1573,8 @@ func TestCreateTemplateRunPersistsRunFields(t *testing.T) {
 			backend_config_hash,
 			status,
 			trigger_actor,
-			started_at,
-			completed_at,
-			error_summary
+			created_at,
+			completed_at
 		from template_runs
 		where id = $1
 	`, run.ID).Scan(
@@ -1594,9 +1592,8 @@ func TestCreateTemplateRunPersistsRunFields(t *testing.T) {
 		&got.BackendConfigHash,
 		&got.Status,
 		&got.TriggerActor,
-		&got.StartedAt,
+		&got.CreatedAt,
 		&got.CompletedAt,
-		&got.ErrorSummary,
 	)
 	if err != nil {
 		t.Fatalf("read inserted template run: %v", err)
@@ -1615,12 +1612,11 @@ func TestCreateTemplateRunPersistsRunFields(t *testing.T) {
 		got.BackendType != run.BackendType ||
 		got.BackendConfigHash != run.BackendConfigHash ||
 		got.Status != run.Status ||
-		got.TriggerActor != run.TriggerActor ||
-		got.ErrorSummary != run.ErrorSummary {
+		got.TriggerActor != run.TriggerActor {
 		t.Fatalf("inserted run = %#v, want %#v", got, run)
 	}
-	if !got.StartedAt.Equal(run.StartedAt) {
-		t.Fatalf("StartedAt = %v, want %v", got.StartedAt, run.StartedAt)
+	if !got.CreatedAt.Equal(run.CreatedAt) {
+		t.Fatalf("CreatedAt = %v, want %v", got.CreatedAt, run.CreatedAt)
 	}
 	if !got.CompletedAt.Equal(run.CompletedAt) {
 		t.Fatalf("CompletedAt = %v, want %v", got.CompletedAt, run.CompletedAt)
@@ -1711,6 +1707,8 @@ func TestCreateTemplateRunScopesTheInFlightGate(t *testing.T) {
 		StackTemplateID: domain.StackTemplateID("stack_template_c"),
 		Operation:       domain.OperationPlan,
 		Status:          domain.TemplateRunFailed,
+		Phase:           domain.RunPhasePlan,
+		WorkflowID:      "template-run/tenant_123/run_c_4",
 	}); err != nil {
 		t.Fatalf("RecordTemplateRunStatus returned error: %v", err)
 	}
@@ -1839,7 +1837,7 @@ func templateRunAt(stackTemplateID domain.StackTemplateID, runID domain.Template
 		ConfigJSON:      json.RawMessage(`{}`),
 		Status:          status,
 		TriggerActor:    domain.UserID("user_123"),
-		StartedAt:       time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC),
+		CreatedAt:       time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC),
 	}
 }
 
@@ -1910,9 +1908,8 @@ func TestGetTemplateRunReturnsTenantScopedRecord(t *testing.T) {
 		BackendConfigHash: "backend_hash_123",
 		Status:            domain.TemplateRunCompleted,
 		TriggerActor:      domain.UserID("user_123"),
-		StartedAt:         startedAt,
+		CreatedAt:         startedAt,
 		CompletedAt:       completedAt,
-		ErrorSummary:      "previous error summary",
 	})
 
 	run, err := store.GetTemplateRun(ctx, domain.TenantID("tenant_123"), domain.TemplateRunID("run_123"))
@@ -1932,13 +1929,12 @@ func TestGetTemplateRunReturnsTenantScopedRecord(t *testing.T) {
 		BackendConfigHash: "backend_hash_123",
 		Status:            domain.TemplateRunCompleted,
 		TriggerActor:      domain.UserID("user_123"),
-		StartedAt:         startedAt,
+		CreatedAt:         startedAt,
 		CompletedAt:       completedAt,
 		ConfigJSON:        json.RawMessage(`{}`),
-		ErrorSummary:      "previous error summary",
 		RunNumber:         1,
 	}
-	run.StartedAt = run.StartedAt.UTC()
+	run.CreatedAt = run.CreatedAt.UTC()
 	run.CompletedAt = run.CompletedAt.UTC()
 	if !reflect.DeepEqual(run, want) {
 		t.Fatalf("run = %#v, want %#v", run, want)
@@ -2198,7 +2194,7 @@ func TestListTemplateRunsReturnsMostRecentFirstScopedToStackTemplate(t *testing.
 		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
 		Status:          domain.TemplateRunCompleted,
 		TriggerActor:    domain.UserID("user_123"),
-		StartedAt:       time.Date(2026, 7, 20, 9, 0, 0, 0, time.UTC),
+		CreatedAt:       time.Date(2026, 7, 20, 9, 0, 0, 0, time.UTC),
 	})
 	seedTemplateRun(t, ctx, pool, domain.TemplateRun{
 		ID:              domain.TemplateRunID("run_newer"),
@@ -2209,7 +2205,7 @@ func TestListTemplateRunsReturnsMostRecentFirstScopedToStackTemplate(t *testing.
 		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
 		Status:          domain.TemplateRunWaitingApproval,
 		TriggerActor:    domain.UserID("user_456"),
-		StartedAt:       time.Date(2026, 7, 20, 10, 0, 0, 0, time.UTC),
+		CreatedAt:       time.Date(2026, 7, 20, 10, 0, 0, 0, time.UTC),
 	})
 	seedTemplateRun(t, ctx, pool, domain.TemplateRun{
 		ID:              domain.TemplateRunID("run_other_stack_template"),
@@ -2220,7 +2216,7 @@ func TestListTemplateRunsReturnsMostRecentFirstScopedToStackTemplate(t *testing.
 		WorkspaceName:   "mtp_acme_prod_vpc_other",
 		Status:          domain.TemplateRunCompleted,
 		TriggerActor:    domain.UserID("user_123"),
-		StartedAt:       time.Date(2026, 7, 20, 11, 0, 0, 0, time.UTC),
+		CreatedAt:       time.Date(2026, 7, 20, 11, 0, 0, 0, time.UTC),
 	})
 
 	runs, err := store.ListTemplateRuns(ctx, domain.TenantID("tenant_123"), domain.StackTemplateID("stack_template_123"))
@@ -2375,6 +2371,8 @@ func TestRecordTemplateRunStatusUpdatesTenantScopedRun(t *testing.T) {
 		StackTemplateID: domain.StackTemplateID("stack_template_123"),
 		Operation:       domain.OperationPlan,
 		Status:          domain.TemplateRunRunning,
+		Phase:           domain.RunPhasePlan,
+		WorkflowID:      "template-run/tenant_123/run_123",
 	})
 	if err != nil {
 		t.Fatalf("RecordTemplateRunStatus returned error: %v", err)
@@ -2423,6 +2421,8 @@ func TestRecordTemplateRunStatusSetsCompletedAtForTerminalStatus(t *testing.T) {
 		StackTemplateID: domain.StackTemplateID("stack_template_123"),
 		Operation:       domain.OperationPlan,
 		Status:          domain.TemplateRunCompleted,
+		Phase:           domain.RunPhasePlan,
+		WorkflowID:      "template-run/tenant_123/run_123",
 	})
 	if err != nil {
 		t.Fatalf("RecordTemplateRunStatus returned error: %v", err)
@@ -2468,6 +2468,8 @@ func TestRecordTemplateRunStatusPersistsFailureSummary(t *testing.T) {
 		StackTemplateID: domain.StackTemplateID("stack_template_123"),
 		Operation:       domain.OperationPlan,
 		Status:          domain.TemplateRunFailed,
+		Phase:           domain.RunPhasePlan,
+		WorkflowID:      "template-run/tenant_123/run_failure_summary",
 		ErrorSummary:    "run terraform: activity failed",
 	})
 	if err != nil {
@@ -2475,15 +2477,19 @@ func TestRecordTemplateRunStatusPersistsFailureSummary(t *testing.T) {
 	}
 
 	var status domain.TemplateRunStatus
-	var errorSummary string
 	var completedAt time.Time
 	if err := pool.QueryRow(ctx, `
-		select status, error_summary, completed_at
+		select status, completed_at
 		from template_runs
 		where id = $1
-	`, "run_failure_summary").Scan(&status, &errorSummary, &completedAt); err != nil {
+	`, "run_failure_summary").Scan(&status, &completedAt); err != nil {
 		t.Fatalf("read failed run: %v", err)
 	}
+	run, err := store.GetTemplateRun(ctx, "tenant_123", "run_failure_summary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	errorSummary := run.ErrorSummary
 	if status != domain.TemplateRunFailed {
 		t.Fatalf("status = %q, want %q", status, domain.TemplateRunFailed)
 	}
@@ -2865,14 +2871,13 @@ func seedTemplateRun(t *testing.T, ctx context.Context, pool *pgxpool.Pool, run 
 			backend_config_hash,
 			status,
 			trigger_actor,
-			started_at,
+			created_at,
 			completed_at,
-			error_summary,
 			auto_approve,
 			run_number
 		) values (
 			$1, $2, $3, $4, $5, $6, $7, $8,
-			$9, $10::jsonb, $11, $12, $13, $14, $15, $16, $17, $18,
+			$9, $10::jsonb, $11, $12, $13, $14, $15, $16, $17,
 			(
 				select coalesce(max(run_number), 0) + 1
 				from template_runs
@@ -2895,13 +2900,27 @@ func seedTemplateRun(t *testing.T, ctx context.Context, pool *pgxpool.Pool, run 
 		run.BackendConfigHash,
 		run.Status,
 		run.TriggerActor,
-		nullTime(run.StartedAt),
+		nullTime(run.CreatedAt),
 		nullTime(run.CompletedAt),
-		run.ErrorSummary,
 		run.AutoApprove,
 	)
 	if err != nil {
 		t.Fatalf("seed template run: %v", err)
+	}
+	// A running run is always carried by a running workflow execution: its
+	// apply for an auto-approved run, which has no plan, and its plan
+	// otherwise.
+	if run.Status == domain.TemplateRunRunning {
+		phase := domain.RunPhasePlan
+		if run.AutoApprove {
+			phase = domain.RunPhaseApply
+		}
+		if _, err := pool.Exec(ctx, `
+			insert into template_run_workflow_executions (tenant_id, run_id, phase, workflow_id, actor, status, started_at)
+			values ($1, $2, $3, $4, $5, 'running', now())
+		`, run.TenantID, run.ID, phase, "template-run/"+string(run.TenantID)+"/"+string(run.ID), run.TriggerActor); err != nil {
+			t.Fatalf("seed running workflow execution: %v", err)
+		}
 	}
 }
 
@@ -3047,7 +3066,9 @@ func TestAppendAuditEventSuccess(t *testing.T) {
 
 // TestRecordTemplateRunStatusReconcilesInterruptedDestroyLifecycle checks
 // that a destroy run which fails after its template began destroying leaves
-// the template's lifecycle failed; otherwise the lifecycle is left alone.
+// the template's lifecycle failed; otherwise the lifecycle is left alone. The
+// failure is always the destroy's apply: a running run's apply has claimed it,
+// and an approved run's apply failed before it could.
 func TestRecordTemplateRunStatusReconcilesInterruptedDestroyLifecycle(t *testing.T) {
 	t.Parallel()
 
@@ -3068,7 +3089,7 @@ func TestRecordTemplateRunStatusReconcilesInterruptedDestroyLifecycle(t *testing
 		{
 			name:             "failed before destroy started",
 			initialLifecycle: domain.StackTemplateActive,
-			initialStatus:    domain.TemplateRunWaitingApproval,
+			initialStatus:    domain.TemplateRunApproved,
 			terminalStatus:   domain.TemplateRunFailed,
 			wantLifecycle:    domain.StackTemplateActive,
 		},
@@ -3126,9 +3147,15 @@ func TestRecordTemplateRunStatusReconcilesInterruptedDestroyLifecycle(t *testing
 				Operation:       domain.OperationDestroy,
 				SelectedRef:     "main",
 				WorkspaceName:   "ws_" + suffix,
-				Status:          test.initialStatus,
+				Status:          domain.TemplateRunApproved,
 				TriggerActor:    domain.UserID("user_123"),
 			})
+			workflowID := "template-run/" + string(tenantID) + "/" + string(runID) + "/apply"
+			if test.initialStatus == domain.TemplateRunRunning {
+				if claimed, err := store.BeginTemplateApply(ctx, tenantID, runID, false, workflowID); err != nil || !claimed {
+					t.Fatalf("BeginTemplateApply = %v, %v; want claimed", claimed, err)
+				}
+			}
 
 			if err := store.RecordTemplateRunStatus(ctx, domain.TemplateRunStatusActivityInput{
 				RunID:           runID,
@@ -3136,6 +3163,8 @@ func TestRecordTemplateRunStatusReconcilesInterruptedDestroyLifecycle(t *testing
 				StackTemplateID: stackTemplateID,
 				Operation:       domain.OperationDestroy,
 				Status:          test.terminalStatus,
+				Phase:           domain.RunPhaseApply,
+				WorkflowID:      workflowID,
 			}); err != nil {
 				t.Fatalf("RecordTemplateRunStatus returned error: %v", err)
 			}
@@ -3404,17 +3433,17 @@ func TestMigrationClosesOutRunsBeingCanceled(t *testing.T) {
 	ctx := context.Background()
 	pool := openTestPool(t, ctx)
 	migrateThrough(t, ctx, pool, "0024_run_phase_log_names")
+	// Seeded in the 0024 schema's own columns: seedTemplateRun writes the
+	// current schema, which renamed started_at in 0029.
 	for i, status := range []domain.TemplateRunStatus{"cancel_requested", "canceling"} {
-		seedTemplateRun(t, ctx, pool, domain.TemplateRun{
-			ID:              domain.TemplateRunID(fmt.Sprintf("run_%d", i)),
-			TenantID:        domain.TenantID("tenant_123"),
-			StackTemplateID: domain.StackTemplateID(fmt.Sprintf("stack_template_%d", i)),
-			Operation:       domain.OperationApply,
-			SelectedRef:     "main",
-			WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
-			Status:          status,
-			TriggerActor:    domain.UserID("user_123"),
-		})
+		if _, err := pool.Exec(ctx, `
+			insert into template_runs (
+				id, tenant_id, stack_template_id, operation, selected_ref, workspace_name,
+				status, trigger_actor, run_number
+			) values ($1, 'tenant_123', $2, 'apply', 'main', 'mtp_acme_prod_vpc_a13f9c', $3, 'user_123', 1)
+		`, fmt.Sprintf("run_%d", i), fmt.Sprintf("stack_template_%d", i), status); err != nil {
+			t.Fatalf("seed pre-migration run: %v", err)
+		}
 	}
 
 	if err := Migrate(ctx, pool); err != nil {

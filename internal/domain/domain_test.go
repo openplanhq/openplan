@@ -350,3 +350,16 @@ func TestTemplateRegistrationStepValid(t *testing.T) {
 		}
 	}
 }
+
+func TestRunPhaseValid(t *testing.T) {
+	for _, phase := range []RunPhase{RunPhasePlan, RunPhaseApply} {
+		if !phase.Valid() {
+			t.Fatalf("%q.Valid() = false, want true", phase)
+		}
+	}
+	for _, phase := range []RunPhase{"", "destroy"} {
+		if phase.Valid() {
+			t.Fatalf("%q.Valid() = true, want false", phase)
+		}
+	}
+}

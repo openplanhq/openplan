@@ -32,10 +32,11 @@ type PlanRecorder interface {
 	// FinishTemplatePlan records a finished plan and decides what follows it.
 	FinishTemplatePlan(ctx context.Context, input domain.FinishPlanActivityInput) (domain.PlanOutcome, error)
 	// BeginTemplateApply claims a run for its apply phase by moving it to
-	// running: an approved run, or with autoApprove a queued one. It reports
-	// true for a run it already claimed, so a retried claim is idempotent, and
-	// false when the run is no longer in a state this claim can take.
-	BeginTemplateApply(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, autoApprove bool) (bool, error)
+	// running, and starts its apply execution as workflowID: an approved run,
+	// or with autoApprove a queued one. It reports true for a run it already
+	// claimed, so a retried claim is idempotent, and false when the run is no
+	// longer in a state this claim can take.
+	BeginTemplateApply(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, autoApprove bool, workflowID string) (bool, error)
 }
 
 // LogMetadataRecorder persists the metadata row for an uploaded phase log.
@@ -168,7 +169,7 @@ func (activities *ControlActivities) FinishPlan(ctx context.Context, input domai
 
 // BeginApply claims a run for its apply phase.
 func (activities *ControlActivities) BeginApply(ctx context.Context, input domain.BeginApplyActivityInput) (domain.BeginApplyActivityOutput, error) {
-	claimed, err := activities.store.BeginTemplateApply(ctx, input.TenantID, input.RunID, input.AutoApprove)
+	claimed, err := activities.store.BeginTemplateApply(ctx, input.TenantID, input.RunID, input.AutoApprove, input.WorkflowID)
 	if err != nil {
 		return domain.BeginApplyActivityOutput{}, fmt.Errorf("begin apply: %w", err)
 	}

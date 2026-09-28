@@ -1917,12 +1917,22 @@ components:
         backend_type: { type: string }
         backend_config_hash: { type: string }
         status: { $ref: "#/components/schemas/TemplateRunStatus" }
-        step: { $ref: "#/components/schemas/TemplateRunStep" }
+        step:
+          allOf: [{ $ref: "#/components/schemas/TemplateRunStep" }]
+          description: |
+            The latest step of the workflow execution that started last.
+            Empty when that execution has not started a step, as for an
+            apply between claiming the run and its first step.
         trigger_actor:
           type: string
           description: |
             Who started the run. This is the subject that may not approve it.
-        started_at: { type: string, format: date-time }
+        created_at:
+          type: string
+          format: date-time
+          description: |
+            When the run was requested. When its work started is its
+            executions' `started_at`.
         completed_at:
           type: string
           format: date-time
@@ -1931,7 +1941,7 @@ components:
             (`0001-01-01T00:00:00Z`) while the run is unfinished.
         error_summary:
           type: string
-          description: Why the run failed. Empty otherwise.
+          description: Why the run failed, from its failed workflow execution. Empty otherwise.
         run_number:
           type: integer
           minimum: 1
@@ -1946,20 +1956,28 @@ components:
           type: [object, "null"]
           description: |
             What the plan would change, counted the way tofu's own summary
-            line counts: a replacement is one add and one destroy. Null until
-            a plan with changes has finished. For an auto-approved `apply`,
-            what the apply changed, read from its "Apply complete!" line, and
+            line counts: a replacement is one add and one destroy. From the
+            run's plan execution; null until a plan with changes has
+            finished. For an auto-approved `apply`, which has no plan, what
+            the apply changed, read from its "Apply complete!" line, and
             null until it finishes.
           properties:
             add: { type: integer, minimum: 0 }
             change: { type: integer, minimum: 0 }
             destroy: { type: integer, minimum: 0 }
           required: [add, change, destroy]
+        executions:
+          type: array
+          description: |
+            The workflows that carried the run, in the order they started:
+            its plan, then its apply, or only one of them. Present only on
+            `GET /v1/tenants/{tenant_id}/template-runs/{run_id}`.
+          items: { $ref: "#/components/schemas/TemplateRunWorkflowExecution" }
       required:
         [id, tenant_id, stack_template_id, template_revision_id,
          source_template_id, operation, selected_ref, resolved_commit_sha,
          workspace_name, backend_type, backend_config_hash, status, step,
-         trigger_actor, started_at, error_summary, run_number, auto_approve,
+         trigger_actor, created_at, error_summary, run_number, auto_approve,
          plan_summary]
 
     TemplateRunStatus:
@@ -1999,6 +2017,60 @@ components:
         - planning
         - saving_plan
         - applying
+
+    TemplateRunExecutionStatus:
+      type: string
+      description: Where one workflow execution of a run, or one step of it, stands.
+      enum: [running, succeeded, failed]
+
+    TemplateRunWorkflowExecution:
+      type: object
+      description: One workflow that carried a run.
+      properties:
+        phase: { type: string, enum: [plan, apply] }
+        workflow_id: { type: string, description: The Temporal workflow ID. }
+        actor:
+          type: string
+          description: |
+            Who started this execution: the run's requester for a plan or an
+            auto-approved apply, and its approver for an approved apply.
+        status: { $ref: "#/components/schemas/TemplateRunExecutionStatus" }
+        started_at: { type: string, format: date-time }
+        finished_at:
+          type: string
+          format: date-time
+          description: Reads as the zero time (`0001-01-01T00:00:00Z`) while the execution runs.
+        error_summary: { type: string, description: Why it failed. Empty otherwise. }
+        summary:
+          type: [object, "null"]
+          description: |
+            A plan's counts of what it would change, or an apply's of what it
+            changed. Null for a plan with no changes, and until known.
+          properties:
+            add: { type: integer, minimum: 0 }
+            change: { type: integer, minimum: 0 }
+            destroy: { type: integer, minimum: 0 }
+          required: [add, change, destroy]
+        steps:
+          type: array
+          description: The steps it ran, in the order they started.
+          items: { $ref: "#/components/schemas/TemplateRunStepExecution" }
+      required: [phase, workflow_id, actor, status, started_at, finished_at, error_summary, summary, steps]
+
+    TemplateRunStepExecution:
+      type: object
+      description: |
+        One step a workflow execution ran. A step runs until the next one
+        starts, or until its execution ends.
+      properties:
+        step: { $ref: "#/components/schemas/TemplateRunStep" }
+        status: { $ref: "#/components/schemas/TemplateRunExecutionStatus" }
+        started_at: { type: string, format: date-time }
+        finished_at:
+          type: string
+          format: date-time
+          description: Reads as the zero time while the step runs.
+      required: [step, status, started_at, finished_at]
 
     LogPhase:
       type: string

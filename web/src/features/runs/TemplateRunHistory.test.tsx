@@ -25,7 +25,7 @@ function run(overrides: Partial<TemplateRun> = {}): TemplateRun {
     status: "queued",
     step: "",
     trigger_actor: "user_123",
-    started_at: "2026-07-20T00:00:00Z",
+    created_at: "2026-07-20T00:00:00Z",
     error_summary: "",
     run_number: 1,
     auto_approve: false,
@@ -70,8 +70,8 @@ describe("TemplateRunHistory", () => {
   it("links every run in the history to its run detail screen", () => {
     const queryClient = testQueryClient();
     seedRuns(queryClient, [
-      run({ id: "run_apply_1", run_number: 2, operation: "apply", status: "waiting_approval", trigger_actor: "someone_else", started_at: "2026-07-20T01:00:00Z" }),
-      run({ id: "run_plan_1", run_number: 1, operation: "plan", status: "completed", trigger_actor: "someone_else", started_at: "2026-07-20T00:00:00Z" })
+      run({ id: "run_apply_1", run_number: 2, operation: "apply", status: "waiting_approval", trigger_actor: "someone_else", created_at: "2026-07-20T01:00:00Z" }),
+      run({ id: "run_plan_1", run_number: 1, operation: "plan", status: "completed", trigger_actor: "someone_else", created_at: "2026-07-20T00:00:00Z" })
     ]);
 
     renderHistory(queryClient);

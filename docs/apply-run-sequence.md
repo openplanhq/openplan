@@ -90,7 +90,7 @@ sequenceDiagram
     CW->>PG: SealPlanKey creates the run's plan key (stored encrypted), sealed to key A
     EX1->>AS: UploadPlan: tfplan + lock file, AES-GCM under the plan key
     Note over CW,EX1: ReleaseRunKey, CleanupWorkspace, session completed. Executor A is free.
-    CW->>PG: FinishPlan: counts, waiting_approval, template's pending plan
+    CW->>PG: FinishPlan: plan execution and its last step succeeded with its counts, run waiting_approval, template's pending plan
     Note over CW: TemplatePlanWorkflow completes. Nothing waits on a person.
 
     UI->>API: POST /approval
@@ -98,7 +98,7 @@ sequenceDiagram
     Note over API: queue loop claims the row
     API->>T: StartWorkflow TemplateApplyWorkflow ("…/apply")
     T-->>CW: workflow task
-    CW->>PG: BeginApply: approved to running, or stop if discarded meanwhile
+    CW->>PG: BeginApply: approved to running and the apply execution started, or stop if discarded meanwhile
     CW->>T: create session on "execution"
     T-->>EX2: session created, usually another executor
 
@@ -164,7 +164,7 @@ sequenceDiagram
     T-->>CW: workflow task
     CW->>T: schedule RecordTemplateRunEvent(applied)
     T-->>CW: activity task
-    CW->>PG: stack template last applied, with the run row locked
+    CW->>PG: stack template last applied, and the apply's counts on its execution, with the run row locked
     CW->>T: activity completed
 
     T-->>CW: workflow task
@@ -187,7 +187,7 @@ sequenceDiagram
     T-->>CW: workflow task
     CW->>T: schedule RecordTemplateRunStatus(completed)
     T-->>CW: activity task
-    CW->>PG: UPDATE template_runs status (completed also drops the plan key)
+    CW->>PG: run completed, its apply execution and last step succeeded (also drops the plan key)
     CW->>T: activity completed
 
     T-->>CW: workflow task

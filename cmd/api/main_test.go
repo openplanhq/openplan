@@ -830,12 +830,16 @@ func (recordingStore) FinishTemplatePlan(context.Context, domain.FinishPlanActiv
 	return "", nil
 }
 
-func (recordingStore) BeginTemplateApply(context.Context, domain.TenantID, domain.TemplateRunID, bool) (bool, error) {
+func (recordingStore) BeginTemplateApply(context.Context, domain.TenantID, domain.TemplateRunID, bool, string) (bool, error) {
 	return false, nil
 }
 
 func (recordingStore) GetTemplateRun(context.Context, domain.TenantID, domain.TemplateRunID) (domain.TemplateRun, error) {
 	return domain.TemplateRun{}, nil
+}
+
+func (recordingStore) ListTemplateRunExecutions(context.Context, domain.TenantID, domain.TemplateRunID) ([]domain.TemplateRunWorkflowExecution, error) {
+	return nil, nil
 }
 
 func (recordingStore) ListTemplateRuns(context.Context, domain.TenantID, domain.StackTemplateID) ([]domain.TemplateRun, error) {
