@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import StyleGuide from "./StyleGuide";
 
@@ -27,6 +27,21 @@ describe("StyleGuide", () => {
     const { container } = render(<StyleGuide />);
     for (const role of ["owner", "operator", "approver", "viewer"]) {
       expect(container.querySelector(`.role-badge--${role}`), `missing role ${role}`).toBeTruthy();
+    }
+  });
+
+  it("shows every shadcn Button variant", () => {
+    render(<StyleGuide />);
+    const section = within(screen.getByTestId("sg-theme"));
+    for (const name of ["Default", "Outline", "Secondary", "Ghost", "Destructive", "Link"]) {
+      expect(section.getByRole("button", { name })).toBeTruthy();
+    }
+  });
+
+  it("swatches every theme colour", () => {
+    const { container } = render(<StyleGuide />);
+    for (const name of ["background", "foreground", "primary", "secondary", "muted", "accent", "destructive", "success", "warning", "border"]) {
+      expect(container.querySelector(`[data-swatch="${name}"]`), `missing --${name}`).toBeTruthy();
     }
   });
 

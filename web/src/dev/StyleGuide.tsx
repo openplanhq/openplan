@@ -6,6 +6,9 @@ import StatBand from "../shared/StatBand";
 import StatusRow from "../shared/StatusRow";
 import { statusGlyph, statusTone } from "../shared/statusTone";
 import "./styleguide.css";
+import { Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 /**
  * Development-only gallery of the design system.
@@ -21,6 +24,7 @@ import "./styleguide.css";
  */
 
 const SECTIONS: { id: string; title: string }[] = [
+  { id: "theme", title: "shadcn theme" },
   { id: "colour", title: "Colour" },
   { id: "type", title: "Typography" },
   { id: "radii", title: "Radii" },
@@ -37,6 +41,24 @@ const SECTIONS: { id: string; title: string }[] = [
   { id: "log", title: "Log panel" },
   { id: "showpiece", title: "Showpieces" }
 ];
+
+// Literal class names: Tailwind only generates classes it can find in source.
+const THEME_SWATCHES = [
+  { name: "background", className: "bg-background" },
+  { name: "foreground", className: "bg-foreground" },
+  { name: "primary", className: "bg-primary" },
+  { name: "secondary", className: "bg-secondary" },
+  { name: "muted", className: "bg-muted" },
+  { name: "accent", className: "bg-accent" },
+  { name: "destructive", className: "bg-destructive" },
+  { name: "success", className: "bg-success" },
+  { name: "warning", className: "bg-warning" },
+  { name: "border", className: "bg-border" }
+];
+
+const BUTTON_VARIANTS = ["default", "outline", "secondary", "ghost", "destructive", "link"] as const;
+const BUTTON_SIZES = ["xs", "sm", "default", "lg"] as const;
+const titleCase = (word: string) => word[0].toUpperCase() + word.slice(1);
 
 const COLOUR_TOKENS = [
   "--legacy-color-bg",
@@ -179,6 +201,42 @@ export default function StyleGuide() {
             cascade, so this page cannot drift from the implementation. It is registered only in
             development builds, and it mounts outside the auth provider so it works with no backend.
           </p>
+        </div>
+
+        <div data-testid="sg-theme">
+          <Section
+            id="theme"
+            title="shadcn theme"
+            note="Components from src/components/ui on theme.css. Everything below this section is the legacy system, retired screen by screen."
+          >
+            <Specimen label="Colours" hint="theme.css">
+              <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-5">
+                {THEME_SWATCHES.map(({ name, className }) => (
+                  <div key={name} data-swatch={name} className="flex flex-col gap-1.5">
+                    <div className={cn("h-10 rounded-md border", className)} />
+                    <code className="font-mono text-xs text-muted-foreground">--{name}</code>
+                  </div>
+                ))}
+              </div>
+            </Specimen>
+            <Specimen label="Button variants">
+              {BUTTON_VARIANTS.map((variant) => (
+                <Button key={variant} variant={variant}>
+                  {titleCase(variant)}
+                </Button>
+              ))}
+            </Specimen>
+            <Specimen label="Button sizes">
+              {BUTTON_SIZES.map((size) => (
+                <Button key={size} size={size} variant="outline">
+                  {size}
+                </Button>
+              ))}
+              <Button size="icon" aria-label="Add">
+                <Plus />
+              </Button>
+            </Specimen>
+          </Section>
         </div>
 
         <Section
