@@ -1,8 +1,8 @@
 # Adopt shadcn/ui in `web/`
 
 **Date:** 2026-09-29
-**Status:** Approved. Guard and testing sections reviewed with PR 1, which
-also settled the details recorded below.
+**Status:** Approved. Guard and testing sections reviewed with PR 1. PR 1 and
+PR 2 settled the details recorded below.
 
 ## Problem
 
@@ -122,8 +122,9 @@ The five status tones become Badge variants:
 | waiting | `warning` | `--warning` |
 | canceled | `muted` | `--muted-foreground` on `--muted` |
 
-The four role badges (owner, operator, approver, viewer) also become Badge
-variants.
+The four role badges map onto the same variants: owner `progress`, operator
+`success`, approver `warning`, viewer `muted`. A role the UI doesn't know
+renders `muted`.
 
 ## Running old and new styles side by side
 
@@ -182,7 +183,9 @@ example by stalling or failing `/v1/*` requests over the DevTools protocol.
 
 **Known leak, accepted until PR 9.** `base.css` styles bare elements (`h1`–`h4`,
 `a`, `button`, `input`, `select`, `textarea`, `code`). Those rules still apply on
-migrated screens for any property the Tailwind classes don't set.
+migrated screens for any property the Tailwind classes don't set. Migrated
+components therefore set colour, type and decoration on their own `a` and `h1`
+elements: a rule on the element beats a colour it would inherit.
 
 **Mixed look, accepted until PR 8.** Between PR 2 and PR 8, `main` shows
 migrated and unmigrated screens side by side.
@@ -193,7 +196,7 @@ migrated and unmigrated screens side by side.
 |---|---|---|
 | 0 | Upgrade React 18 to 19, nothing else | none |
 | 1 | Tooling, theme, layer setup, token rename, Fontsource Geist, new guards, Preflight restorations; removes the page glows (`body::before`, and `body > *`, which only lifted content above them); adds the Button to `/styleguide`. No screen changes. | Button |
-| 2 | App shell (`AppShell`) and `src/shared/` components | Breadcrumb; Badge (status tones, roles); Card (`StatBand`, `IdsPanel`); Collapsible (`LogSteps`) |
+| 2 | App shell (`AppShell`) and `src/shared/` components; deletes the unused `StatBand` and `IdsPanel` | Breadcrumb; Badge (status tones, roles); Collapsible (`LogSteps`) |
 | 3 | Standalone screens: sign-in, access denied, not found, service unavailable, route placeholder | Card, Button, Alert |
 | 4 | Stacks: list, create, detail shell, environment, credentials | Table, Input, Label, Button |
 | 5 | Stack access | Combobox for the user search; Select for the role picker |
@@ -201,6 +204,21 @@ migrated and unmigrated screens side by side.
 | 7 | Template registry: registry, registration, detail | Table, Card, Input |
 | 8 | Runs: detail, logs, history, actions, destroy panel | AlertDialog for the destroy confirmation; ScrollArea for logs |
 | 9 | Cleanup: delete `tokens.css`, `base.css`, `primitives.css`, `features.css`, the `legacy` layer, the old guards and the dead-CSS guard | none |
+
+**What PR 2 settled.**
+
+- `StatBand` and `IdsPanel` had no screen left rendering them, so PR 2
+  deleted them instead of moving them to Card. Card arrives in PR 3.
+- Status pills and role badges are `src/shared/StatusBadge.tsx` and
+  `src/shared/RoleBadge.tsx`. PR 2 moved only `StatusRow` and `/styleguide`
+  onto them. The legacy `status-tone` and `role-badge` CSS goes with the last
+  screen that stops using it.
+- `Breadcrumb` carries the page spacing below it (`mb-6`). Header rows that
+  set it beside a button pass `className="mb-0"`, because a legacy rule can't
+  outrank a utility.
+- The app header is `z-5`, below the legacy `.search-dropdown` (10) and
+  `.undo-banner` (20). `AppShell.test.tsx` checks that order until those
+  overlays migrate.
 
 `HeroGraphic` (the decorative shapes on error and empty-state screens) has no
 counterpart in the stock look. Each migrating screen drops it for a plain empty
@@ -220,6 +238,12 @@ state, and the component file goes when its last user migrates (PR 7:
 5. Include before/after screenshots in the PR description. The local stack
    (`docker compose --profile auth up` plus `npm run dev`) serves every screen,
    and `scripts/drive-web.mjs` can take them through a real Keycloak login.
+6. Give each control a 44px target on coarse pointers, as
+   `--legacy-touch-target` did: `pointer-coarse:h-11` on fixed-height
+   controls, `pointer-coarse:min-h-11` on rows whose height comes from their
+   content.
+7. Replace its inline `status-tone` and `role-badge` markup with
+   `StatusBadge` and `RoleBadge` from `src/shared/`.
 
 ## Guards
 
