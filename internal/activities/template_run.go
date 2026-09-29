@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vishu42/tflive/internal/domain"
-	"github.com/vishu42/tflive/internal/logsink"
-	"github.com/vishu42/tflive/internal/planbundle"
-	"github.com/vishu42/tflive/internal/runner"
-	"github.com/vishu42/tflive/internal/runseal"
+	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/logsink"
+	"github.com/vishu42/openplan/internal/planbundle"
+	"github.com/vishu42/openplan/internal/runner"
+	"github.com/vishu42/openplan/internal/runseal"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/temporal"
 )

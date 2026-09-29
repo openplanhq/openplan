@@ -12,14 +12,14 @@ describe("tenant configuration", () => {
   });
 
   it("requires an explicit production tenant", () => {
-    expect(() => resolveTenantID(undefined, false)).toThrow("VITE_TFLIVE_TENANT_ID is required");
-    expect(() => resolveTenantID("   ", false)).toThrow("VITE_TFLIVE_TENANT_ID is required");
+    expect(() => resolveTenantID(undefined, false)).toThrow("VITE_OPENPLAN_TENANT_ID is required");
+    expect(() => resolveTenantID("   ", false)).toThrow("VITE_OPENPLAN_TENANT_ID is required");
   });
 
   it.each(["-tenant", "tenant/value", "tenant value", "tenant!", "a".repeat(129)])(
     "rejects malformed tenant %s",
     (value) => {
-      expect(() => resolveTenantID(value, false)).toThrow("VITE_TFLIVE_TENANT_ID must start");
+      expect(() => resolveTenantID(value, false)).toThrow("VITE_OPENPLAN_TENANT_ID must start");
     }
   );
 });

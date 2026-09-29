@@ -286,7 +286,7 @@ order by started_at;
 ## Migration
 
 `0029_template_run_executions.sql` creates both tables and makes the
-`template_runs` changes. There is no backfill and no close-out: tflive is
+`template_runs` changes. There is no backfill and no close-out: openplan is
 pre-production, so a database with runs in flight is reset with
 `docker compose down -v` rather than migrated. A `running` run left from
 before 0029 has no workflow execution and would break the first invariant.
@@ -315,7 +315,7 @@ The local database also needs the reset for a second reason: it ran the
 
 ## Testing
 
-- Store tests against real Postgres (`tflive_POSTGRES_TEST_DSN`):
+- Store tests against real Postgres (`OPENPLAN_POSTGRES_TEST_DSN`):
   - each row of the write-rules table, including a retry of each write;
   - the fail-before-claim insert;
   - a step start closing the previous step, and the execution's end closing

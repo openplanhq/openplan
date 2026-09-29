@@ -4,9 +4,9 @@
 
 **Date:** 2026-07-14
 
-**Issue:** [AUTH-001](https://github.com/vishu42/tflive/issues/3)
+**Issue:** [AUTH-001](https://github.com/vishu42/openplan/issues/3)
 
-**Scope:** Authentication and authorization foundation for the configured single tflive tenant
+**Scope:** Authentication and authorization foundation for the configured single openplan tenant
 
 ## Purpose
 
@@ -16,7 +16,7 @@ role semantics, authorization decisions, failure contracts, audit guarantees,
 and threat mitigations that the implementation tickets must preserve.
 
 Keycloak authenticates people and administers global roles. OpenFGA stores
-per-stack relationships and derives stack permissions. The tflive API is the
+per-stack relationships and derives stack permissions. The openplan API is the
 only product enforcement point. Browser visibility is a usability aid and is
 never an authorization control.
 
@@ -62,14 +62,14 @@ Platform ingress
     |---------------------------> Keycloak browser endpoints
     |
     v
-tflive API ---------------> Keycloak discovery/JWKS
+openplan API ---------------> Keycloak discovery/JWKS
     |  |  |
     |  |  +---------------> OpenFGA checks and relationship writes
     |  +------------------> Postgres product state, audit, durable intents
     +---------------------> Temporal commands and signals
                                    |
                                    v
-                              tflive workers
+                              openplan workers
                                    |
                                    v
                          logs, artifacts, providers
@@ -131,7 +131,7 @@ The request principal contains:
 subject: immutable Keycloak sub
 display_name: optional presentation claim
 email: optional presentation claim
-global_roles: normalized set of recognized tflive global roles
+global_roles: normalized set of recognized openplan global roles
 ```
 
 Unknown roles are ignored. Tokens and unneeded claims are discarded after
@@ -145,7 +145,7 @@ carry the same `sub`. No access token crosses the API boundary.
 
 ## Tenant Boundary
 
-tflive has one configured tenant identifier. Startup validation rejects an
+openplan has one configured tenant identifier. Startup validation rejects an
 empty or malformed tenant value. Every tenant-scoped handler compares
 `{tenant_id}` with the configured tenant before repository access, OpenFGA
 calls, object-key construction, or workflow dispatch.
@@ -165,7 +165,7 @@ storage, and workflow identifiers consistently scoped.
 
 | Role | Source | Meaning |
 |---|---|---|
-| `platform-admin` | Validated Keycloak token | Administer tflive and bypass ordinary stack checks, except the constraints listed below |
+| `platform-admin` | Validated Keycloak token | Administer openplan and bypass ordinary stack checks, except the constraints listed below |
 | `stack-creator` | Validated Keycloak token | Create a stack and become its initial owner |
 
 Global roles are evaluated by the API after token verification. They are not
@@ -203,7 +203,7 @@ idempotent replacement that removes the old relation and establishes the new
 one as one logical mutation.
 
 Owners and platform administrators may list and manage grants. Target users
-must resolve to enabled users in the tflive Keycloak realm. The backend
+must resolve to enabled users in the openplan Keycloak realm. The backend
 directory credential may search and read safe user attributes only; it cannot
 create users, change passwords, delete users, or assign global roles.
 
@@ -260,7 +260,7 @@ persists and signals the authenticated approver subject.
 
 ## Reliable Relationship Mutations
 
-Postgres and OpenFGA do not share a transaction. tflive therefore uses a durable
+Postgres and OpenFGA do not share a transaction. openplan therefore uses a durable
 desired-state and reconciliation pattern rather than pretending that a
 cross-datastore transaction is atomic.
 
@@ -357,7 +357,7 @@ administrative responses.
 | Authorization outage | Dependency error is mistaken for allow or deny | Typed adapter outcomes, bounded deadlines, fail closed with `503`, no frontend fallback |
 | Self-approval | Requester approves their own privileged operation | Immutable requester subject, mandatory equality check after authorization, audit rejection, no Temporal signal |
 | Secret leakage | Sensitive values appear in logs, errors, payloads, or examples | Structured redaction, secret-backed configuration, production-default rejection, regression tests |
-| Directory overreach | tflive service account changes Keycloak users or global roles | Least-privilege read/search service account; lifecycle and global-role changes stay in Admin Console |
+| Directory overreach | openplan service account changes Keycloak users or global roles | Least-privilege read/search service account; lifecycle and global-role changes stay in Admin Console |
 
 ## Security Logging and Observability
 
@@ -401,10 +401,10 @@ the final release gate.
 
 | ID | Decision | Rationale |
 |---|---|---|
-| SEC-001 | Keycloak and OpenFGA are private platform-operated services in the same Kubernetes environment as tflive | Keeps the initial operational and network trust model explicit and bounded |
+| SEC-001 | Keycloak and OpenFGA are private platform-operated services in the same Kubernetes environment as openplan | Keeps the initial operational and network trust model explicit and bounded |
 | SEC-002 | Keycloak `sub` is the only authorization identity | It is immutable within the realm and avoids mutable-name ambiguity |
 | SEC-003 | Keycloak owns identity/global roles; OpenFGA owns stack relations; the API owns enforcement | Gives each system one authority and prevents policy duplication |
-| SEC-004 | tflive accepts one configured tenant and treats URL tenant values as assertions to validate | Prevents browser-selected tenancy while preserving existing routes |
+| SEC-004 | openplan accepts one configured tenant and treats URL tenant values as assertions to validate | Prevents browser-selected tenancy while preserving existing routes |
 | SEC-005 | Platform administrators bypass ordinary stack checks but never self-approval, tenant, audit, validation, or fail-closed controls | Preserves recovery power without creating an unbounded superuser path |
 | SEC-006 | Inaccessible reads use protected `404`; visible-resource mutation denials use `403`; dependency failures use `503` | Prevents enumeration while keeping operational failures distinguishable |
 | SEC-007 | Access mutations and their audits commit atomically in Postgres and fail closed on audit failure | An unrecorded privilege change is not acceptable |

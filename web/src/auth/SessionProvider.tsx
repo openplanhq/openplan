@@ -124,7 +124,7 @@ export default function SessionProvider() {
       // Asking /v1/me again is itself an authenticated request, so it slides
       // the very bound it is asking about. Doing that unconditionally turns
       // this timer into a keepalive: an unattended tab renews itself one lead
-      // period before each expiry, forever, and TFLIVE_SESSION_IDLE_TTL can
+      // period before each expiry, forever, and OPENPLAN_SESSION_IDLE_TTL can
       // never fire. A tab that has made no other request since the snapshot
       // has nothing to learn by asking — the bound cannot have moved — so it
       // stays quiet and lets the session end on the server's terms. Someone

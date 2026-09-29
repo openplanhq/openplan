@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/vishu42/tflive/internal/domain"
+	"github.com/vishu42/openplan/internal/domain"
 )
 
 // A run's workflow executions are written in the same transaction as the run

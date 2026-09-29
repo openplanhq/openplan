@@ -55,8 +55,8 @@ package auth
 import (
 	"slices"
 
-	"github.com/vishu42/tflive/internal/authn"
-	"github.com/vishu42/tflive/internal/traits"
+	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/traits"
 )
 
 // MeResponse is the identity envelope returned by GET /v1/me.
@@ -110,8 +110,8 @@ Actually, I should just check `role == "platform-admin"` directly. No need for `
 package auth
 
 import (
-	"github.com/vishu42/tflive/internal/authn"
-	"github.com/vishu42/tflive/internal/traits"
+	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/traits"
 )
 
 // MeResponse is the identity envelope returned by GET /v1/me.
@@ -182,7 +182,7 @@ git commit -m "feat(auth): add MeResponse type and MeFromPrincipal mapping"
 
 - [ ] **Step 1: Add the import**
 
-In `internal/api/server.go`, add `"github.com/vishu42/tflive/internal/auth"` to the import block (lines 4-17):
+In `internal/api/server.go`, add `"github.com/vishu42/openplan/internal/auth"` to the import block (lines 4-17):
 
 ```go
 import (
@@ -195,11 +195,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vishu42/tflive/internal/app"
-	"github.com/vishu42/tflive/internal/auth"
-	"github.com/vishu42/tflive/internal/authn"
-	"github.com/vishu42/tflive/internal/authz"
-	"github.com/vishu42/tflive/internal/traits"
+	"github.com/vishu42/openplan/internal/app"
+	"github.com/vishu42/openplan/internal/auth"
+	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/authz"
+	"github.com/vishu42/openplan/internal/traits"
 )
 ```
 

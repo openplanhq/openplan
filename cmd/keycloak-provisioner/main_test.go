@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vishu42/tflive/internal/keycloak"
+	"github.com/vishu42/openplan/internal/keycloak"
 )
 
 func TestRunRejectsInvalidConfiguration(t *testing.T) {
@@ -54,7 +54,7 @@ func TestRunLogsOnlyNonSensitiveResultIdentifiers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run() error = %v", err)
 	}
-	for _, want := range []string{"tflive", "tflive-api", "tflive-platform-admin"} {
+	for _, want := range []string{"openplan", "openplan-api", "openplan-platform-admin"} {
 		if !strings.Contains(logLine, want) {
 			t.Fatalf("log = %q, missing %q", logLine, want)
 		}
@@ -82,14 +82,14 @@ func TestRunPassesCancellationToProvisioner(t *testing.T) {
 func commandTestEnv() func(string) string {
 	values := map[string]string{
 		"KEYCLOAK_ADMIN_URL":                 "http://keycloak:8080",
-		"KEYCLOAK_ADMIN_USERNAME":            "tflive-admin",
+		"KEYCLOAK_ADMIN_USERNAME":            "openplan-admin",
 		"KEYCLOAK_ADMIN_PASSWORD":            "master-local-only-secret",
-		"TFLIVE_PUBLIC_URL":                  "http://localhost:5173/",
+		"OPENPLAN_PUBLIC_URL":                "http://localhost:5173/",
 		"OIDC_CLIENT_SECRET":                 "oidc-client-secret",
-		"KEYCLOAK_PLATFORM_ADMIN_USERNAME":   "tflive-platform-admin",
+		"KEYCLOAK_PLATFORM_ADMIN_USERNAME":   "openplan-platform-admin",
 		"KEYCLOAK_PLATFORM_ADMIN_PASSWORD":   "platform-local-only-secret",
-		"KEYCLOAK_PLATFORM_ADMIN_EMAIL":      "tflive-platform-admin@local.test",
-		"KEYCLOAK_PLATFORM_ADMIN_FIRST_NAME": "tflive",
+		"KEYCLOAK_PLATFORM_ADMIN_EMAIL":      "openplan-platform-admin@local.test",
+		"KEYCLOAK_PLATFORM_ADMIN_FIRST_NAME": "openplan",
 		"KEYCLOAK_PLATFORM_ADMIN_LAST_NAME":  "Platform Administrator",
 	}
 	return func(name string) string { return values[name] }

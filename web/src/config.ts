@@ -7,17 +7,17 @@ export function resolveTenantID(rawTenantID: string | undefined, development: bo
     if (development) {
       return localTenantID;
     }
-    throw new Error("VITE_TFLIVE_TENANT_ID is required");
+    throw new Error("VITE_OPENPLAN_TENANT_ID is required");
   }
   if (!tenantIDPattern.test(value)) {
     throw new Error(
-      "VITE_TFLIVE_TENANT_ID must start with an ASCII alphanumeric character, contain only ASCII alphanumerics, underscore, or hyphen, and be at most 128 characters"
+      "VITE_OPENPLAN_TENANT_ID must start with an ASCII alphanumeric character, contain only ASCII alphanumerics, underscore, or hyphen, and be at most 128 characters"
     );
   }
   return value;
 }
 
 export const tenantID = resolveTenantID(
-  import.meta.env.VITE_TFLIVE_TENANT_ID,
+  import.meta.env.VITE_OPENPLAN_TENANT_ID,
   import.meta.env.DEV
 );

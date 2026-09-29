@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/vishu42/tflive/internal/domain"
+	"github.com/vishu42/openplan/internal/domain"
 )
 
 // CommandError identifies which Terraform command failed. Callers can recover

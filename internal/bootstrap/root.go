@@ -9,8 +9,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/vishu42/tflive/internal/authn"
-	"github.com/vishu42/tflive/internal/authorization"
+	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/authorization"
 )
 
 const (
@@ -45,7 +45,7 @@ type Accounts interface {
 }
 
 // SeedRoot makes a fresh install administrable: a local root account, and the
-// {user:<sub>, root, platform:tflive} tuple that gives it authority.
+// {user:<sub>, root, platform:openplan} tuple that gives it authority.
 //
 // Root is not a bypass and not a special code path. It is an ordinary local
 // account plus an ordinary tuple, so every authorization question about it is
@@ -96,7 +96,7 @@ func SeedRoot(
 // when it is not.
 //
 // Existence is asked by sub, not by username. The sub is fixed and the username
-// is configurable, so the two questions diverge the moment TFLIVE_ROOT_USERNAME
+// is configurable, so the two questions diverge the moment OPENPLAN_ROOT_USERNAME
 // changes: asking by username would report root missing, and the insert that
 // followed would collide with the existing row on the primary key and fail
 // every boot from then on, leaving the install unstartable over what is only a
@@ -123,7 +123,7 @@ func ensureRootAccount(
 	case err == nil:
 		if existing.Username != username {
 			log.Printf(
-				"seed root: root account already exists as %q; TFLIVE_ROOT_USERNAME=%q applies only when the account is created and was not applied",
+				"seed root: root account already exists as %q; OPENPLAN_ROOT_USERNAME=%q applies only when the account is created and was not applied",
 				existing.Username, username,
 			)
 		}
@@ -156,7 +156,7 @@ func ensureRootAccount(
 	// for a sub that has no account behind it, and the operator would be left
 	// signing in as somebody else and wondering why they are not root.
 	if !created {
-		return fmt.Errorf("seed root: username %q already belongs to another account; set TFLIVE_ROOT_USERNAME to a free name", username)
+		return fmt.Errorf("seed root: username %q already belongs to another account; set OPENPLAN_ROOT_USERNAME to a free name", username)
 	}
 	return nil
 }

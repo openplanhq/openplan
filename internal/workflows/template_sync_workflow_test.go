@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/mock"
-	"github.com/vishu42/tflive/internal/domain"
+	"github.com/vishu42/openplan/internal/domain"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/converter"
 	"go.temporal.io/sdk/testsuite"

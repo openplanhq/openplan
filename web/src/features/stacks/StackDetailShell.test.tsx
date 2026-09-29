@@ -79,7 +79,7 @@ describe("StackDetailShell", () => {
   });
 
   it("renders the stack name and all four tabs when every capability is granted", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const markup = await renderStackRoute("/stacks/stack_1", allAllowed);
 
     expect(markup).toContain('data-testid="stack-detail-shell"');
@@ -93,7 +93,7 @@ describe("StackDetailShell", () => {
   // Runs live on each template's own page, so the stack has no Runs tab and
   // no runs routes of its own.
   it("offers no Runs tab", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const markup = await renderStackRoute("/stacks/stack_1", allAllowed);
 
     expect(markup).not.toContain('href="/stacks/stack_1/runs"');
@@ -101,7 +101,7 @@ describe("StackDetailShell", () => {
   });
 
   it("no longer resolves the standalone runs routes", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     for (const path of ["/stacks/stack_1/runs", "/stacks/stack_1/runs/run_1", "/stacks/stack_1/template"]) {
       const markup = await renderStackRoute(path, allAllowed);
       expect(markup).toContain('data-testid="route-not-found"');
@@ -110,7 +110,7 @@ describe("StackDetailShell", () => {
   });
 
   it("omits the Access tab when canManageAccess is denied", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const markup = await renderStackRoute("/stacks/stack_1", { ...allAllowed, canManageAccess: false });
 
     expect(markup).toContain('data-testid="stack-detail-shell"');
@@ -120,7 +120,7 @@ describe("StackDetailShell", () => {
   });
 
   it("renders each nested route's content inside the shell", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     // The access tab is a real screen now with its own loading state; the
     // grants query is unseeded here, so the shell renders the StackAccessScreen
     // component as the nested content.
@@ -152,7 +152,7 @@ describe("StackDetailShell", () => {
   });
 
   it("titles the page with a Stacks / stack breadcrumb", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const markup = await renderStackRoute("/stacks/stack_1/templates", allAllowed);
 
     expect(markup).toMatch(/<nav class="breadcrumb" aria-label="Breadcrumb">.*href="\/stacks">Stacks<.*<h1 aria-current="page">Payments<\/h1>/);
@@ -163,7 +163,7 @@ describe("StackDetailShell", () => {
   // the way back to the stack's. Its state sits at the end of that row, not in
   // the breadcrumb.
   it("swaps the stack tabs for the template's on a template's page", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const markup = await renderStackRoute("/stacks/stack_1/templates/st_1/settings", allAllowed, [{ ...vpc, live_state: "differs" }]);
 
     expect(markup).toContain('aria-label="Template sections"');
@@ -174,14 +174,14 @@ describe("StackDetailShell", () => {
   });
 
   it("keeps the template's state off a run's page, where it would read as the run's", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const markup = await renderStackRoute("/stacks/stack_1/templates/st_1/runs/1", allAllowed, [vpc]);
 
     expect(markup).not.toContain('data-testid="stack-template-state"');
   });
 
   it("names the template on its own page", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const markup = await renderStackRoute("/stacks/stack_1/templates/st_1/settings", allAllowed, [vpc]);
 
     expect(markup).toMatch(
@@ -190,7 +190,7 @@ describe("StackDetailShell", () => {
   });
 
   it("extends the breadcrumb through the template on a page below it", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const runMarkup = await renderStackRoute("/stacks/stack_1/templates/st_1/runs/4", allAllowed, [vpc]);
     expect(runMarkup).toMatch(
       /<nav class="breadcrumb".*href="\/stacks\/stack_1\/templates">Templates<.*href="\/stacks\/stack_1\/templates\/st_1">Network<.*<h1 aria-current="page">Run #4<\/h1>/
@@ -204,14 +204,14 @@ describe("StackDetailShell", () => {
   });
 
   it("marks the tab matching the current route as current", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const markup = await renderStackRoute("/stacks/stack_1/templates", allAllowed);
 
     expect(markup).toMatch(/aria-current="page"[^>]*>Templates|href="\/stacks\/stack_1\/templates"[^>]*aria-current="page"/);
   });
 
   it("still renders NotFound (no shell chrome) when canView is denied", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const markup = await renderStackRoute("/stacks/stack_1", {
       canView: false,
       canOperate: false,

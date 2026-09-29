@@ -6,13 +6,13 @@
 
 **Architecture:** `internal/config` owns nested runtime security types and all environment parsing. `cmd/api` loads this configuration before initializing dependencies and logs only sanitized errors. The existing `internal/openfga.Client` retains its transport timeout and also derives a context deadline for each request.
 
-**Tech Stack:** Go 1.24.1 standard library (`context`, `fmt`, `net/url`, `time`, `unicode`), existing tflive configuration and OpenFGA packages, Node.js Compose contract checks, Markdown operational documentation
+**Tech Stack:** Go 1.24.1 standard library (`context`, `fmt`, `net/url`, `time`, `unicode`), existing openplan configuration and OpenFGA packages, Node.js Compose contract checks, Markdown operational documentation
 
 ## Global Constraints
 
-- An empty `TFLIVE_ENVIRONMENT` resolves to `development`; the only non-empty accepted values are `development` and `production`.
+- An empty `OPENPLAN_ENVIRONMENT` resolves to `development`; the only non-empty accepted values are `development` and `production`.
 - Production requires HTTPS for both `OIDC_ISSUER_URL` and `OPENFGA_API_URL` and requires a non-empty `OPENFGA_API_TOKEN`.
-- `TFLIVE_TENANT_ID` is 1 through 128 ASCII characters, starts with an ASCII alphanumeric character, and otherwise contains only ASCII alphanumerics, `_`, or `-`.
+- `OPENPLAN_TENANT_ID` is 1 through 128 ASCII characters, starts with an ASCII alphanumeric character, and otherwise contains only ASCII alphanumerics, `_`, or `-`.
 - `OPENFGA_STORE_ID` and `OPENFGA_MODEL_ID` are always explicit and are never discovered or defaulted.
 - `OPENFGA_HTTP_TIMEOUT` defaults to `10s`, must be positive, and supplies both an HTTP-client timeout and a per-request context deadline.
 - Raw environment values must never be embedded in validation errors. Bootstrap passwords, client secrets, and API tokens must not appear in formatting, errors, or startup logs.
@@ -75,7 +75,7 @@ func TestLoadSecurityConfigDevelopmentModes(t *testing.T) {
 			t.Parallel()
 
 			values := validSecurityValues()
-			values["TFLIVE_ENVIRONMENT"] = mode
+			values["OPENPLAN_ENVIRONMENT"] = mode
 			cfg, err := loadSecurityConfig(mapConfigEnv(values))
 			if err != nil {
 				t.Fatalf("loadSecurityConfig returned error: %v", err)
@@ -86,11 +86,11 @@ func TestLoadSecurityConfigDevelopmentModes(t *testing.T) {
 			if cfg.TenantID != "tenant_123" {
 				t.Fatalf("TenantID = %q, want tenant_123", cfg.TenantID)
 			}
-			if got := cfg.OIDC.IssuerURL.String(); got != "http://localhost:8082/realms/tflive" {
+			if got := cfg.OIDC.IssuerURL.String(); got != "http://localhost:8082/realms/openplan" {
 				t.Fatalf("IssuerURL = %q", got)
 			}
-			if cfg.OIDC.Audience != "tflive-api" {
-				t.Fatalf("Audience = %q, want tflive-api", cfg.OIDC.Audience)
+			if cfg.OIDC.Audience != "openplan-api" {
+				t.Fatalf("Audience = %q, want openplan-api", cfg.OIDC.Audience)
 			}
 			if got := cfg.OpenFGA.APIURL.String(); got != "http://localhost:8080" {
 				t.Fatalf("OpenFGA APIURL = %q", got)
@@ -112,8 +112,8 @@ func TestLoadSecurityConfigProductionAndSecretFormatting(t *testing.T) {
 	t.Parallel()
 
 	values := validSecurityValues()
-	values["TFLIVE_ENVIRONMENT"] = "production"
-	values["OIDC_ISSUER_URL"] = "https://id.example.com/realms/tflive"
+	values["OPENPLAN_ENVIRONMENT"] = "production"
+	values["OIDC_ISSUER_URL"] = "https://id.example.com/realms/openplan"
 	values["OPENFGA_API_URL"] = "https://openfga.example.com"
 	values["OPENFGA_API_TOKEN"] = "openfga-token-sentinel"
 
@@ -146,18 +146,18 @@ func TestLoadSecurityConfigRejectsMissingAndMalformedValues(t *testing.T) {
 		value string
 		want  string
 	}{
-		{name: "unknown environment", key: "TFLIVE_ENVIRONMENT", value: "staging", want: "TFLIVE_ENVIRONMENT must be development or production"},
-		{name: "missing tenant", key: "TFLIVE_TENANT_ID", value: "", want: "TFLIVE_TENANT_ID is required"},
-		{name: "tenant prefix", key: "TFLIVE_TENANT_ID", value: "-tenant", want: "TFLIVE_TENANT_ID must start"},
-		{name: "tenant slash", key: "TFLIVE_TENANT_ID", value: "tenant/123", want: "TFLIVE_TENANT_ID must start"},
-		{name: "tenant too long", key: "TFLIVE_TENANT_ID", value: strings.Repeat("a", 129), want: "TFLIVE_TENANT_ID must start"},
+		{name: "unknown environment", key: "OPENPLAN_ENVIRONMENT", value: "staging", want: "OPENPLAN_ENVIRONMENT must be development or production"},
+		{name: "missing tenant", key: "OPENPLAN_TENANT_ID", value: "", want: "OPENPLAN_TENANT_ID is required"},
+		{name: "tenant prefix", key: "OPENPLAN_TENANT_ID", value: "-tenant", want: "OPENPLAN_TENANT_ID must start"},
+		{name: "tenant slash", key: "OPENPLAN_TENANT_ID", value: "tenant/123", want: "OPENPLAN_TENANT_ID must start"},
+		{name: "tenant too long", key: "OPENPLAN_TENANT_ID", value: strings.Repeat("a", 129), want: "OPENPLAN_TENANT_ID must start"},
 		{name: "missing issuer", key: "OIDC_ISSUER_URL", value: "", want: "OIDC_ISSUER_URL is required"},
-		{name: "relative issuer", key: "OIDC_ISSUER_URL", value: "/realms/tflive", want: "OIDC_ISSUER_URL must be an absolute HTTP or HTTPS URL"},
-		{name: "issuer user info", key: "OIDC_ISSUER_URL", value: "https://client:client-secret-sentinel@id.example.com/realms/tflive", want: "OIDC_ISSUER_URL must not include user information"},
-		{name: "issuer query", key: "OIDC_ISSUER_URL", value: "https://id.example.com/realms/tflive?x=1", want: "OIDC_ISSUER_URL must not include a query"},
-		{name: "issuer fragment", key: "OIDC_ISSUER_URL", value: "https://id.example.com/realms/tflive#keys", want: "OIDC_ISSUER_URL must not include a fragment"},
+		{name: "relative issuer", key: "OIDC_ISSUER_URL", value: "/realms/openplan", want: "OIDC_ISSUER_URL must be an absolute HTTP or HTTPS URL"},
+		{name: "issuer user info", key: "OIDC_ISSUER_URL", value: "https://client:client-secret-sentinel@id.example.com/realms/openplan", want: "OIDC_ISSUER_URL must not include user information"},
+		{name: "issuer query", key: "OIDC_ISSUER_URL", value: "https://id.example.com/realms/openplan?x=1", want: "OIDC_ISSUER_URL must not include a query"},
+		{name: "issuer fragment", key: "OIDC_ISSUER_URL", value: "https://id.example.com/realms/openplan#keys", want: "OIDC_ISSUER_URL must not include a fragment"},
 		{name: "missing audience", key: "OIDC_AUDIENCE", value: "", want: "OIDC_AUDIENCE is required"},
-		{name: "audience whitespace", key: "OIDC_AUDIENCE", value: "tflive api", want: "OIDC_AUDIENCE must not contain whitespace or control characters"},
+		{name: "audience whitespace", key: "OIDC_AUDIENCE", value: "openplan api", want: "OIDC_AUDIENCE must not contain whitespace or control characters"},
 		{name: "missing OpenFGA URL", key: "OPENFGA_API_URL", value: "", want: "OPENFGA_API_URL is required"},
 		{name: "OpenFGA scheme", key: "OPENFGA_API_URL", value: "ftp://openfga.example.com", want: "OPENFGA_API_URL must be an absolute HTTP or HTTPS URL"},
 		{name: "OpenFGA user info", key: "OPENFGA_API_URL", value: "https://user:api-url-secret-sentinel@openfga.example.com", want: "OPENFGA_API_URL must not include user information"},
@@ -203,7 +203,7 @@ func TestLoadSecurityConfigRejectsInsecureProductionValues(t *testing.T) {
 		mutate func(map[string]string)
 		want   string
 	}{
-		{name: "HTTP issuer", mutate: func(values map[string]string) { values["OIDC_ISSUER_URL"] = "http://id.example.com/realms/tflive" }, want: "OIDC_ISSUER_URL must use HTTPS in production"},
+		{name: "HTTP issuer", mutate: func(values map[string]string) { values["OIDC_ISSUER_URL"] = "http://id.example.com/realms/openplan" }, want: "OIDC_ISSUER_URL must use HTTPS in production"},
 		{name: "HTTP OpenFGA", mutate: func(values map[string]string) { values["OPENFGA_API_URL"] = "http://openfga.example.com" }, want: "OPENFGA_API_URL must use HTTPS in production"},
 		{name: "missing OpenFGA token", mutate: func(values map[string]string) { values["OPENFGA_API_TOKEN"] = "" }, want: "OPENFGA_API_TOKEN is required in production"},
 	}
@@ -213,8 +213,8 @@ func TestLoadSecurityConfigRejectsInsecureProductionValues(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			values := validSecurityValues()
-			values["TFLIVE_ENVIRONMENT"] = "production"
-			values["OIDC_ISSUER_URL"] = "https://id.example.com/realms/tflive"
+			values["OPENPLAN_ENVIRONMENT"] = "production"
+			values["OIDC_ISSUER_URL"] = "https://id.example.com/realms/openplan"
 			values["OPENFGA_API_URL"] = "https://openfga.example.com"
 			values["OPENFGA_API_TOKEN"] = "production-token-sentinel"
 			test.mutate(values)
@@ -231,10 +231,10 @@ func TestLoadSecurityConfigRejectsInsecureProductionValues(t *testing.T) {
 
 func validSecurityValues() map[string]string {
 	return map[string]string{
-		"TFLIVE_ENVIRONMENT":  "development",
-		"TFLIVE_TENANT_ID":    "tenant_123",
-		"OIDC_ISSUER_URL":     "http://localhost:8082/realms/tflive",
-		"OIDC_AUDIENCE":       "tflive-api",
+		"OPENPLAN_ENVIRONMENT":  "development",
+		"OPENPLAN_TENANT_ID":    "tenant_123",
+		"OIDC_ISSUER_URL":     "http://localhost:8082/realms/openplan",
+		"OIDC_AUDIENCE":       "openplan-api",
 		"OPENFGA_API_URL":     "http://localhost:8080",
 		"OPENFGA_STORE_ID":    "store-id",
 		"OPENFGA_MODEL_ID":    "model-id",
@@ -272,7 +272,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/vishu42/tflive/internal/traits"
+	"github.com/vishu42/openplan/internal/traits"
 )
 
 const DefaultOpenFGAHTTPTimeout = 10 * time.Second
@@ -359,17 +359,17 @@ func (cfg SecurityConfig) GoString() string {
 }
 
 func loadSecurityConfig(getenv func(string) string) (SecurityConfig, error) {
-	mode, err := parseRuntimeMode(getenv("TFLIVE_ENVIRONMENT"))
+	mode, err := parseRuntimeMode(getenv("OPENPLAN_ENVIRONMENT"))
 	if err != nil {
 		return SecurityConfig{}, err
 	}
 
-	tenantID := strings.TrimSpace(getenv("TFLIVE_TENANT_ID"))
+	tenantID := strings.TrimSpace(getenv("OPENPLAN_TENANT_ID"))
 	if tenantID == "" {
-		return SecurityConfig{}, authConfigError("TFLIVE_TENANT_ID is required")
+		return SecurityConfig{}, authConfigError("OPENPLAN_TENANT_ID is required")
 	}
 	if !validTenantID(tenantID) {
-		return SecurityConfig{}, authConfigError("TFLIVE_TENANT_ID must start with an ASCII alphanumeric character, contain only ASCII alphanumerics, underscore, or hyphen, and be at most 128 characters")
+		return SecurityConfig{}, authConfigError("OPENPLAN_TENANT_ID must start with an ASCII alphanumeric character, contain only ASCII alphanumerics, underscore, or hyphen, and be at most 128 characters")
 	}
 
 	issuerURL, err := parseConfigURL("OIDC_ISSUER_URL", getenv("OIDC_ISSUER_URL"))
@@ -453,7 +453,7 @@ func parseRuntimeMode(raw string) (RuntimeMode, error) {
 	case string(RuntimeProduction):
 		return RuntimeProduction, nil
 	default:
-		return "", authConfigError("TFLIVE_ENVIRONMENT must be development or production")
+		return "", authConfigError("OPENPLAN_ENVIRONMENT must be development or production")
 	}
 }
 
@@ -656,15 +656,15 @@ func apiTestValues() map[string]string {
 		"DATABASE_URL":                  "postgres://user:pass@localhost:5432/db?sslmode=disable",
 		"HTTP_ADDRESS":                 ":9090",
 		"TEMPORAL_ADDRESS":             "localhost:7233",
-		"TEMPORAL_NAMESPACE":           "tflive",
+		"TEMPORAL_NAMESPACE":           "openplan",
 		"TEMPORAL_TASK_QUEUE":          "terraform-runs-dev",
-		"WORKER_RUN_ROOT":              "/var/lib/tflive/runs",
+		"WORKER_RUN_ROOT":              "/var/lib/openplan/runs",
 		"ARTIFACT_STORE_KIND":          "filesystem",
-		"ARTIFACT_STORE_FILESYSTEM_ROOT": "/var/lib/tflive/artifacts",
-		"TFLIVE_ENVIRONMENT":           "development",
-		"TFLIVE_TENANT_ID":             "tenant_123",
-		"OIDC_ISSUER_URL":              "http://localhost:8082/realms/tflive",
-		"OIDC_AUDIENCE":                "tflive-api",
+		"ARTIFACT_STORE_FILESYSTEM_ROOT": "/var/lib/openplan/artifacts",
+		"OPENPLAN_ENVIRONMENT":           "development",
+		"OPENPLAN_TENANT_ID":             "tenant_123",
+		"OIDC_ISSUER_URL":              "http://localhost:8082/realms/openplan",
+		"OIDC_AUDIENCE":                "openplan-api",
 		"OPENFGA_API_URL":              "http://localhost:8080",
 		"OPENFGA_STORE_ID":             "store-id",
 		"OPENFGA_MODEL_ID":             "model-id",
@@ -719,7 +719,7 @@ func TestRunRejectsSecurityConfigBeforeDependencies(t *testing.T) {
 	t.Parallel()
 
 	values := apiTestValues()
-	delete(values, "TFLIVE_TENANT_ID")
+	delete(values, "OPENPLAN_TENANT_ID")
 	postgresCalled := false
 	deps := apiDependencies{
 		newPostgresPool: func(context.Context, string) (postgresPool, error) {
@@ -729,7 +729,7 @@ func TestRunRejectsSecurityConfigBeforeDependencies(t *testing.T) {
 	}
 
 	err := runWithDependencies(context.Background(), apiTestGetenv(values), deps)
-	if !errors.Is(err, config.ErrInvalidConfig) || err == nil || !strings.Contains(err.Error(), "TFLIVE_TENANT_ID is required") {
+	if !errors.Is(err, config.ErrInvalidConfig) || err == nil || !strings.Contains(err.Error(), "OPENPLAN_TENANT_ID is required") {
 		t.Fatalf("error = %v, want tenant ErrInvalidConfig", err)
 	}
 	if postgresCalled {
@@ -741,8 +741,8 @@ func TestWriteStartupErrorDoesNotLeakSecuritySecrets(t *testing.T) {
 	t.Parallel()
 
 	values := apiTestValues()
-	values["TFLIVE_ENVIRONMENT"] = "production"
-	values["OIDC_ISSUER_URL"] = "https://client:oidc-client-secret-sentinel@id.example.com/realms/tflive"
+	values["OPENPLAN_ENVIRONMENT"] = "production"
+	values["OIDC_ISSUER_URL"] = "https://client:oidc-client-secret-sentinel@id.example.com/realms/openplan"
 	values["OPENFGA_API_URL"] = "https://openfga.example.com"
 	values["OPENFGA_API_TOKEN"] = "openfga-api-token-sentinel"
 	values["KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD"] = "bootstrap-password-sentinel"
@@ -791,7 +791,7 @@ func main() {
 }
 
 func writeStartupError(writer io.Writer, err error) {
-	log.New(writer, "", log.LstdFlags).Printf("tflive API failed: %v", err)
+	log.New(writer, "", log.LstdFlags).Printf("openplan API failed: %v", err)
 }
 ```
 
@@ -922,7 +922,7 @@ func storeResponse(request *http.Request) *http.Response {
 		StatusCode: http.StatusOK,
 		Status:     "200 OK",
 		Header:     http.Header{"Content-Type": {"application/json"}},
-		Body:       io.NopCloser(strings.NewReader(`{"id":"store-id","name":"tflive"}`)),
+		Body:       io.NopCloser(strings.NewReader(`{"id":"store-id","name":"openplan"}`)),
 		Request:    request,
 	}
 }
@@ -1026,10 +1026,10 @@ function envValue(name) {
 }
 
 for (const [name, value] of Object.entries({
-  TFLIVE_ENVIRONMENT: "development",
-  TFLIVE_TENANT_ID: "tenant_123",
-  OIDC_ISSUER_URL: "http://localhost:8082/realms/tflive",
-  OIDC_AUDIENCE: "tflive-api",
+  OPENPLAN_ENVIRONMENT: "development",
+  OPENPLAN_TENANT_ID: "tenant_123",
+  OIDC_ISSUER_URL: "http://localhost:8082/realms/openplan",
+  OIDC_AUDIENCE: "openplan-api",
   OPENFGA_API_URL: "http://localhost:8080",
   OPENFGA_STORE_ID: "",
   OPENFGA_MODEL_ID: "",
@@ -1048,7 +1048,7 @@ Run:
 rtk node scripts/verify-auth-compose.mjs
 ```
 
-Expected: failure naming `TFLIVE_ENVIRONMENT` as missing from `.env.example`.
+Expected: failure naming `OPENPLAN_ENVIRONMENT` as missing from `.env.example`.
 
 - [ ] **Step 3: Add the API runtime block to `.env.example`**
 
@@ -1056,12 +1056,12 @@ Change the authentication section comment so it says the section is used by the 
 
 ```dotenv
 # API authentication and authorization runtime.
-# Empty TFLIVE_ENVIRONMENT also means development; set production explicitly
+# Empty OPENPLAN_ENVIRONMENT also means development; set production explicitly
 # to enable HTTPS and OpenFGA credential enforcement.
-TFLIVE_ENVIRONMENT=development
-TFLIVE_TENANT_ID=tenant_123
-OIDC_ISSUER_URL=http://localhost:8082/realms/tflive
-OIDC_AUDIENCE=tflive-api
+OPENPLAN_ENVIRONMENT=development
+OPENPLAN_TENANT_ID=tenant_123
+OIDC_ISSUER_URL=http://localhost:8082/realms/openplan
+OIDC_AUDIENCE=openplan-api
 OPENFGA_API_URL=http://localhost:8080
 
 ```
@@ -1080,10 +1080,10 @@ connects to Postgres or Temporal or starts its HTTP listener.
 
 | Variable | Sensitive | Purpose |
 |---|---:|---|
-| `TFLIVE_ENVIRONMENT` | No | Optional runtime mode; empty defaults to `development`; valid values are `development` and `production` |
-| `TFLIVE_TENANT_ID` | No | Required single configured tenant identifier |
+| `OPENPLAN_ENVIRONMENT` | No | Optional runtime mode; empty defaults to `development`; valid values are `development` and `production` |
+| `OPENPLAN_TENANT_ID` | No | Required single configured tenant identifier |
 | `OIDC_ISSUER_URL` | No | Required exact Keycloak issuer URL |
-| `OIDC_AUDIENCE` | No | Required access-token audience; local value is `tflive-api` |
+| `OIDC_AUDIENCE` | No | Required access-token audience; local value is `openplan-api` |
 | `OPENFGA_API_URL` | No | Required OpenFGA API base URL |
 | `OPENFGA_STORE_ID` | No | Required exact store ID emitted by bootstrap |
 | `OPENFGA_MODEL_ID` | No | Required exact immutable model ID emitted by bootstrap |
@@ -1092,7 +1092,7 @@ connects to Postgres or Temporal or starts its HTTP listener.
 
 Development permits the documented loopback HTTP issuer, local HTTP OpenFGA
 endpoint, and tokenless OpenFGA service. Production must be selected explicitly
-with `TFLIVE_ENVIRONMENT=production`; it requires HTTPS for both external
+with `OPENPLAN_ENVIRONMENT=production`; it requires HTTPS for both external
 dependencies and a non-empty OpenFGA bearer token. Unknown modes, malformed
 tenant IDs, unsafe URLs or identifiers, and non-positive timeouts stop startup.
 

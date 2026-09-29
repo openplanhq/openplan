@@ -1,7 +1,7 @@
 # Authentication and Authorization
 
 This document defines the Keycloak realm and identity resources provisioned for
-tflive and the OpenFGA model used for per-stack authorization. The broader
+openplan and the OpenFGA model used for per-stack authorization. The broader
 trust model and authorization invariants remain in the
 [authentication and authorization security architecture](superpowers/specs/2026-07-14-authn-authz-security-architecture-design.md).
 
@@ -15,7 +15,7 @@ exits non-zero if any operation fails.
 The local issuer is:
 
 ```text
-http://keycloak.localhost:8082/realms/tflive
+http://keycloak.localhost:8082/realms/openplan
 ```
 
 The realm has a one-hour access-token lifespan, is enabled, does not permit
@@ -23,21 +23,21 @@ self-registration, and uses Keycloak's `external` SSL policy. Local loopback
 HTTP exists only for development; production uses one canonical HTTPS issuer.
 This lifespan no longer bounds a browser session: it governs only the ID
 token's freshness during the sign-in round trip itself. See "Browser Session"
-below for the session tflive owns after that, deliberately independent of it.
+below for the session openplan owns after that, deliberately independent of it.
 
 ## OIDC Clients and Claims
 
 | Resource | Configuration |
 |---|---|
-| `tflive-api` | Confidential OpenID Connect client; Authorization Code flow with PKCE S256; implicit, password, device, CIBA, service-account, and standard token-exchange grants disabled |
+| `openplan-api` | Confidential OpenID Connect client; Authorization Code flow with PKCE S256; implicit, password, device, CIBA, service-account, and standard token-exchange grants disabled |
 
 There is one client, not two. The API is the only OIDC client and the only
 party that ever talks to Keycloak: `/v1/auth/login`, `/v1/auth/callback`, and
 `/v1/auth/logout` on the API run the entire authorization-code exchange
 server-side, holding the client secret, and the browser receives nothing but
 an httpOnly session cookie (see "Browser Session" below). An earlier revision
-of this design split a public `tflive-web` browser client from a bearer-only
-`tflive-api` audience client; both the second client and the client scope and
+of this design split a public `openplan-web` browser client from a bearer-only
+`openplan-api` audience client; both the second client and the client scope and
 mapper it needed are gone along with it.
 
 The client's one registered redirect URI is derived, never configured
@@ -45,7 +45,7 @@ separately:
 
 ```text
 Redirect URIs:
-  <TFLIVE_PUBLIC_URL>/v1/auth/callback
+  <OPENPLAN_PUBLIC_URL>/v1/auth/callback
 ```
 
 `WebOrigins` is empty and stays empty: the browser only ever calls the API's
@@ -63,7 +63,7 @@ audience is already correct and nothing needs to mint it.
 
 | Role | Meaning |
 |---|---|
-| `platform-admin` | Administer tflive and bypass ordinary stack checks, but never authentication, tenant validation, audit requirements, last-owner protection, dependency fail-closed behavior, or self-approval prevention |
+| `platform-admin` | Administer openplan and bypass ordinary stack checks, but never authentication, tenant validation, audit requirements, last-owner protection, dependency fail-closed behavior, or self-approval prevention |
 | `stack-creator` | Create a stack and become its initial OpenFGA owner |
 
 These are realm roles and appear in `realm_access.roles`. Per-stack roles never
@@ -76,13 +76,13 @@ Two different identities serve different purposes:
 1. The master-realm bootstrap administrator is supplied to Keycloak itself and
    is used by the one-shot provisioner. Its credentials are not shared for
    daily platform administration.
-2. The initial tflive platform administrator is a user inside the `tflive`
+2. The initial openplan platform administrator is a user inside the `openplan`
    realm. It receives the `platform-admin` realm role and only these
    `realm-management` client roles: `query-users`, `view-users`,
    `manage-users`, and `view-realm`.
 
-The tflive administrator can use the dedicated console at
-`http://keycloak.localhost:8082/admin/tflive/console/` to find and manage tflive users
+The openplan administrator can use the dedicated console at
+`http://keycloak.localhost:8082/admin/openplan/console/` to find and manage openplan users
 and assign the fixed global roles. It does not receive the broad `realm-admin`
 composite and cannot administer the master realm.
 
@@ -104,11 +104,11 @@ system and must not reuse the examples.
 | `KEYCLOAK_ADMIN_REALM` | No | Bootstrap administrator realm; defaults to `master` |
 | `KEYCLOAK_ADMIN_USERNAME` | Yes | Master bootstrap administrator username |
 | `KEYCLOAK_ADMIN_PASSWORD` | Yes | Master bootstrap administrator password |
-| `KEYCLOAK_REALM` | No | Product realm; defaults to `tflive` |
-| `KEYCLOAK_API_CLIENT_ID` | No | The confidential client's ID; defaults to `tflive-api` |
-| `TFLIVE_PUBLIC_URL` | No | Origin the browser reaches; the provisioner derives the client's redirect URI (`<TFLIVE_PUBLIC_URL>/v1/auth/callback`) and post-logout redirect URI from it |
+| `KEYCLOAK_REALM` | No | Product realm; defaults to `openplan` |
+| `KEYCLOAK_API_CLIENT_ID` | No | The confidential client's ID; defaults to `openplan-api` |
+| `OPENPLAN_PUBLIC_URL` | No | Origin the browser reaches; the provisioner derives the client's redirect URI (`<OPENPLAN_PUBLIC_URL>/v1/auth/callback`) and post-logout redirect URI from it |
 | `OIDC_CLIENT_SECRET` | Yes | Secret registered on the confidential client; must match what the API is configured with |
-| `KEYCLOAK_PLATFORM_ADMIN_USERNAME` | Yes | Initial tflive platform administrator username |
+| `KEYCLOAK_PLATFORM_ADMIN_USERNAME` | Yes | Initial openplan platform administrator username |
 | `KEYCLOAK_PLATFORM_ADMIN_PASSWORD` | Yes | Initial password, used only when creating the user |
 | `KEYCLOAK_PLATFORM_ADMIN_EMAIL` | No | Required trusted bootstrap profile email |
 | `KEYCLOAK_PLATFORM_ADMIN_FIRST_NAME` | No | Required bootstrap profile first name |
@@ -125,32 +125,32 @@ connects to Postgres or Temporal or starts its HTTP listener.
 
 | Variable | Sensitive | Purpose |
 |---|---:|---|
-| `TFLIVE_ENVIRONMENT` | No | Optional runtime mode; empty defaults to `development`; valid values are `development` and `production` |
-| `TFLIVE_TENANT_ID` | No | Required single configured tenant identifier |
-| `VITE_TFLIVE_TENANT_ID` | No | Frontend build-time tenant context; must exactly match `TFLIVE_TENANT_ID`; local development falls back to `tenant_123` |
+| `OPENPLAN_ENVIRONMENT` | No | Optional runtime mode; empty defaults to `development`; valid values are `development` and `production` |
+| `OPENPLAN_TENANT_ID` | No | Required single configured tenant identifier |
+| `VITE_OPENPLAN_TENANT_ID` | No | Frontend build-time tenant context; must exactly match `OPENPLAN_TENANT_ID`; local development falls back to `tenant_123` |
 | `OIDC_ISSUER_URL` | No | Required exact OIDC issuer URL; any compliant provider, not only the local Keycloak |
 | `OIDC_CLIENT_ID` | No | Required OAuth client ID; also the ID token audience the verifier checks against |
 | `OIDC_CLIENT_SECRET` | Yes | Required; the API is a confidential client and authenticates as one when it exchanges a code |
-| `TFLIVE_PUBLIC_URL` | No | Required; the origin the browser reaches. The API derives its own OIDC redirect URI (`<TFLIVE_PUBLIC_URL>/v1/auth/callback`) and post-logout redirect URI from it — never from `Host` or `X-Forwarded-Proto`, which an attacker can set |
+| `OPENPLAN_PUBLIC_URL` | No | Required; the origin the browser reaches. The API derives its own OIDC redirect URI (`<OPENPLAN_PUBLIC_URL>/v1/auth/callback`) and post-logout redirect URI from it — never from `Host` or `X-Forwarded-Proto`, which an attacker can set |
 | `SESSION_ENCRYPTION_KEY` | Yes | Required 32-byte key (raw, base64, or hex) that seals the short-lived login transaction cookie (`state`, `nonce`, PKCE verifier, `return_to`) and encrypts each session row's stored ID token at rest |
-| `TFLIVE_SESSION_ABSOLUTE_TTL` | No | Optional hard cap on a session from sign-in, never extended; defaults to `8h` |
-| `TFLIVE_SESSION_IDLE_TTL` | No | Optional idle bound, sliding on activity; defaults to `1h`; must not exceed `TFLIVE_SESSION_ABSOLUTE_TTL` |
-| `OPENFGA_STORE_NAME` | No | Optional name of the store the API adopts; defaults to `tflive` |
+| `OPENPLAN_SESSION_ABSOLUTE_TTL` | No | Optional hard cap on a session from sign-in, never extended; defaults to `8h` |
+| `OPENPLAN_SESSION_IDLE_TTL` | No | Optional idle bound, sliding on activity; defaults to `1h`; must not exceed `OPENPLAN_SESSION_ABSOLUTE_TTL` |
+| `OPENFGA_STORE_NAME` | No | Optional name of the store the API adopts; defaults to `openplan` |
 
-`TFLIVE_TENANT_ID` is the authoritative security boundary. Every authenticated
+`OPENPLAN_TENANT_ID` is the authoritative security boundary. Every authenticated
 tenant-scoped route compares its `{tenant_id}` path value with that configured
 tenant before decoding a body or accessing application services, repositories,
 logs, artifacts, or authorization data. Missing, malformed, and mismatched
 tenant paths return `404` without disclosing whether a referenced resource
 exists.
 
-The React application reads `VITE_TFLIVE_TENANT_ID` as non-editable build-time
-context. Deployments must set it to the same value as `TFLIVE_TENANT_ID`; a
+The React application reads `VITE_OPENPLAN_TENANT_ID` as non-editable build-time
+context. Deployments must set it to the same value as `OPENPLAN_TENANT_ID`; a
 mismatch is safe but prevents tenant-scoped requests from succeeding. Changing
 this value requires rebuilding and redeploying the frontend bundle.
 
 Development permits the documented loopback HTTP issuer. Production must be
-selected explicitly with `TFLIVE_ENVIRONMENT=production`; it requires HTTPS for
+selected explicitly with `OPENPLAN_ENVIRONMENT=production`; it requires HTTPS for
 external dependencies. Unknown modes, malformed tenant IDs, and unsafe URLs or
 identifiers stop startup.
 
@@ -191,13 +191,13 @@ AUTH-007 middleware owns HTTP status mapping and credential parsing.
 
 ## API Request Authentication
 
-The `tflive_session` cookie is the only credential `/v1` accepts. The
+The `openplan_session` cookie is the only credential `/v1` accepts. The
 middleware hashes it, looks up the session row, and checks `Session.IsLive`
-against tflive's own bounds — see "Browser Session" below. The IdP is not
+against openplan's own bounds — see "Browser Session" below. The IdP is not
 consulted on this path at all; the ID token behind the session was verified
 once, at the callback, and its claims copied onto the row there.
 
-An `Authorization` header authenticates nothing. tflive previously accepted an
+An `Authorization` header authenticates nothing. openplan previously accepted an
 `Authorization: Bearer <id-token>` header for "a CLI or service-to-service
 caller," and that was removed because:
 
@@ -216,7 +216,7 @@ caller," and that was removed because:
   admin disabling an account all mark a session row. None of them can reach a
   JWT somebody already holds.
 
-A non-browser caller therefore wants a credential tflive issues and can revoke
+A non-browser caller therefore wants a credential openplan issues and can revoke
 — personal access tokens, the device authorization flow, or service accounts —
 not a re-used ID token. None of those exist yet.
 
@@ -227,7 +227,7 @@ written to logs or responses.
 
 After authentication, the request context contains an `authn.Principal` with
 the immutable subject and safe display claims — `Name`, `PreferredUsername`,
-`Email`, and `ExpiresAt` (tflive's own idle/absolute bound). It carries no role
+`Email`, and `ExpiresAt` (openplan's own idle/absolute bound). It carries no role
 claim: OpenFGA is the sole authorization source, so nothing from the token
 feeds an access decision. Handlers and application services obtain it with
 `authn.PrincipalFromContext` rather than parsing HTTP headers or tokens.
@@ -241,7 +241,7 @@ and two that belong to local sign-in rather than to any provider:
 | Route | Purpose |
 |---|---|
 | `GET /v1/auth/methods` | Unauthenticated; reports which ways in exist, so the sign-in screen renders the ones that do |
-| `POST /v1/auth/login` | Signs in against tflive's own account table and mints the same session row a federated sign-in would |
+| `POST /v1/auth/login` | Signs in against openplan's own account table and mints the same session row a federated sign-in would |
 | `GET /v1/auth/login` | Starts the OIDC flow: generates `state`, `nonce`, and a PKCE verifier, seals them into the transaction cookie, and redirects to the IdP |
 | `GET /v1/auth/callback` | Redeems the code on the back channel, verifies the resulting ID token, creates a session row, and hands the browser the session cookie |
 | `POST /v1/auth/logout` | Revokes the session row, clears the session cookie, and redirects to the IdP's RP-initiated logout where there is one |
@@ -283,7 +283,7 @@ password sign-in navigates to it without the server ever seeing it.
 
 Two cookies carry the interactive flow:
 
-| | `tflive_session` | `tflive_auth_tx` |
+| | `openplan_session` | `openplan_auth_tx` |
 |---|---|---|
 | Contents | an opaque 43-character reference to a session row — not a token | sealed `{state, nonce, code_verifier, return_to}` |
 | Path | `/` | `/v1/auth` |
@@ -294,7 +294,7 @@ Two cookies carry the interactive flow:
 
 Both are `SameSite=Lax`, not `Strict`. The IdP's callback to
 `/v1/auth/callback` is a cross-site top-level GET — the browser is navigating
-back from `keycloak.localhost`, not from tflive's own origin — and `Strict`
+back from `keycloak.localhost`, not from openplan's own origin — and `Strict`
 would withhold the transaction cookie on exactly that request, breaking every
 login. It would look like a random state-mismatch failure rather than an
 obviously misconfigured cookie.
@@ -302,12 +302,12 @@ obviously misconfigured cookie.
 `Lax` still stops CSRF on every mutating route in this API, because `Lax`
 withholds the cookie from a cross-site request unless it is a top-level GET
 navigation. A forged cross-site form or script can `POST`, `PATCH`, or
-`DELETE` all it wants; the browser will not attach `tflive_session` to any of
+`DELETE` all it wants; the browser will not attach `openplan_session` to any of
 it, so the request arrives unauthenticated. This holds only because every
 mutating route in the API is `POST`, `PATCH`, or `DELETE` — a mutating `GET`
 would defeat it, so there is not one, and there is no separate CSRF token.
 
-`tflive_session` needs no encryption: it carries no claims to protect, only 32
+`openplan_session` needs no encryption: it carries no claims to protect, only 32
 bytes of CSPRNG output rendered as base64. The database never stores that
 value, only its SHA-256 hash (`id_hash`), so a leaked row of the `sessions`
 table yields no usable cookie, and a tampered cookie value simply hashes to no
@@ -319,12 +319,12 @@ in.
 
 ### Session Lifetime
 
-A session is tflive's own record, not the IdP's. Before this design the
+A session is openplan's own record, not the IdP's. Before this design the
 session cookie held the raw ID token, so how long a sign-in lasted was decided
 by the provider's token lifespan and whether silent renewal was governed by
-its SSO idle timeout. tflive is BYO-IdP and configures neither on a
+its SSO idle timeout. openplan is BYO-IdP and configures neither on a
 deployment's provider, so a row in the `sessions` table
-(`internal/postgres/migrations/0018_sessions.sql`) is a session tflive issues,
+(`internal/postgres/migrations/0018_sessions.sql`) is a session openplan issues,
 expires, and revokes on its own terms. `internal/authn.Session` is the Go
 type; `internal/authn.SessionStore` is the persistence interface the cookie
 path of `RequireAuthentication` depends on.
@@ -333,7 +333,7 @@ path of `RequireAuthentication` depends on.
 at sign-in — subject, name, preferred username, email, and the `sid` claim
 when the provider sends one. Every later request authenticates against that
 row; the ID token is never re-verified or re-read after the callback. That is
-the whole point: session length becomes tflive's to choose instead of a
+the whole point: session length becomes openplan's to choose instead of a
 consequence of whatever access-token lifespan or SSO idle timeout a customer's
 IdP happens to run.
 
@@ -341,8 +341,8 @@ Two independent bounds decide whether a session is live (`Session.IsLive`):
 
 | Bound | Config | Default | Behavior |
 |---|---|---|---|
-| Absolute | `TFLIVE_SESSION_ABSOLUTE_TTL` | `8h` | Set once at sign-in and never extended — a hard cap from `CreatedAt`, not slid by activity |
-| Idle | `TFLIVE_SESSION_IDLE_TTL` | `1h` | Slides on activity, but the row is written back at most once every 5 minutes (`SessionTouchInterval`), not on every request |
+| Absolute | `OPENPLAN_SESSION_ABSOLUTE_TTL` | `8h` | Set once at sign-in and never extended — a hard cap from `CreatedAt`, not slid by activity |
+| Idle | `OPENPLAN_SESSION_IDLE_TTL` | `1h` | Slides on activity, but the row is written back at most once every 5 minutes (`SessionTouchInterval`), not on every request |
 
 The session's effective expiry is the earlier of the two (`Session.ExpiresAt`),
 which is what `/v1/me` reports as `sessionExpiresAt` so the SPA can
@@ -353,7 +353,7 @@ re-checks when it has made some *other* request since the snapshot. A tab
 nobody is using makes none, so it makes no noise at its expiry either and the
 idle bound is reached — the alternative is a browser that renews itself once an
 hour forever and an idle bound that can never fire.
-`TFLIVE_SESSION_IDLE_TTL` must not exceed `TFLIVE_SESSION_ABSOLUTE_TTL` — the
+`OPENPLAN_SESSION_IDLE_TTL` must not exceed `OPENPLAN_SESSION_ABSOLUTE_TTL` — the
 API refuses to start otherwise, since an unreachable idle bound is a
 configuration mistake, not a permissive setting. Revocation (`RevokedAt`) is
 checked first in `IsLive` and is unconditional: a revoked session is dead
@@ -361,7 +361,7 @@ regardless of either bound, which is what lets back-channel logout end a
 session immediately instead of waiting on a TTL.
 
 Because claims are copied once, an IdP-side change — a renamed user, a
-disabled account, a role change — is not observed by tflive until the session
+disabled account, a role change — is not observed by openplan until the session
 ends. Without back-channel logout that staleness window is bounded by the 8h
 absolute cap; with it, the window closes as soon as the notification arrives
 (see below). That trade is deliberate: session length a BYO-IdP deployment
@@ -403,68 +403,68 @@ across Keycloak, Okta, and Google. The full reasoning, including the ArgoCD
 comparison that shaped it, is in the [design
 doc](superpowers/specs/2026-08-25-oidc-server-side-flow-design.md). What has
 changed is what "expired" means: it is no longer the IdP's ID token `exp` but
-tflive's own idle and absolute bounds.
+openplan's own idle and absolute bounds.
 
 ### What ends a session, and what does not
 
-An expiring IdP session does **not** end a tflive session. Keycloak's cleanup
+An expiring IdP session does **not** end a openplan session. Keycloak's cleanup
 task removes expired sessions from its own storage and notifies nobody
 (`ClearExpiredUserSessions` calls `removeAllExpired()` and nothing else), so
 back-channel logout fires only on explicit events — a logout, or an admin
 disabling a user. This is the independence the app-owned session was built for.
 
-Re-authentication is **not** silent, though. tflive never contacts the IdP
+Re-authentication is **not** silent, though. openplan never contacts the IdP
 after the callback — no refresh, no userinfo call — so Keycloak's SSO idle
 timer starts at sign-in and is never refreshed. At Keycloak's default
 `ssoSessionIdleTimeout` of 1800s it is always dead thirty minutes in, long
-before tflive's own session ends. When a tflive session does expire, the trip
+before openplan's own session ends. When a openplan session does expire, the trip
 through `/v1/auth/login` therefore finds no SSO session to pick up and the user
 gets a full credential prompt.
 
 That is the safer of the two possible behaviours, and it is worth being
 deliberate about: silent re-authentication is the IdP renewing someone without
-asking, which is exactly what would nullify `TFLIVE_SESSION_IDLE_TTL`. An
-abandoned browser whose tflive session idled out would simply be resumed.
+asking, which is exactly what would nullify `OPENPLAN_SESSION_IDLE_TTL`. An
+abandoned browser whose openplan session idled out would simply be resumed.
 
-The BYO-IdP consequence follows: **tflive's idle bound is only enforceable if
+The BYO-IdP consequence follows: **openplan's idle bound is only enforceable if
 the deployment's IdP idles out at least as fast.** A provider configured with a
-long SSO idle timeout makes `TFLIVE_SESSION_IDLE_TTL` advisory, because the
+long SSO idle timeout makes `OPENPLAN_SESSION_IDLE_TTL` advisory, because the
 redirect that follows it will be answered silently.
 
 ### Back-Channel Logout
 
 `POST /v1/auth/backchannel-logout` is unauthenticated by necessity: it is
-called by the IdP's own server, which holds no tflive cookie and no bearer
+called by the IdP's own server, which holds no openplan cookie and no bearer
 token. The credential is the logout token itself (OIDC Back-Channel Logout
 1.0), verified against the same JWKS and issuer that verify ID tokens
-(`OIDCVerifier.VerifyLogoutToken`). tflive checks signature, issuer, audience,
+(`OIDCVerifier.VerifyLogoutToken`). openplan checks signature, issuer, audience,
 `iat` freshness (2-minute maximum age), the required
 `http://schemas.openid.net/event/backchannel-logout` event, and rejects any
 token carrying `nonce` — its presence would mean an ID token is being replayed
 as a logout token, which would let anyone holding one revoke another user's
 sessions.
 
-A logout token identifies what to revoke by `sid` or `sub`, and tflive prefers
+A logout token identifies what to revoke by `sid` or `sub`, and openplan prefers
 the narrower one: a `sid` match revokes one browser session
 (`RevokeSessionsByIDPSessionID`); a `sub`-only match revokes every session for
 that user (`RevokeSessionsBySubject`). The endpoint returns `200` whether or
-not anything matched — whether tflive holds a session for a given `sid` is not
+not anything matched — whether openplan holds a session for a given `sid` is not
 something an unauthenticated caller gets to learn.
 
 A BYO-IdP deployment needs **no** session or timeout configuration on its
-provider; the 8h/1h bounds above are entirely tflive's own. To get immediate
+provider; the 8h/1h bounds above are entirely openplan's own. To get immediate
 revocation instead of waiting on those bounds, point the provider's
 back-channel logout at the API's `/v1/auth/backchannel-logout` endpoint —
 **reachable from the identity provider**, not from the browser. Those are
 frequently different addresses: the callback and post-logout redirect URIs
-are resolved by the browser, so `TFLIVE_PUBLIC_URL` (e.g.
+are resolved by the browser, so `OPENPLAN_PUBLIC_URL` (e.g.
 `http://localhost:5173` on the reference stack) is correct for them, but a
 back-channel logout is a server-to-server POST from the IdP's own process —
-if the IdP runs in its own container or network, `TFLIVE_PUBLIC_URL` names
+if the IdP runs in its own container or network, `OPENPLAN_PUBLIC_URL` names
 nothing it can reach, and the notification silently never arrives.
 
-`TFLIVE_BACKCHANNEL_LOGOUT_URL` (optional; defaults to
-`<TFLIVE_PUBLIC_URL>/v1/auth/backchannel-logout`, unchanged from before) lets
+`OPENPLAN_BACKCHANNEL_LOGOUT_URL` (optional; defaults to
+`<OPENPLAN_PUBLIC_URL>/v1/auth/backchannel-logout`, unchanged from before) lets
 a deployment register a different, IdP-reachable address. On the local
 Compose stack, the provisioner sets it to `http://api:8081/v1/auth/backchannel-logout`
 — the API's address on the Compose network, which is what Keycloak resolves,
@@ -472,14 +472,14 @@ rather than `http://localhost:5173`, which inside Keycloak's own container
 means Keycloak's own loopback.
 
 Also enable session-required logout so the provider includes `sid` in both the
-ID token and the logout token — without it, tflive can only match on `sub`,
+ID token and the logout token — without it, openplan can only match on `sub`,
 so signing one device out signs out every session the user has. On Keycloak,
 the provisioner (`internal/keycloak/provisioner.go`) sets this automatically
-on the `tflive-api` client:
+on the `openplan-api` client:
 
 | Attribute | Value | Effect |
 |---|---|---|
-| `backchannel.logout.url` | `TFLIVE_BACKCHANNEL_LOGOUT_URL`, or `<TFLIVE_PUBLIC_URL>/v1/auth/backchannel-logout` if unset | Where Keycloak posts the logout token |
+| `backchannel.logout.url` | `OPENPLAN_BACKCHANNEL_LOGOUT_URL`, or `<OPENPLAN_PUBLIC_URL>/v1/auth/backchannel-logout` if unset | Where Keycloak posts the logout token |
 | `backchannel.logout.session.required` | `true` | Includes `sid` in the ID token and the logout token |
 
 Matching prefers `sid` over `sub`, so a provider that signs one device out does
@@ -487,14 +487,14 @@ not sign the user out everywhere. When the `sid` matches no row the handler
 falls back to `sub` in the same token: a provider may put `sid` in the logout
 token but not in the ID token the session was built from, leaving
 `idp_session_id` empty on every row, and the narrow key would then silently
-revoke nothing at all. Either way the endpoint answers `200` — whether tflive
+revoke nothing at all. Either way the endpoint answers `200` — whether openplan
 holds a session for a given `sid` is not something an unauthenticated caller
 gets to learn.
 
 A provider that never calls this endpoint is not a broken deployment: sessions
 still end at their own absolute and idle bounds, exactly as if back-channel
 logout did not exist. The endpoint only closes the gap between "the IdP
-considers this session over" and "tflive does too."
+considers this session over" and "openplan does too."
 
 Logout redirects rather than returning the IdP's logout URL in a JSON body.
 That URL carries the raw ID token as `id_token_hint`, and there is no reason to
@@ -528,11 +528,11 @@ ever describes the bearer of the token presented, so it cannot look up a third
 user, and cross-user lookup is vendor-specific admin API territory — Okta's
 Users API, Microsoft Graph, Google's Admin SDK. Each needs elevated permissions
 a customer's security team must approve, and each would put that provider on
-the critical path for rendering a grants list. tflive previously did exactly
+the critical path for rendering a grants list. openplan previously did exactly
 this against the Keycloak Admin API, with a service account holding
 `query-users` and `view-users` on the realm. That is gone.
 
-Instead, every ID token tflive verifies already carries what the UI needs, and
+Instead, every ID token openplan verifies already carries what the UI needs, and
 the callback writes it down:
 
 | Column | Source |
@@ -548,7 +548,7 @@ a failure there fails the sign-in. Ordering it first is what makes the useful
 statement true: **a session row exists only for a subject that is in the
 projection.**
 
-This is a projection, not a directory. tflive is not the source of truth for
+This is a projection, not a directory. openplan is not the source of truth for
 identity and performs no account lifecycle: nothing creates, disables, or
 deletes a row except a sign-in. A changed name or email is picked up the next
 time that person signs in.
@@ -566,7 +566,7 @@ you grant them a role. The same applies to bootstrapping the first
 administrator.
 
 There is no pending-grant mechanism and no email-to-`sub` reconciliation, both
-of which would mean inventing an identity tflive has not been told about. SCIM
+of which would mean inventing an identity openplan has not been told about. SCIM
 is the answer if pre-provisioning is ever genuinely required, and is
 out of scope here and in the security architecture.
 
@@ -581,7 +581,7 @@ docker compose --env-file .env up --build keycloak-provision
 A successful run exits `0` once every resource is reconciled. Re-run
 the same command after configuration changes. The provisioner looks up realms,
 clients, roles, scopes, mappers, and users by their immutable names, creates
-missing resources, and repairs fields owned by tflive without discarding
+missing resources, and repairs fields owned by openplan without discarding
 unrelated representation fields managed by a deployment administrator.
 
 To prove idempotence locally:
@@ -700,7 +700,7 @@ refusal.
 There is no provisioning step and no verification command. The API resolves both
 identifiers itself at startup, by the same rules the retired provisioner used:
 
-- a store whose name matches `OPENFGA_STORE_NAME` (default `tflive`) is adopted;
+- a store whose name matches `OPENFGA_STORE_NAME` (default `openplan`) is adopted;
   one is created only when absent
 - a stored model semantically equal to the repository model is adopted; a new
   immutable version is written only when none matches

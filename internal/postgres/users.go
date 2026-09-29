@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vishu42/tflive/internal/app"
+	"github.com/vishu42/openplan/internal/app"
 )
 
 // UpsertUser projects one verified identity.

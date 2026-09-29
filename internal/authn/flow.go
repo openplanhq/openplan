@@ -24,7 +24,7 @@ type FlowConfig struct {
 	ClientSecret string
 	RedirectURI  string
 	// Scopes defaults to openid, profile, email. offline_access is never
-	// requested: tflive holds no refresh token.
+	// requested: openplan holds no refresh token.
 	Scopes     []string
 	Endpoints  EndpointSource
 	HTTPClient *http.Client

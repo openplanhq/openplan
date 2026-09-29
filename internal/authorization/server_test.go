@@ -7,16 +7,16 @@ import (
 	"github.com/openfga/openfga/pkg/storage/memory"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vishu42/tflive/internal/authorization"
+	"github.com/vishu42/openplan/internal/authorization"
 )
 
 func TestNewRequiresAPool(t *testing.T) {
-	_, err := authorization.New(context.Background(), nil, "tflive")
+	_, err := authorization.New(context.Background(), nil, "openplan")
 	require.Error(t, err, "a server with no datastore must refuse to exist")
 }
 
 func TestBootstrapResolvesAStoreAndModel(t *testing.T) {
-	auth, err := authorization.NewWithDatastore(context.Background(), memory.New(), "tflive-test")
+	auth, err := authorization.NewWithDatastore(context.Background(), memory.New(), "openplan-test")
 	require.NoError(t, err)
 	t.Cleanup(auth.Close)
 
@@ -27,7 +27,7 @@ func TestBootstrapResolvesAStoreAndModel(t *testing.T) {
 func TestCloseIsSafeTwice(t *testing.T) {
 	// New closes on a failed bootstrap and callers also defer it, so a double
 	// free would turn a startup error into a panic.
-	auth, err := authorization.NewWithDatastore(context.Background(), memory.New(), "tflive-test")
+	auth, err := authorization.NewWithDatastore(context.Background(), memory.New(), "openplan-test")
 	require.NoError(t, err)
 	auth.Close()
 	auth.Close()
@@ -78,7 +78,7 @@ func TestNewRefusesAnUnmigratedDatabase(t *testing.T) {
 	ctx := context.Background()
 	pool := unmigratedTestPool(t)
 
-	_, err := authorization.New(ctx, pool, "tflive-unmigrated-test")
+	_, err := authorization.New(ctx, pool, "openplan-unmigrated-test")
 	require.ErrorContains(t, err, "schema is not migrated")
 	require.ErrorContains(t, err, "Migrate")
 }

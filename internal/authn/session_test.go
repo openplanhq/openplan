@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vishu42/tflive/internal/encryption"
+	"github.com/vishu42/openplan/internal/encryption"
 )
 
 func testCipher(t *testing.T) *encryption.Cipher {

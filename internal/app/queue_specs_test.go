@@ -3,7 +3,7 @@ package app
 import (
 	"testing"
 
-	"github.com/vishu42/tflive/internal/queue"
+	"github.com/vishu42/openplan/internal/queue"
 )
 
 // The three authorization kinds are gone: granting the founding owner,

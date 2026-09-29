@@ -682,16 +682,16 @@ import (
 	"github.com/openfga/openfga/pkg/tuple"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vishu42/tflive/internal/authorization"
+	"github.com/vishu42/openplan/internal/authorization"
 )
 
 // testPool gates every test in this file: without a database there is nothing
 // worth asserting, because the deliverable is what Postgres does at commit.
 func testPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	dsn := os.Getenv("tflive_POSTGRES_TEST_DSN")
+	dsn := os.Getenv("OPENPLAN_POSTGRES_TEST_DSN")
 	if dsn == "" {
-		t.Skip("set tflive_POSTGRES_TEST_DSN (or run `make differential-test`)")
+		t.Skip("set OPENPLAN_POSTGRES_TEST_DSN (or run `make differential-test`)")
 	}
 	pool, err := pgxpool.New(context.Background(), dsn)
 	require.NoError(t, err)
@@ -781,7 +781,7 @@ add `NewDatastoreForTest` as an exported test-only wrapper around
 # integration tests somewhere else:
 #
 #   make differential-test TEST_DSN=postgres://…
-TEST_DSN ?= postgres://tflive:tflive@localhost:55432/tflive_test?sslmode=disable
+TEST_DSN ?= postgres://openplan:openplan@localhost:55432/openplan_test?sslmode=disable
 
 # internal/authorization/write.go is a transcription of OpenFGA's own write path
 # with its BeginTx/Commit removed, so a tuple write can join our transaction.
@@ -793,7 +793,7 @@ TEST_DSN ?= postgres://tflive:tflive@localhost:55432/tflive_test?sslmode=disable
 #
 # Run it after every `go get github.com/openfga/openfga@...`.
 differential-test: ## Run the authorization tests that need a real Postgres
-	tflive_POSTGRES_TEST_DSN=$(TEST_DSN) go test ./internal/authorization/ -count=1 -v
+	OPENPLAN_POSTGRES_TEST_DSN=$(TEST_DSN) go test ./internal/authorization/ -count=1 -v
 ```
 
 Add `differential-test` to `.PHONY`, and widen the help column from `%-14s` to
@@ -843,7 +843,7 @@ import (
 	"github.com/openfga/openfga/pkg/tuple"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vishu42/tflive/internal/authorization"
+	"github.com/vishu42/openplan/internal/authorization"
 )
 
 // TestTransactionalWriteMatchesUpstream writes the same tuples two ways -- once
@@ -868,7 +868,7 @@ func TestTransactionalWriteMatchesUpstream(t *testing.T) {
 	keys := storage.Writes{
 		tuple.NewTupleKey("stack:diff", "owner", "user:alice"),
 		tuple.NewTupleKey("stack:diff", "viewer", "user:bob"),
-		tuple.NewTupleKey("stack:diff", "parent", "platform:tflive"),
+		tuple.NewTupleKey("stack:diff", "parent", "platform:openplan"),
 	}
 
 	// Upstream path: no transaction on the context, so Write falls through.
@@ -1033,7 +1033,7 @@ func TestNewIsIdempotentAcrossRestarts(t *testing.T) {
 	ctx := context.Background()
 	pool := testPool(t)
 
-	first, err := authorization.New(ctx, pool, "tflive-test")
+	first, err := authorization.New(ctx, pool, "openplan-test")
 	require.NoError(t, err)
 	firstStore, firstModel := first.StoreID(), first.ModelID()
 	first.Close()
@@ -1041,7 +1041,7 @@ func TestNewIsIdempotentAcrossRestarts(t *testing.T) {
 	// A restart must adopt the same store and model. If it does not, every boot
 	// mints a new model id and existing tuples are evaluated against a model
 	// nothing was written for.
-	second, err := authorization.New(ctx, pool, "tflive-test")
+	second, err := authorization.New(ctx, pool, "openplan-test")
 	require.NoError(t, err)
 	t.Cleanup(second.Close)
 	require.Equal(t, firstStore, second.StoreID())
@@ -1049,13 +1049,13 @@ func TestNewIsIdempotentAcrossRestarts(t *testing.T) {
 }
 
 func TestNewRequiresAPool(t *testing.T) {
-	_, err := authorization.New(context.Background(), nil, "tflive")
+	_, err := authorization.New(context.Background(), nil, "openplan")
 	require.Error(t, err)
 }
 
 func TestCloseIsSafeTwice(t *testing.T) {
 	// New closes on a failed bootstrap and callers also defer it.
-	auth, err := authorization.New(context.Background(), testPool(t), "tflive-test")
+	auth, err := authorization.New(context.Background(), testPool(t), "openplan-test")
 	require.NoError(t, err)
 	auth.Close()
 	auth.Close()
@@ -1067,7 +1067,7 @@ func TestCloseIsSafeTwice(t *testing.T) {
 - [ ] **Step 3: Write `server.go`**
 
 ```go
-const defaultStoreName = "tflive"
+const defaultStoreName = "openplan"
 
 // New starts an embedded OpenFGA over the application's pool and resolves the
 // store and authorization model this process will use.
@@ -1177,7 +1177,7 @@ higher fidelity than the hand-written fakes they replace.
 ```go
 func newTestAuthorization(t *testing.T) *authorization.Authorization {
 	t.Helper()
-	auth, err := authorization.NewWithDatastore(context.Background(), memory.New(), "tflive-test")
+	auth, err := authorization.NewWithDatastore(context.Background(), memory.New(), "openplan-test")
 	require.NoError(t, err)
 	t.Cleanup(auth.Close)
 	return auth

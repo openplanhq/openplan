@@ -5,7 +5,7 @@ import "fmt"
 // grantableRelations is the port's one genuine refusal — the only hazard
 // OpenFGA does not reject on the write path.
 //
-// A structural edge such as {platform:tflive, parent, stack:X} is a perfectly
+// A structural edge such as {platform:openplan, parent, stack:X} is a perfectly
 // legal tuple: `parent` declares [platform] as a direct type because
 // platform-admin inheritance requires it. So the server cannot tell stack
 // provisioning writing that edge from a grant endpoint writing it, and nothing

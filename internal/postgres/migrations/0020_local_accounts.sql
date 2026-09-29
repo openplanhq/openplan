@@ -1,6 +1,6 @@
--- Accounts tflive authenticates itself, so a POC, demo, or test needs no IdP.
+-- Accounts openplan authenticates itself, so a POC, demo, or test needs no IdP.
 --
--- This is not a second identity provider. tflive signs nothing and issues no
+-- This is not a second identity provider. openplan signs nothing and issues no
 -- token: a local sign-in verifies a password and then mints the same session
 -- row the OIDC callback mints, and every request after it is authenticated by
 -- the same opaque session cookie. See #211 and
@@ -9,7 +9,7 @@
 --
 -- Distinct from users (0019), which is a projection written at every sign-in
 -- from whatever the provider asserted. This table is the credential store for
--- the accounts tflive owns, and a row here still projects into users at
+-- the accounts openplan owns, and a row here still projects into users at
 -- sign-in through the ordinary path, so grants and search treat a local user
 -- exactly like a federated one.
 create table local_accounts (

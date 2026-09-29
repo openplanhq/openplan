@@ -54,7 +54,7 @@ func TestObjectFromIDRejectsMalformedType(t *testing.T) {
 
 // Pins the character rules. Each rejected input changes a tuple's meaning
 // rather than merely being malformed, which is why this is the highest-value
-// test in the package: sub is the one identifier tflive does not originate.
+// test in the package: sub is the one identifier openplan does not originate.
 func TestCanonicalIdentifiersRejectTupleSyntax(t *testing.T) {
 	// Each of these changes the meaning of a tuple rather than merely being
 	// malformed: ':' forges the type prefix, '#' makes a userset reference,
@@ -112,16 +112,16 @@ func TestSubjectRejectsANonActorType(t *testing.T) {
 // against, so a drifted id would not fail loudly -- it would answer every
 // global question against an empty object. This pins both slots it occupies.
 func TestPlatformSingletonIsFixedAndMayAct(t *testing.T) {
-	if Platform.String() != "platform:tflive" {
-		t.Fatalf("Platform = %q, want platform:tflive", Platform.String())
+	if Platform.String() != "platform:openplan" {
+		t.Fatalf("Platform = %q, want platform:openplan", Platform.String())
 	}
 	if !Platform.Valid() {
 		t.Fatal("the platform singleton must be a valid object")
 	}
 	// The parent edge puts the platform in the user slot, so unlike a stack it
 	// must validate as a subject.
-	if PlatformSubject.String() != "platform:tflive" {
-		t.Fatalf("PlatformSubject = %q, want platform:tflive", PlatformSubject.String())
+	if PlatformSubject.String() != "platform:openplan" {
+		t.Fatalf("PlatformSubject = %q, want platform:openplan", PlatformSubject.String())
 	}
 	if !PlatformSubject.Valid() {
 		t.Fatal("the platform singleton must be able to occupy the user slot")

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Allow stack owners and platform administrators to manage fixed stack roles (owner, operator, approver, viewer) from the tflive UI. Built on the reserved `/stacks/:stackId/access` route scaffold, gated by `canManageAccess`.
+Allow stack owners and platform administrators to manage fixed stack roles (owner, operator, approver, viewer) from the openplan UI. Built on the reserved `/stacks/:stackId/access` route scaffold, gated by `canManageAccess`.
 
 ## Dependencies
 

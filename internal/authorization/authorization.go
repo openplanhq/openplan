@@ -141,7 +141,7 @@ func (auth *Authorization) CanAll(ctx context.Context, subject string, checks []
 // the response cannot be trusted, and fails the call. See grantFromTuple.
 //
 //	[{alice, owner, one}]                      → [{alice, owner, one}]
-//	[{platform:tflive, parent, one}]           → []            (structural)
+//	[{platform:openplan, parent, one}]           → []            (structural)
 //	[{alice, can_view, one}]                   → error         (unstorable)
 //	[{alice, owner, one}, {bob, viewer, one}]  → both, sorted by subject
 //	[{alice, owner, other}]                    → error         (wrong object)
@@ -297,7 +297,7 @@ func deleteKeys(grants []Grant) ([]*openfgav1.TupleKeyWithoutCondition, error) {
 // become a Grant, because callers must treat them differently.
 var (
 	// errNotAGrant reports a tuple that legitimately exists and simply is not
-	// access -- a structural edge such as {platform:tflive, parent, stack:X}.
+	// access -- a structural edge such as {platform:openplan, parent, stack:X}.
 	// "Who has access to this stack" still has a correct and complete answer
 	// with such a tuple present, so a lister skips it.
 	errNotAGrant = errors.New("tuple is not a grant")
@@ -313,7 +313,7 @@ var (
 // that is not one as either not-a-grant or malformed.
 //
 //	{user:alice, owner, stack:abc}, stack:abc       → Grant{…}, nil
-//	{platform:tflive, parent, stack:abc}, stack:abc → errNotAGrant       (structural edge)
+//	{platform:openplan, parent, stack:abc}, stack:abc → errNotAGrant       (structural edge)
 //	{user:alice, root, stack:abc}, stack:abc        → errNotAGrant       (structural)
 //	{user:alice, can_view, stack:abc}, stack:abc    → errMalformedTuple  (derived; unstorable)
 //	{user:alice, nonsense, stack:abc}, stack:abc    → errMalformedTuple  (unknown; unstorable)
@@ -331,7 +331,7 @@ func grantFromTuple(key *openfgav1.TupleKey, requestedObject Object) (Grant, err
 	if key.GetObject() != requestedObject.String() {
 		return Grant{}, fmt.Errorf("%w: object is not the one requested", errMalformedTuple)
 	}
-	// A non-user subject is legitimate: #141 stores {platform:tflive, parent,
+	// A non-user subject is legitimate: #141 stores {platform:openplan, parent,
 	// stack:X} on every stack so admins inherit stack permissions. It is a
 	// structural edge, not access, so it is skipped rather than refused.
 	if !strings.HasPrefix(key.GetUser(), subjectPrefix) {

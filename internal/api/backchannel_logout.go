@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/vishu42/tflive/internal/authn"
+	"github.com/vishu42/openplan/internal/authn"
 )
 
 // LogoutTokenVerifier authenticates a back-channel logout notification.
@@ -18,12 +18,12 @@ type LogoutTokenVerifier interface {
 // handleBackchannelLogout ends sessions on the IdP's instruction.
 //
 // It is unauthenticated by necessity: the notification arrives from the
-// provider's server, which holds no tflive cookie and no bearer token. The
+// provider's server, which holds no openplan cookie and no bearer token. The
 // logout token is the credential, and it is verified against the same JWKS
 // that verifies ID tokens.
 //
-// Without this endpoint, disabling a user at the IdP would not reach tflive
-// until their session hit its own expiry, because tflive stops consulting the
+// Without this endpoint, disabling a user at the IdP would not reach openplan
+// until their session hit its own expiry, because openplan stops consulting the
 // provider once a session exists.
 func (server *Server) handleBackchannelLogout(response http.ResponseWriter, request *http.Request) {
 	response.Header().Set("Cache-Control", "no-store")
@@ -89,7 +89,7 @@ func (server *Server) handleBackchannelLogout(response http.ResponseWriter, requ
 		return
 	}
 
-	// 200 whether or not anything matched. Whether tflive holds a session for
+	// 200 whether or not anything matched. Whether openplan holds a session for
 	// a given sid is not something an unauthenticated caller gets to learn.
 	log.Printf("backchannel logout: revoked %d session(s)", revoked)
 	response.WriteHeader(http.StatusOK)

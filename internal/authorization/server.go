@@ -13,7 +13,7 @@ import (
 // defaultStoreName is the OpenFGA store this application adopts when none is
 // named. The name is what bootstrap reconciles against, so it is configuration
 // rather than an identifier anyone has to record.
-const defaultStoreName = "tflive"
+const defaultStoreName = "openplan"
 
 // Authorization answers authorization questions against an in-process OpenFGA.
 //
@@ -41,7 +41,7 @@ type Authorization struct {
 // and leaves the pool to whoever created it, because the application is still
 // using it for everything else.
 //
-//	pool, "tflive" → *Authorization with a resolved store and model
+//	pool, "openplan" → *Authorization with a resolved store and model
 //	nil pool       → nil, error
 //	a second call against the same database adopts the same store and model
 func New(ctx context.Context, pool *pgxpool.Pool, storeName string) (*Authorization, error) {

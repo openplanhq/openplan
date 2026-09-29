@@ -86,10 +86,10 @@ func provisionWithBackend(ctx context.Context, cfg Config, backend provisionBack
 	realmSpec := RealmSpec{
 		Name:    cfg.Realm,
 		Enabled: true,
-		// Five minutes. It does not govern how long a tflive session lasts —
-		// that is tflive's own, set by TFLIVE_SESSION_ABSOLUTE_TTL and
-		// TFLIVE_SESSION_IDLE_TTL — and the ID token it bounds authenticates
-		// nothing at tflive after the callback, since the middleware works off
+		// Five minutes. It does not govern how long a openplan session lasts —
+		// that is openplan's own, set by OPENPLAN_SESSION_ABSOLUTE_TTL and
+		// OPENPLAN_SESSION_IDLE_TTL — and the ID token it bounds authenticates
+		// nothing at openplan after the callback, since the middleware works off
 		// the session store. So this is hygiene rather than a control: the one
 		// token we keep is short-lived by default, and nothing is lost by that.
 		// RP-Initiated Logout 1.0 says the OP SHOULD honour an expired
@@ -115,7 +115,7 @@ func provisionWithBackend(ctx context.Context, cfg Config, backend provisionBack
 	apiAttributes["backchannel.logout.revoke.offline.tokens"] = "false"
 	if _, err := backend.EnsureClient(ctx, cfg.Realm, ClientSpec{
 		ClientID:                     cfg.APIClientID,
-		Name:                         "tflive API",
+		Name:                         "openplan API",
 		Secret:                       cfg.APIClientSecret,
 		Enabled:                      true,
 		Protocol:                     "openid-connect",
@@ -149,7 +149,7 @@ func provisionWithBackend(ctx context.Context, cfg Config, backend provisionBack
 	}
 	// No global realm roles are assigned. Keycloak is identity-only: the
 	// platform tiers that platform-admin and stack-creator used to carry are
-	// OpenFGA tuples on platform:tflive now, seeded by #212. Leaving the roles
+	// OpenFGA tuples on platform:openplan now, seeded by #212. Leaving the roles
 	// here would be worse than redundant -- a stale claim nothing reads looks
 	// like access that was granted.
 

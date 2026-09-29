@@ -132,7 +132,7 @@ export interface Me {
 }
 ```
 
-Frontend can now use `me.tenantID` for API calls. The `VITE_TFLIVE_TENANT_ID` env var remains as a build-time fallback (`resolveTenantID` in `config.ts` unchanged for now).
+Frontend can now use `me.tenantID` for API calls. The `VITE_OPENPLAN_TENANT_ID` env var remains as a build-time fallback (`resolveTenantID` in `config.ts` unchanged for now).
 
 ### Mock auth provider update
 

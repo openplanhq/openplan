@@ -20,10 +20,10 @@ func TestLoadConfigReadsValidLocalSettings(t *testing.T) {
 	if got, want := cfg.AdminRealm, "master"; got != want {
 		t.Fatalf("AdminRealm = %q, want %q", got, want)
 	}
-	if got, want := cfg.Realm, "tflive"; got != want {
+	if got, want := cfg.Realm, "openplan"; got != want {
 		t.Fatalf("Realm = %q, want %q", got, want)
 	}
-	if got, want := cfg.APIClientID, "tflive-api"; got != want {
+	if got, want := cfg.APIClientID, "openplan-api"; got != want {
 		t.Fatalf("APIClientID = %q, want %q", got, want)
 	}
 	if got, want := cfg.APIClientSecret, "oidc-client-secret"; got != want {
@@ -38,7 +38,7 @@ func TestLoadConfigReadsValidLocalSettings(t *testing.T) {
 	if got, want := cfg.BackchannelLogoutURI, "http://localhost:5173/v1/auth/backchannel-logout"; got != want {
 		t.Fatalf("BackchannelLogoutURI = %q, want %q", got, want)
 	}
-	if cfg.PlatformAdminEmail != "tflive-platform-admin@local.test" || cfg.PlatformAdminFirstName != "tflive" || cfg.PlatformAdminLastName != "Platform Administrator" {
+	if cfg.PlatformAdminEmail != "openplan-platform-admin@local.test" || cfg.PlatformAdminFirstName != "openplan" || cfg.PlatformAdminLastName != "Platform Administrator" {
 		t.Fatalf("platform admin profile = email %q, first %q, last %q", cfg.PlatformAdminEmail, cfg.PlatformAdminFirstName, cfg.PlatformAdminLastName)
 	}
 	if got, want := cfg.HTTPTimeout, 10*time.Second; got != want {
@@ -60,10 +60,10 @@ func TestLoadConfigUsesNonSecretDefaults(t *testing.T) {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
 
-	if cfg.AdminRealm != "master" || cfg.Realm != "tflive" {
+	if cfg.AdminRealm != "master" || cfg.Realm != "openplan" {
 		t.Fatalf("realm defaults = admin %q, product %q", cfg.AdminRealm, cfg.Realm)
 	}
-	if cfg.APIClientID != "tflive-api" {
+	if cfg.APIClientID != "openplan-api" {
 		t.Fatalf("client default = api %q", cfg.APIClientID)
 	}
 	if cfg.HTTPTimeout != 10*time.Second {
@@ -90,14 +90,14 @@ func TestLoadConfigOverridesBackchannelLogoutURIWhenSet(t *testing.T) {
 	t.Parallel()
 
 	env := validConfigEnv()
-	env["TFLIVE_BACKCHANNEL_LOGOUT_URL"] = "http://api:8081/v1/auth/backchannel-logout"
+	env["OPENPLAN_BACKCHANNEL_LOGOUT_URL"] = "http://api:8081/v1/auth/backchannel-logout"
 
 	cfg, err := LoadConfig(mapEnv(env))
 	if err != nil {
 		t.Fatalf("LoadConfig returned error: %v", err)
 	}
 	// The IdP, not the browser, calls this one — so unlike CallbackURI it
-	// must not be forced to derive from TFLIVE_PUBLIC_URL, which the browser
+	// must not be forced to derive from OPENPLAN_PUBLIC_URL, which the browser
 	// resolves but a server-to-server POST from the IdP's own process often
 	// cannot reach.
 	if got, want := cfg.BackchannelLogoutURI, "http://api:8081/v1/auth/backchannel-logout"; got != want {
@@ -109,17 +109,17 @@ func TestLoadConfigRejectsInvalidBackchannelLogoutURL(t *testing.T) {
 	t.Parallel()
 
 	env := validConfigEnv()
-	env["TFLIVE_BACKCHANNEL_LOGOUT_URL"] = "/backchannel-logout"
+	env["OPENPLAN_BACKCHANNEL_LOGOUT_URL"] = "/backchannel-logout"
 
-	if _, err := LoadConfig(mapEnv(env)); err == nil || !strings.Contains(err.Error(), "TFLIVE_BACKCHANNEL_LOGOUT_URL") {
-		t.Fatalf("LoadConfig() error = %v, want a TFLIVE_BACKCHANNEL_LOGOUT_URL error", err)
+	if _, err := LoadConfig(mapEnv(env)); err == nil || !strings.Contains(err.Error(), "OPENPLAN_BACKCHANNEL_LOGOUT_URL") {
+		t.Fatalf("LoadConfig() error = %v, want a OPENPLAN_BACKCHANNEL_LOGOUT_URL error", err)
 	}
 }
 
 func TestLoadConfigRequiresPublicURLAndClientSecret(t *testing.T) {
 	t.Parallel()
 
-	for _, name := range []string{"TFLIVE_PUBLIC_URL", "OIDC_CLIENT_SECRET"} {
+	for _, name := range []string{"OPENPLAN_PUBLIC_URL", "OIDC_CLIENT_SECRET"} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			env := validConfigEnv()
@@ -138,7 +138,7 @@ func TestLoadConfigRequiresRuntimeSecretsAndEndpoints(t *testing.T) {
 		"KEYCLOAK_ADMIN_URL",
 		"KEYCLOAK_ADMIN_USERNAME",
 		"KEYCLOAK_ADMIN_PASSWORD",
-		"TFLIVE_PUBLIC_URL",
+		"OPENPLAN_PUBLIC_URL",
 		"OIDC_CLIENT_SECRET",
 		"KEYCLOAK_PLATFORM_ADMIN_USERNAME",
 		"KEYCLOAK_PLATFORM_ADMIN_PASSWORD",
@@ -172,9 +172,9 @@ func TestLoadConfigRejectsInvalidSecuritySettings(t *testing.T) {
 		{name: "admin URL is relative", key: "KEYCLOAK_ADMIN_URL", value: "/keycloak", wantErr: "absolute http or https URL"},
 		{name: "admin URL has credentials", key: "KEYCLOAK_ADMIN_URL", value: "https://admin:secret@keycloak.example.com", wantErr: "must not contain user information"},
 		{name: "admin URL has query", key: "KEYCLOAK_ADMIN_URL", value: "https://keycloak.example.com?token=x", wantErr: "must not contain a query or fragment"},
-		{name: "public URL is relative", key: "TFLIVE_PUBLIC_URL", value: "/app", wantErr: "absolute http or https URL"},
-		{name: "public URL has credentials", key: "TFLIVE_PUBLIC_URL", value: "https://user:pass@app.example.com", wantErr: "must not contain user information"},
-		{name: "public URL has query", key: "TFLIVE_PUBLIC_URL", value: "https://app.example.com?token=x", wantErr: "must not contain a query or fragment"},
+		{name: "public URL is relative", key: "OPENPLAN_PUBLIC_URL", value: "/app", wantErr: "absolute http or https URL"},
+		{name: "public URL has credentials", key: "OPENPLAN_PUBLIC_URL", value: "https://user:pass@app.example.com", wantErr: "must not contain user information"},
+		{name: "public URL has query", key: "OPENPLAN_PUBLIC_URL", value: "https://app.example.com?token=x", wantErr: "must not contain a query or fragment"},
 		{name: "invalid timeout", key: "KEYCLOAK_HTTP_TIMEOUT", value: "0s", wantErr: "must be greater than zero"},
 	}
 
@@ -206,19 +206,19 @@ func TestLoadConfigRequiresDistinctAdminUsers(t *testing.T) {
 
 func validConfigEnv() map[string]string {
 	return map[string]string{
-		"TFLIVE_ENVIRONMENT":                 "production",
+		"OPENPLAN_ENVIRONMENT":               "production",
 		"KEYCLOAK_ADMIN_URL":                 "http://keycloak:8080/",
 		"KEYCLOAK_ADMIN_REALM":               "master",
-		"KEYCLOAK_ADMIN_USERNAME":            "tflive-admin",
+		"KEYCLOAK_ADMIN_USERNAME":            "openplan-admin",
 		"KEYCLOAK_ADMIN_PASSWORD":            "master-local-only-secret",
-		"KEYCLOAK_REALM":                     "tflive",
-		"KEYCLOAK_API_CLIENT_ID":             "tflive-api",
-		"TFLIVE_PUBLIC_URL":                  "http://localhost:5173/",
+		"KEYCLOAK_REALM":                     "openplan",
+		"KEYCLOAK_API_CLIENT_ID":             "openplan-api",
+		"OPENPLAN_PUBLIC_URL":                "http://localhost:5173/",
 		"OIDC_CLIENT_SECRET":                 "oidc-client-secret",
-		"KEYCLOAK_PLATFORM_ADMIN_USERNAME":   "tflive-platform-admin",
+		"KEYCLOAK_PLATFORM_ADMIN_USERNAME":   "openplan-platform-admin",
 		"KEYCLOAK_PLATFORM_ADMIN_PASSWORD":   "platform-local-only-secret",
-		"KEYCLOAK_PLATFORM_ADMIN_EMAIL":      "tflive-platform-admin@local.test",
-		"KEYCLOAK_PLATFORM_ADMIN_FIRST_NAME": "tflive",
+		"KEYCLOAK_PLATFORM_ADMIN_EMAIL":      "openplan-platform-admin@local.test",
+		"KEYCLOAK_PLATFORM_ADMIN_FIRST_NAME": "openplan",
 		"KEYCLOAK_PLATFORM_ADMIN_LAST_NAME":  "Platform Administrator",
 		"KEYCLOAK_HTTP_TIMEOUT":              "10s",
 	}

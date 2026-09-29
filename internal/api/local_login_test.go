@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vishu42/tflive/internal/app"
-	"github.com/vishu42/tflive/internal/authn"
-	"github.com/vishu42/tflive/internal/encryption"
+	"github.com/vishu42/openplan/internal/app"
+	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/encryption"
 )
 
 type stubLocalAuthenticator struct {
@@ -34,7 +34,7 @@ func testIdentity() authn.Identity {
 		Subject:           "local_root",
 		DisplayName:       "Root",
 		PreferredUsername: "root",
-		Email:             "root@tflive.local",
+		Email:             "root@openplan.local",
 	}
 }
 
@@ -89,7 +89,7 @@ func TestLocalLoginSetsASessionCookieForCorrectCredentials(t *testing.T) {
 		t.Fatalf("created %d sessions, want 1", len(sessions.created))
 	}
 	session := sessions.created[0]
-	if session.Subject != "local_root" || session.PreferredUsername != "root" || session.Email != "root@tflive.local" {
+	if session.Subject != "local_root" || session.PreferredUsername != "root" || session.Email != "root@openplan.local" {
 		t.Fatalf("session identity = %+v, want the authenticated identity", session)
 	}
 	if session.IDHash != authn.HashSessionID(cookie.Value) {
@@ -126,7 +126,7 @@ func TestLocalLoginProjectsTheSignedInUser(t *testing.T) {
 	if len(users.users) != 1 {
 		t.Fatalf("projected %d users, want 1", len(users.users))
 	}
-	if users.users[0] != (app.UserProfile{Sub: "local_root", DisplayName: "Root", Email: "root@tflive.local"}) {
+	if users.users[0] != (app.UserProfile{Sub: "local_root", DisplayName: "Root", Email: "root@openplan.local"}) {
 		t.Fatalf("projected %+v, want the authenticated identity", users.users[0])
 	}
 }

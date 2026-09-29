@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vishu42/tflive/internal/app"
+	"github.com/vishu42/openplan/internal/app"
 )
 
 var _ app.UserRepository = (*Store)(nil)

@@ -13,7 +13,7 @@ import (
 // It is its own sentinel rather than an ErrInvalidCommand, because this is the
 // user-visible face of a deliberate design limitation rather than a malformed
 // request, and the message reaches a person: the API renders it verbatim.
-var ErrUserNotProvisioned = errors.New("user has not signed in to tflive yet")
+var ErrUserNotProvisioned = errors.New("user has not signed in to openplan yet")
 
 // UserProfile is what a verified token asserted about a person. It is display
 // data with one key: Sub is the OIDC sub claim and the only stable identifier,

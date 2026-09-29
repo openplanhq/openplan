@@ -467,7 +467,7 @@ rtk go test ./internal/temporal ./internal/workflows -count=1
 rtk go test ./internal/postgres -run 'TestCreateTemplateRunPersistsRunFields|TestApproveTemplateRunApprovesWaitingRun|TestRequestTemplateRunCancellationMarksCancelableRun' -count=1
 ```
 
-Expected: PASS. Without `tflive_POSTGRES_TEST_DSN`, Postgres integration tests may report SKIP; with the repository's test DSN they must PASS and round-trip the exact subject strings.
+Expected: PASS. Without `OPENPLAN_POSTGRES_TEST_DSN`, Postgres integration tests may report SKIP; with the repository's test DSN they must PASS and round-trip the exact subject strings.
 
 - [ ] **Step 3: Run the complete verification suite before changing backlog status**
 

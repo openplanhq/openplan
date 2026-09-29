@@ -1,6 +1,6 @@
 # Terraform Destroy Flow
 
-Ref: [#126](https://github.com/vishu42/tflive/issues/126)
+Ref: [#126](https://github.com/vishu42/openplan/issues/126)
 
 ## Summary
 

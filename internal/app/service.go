@@ -14,11 +14,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vishu42/tflive/internal/authn"
-	"github.com/vishu42/tflive/internal/authorization"
-	"github.com/vishu42/tflive/internal/domain"
-	"github.com/vishu42/tflive/internal/queue"
-	"github.com/vishu42/tflive/internal/strval"
+	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/authorization"
+	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/queue"
+	"github.com/vishu42/openplan/internal/strval"
 )
 
 var (
@@ -1320,7 +1320,7 @@ func (service *Service) AssignStackRole(ctx context.Context, command AssignStack
 		return GrantView{}, err
 	}
 
-	// The projection is the only place tflive knows a person exists, so this
+	// The projection is the only place openplan knows a person exists, so this
 	// check is where the accepted limitation is actually enforced: a subject
 	// that has never signed in cannot be granted a role. It is unconditional —
 	// previously it was skipped whenever no directory was configured, which
@@ -2260,7 +2260,7 @@ func (systemClock) Now() time.Time {
 
 // randomID mints one identifier: the kind's prefix followed by 16 bytes of
 // CSPRNG output in hex. Every generator below is this function plus a prefix,
-// so the shape of a tflive identifier is defined in exactly one place.
+// so the shape of a openplan identifier is defined in exactly one place.
 //
 // A failed read falls back to a timestamp rather than failing the call: the
 // generator interfaces return no error, and the callers minting these IDs are

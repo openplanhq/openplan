@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Build, launch, and drive the tflive web frontend to observe a change at runtime
+description: Build, launch, and drive the openplan web frontend to observe a change at runtime
 ---
 
 # Verifying web/ changes at runtime
@@ -9,7 +9,7 @@ The frontend is a Vite SPA (`npm run dev` in `web/`, port 5173) that proxies
 `/v1` and `/healthz` to a backend on `http://localhost:8081` (see
 `vite.config.ts`). In dev mode the tenant defaults to `tenant_123`
 (`src/config.ts`), and auth comes from `MockAuthProvider` (default role
-"operator"; override with `VITE_TFLIVE_MOCK_USER_ROLE`).
+"operator"; override with `VITE_OPENPLAN_MOCK_USER_ROLE`).
 
 The Go backend does not yet return `effectiveCapabilities` on stack responses
 (AUTH-013/017 not landed), so capability-gated routes hang in a blank

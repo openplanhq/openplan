@@ -7,9 +7,9 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/vishu42/tflive/internal/app"
-	"github.com/vishu42/tflive/internal/domain"
-	"github.com/vishu42/tflive/internal/planbundle"
+	"github.com/vishu42/openplan/internal/app"
+	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/planbundle"
 )
 
 // CreatePlanKey returns the key the run's saved plan is encrypted with, making

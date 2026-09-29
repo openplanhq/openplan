@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/vishu42/tflive/internal/domain"
+	"github.com/vishu42/openplan/internal/domain"
 )
 
 type FileSink struct {

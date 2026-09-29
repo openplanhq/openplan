@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/vishu42/tflive/internal/queue"
+	"github.com/vishu42/openplan/internal/queue"
 )
 
 func TestNotifyUserSpecKeyNamesTheEvent(t *testing.T) {

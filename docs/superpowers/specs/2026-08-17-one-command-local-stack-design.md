@@ -11,7 +11,7 @@ property and without removing Keycloak or OpenFGA from the stack.
 A clean checkout requires copying `.env.example` to `.env`, starting a partial
 dependency set, running `openfga-provision bootstrap`, copying two identifiers
 from stdout into `.env` by hand, running `openfga-provision verify`, starting
-the remaining dependencies, then running `tflive-api`, `tflive-worker`, and the
+the remaining dependencies, then running `openplan-api`, `openplan-worker`, and the
 Vite dev server as three separate host processes with a Go toolchain and a Node
 toolchain installed. `docker-compose.yaml` defines thirteen services and five
 volumes, four of which are Postgres instances. `.env.example` defines
@@ -129,7 +129,7 @@ and reaches the container directly. Matching the internal and external port is
 required because the port is part of the issuer string.
 
 `VITE_OIDC_ISSUER` and `OIDC_ISSUER_URL` are both set to
-`http://keycloak.localhost:8082/realms/tflive`. `KEYCLOAK_WEB_REDIRECT_URIS` and
+`http://keycloak.localhost:8082/realms/openplan`. `KEYCLOAK_WEB_REDIRECT_URIS` and
 `KEYCLOAK_WEB_ORIGINS` continue to name the browser origin of the `web`
 service.
 

@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// Session is one signed-in browser, owned by tflive rather than by the IdP.
+// Session is one signed-in browser, owned by openplan rather than by the IdP.
 // The claims are copied at sign-in: after that, requests authenticate against
 // this record and the ID token is not re-read, so session lifetime is ours to
 // choose rather than a consequence of the provider's token lifespan.

@@ -4,10 +4,10 @@ import (
 	"errors"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/vishu42/tflive/internal/app"
-	"github.com/vishu42/tflive/internal/authn"
-	"github.com/vishu42/tflive/internal/encryption"
-	"github.com/vishu42/tflive/internal/queue"
+	"github.com/vishu42/openplan/internal/app"
+	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/encryption"
+	"github.com/vishu42/openplan/internal/queue"
 )
 
 var ErrNotFound = errors.New("postgres: not found")

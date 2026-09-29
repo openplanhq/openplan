@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/vishu42/tflive/internal/domain"
-	"github.com/vishu42/tflive/internal/logsink"
-	"github.com/vishu42/tflive/internal/planbundle"
-	"github.com/vishu42/tflive/internal/runseal"
+	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/logsink"
+	"github.com/vishu42/openplan/internal/planbundle"
+	"github.com/vishu42/openplan/internal/runseal"
 )
 
 // memoryPlanStore keeps sealed plans in memory, keyed by run.

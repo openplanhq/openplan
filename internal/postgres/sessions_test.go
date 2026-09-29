@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vishu42/tflive/internal/authn"
-	"github.com/vishu42/tflive/internal/encryption"
+	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/encryption"
 )
 
 func newSessionTestStore(t *testing.T, ctx context.Context) *Store {

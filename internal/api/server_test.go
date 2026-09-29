@@ -15,12 +15,12 @@ import (
 	openfgav1 "github.com/openfga/api/proto/openfga/v1"
 	"github.com/openfga/openfga/pkg/storage"
 	"github.com/openfga/openfga/pkg/storage/memory"
-	"github.com/vishu42/tflive/internal/app"
-	"github.com/vishu42/tflive/internal/authn"
+	"github.com/vishu42/openplan/internal/app"
+	"github.com/vishu42/openplan/internal/authn"
 
-	"github.com/vishu42/tflive/internal/authorization"
-	"github.com/vishu42/tflive/internal/domain"
-	"github.com/vishu42/tflive/internal/queue"
+	"github.com/vishu42/openplan/internal/authorization"
+	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/queue"
 )
 
 const apiKeycloakSubject = "6fdb4b4c-2a8f-4cf7-945f-38f67f6a0e91"
@@ -2629,7 +2629,7 @@ func newAPITestDependencies(t *testing.T) *apiTestDependencies {
 
 func newBareAPITestDependencies(t *testing.T) *apiTestDependencies {
 	t.Helper()
-	auth, err := authorization.NewWithDatastore(context.Background(), memory.New(), "tflive-test")
+	auth, err := authorization.NewWithDatastore(context.Background(), memory.New(), "openplan-test")
 	if err != nil {
 		t.Fatalf("build authorization: %v", err)
 	}
@@ -3722,7 +3722,7 @@ func (d *failAfterBootstrap) ReadStartingWithUser(ctx context.Context, store str
 func newFailingAPIAuthorization(t *testing.T) *authorization.Authorization {
 	t.Helper()
 	datastore := &failAfterBootstrap{OpenFGADatastore: memory.New()}
-	auth, err := authorization.NewWithDatastore(context.Background(), datastore, "tflive-test")
+	auth, err := authorization.NewWithDatastore(context.Background(), datastore, "openplan-test")
 	if err != nil {
 		t.Fatalf("build authorization: %v", err)
 	}

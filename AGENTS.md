@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This repository contains the `tflive` Terraform platform. Go services live in
+This repository contains the `openplan` Terraform platform. Go services live in
 `cmd/` (`api`, `executor`, and provisioning commands) and reusable backend code
 is under `internal/`. Key boundaries include `internal/api`, `internal/app`,
 `internal/postgres`, `internal/workflows`, `internal/activities`, and

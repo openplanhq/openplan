@@ -10,7 +10,7 @@ is not, and what the issue reduces to once the stale half is removed.
 1. `POST /v1/auth/login` returns an **RS256 JWT** to the caller.
 2. `Verify` reads `iss` from an unverified parse and **routes** to either a
    local branch (in-process public key) or the OIDC branch.
-3. tflive persists an **RSA keypair** across restarts, "if it regenerates on
+3. openplan persists an **RSA keypair** across restarts, "if it regenerates on
    restart every session dies".
 4. **Server-side sessions are out of scope.**
 
@@ -49,7 +49,7 @@ struct the handler already had.
 
 The pattern is correct **in ArgoCD**, where it was read from, because ArgoCD's
 session cookie *is* the JWT. Routing on `iss` is how ArgoCD tells its own
-cookie from an IdP's. tflive's cookie is a random 32-byte reference, and the
+cookie from an IdP's. openplan's cookie is a random 32-byte reference, and the
 question "who signed this" is never asked of it, because nothing signed it.
 
 The same collapse takes the other three items with it:
@@ -121,12 +121,12 @@ and the sign-in screen cannot be built without it.
   than parsing one, so the contract can be asserted once against both producers.
 - **Epic #210** still says requests are accepted "with either the cookie or an
   `Authorization: Bearer` header, so a future CLI still works." #216 removed the
-  bearer path on purpose and named the replacement: a credential tflive issues
+  bearer path on purpose and named the replacement: a credential openplan issues
   and can revoke. That paragraph is stale.
 
 ## The one thing genuinely lost
 
-Nothing today wants a stateless tflive-issued token. A future CLI is the usual
+Nothing today wants a stateless openplan-issued token. A future CLI is the usual
 candidate, and `middleware.go` has already ruled on it in favour of a revocable
 issued credential. Re-adding signing later costs a keypair and a verifier branch
 — roughly the code this removes — and would be built against a real caller

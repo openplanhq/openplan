@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/vishu42/tflive/internal/queue"
+	"github.com/vishu42/openplan/internal/queue"
 )
 
 // pgxExecutor is satisfied by both *pgxpool.Pool and pgx.Tx, so enqueue works

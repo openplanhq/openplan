@@ -4,7 +4,7 @@
 
 **Goal:** Keep all filesystem-dependent activities for one `TemplateRun` on the same Temporal worker replica while allowing multiple replicas to share the task queue.
 
-**Architecture:** Enable Temporal Go SDK session workers in every `cmd/tflive-worker` process. Create one session per `TemplateRunWorkflow`, route workspace activities through the session context, and keep status/failure persistence on the normal workflow context. A session spans approval waits because apply and destroy reuse workspace state after approval; a worker crash still fails the session and is reported as a failed run.
+**Architecture:** Enable Temporal Go SDK session workers in every `cmd/openplan-worker` process. Create one session per `TemplateRunWorkflow`, route workspace activities through the session context, and keep status/failure persistence on the normal workflow context. A session spans approval waits because apply and destroy reuse workspace state after approval; a worker crash still fails the session and is reported as a failed run.
 
 **Tech Stack:** Go 1.24, Temporal Go SDK v1.45.0, Temporal workflow test suite, standard `testing` package.
 

@@ -149,7 +149,7 @@ describe("AppShell", () => {
   });
 
   it("renders nav, an identity slot, a static tenant indicator, and routed content", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { default: AppShell } = await import("./AppShell");
 
     const testRouter = createMemoryRouter(
@@ -263,7 +263,7 @@ describe("routeConfig", () => {
   });
 
   it("renders the existing workflow console unchanged at the index route", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
 
     const testRouter = createMemoryRouter(routeConfig, { initialEntries: ["/"] });
@@ -274,7 +274,7 @@ describe("routeConfig", () => {
   });
 
   it("renders a placeholder for every reserved screen in the route map", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
 
     const reservedPaths = [
@@ -297,7 +297,7 @@ describe("routeConfig", () => {
   });
 
   it("renders the 404 screen for unknown paths", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
 
     const testRouter = createMemoryRouter(routeConfig, { initialEntries: ["/nonexistent"] });

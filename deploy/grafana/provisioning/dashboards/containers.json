@@ -1,6 +1,6 @@
 {
-  "uid": "tflive-containers",
-  "title": "tflive containers",
+  "uid": "openplan-containers",
+  "title": "openplan containers",
   "schemaVersion": 39,
   "version": 1,
   "refresh": "5s",
@@ -9,7 +9,7 @@
     "to": "now"
   },
   "tags": [
-    "tflive"
+    "openplan"
   ],
   "panels": [
     {

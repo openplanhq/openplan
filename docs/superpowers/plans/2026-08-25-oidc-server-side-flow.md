@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make the tflive API the OIDC confidential client, so the browser never handles a token and any OIDC provider works without a paid custom authorization server.
+**Goal:** Make the openplan API the OIDC confidential client, so the browser never handles a token and any OIDC provider works without a paid custom authorization server.
 
 **Architecture:** The API gains `/v1/auth/login`, `/v1/auth/callback`, and `/v1/auth/logout`. Login redirects the browser to the IdP with PKCE, sealing `state`/`nonce`/`code_verifier`/`return_to` in a short-lived AEAD cookie. The callback exchanges the code server-to-server, verifies the **ID token** (whose `aud` is the client ID), and sets it as an httpOnly session cookie. The authn middleware accepts the token from the `Authorization` header or that cookie. There is no refresh token: session length is the ID token's lifetime, and the SPA re-authenticates through the IdP's still-live SSO session.
 
@@ -14,9 +14,9 @@
 
 - Go module floor is `go 1.25.0`, toolchain `go1.25.14`. Do not raise either.
 - Format every Go file you touch: `gofmt -w <files>`.
-- **tflive is pre-production with disposable state.** Never write a backward-compatibility shim, a config alias, or a data migration for old values. A stale env var name must fail startup loudly.
+- **openplan is pre-production with disposable state.** Never write a backward-compatibility shim, a config alias, or a data migration for old values. A stale env var name must fail startup loudly.
 - Only one new Go dependency is authorised: `golang.org/x/oauth2`. Do not add `coreos/go-oidc` — our own discovery and verifier are a settled decision (`docs/superpowers/specs/2026-08-20-iam-openfga-surface-analysis.md`).
-- Cookie names are exactly `tflive_session` and `tflive_auth_tx`.
+- Cookie names are exactly `openplan_session` and `openplan_auth_tx`.
 - Both cookies are `HttpOnly` and `SameSite=Lax`. **Never `SameSite=Strict`** — the IdP callback is a cross-site top-level GET and `Strict` withholds the cookie, breaking every login.
 - `Secure` is set on both cookies only when the runtime mode is `production`.
 - Requested scope is exactly `openid profile email`. **Never add `offline_access`** — no refresh token is wanted.
@@ -256,7 +256,7 @@ func decodeKey(raw string) ([]byte, error) {
 }
 ```
 
-**Note the one deliberate behaviour change:** the encoding moves from `base64.RawStdEncoding` to `base64.RawURLEncoding`, because this value now goes into a cookie and `+` and `/` are not safe there. Existing encrypted credentials in a local database will fail to decode — that is acceptable and expected, because tflive is pre-production with disposable state. Do not write a fallback decoder.
+**Note the one deliberate behaviour change:** the encoding moves from `base64.RawStdEncoding` to `base64.RawURLEncoding`, because this value now goes into a cookie and `+` and `/` are not safe there. Existing encrypted credentials in a local database will fail to decode — that is acceptable and expected, because openplan is pre-production with disposable state. Do not write a fallback decoder.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -265,7 +265,7 @@ Expected: PASS, 4 tests
 
 - [ ] **Step 5: Point the store at the new package and delete the old one**
 
-In `internal/postgres/store.go`, change the import from `"github.com/vishu42/tflive/internal/credentials"` to `"github.com/vishu42/tflive/internal/secrets"`, and change both occurrences of `*credentials.Cipher` to `*secrets.Cipher` and `credentials.NewCipher` to `secrets.NewCipher`. Leave the `os.Getenv` call alone for now — Task 2 removes it.
+In `internal/postgres/store.go`, change the import from `"github.com/vishu42/openplan/internal/credentials"` to `"github.com/vishu42/openplan/internal/secrets"`, and change both occurrences of `*credentials.Cipher` to `*secrets.Cipher` and `credentials.NewCipher` to `secrets.NewCipher`. Leave the `os.Getenv` call alone for now — Task 2 removes it.
 
 Then: `rm -r internal/credentials`
 
@@ -312,7 +312,7 @@ Append to `internal/config/auth_test.go`:
 
 ```go
 func TestLoadSecurityConfigRequiresOIDCClientCredentials(t *testing.T) {
-	for _, name := range []string{"OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET", "TFLIVE_PUBLIC_URL", "SESSION_ENCRYPTION_KEY"} {
+	for _, name := range []string{"OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET", "OPENPLAN_PUBLIC_URL", "SESSION_ENCRYPTION_KEY"} {
 		t.Run(name, func(t *testing.T) {
 			env := validSecurityEnv()
 			delete(env, name)
@@ -328,7 +328,7 @@ func TestLoadSecurityConfigRejectsRetiredOIDCAudience(t *testing.T) {
 	// Silently accepting the old name would validate a value nobody re-checked.
 	env := validSecurityEnv()
 	delete(env, "OIDC_CLIENT_ID")
-	env["OIDC_AUDIENCE"] = "tflive-api"
+	env["OIDC_AUDIENCE"] = "openplan-api"
 	if _, err := loadSecurityConfig(envLookup(env)); err == nil {
 		t.Fatal("loadSecurityConfig accepted the retired OIDC_AUDIENCE")
 	}
@@ -343,7 +343,7 @@ func TestLoadSecurityConfigReadsPublicURLAndSessionKey(t *testing.T) {
 	if cfg.PublicURL == nil || cfg.PublicURL.String() != "http://localhost:5173" {
 		t.Fatalf("PublicURL = %v", cfg.PublicURL)
 	}
-	if cfg.OIDC.ClientID != "tflive-api" {
+	if cfg.OIDC.ClientID != "openplan-api" {
 		t.Fatalf("ClientID = %q", cfg.OIDC.ClientID)
 	}
 	if cfg.OIDC.ClientSecret.Value() != "oidc-client-secret" {
@@ -373,11 +373,11 @@ These tests use `strings.Contains`, so ensure `"strings"` is imported. Add these
 ```go
 func validSecurityEnv() map[string]string {
 	return map[string]string{
-		"TFLIVE_ENVIRONMENT":     "development",
-		"TFLIVE_TENANT_ID":       "tenant_123",
-		"TFLIVE_PUBLIC_URL":      "http://localhost:5173",
-		"OIDC_ISSUER_URL":        "http://localhost:8082/realms/tflive",
-		"OIDC_CLIENT_ID":         "tflive-api",
+		"OPENPLAN_ENVIRONMENT":     "development",
+		"OPENPLAN_TENANT_ID":       "tenant_123",
+		"OPENPLAN_PUBLIC_URL":      "http://localhost:5173",
+		"OIDC_ISSUER_URL":        "http://localhost:8082/realms/openplan",
+		"OIDC_CLIENT_ID":         "openplan-api",
 		"OIDC_CLIENT_SECRET":     "oidc-client-secret",
 		"SESSION_ENCRYPTION_KEY": "01234567890123456789012345678901",
 		"OPENFGA_API_URL":        "http://localhost:8080",
@@ -433,7 +433,7 @@ Replace the `OIDC_AUDIENCE` block in `loadSecurityConfig` with:
 		return SecurityConfig{}, authConfigError("OIDC_CLIENT_SECRET is required")
 	}
 
-	publicURL, err := parseConfigURL("TFLIVE_PUBLIC_URL", getenv("TFLIVE_PUBLIC_URL"))
+	publicURL, err := parseConfigURL("OPENPLAN_PUBLIC_URL", getenv("OPENPLAN_PUBLIC_URL"))
 	if err != nil {
 		return SecurityConfig{}, err
 	}
@@ -448,7 +448,7 @@ Replace the `OIDC_AUDIENCE` block in `loadSecurityConfig` with:
 	}
 ```
 
-Import `"github.com/vishu42/tflive/internal/secrets"`. Add `publicURL.Scheme != "https"` to the existing production HTTPS block alongside the issuer check. Populate the new fields in the returned struct, and update the `String()` format so it renders `ClientID`, `ClientSecret`, `PublicURL`, and `SessionEncryptionKey` — the `Secret` type already redacts, so pass the values through `%s`, never `%q` on `.Value()`.
+Import `"github.com/vishu42/openplan/internal/secrets"`. Add `publicURL.Scheme != "https"` to the existing production HTTPS block alongside the issuer check. Populate the new fields in the returned struct, and update the `String()` format so it renders `ClientID`, `ClientSecret`, `PublicURL`, and `SessionEncryptionKey` — the `Secret` type already redacts, so pass the values through `%s`, never `%q` on `.Value()`.
 
 - [ ] **Step 4: Route the credential key through config**
 
@@ -509,7 +509,7 @@ and in `runWithDependencies`, before the `newStore` call:
 	store, err := deps.newStore(pool, specs, credentialCipher)
 ```
 
-Apply the same shape in `cmd/worker/main.go`. Update `cmd/api/main_test.go`'s env fixture: replace `"OIDC_AUDIENCE": "tflive-api"` with the four new variables from `validSecurityEnv()` above, and update any `newStore` test double to the three-argument signature.
+Apply the same shape in `cmd/worker/main.go`. Update `cmd/api/main_test.go`'s env fixture: replace `"OIDC_AUDIENCE": "openplan-api"` with the four new variables from `validSecurityEnv()` above, and update any `newStore` test double to the three-argument signature.
 
 - [ ] **Step 5: Run the tests**
 
@@ -881,7 +881,7 @@ git commit -m "feat(authn): carry nonce and expiry off the verified token"
 
 ### Task 5: Session and transaction cookies
 
-Two cookies with opposite trust models. `tflive_session` holds the raw ID token and needs no encryption — it is a signed JWT, and tampering is caught by verification. `tflive_auth_tx` holds `state`, `nonce`, `code_verifier`, and `return_to`, and **must** be sealed: `state` only defends against login-CSRF if the browser cannot forge it.
+Two cookies with opposite trust models. `openplan_session` holds the raw ID token and needs no encryption — it is a signed JWT, and tampering is caught by verification. `openplan_auth_tx` holds `state`, `nonce`, `code_verifier`, and `return_to`, and **must** be sealed: `state` only defends against login-CSRF if the browser cannot forge it.
 
 **Files:**
 - Create: `internal/authn/session.go`
@@ -912,7 +912,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/vishu42/tflive/internal/secrets"
+	"github.com/vishu42/openplan/internal/secrets"
 )
 
 func testCipher(t *testing.T) *secrets.Cipher {
@@ -1056,17 +1056,17 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/vishu42/tflive/internal/secrets"
+	"github.com/vishu42/openplan/internal/secrets"
 )
 
 const (
 	// SessionCookieName holds the IdP's raw ID token. It is deliberately not
 	// encrypted: it is a signed JWT whose contents are the user's own claims,
 	// and tampering is caught by verification.
-	SessionCookieName = "tflive_session"
+	SessionCookieName = "openplan_session"
 	// TransactionCookieName holds the in-flight login, sealed. state is only
 	// meaningful if the browser cannot forge it.
-	TransactionCookieName = "tflive_auth_tx"
+	TransactionCookieName = "openplan_auth_tx"
 	// transactionMaxAge bounds how long a login may sit half-finished.
 	transactionMaxAge = 600
 	// transactionCookiePath scopes the transaction cookie to the routes that
@@ -1235,7 +1235,7 @@ func (s staticEndpoints) Endpoints() Endpoints { return s.endpoints }
 func newTestFlow(t *testing.T, endpoints Endpoints) *Flow {
 	t.Helper()
 	flow, err := NewFlow(FlowConfig{
-		ClientID:     "tflive-api",
+		ClientID:     "openplan-api",
 		ClientSecret: "client-secret",
 		RedirectURI:  "http://localhost:5173/v1/auth/callback",
 		Endpoints:    staticEndpoints{endpoints: endpoints},
@@ -1266,7 +1266,7 @@ func TestAuthorizationURLCarriesFlowParameters(t *testing.T) {
 	query := parsed.Query()
 	for name, want := range map[string]string{
 		"response_type":         "code",
-		"client_id":             "tflive-api",
+		"client_id":             "openplan-api",
 		"redirect_uri":          "http://localhost:5173/v1/auth/callback",
 		"scope":                 "openid profile email",
 		"state":                 "state-1",
@@ -1322,7 +1322,7 @@ func TestExchangeSendsClientCredentialsAndReturnsIDToken(t *testing.T) {
 	if rawIDToken != "raw.id.token" {
 		t.Fatalf("id token = %q", rawIDToken)
 	}
-	if !gotBasic || gotUser != "tflive-api" || gotPassword != "client-secret" {
+	if !gotBasic || gotUser != "openplan-api" || gotPassword != "client-secret" {
 		t.Fatalf("client authentication = %q/%q basic=%t", gotUser, gotPassword, gotBasic)
 	}
 	if gotForm.Get("grant_type") != "authorization_code" {
@@ -1394,7 +1394,7 @@ func TestNewFlowRejectsIncompleteConfig(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			cfg := FlowConfig{
-				ClientID:     "tflive-api",
+				ClientID:     "openplan-api",
 				ClientSecret: "client-secret",
 				RedirectURI:  "http://localhost:5173/v1/auth/callback",
 				Endpoints:    staticEndpoints{},
@@ -1444,7 +1444,7 @@ type FlowConfig struct {
 	ClientSecret string
 	RedirectURI  string
 	// Scopes defaults to openid, profile, email. offline_access is never
-	// requested: tflive holds no refresh token.
+	// requested: openplan holds no refresh token.
 	Scopes     []string
 	Endpoints  EndpointSource
 	HTTPClient *http.Client
@@ -1589,7 +1589,7 @@ func TestRequireAuthenticationAcceptsSessionCookie(t *testing.T) {
 	valid := VerifiedToken{Subject: "user-123", Name: "Ada"}
 
 	// hasCookie is separate from cookie so the empty-value row actually sends
-	// `tflive_session=`. Gating injection on `cookie != ""` would make that row
+	// `openplan_session=`. Gating injection on `cookie != ""` would make that row
 	// byte-identical to "neither" and leave the empty-value guard untested — a
 	// real client sends exactly that after the cookie is cleared.
 	for _, test := range []struct {
@@ -1719,8 +1719,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vishu42/tflive/internal/authn"
-	"github.com/vishu42/tflive/internal/secrets"
+	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/secrets"
 )
 
 type stubFlow struct {
@@ -2043,7 +2043,7 @@ Expected: FAIL — `undefined: WithAuth`
 
 - [ ] **Step 3: Add the server option**
 
-In `internal/api/server.go`, add to the imports `"context"` and `"github.com/vishu42/tflive/internal/secrets"`, add the field `auth AuthConfig` to `Server`, and add:
+In `internal/api/server.go`, add to the imports `"context"` and `"github.com/vishu42/openplan/internal/secrets"`, add the field `auth AuthConfig` to `Server`, and add:
 
 ```go
 // AuthFlow is the subset of the OIDC flow the handlers use. *authn.Flow
@@ -2106,7 +2106,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/vishu42/tflive/internal/authn"
+	"github.com/vishu42/openplan/internal/authn"
 )
 
 // authFailureBody is the single response every authentication failure renders.
@@ -2356,7 +2356,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vishu42/tflive/internal/authn"
+	"github.com/vishu42/openplan/internal/authn"
 )
 
 func TestMeFromPrincipalReportsSessionExpiry(t *testing.T) {
@@ -2423,7 +2423,7 @@ git commit -m "feat(api): report session expiry from /v1/me"
 
 ### Task 10: Collapse the Keycloak fixture to one confidential client
 
-`tflive-web` (public, PKCE, browser) and `tflive-api` (bearer-only) become a single confidential client that does both jobs. The audience mapper that forced `aud: tflive-api` into the access token goes with them — an ID token's `aud` *is* the client ID, which is the point of the whole issue. This shrinks #197.
+`openplan-web` (public, PKCE, browser) and `openplan-api` (bearer-only) become a single confidential client that does both jobs. The audience mapper that forced `aud: openplan-api` into the access token goes with them — an ID token's `aud` *is* the client ID, which is the point of the whole issue. This shrinks #197.
 
 **Files:**
 - Modify: `internal/keycloak/config.go:11-16,21-39,58-72,120-145`
@@ -2432,12 +2432,12 @@ git commit -m "feat(api): report session expiry from /v1/me"
 - Modify: `internal/keycloak/config_test.go`
 
 **Interfaces:**
-- Consumes: `TFLIVE_PUBLIC_URL` (Task 2)
+- Consumes: `OPENPLAN_PUBLIC_URL` (Task 2)
 - Produces: `keycloak.Config{APIClientID, APIClientSecret string; CallbackURI, PostLogoutRedirectURI string}` — `WebClientID`, `RedirectURIs`, and `WebOrigins` are removed
 
 - [ ] **Step 1: Write the failing tests**
 
-In `internal/keycloak/provisioner_test.go`, replace the `tflive-web` assertions with assertions on the single client. Read lines 60–115 for the existing style and follow it:
+In `internal/keycloak/provisioner_test.go`, replace the `openplan-web` assertions with assertions on the single client. Read lines 60–115 for the existing style and follow it:
 
 ```go
 func TestProvisionCreatesOneConfidentialClient(t *testing.T) {
@@ -2448,7 +2448,7 @@ func TestProvisionCreatesOneConfidentialClient(t *testing.T) {
 		t.Fatalf("provisionWithBackend returned error: %v", err)
 	}
 
-	if _, exists := backend.clients["tflive-web"]; exists {
+	if _, exists := backend.clients["openplan-web"]; exists {
 		t.Fatal("the public browser client still exists")
 	}
 
@@ -2489,7 +2489,7 @@ func TestProvisionNoLongerCreatesTheAudienceScope(t *testing.T) {
 }
 ```
 
-Add a `validProvisionConfig()` helper if the test file has no equivalent, returning a `Config` with `APIClientID: "tflive-api"`, `APIClientSecret: "oidc-client-secret"`, `CallbackURI: "http://localhost:5173/v1/auth/callback"`, `PostLogoutRedirectURI: "http://localhost:5173/"`, and whatever the existing tests already set for realm, admin, and platform fields. If `fakeProvisionBackend` does not record client scopes in a map, add one following how it records `clients`.
+Add a `validProvisionConfig()` helper if the test file has no equivalent, returning a `Config` with `APIClientID: "openplan-api"`, `APIClientSecret: "oidc-client-secret"`, `CallbackURI: "http://localhost:5173/v1/auth/callback"`, `PostLogoutRedirectURI: "http://localhost:5173/"`, and whatever the existing tests already set for realm, admin, and platform fields. If `fakeProvisionBackend` does not record client scopes in a map, add one following how it records `clients`.
 
 In `internal/keycloak/config_test.go`, replace any `KEYCLOAK_WEB_REDIRECT_URIS` / `KEYCLOAK_WEB_ORIGINS` cases with:
 
@@ -2509,7 +2509,7 @@ func TestLoadConfigDerivesCallbackFromPublicURL(t *testing.T) {
 }
 
 func TestLoadConfigRequiresPublicURLAndClientSecret(t *testing.T) {
-	for _, name := range []string{"TFLIVE_PUBLIC_URL", "OIDC_CLIENT_SECRET"} {
+	for _, name := range []string{"OPENPLAN_PUBLIC_URL", "OIDC_CLIENT_SECRET"} {
 		t.Run(name, func(t *testing.T) {
 			env := validKeycloakEnv()
 			delete(env, name)
@@ -2539,13 +2539,13 @@ In `internal/keycloak/config.go`, delete the `defaultWebClient` constant, and on
 In `LoadConfig`, delete the `KEYCLOAK_WEB_REDIRECT_URIS` and `KEYCLOAK_WEB_ORIGINS` blocks and the two `parseBrowserURLs` calls, and add:
 
 ```go
-	publicURLRaw, err := required(getenv, "TFLIVE_PUBLIC_URL")
+	publicURLRaw, err := required(getenv, "OPENPLAN_PUBLIC_URL")
 	if err != nil {
 		return Config{}, err
 	}
 	publicURL, err := parseAdminURL(publicURLRaw)
 	if err != nil {
-		return Config{}, fmt.Errorf("invalid Keycloak config: TFLIVE_PUBLIC_URL %w", err)
+		return Config{}, fmt.Errorf("invalid Keycloak config: OPENPLAN_PUBLIC_URL %w", err)
 	}
 	apiClientSecret, err := required(getenv, "OIDC_CLIENT_SECRET")
 	if err != nil {
@@ -2575,7 +2575,7 @@ Replace the two `EnsureClient` blocks (the bearer-only API client and the public
 	apiAttributes["post.logout.redirect.uris"] = cfg.PostLogoutRedirectURI
 	if _, err := backend.EnsureClient(ctx, cfg.Realm, ClientSpec{
 		ClientID:                     cfg.APIClientID,
-		Name:                         "tflive API",
+		Name:                         "openplan API",
 		Secret:                       cfg.APIClientSecret,
 		Enabled:                      true,
 		Protocol:                     "openid-connect",
@@ -2611,7 +2611,7 @@ Change the realm spec's token lifespan and comment it:
 	realmSpec := RealmSpec{
 		Name:    cfg.Realm,
 		Enabled: true,
-		// One hour. This is the whole session: tflive holds no refresh token,
+		// One hour. This is the whole session: openplan holds no refresh token,
 		// so expiry means a round trip through Keycloak's still-live SSO
 		// session. Five minutes made that a constant interruption; eight hours
 		// would make the re-authentication path one nobody notices breaking.
@@ -2966,14 +2966,14 @@ Remove `OIDC_AUDIENCE`, `KEYCLOAK_WEB_REDIRECT_URIS`, `KEYCLOAK_WEB_ORIGINS`, an
 
 ```bash
 # Origin the browser reaches. The API derives its OIDC redirect URI
-# (<TFLIVE_PUBLIC_URL>/v1/auth/callback) and post-logout URI from this, and the
+# (<OPENPLAN_PUBLIC_URL>/v1/auth/callback) and post-logout URI from this, and the
 # Keycloak provisioner registers the same value. One source, so they cannot drift.
-TFLIVE_PUBLIC_URL=http://localhost:5173
+OPENPLAN_PUBLIC_URL=http://localhost:5173
 
 # The OAuth client. The API is a confidential client: it runs the
 # authorization-code flow server-side and the browser never holds a token.
 # OIDC_CLIENT_ID is the audience the ID token is checked against.
-OIDC_CLIENT_ID=tflive-api
+OIDC_CLIENT_ID=openplan-api
 OIDC_CLIENT_SECRET=replace-me-with-a-local-only-secret
 
 # Seals the short-lived login transaction cookie (state, nonce, PKCE verifier).
@@ -2986,13 +2986,13 @@ SESSION_ENCRYPTION_KEY=b6f1d2c4a8e0937516243b8c5d7e9f0a1b2c3d4e5f60718293a4b5c6d
 In `docker-compose.app.yaml`, in **both** service blocks that currently set `OIDC_AUDIENCE` (lines ~34 and ~67), replace it and add the rest:
 
 ```yaml
-      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-tflive-api}
-      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-tflive-api-local-only}
-      TFLIVE_PUBLIC_URL: ${TFLIVE_PUBLIC_URL:-http://localhost:5173}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-openplan-api}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-openplan-api-local-only}
+      OPENPLAN_PUBLIC_URL: ${OPENPLAN_PUBLIC_URL:-http://localhost:5173}
       SESSION_ENCRYPTION_KEY: ${SESSION_ENCRYPTION_KEY:-b6f1d2c4a8e0937516243b8c5d7e9f0a1b2c3d4e5f60718293a4b5c6d7e8f9a0}
 ```
 
-The Keycloak provisioner service needs `TFLIVE_PUBLIC_URL` and `OIDC_CLIENT_SECRET` too — it registers the redirect URI and the client secret. Remove `KEYCLOAK_WEB_REDIRECT_URIS` and `KEYCLOAK_WEB_ORIGINS` from it. Remove any `VITE_OIDC_*` from the web build service.
+The Keycloak provisioner service needs `OPENPLAN_PUBLIC_URL` and `OIDC_CLIENT_SECRET` too — it registers the redirect URI and the client secret. Remove `KEYCLOAK_WEB_REDIRECT_URIS` and `KEYCLOAK_WEB_ORIGINS` from it. Remove any `VITE_OIDC_*` from the web build service.
 
 - [ ] **Step 3: Rewrite the auth documentation**
 
@@ -3001,7 +3001,7 @@ In `docs/authentication.md`:
 - **"OIDC Clients and Claims"** — one confidential client, not two. The API runs the flow; the browser holds an httpOnly cookie. `aud` is the client ID because the token is an **ID token**, which is what removes the need for a custom authorization server and its paid add-on.
 - **"API Access-Token Verification"** — retitle to "API Token Verification" and say it verifies ID tokens.
 - **"API Request Authentication"** — the header-then-cookie order and why the header wins.
-- **"Keycloak Provisioner Configuration"** — drop `KEYCLOAK_WEB_*`, add `TFLIVE_PUBLIC_URL` and `OIDC_CLIENT_SECRET`.
+- **"Keycloak Provisioner Configuration"** — drop `KEYCLOAK_WEB_*`, add `OPENPLAN_PUBLIC_URL` and `OIDC_CLIENT_SECRET`.
 - **"API Runtime Security Configuration"** — the four new variables, and that `OIDC_AUDIENCE` is retired and fails startup.
 - **New section, "Browser Session"** — the cookie table from the design doc, `SameSite=Lax` and why not `Strict`, that CSRF rests on Lax while every mutating route is POST/PATCH/DELETE, and that there is no refresh token: session length is the IdP's ID token lifetime and the SPA re-authenticates through the IdP's SSO session. Link the design doc.
 
@@ -3018,11 +3018,11 @@ Then, in a browser at `http://localhost:5173`:
 
 1. You are redirected to Keycloak. Sign in as `KEYCLOAK_PLATFORM_ADMIN_USERNAME`.
 2. You land back on the app, signed in.
-3. In devtools → Application → Cookies, `tflive_session` shows `HttpOnly ✓`, `SameSite Lax`, and `tflive_auth_tx` is gone.
-4. In the console, `document.cookie` does **not** contain `tflive_session`.
+3. In devtools → Application → Cookies, `openplan_session` shows `HttpOnly ✓`, `SameSite Lax`, and `openplan_auth_tx` is gone.
+4. In the console, `document.cookie` does **not** contain `openplan_session`.
 5. Navigate to `http://localhost:5173/stacks` while signed out and confirm you return to `/stacks`, not `/`, after signing in.
 6. Sign out, then sign in again. Keycloak must prompt for credentials — if it signs you straight back in, RP-initiated logout is not working.
-7. Set `AccessTokenLifespan` to 60 in the Keycloak admin console for the `tflive` realm, sign in, wait, and confirm the re-authentication round trip is silent: no login form, same route, no visible error.
+7. Set `AccessTokenLifespan` to 60 in the Keycloak admin console for the `openplan` realm, sign in, wait, and confirm the re-authentication round trip is silent: no login form, same route, no visible error.
 
 - [ ] **Step 5: Full test suite**
 
@@ -3053,6 +3053,6 @@ git commit -m "docs: describe the server-side OIDC flow and its configuration"
 
 1. `SameSite=Strict` on either cookie. It withholds the cookie on the IdP's cross-site callback and breaks every login, and it will look like a random state-mismatch failure.
 2. `offline_access` in the scope list, or storing a refresh token. There is no refresh in this design, on purpose.
-3. Deriving the redirect URI from `Host` or `X-Forwarded-Proto`. Use `TFLIVE_PUBLIC_URL`.
+3. Deriving the redirect URI from `Host` or `X-Forwarded-Proto`. Use `OPENPLAN_PUBLIC_URL`.
 
-**When the browser can't reach the IdP.** `OIDC_ISSUER_URL` uses `keycloak.localhost:8082`, a name that resolves from both the host and inside containers. The browser now follows a redirect to the authorization endpoint from that same document, so it must resolve for the browser too. If login fails with a DNS error, that is [#199](https://github.com/vishu42/tflive/issues/199), not this work.
+**When the browser can't reach the IdP.** `OIDC_ISSUER_URL` uses `keycloak.localhost:8082`, a name that resolves from both the host and inside containers. The browser now follows a redirect to the authorization endpoint from that same document, so it must resolve for the browser too. If login fails with a DNS error, that is [#199](https://github.com/vishu42/openplan/issues/199), not this work.

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Restyle the entire tflive web console in the Minimalist Modern design system — warm off-white canvas, Electric Blue gradient accent, Calistoga/Inter/JetBrains Mono type, rounded surfaces, layered shadows, and purposeful CSS motion.
+**Goal:** Restyle the entire openplan web console in the Minimalist Modern design system — warm off-white canvas, Electric Blue gradient accent, Calistoga/Inter/JetBrains Mono type, rounded surfaces, layered shadows, and purposeful CSS motion.
 
 **Architecture:** The existing `web/src/styles/` token split is retained and rethemed. Primitives are rewritten under their existing class names so most screens restyle with no component edits. New motion and showpiece behaviour arrives as small, self-contained shared modules. `web/src/styles.css` continues draining toward a pure `@import` index.
 
@@ -1952,7 +1952,7 @@ In `web/src/app/AppShell.tsx`, replace the opening of the returned JSX — from 
       </a>
       <header className="app-frame-header">
         <div className="app-frame-brand">
-          <span className="app-wordmark">tflive</span>
+          <span className="app-wordmark">openplan</span>
           <nav className="app-nav" aria-label="Primary">
             {navItems.map((item) => (
               <Link key={item.to} to={item.to}>

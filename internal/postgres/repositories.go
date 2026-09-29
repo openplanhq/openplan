@@ -12,8 +12,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/vishu42/tflive/internal/app"
-	"github.com/vishu42/tflive/internal/domain"
+	"github.com/vishu42/openplan/internal/app"
+	"github.com/vishu42/openplan/internal/domain"
 )
 
 func (store *Store) CreateTemplateRegistration(ctx context.Context, registration domain.TemplateRegistration) error {

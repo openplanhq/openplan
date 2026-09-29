@@ -1,8 +1,8 @@
--- A session is tflive's own, not the IdP's.
+-- A session is openplan's own, not the IdP's.
 --
 -- Before this table the session cookie held the raw ID token, so how long a
 -- sign-in lasted was decided by the provider's token lifespan and whether
--- renewal was silent by its SSO idle timeout. tflive is BYO-IdP and sets
+-- renewal was silent by its SSO idle timeout. openplan is BYO-IdP and sets
 -- neither on a customer's provider. A row here is a session we issue, expire,
 -- and revoke on our own terms.
 --

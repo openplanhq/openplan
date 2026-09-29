@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/vishu42/tflive/internal/domain"
-	"github.com/vishu42/tflive/internal/encryption"
+	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/encryption"
 )
 
 func savedPlanStore(t *testing.T, pool *pgxpool.Pool) *Store {

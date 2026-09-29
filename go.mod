@@ -1,4 +1,4 @@
-module github.com/vishu42/tflive
+module github.com/vishu42/openplan
 
 go 1.25.7
 

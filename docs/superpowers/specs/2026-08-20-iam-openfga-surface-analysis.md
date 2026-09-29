@@ -11,7 +11,7 @@ accounts, and Keycloak extraction. The two meet at exactly one point, #145
 removing `RealmRoles` from `authn.Principal`. Sections 1-7a below were written
 before the split and describe both halves.
 
-The goal as stated in #151: tflive accepts any OIDC provider's JWT access
+The goal as stated in #151: openplan accepts any OIDC provider's JWT access
 token, stores no user records of its own beyond a projection, and lets
 OpenFGA answer every authorization question with no exception.
 
@@ -19,7 +19,7 @@ OpenFGA answer every authorization question with no exception.
 
 ## 0. Standing constraint: there is no data to preserve
 
-tflive is pre-production. Nothing is deployed, nobody uses it, and all state is
+openplan is pre-production. Nothing is deployed, nobody uses it, and all state is
 disposable. A single `postgres-data` volume (`docker-compose.yaml:23`) backs the
 app database, OpenFGA, and Temporal, so `docker compose down -v` is a complete
 reset.
@@ -176,7 +176,7 @@ The `:90`, `:196`, and `:238` ones are the interesting ones — see §4.
 Two ways to satisfy "OpenFGA answers everything," and they are not equivalent.
 
 **(a) Keep the branch, move the source.** Replace `isPlatformAdmin(principal)`
-with `authorizer.Check(subject, platform:tflive, admin)`. Minimal diff — seven
+with `authorizer.Check(subject, platform:openplan, admin)`. Minimal diff — seven
 call sites each grow one check. But the branch is still in Go, admin is still a
 special case in application code, and it costs an extra round trip on every
 request that has one.
@@ -192,7 +192,7 @@ One check answers the whole question. No Go branching at all — which is what
 "no exception" actually means. `ListObjects` then naturally returns every stack
 for an admin, so `:90` stops being a special case rather than becoming a slow one.
 
-Cost of (b): every stack needs a `platform:tflive` parent tuple written at
+Cost of (b): every stack needs a `platform:openplan` parent tuple written at
 creation, and existing stacks need a backfill. Also worth checking whether the
 `stack` object should hang off `tenant` instead of `platform` — the app already
 has a `TenantID` everywhere and #151 has nothing to say about it. Getting the
@@ -269,7 +269,7 @@ prerequisite for the projection, not just tidiness.
 
 ### 4.2 The claim contract becomes a public API
 
-Today the required set is implicit and partly accidental: `aud: tflive-api`,
+Today the required set is implicit and partly accidental: `aud: openplan-api`,
 `sub`, `exp`, `iss`, plus the three optional-by-accident display claims. #198
 wants it documented; the sharper point is that **once it is documented it is
 frozen**, so it should be settled before it is written down — which is what
@@ -483,7 +483,7 @@ actually disappears.
 **2. The parent object is the `platform` singleton, and the relation is named
 `parent`.**
 
-`platform` vs `tenant` is a non-decision today: `TFLIVE_TENANT_ID`
+`platform` vs `tenant` is a non-decision today: `OPENPLAN_TENANT_ID`
 (`internal/config/auth.go:115`) is one fixed value per deployment, enforced by
 the single-tenant boundary design, so platform and tenant are 1:1. If real
 multi-tenancy ever arrives it invalidates far more than this tuple.
@@ -491,8 +491,8 @@ multi-tenancy ever arrives it invalidates far more than this tuple.
 The relation is `parent`, not `platform`, so the tuple reads as a sentence:
 
 ```
-{ user: "platform:tflive", relation: "parent", object: "stack:X" }
-   → "platform:tflive is the parent of stack:X"
+{ user: "platform:openplan", relation: "parent", object: "stack:X" }
+   → "platform:openplan is the parent of stack:X"
 ```
 
 `define platform: [platform]` would make the rule read marginally better
@@ -540,7 +540,7 @@ Three things to know about it:
   type and nothing more. That matches what we have today —
   `openfga/authorization-model.json:4-6` is literally `{"type": "user"}`.
 - **`platform` is a singleton by convention only.** Nothing in the model
-  prevents `platform:other`; we simply never write any ID but `platform:tflive`.
+  prevents `platform:other`; we simply never write any ID but `platform:openplan`.
   The whole design leans on that, so it needs stating somewhere enforceable —
   most likely the bootstrap path and the port's object constructor.
 - **`can_create_stack: admin or stack_creator` is the structural fix for #201.**
@@ -595,7 +595,7 @@ so out loud:
 > `Role` — *"Its value is intentionally opaque so derived permissions cannot be
 > used as relationship-write targets."*
 
-With plain strings, `authz.Grant` could hold `{platform:tflive, parent,
+With plain strings, `authz.Grant` could hold `{platform:openplan, parent,
 stack:X}` and the grant endpoint could write a structural edge. That is the
 hazard, and it is not hypothetical — it is the exact tuple decision 2
 introduces.
@@ -618,7 +618,7 @@ true via `owner` while the write failed.
 
 *The simplification that falls out.* On the wire the `user` field and the
 `object` field hold the same kind of value — `type:id`. Decision 2's tuple
-proves it: `platform:tflive` sits in the `user` slot. So `Subject` is not a
+proves it: `platform:openplan` sits in the `user` slot. So `Subject` is not a
 separate concept; it is an `Object` that happens to be on the left, and can
 simply wrap one. When groups arrive it gains an optional relation suffix
 (`group:eng#member`) with no restructuring — which is why decision 9 below can
@@ -664,7 +664,7 @@ define root: [user]
 define admin: [user] or root
 ```
 
-The tuple is `user:<configured-sub> root of platform:tflive`, and admin follows
+The tuple is `user:<configured-sub> root of platform:openplan`, and admin follows
 automatically. Three reasons this beats a flat `admin` tuple:
 
 - `root` sits **outside the grantable bucket**, so per decision 3 the grant API
@@ -679,7 +679,7 @@ automatically. Three reasons this beats a flat `admin` tuple:
 Operational details to settle when this is built:
 
 - **Env var name.** #153 says "Keycloak subject"; after this epic it must be
-  IdP-neutral. Something like `TFLIVE_ROOT_SUBJECT`.
+  IdP-neutral. Something like `OPENPLAN_ROOT_SUBJECT`.
 - **Reconciled at boot, add-only.** Write the tuple if absent, every startup.
   Do **not** delete the previous root's tuple when the env value changes —
   that risks removing access from someone legitimately granted since. Demoting
@@ -688,7 +688,7 @@ Operational details to settle when this is built:
   start. Starting with no reachable admin is the worse failure.
 - **No bootstrap ordering problem.** OpenFGA has no "create object" step —
   objects exist implicitly the moment a tuple references them, so
-  `platform:tflive` needs no prior provisioning.
+  `platform:openplan` needs no prior provisioning.
 - This replaces the seeding currently done at `internal/keycloak/provisioner.go:142-155`,
   which creates the realm roles and assigns them. That path goes away with #197.
 
@@ -710,7 +710,7 @@ the Keycloak console; #197 removes that console, and nothing replaces it. The
 implementation path: it needs a platform-level grant API plus UI. Wants its own
 issue.
 
-**Gap B — how does the installer name the root subject?** tflive owns no
+**Gap B — how does the installer name the root subject?** openplan owns no
 identity, so root is a `sub` from the customer's IdP: an opaque UUID the
 operator must extract from their IdP console or a decoded token before the app
 will admit them. That is a poor first-run experience for what is meant to be
@@ -718,8 +718,8 @@ the easy path.
 
 | Option | Mechanism | Assessment |
 |---|---|---|
-| `TFLIVE_ROOT_SUBJECT=<sub>` | operator supplies the IdP subject | **Preferred.** Safe; needs a companion "how do I find my sub" answer |
-| `TFLIVE_ROOT_EMAIL=<email>` | match the `email` claim at verification | **Reject.** Emails are mutable and often unverified; an IdP where a user can set their own email address hands out root |
+| `OPENPLAN_ROOT_SUBJECT=<sub>` | operator supplies the IdP subject | **Preferred.** Safe; needs a companion "how do I find my sub" answer |
+| `OPENPLAN_ROOT_EMAIL=<email>` | match the `email` claim at verification | **Reject.** Emails are mutable and often unverified; an IdP where a user can set their own email address hands out root |
 | first-login-wins | first successful sign-in claims root | Zero config, but a stranger takes root if the app is reachable before the operator signs in |
 
 Recommended direction: configure by `sub`, and solve discoverability separately
@@ -772,8 +772,8 @@ GitHub, which offers no OIDC for user login at all.
   be dropped from config and derived.
 - Scope must add **`offline_access`**; Okta issues no refresh token without it.
   Current scope is `openid profile email`.
-- **One confidential client replaces two.** `tflive-web` (public) and
-  `tflive-api` collapse into one, shrinking the IdP fixture and helping #197.
+- **One confidential client replaces two.** `openplan-web` (public) and
+  `openplan-api` collapse into one, shrinking the IdP fixture and helping #197.
 - Cookies put **CSRF in scope**; bearer-in-header was immune by construction.
   `SameSite=lax` is ArgoCD's answer and the right starting point, but it is new
   surface.
@@ -782,7 +782,7 @@ GitHub, which offers no OIDC for user login at all.
 *A gap found in go-oidc while verifying this.* When `aud` holds multiple values,
 OIDC requires an `azp` claim naming the client the token was actually issued to.
 go-oidc does not check it, and says so in a comment above the audience check.
-A token with `aud: [tflive, other]` and `azp: other` passes. Worth adding to
+A token with `aud: [openplan, other]` and `azp: other` passes. Worth adding to
 #196's list of strictness properties as a fifth item.
 
 ### Still open
@@ -796,7 +796,7 @@ A token with `aud: [tflive, other]` and `azp: other` passes. Worth adding to
    that plus the three new resource types in one design?
 10. **Groups.** Deferred by the user on 2026-08-21. Decision 3 keeps the port
     ready (`Subject` wraps `Object`, gains a `#relation` suffix later), so this
-    forces no rewrite. When it returns there are three options: tflive-native
+    forces no rewrite. When it returns there are three options: openplan-native
     groups in OpenFGA (no IdP coupling, no licensing wall), reading a `groups`
     claim (**re-imposes the Okta API Access Management requirement** that
     decision 5 just removed — this is ArgoCD's documented caveat), or SCIM.
@@ -849,7 +849,7 @@ integration", Entra "app registration", Auth0 "application", Keycloak
 4. Assign the users or groups who should have access
 5. Copy the client ID and secret
 
-In tflive — four values:
+In openplan — four values:
 
 ```
 OIDC_ISSUER_URL=https://acme.okta.com

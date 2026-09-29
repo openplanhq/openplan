@@ -4,7 +4,7 @@
 -- workflow that applies exactly that file. See
 -- docs/superpowers/specs/2026-09-21-saved-plan-flow-design.md.
 --
--- tflive is pre-production, so this converts in place rather than migrating
+-- openplan is pre-production, so this converts in place rather than migrating
 -- behaviour: runs of the old shape are closed out, and the old approval queue
 -- kind is dropped.
 

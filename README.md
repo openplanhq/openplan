@@ -1,19 +1,19 @@
-# TFlive Terraform Platform
+# openplan Terraform Platform
 
 > [!WARNING]
-> tflive is not production ready. It is an MVP baseline intended for local
+> openplan is not production ready. It is an MVP baseline intended for local
 > development, evaluation, and continued hardening.
 
 ## What it is
 
-tflive turns Terraform and OpenTofu modules into infrastructure you can hand to
+openplan turns Terraform and OpenTofu modules into infrastructure you can hand to
 a team. Register a module once, and anyone with access can stand up their own
 copy of it from a web UI — with their own variables, their own credentials, and
 a full history of every change.
 
 ## Demo
 
-[![Watch the tflive demo](https://img.youtube.com/vi/2oFE764dnIs/maxresdefault.jpg)](https://youtu.be/2oFE764dnIs)
+[![Watch the openplan demo](https://img.youtube.com/vi/2oFE764dnIs/maxresdefault.jpg)](https://youtu.be/2oFE764dnIs)
 
 ## Screenshots
 
@@ -47,7 +47,7 @@ explicit, guarded action.
 
 ## What you can do
 
-- **Register templates.** Point tflive at a Git repository and a revision. That
+- **Register templates.** Point openplan at a Git repository and a revision. That
   becomes a reusable template anyone on the platform can install.
 - **Compose stacks.** A stack groups the templates that make up one environment
   or one service, each with its own configuration.
@@ -63,8 +63,8 @@ explicit, guarded action.
 - **Sign in with SSO.** Authentication is standard OIDC, and the local stack
   ships an identity provider so there is nothing to wire up to try it.
 
-tflive requires no session or timeout configuration on your identity provider:
-signed-in sessions are tflive's own record, bounded by its own absolute and
+openplan requires no session or timeout configuration on your identity provider:
+signed-in sessions are openplan's own record, bounded by its own absolute and
 idle timeouts, independent of whatever token lifespan or SSO idle timeout the
 provider runs. To get immediate revocation when a user signs out or is
 disabled at the IdP, instead of waiting for those bounds, point the provider's
@@ -76,9 +76,9 @@ That URL must be **reachable from the identity provider**, not from the
 browser — a back-channel logout is a server-to-server POST, not a redirect
 the browser follows. The two addresses differ whenever the IdP runs on an
 internal network or behind split-horizon DNS, which is why it is a separate
-setting, `TFLIVE_BACKCHANNEL_LOGOUT_URL`, rather than always derived from
-`TFLIVE_PUBLIC_URL`: on this local stack, Keycloak resolves
-`http://localhost:5173` (`TFLIVE_PUBLIC_URL`) inside its own container, not
+setting, `OPENPLAN_BACKCHANNEL_LOGOUT_URL`, rather than always derived from
+`OPENPLAN_PUBLIC_URL`: on this local stack, Keycloak resolves
+`http://localhost:5173` (`OPENPLAN_PUBLIC_URL`) inside its own container, not
 the host's browser-facing port, so the provisioner registers
 `http://api:8081/v1/auth/backchannel-logout` instead.
 
@@ -89,7 +89,7 @@ Requires Docker. No Go or Node toolchain.
 > [!NOTE]
 > **Upgrading an existing local stack?** Run `docker compose down -v` before
 > starting it back up. Two reasons. The provisioner no longer creates the
-> `tflive-web` public client or its audience mapper, but an existing Keycloak
+> `openplan-web` public client or its audience mapper, but an existing Keycloak
 > volume keeps them from before — and a stale public client can still mint
 > browser-held access tokens, which is the posture that change exists to end.
 > Separately, OpenFGA's tables moved out of their own database and into the
@@ -114,7 +114,7 @@ credentials from `.env.example`.
 
 > [!IMPORTANT]
 > Use `localhost`, not `127.0.0.1`. The redirect URI is derived from a single
-> `TFLIVE_PUBLIC_URL`, so only that exact origin is registered with Keycloak —
+> `OPENPLAN_PUBLIC_URL`, so only that exact origin is registered with Keycloak —
 > `127.0.0.1` fails sign-in with "Invalid parameter: redirect_uri".
 
 ### Stopping it
@@ -141,6 +141,6 @@ docker compose --profile debug up -d   # Temporal UI on http://localhost:8080
 
 ## Documentation
 
-- [Local development](docs/development.md) — running tflive from source
+- [Local development](docs/development.md) — running openplan from source
 - [Architecture and product model](docs/architecture.md)
 - [Authentication and authorization](docs/authentication.md)

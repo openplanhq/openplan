@@ -6,7 +6,7 @@ import (
 
 	"github.com/openfga/openfga/pkg/storage/memory"
 
-	"github.com/vishu42/tflive/internal/authorization"
+	"github.com/vishu42/openplan/internal/authorization"
 )
 
 // This file replaces the hand-written authorizer fakes the suite used while
@@ -21,7 +21,7 @@ import (
 // newTestAuthorization builds a real Authorization backed by memory.
 func newTestAuthorization(t *testing.T) *authorization.Authorization {
 	t.Helper()
-	auth, err := authorization.NewWithDatastore(context.Background(), memory.New(), "tflive-test")
+	auth, err := authorization.NewWithDatastore(context.Background(), memory.New(), "openplan-test")
 	if err != nil {
 		t.Fatalf("build test authorization: %v", err)
 	}

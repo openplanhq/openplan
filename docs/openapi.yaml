@@ -1,26 +1,26 @@
 openapi: 3.1.0
 
 info:
-  title: tflive API
+  title: openplan API
   version: 0.1.0
-  summary: HTTP API for the tflive Terraform platform.
+  summary: HTTP API for the openplan Terraform platform.
   description: |
-    tflive turns Terraform and OpenTofu modules into infrastructure a team can
+    openplan turns Terraform and OpenTofu modules into infrastructure a team can
     self-serve. This document describes the HTTP surface the web client uses;
     it is the same surface a script or a CI job can drive.
 
     ## Status
 
-    tflive is pre-1.0 and not production ready. Paths are versioned under
+    openplan is pre-1.0 and not production ready. Paths are versioned under
     `/v1`, but nothing here is a frozen contract yet — fields may be added,
     renamed, or removed between releases.
 
     ## Authentication
 
     Every `/v1` route except the sign-in routes requires an opaque session
-    cookie named `tflive_session`. There is no bearer-token path: a token is
+    cookie named `openplan_session`. There is no bearer-token path: a token is
     verified in exactly one place, the OIDC callback, and what the browser
-    carries afterwards is a session tflive owns.
+    carries afterwards is a session openplan owns.
 
     Get a session one of two ways:
 
@@ -33,7 +33,7 @@ info:
     `GET /v1/auth/methods` reports which of the two a deployment has enabled.
 
     A session ends at the earlier of its idle and absolute bounds, both of
-    which tflive owns independently of the provider's token lifetimes.
+    which openplan owns independently of the provider's token lifetimes.
     `GET /v1/me` returns `sessionExpiresAt` so a client can re-authenticate at
     a quiet moment instead of being interrupted by a `401`.
 
@@ -58,8 +58,8 @@ info:
     name: Apache-2.0
     identifier: Apache-2.0
   contact:
-    name: tflive
-    url: https://github.com/vishu42/tflive
+    name: openplan
+    url: https://github.com/vishu42/openplan
 
 servers:
   - url: http://localhost:5173
@@ -135,7 +135,7 @@ paths:
                 properties:
                   local:
                     type: boolean
-                    description: Username and password against tflive's own account table.
+                    description: Username and password against openplan's own account table.
                   oidc:
                     type: boolean
                     description: Redirect-based sign-in against a configured identity provider.
@@ -149,7 +149,7 @@ paths:
         Redirects the browser to the identity provider's authorization
         endpoint. Makes no network call of its own: the endpoint comes from
         discovery the verifier already cached. Sets a short-lived sealed
-        transaction cookie (`tflive_auth_tx`) carrying state, nonce and PKCE
+        transaction cookie (`openplan_auth_tx`) carrying state, nonce and PKCE
         verifier.
 
         Registered only when an OIDC provider is configured.
@@ -171,7 +171,7 @@ paths:
             Location:
               schema: { type: string, format: uri }
             Set-Cookie:
-              description: The sealed `tflive_auth_tx` transaction cookie.
+              description: The sealed `openplan_auth_tx` transaction cookie.
               schema: { type: string }
         "401":
           $ref: "#/components/responses/SignInFailedHTML"
@@ -179,7 +179,7 @@ paths:
       tags: [Authentication]
       summary: Sign in with a local account
       description: |
-        Authenticates against tflive's own account table and ends in exactly
+        Authenticates against openplan's own account table and ends in exactly
         the tail the OIDC callback ends in — project the user, mint a session
         row, set the cookie. Nothing downstream can tell which method was used.
 
@@ -219,7 +219,7 @@ paths:
           description: Signed in. The session cookie is set.
           headers:
             Set-Cookie:
-              description: The `tflive_session` cookie.
+              description: The `openplan_session` cookie.
               schema: { type: string }
         "400":
           description: |
@@ -302,7 +302,7 @@ paths:
             Location:
               schema: { type: string }
             Set-Cookie:
-              description: The `tflive_session` cookie.
+              description: The `openplan_session` cookie.
               schema: { type: string }
         "401":
           $ref: "#/components/responses/SignInFailedHTML"
@@ -333,7 +333,7 @@ paths:
             Location:
               schema: { type: string, format: uri }
             Set-Cookie:
-              description: The cleared `tflive_session` cookie.
+              description: The cleared `openplan_session` cookie.
               schema: { type: string }
 
   /v1/auth/backchannel-logout:
@@ -343,12 +343,12 @@ paths:
       description: |
         A server-to-server POST from the identity provider, not a redirect the
         browser follows. Point the provider at an address **it** can reach:
-        `TFLIVE_BACKCHANNEL_LOGOUT_URL`, which is deliberately separate from
-        `TFLIVE_PUBLIC_URL` because the two differ whenever the provider runs
+        `OPENPLAN_BACKCHANNEL_LOGOUT_URL`, which is deliberately separate from
+        `OPENPLAN_PUBLIC_URL` because the two differ whenever the provider runs
         on an internal network or behind split-horizon DNS.
 
         Without this endpoint, disabling a user at the provider would not reach
-        tflive until their session hit its own expiry — tflive stops consulting
+        openplan until their session hit its own expiry — openplan stops consulting
         the provider once a session exists. Enable session-required logout so
         the token carries `sid`.
 
@@ -409,7 +409,7 @@ paths:
       tags: [Templates]
       summary: Register a template revision
       description: |
-        Points tflive at a GitHub repository and a revision, and starts an
+        Points openplan at a GitHub repository and a revision, and starts an
         asynchronous registration: resolve the ref to a commit, fetch the
         source, and infer the root module's input variables.
 
@@ -743,7 +743,7 @@ paths:
         Assigning replaces whatever role the subject already held — one person
         has at most one role on a stack.
 
-        The subject must have signed in to tflive at least once. tflive is not
+        The subject must have signed in to openplan at least once. openplan is not
         a directory: a person exists here only once a verified token has
         projected them. Granting to a subject it has never seen returns `400
         unknown_user`. Use `GET /v1/tenants/{tenant_id}/users/search` to find
@@ -1220,7 +1220,7 @@ paths:
       description: |
         Matches display name or email, case-insensitively.
 
-        This is not a directory lookup. It searches tflive's projection of
+        This is not a directory lookup. It searches openplan's projection of
         identities it has actually verified, so a person who has never signed
         in will not appear — and cannot be granted a role. That is the same
         limitation `POST .../grants` enforces as `unknown_user`.
@@ -1319,7 +1319,7 @@ components:
     sessionCookie:
       type: apiKey
       in: cookie
-      name: tflive_session
+      name: openplan_session
       description: |
         An opaque session identifier set by either sign-in route. It is not a
         JWT and carries no claims: the middleware authenticates it against the
@@ -1477,7 +1477,7 @@ components:
           format: date-time
           description: |
             When this session ends: the earlier of its idle and absolute
-            bounds, both of which tflive owns. It lets a client
+            bounds, both of which openplan owns. It lets a client
             re-authenticate at a quiet moment instead of being interrupted by
             a `401`. It is not a control — the API rejects an expired session
             regardless of what the browser believes.

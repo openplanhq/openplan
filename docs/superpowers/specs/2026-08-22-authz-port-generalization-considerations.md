@@ -1,6 +1,6 @@
 # #214 — generalizing the authz port: considerations before the design
 
-Feeds the design for [#214](https://github.com/vishu42/tflive/issues/214).
+Feeds the design for [#214](https://github.com/vishu42/openplan/issues/214).
 Written 2026-08-22, before any code.
 
 > **Superseded in part.** §§1–3 below were overturned the same day by a probe
@@ -67,7 +67,7 @@ we have now, because it also covers `platform` and every type #142–#144 add.
 ## 2. How the write path stays un-abusable
 
 The stated hazard is concrete: with plain strings, `authz.Grant` could hold
-`{platform:tflive, parent, stack:X}` and the grant endpoint could write it,
+`{platform:openplan, parent, stack:X}` and the grant endpoint could write it,
 re-pointing a stack at a different platform. Three buckets on `Relation` are
 necessary but not sufficient — the question is what the *write* types accept.
 
@@ -226,7 +226,7 @@ Three things are worth deciding rather than defaulting:
   cannot express a `parent` edge. These are the tests that prove the refactor
   achieved its stated purpose rather than merely renaming things.
 - **`.fga.yaml` cases for the `platform` type** if §3(b) is taken, including
-  the "inert with no tuples" assertion. Note [#208](https://github.com/vishu42/tflive/issues/208):
+  the "inert with no tuples" assertion. Note [#208](https://github.com/vishu42/openplan/issues/208):
   both model-semantics test mechanisms are opt-in and never run in CI, so cases
   added here buy nothing until that is fixed. Worth knowing whether #208 should
   come first.
@@ -267,7 +267,7 @@ overengineered, I probed the four hazards against the candidate model with the
 | `user:alice can_view stack:X` — write to a derived relation | **REJECTED** |
 | `user:* viewer stack:X` — typed wildcard, grants everyone | **REJECTED** |
 | `user:alice#member viewer stack:X` — userset injection | **REJECTED** |
-| `platform:tflive parent stack:X` — structural edge | **ACCEPTED** |
+| `platform:openplan parent stack:X` — structural edge | **ACCEPTED** |
 
 Three of four are enforced by the server already, against the model itself and
 therefore without drift. The `Role`/`Permission` split that §1 set out to

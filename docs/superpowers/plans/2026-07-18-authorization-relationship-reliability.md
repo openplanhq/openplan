@@ -364,7 +364,7 @@ Add `AuthorizationOutbox authdispatch.Outbox` to `app.Service`. After `WriteRela
 
 - [ ] **Step 4: Add worker OpenFGA-only configuration**
 
-Extract OpenFGA validation from `loadSecurityConfig` into a helper used by API and worker configuration. Add `OpenFGA OpenFGAConfig` to `WorkerConfig`; `LoadWorkerConfig` must validate `OPENFGA_API_URL`, `OPENFGA_STORE_ID`, `OPENFGA_MODEL_ID`, optional positive `OPENFGA_HTTP_TIMEOUT`, and production HTTPS/token requirements without requiring `OIDC_ISSUER_URL`, `OIDC_AUDIENCE`, or `TFLIVE_TENANT_ID`.
+Extract OpenFGA validation from `loadSecurityConfig` into a helper used by API and worker configuration. Add `OpenFGA OpenFGAConfig` to `WorkerConfig`; `LoadWorkerConfig` must validate `OPENFGA_API_URL`, `OPENFGA_STORE_ID`, `OPENFGA_MODEL_ID`, optional positive `OPENFGA_HTTP_TIMEOUT`, and production HTTPS/token requirements without requiring `OIDC_ISSUER_URL`, `OIDC_AUDIENCE`, or `OPENPLAN_TENANT_ID`.
 
 Add tests for missing OpenFGA URL, store ID, model ID, invalid timeout, and production missing token. Assert `WorkerConfig` does not contain OIDC or tenant fields.
 

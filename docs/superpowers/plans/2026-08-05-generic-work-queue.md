@@ -12,8 +12,8 @@
 
 ## Global Constraints
 
-- Module path is `github.com/vishu42/tflive`. All internal imports use that prefix.
-- Postgres integration tests skip unless `tflive_POSTGRES_TEST_DSN` is set. Use the existing `openMigratedTestPool(t, ctx)` helper in `internal/postgres/store_test.go`; it creates an isolated schema per test and registers cleanup.
+- Module path is `github.com/vishu42/openplan`. All internal imports use that prefix.
+- Postgres integration tests skip unless `OPENPLAN_POSTGRES_TEST_DSN` is set. Use the existing `openMigratedTestPool(t, ctx)` helper in `internal/postgres/store_test.go`; it creates an isolated schema per test and registers cleanup.
 - All tests call `t.Parallel()` as the first statement, matching the existing suite.
 - Migrations are embedded via `//go:embed migrations/*.sql` and applied in filename order. New migration is `0012_work_queue.sql`.
 - Error wrapping uses `fmt.Errorf("verb noun: %w", err)` — lowercase, no trailing punctuation, matching `internal/postgres/repositories.go`.
@@ -1331,7 +1331,7 @@ func TestWorkQueueMigrationBackfillsPendingAuthorizationOutbox(t *testing.T) {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `tflive_POSTGRES_TEST_DSN=$tflive_POSTGRES_TEST_DSN go test ./internal/postgres/ -run TestWorkQueue -v`
+Run: `OPENPLAN_POSTGRES_TEST_DSN=$OPENPLAN_POSTGRES_TEST_DSN go test ./internal/postgres/ -run TestWorkQueue -v`
 Expected: FAIL — `relation "work_queue" does not exist`.
 
 - [ ] **Step 3: Write the implementation**
@@ -1390,7 +1390,7 @@ on conflict (kind, resource_key) where processed_at is null do nothing;
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `tflive_POSTGRES_TEST_DSN=$tflive_POSTGRES_TEST_DSN go test ./internal/postgres/ -run TestWorkQueue -v`
+Run: `OPENPLAN_POSTGRES_TEST_DSN=$OPENPLAN_POSTGRES_TEST_DSN go test ./internal/postgres/ -run TestWorkQueue -v`
 Expected: PASS, 3 tests.
 
 - [ ] **Step 5: Commit**
@@ -1425,7 +1425,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/vishu42/tflive/internal/queue"
+	"github.com/vishu42/openplan/internal/queue"
 )
 
 type keyedHandler struct {
@@ -1535,7 +1535,7 @@ func TestEnqueueRejectsUnknownKind(t *testing.T) {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `tflive_POSTGRES_TEST_DSN=$tflive_POSTGRES_TEST_DSN go test ./internal/postgres/ -run TestEnqueue -v`
+Run: `OPENPLAN_POSTGRES_TEST_DSN=$OPENPLAN_POSTGRES_TEST_DSN go test ./internal/postgres/ -run TestEnqueue -v`
 Expected: FAIL — compile error, `NewStore` takes 1 argument.
 
 - [ ] **Step 3: Write the implementation**
@@ -1551,7 +1551,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/vishu42/tflive/internal/queue"
+	"github.com/vishu42/openplan/internal/queue"
 )
 
 // pgxExecutor is satisfied by both *pgxpool.Pool and pgx.Tx, so enqueue works
@@ -1631,7 +1631,7 @@ Update every existing `NewStore(` call site to pass a registry or `nil`.
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `go build ./... && tflive_POSTGRES_TEST_DSN=$tflive_POSTGRES_TEST_DSN go test ./internal/postgres/ -run TestEnqueue -v`
+Run: `go build ./... && OPENPLAN_POSTGRES_TEST_DSN=$OPENPLAN_POSTGRES_TEST_DSN go test ./internal/postgres/ -run TestEnqueue -v`
 Expected: PASS, 3 tests, everything still compiles.
 
 - [ ] **Step 5: Commit**
@@ -1865,7 +1865,7 @@ func TestListByActorReturnsOnlyCallerItems(t *testing.T) {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `tflive_POSTGRES_TEST_DSN=$tflive_POSTGRES_TEST_DSN go test ./internal/postgres/ -run 'TestClaim|TestComplete|TestReschedule|TestPrune|TestListByActor' -v`
+Run: `OPENPLAN_POSTGRES_TEST_DSN=$OPENPLAN_POSTGRES_TEST_DSN go test ./internal/postgres/ -run 'TestClaim|TestComplete|TestReschedule|TestPrune|TestListByActor' -v`
 Expected: FAIL — `store.Claim` undefined.
 
 - [ ] **Step 3: Write the implementation**
@@ -2011,7 +2011,7 @@ Add `"encoding/json"` and `"time"` to the file's imports.
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `tflive_POSTGRES_TEST_DSN=$tflive_POSTGRES_TEST_DSN go test ./internal/postgres/ -v`
+Run: `OPENPLAN_POSTGRES_TEST_DSN=$OPENPLAN_POSTGRES_TEST_DSN go test ./internal/postgres/ -v`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -2047,9 +2047,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vishu42/tflive/internal/app"
-	"github.com/vishu42/tflive/internal/queue"
-	"github.com/vishu42/tflive/internal/traits"
+	"github.com/vishu42/openplan/internal/app"
+	"github.com/vishu42/openplan/internal/queue"
+	"github.com/vishu42/openplan/internal/traits"
 )
 
 func TestInTxCommitsDomainWriteAndIntentTogether(t *testing.T) {
@@ -2144,7 +2144,7 @@ func TestInTxRollsBackBothOnError(t *testing.T) {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `tflive_POSTGRES_TEST_DSN=$tflive_POSTGRES_TEST_DSN go test ./internal/postgres/ -run TestInTx -v`
+Run: `OPENPLAN_POSTGRES_TEST_DSN=$OPENPLAN_POSTGRES_TEST_DSN go test ./internal/postgres/ -run TestInTx -v`
 Expected: FAIL — `store.InTx` undefined.
 
 - [ ] **Step 3: Write the implementation**
@@ -2157,9 +2157,9 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/vishu42/tflive/internal/app"
-	"github.com/vishu42/tflive/internal/queue"
-	"github.com/vishu42/tflive/internal/traits"
+	"github.com/vishu42/openplan/internal/app"
+	"github.com/vishu42/openplan/internal/queue"
+	"github.com/vishu42/openplan/internal/traits"
 )
 
 // txRepo is the transaction-scoped subset of Store handed to an InTx callback.
@@ -2211,7 +2211,7 @@ Extract the existing `AppendAuditEvent` body into `appendAuditEvent(ctx context.
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `tflive_POSTGRES_TEST_DSN=$tflive_POSTGRES_TEST_DSN go test ./internal/postgres/ -v`
+Run: `OPENPLAN_POSTGRES_TEST_DSN=$OPENPLAN_POSTGRES_TEST_DSN go test ./internal/postgres/ -v`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -2248,8 +2248,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/vishu42/tflive/internal/authz"
-	"github.com/vishu42/tflive/internal/queue"
+	"github.com/vishu42/openplan/internal/authz"
+	"github.com/vishu42/openplan/internal/queue"
 )
 
 type fakeAuthorizer struct {
@@ -2517,8 +2517,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/vishu42/tflive/internal/authz"
-	"github.com/vishu42/tflive/internal/queue"
+	"github.com/vishu42/openplan/internal/authz"
+	"github.com/vishu42/openplan/internal/queue"
 )
 
 // KindReconcileStackGrant names the work kind this handler serves.
@@ -3164,7 +3164,7 @@ Expected: PASS.
 ```bash
 go build ./...
 go vet ./...
-tflive_POSTGRES_TEST_DSN=$tflive_POSTGRES_TEST_DSN go test ./... -race
+OPENPLAN_POSTGRES_TEST_DSN=$OPENPLAN_POSTGRES_TEST_DSN go test ./... -race
 git add internal/api/
 git commit -m "feat(api): add queue read endpoint scoped to the caller"
 ```

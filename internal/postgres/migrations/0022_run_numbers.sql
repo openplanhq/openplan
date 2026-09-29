@@ -9,7 +9,7 @@
 -- index below is the backstop if that rule ever loosens, and it also serves the
 -- max() lookup.
 --
--- Existing runs are numbered in start order. tflive is pre-production, so this
+-- Existing runs are numbered in start order. openplan is pre-production, so this
 -- is a one-shot renumbering rather than a compatibility path.
 alter table template_runs add column run_number integer;
 

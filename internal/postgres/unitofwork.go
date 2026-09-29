@@ -5,10 +5,10 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/vishu42/tflive/internal/app"
-	"github.com/vishu42/tflive/internal/authorization"
-	"github.com/vishu42/tflive/internal/domain"
-	"github.com/vishu42/tflive/internal/queue"
+	"github.com/vishu42/openplan/internal/app"
+	"github.com/vishu42/openplan/internal/authorization"
+	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/queue"
 )
 
 // txRepo is the transaction-scoped subset of Store handed to an InTx callback.

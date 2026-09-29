@@ -30,7 +30,7 @@ describe("AppShell", () => {
   });
 
   it("renders nav, an identity slot, a static tenant indicator, and routed content", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { default: AppShell } = await import("./AppShell");
 
     const testRouter = createMemoryRouter(
@@ -60,7 +60,7 @@ describe("AppShell", () => {
   });
 
   it("displays the user's display name and a logout control", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { default: AppShell } = await import("./AppShell");
 
     const testRouter = createMemoryRouter(
@@ -79,7 +79,7 @@ describe("AppShell", () => {
   });
 
   it("renders the debug IDs panel when in dev mode", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { default: AppShell } = await import("./AppShell");
 
     const testRouter = createMemoryRouter(

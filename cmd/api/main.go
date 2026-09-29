@@ -15,21 +15,21 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/vishu42/tflive/internal/activities"
-	"github.com/vishu42/tflive/internal/api"
-	"github.com/vishu42/tflive/internal/app"
-	"github.com/vishu42/tflive/internal/artifacts"
-	"github.com/vishu42/tflive/internal/authn"
-	"github.com/vishu42/tflive/internal/authorization"
-	"github.com/vishu42/tflive/internal/bootstrap"
-	"github.com/vishu42/tflive/internal/config"
-	"github.com/vishu42/tflive/internal/domain"
-	"github.com/vishu42/tflive/internal/encryption"
-	"github.com/vishu42/tflive/internal/githubapp"
-	"github.com/vishu42/tflive/internal/postgres"
-	"github.com/vishu42/tflive/internal/queue"
-	"github.com/vishu42/tflive/internal/temporal"
-	"github.com/vishu42/tflive/internal/workflows"
+	"github.com/vishu42/openplan/internal/activities"
+	"github.com/vishu42/openplan/internal/api"
+	"github.com/vishu42/openplan/internal/app"
+	"github.com/vishu42/openplan/internal/artifacts"
+	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/authorization"
+	"github.com/vishu42/openplan/internal/bootstrap"
+	"github.com/vishu42/openplan/internal/config"
+	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/encryption"
+	"github.com/vishu42/openplan/internal/githubapp"
+	"github.com/vishu42/openplan/internal/postgres"
+	"github.com/vishu42/openplan/internal/queue"
+	"github.com/vishu42/openplan/internal/temporal"
+	"github.com/vishu42/openplan/internal/workflows"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
 	temporalworker "go.temporal.io/sdk/worker"
@@ -185,7 +185,7 @@ func shutdownContext() (context.Context, context.CancelFunc) {
 }
 
 func writeStartupError(writer io.Writer, err error) {
-	log.New(writer, "", log.LstdFlags).Printf("tflive API failed: %v", err)
+	log.New(writer, "", log.LstdFlags).Printf("openplan API failed: %v", err)
 }
 
 func defaultAPIDependencies() apiDependencies {

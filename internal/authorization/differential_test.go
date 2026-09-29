@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/vishu42/tflive/internal/authorization"
+	"github.com/vishu42/openplan/internal/authorization"
 )
 
 // TestTransactionalWriteMatchesUpstream writes the same tuples two ways -- once
@@ -38,7 +38,7 @@ func TestTransactionalWriteMatchesUpstream(t *testing.T) {
 	keys := storage.Writes{
 		tuple.NewTupleKey("stack:diff", "owner", "user:alice"),
 		tuple.NewTupleKey("stack:diff", "viewer", "user:bob"),
-		tuple.NewTupleKey("stack:diff", "parent", "platform:tflive"),
+		tuple.NewTupleKey("stack:diff", "parent", "platform:openplan"),
 	}
 
 	// Upstream path: no transaction on the context, so Write falls through.
@@ -119,7 +119,7 @@ func TestTransactionalReadPageMatchesUpstream(t *testing.T) {
 	require.NoError(t, store.Write(ctx, storeID, nil, storage.Writes{
 		tuple.NewTupleKey("stack:read", "owner", "user:alice"),
 		tuple.NewTupleKey("stack:read", "viewer", "user:bob"),
-		tuple.NewTupleKey("stack:read", "parent", "platform:tflive"),
+		tuple.NewTupleKey("stack:read", "parent", "platform:openplan"),
 		tuple.NewTupleKey("stack:other", "owner", "user:alice"),
 	}))
 

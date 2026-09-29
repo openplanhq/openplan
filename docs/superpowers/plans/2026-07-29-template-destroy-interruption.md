@@ -104,7 +104,7 @@ rtk go test ./internal/workflows ./internal/postgres -count=1
 ```
 
 Expected: all available tests pass without warnings; PostgreSQL integration
-tests may be skipped when `tflive_POSTGRES_TEST_DSN` is not configured.
+tests may be skipped when `OPENPLAN_POSTGRES_TEST_DSN` is not configured.
 
 - [ ] **Step 4: Commit the documentation**
 

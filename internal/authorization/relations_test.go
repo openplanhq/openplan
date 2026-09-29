@@ -6,7 +6,7 @@ import (
 )
 
 // The allowlist exists for exactly one tuple OpenFGA itself accepts:
-// {platform:tflive, parent, stack:X}. A grant endpoint must never write it.
+// {platform:openplan, parent, stack:X}. A grant endpoint must never write it.
 func TestGrantRelationRefusesNonGrantableRelations(t *testing.T) {
 	for _, name := range []string{"parent", "root", "can_view", "can_operate", "can_approve", "can_manage_access", "nonsense"} {
 		if _, err := GrantRelation(name); !errors.Is(err, ErrInvalidInput) {

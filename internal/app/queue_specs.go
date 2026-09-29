@@ -1,7 +1,7 @@
 package app
 
 import (
-	"github.com/vishu42/tflive/internal/queue"
+	"github.com/vishu42/openplan/internal/queue"
 )
 
 // QueueSpecs returns every queue contract shared by API producers and the queue loop.

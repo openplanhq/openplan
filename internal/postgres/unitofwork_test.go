@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vishu42/tflive/internal/app"
-	"github.com/vishu42/tflive/internal/domain"
-	"github.com/vishu42/tflive/internal/queue"
+	"github.com/vishu42/openplan/internal/app"
+	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/queue"
 )
 
 var _ app.UnitOfWork = (*Store)(nil)

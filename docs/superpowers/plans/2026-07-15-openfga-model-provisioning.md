@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go 1.24.0 with toolchain 1.24.1, Go standard library, OpenFGA schema 1.1, OpenFGA server v1.15.1, OpenFGA CLI v0.7.15, Docker Compose, Node.js contract tests.
 
-**Issue:** [AUTH-004](https://github.com/vishu42/tflive/issues/6)
+**Issue:** [AUTH-004](https://github.com/vishu42/openplan/issues/6)
 
 **Design:** [2026-07-15-openfga-model-provisioning-design.md](../specs/2026-07-15-openfga-model-provisioning-design.md)
 
@@ -88,7 +88,7 @@ Expected: exactly one matching backlog row.
 Create openfga/authorization-model-tests.fga.yaml before the referenced model exists:
 
 ~~~yaml
-name: tflive stack authorization
+name: openplan stack authorization
 model_file: ./authorization-model.json
 tuples:
   - user: user:owner
@@ -338,7 +338,7 @@ import (
 	"strings"
 	"testing"
 
-	openfgamodel "github.com/vishu42/tflive/openfga"
+	openfgamodel "github.com/vishu42/openplan/openfga"
 )
 
 func TestParseAuthorizationModelRejectsInvalidModels(t *testing.T) {
@@ -654,7 +654,7 @@ func TestLoadConfigReadsValidValuesAndDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.APIURL.String() != "http://openfga:8080" || cfg.StoreName != "tflive" {
+	if cfg.APIURL.String() != "http://openfga:8080" || cfg.StoreName != "openplan" {
 		t.Fatalf("unexpected config: %#v", cfg)
 	}
 	if cfg.StoreID != "store-id" || cfg.ModelID != "model-id" || cfg.APIToken != "secret-token" {
@@ -762,7 +762,7 @@ import (
 )
 
 const (
-	defaultStoreName  = "tflive"
+	defaultStoreName  = "openplan"
 	defaultHTTPTimeout = 10 * time.Second
 )
 
@@ -915,7 +915,7 @@ func TestClientListsStoresAcrossPagesAndAuthenticates(t *testing.T) {
 		case "":
 			fmt.Fprint(w, `{"stores":[{"id":"store-1","name":"other"}],"continuation_token":"next"}`)
 		case "next":
-			fmt.Fprint(w, `{"stores":[{"id":"store-2","name":"tflive"}]}`)
+			fmt.Fprint(w, `{"stores":[{"id":"store-2","name":"openplan"}]}`)
 		default:
 			t.Fatalf("unexpected continuation token %q", r.URL.Query().Get("continuation_token"))
 		}
@@ -1027,13 +1027,13 @@ func TestClientStoreAndModelEndpointContracts(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 				t.Fatal(err)
 			}
-			if request["name"] != "tflive" || r.Header.Get("Content-Type") != "application/json" {
+			if request["name"] != "openplan" || r.Header.Get("Content-Type") != "application/json" {
 				t.Fatalf("create store request = %#v content-type = %q", request, r.Header.Get("Content-Type"))
 			}
 			w.WriteHeader(http.StatusCreated)
-			fmt.Fprint(w, `{"id":"store-id","name":"tflive"}`)
+			fmt.Fprint(w, `{"id":"store-id","name":"openplan"}`)
 		case r.Method == http.MethodGet && r.URL.Path == "/stores/store-id":
-			fmt.Fprint(w, `{"id":"store-id","name":"tflive"}`)
+			fmt.Fprint(w, `{"id":"store-id","name":"openplan"}`)
 		case r.Method == http.MethodGet && r.URL.Path == "/stores/store-id/authorization-models":
 			responseModel := model
 			responseModel.ID = "model-id"
@@ -1059,7 +1059,7 @@ func TestClientStoreAndModelEndpointContracts(t *testing.T) {
 	defer server.Close()
 
 	client := testClient(t, server.URL, "")
-	store, err := client.CreateStore(context.Background(), "tflive")
+	store, err := client.CreateStore(context.Background(), "openplan")
 	if err != nil || store.ID != "store-id" {
 		t.Fatalf("CreateStore() = %#v, %v", store, err)
 	}
@@ -1113,10 +1113,10 @@ func TestClientRejectsOversizedSuccessAndMissingIdentifiers(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusCreated)
-			fmt.Fprint(w, `{"name":"tflive"}`)
+			fmt.Fprint(w, `{"name":"openplan"}`)
 		}))
 		defer server.Close()
-		_, err := testClient(t, server.URL, "").CreateStore(context.Background(), "tflive")
+		_, err := testClient(t, server.URL, "").CreateStore(context.Background(), "openplan")
 		if err == nil || !strings.Contains(err.Error(), "missing or unsafe id") {
 			t.Fatalf("CreateStore() error = %v", err)
 		}
@@ -1492,7 +1492,7 @@ import (
 	"strings"
 	"testing"
 
-	openfgamodel "github.com/vishu42/tflive/openfga"
+	openfgamodel "github.com/vishu42/openplan/openfga"
 )
 
 func TestBootstrapIsRepeatableAndReturnsStableIDs(t *testing.T) {
@@ -1500,7 +1500,7 @@ func TestBootstrapIsRepeatableAndReturnsStableIDs(t *testing.T) {
 
 	desired := desiredModel(t)
 	backend := &fakeBackend{}
-	cfg := Config{StoreName: "tflive"}
+	cfg := Config{StoreName: "openplan"}
 
 	first, err := Bootstrap(context.Background(), cfg, desired, backend)
 	if err != nil {
@@ -1530,15 +1530,15 @@ func TestBootstrapRejectsAmbiguousStoresAndModels(t *testing.T) {
 		{
 			name: "duplicate store names",
 			backend: &fakeBackend{stores: []Store{
-				{ID: "store-1", Name: "tflive"},
-				{ID: "store-2", Name: "tflive"},
+				{ID: "store-1", Name: "openplan"},
+				{ID: "store-2", Name: "openplan"},
 			}},
 			want: "found 2 stores named",
 		},
 		{
 			name: "duplicate semantic models",
 			backend: &fakeBackend{
-				stores: []Store{{ID: "store-1", Name: "tflive"}},
+				stores: []Store{{ID: "store-1", Name: "openplan"}},
 				models: map[string][]ModelRecord{"store-1": {
 					{ID: "model-1", Model: withID(desired, "model-1")},
 					{ID: "model-2", Model: withID(desired, "model-2")},
@@ -1552,7 +1552,7 @@ func TestBootstrapRejectsAmbiguousStoresAndModels(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := Bootstrap(context.Background(), Config{StoreName: "tflive"}, desired, test.backend)
+			_, err := Bootstrap(context.Background(), Config{StoreName: "openplan"}, desired, test.backend)
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("Bootstrap() error = %v, want containing %q", err, test.want)
 			}
@@ -1565,12 +1565,12 @@ func TestBootstrapRecoversAfterStoreCreationFailure(t *testing.T) {
 
 	desired := desiredModel(t)
 	backend := &fakeBackend{writeErr: errors.New("temporary write failure")}
-	_, err := Bootstrap(context.Background(), Config{StoreName: "tflive"}, desired, backend)
+	_, err := Bootstrap(context.Background(), Config{StoreName: "openplan"}, desired, backend)
 	if !errors.Is(err, backend.writeErr) {
 		t.Fatalf("Bootstrap() error = %v", err)
 	}
 	backend.writeErr = nil
-	result, err := Bootstrap(context.Background(), Config{StoreName: "tflive"}, desired, backend)
+	result, err := Bootstrap(context.Background(), Config{StoreName: "openplan"}, desired, backend)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1709,17 +1709,17 @@ func TestBootstrapReusesStoreAndCreatesOneVersionForChangedModel(t *testing.T) {
 		}
 	}
 	backend := &fakeBackend{
-		stores: []Store{{ID: "store-existing", Name: "tflive"}},
+		stores: []Store{{ID: "store-existing", Name: "openplan"}},
 		models: map[string][]ModelRecord{
 			"store-existing": {{ID: "old-model", Model: withID(old, "old-model")}},
 		},
 	}
 
-	first, err := Bootstrap(context.Background(), Config{StoreName: "tflive"}, desired, backend)
+	first, err := Bootstrap(context.Background(), Config{StoreName: "openplan"}, desired, backend)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := Bootstrap(context.Background(), Config{StoreName: "tflive"}, desired, backend)
+	second, err := Bootstrap(context.Background(), Config{StoreName: "openplan"}, desired, backend)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1743,7 +1743,7 @@ func TestVerifyRejectsMissingIDsAndSemanticMismatch(t *testing.T) {
 		}
 	}
 	backend := &fakeBackend{
-		stores: []Store{{ID: "store-id", Name: "tflive"}},
+		stores: []Store{{ID: "store-id", Name: "openplan"}},
 		models: map[string][]ModelRecord{
 			"store-id": {{ID: "model-id", Model: withID(actual, "model-id")}},
 		},
@@ -1767,7 +1767,7 @@ func TestProvisionerWrapsEveryBackendFailure(t *testing.T) {
 			name: "list stores",
 			operation: func(backend *fakeBackend) error {
 				backend.listStoreErr = want
-				_, err := Bootstrap(context.Background(), Config{StoreName: "tflive"}, desired, backend)
+				_, err := Bootstrap(context.Background(), Config{StoreName: "openplan"}, desired, backend)
 				return err
 			},
 		},
@@ -1775,25 +1775,25 @@ func TestProvisionerWrapsEveryBackendFailure(t *testing.T) {
 			name: "create store",
 			operation: func(backend *fakeBackend) error {
 				backend.createStoreErr = want
-				_, err := Bootstrap(context.Background(), Config{StoreName: "tflive"}, desired, backend)
+				_, err := Bootstrap(context.Background(), Config{StoreName: "openplan"}, desired, backend)
 				return err
 			},
 		},
 		{
 			name: "list models",
 			operation: func(backend *fakeBackend) error {
-				backend.stores = []Store{{ID: "store-id", Name: "tflive"}}
+				backend.stores = []Store{{ID: "store-id", Name: "openplan"}}
 				backend.listModelErr = want
-				_, err := Bootstrap(context.Background(), Config{StoreName: "tflive"}, desired, backend)
+				_, err := Bootstrap(context.Background(), Config{StoreName: "openplan"}, desired, backend)
 				return err
 			},
 		},
 		{
 			name: "write model",
 			operation: func(backend *fakeBackend) error {
-				backend.stores = []Store{{ID: "store-id", Name: "tflive"}}
+				backend.stores = []Store{{ID: "store-id", Name: "openplan"}}
 				backend.writeErr = want
-				_, err := Bootstrap(context.Background(), Config{StoreName: "tflive"}, desired, backend)
+				_, err := Bootstrap(context.Background(), Config{StoreName: "openplan"}, desired, backend)
 				return err
 			},
 		},
@@ -1808,7 +1808,7 @@ func TestProvisionerWrapsEveryBackendFailure(t *testing.T) {
 		{
 			name: "get model",
 			operation: func(backend *fakeBackend) error {
-				backend.stores = []Store{{ID: "store-id", Name: "tflive"}}
+				backend.stores = []Store{{ID: "store-id", Name: "openplan"}}
 				backend.getModelErr = want
 				_, err := Verify(context.Background(), Config{StoreID: "store-id", ModelID: "model-id"}, desired, backend)
 				return err
@@ -1831,7 +1831,7 @@ func TestBootstrapPreservesCancellation(t *testing.T) {
 	t.Parallel()
 
 	backend := &fakeBackend{listStoreErr: context.Canceled}
-	_, err := Bootstrap(context.Background(), Config{StoreName: "tflive"}, desiredModel(t), backend)
+	_, err := Bootstrap(context.Background(), Config{StoreName: "openplan"}, desiredModel(t), backend)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("Bootstrap() error = %v", err)
 	}
@@ -1994,8 +1994,8 @@ import (
 	"strings"
 	"testing"
 
-	openfga "github.com/vishu42/tflive/internal/openfga"
-	openfgamodel "github.com/vishu42/tflive/openfga"
+	openfga "github.com/vishu42/openplan/internal/openfga"
+	openfgamodel "github.com/vishu42/openplan/openfga"
 )
 
 func TestRunDefaultsToVerifyAndPrintsOnlyEnvironmentAssignments(t *testing.T) {
@@ -2133,8 +2133,8 @@ import (
 	"strings"
 	"syscall"
 
-	openfga "github.com/vishu42/tflive/internal/openfga"
-	openfgamodel "github.com/vishu42/tflive/openfga"
+	openfga "github.com/vishu42/openplan/internal/openfga"
+	openfgamodel "github.com/vishu42/openplan/openfga"
 )
 
 type executeFunc func(context.Context, string, openfga.Config, openfga.AuthorizationModel) (openfga.Result, error)
@@ -2243,7 +2243,7 @@ assert.equal(openfgaProvision.build?.dockerfile, "Dockerfile.openfga-provisioner
 assert.deepEqual(openfgaProvision.ports ?? [], []);
 assert.deepEqual(openfgaProvision.command, ["verify"]);
 assert.equal(openfgaProvision.environment?.OPENFGA_API_URL, "http://openfga:8080");
-assert.equal(openfgaProvision.environment?.OPENFGA_STORE_NAME, "tflive");
+assert.equal(openfgaProvision.environment?.OPENFGA_STORE_NAME, "openplan");
 assert.equal(openfgaProvision.environment?.OPENFGA_STORE_ID, "");
 assert.equal(openfgaProvision.environment?.OPENFGA_MODEL_ID, "");
 assert.equal(openfgaProvision.environment?.OPENFGA_HTTP_TIMEOUT, "10s");
@@ -2310,7 +2310,7 @@ Insert this service after openfga in docker-compose.yaml:
         condition: service_healthy
     environment:
       OPENFGA_API_URL: http://openfga:8080
-      OPENFGA_STORE_NAME: tflive
+      OPENFGA_STORE_NAME: openplan
       OPENFGA_STORE_ID: ${OPENFGA_STORE_ID:-}
       OPENFGA_MODEL_ID: ${OPENFGA_MODEL_ID:-}
       OPENFGA_HTTP_TIMEOUT: ${OPENFGA_HTTP_TIMEOUT:-10s}
@@ -2386,8 +2386,8 @@ import (
 	"testing"
 	"time"
 
-	openfga "github.com/vishu42/tflive/internal/openfga"
-	openfgamodel "github.com/vishu42/tflive/openfga"
+	openfga "github.com/vishu42/openplan/internal/openfga"
+	openfgamodel "github.com/vishu42/openplan/openfga"
 )
 
 func TestLiveBootstrapVerifyAndDerivedWriteRejection(t *testing.T) {
@@ -2399,7 +2399,7 @@ func TestLiveBootstrapVerifyAndDerivedWriteRejection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.StoreName = fmt.Sprintf("tflive-integration-%d", time.Now().UnixNano())
+	cfg.StoreName = fmt.Sprintf("openplan-integration-%d", time.Now().UnixNano())
 	cfg.StoreID = ""
 	cfg.ModelID = ""
 	model, err := openfga.ParseAuthorizationModel(openfgamodel.AuthorizationModelJSON())
@@ -2612,7 +2612,7 @@ Derived relations
 - can_manage_access = owner
 
 Provisioning contract
-- bootstrap discovers only the uniquely named tflive store and reuses one semantic model match
+- bootstrap discovers only the uniquely named openplan store and reuses one semantic model match
 - duplicate names or duplicate matches fail closed
 - stdout contains only OPENFGA_STORE_ID and OPENFGA_MODEL_ID assignments
 - deployment administrators record both IDs in environment configuration

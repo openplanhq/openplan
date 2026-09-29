@@ -3,7 +3,7 @@
 **Date:** 2026-09-16
 **Status:** Resolved — all three decisions taken and applied on 2026-09-16
 
-Survey of all 77 open issues on `vishu42/tflive`, to tie every issue to an epic
+Survey of all 77 open issues on `vishu42/openplan`, to tie every issue to an epic
 and retire the `model:*` labels.
 
 ## Done already

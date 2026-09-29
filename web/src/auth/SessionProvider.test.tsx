@@ -9,7 +9,7 @@ import { ApiRequestError } from "../api/client";
 import { clearLoginAttempts, maxLoginAttempts, readLoginAttempts } from "./loginAttempts";
 import SessionProvider, { REAUTH_DEFER_LIMIT_MS, REAUTH_RETRY_MS } from "./SessionProvider";
 
-const attemptsKey = "tflive.auth.loginAttempts";
+const attemptsKey = "openplan.auth.loginAttempts";
 
 const getMe = vi.fn();
 const logout = vi.fn();
@@ -103,7 +103,7 @@ describe("SessionProvider", () => {
 
   // Refetching /v1/me is itself an authenticated request, so a timer that
   // refetched unconditionally would slide the very bound it was checking and
-  // renew an unattended tab forever, putting TFLIVE_SESSION_IDLE_TTL out of
+  // renew an unattended tab forever, putting OPENPLAN_SESSION_IDLE_TTL out of
   // reach. A tab that has said nothing says nothing here either.
   it("stays quiet at the re-auth moment when the tab has made no other request", async () => {
     getMe.mockResolvedValue({ ...me, sessionExpiresAt: new Date(Date.now() + 61 * 1000).toISOString() });

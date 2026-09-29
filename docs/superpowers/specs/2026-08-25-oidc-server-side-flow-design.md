@@ -1,7 +1,7 @@
 # #216 — Server-side OIDC flow: design
 
-Design for [#216](https://github.com/vishu42/tflive/issues/216), under
-[Epic #210](https://github.com/vishu42/tflive/issues/210). Successor to
+Design for [#216](https://github.com/vishu42/openplan/issues/216), under
+[Epic #210](https://github.com/vishu42/openplan/issues/210). Successor to
 [the analysis](2026-08-22-oidc-server-side-flow-analysis.md), which parked #216 behind #145.
 
 **The block is cleared.** #145 landed at `5dea447` ("make OpenFGA the sole authorization
@@ -176,7 +176,7 @@ rather than the load-bearing control — but it is five lines and several provid
 
 ### `internal/authn/session.go` — two cookies
 
-| | `tflive_session` | `tflive_auth_tx` |
+| | `openplan_session` | `openplan_auth_tx` |
 |---|---|---|
 | Contents | the IdP's raw ID token | sealed `{state, nonce, code_verifier, return_to}` |
 | Path | `/` | `/v1/auth` |
@@ -222,9 +222,9 @@ flow, at the cost of duplicating the AES-GCM boilerplate inside `internal/authn`
 The API sits behind Vite in dev and nginx in prod and cannot see the browser's origin.
 Deriving it from `X-Forwarded-Proto` and `Host` makes the redirect URI attacker-influenced.
 
-New required config: **`TFLIVE_PUBLIC_URL`** (`http://localhost:5173` locally). The redirect
-URI is `${TFLIVE_PUBLIC_URL}/v1/auth/callback` and the post-logout redirect is
-`${TFLIVE_PUBLIC_URL}/`. Both are computed, never configured separately, so they cannot drift
+New required config: **`OPENPLAN_PUBLIC_URL`** (`http://localhost:5173` locally). The redirect
+URI is `${OPENPLAN_PUBLIC_URL}/v1/auth/callback` and the post-logout redirect is
+`${OPENPLAN_PUBLIC_URL}/`. Both are computed, never configured separately, so they cannot drift
 from what is registered with the IdP.
 
 ### `return_to` and open redirect
@@ -255,7 +255,7 @@ failed, and the distinction is an oracle.
 
 **`POST /v1/auth/logout`** — clears the session cookie and responds `303 See Other` to the
 provider's `end_session_endpoint`, built with `id_token_hint` and `post_logout_redirect_uri`,
-falling back to `${TFLIVE_PUBLIC_URL}/` when the provider advertises none.
+falling back to `${OPENPLAN_PUBLIC_URL}/` when the provider advertises none.
 
 **It redirects rather than returning that URL in a body, and that is the security-relevant
 part.** The URL carries the raw ID token as `id_token_hint`. A JSON body would be readable by
@@ -286,7 +286,7 @@ reads a value the verifier has in hand rather than parsing anything new.
 ## Middleware
 
 `RequireAuthentication` (`internal/authn/middleware.go`) tries `Authorization: Bearer` first,
-then the `tflive_session` cookie. Header first keeps a future CLI working and keeps the
+then the `openplan_session` cookie. Header first keeps a future CLI working and keeps the
 existing precedence explicit rather than accidental. Both paths feed the same
 `verifier.Verify` and produce the same `Principal`; there is no second code path for
 cookie-derived identity.
@@ -302,13 +302,13 @@ cookie-derived identity.
 | `OIDC_AUDIENCE` | **retired**, replaced by `OIDC_CLIENT_ID` |
 | `OIDC_CLIENT_ID` | new, required — the audience of the ID token |
 | `OIDC_CLIENT_SECRET` | new, required — the API is a confidential client |
-| `TFLIVE_PUBLIC_URL` | new, required — origin the browser reaches |
+| `OPENPLAN_PUBLIC_URL` | new, required — origin the browser reaches |
 | `SESSION_ENCRYPTION_KEY` | new, required — 32 bytes, seals the transaction cookie |
 | `CREDENTIAL_ENCRYPTION_KEY` | unchanged value, now read through `internal/config` |
 | `VITE_OIDC_ISSUER`, `VITE_OIDC_CLIENT_ID`, `VITE_OIDC_REDIRECT_URI` | **deleted** — the browser no longer speaks OIDC |
-| `KEYCLOAK_WEB_REDIRECT_URIS`, `KEYCLOAK_WEB_ORIGINS` | **deleted** — derived from `TFLIVE_PUBLIC_URL` |
+| `KEYCLOAK_WEB_REDIRECT_URIS`, `KEYCLOAK_WEB_ORIGINS` | **deleted** — derived from `OPENPLAN_PUBLIC_URL` |
 
-`OIDC_AUDIENCE` is renamed rather than redefined. tflive is pre-production with disposable
+`OIDC_AUDIENCE` is renamed rather than redefined. openplan is pre-production with disposable
 state, so no compatibility shim: a config file carrying the old name fails to start, which is
 the correct outcome when its meaning has changed.
 
@@ -319,18 +319,18 @@ the correct outcome when its meaning has changed.
 
 Two clients collapse to one. This shrinks #197.
 
-- **`tflive-web` is deleted.** With it go the public client, PKCE attributes, web origins,
+- **`openplan-web` is deleted.** With it go the public client, PKCE attributes, web origins,
   and post-logout redirect attributes.
-- **`tflive-api` becomes the confidential browser client**: `BearerOnly: false`,
+- **`openplan-api` becomes the confidential browser client**: `BearerOnly: false`,
   `PublicClient: false`, `StandardFlowEnabled: true`, a secret, and
-  `RedirectURIs: ["${TFLIVE_PUBLIC_URL}/v1/auth/callback"]`. `WebOrigins` stays empty — no
+  `RedirectURIs: ["${OPENPLAN_PUBLIC_URL}/v1/auth/callback"]`. `WebOrigins` stays empty — no
   CORS is needed and none is configured anywhere in `internal/api`.
-- **The `tflive-api-audience` client scope and its audience mapper are deleted.** They exist
+- **The `openplan-api-audience` client scope and its audience mapper are deleted.** They exist
   to force a resource identifier into an access token's `aud`. An ID token's `aud` is the
   client ID by construction — which is the entire point of #216.
 - **The `roles` client scope link is deleted.** Nothing has read realm roles since #145.
 - **`ExampleAccessToken` is deleted** from the provisioner and its backend interface. It
-  asserted `aud` contains `tflive-api`, which is now true by definition and no longer worth a
+  asserted `aud` contains `openplan-api`, which is now true by definition and no longer worth a
   round trip.
 - **`AccessTokenLifespan` rises from 300 to 3600**, with a comment naming it the session
   length and pointing at the no-refresh decision above.
@@ -402,7 +402,7 @@ built, so everything below is verified statically and by the automated suites on
 here confirms the stack boots or that login and logout work end to end. Run it before
 trusting the branch.
 
-`docker compose up`, log in through Keycloak, confirm `tflive_session` is
+`docker compose up`, log in through Keycloak, confirm `openplan_session` is
 httpOnly in devtools and that no token is reachable from `document.cookie` or any JS store.
 Drop `AccessTokenLifespan` to 60 temporarily and confirm the warm re-auth round trip is
 silent — no login form, route preserved, React Query state refetched.
@@ -439,7 +439,7 @@ four new variables. `README.md` and `.env.example` follow.
 - **#199** — shrinks but does not disappear. The browser still resolves the authorization
   endpoint, so `keycloak.localhost:8082` is still a name both the container and the host must
   resolve. Only the token and JWKS endpoints become API-only.
-- **#211 / #213** — converge on `tflive_session` rather than returning a token to the SPA.
+- **#211 / #213** — converge on `openplan_session` rather than returning a token to the SPA.
 - **#197** — shrinks by one client, one client scope, one protocol mapper, and the
   `ExampleAccessToken` verification.
 - **#198** — unaffected in shape; the claim contract is now read from the ID token.

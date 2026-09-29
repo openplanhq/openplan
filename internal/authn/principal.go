@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/vishu42/tflive/internal/strval"
+	"github.com/vishu42/openplan/internal/strval"
 )
 
 // Principal is the normalized identity made available to handlers. It is built

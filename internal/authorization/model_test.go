@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/vishu42/tflive/internal/authorization"
+	"github.com/vishu42/openplan/internal/authorization"
 )
 
 // The DSL is transformed at runtime, so a malformed model would otherwise first

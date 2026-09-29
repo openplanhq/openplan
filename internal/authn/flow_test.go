@@ -16,7 +16,7 @@ func (s staticEndpoints) Endpoints() Endpoints { return s.endpoints }
 func newTestFlow(t *testing.T, endpoints Endpoints) *Flow {
 	t.Helper()
 	flow, err := NewFlow(FlowConfig{
-		ClientID:     "tflive-api",
+		ClientID:     "openplan-api",
 		ClientSecret: "client-secret",
 		RedirectURI:  "http://localhost:5173/v1/auth/callback",
 		Endpoints:    staticEndpoints{endpoints: endpoints},
@@ -47,7 +47,7 @@ func TestAuthorizationURLCarriesFlowParameters(t *testing.T) {
 	query := parsed.Query()
 	for name, want := range map[string]string{
 		"response_type":         "code",
-		"client_id":             "tflive-api",
+		"client_id":             "openplan-api",
 		"redirect_uri":          "http://localhost:5173/v1/auth/callback",
 		"scope":                 "openid profile email",
 		"state":                 "state-1",
@@ -103,7 +103,7 @@ func TestExchangeSendsClientCredentialsAndReturnsIDToken(t *testing.T) {
 	if rawIDToken != "raw.id.token" {
 		t.Fatalf("id token = %q", rawIDToken)
 	}
-	if !gotBasic || gotUser != "tflive-api" || gotPassword != "client-secret" {
+	if !gotBasic || gotUser != "openplan-api" || gotPassword != "client-secret" {
 		t.Fatalf("client authentication = %q/%q basic=%t", gotUser, gotPassword, gotBasic)
 	}
 	if gotForm.Get("grant_type") != "authorization_code" {
@@ -175,7 +175,7 @@ func TestNewFlowRejectsIncompleteConfig(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			cfg := FlowConfig{
-				ClientID:     "tflive-api",
+				ClientID:     "openplan-api",
 				ClientSecret: "client-secret",
 				RedirectURI:  "http://localhost:5173/v1/auth/callback",
 				Endpoints:    staticEndpoints{},

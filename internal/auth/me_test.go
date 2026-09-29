@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vishu42/tflive/internal/authn"
+	"github.com/vishu42/openplan/internal/authn"
 )
 
 func TestMeFromPrincipalReportsSessionExpiry(t *testing.T) {

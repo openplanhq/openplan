@@ -4,13 +4,13 @@
 > acceptance criterion against a live Keycloak 26.6.3 container before closing
 > AUTH-003.
 
-**Goal:** Provision and continuously reconcile the local `tflive` Keycloak
+**Goal:** Provision and continuously reconcile the local `openplan` Keycloak
 realm, OIDC clients, token claims, fixed global roles, and initial platform
 administrator without duplicating named resources.
 
 **Architecture:** Add a small Go one-shot provisioner that authenticates to the
 Keycloak Admin REST API with bootstrap credentials supplied at runtime. It
-creates missing resources, updates fields owned by tflive on existing
+creates missing resources, updates fields owned by openplan on existing
 resources, assigns roles idempotently, and verifies the effective example
 access token before returning success. Docker Compose builds and runs the
 provisioner only after Keycloak is healthy. Keycloak startup realm import is not
@@ -20,21 +20,21 @@ later desired-state changes.
 **Tech stack:** Go 1.24 standard library, Keycloak Admin REST API, Docker
 Compose, Node.js contract tests, Go `httptest` tests.
 
-**Issue:** [AUTH-003](https://github.com/vishu42/tflive/issues/5)
+**Issue:** [AUTH-003](https://github.com/vishu42/openplan/issues/5)
 
 ## Approved Design Decisions
 
-- Manage one realm named `tflive` with a maximum access-token lifespan of 300
+- Manage one realm named `openplan` with a maximum access-token lifespan of 300
   seconds.
-- Provision `tflive-web` as a public OpenID Connect client. Enable only the
+- Provision `openplan-web` as a public OpenID Connect client. Enable only the
   standard Authorization Code flow and require PKCE S256. Disable implicit,
   resource-owner password, device, CIBA, and service-account flows.
 - Accept only exact redirect URIs and web origins. Reject wildcard entries,
   URL fragments, URL user information, and non-loopback plain HTTP browser
   endpoints. Local development permits exactly `http://localhost:5173/` and
   `http://127.0.0.1:5173/` with their matching origins.
-- Provision `tflive-api` as a bearer-only client. Add a default client scope
-  with an explicit hardcoded audience mapper for `tflive-api`.
+- Provision `openplan-api` as a bearer-only client. Add a default client scope
+  with an explicit hardcoded audience mapper for `openplan-api`.
 - Keep global realm roles in Keycloak's standard `realm_access.roles` access
   token claim and explicitly link the built-in `roles` client scope.
 - Provision the fixed realm roles `platform-admin` and `stack-creator` with
@@ -42,12 +42,12 @@ Compose, Node.js contract tests, Go `httptest` tests.
 - Source the initial platform administrator username and password only from
   runtime environment values. Set the password only when creating the user;
   reruns do not overwrite an operator-rotated password.
-- Keep the tflive realm administrator distinct from the master-realm bootstrap
+- Keep the openplan realm administrator distinct from the master-realm bootstrap
   administrator. Assign `platform-admin` plus the least-privilege
   `realm-management` roles `query-users`, `view-users`, `manage-users`, and
   `view-realm`. Do not grant the broad `realm-admin` composite.
 - Treat an example access token generated for the browser client and bootstrap
-  platform user as a postcondition: its audience must include `tflive-api` and
+  platform user as a postcondition: its audience must include `openplan-api` and
   `realm_access.roles` must include `platform-admin`.
 - Never log passwords, access tokens, refresh tokens, or credential-bearing
   request bodies. Redact configured secret values from all surfaced errors.
@@ -70,8 +70,8 @@ Compose, Node.js contract tests, Go `httptest` tests.
    `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_WEB_REDIRECT_URIS`,
    `KEYCLOAK_WEB_ORIGINS`, `KEYCLOAK_PLATFORM_ADMIN_USERNAME`, and
    `KEYCLOAK_PLATFORM_ADMIN_PASSWORD`.
-4. Default the admin realm to `master`, product realm to `tflive`, browser
-   client to `tflive-web`, API client to `tflive-api`, and timeout to ten
+4. Default the admin realm to `master`, product realm to `openplan`, browser
+   client to `openplan-web`, API client to `openplan-api`, and timeout to ten
    seconds.
 5. Run `go test ./internal/keycloak -run TestLoadConfig -count=1`.
 
@@ -112,7 +112,7 @@ Compose, Node.js contract tests, Go `httptest` tests.
 4. Implement create-or-update reconciliation keyed only by immutable Keycloak
    resource identifiers: realm name, client ID, role name, client-scope name,
    protocol-mapper name, and exact username.
-5. Preserve fields not owned by tflive when updating existing resource
+5. Preserve fields not owned by openplan when updating existing resource
    representations.
 6. Set the initial password only on user creation, then idempotently apply the
    realm and realm-management role mappings.
@@ -162,7 +162,7 @@ Compose, Node.js contract tests, Go `httptest` tests.
 
 1. Document the local issuer, exact client settings, token claims, role
    meanings, five-minute access-token lifetime, secret inputs, and the
-   distinction between master bootstrap and tflive realm administration.
+   distinction between master bootstrap and openplan realm administration.
 2. Document safe reruns and explain that existing platform-user passwords are
    not overwritten.
 3. Update clean-checkout startup to include `keycloak-provision` and show how
@@ -177,7 +177,7 @@ Compose, Node.js contract tests, Go `httptest` tests.
 3. Query Keycloak Admin REST representations to prove resource counts,
    exact redirect/origin settings, PKCE S256, disabled unsafe flows, role
    assignments, and effective example-token audience/role claims.
-4. Prove the tflive realm administrator can authenticate to its dedicated
+4. Prove the openplan realm administrator can authenticate to its dedicated
    realm Admin Console/API and cannot administer the master realm.
 5. Run fresh final verification:
 

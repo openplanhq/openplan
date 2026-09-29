@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vishu42/tflive/internal/app"
-	"github.com/vishu42/tflive/internal/authn"
-	"github.com/vishu42/tflive/internal/encryption"
+	"github.com/vishu42/openplan/internal/app"
+	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/encryption"
 )
 
 type stubFlow struct {

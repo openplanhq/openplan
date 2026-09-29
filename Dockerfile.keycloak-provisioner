@@ -4,7 +4,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 # Unlike the other images, this build copies only what the binary needs rather
 # than the whole tree. That list is exactly `go list -deps
-# ./cmd/keycloak-provisioner | grep tflive`, so a new internal import anywhere
+# ./cmd/keycloak-provisioner | grep openplan`, so a new internal import anywhere
 # under internal/keycloak has to be added here or the build fails at COPY time.
 COPY internal/strval ./internal/strval
 COPY internal/keycloak ./internal/keycloak

@@ -12,12 +12,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vishu42/tflive/internal/app"
-	"github.com/vishu42/tflive/internal/auth"
-	"github.com/vishu42/tflive/internal/authn"
-	"github.com/vishu42/tflive/internal/domain"
-	"github.com/vishu42/tflive/internal/encryption"
-	"github.com/vishu42/tflive/internal/queue"
+	"github.com/vishu42/openplan/internal/app"
+	"github.com/vishu42/openplan/internal/auth"
+	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/encryption"
+	"github.com/vishu42/openplan/internal/queue"
 )
 
 type Server struct {
@@ -47,7 +47,7 @@ type AuthFlow interface {
 }
 
 // LocalAuthenticator checks a username and password against the accounts
-// tflive owns. *authn.LocalAuthenticator satisfies it.
+// openplan owns. *authn.LocalAuthenticator satisfies it.
 //
 // It is separate from Verifier because the two answer different questions: a
 // Verifier decides whether a token an IdP issued is genuine, this decides
@@ -1092,10 +1092,10 @@ func writeAppError(response http.ResponseWriter, err error) {
 	case errors.Is(err, app.ErrNotFound):
 		writeError(response, http.StatusNotFound, "not_found", err.Error())
 	// Its own code because it is not a malformed request: the caller named a
-	// real person tflive has simply never seen sign in.
+	// real person openplan has simply never seen sign in.
 	case errors.Is(err, app.ErrUserNotProvisioned):
 		writeError(response, http.StatusBadRequest, "unknown_user",
-			"that user has not signed in to tflive yet - they need to sign in once before a role can be granted")
+			"that user has not signed in to openplan yet - they need to sign in once before a role can be granted")
 	// Its own code, because the client can act on this one: re-plan, then apply.
 	case errors.Is(err, app.ErrStackTemplatePlanStale):
 		writeError(response, http.StatusConflict, "plan_stale", err.Error())
