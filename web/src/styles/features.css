@@ -717,6 +717,13 @@
   cursor: pointer;
 }
 
+/* Preflight audit: this button is not a flex container, so a block svg would
+   change its height. :where() keeps browser-default precedence. */
+:where(.selected-user-card button svg) {
+  display: revert;
+  vertical-align: revert;
+}
+
 /* ---- Undo banner ---- */
 .undo-banner {
   position: fixed;
@@ -746,6 +753,13 @@
   font-size: var(--legacy-text-sm);
   font-weight: 400;
   cursor: pointer;
+}
+
+/* Preflight audit: the pending spinner sits inline in this button, which is
+   not a flex container. :where() keeps browser-default precedence. */
+:where(.undo-banner button svg) {
+  display: revert;
+  vertical-align: revert;
 }
 
 /* ---- Layout grids ---- */
@@ -1409,4 +1423,18 @@
    enough to read as the SSO button belonging to something else. */
 .signin-card > .signin-divider + .secondary-button {
   margin-top: 0;
+}
+
+/* ---- Session errors ---- */
+/* Preflight audit: SessionProvider's error screens are unstyled markup that
+   relied on browser defaults for paragraph spacing and the retry button.
+   `all: revert` restores every browser default Preflight changed; :where()
+   keeps it at browser-default precedence, so base.css's element rules still
+   apply as they did before. */
+:where(.session-error p) {
+  margin-block: revert;
+}
+
+:where(.session-error button) {
+  all: revert;
 }

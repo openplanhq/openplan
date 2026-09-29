@@ -180,7 +180,7 @@ export default function SessionProvider() {
 
   if (status === "loop") {
     return (
-      <div data-testid="auth-loop-error">
+      <div className="session-error" data-testid="auth-loop-error">
         <h1>We could not keep you signed in</h1>
         <p>
           Sign-in worked, but this browser did not hold on to the session, so every page load
@@ -202,7 +202,7 @@ export default function SessionProvider() {
 
   if (status === "error") {
     return (
-      <div data-testid="auth-error">
+      <div className="session-error" data-testid="auth-error">
         <p>Authentication failed. The identity service may be unavailable.</p>
         <button type="button" onClick={retryMe} data-testid="auth-retry-button">
           Retry

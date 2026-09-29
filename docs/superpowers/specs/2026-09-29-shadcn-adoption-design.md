@@ -165,12 +165,20 @@ and in `dev/StyleGuide.tsx`, the only TSX file that reads them. The rename cover
 in `base.css`, never set).
 
 **Restore what Preflight takes.** PR 1 diffed the computed styles of all 19
-screens before and after adding Tailwind. Five restorations brought the diff to
-zero: `body` keeps its inherited legacy colours instead of `theme.css`'s, and four
-browser defaults come back where legacy markup relied on them. Each restoration
-is written `:where(<legacy class> …) { <property>: revert; }`: `revert` is exactly
-the browser default Preflight removed, and `:where()` gives it browser-default
-precedence, so every existing legacy rule still wins over it.
+screens before and after adding Tailwind, in the states the local database could
+show (one stack, one template, two completed runs). The branch review then
+rendered the states that audit could not reach: loading lines, both session-error
+screens, the selected-user card and the undo banner. Restorations bring both
+checks to zero difference: `body` keeps its inherited legacy colours instead of
+`theme.css`'s, and browser defaults come back where legacy markup relied on them
+(inline icons in loading lines and non-flex buttons, panel and swatch margins,
+the icon button's padding, and the class-less session-error screens, which gain
+a `session-error` class to hang them on). Each restoration is written
+`:where(<legacy class> …) { <property>: revert; }`: `revert` is exactly the
+browser default Preflight removed, and `:where()` gives it browser-default
+precedence, so every existing legacy rule still wins over it. Screen PRs should
+audit the same way, and also reach loading, error and transient states, for
+example by stalling or failing `/v1/*` requests over the DevTools protocol.
 
 **Known leak, accepted until PR 9.** `base.css` styles bare elements (`h1`–`h4`,
 `a`, `button`, `input`, `select`, `textarea`, `code`). Those rules still apply on

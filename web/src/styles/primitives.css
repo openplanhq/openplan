@@ -370,6 +370,14 @@ textarea {
   color: var(--legacy-color-muted-fg);
 }
 
+/* Preflight audit: loading lines put an icon inline before their text
+   ("⟳ Loading stacks…"); Preflight's block svg would drop the text below it.
+   :where() keeps browser-default precedence. */
+:where(.muted > svg) {
+  display: revert;
+  vertical-align: revert;
+}
+
 /* ---- Stat band ---- */
 .stat-band {
   margin: var(--legacy-space-8) 0;
