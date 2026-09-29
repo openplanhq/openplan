@@ -32,7 +32,7 @@ func testStoredAccount(t *testing.T) LocalAccount {
 		Username:     "root",
 		PasswordHash: hash,
 		DisplayName:  "Root",
-		Email:        "root@tflive.local",
+		Email:        "root@openplan.local",
 	}
 }
 
@@ -48,7 +48,7 @@ func TestAuthenticateReturnsTheIdentityForCorrectCredentials(t *testing.T) {
 		Subject:           "local_root",
 		DisplayName:       "Root",
 		PreferredUsername: "root",
-		Email:             "root@tflive.local",
+		Email:             "root@openplan.local",
 	}
 	if identity != want {
 		t.Fatalf("Authenticate = %+v, want %+v", identity, want)

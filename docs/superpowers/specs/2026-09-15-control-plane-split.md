@@ -9,7 +9,7 @@ this change").
 The control plane is split across two binaries, and the half in `cmd/worker`
 runs next to tenant Terraform.
 
-`tflive-worker` today holds:
+`openplan-worker` today holds:
 
 | Code | Plane |
 |---|---|
@@ -37,7 +37,7 @@ That is every tenant's database rows and every tenant's decrypted credentials.
 ```
 CONTROL PLANE                                                 DATA PLANE
 ───────────────────────────────────────────────               ────────────────────────────────
-tflive-api                                                    tflive-executor
+openplan-api                                                    openplan-executor
  ├─ HTTP                                                       └─ Temporal worker, queue "execution"
  ├─ queue loop (work_queue → Temporal)        ──start/signal─▶     (sessions enabled)
  └─ Temporal worker, queue "control"          ◀─poll/respond─      ├─ PrepareWorkspace  (+ run keypair)
@@ -51,7 +51,7 @@ tflive-api                                                    tflive-executor
                                                    └────── api polls "control", starts, signals
 ```
 
-Every connection to Temporal is outbound from a tflive process. The executor
+Every connection to Temporal is outbound from a openplan process. The executor
 connects to Temporal and the artifact store, nothing else: no `DATABASE_URL`,
 no keys, no route to the API.
 

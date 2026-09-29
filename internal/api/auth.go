@@ -7,8 +7,8 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/vishu42/tflive/internal/app"
-	"github.com/vishu42/tflive/internal/authn"
+	"github.com/vishu42/openplan/internal/app"
+	"github.com/vishu42/openplan/internal/authn"
 )
 
 // authFailureBody is the single response every authentication failure renders.
@@ -133,7 +133,7 @@ func (server *Server) handleAuthCallback(response http.ResponseWriter, request *
 // identity supplies only the claim-bearing fields of the session — the caller
 // fills Subject, Name, PreferredUsername, Email, and, for an OIDC sign-in, the
 // IdP's session id and ID token. The lifetimes and the id hash are set here,
-// because they are tflive's to decide rather than the caller's.
+// because they are openplan's to decide rather than the caller's.
 //
 // The projection happens before the session exists, so that a session row
 // implies a projected user rather than merely coinciding with one. That
@@ -171,7 +171,7 @@ func (server *Server) establishSession(
 	session.CreatedAt = now
 	session.LastSeenAt = now
 	// The IdP's token lifetime deliberately does not appear here. How long a
-	// tflive session lasts is tflive's to decide; the token's exp bounded only
+	// openplan session lasts is openplan's to decide; the token's exp bounded only
 	// the authentication that just completed.
 	session.AbsoluteExpiresAt = now.Add(server.auth.SessionAbsoluteTTL)
 

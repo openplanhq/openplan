@@ -16,7 +16,7 @@ import (
 	"github.com/openfga/openfga/pkg/tuple"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vishu42/tflive/internal/authorization"
+	"github.com/vishu42/openplan/internal/authorization"
 )
 
 // testPool gates every test in this file: without a database there is nothing
@@ -27,9 +27,9 @@ import (
 // takes a URL, not a pool, because OpenFGA's runner opens its own connection.
 func testPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	dsn := os.Getenv("tflive_POSTGRES_TEST_DSN")
+	dsn := os.Getenv("OPENPLAN_POSTGRES_TEST_DSN")
 	if dsn == "" {
-		t.Skip("set tflive_POSTGRES_TEST_DSN (or run `make differential-test`)")
+		t.Skip("set OPENPLAN_POSTGRES_TEST_DSN (or run `make differential-test`)")
 	}
 	require.NoError(t, authorization.Migrate(dsn))
 	pool, err := pgxpool.New(context.Background(), dsn)
@@ -181,7 +181,7 @@ func TestWriteIsVisibleInsideItsOwnTransaction(t *testing.T) {
 func singleConnectionPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	testPool(t) // skips without a database, and migrates
-	config, err := pgxpool.ParseConfig(os.Getenv("tflive_POSTGRES_TEST_DSN"))
+	config, err := pgxpool.ParseConfig(os.Getenv("OPENPLAN_POSTGRES_TEST_DSN"))
 	require.NoError(t, err)
 	config.MaxConns = 1
 	pool, err := pgxpool.NewWithConfig(context.Background(), config)
@@ -262,9 +262,9 @@ func TestListGrantsInsideATransactionSeesItsOwnWrites(t *testing.T) {
 // all, which is the state the New guard exists to report.
 func unmigratedTestPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	dsn := os.Getenv("tflive_POSTGRES_TEST_DSN")
+	dsn := os.Getenv("OPENPLAN_POSTGRES_TEST_DSN")
 	if dsn == "" {
-		t.Skip("set tflive_POSTGRES_TEST_DSN (or run `make differential-test`)")
+		t.Skip("set OPENPLAN_POSTGRES_TEST_DSN (or run `make differential-test`)")
 	}
 	admin, err := pgxpool.New(context.Background(), dsn)
 	require.NoError(t, err)

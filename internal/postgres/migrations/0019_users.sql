@@ -2,15 +2,15 @@
 --
 -- Before this table, grant display names and the grant search box were served
 -- by the Keycloak Admin API behind a service account holding query-users and
--- view-users on the realm. That coupled tflive to Keycloak specifically and put
+-- view-users on the realm. That coupled openplan to Keycloak specifically and put
 -- the customer's IdP on the critical path for rendering a grants list. OIDC has
 -- no standard directory-search endpoint to replace it with: /userinfo only ever
 -- describes the bearer of the token presented, so it cannot look up a third
 -- user, and every vendor alternative is an admin API needing elevated
 -- permissions a customer security team must approve.
 --
--- Every ID token tflive verifies already carries sub, email, and a display
--- claim. A row here is those three, written at sign-in. tflive is not the
+-- Every ID token openplan verifies already carries sub, email, and a display
+-- claim. A row here is those three, written at sign-in. openplan is not the
 -- source of truth for identity and does no account lifecycle: nothing creates,
 -- disables, or deletes a row from outside a sign-in.
 --

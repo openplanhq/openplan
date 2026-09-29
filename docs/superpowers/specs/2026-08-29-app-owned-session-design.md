@@ -6,19 +6,19 @@ the authorization-code flow, PKCE, transaction sealing, and confidential-client 
 
 ## Problem
 
-`tflive_session` holds the raw ID token (`internal/authn/session.go:17`). The session *is* the
-token, so two numbers tflive does not own decide how the product behaves:
+`openplan_session` holds the raw ID token (`internal/authn/session.go:17`). The session *is* the
+token, so two numbers openplan does not own decide how the product behaves:
 
 - **The IdP's token lifespan** sets how long a session lasts.
 - **The IdP's SSO idle timeout** decides whether renewal at expiry is silent or a password prompt.
 
 On the Keycloak the provisioner creates, `accessTokenLifespan` is set to 3600s. On a customer's IdP
-it is set to nothing, because tflive does not provision a customer's IdP. Measured on the running
+it is set to nothing, because openplan does not provision a customer's IdP. Measured on the running
 local stack, Keycloak's own `master` realm ships `accessTokenLifespan=60` against the `3600` written
-into `tflive` — a 60× spread between two realms on one server. Across vendors: Okta ~60 min, Entra
+into `openplan` — a 60× spread between two realms on one server. Across vendors: Okta ~60 min, Entra
 60–90 min and policy-driven, Auth0 different again.
 
-tflive is BYO-IdP. Asking an operator to change `ssoSessionIdleTimeout` so our app's sessions last a
+openplan is BYO-IdP. Asking an operator to change `ssoSessionIdleTimeout` so our app's sessions last a
 sensible time is asking them to reconfigure their identity provider to accommodate us. That is not a
 request we get to make, and it does not scale past the IdPs we happen to have documented.
 
@@ -54,7 +54,7 @@ years in.
 
 Treat the OIDC round trip as an **authentication event**, not as the session.
 
-The IdP answers "who is this, right now." tflive records that answer as a session it owns, with an
+The IdP answers "who is this, right now." openplan records that answer as a session it owns, with an
 expiry it chooses, and hands the browser an opaque reference to it. IdP token lifetimes stop
 affecting how long anyone stays signed in, because we stop borrowing the IdP's clock.
 
@@ -75,7 +75,7 @@ worth having on their own.
    (`internal/api/auth.go`). An opaque 32-byte reference cannot approach that limit whatever the
    provider emits. The loop guard added in `e837c0a` stays as defence in depth; the cause it guards
    against stops occurring.
-2. **No Redis.** tflive already runs Postgres. ArgoCD's scaling note does not apply to a table.
+2. **No Redis.** openplan already runs Postgres. ArgoCD's scaling note does not apply to a table.
 3. **Logout becomes real.** Today clearing the cookie ends the browser session but a copied cookie
    stays valid until the ID token expires — a known accepted limitation of the previous design.
    A revoked row is revoked for every copy.
@@ -90,14 +90,14 @@ Lookup is by hash on a unique index.
 
 ### Lifetime policy
 
-Two bounds, both tflive's to choose:
+Two bounds, both openplan's to choose:
 
 | Bound | Default | Meaning |
 |---|---|---|
 | Absolute | 8h | Hard cap from sign-in. Not extendable. Re-authentication required past it. |
 | Idle | 1h | Expires this long after the last request the session made. |
 
-`TFLIVE_SESSION_ABSOLUTE_TTL` and `TFLIVE_SESSION_IDLE_TTL` override them. The defaults are a
+`OPENPLAN_SESSION_ABSOLUTE_TTL` and `OPENPLAN_SESSION_IDLE_TTL` override them. The defaults are a
 workday and a lunch break: long enough that nobody is interrupted mid-task, short enough that an
 unattended browser does not stay authenticated overnight.
 
@@ -149,9 +149,9 @@ for that `subject`. Always `200` on a well-formed token, `400` otherwise; the re
 about whether any session matched.
 
 The Keycloak provisioner registers `backchannel.logout.url` and
-`backchannel.logout.session.required=true` on the `tflive-api` client, the latter being what makes
+`backchannel.logout.session.required=true` on the `openplan-api` client, the latter being what makes
 Keycloak put `sid` in both the ID token and the logout token. For a BYO IdP this is one field in
-their client configuration, documented — and unlike an idle-timeout change it is a tflive-specific
+their client configuration, documented — and unlike an idle-timeout change it is a openplan-specific
 integration setting rather than a change to how their IdP treats every other application.
 
 An IdP that does not support back-channel logout degrades to the absolute cap. Nothing breaks.
@@ -201,6 +201,6 @@ The change is not complete until, on the live compose stack:
 2. `select` on `sessions` shows one row, `id_token_ciphertext` unreadable without the key.
 3. Setting the realm's `accessTokenLifespan` to 60s and waiting 2 minutes leaves the session
    working — the point of the change, and the thing the current design fails.
-4. Signing out from Keycloak's account console revokes the tflive session, observed as `revoked_at`
+4. Signing out from Keycloak's account console revokes the openplan session, observed as `revoked_at`
    set and the next request 401ing.
-5. `TFLIVE_SESSION_IDLE_TTL=60s` expires an idle session at 60s regardless of token lifetime.
+5. `OPENPLAN_SESSION_IDLE_TTL=60s` expires an idle session at 60s regardless of token lifetime.

@@ -4,7 +4,7 @@
 
 **Goal:** Enforce the configured tenant before every tenant-scoped API handler and replace the browser-editable tenant with validated deployment configuration.
 
-**Architecture:** The API server receives `cfg.Security.TenantID` and registers all tenant routes through one wrapper that returns a generic `404` before handler execution when the path tenant differs. The React app resolves one validated `VITE_TFLIVE_TENANT_ID`, displays it as read-only runtime context, and passes it to the existing API client functions.
+**Architecture:** The API server receives `cfg.Security.TenantID` and registers all tenant routes through one wrapper that returns a generic `404` before handler execution when the path tenant differs. The React app resolves one validated `VITE_OPENPLAN_TENANT_ID`, displays it as read-only runtime context, and passes it to the existing API client functions.
 
 **Tech Stack:** Go 1.24.1, `net/http`, React 18, TypeScript 5.6, Vite 8, Vitest 4.
 
@@ -14,7 +14,7 @@
 - Every one of the sixteen existing tenant-scoped routes uses the same exact configured-tenant comparison.
 - Authenticated missing, malformed, encoded-separator, and cross-tenant paths cannot reach request decoding, application services, repositories, workflows, logs, artifacts, or future authorization adapters.
 - Captured tenant mismatches return `404` with `{"error":"not_found","message":"resource not found"}` and never disclose resource existence.
-- `TFLIVE_TENANT_ID` remains the authoritative backend value; `VITE_TFLIVE_TENANT_ID` must match it operationally.
+- `OPENPLAN_TENANT_ID` remains the authoritative backend value; `VITE_OPENPLAN_TENANT_ID` must match it operationally.
 - `tenant_123` is permitted only as the frontend local-development fallback.
 - Do not add a new API endpoint, database migration, authorization-model change, or frontend dependency.
 - Do not modify actor identity behavior; AUTH-008 owns removal of the editable Actor control and request actor fields.
@@ -28,7 +28,7 @@
 - `cmd/api/main_test.go`: prove startup wiring installs the configured boundary.
 - `web/src/config.ts`: resolve and validate the frontend tenant setting.
 - `web/src/config.test.ts`: test development fallback, production requirements, trimming, and syntax.
-- `web/src/vite-env.d.ts`: type `VITE_TFLIVE_TENANT_ID` through Vite's environment declarations.
+- `web/src/vite-env.d.ts`: type `VITE_OPENPLAN_TENANT_ID` through Vite's environment declarations.
 - `web/src/App.tsx`: consume the configured constant and remove editable tenant state.
 - `web/src/App.test.tsx`: server-render the shell and prove tenant context is not an input.
 - `web/src/styles.css`: style read-only runtime context alongside the remaining Actor control.
@@ -170,7 +170,7 @@ func TestRunWiresConfiguredTenantBoundary(t *testing.T) {
 	t.Parallel()
 
 	values := apiTestValues()
-	values["TFLIVE_TENANT_ID"] = "tenant_configured"
+	values["OPENPLAN_TENANT_ID"] = "tenant_configured"
 	deps := newRecordingAPIDependencies(t)
 	if err := runWithDependencies(context.Background(), apiTestGetenv(values), deps.apiDependencies); err != nil {
 		t.Fatalf("runWithDependencies returned error: %v", err)
@@ -314,7 +314,7 @@ rtk git commit -m "fix: enforce configured tenant boundary"
 - Modify: `web/src/styles.css:65`
 
 **Interfaces:**
-- Consumes: `import.meta.env.VITE_TFLIVE_TENANT_ID`, `import.meta.env.DEV`, existing API client tenant arguments.
+- Consumes: `import.meta.env.VITE_OPENPLAN_TENANT_ID`, `import.meta.env.DEV`, existing API client tenant arguments.
 - Produces: `resolveTenantID(rawTenantID: string | undefined, development: boolean): string` and `tenantID: string`.
 
 - [ ] **Step 1: Write failing frontend configuration tests**
@@ -336,14 +336,14 @@ describe("tenant configuration", () => {
   });
 
   it("requires an explicit production tenant", () => {
-    expect(() => resolveTenantID(undefined, false)).toThrow("VITE_TFLIVE_TENANT_ID is required");
-    expect(() => resolveTenantID("   ", false)).toThrow("VITE_TFLIVE_TENANT_ID is required");
+    expect(() => resolveTenantID(undefined, false)).toThrow("VITE_OPENPLAN_TENANT_ID is required");
+    expect(() => resolveTenantID("   ", false)).toThrow("VITE_OPENPLAN_TENANT_ID is required");
   });
 
   it.each(["-tenant", "tenant/value", "tenant value", "tenant!", "a".repeat(129)])(
     "rejects malformed tenant %s",
     (value) => {
-      expect(() => resolveTenantID(value, false)).toThrow("VITE_TFLIVE_TENANT_ID must start");
+      expect(() => resolveTenantID(value, false)).toThrow("VITE_OPENPLAN_TENANT_ID must start");
     }
   );
 });
@@ -364,7 +364,7 @@ describe("application tenant context", () => {
   });
 
   it("displays the configured tenant without an editable tenant input", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { default: App } = await import("./App");
 
     const markup = renderToStaticMarkup(<App />);
@@ -395,7 +395,7 @@ Create `web/src/vite-env.d.ts`:
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_TFLIVE_TENANT_ID?: string;
+  readonly VITE_OPENPLAN_TENANT_ID?: string;
 }
 
 interface ImportMeta {
@@ -415,18 +415,18 @@ export function resolveTenantID(rawTenantID: string | undefined, development: bo
     if (development) {
       return localTenantID;
     }
-    throw new Error("VITE_TFLIVE_TENANT_ID is required");
+    throw new Error("VITE_OPENPLAN_TENANT_ID is required");
   }
   if (!tenantIDPattern.test(value)) {
     throw new Error(
-      "VITE_TFLIVE_TENANT_ID must start with an ASCII alphanumeric character, contain only ASCII alphanumerics, underscore, or hyphen, and be at most 128 characters"
+      "VITE_OPENPLAN_TENANT_ID must start with an ASCII alphanumeric character, contain only ASCII alphanumerics, underscore, or hyphen, and be at most 128 characters"
     );
   }
   return value;
 }
 
 export const tenantID = resolveTenantID(
-  import.meta.env.VITE_TFLIVE_TENANT_ID,
+  import.meta.env.VITE_OPENPLAN_TENANT_ID,
   import.meta.env.DEV
 );
 ```
@@ -493,7 +493,7 @@ From `web/`, run:
 ```bash
 rtk npm test -- src/config.test.ts src/App.test.tsx
 rtk npm test
-VITE_TFLIVE_TENANT_ID=tenant_123 rtk npm run build
+VITE_OPENPLAN_TENANT_ID=tenant_123 rtk npm run build
 ```
 
 Expected: both test commands PASS and the production TypeScript/Vite build
@@ -524,30 +524,30 @@ rtk git commit -m "fix: lock frontend tenant context"
 Add the frontend value beside the backend tenant in `.env.example`:
 
 ```dotenv
-TFLIVE_ENVIRONMENT=development
-TFLIVE_TENANT_ID=tenant_123
-VITE_TFLIVE_TENANT_ID=tenant_123
-OIDC_ISSUER_URL=http://localhost:8082/realms/tflive
+OPENPLAN_ENVIRONMENT=development
+OPENPLAN_TENANT_ID=tenant_123
+VITE_OPENPLAN_TENANT_ID=tenant_123
+OIDC_ISSUER_URL=http://localhost:8082/realms/openplan
 ```
 
 Add this row to the API runtime security table in `docs/authentication.md`:
 
 ```markdown
-| `VITE_TFLIVE_TENANT_ID` | No | Frontend build-time tenant context; must exactly match `TFLIVE_TENANT_ID`; local development falls back to `tenant_123` |
+| `VITE_OPENPLAN_TENANT_ID` | No | Frontend build-time tenant context; must exactly match `OPENPLAN_TENANT_ID`; local development falls back to `tenant_123` |
 ```
 
 Add this boundary description after the table:
 
 ```markdown
-`TFLIVE_TENANT_ID` is the authoritative security boundary. Every authenticated
+`OPENPLAN_TENANT_ID` is the authoritative security boundary. Every authenticated
 tenant-scoped route compares its `{tenant_id}` path value with that configured
 tenant before decoding a body or accessing application services, repositories,
 logs, artifacts, or authorization data. Missing, malformed, and mismatched
 tenant paths return `404` without disclosing whether a referenced resource
 exists.
 
-The React application reads `VITE_TFLIVE_TENANT_ID` as non-editable runtime
-context. Deployments must set it to the same value as `TFLIVE_TENANT_ID`; a
+The React application reads `VITE_OPENPLAN_TENANT_ID` as non-editable runtime
+context. Deployments must set it to the same value as `OPENPLAN_TENANT_ID`; a
 mismatch is safe but prevents tenant-scoped requests from succeeding.
 ```
 
@@ -564,7 +564,7 @@ From `web/`, run:
 
 ```bash
 rtk npm test
-VITE_TFLIVE_TENANT_ID=tenant_123 rtk npm run build
+VITE_OPENPLAN_TENANT_ID=tenant_123 rtk npm run build
 ```
 
 Expected: all Go packages PASS, all Vitest tests PASS, the production build
@@ -583,7 +583,7 @@ In `docs/sprint/authn_and_authz/README.md`, change only the AUTH-009 status cell
 Run:
 
 ```bash
-rtk rg -n 'AUTH-009.*Done|VITE_TFLIVE_TENANT_ID|configured tenant' .env.example docs/authentication.md docs/sprint/authn_and_authz/README.md
+rtk rg -n 'AUTH-009.*Done|VITE_OPENPLAN_TENANT_ID|configured tenant' .env.example docs/authentication.md docs/sprint/authn_and_authz/README.md
 rtk git diff --check
 rtk git status --short
 ```

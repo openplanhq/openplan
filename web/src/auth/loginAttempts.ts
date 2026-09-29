@@ -16,7 +16,7 @@
 // the reload and is scoped to the one tab, so the count tracks a single run of
 // attempts and a second tab starts clean.
 
-const storageKey = "tflive.auth.loginAttempts";
+const storageKey = "openplan.auth.loginAttempts";
 
 // Sign-ins allowed before we stop and explain. Enough to absorb an expiry
 // racing a page load, few enough that the user is not made to retype a

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vishu42/tflive/internal/domain"
+	"github.com/vishu42/openplan/internal/domain"
 )
 
 func TestLocalProcessRunnerRunsTerraformPlan(t *testing.T) {
@@ -20,7 +20,7 @@ func TestLocalProcessRunnerRunsTerraformPlan(t *testing.T) {
 	runner := NewLocalProcessRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
-		WorkspacePath: "/tmp/tflive/runs/tenant_123/run_123",
+		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandPlan,
 	})
@@ -30,7 +30,7 @@ func TestLocalProcessRunnerRunsTerraformPlan(t *testing.T) {
 
 	want := []recordedCommand{
 		{
-			dir:  "/tmp/tflive/runs/tenant_123/run_123",
+			dir:  "/tmp/openplan/runs/tenant_123/run_123",
 			name: "tofu",
 			args: []string{"plan", "-input=false", "-no-color", "-detailed-exitcode", "-out=tfplan"},
 		},
@@ -46,7 +46,7 @@ func TestLocalProcessRunnerInjectsCredentialEnvironment(t *testing.T) {
 	runner := NewLocalProcessRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
-		WorkspacePath: "/tmp/tflive/runs/tenant_123/run_123",
+		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandPlan,
 		Environment:   map[string]string{"AWS_ACCESS_KEY_ID": "key", "AWS_SECRET_ACCESS_KEY": "secret"},
@@ -86,7 +86,7 @@ func TestLocalProcessRunnerRunsTerraformApply(t *testing.T) {
 	runner := NewLocalProcessRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
-		WorkspacePath: "/tmp/tflive/runs/tenant_123/run_123",
+		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandApply,
 	})
@@ -96,7 +96,7 @@ func TestLocalProcessRunnerRunsTerraformApply(t *testing.T) {
 
 	want := []recordedCommand{
 		{
-			dir:  "/tmp/tflive/runs/tenant_123/run_123",
+			dir:  "/tmp/openplan/runs/tenant_123/run_123",
 			name: "tofu",
 			args: []string{"apply", "-input=false", "-auto-approve", "-no-color", "tfplan"},
 		},
@@ -116,7 +116,7 @@ func TestLocalProcessRunnerRunsTerraformDestroy(t *testing.T) {
 	runner := NewLocalProcessRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
-		WorkspacePath: "/tmp/tflive/runs/tenant_123/run_123",
+		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandDestroy,
 	})
@@ -126,7 +126,7 @@ func TestLocalProcessRunnerRunsTerraformDestroy(t *testing.T) {
 
 	want := []recordedCommand{
 		{
-			dir:  "/tmp/tflive/runs/tenant_123/run_123",
+			dir:  "/tmp/openplan/runs/tenant_123/run_123",
 			name: "tofu",
 			args: []string{"apply", "-input=false", "-auto-approve", "-no-color", "tfplan"},
 		},
@@ -186,7 +186,7 @@ func TestLocalProcessRunnerSetsTerraformVariablesOnlyWhenPlanning(t *testing.T) 
 			runner := NewLocalProcessRunnerWithExecutor(executor)
 
 			_, err := runner.Run(context.Background(), TerraformCommand{
-				WorkspacePath: "/tmp/tflive/runs/tenant_123/run_123",
+				WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 				WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 				Command:       tt.command,
 				ConfigJSON:    []byte(`{"enabled":true,"region":"us-east-1","replicas":3,"tags":{"env":"prod"},"zones":["us-east-1a","us-east-1b"]}`),
@@ -197,7 +197,7 @@ func TestLocalProcessRunnerSetsTerraformVariablesOnlyWhenPlanning(t *testing.T) 
 
 			want := []recordedCommand{
 				{
-					dir:  "/tmp/tflive/runs/tenant_123/run_123",
+					dir:  "/tmp/openplan/runs/tenant_123/run_123",
 					env:  tt.env,
 					name: "tofu",
 					args: tt.args,
@@ -220,7 +220,7 @@ func TestLocalProcessRunnerCountsAnAutoApprovedApplyFromItsOutput(t *testing.T) 
 	var log bytes.Buffer
 
 	result, err := runner.Run(context.Background(), TerraformCommand{
-		WorkspacePath: "/tmp/tflive/runs/tenant_123/run_123",
+		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandApplyAutoApprove,
 		Stdout:        &log,
@@ -284,7 +284,7 @@ func TestLocalProcessRunnerCountsTheChangesOfAPlanThatHasThem(t *testing.T) {
 	runner := NewLocalProcessRunnerWithExecutor(executor)
 
 	result, err := runner.Run(context.Background(), TerraformCommand{
-		WorkspacePath: "/tmp/tflive/runs/tenant_123/run_123",
+		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandPlan,
 		Environment:   map[string]string{"AWS_REGION": "us-east-1"},
@@ -312,7 +312,7 @@ func TestLocalProcessRunnerReportsAPlanWithoutChangesAsSuch(t *testing.T) {
 	runner := NewLocalProcessRunnerWithExecutor(executor)
 
 	result, err := runner.Run(context.Background(), TerraformCommand{
-		WorkspacePath: "/tmp/tflive/runs/tenant_123/run_123",
+		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandPlan,
 	})
@@ -335,7 +335,7 @@ func TestLocalProcessRunnerFailsAPlanThatExitsOne(t *testing.T) {
 	runner := NewLocalProcessRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
-		WorkspacePath: "/tmp/tflive/runs/tenant_123/run_123",
+		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandPlan,
 	})
@@ -352,7 +352,7 @@ func TestLocalProcessRunnerSelectsExistingWorkspace(t *testing.T) {
 	runner := NewLocalProcessRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
-		WorkspacePath: "/tmp/tflive/runs/tenant_123/run_123",
+		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandSelectWorkspace,
 	})
@@ -362,7 +362,7 @@ func TestLocalProcessRunnerSelectsExistingWorkspace(t *testing.T) {
 
 	want := []recordedCommand{
 		{
-			dir:  "/tmp/tflive/runs/tenant_123/run_123",
+			dir:  "/tmp/openplan/runs/tenant_123/run_123",
 			name: "tofu",
 			args: []string{"workspace", "select", "-no-color", "mtp_acme_prod_vpc_a13f9c"},
 		},
@@ -381,7 +381,7 @@ func TestLocalProcessRunnerCreatesMissingWorkspace(t *testing.T) {
 	runner := NewLocalProcessRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
-		WorkspacePath: "/tmp/tflive/runs/tenant_123/run_123",
+		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandSelectWorkspace,
 	})
@@ -391,12 +391,12 @@ func TestLocalProcessRunnerCreatesMissingWorkspace(t *testing.T) {
 
 	want := []recordedCommand{
 		{
-			dir:  "/tmp/tflive/runs/tenant_123/run_123",
+			dir:  "/tmp/openplan/runs/tenant_123/run_123",
 			name: "tofu",
 			args: []string{"workspace", "select", "-no-color", "mtp_acme_prod_vpc_a13f9c"},
 		},
 		{
-			dir:  "/tmp/tflive/runs/tenant_123/run_123",
+			dir:  "/tmp/openplan/runs/tenant_123/run_123",
 			name: "tofu",
 			args: []string{"workspace", "new", "-no-color", "mtp_acme_prod_vpc_a13f9c"},
 		},
@@ -416,7 +416,7 @@ func TestLocalProcessRunnerWrapsWorkspaceCreationErrorWithTofuContext(t *testing
 	runner := NewLocalProcessRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
-		WorkspacePath: "/tmp/tflive/runs/tenant_123/run_123",
+		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandSelectWorkspace,
 	})
@@ -440,7 +440,7 @@ func TestLocalProcessRunnerWrapsCommandErrors(t *testing.T) {
 	runner := NewLocalProcessRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
-		WorkspacePath: "/tmp/tflive/runs/tenant_123/run_123",
+		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandPlan,
 	})
@@ -468,7 +468,7 @@ func TestLocalProcessRunnerPassesOutputWritersToExecutor(t *testing.T) {
 	var stderr bytes.Buffer
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
-		WorkspacePath: "/tmp/tflive/runs/tenant_123/run_123",
+		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandPlan,
 		Stdout:        &stdout,
@@ -592,7 +592,7 @@ func TestLocalProcessRunnerCountsASavedPlanApplyFromItsOutput(t *testing.T) {
 			var log bytes.Buffer
 
 			result, err := runner.Run(context.Background(), TerraformCommand{
-				WorkspacePath: "/tmp/tflive/runs/tenant_123/run_123",
+				WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 				WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 				Command:       testCase.command,
 				Stdout:        &log,

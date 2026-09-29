@@ -17,16 +17,16 @@ import (
 	"time"
 
 	"github.com/openfga/openfga/pkg/storage/memory"
-	"github.com/vishu42/tflive/internal/app"
-	"github.com/vishu42/tflive/internal/authn"
+	"github.com/vishu42/openplan/internal/app"
+	"github.com/vishu42/openplan/internal/authn"
 
-	"github.com/vishu42/tflive/internal/activities"
-	"github.com/vishu42/tflive/internal/authorization"
-	"github.com/vishu42/tflive/internal/config"
-	"github.com/vishu42/tflive/internal/domain"
-	"github.com/vishu42/tflive/internal/encryption"
-	"github.com/vishu42/tflive/internal/queue"
-	"github.com/vishu42/tflive/internal/temporal"
+	"github.com/vishu42/openplan/internal/activities"
+	"github.com/vishu42/openplan/internal/authorization"
+	"github.com/vishu42/openplan/internal/config"
+	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/encryption"
+	"github.com/vishu42/openplan/internal/queue"
+	"github.com/vishu42/openplan/internal/temporal"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
 	temporalworker "go.temporal.io/sdk/worker"
@@ -59,7 +59,7 @@ func TestRunRejectsSecurityConfigBeforeDependencies(t *testing.T) {
 	t.Parallel()
 
 	values := apiTestValues()
-	delete(values, "TFLIVE_TENANT_ID")
+	delete(values, "OPENPLAN_TENANT_ID")
 	postgresCalled := false
 	deps := apiDependencies{
 		newPostgresPool: func(context.Context, string) (postgresPool, error) {
@@ -69,7 +69,7 @@ func TestRunRejectsSecurityConfigBeforeDependencies(t *testing.T) {
 	}
 
 	err := runWithDependencies(context.Background(), apiTestGetenv(values), deps)
-	if !errors.Is(err, config.ErrInvalidConfig) || err == nil || !strings.Contains(err.Error(), "TFLIVE_TENANT_ID is required") {
+	if !errors.Is(err, config.ErrInvalidConfig) || err == nil || !strings.Contains(err.Error(), "OPENPLAN_TENANT_ID is required") {
 		t.Fatalf("error = %v, want tenant ErrInvalidConfig", err)
 	}
 	if postgresCalled {
@@ -81,8 +81,8 @@ func TestWriteStartupErrorDoesNotLeakSecuritySecrets(t *testing.T) {
 	t.Parallel()
 
 	values := apiTestValues()
-	values["TFLIVE_ENVIRONMENT"] = "production"
-	values["OIDC_ISSUER_URL"] = "https://client:oidc-client-secret-sentinel@id.example.com/realms/tflive"
+	values["OPENPLAN_ENVIRONMENT"] = "production"
+	values["OIDC_ISSUER_URL"] = "https://client:oidc-client-secret-sentinel@id.example.com/realms/openplan"
 	values["KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD"] = "bootstrap-password-sentinel"
 
 	err := runWithDependencies(context.Background(), apiTestGetenv(values), apiDependencies{})
@@ -158,8 +158,8 @@ func TestRunWiresStoreAndService(t *testing.T) {
 	if deps.artifactStoreConfig.Kind != config.ArtifactStoreFilesystem {
 		t.Fatalf("artifact store kind = %q, want filesystem", deps.artifactStoreConfig.Kind)
 	}
-	if deps.artifactStoreConfig.FilesystemRoot != "/var/lib/tflive/artifacts" {
-		t.Fatalf("artifact store root = %q, want /var/lib/tflive/artifacts", deps.artifactStoreConfig.FilesystemRoot)
+	if deps.artifactStoreConfig.FilesystemRoot != "/var/lib/openplan/artifacts" {
+		t.Fatalf("artifact store root = %q, want /var/lib/openplan/artifacts", deps.artifactStoreConfig.FilesystemRoot)
 	}
 	if deps.service.TemplateRunLogs != deps.logReader {
 		t.Fatal("service TemplateRunLogs is not the configured log reader")
@@ -186,8 +186,8 @@ func TestRunWiresControlPlane(t *testing.T) {
 		t.Fatalf("runWithDependencies returned error: %v", err)
 	}
 
-	if deps.temporalConfig.Address != "localhost:7233" || deps.temporalConfig.Namespace != "tflive" {
-		t.Fatalf("temporal config = %+v, want localhost:7233 in tflive", deps.temporalConfig)
+	if deps.temporalConfig.Address != "localhost:7233" || deps.temporalConfig.Namespace != "openplan" {
+		t.Fatalf("temporal config = %+v, want localhost:7233 in openplan", deps.temporalConfig)
 	}
 	if deps.workerTaskQueue != domain.ControlTaskQueue {
 		t.Fatalf("worker task queue = %q, want %q", deps.workerTaskQueue, domain.ControlTaskQueue)
@@ -294,7 +294,7 @@ func TestRunWiresConfiguredTenantBoundary(t *testing.T) {
 	t.Parallel()
 
 	values := apiTestValues()
-	values["TFLIVE_TENANT_ID"] = "tenant_configured"
+	values["OPENPLAN_TENANT_ID"] = "tenant_configured"
 	deps := newRecordingAPIDependencies(t)
 	if err := runWithDependencies(context.Background(), apiTestGetenv(values), deps.apiDependencies); err != nil {
 		t.Fatalf("runWithDependencies returned error: %v", err)
@@ -341,9 +341,9 @@ func TestRunGatesSecureCookiesOnRuntimeMode(t *testing.T) {
 
 			values := apiTestValues()
 			if test.production {
-				values["TFLIVE_ENVIRONMENT"] = "production"
-				values["OIDC_ISSUER_URL"] = "https://id.example.com/realms/tflive"
-				values["TFLIVE_PUBLIC_URL"] = "https://app.example.com"
+				values["OPENPLAN_ENVIRONMENT"] = "production"
+				values["OIDC_ISSUER_URL"] = "https://id.example.com/realms/openplan"
+				values["OPENPLAN_PUBLIC_URL"] = "https://app.example.com"
 			}
 
 			deps := newRecordingAPIDependencies(t)
@@ -425,9 +425,9 @@ func TestRunWrapsWireServiceFailure(t *testing.T) {
 // needed an IdP; it needed one only because the configuration would not load
 // without it.
 func TestRunMigratesRealPostgresWhenDSNIsSet(t *testing.T) {
-	dsn := os.Getenv("tflive_POSTGRES_TEST_DSN")
+	dsn := os.Getenv("OPENPLAN_POSTGRES_TEST_DSN")
 	if dsn == "" {
-		t.Skip("tflive_POSTGRES_TEST_DSN is not set")
+		t.Skip("OPENPLAN_POSTGRES_TEST_DSN is not set")
 	}
 
 	logs := newStartupLogBuffer()
@@ -548,17 +548,17 @@ func apiTestValues() map[string]string {
 		"DATABASE_URL":                   "postgres://user:pass@localhost:5432/db?sslmode=disable",
 		"HTTP_ADDRESS":                   ":9090",
 		"TEMPORAL_ADDRESS":               "localhost:7233",
-		"TEMPORAL_NAMESPACE":             "tflive",
+		"TEMPORAL_NAMESPACE":             "openplan",
 		"ARTIFACT_STORE_KIND":            "filesystem",
-		"ARTIFACT_STORE_FILESYSTEM_ROOT": "/var/lib/tflive/artifacts",
-		"TFLIVE_ENVIRONMENT":             "development",
-		"TFLIVE_TENANT_ID":               "tenant_123",
-		"TFLIVE_PUBLIC_URL":              "http://localhost:5173",
-		"OIDC_ISSUER_URL":                "http://localhost:8082/realms/tflive",
-		"OIDC_CLIENT_ID":                 "tflive-api",
+		"ARTIFACT_STORE_FILESYSTEM_ROOT": "/var/lib/openplan/artifacts",
+		"OPENPLAN_ENVIRONMENT":           "development",
+		"OPENPLAN_TENANT_ID":             "tenant_123",
+		"OPENPLAN_PUBLIC_URL":            "http://localhost:5173",
+		"OIDC_ISSUER_URL":                "http://localhost:8082/realms/openplan",
+		"OIDC_CLIENT_ID":                 "openplan-api",
 		"OIDC_CLIENT_SECRET":             "oidc-client-secret",
 		"SESSION_ENCRYPTION_KEY":         "01234567890123456789012345678901",
-		"TFLIVE_ROOT_PASSWORD":           "root-local-only",
+		"OPENPLAN_ROOT_PASSWORD":         "root-local-only",
 	}
 }
 
@@ -689,7 +689,7 @@ func newRecordingAPIDependencies(t *testing.T) *recordingAPIDependencies {
 			deps.gitHubTokens = gitHubTokens
 		},
 	}
-	auth, err := authorization.NewWithDatastore(context.Background(), memory.New(), "tflive-test")
+	auth, err := authorization.NewWithDatastore(context.Background(), memory.New(), "openplan-test")
 	if err != nil {
 		t.Fatalf("build authorization: %v", err)
 	}

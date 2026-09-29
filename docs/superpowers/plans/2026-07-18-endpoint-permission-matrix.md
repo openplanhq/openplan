@@ -472,7 +472,7 @@ Seed stacks with equal and unequal timestamps, call page one with limit 2, then 
 
 Run: `go test ./internal/postgres -run 'TestListStacksPage' -count=1`
 
-Expected: FAIL before `ListStacksPage` exists; with no `tflive_POSTGRES_TEST_DSN`, compilation succeeds and tests report skipped.
+Expected: FAIL before `ListStacksPage` exists; with no `OPENPLAN_POSTGRES_TEST_DSN`, compilation succeeds and tests report skipped.
 
 - [x] **Step 5: Implement complete BatchCheck filtering**
 
@@ -666,7 +666,7 @@ Run: `gofmt -w cmd/api/main_test.go internal/app/authorization.go internal/app/a
 
 Run: `go test ./... && go vet ./... && git diff --check`
 
-Expected: all commands exit zero. Postgres runtime tests may report skipped when `tflive_POSTGRES_TEST_DSN` is unset, but must compile.
+Expected: all commands exit zero. Postgres runtime tests may report skipped when `OPENPLAN_POSTGRES_TEST_DSN` is unset, but must compile.
 
 - [x] **Step 4: Confirm worktree ownership and status**
 

@@ -1299,7 +1299,7 @@ describe("application tenant context", () => {
   });
 
   it("displays the configured tenant without an editable tenant input", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { default: App } = await import("./App");
     const queryClient = new QueryClient();
 

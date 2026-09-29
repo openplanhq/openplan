@@ -1,7 +1,7 @@
 # #216 — Server-side OIDC flow: analysis and sequencing decision
 
-Pre-design analysis for [#216](https://github.com/vishu42/tflive/issues/216), under
-[Epic #210](https://github.com/vishu42/tflive/issues/210). Every claim below was read out of
+Pre-design analysis for [#216](https://github.com/vishu42/openplan/issues/216), under
+[Epic #210](https://github.com/vishu42/openplan/issues/210). Every claim below was read out of
 the tree at b11e592, not recalled.
 
 **Outcome: #216 is parked behind #145.** The analysis set out to design #216 and instead found
@@ -98,7 +98,7 @@ not a technical one.
 ### 6. Cookie contents interact with #211
 
 ArgoCD stores the IdP's ID token as the cookie and routes on `iss` — which is exactly what
-#211 assumes when it adds `iss: tflive` self-signed tokens. Minting our own session token
+#211 assumes when it adds `iss: openplan` self-signed tokens. Minting our own session token
 instead would collapse both paths into one, but it changes #211's shape. Following ArgoCD
 keeps the epic's sequencing intact and is the default unless you want to revisit #211.
 
@@ -113,9 +113,9 @@ it while we are here.
 
 ### 8. Fixture and dev loop
 
-Two Keycloak clients collapse to one confidential client — `tflive-api` is currently
+Two Keycloak clients collapse to one confidential client — `openplan-api` is currently
 `BearerOnly: true, StandardFlowEnabled: false` (`provisioner.go:160`) and must gain the
-standard flow and a secret; `tflive-web` goes away. Redirect URI becomes
+standard flow and a secret; `openplan-web` goes away. Redirect URI becomes
 `http://localhost:5173/v1/auth/callback`, which resolves through the Vite proxy in dev and
 nginx in prod with no new routing. This shrinks #197.
 
@@ -145,7 +145,7 @@ cherry-pick. `CheckRequest` takes a `Stack`, not an object
 (`internal/app/authorization.go:74`), so `platform` cannot be expressed until #214 lands, and
 #141 must define the singleton before #145 can ask OpenFGA whether a caller is an admin. #151
 also warns that changing the model before #208/#209 means retro-testing it. Against that,
-tflive is pre-production with disposable state, so the schedule pressure that would normally
+openplan is pre-production with disposable state, so the schedule pressure that would normally
 favour the interim mapper is not real.
 
 **Next:** #214, which gates the rest of #151 and carries no identity entanglement.
@@ -169,7 +169,7 @@ Settled here, not revisited later:
 ## Issue edits made from these findings
 
 - **#151** — opening premise and "Provider constraint" section were written around JWT access
-  tokens with `aud: tflive-api`, which #216 supersedes; couplings list reduced from three to
+  tokens with `aud: openplan-api`, which #216 supersedes; couplings list reduced from three to
   one (#195 closed, #155 moved to #210).
 - **#153** — root was "configured via environment (e.g. Keycloak subject)"; it is a seeded
   local account needing no IdP. Model/seeding split with #212 made explicit.

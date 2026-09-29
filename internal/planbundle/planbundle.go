@@ -24,7 +24,7 @@ import (
 	"path/filepath"
 	"slices"
 
-	"github.com/vishu42/tflive/internal/runner"
+	"github.com/vishu42/openplan/internal/runner"
 )
 
 // LockFileName is tofu's dependency lock file in the root module directory.

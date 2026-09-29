@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add pinned, persistent, health-checked Keycloak and OpenFGA services to the existing local Docker Compose stack without regressing tflive, Temporal, Postgres, or MinIO startup.
+**Goal:** Add pinned, persistent, health-checked Keycloak and OpenFGA services to the existing local Docker Compose stack without regressing openplan, Temporal, Postgres, or MinIO startup.
 
 **Architecture:** Keycloak 26.6.3 and OpenFGA v1.15.1 each use a dedicated Postgres 16 datastore and a named development volume. Keycloak runs in development mode with health checks enabled; OpenFGA runs its database migration as a one-shot dependency before the server starts. All local credentials are required Compose substitutions supplied by `.env.example` or a developer-owned `.env` file.
 
@@ -283,8 +283,8 @@ Add an `Authentication and authorization services` section to `.env.example`:
 KEYCLOAK_DB_NAME=keycloak
 KEYCLOAK_DB_USER=keycloak
 KEYCLOAK_DB_PASSWORD=keycloak-local-only
-KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME=tflive-admin
-KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD=tflive-admin-local-only
+KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME=openplan-admin
+KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD=openplan-admin-local-only
 
 OPENFGA_DB_NAME=openfga
 OPENFGA_DB_USER=openfga
@@ -309,7 +309,7 @@ OpenFGA gRPC: localhost:8084
 ```
 
 State that the example credentials are local-only and that AUTH-003 provisions
-the tflive realm after the infrastructure is healthy.
+the openplan realm after the infrastructure is healthy.
 
 - [ ] **Step 3: Mark AUTH-002 In Progress while live verification runs**
 
@@ -369,7 +369,7 @@ Run:
 ```bash
 docker compose --env-file .env.example ps
 curl --fail http://localhost:8083/healthz
-docker volume inspect tflive-compose_keycloak-postgres-data tflive-compose_openfga-postgres-data
+docker volume inspect openplan-compose_keycloak-postgres-data openplan-compose_openfga-postgres-data
 ```
 
 Expected: OpenFGA returns `{"status":"SERVING"}`, Keycloak and OpenFGA show healthy, and both named volumes exist.

@@ -540,7 +540,7 @@ Replace the existing `"renders a placeholder for every reserved screen in the ro
 ```tsx
 // web/src/app/router.test.tsx (replace the second `it(...)` block, then append the new describe block)
   it("renders a placeholder for every reserved screen a signed-in operator can reach", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
     const { default: MockAuthProvider } = await import("../auth/MockAuthProvider");
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
@@ -602,7 +602,7 @@ Replace the existing `"renders a placeholder for every reserved screen in the ro
   });
 
   it("renders a 404, not a permission leak, when canView is denied for a stack route", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
     const { default: MockAuthProvider } = await import("../auth/MockAuthProvider");
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
@@ -641,7 +641,7 @@ Replace the existing `"renders a placeholder for every reserved screen in the ro
   });
 
   it("renders AccessDenied for /stacks/:stackId/access when canManageAccess is denied but canView is allowed", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
     const { default: MockAuthProvider } = await import("../auth/MockAuthProvider");
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
@@ -680,8 +680,8 @@ Replace the existing `"renders a placeholder for every reserved screen in the ro
   });
 
   it("renders AccessDenied at /stacks/new for a role without canCreateStack", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
-    vi.stubEnv("VITE_TFLIVE_MOCK_USER_ROLE", "viewer");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_MOCK_USER_ROLE", "viewer");
     const { routeConfig } = await import("./router");
     const { default: MockAuthProvider } = await import("../auth/MockAuthProvider");
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");

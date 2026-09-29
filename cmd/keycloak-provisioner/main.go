@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/vishu42/tflive/internal/keycloak"
+	"github.com/vishu42/openplan/internal/keycloak"
 )
 
 type provisionFunc func(context.Context, keycloak.Config) (keycloak.Result, error)

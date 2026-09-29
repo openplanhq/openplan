@@ -10,7 +10,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/vishu42/tflive/internal/encryption"
+	"github.com/vishu42/openplan/internal/encryption"
 )
 
 const (
@@ -18,10 +18,10 @@ const (
 	// token. Only its SHA-256 reaches the database, so the cookie is useless
 	// to anyone who reads the table, and its size does not depend on how many
 	// claims the provider puts in an ID token.
-	SessionCookieName = "tflive_session"
+	SessionCookieName = "openplan_session"
 	// TransactionCookieName holds the in-flight login, sealed. state is only
 	// meaningful if the browser cannot forge it.
-	TransactionCookieName = "tflive_auth_tx"
+	TransactionCookieName = "openplan_auth_tx"
 	// transactionMaxAge bounds how long a login may sit half-finished. It is
 	// enforced twice: as the transaction cookie's Max-Age, and independently
 	// against the IssuedAt sealed into the transaction itself, since a cookie's

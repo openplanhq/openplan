@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/vishu42/tflive/internal/domain"
-	"github.com/vishu42/tflive/internal/runseal"
+	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/runseal"
 )
 
 // ControlStore is everything the control activities read and write.

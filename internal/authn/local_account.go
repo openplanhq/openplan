@@ -11,7 +11,7 @@ import (
 // see LocalAuthenticator.
 var ErrLocalAccountNotFound = errors.New("local account not found")
 
-// LocalAccount is an account tflive authenticates itself. It is a credential
+// LocalAccount is an account openplan authenticates itself. It is a credential
 // record, not an identity assertion — the identity it produces at sign-in is
 // projected into users through the same path an OIDC sign-in uses.
 type LocalAccount struct {
@@ -28,7 +28,7 @@ type LocalAccount struct {
 	Email        string
 }
 
-// LocalAccountStore reads the accounts tflive owns. *postgres.Store implements
+// LocalAccountStore reads the accounts openplan owns. *postgres.Store implements
 // it; the interface is here, next to its consumer, so the authenticator needs
 // no database to be tested.
 type LocalAccountStore interface {

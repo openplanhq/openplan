@@ -30,7 +30,7 @@ func TestClientAuthenticatesAndSendsAuthorizedJSON(t *testing.T) {
 			wantForm := url.Values{
 				"client_id":  {"admin-cli"},
 				"grant_type": {"password"},
-				"username":   {"tflive-admin"},
+				"username":   {"openplan-admin"},
 				"password":   {"master-local-only-secret"},
 			}
 			if got := r.Form.Encode(); got != wantForm.Encode() {
@@ -40,9 +40,9 @@ func TestClientAuthenticatesAndSendsAuthorizedJSON(t *testing.T) {
 				"access_token": "admin-access-token",
 				"expires_in":   60,
 			})
-		case "/admin/realms/tflive/clients/client/id":
+		case "/admin/realms/openplan/clients/client/id":
 			resourceCalled = true
-			if got, want := r.RequestURI, "/admin/realms/tflive/clients/client%2Fid?brief=true"; got != want {
+			if got, want := r.RequestURI, "/admin/realms/openplan/clients/client%2Fid?brief=true"; got != want {
 				t.Errorf("RequestURI = %q, want %q", got, want)
 			}
 			if got, want := r.Header.Get("Authorization"), "Bearer admin-access-token"; got != want {
@@ -77,7 +77,7 @@ func TestClientAuthenticatesAndSendsAuthorizedJSON(t *testing.T) {
 	err := client.doJSON(
 		context.Background(),
 		http.MethodPut,
-		[]string{"admin", "realms", "tflive", "clients", "client/id"},
+		[]string{"admin", "realms", "openplan", "clients", "client/id"},
 		url.Values{"brief": {"true"}},
 		map[string]bool{"enabled": true},
 		[]int{http.StatusOK},
@@ -166,7 +166,7 @@ func TestClientRejectsMalformedJSONResourceResponse(t *testing.T) {
 		t.Fatalf("Authenticate() error = %v", err)
 	}
 	var response map[string]any
-	err := client.doJSON(context.Background(), http.MethodGet, []string{"admin", "realms", "tflive"}, nil, nil, []int{http.StatusOK}, &response)
+	err := client.doJSON(context.Background(), http.MethodGet, []string{"admin", "realms", "openplan"}, nil, nil, []int{http.StatusOK}, &response)
 	if err == nil || !strings.Contains(err.Error(), "decode response") {
 		t.Fatalf("doJSON() error = %v, want decode response error", err)
 	}

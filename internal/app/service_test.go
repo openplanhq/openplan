@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vishu42/tflive/internal/authn"
-	"github.com/vishu42/tflive/internal/authorization"
-	"github.com/vishu42/tflive/internal/domain"
-	"github.com/vishu42/tflive/internal/queue"
+	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/authorization"
+	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/queue"
 )
 
 const keycloakSubject = "6fdb4b4c-2a8f-4cf7-945f-38f67f6a0e91"

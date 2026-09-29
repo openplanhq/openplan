@@ -1560,7 +1560,7 @@ Append this test inside the top-level `describe` in `web/src/app/router.test.tsx
 
 ```tsx
   it("renders the add template screen at /stacks/:stackId/template/new", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
     const { createMemoryRouter, RouterProvider } = await import("react-router-dom");
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
@@ -2138,7 +2138,7 @@ Append this test inside the top-level `describe` in `web/src/app/router.test.tsx
 
 ```tsx
   it("renders the upgrade screen at /stacks/:stackId/template/:stackTemplateId/upgrade", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
     const { createMemoryRouter, RouterProvider } = await import("react-router-dom");
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");

@@ -9,7 +9,7 @@
 **Tech Stack:** Go 1.25, standard library `testing`, `net/http/httptest` for adapter tests. No new dependencies.
 
 > **Paths moved after this plan was executed.** `internal/openfga` was split so
-> the vendor package imports nothing from tflive. The step-by-step instructions
+> the vendor package imports nothing from openplan. The step-by-step instructions
 > below name the files as they were at the time and are left unedited, being a
 > record of work already done. Current locations:
 >
@@ -28,7 +28,7 @@
 ## Global Constraints
 
 - **This is a rename-and-reshape with zero behaviour change.** Every check that passes before must pass after. The only intentional behaviour changes are the tightened identifier validation (Task 2) and `BatchCheck` chunking (Task 8).
-- **tflive is pre-production.** No backward compatibility, no deprecation shims, no aliases for old names. Delete and replace.
+- **openplan is pre-production.** No backward compatibility, no deprecation shims, no aliases for old names. Delete and replace.
 - **The queue key format `stack:<id>/user:<sub>` must not change.** It is built from the canonical formatters (`authz.StackGrantSpec`, `internal/authz/grant_handler.go`), and those produce identical strings after this change. Verified by a test in Task 6.
 - **`go build ./...` and `go test ./...` must pass at every commit.** Because this changes an interface, intermediate states do not compile — Tasks 3–7 are therefore ordered so each ends compiling. Do not commit a broken build.
 - **Naming, exactly:** `Stack` → `Object`; `StackFromID` → `ObjectFromID`; `SubjectFromKeycloakSub` → `SubjectFromOIDCSub`; `Role` and `Permission` → `Relation`; `RoleOwner` → `RelationOwner`; `PermissionView` → `RelationCanView` (and the three siblings); `Grant.Role()` → `Grant.Relation()`; `ListGrantsRequest.Stack` → `.Object`; `ListSubjectGrantsRequest.Stack` → `.Object`; `CheckRequest.Stack`/`.Permission` → `.Object`/`.Relation`.
@@ -213,7 +213,7 @@ git commit -m "refactor(authz): replace Stack with a typed Object"
 - Consumes: `ObjectFromID`, `TypeUser`, `TypeStack` from Task 1
 - Produces: no new symbols; `canonicalIdentifier` additionally rejects `#` and `*`
 
-**Why:** `sub` comes from the customer's IdP and is the one identifier tflive does not originate. `#` turns `user:<sub>` into a userset reference and `*` turns it into the everyone-wildcard. OpenFGA fails closed on both today, but only because our model declares `[user]` rather than `[user:*]` and `user` has no relations — both model facts that can change.
+**Why:** `sub` comes from the customer's IdP and is the one identifier openplan does not originate. `#` turns `user:<sub>` into a userset reference and `*` turns it into the everyone-wildcard. OpenFGA fails closed on both today, but only because our model declares `[user]` rather than `[user:*]` and `user` has no relations — both model facts that can change.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -222,7 +222,7 @@ Add to `internal/authz/authorization_test.go`:
 ```go
 // Pins the character rules. Each rejected input changes a tuple's meaning
 // rather than merely being malformed, which is why this is the highest-value
-// test in the package: sub is the one identifier tflive does not originate.
+// test in the package: sub is the one identifier openplan does not originate.
 func TestCanonicalIdentifiersRejectTupleSyntax(t *testing.T) {
 	// Each of these changes the meaning of a tuple rather than merely being
 	// malformed: ':' forges the type prefix, '#' makes a userset reference,
@@ -327,7 +327,7 @@ import (
 )
 
 // The allowlist exists for exactly one tuple OpenFGA itself accepts:
-// {platform:tflive, parent, stack:X}. A grant endpoint must never write it.
+// {platform:openplan, parent, stack:X}. A grant endpoint must never write it.
 func TestGrantRelationRefusesNonGrantableRelations(t *testing.T) {
 	for _, name := range []string{"parent", "root", "can_view", "can_operate", "can_approve", "can_manage_access", "nonsense"} {
 		if _, err := GrantRelation(name); !errors.Is(err, ErrInvalidInput) {
@@ -444,7 +444,7 @@ import (
 // grantableRelations is the port's one genuine refusal — the only hazard
 // OpenFGA does not reject on the write path.
 //
-// A structural edge such as {platform:tflive, parent, stack:X} is a perfectly
+// A structural edge such as {platform:openplan, parent, stack:X} is a perfectly
 // legal tuple: `parent` declares [platform] as a direct type because
 // platform-admin inheritance requires it. So the server cannot tell stack
 // provisioning writing that edge from a grant endpoint writing it, and nothing
@@ -601,7 +601,7 @@ type Subject struct {
 }
 
 // SubjectFromOIDCSub returns the canonical authorization identifier for sub,
-// the "sub" claim of a verified ID token. This is the one identifier tflive
+// the "sub" claim of a verified ID token. This is the one identifier openplan
 // does not originate, so the character rules matter most here.
 //
 //	SubjectFromOIDCSub("00u1b2c3")      → Subject{"user:00u1b2c3"}, nil
@@ -656,7 +656,7 @@ git commit -m "refactor(authz): collapse Role and Permission into Relation
 The Role/Permission split duplicated a check OpenFGA makes natively:
 a derived relation declares no directly_related_user_types, so the
 server refuses a write to it against the model itself. What the server
-cannot refuse is a structural edge like {platform:tflive, parent,
+cannot refuse is a structural edge like {platform:openplan, parent,
 stack:X} — parent must be directly writable for platform-admin
 inheritance to exist. The grantable allowlist guards exactly that."
 ```
@@ -1151,7 +1151,7 @@ func TestListGrantsRejectsAStructuralTuple(t *testing.T) {
 	adapter := adapterForHandler(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		// A parent edge is a legal tuple on the wire; it is not a grant.
-		fmt.Fprint(w, `{"tuples":[{"key":{"user":"platform:tflive","relation":"parent","object":"stack:one"}}],"continuation_token":""}`)
+		fmt.Fprint(w, `{"tuples":[{"key":{"user":"platform:openplan","relation":"parent","object":"stack:one"}}],"continuation_token":""}`)
 	})
 
 	_, err := adapter.ListGrants(context.Background(), authz.ListGrantsRequest{Object: mustStack(t, "one")})
@@ -1211,7 +1211,7 @@ func objectFromCanonical(objectType authz.ObjectType, raw string) (authz.Object,
 // refusing anything that is not a grant on the object that was asked about.
 //
 //	{user:alice, owner, stack:abc}, stack:abc      → Grant{…}, nil
-//	{platform:tflive, parent, stack:abc}, stack:abc → Grant{}, error  (not a grant)
+//	{platform:openplan, parent, stack:abc}, stack:abc → Grant{}, error  (not a grant)
 //	{user:alice, can_view, stack:abc}, stack:abc   → Grant{}, error
 //	{user:alice, owner, stack:other}, stack:abc    → Grant{}, error  (wrong object)
 //	nil, stack:abc                                 → Grant{}, error

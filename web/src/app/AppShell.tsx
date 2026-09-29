@@ -19,7 +19,7 @@ export default function AppShell() {
       </a>
       <header className="app-frame-header">
         <div className="app-frame-brand">
-          <span className="app-wordmark">tflive</span>
+          <span className="app-wordmark">openplan</span>
           <nav className="app-nav" aria-label="Primary">
             {navItems.map((item) => (
               <Link key={item.to} to={item.to}>

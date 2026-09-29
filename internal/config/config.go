@@ -7,15 +7,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vishu42/tflive/internal/domain"
-	"github.com/vishu42/tflive/internal/encryption"
-	"github.com/vishu42/tflive/internal/githubapp"
+	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/encryption"
+	"github.com/vishu42/openplan/internal/githubapp"
 )
 
 const (
 	DefaultHTTPAddress                 = ":8081"
-	DefaultExecutorRunRoot             = "/tmp/tflive/runs"
-	DefaultArtifactStoreFilesystemRoot = "/tmp/tflive/artifacts"
+	DefaultExecutorRunRoot             = "/tmp/openplan/runs"
+	DefaultArtifactStoreFilesystemRoot = "/tmp/openplan/artifacts"
 )
 
 var ErrInvalidConfig = errors.New("invalid config")
@@ -92,7 +92,7 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	if cfg.HTTPAddress == "" {
 		cfg.HTTPAddress = DefaultHTTPAddress
 	}
-	cfg.Debug = parseBool(getenv("TFLIVE_DEBUG"))
+	cfg.Debug = parseBool(getenv("OPENPLAN_DEBUG"))
 	credentialKey, err := loadCredentialEncryptionKey(getenv)
 	if err != nil {
 		return APIConfig{}, err
@@ -143,7 +143,7 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 	return cfg, nil
 }
 
-// loadTerraformTimeout reads TFLIVE_TERRAFORM_TIMEOUT, the ceiling on a single
+// loadTerraformTimeout reads OPENPLAN_TERRAFORM_TIMEOUT, the ceiling on a single
 // Terraform command.
 //
 // The value is a Go duration ("90m", "1h30m") rather than a bare number,
@@ -153,16 +153,16 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 // raise the ceiling should not silently fall back to the default it was trying
 // to replace.
 func loadTerraformTimeout(getenv func(string) string) (time.Duration, error) {
-	value := strings.TrimSpace(getenv("TFLIVE_TERRAFORM_TIMEOUT"))
+	value := strings.TrimSpace(getenv("OPENPLAN_TERRAFORM_TIMEOUT"))
 	if value == "" {
 		return domain.DefaultTerraformTimeout, nil
 	}
 	timeout, err := time.ParseDuration(value)
 	if err != nil {
-		return 0, fmt.Errorf("%w: TFLIVE_TERRAFORM_TIMEOUT must be a duration such as 45m or 2h", ErrInvalidConfig)
+		return 0, fmt.Errorf("%w: OPENPLAN_TERRAFORM_TIMEOUT must be a duration such as 45m or 2h", ErrInvalidConfig)
 	}
 	if timeout <= 0 {
-		return 0, fmt.Errorf("%w: TFLIVE_TERRAFORM_TIMEOUT must be greater than zero", ErrInvalidConfig)
+		return 0, fmt.Errorf("%w: OPENPLAN_TERRAFORM_TIMEOUT must be greater than zero", ErrInvalidConfig)
 	}
 	return timeout, nil
 }

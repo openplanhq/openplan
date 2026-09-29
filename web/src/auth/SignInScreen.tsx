@@ -161,7 +161,7 @@ export default function SignInScreen() {
     <main className="signin-page">
       <section className="panel signin-card">
         <header className="signin-header">
-          <p className="signin-wordmark">tflive</p>
+          <p className="signin-wordmark">openplan</p>
           <h1 className="signin-title">Sign in</h1>
         </header>
 

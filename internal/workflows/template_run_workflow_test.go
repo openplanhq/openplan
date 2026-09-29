@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/mock"
-	"github.com/vishu42/tflive/internal/domain"
+	"github.com/vishu42/openplan/internal/domain"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/converter"
@@ -467,7 +467,7 @@ func TestTemplatePlanWorkflowRecordsPlanSteps(t *testing.T) {
 				t.Fatalf("prepare workspace TenantID = %q, want %q", activityInput.TenantID, input.TenantID)
 			}
 			events = append(events, "prepare_workspace")
-			return domain.PrepareWorkspaceActivityOutput{WorkspacePath: "/tmp/tflive/runs/tenant_123/run_123"}, nil
+			return domain.PrepareWorkspaceActivityOutput{WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123"}, nil
 		})
 	env.OnActivity(domain.FetchSourceActivityName, mock.Anything, mock.Anything).
 		Return(func(_ context.Context, activityInput domain.FetchSourceActivityInput) (domain.FetchSourceActivityOutput, error) {
@@ -477,7 +477,7 @@ func TestTemplatePlanWorkflowRecordsPlanSteps(t *testing.T) {
 			if activityInput.TenantID != input.TenantID {
 				t.Fatalf("fetch source TenantID = %q, want %q", activityInput.TenantID, input.TenantID)
 			}
-			if activityInput.WorkspacePath != "/tmp/tflive/runs/tenant_123/run_123" {
+			if activityInput.WorkspacePath != "/tmp/openplan/runs/tenant_123/run_123" {
 				t.Fatalf("fetch source WorkspacePath = %q", activityInput.WorkspacePath)
 			}
 			if activityInput.RepoOwner != input.RepoOwner {
@@ -493,7 +493,7 @@ func TestTemplatePlanWorkflowRecordsPlanSteps(t *testing.T) {
 				t.Fatalf("fetch source RootPath = %q, want %q", activityInput.RootPath, input.RootPath)
 			}
 			events = append(events, "fetch_source")
-			return domain.FetchSourceActivityOutput{TerraformPath: "/tmp/tflive/runs/tenant_123/run_123/source/modules/vpc"}, nil
+			return domain.FetchSourceActivityOutput{TerraformPath: "/tmp/openplan/runs/tenant_123/run_123/source/modules/vpc"}, nil
 		})
 	env.OnActivity(domain.RunTerraformActivityName, mock.Anything, mock.Anything).
 		Return(func(_ context.Context, activityInput domain.RunTerraformActivityInput) (domain.RunTerraformActivityOutput, error) {
@@ -503,10 +503,10 @@ func TestTemplatePlanWorkflowRecordsPlanSteps(t *testing.T) {
 			if activityInput.TenantID != input.TenantID {
 				t.Fatalf("run terraform TenantID = %q, want %q", activityInput.TenantID, input.TenantID)
 			}
-			if activityInput.WorkspacePath != "/tmp/tflive/runs/tenant_123/run_123" {
+			if activityInput.WorkspacePath != "/tmp/openplan/runs/tenant_123/run_123" {
 				t.Fatalf("run terraform WorkspacePath = %q", activityInput.WorkspacePath)
 			}
-			if activityInput.TerraformPath != "/tmp/tflive/runs/tenant_123/run_123/source/modules/vpc" {
+			if activityInput.TerraformPath != "/tmp/openplan/runs/tenant_123/run_123/source/modules/vpc" {
 				t.Fatalf("run terraform TerraformPath = %q", activityInput.TerraformPath)
 			}
 			if activityInput.WorkspaceName != input.WorkspaceName {
@@ -572,7 +572,7 @@ func TestTemplatePlanWorkflowSavesAPlanWithChangesAndEnds(t *testing.T) {
 		})
 	env.OnActivity(domain.UploadPlanActivityName, mock.Anything, mock.Anything).
 		Return(func(_ context.Context, input domain.PlanArtifactActivityInput) error {
-			if input.TerraformPath != "/tmp/tflive/runs/tenant_123/run_123/source/modules/vpc" || string(input.SealedPlanKey) != "sealed" {
+			if input.TerraformPath != "/tmp/openplan/runs/tenant_123/run_123/source/modules/vpc" || string(input.SealedPlanKey) != "sealed" {
 				t.Fatalf("upload input = %#v", input)
 			}
 			events = append(events, "upload_plan")
@@ -1072,14 +1072,14 @@ func mockPrepareWorkspace(t *testing.T, env *testsuite.TestWorkflowEnvironment) 
 	t.Helper()
 
 	env.OnActivity(domain.PrepareWorkspaceActivityName, mock.Anything, mock.Anything).
-		Return(domain.PrepareWorkspaceActivityOutput{WorkspacePath: "/tmp/tflive/runs/tenant_123/run_123"}, nil)
+		Return(domain.PrepareWorkspaceActivityOutput{WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123"}, nil)
 }
 
 func mockFetchSource(t *testing.T, env *testsuite.TestWorkflowEnvironment) {
 	t.Helper()
 
 	env.OnActivity(domain.FetchSourceActivityName, mock.Anything, mock.Anything).
-		Return(domain.FetchSourceActivityOutput{TerraformPath: "/tmp/tflive/runs/tenant_123/run_123/source/modules/vpc"}, nil)
+		Return(domain.FetchSourceActivityOutput{TerraformPath: "/tmp/openplan/runs/tenant_123/run_123/source/modules/vpc"}, nil)
 }
 
 func mockRunTerraform(t *testing.T, env *testsuite.TestWorkflowEnvironment, commands *[]domain.TerraformCommandType) {
@@ -1517,7 +1517,7 @@ func TestTemplatePlanWorkflowClosesTheSessionOfAFailedJob(t *testing.T) {
 	env := newTemplateRunWorkflowTestEnvironment(t)
 	var teardown []string
 	env.OnActivity(domain.PrepareWorkspaceActivityName, mock.Anything, mock.Anything).
-		Return(domain.PrepareWorkspaceActivityOutput{WorkspacePath: "/tmp/tflive/runs/tenant_123/run_123", PublicKey: []byte("run-key")}, nil)
+		Return(domain.PrepareWorkspaceActivityOutput{WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123", PublicKey: []byte("run-key")}, nil)
 	mockFetchSource(t, env)
 	env.OnActivity(domain.RunTerraformActivityName, mock.Anything, mock.Anything).
 		Return(func(_ context.Context, input domain.RunTerraformActivityInput) (domain.RunTerraformActivityOutput, error) {

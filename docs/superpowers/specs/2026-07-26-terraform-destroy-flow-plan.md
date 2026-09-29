@@ -1,7 +1,7 @@
 # Implementation Plan: Terraform Destroy Flow
 
 Ref: docs/superpowers/specs/2026-07-26-terraform-destroy-flow-design.md
-Issue: https://github.com/vishu42/tflive/issues/126
+Issue: https://github.com/vishu42/openplan/issues/126
 
 ## Global Constraints
 

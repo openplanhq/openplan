@@ -90,7 +90,7 @@ const (
 // question is asked about this one object, so the value is fixed here rather
 // than configured: a second platform object would not fail, it would silently
 // partition every global grant.
-const PlatformID = "tflive"
+const PlatformID = "openplan"
 
 // Subject is the tuple's user slot: who is acting.
 type Subject struct {
@@ -102,7 +102,7 @@ type Subject struct {
 // and can never be an actor, so it must never reach the user slot.
 //
 // The platform singleton is here for the parent edge, whose tuple puts it in
-// the user slot: {platform:tflive, parent, stack:X}. TypeStack must never join
+// the user slot: {platform:openplan, parent, stack:X}. TypeStack must never join
 // it.
 var subjectTypes = map[ObjectType]bool{
 	TypeUser:     true,
@@ -144,8 +144,8 @@ func mustSubject(objectType ObjectType, id string) Subject {
 //
 // Named for its original and still most common caller, a verified ID token's
 // "sub" claim, where the character rules matter most because that identifier
-// is the one tflive does not originate. Local accounts now reach it too, with
-// subs tflive does choose; the rules are the same either way, which is why
+// is the one openplan does not originate. Local accounts now reach it too, with
+// subs openplan does choose; the rules are the same either way, which is why
 // they are enforced here rather than at each caller.
 //
 //	SubjectFromOIDCSub("00u1b2c3")      → Subject{"user:00u1b2c3"}, nil
@@ -293,7 +293,7 @@ func (grant Grant) Valid() bool {
 }
 
 // NewStructuralRelationship builds a stored edge that is not access: today only
-// {platform:tflive, parent, stack:X}, the edge that carries administrator
+// {platform:openplan, parent, stack:X}, the edge that carries administrator
 // inheritance onto a stack.
 //
 // It is a separate door from NewGrant on purpose. Grant.Valid requires a
@@ -301,7 +301,7 @@ func (grant Grant) Valid() bool {
 // grant endpoint and this tuple, so the provisioning path gets its own
 // constructor rather than the refusal being relaxed for everyone.
 //
-//	NewStructuralRelationship(platform:tflive, stack:abc, RelationParent) → ok
+//	NewStructuralRelationship(platform:openplan, stack:abc, RelationParent) → ok
 //	NewStructuralRelationship(user:alice, stack:abc, RelationOwner)       → ErrInvalidInput
 func NewStructuralRelationship(subject Subject, object Object, relation Relation) (Grant, error) {
 	if !relation.Structural() {

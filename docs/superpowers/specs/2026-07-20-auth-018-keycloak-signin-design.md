@@ -114,7 +114,7 @@ Key considerations:
 ### `web/src/main.tsx`
 
 - Replace `<MockAuthProvider>` with `<OidcAuthProvider>`
-- Remove `VITE_TFLIVE_MOCK_USER_ROLE` references
+- Remove `VITE_OPENPLAN_MOCK_USER_ROLE` references
 
 ### `web/src/app/router.tsx`
 
@@ -159,15 +159,15 @@ New Vite-prefixed variables:
 
 | Variable | Default (dev) | Description |
 |---|---|---|
-| `VITE_OIDC_ISSUER` | `http://localhost:8082/realms/tflive` | OIDC issuer URL |
-| `VITE_OIDC_CLIENT_ID` | `tflive-web` | Keycloak client ID |
+| `VITE_OIDC_ISSUER` | `http://localhost:8082/realms/openplan` | OIDC issuer URL |
+| `VITE_OIDC_CLIENT_ID` | `openplan-web` | Keycloak client ID |
 | `VITE_OIDC_REDIRECT_URI` | `http://localhost:5173/auth/callback` | Redirect URI after login/logout |
 
 Existing variables to keep:
-- `VITE_TFLIVE_TENANT_ID` — unchanged, still needed for API calls
+- `VITE_OPENPLAN_TENANT_ID` — unchanged, still needed for API calls
 
 Variables to remove:
-- `VITE_TFLIVE_MOCK_USER_ROLE` — no longer used
+- `VITE_OPENPLAN_MOCK_USER_ROLE` — no longer used
 
 ## Dependencies
 

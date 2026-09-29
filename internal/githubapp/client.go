@@ -38,7 +38,7 @@ type Token struct {
 	ExpiresAt time.Time
 }
 
-// Client calls the GitHub App endpoints tflive needs: which installation covers
+// Client calls the GitHub App endpoints openplan needs: which installation covers
 // a repository, and a token for it.
 type Client struct {
 	baseURL    string

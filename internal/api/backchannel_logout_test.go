@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vishu42/tflive/internal/authn"
+	"github.com/vishu42/openplan/internal/authn"
 )
 
 func postLogoutToken(t *testing.T, server *Server, body string) *httptest.ResponseRecorder {
@@ -85,7 +85,7 @@ func TestBackchannelLogoutDoesNotSweepOtherDevicesWhenTheSidIsAlreadyRevoked(t *
 // provider that puts sid in the logout token but not in the ID token the
 // session was created from: every row's idp_session_id is empty, so the narrow
 // key matches nothing and, without the fallback, a disabled user keeps their
-// tflive session until the absolute bound — the delay this endpoint exists to
+// openplan session until the absolute bound — the delay this endpoint exists to
 // remove.
 func TestBackchannelLogoutFallsBackWhenTheSessionIDMatchesNothing(t *testing.T) {
 	sessions := newFakeSessionStore()

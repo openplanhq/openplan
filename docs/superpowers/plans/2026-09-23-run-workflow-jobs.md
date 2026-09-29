@@ -79,7 +79,7 @@ func TestTemplatePlanWorkflowClosesTheSessionOfAFailedJob(t *testing.T) {
 	env := newTemplateRunWorkflowTestEnvironment(t)
 	var teardown []string
 	env.OnActivity(domain.PrepareWorkspaceActivityName, mock.Anything, mock.Anything).
-		Return(domain.PrepareWorkspaceActivityOutput{WorkspacePath: "/tmp/tflive/runs/tenant_123/run_123", PublicKey: []byte("run-key")}, nil)
+		Return(domain.PrepareWorkspaceActivityOutput{WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123", PublicKey: []byte("run-key")}, nil)
 	mockFetchSource(t, env)
 	env.OnActivity(domain.RunTerraformActivityName, mock.Anything, mock.Anything).
 		Return(func(_ context.Context, input domain.RunTerraformActivityInput) (domain.RunTerraformActivityOutput, error) {
@@ -165,7 +165,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/vishu42/tflive/internal/domain"
+	"github.com/vishu42/openplan/internal/domain"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -442,7 +442,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/vishu42/tflive/internal/domain"
+	"github.com/vishu42/openplan/internal/domain"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -677,7 +677,7 @@ package workflows
 import (
 	"time"
 
-	"github.com/vishu42/tflive/internal/domain"
+	"github.com/vishu42/openplan/internal/domain"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )

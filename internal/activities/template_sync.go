@@ -14,9 +14,9 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
-	"github.com/vishu42/tflive/internal/domain"
-	"github.com/vishu42/tflive/internal/githubapp"
-	"github.com/vishu42/tflive/internal/runner"
+	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/githubapp"
+	"github.com/vishu42/openplan/internal/runner"
 	"github.com/zclconf/go-cty/cty"
 	"gopkg.in/yaml.v3"
 )
@@ -99,7 +99,7 @@ func (activities *TemplateSyncActivities) SyncTemplate(ctx context.Context, inpu
 		return invalidTemplateSyncOutput("%v", err), nil
 	}
 
-	workspace, err := os.MkdirTemp(activities.tempRoot, "tflive-template-sync-*")
+	workspace, err := os.MkdirTemp(activities.tempRoot, "openplan-template-sync-*")
 	if err != nil {
 		return domain.TemplateSyncActivityOutput{}, fmt.Errorf("create template sync workspace: %w", err)
 	}
@@ -269,7 +269,7 @@ func unauthenticatedFetchHint(cause error, owner string, repo string) string {
 	case cause == nil:
 		return ""
 	case errors.Is(cause, githubapp.ErrAppNotInstalled):
-		return fmt.Sprintf("; the tflive GitHub App is not installed on %s/%s, so this fetch was unauthenticated -- if the repository is private, ask an organization admin to install the App", owner, repo)
+		return fmt.Sprintf("; the openplan GitHub App is not installed on %s/%s, so this fetch was unauthenticated -- if the repository is private, ask an organization admin to install the App", owner, repo)
 	default:
 		return fmt.Sprintf("; could not resolve a GitHub App token for %s/%s (%v), so this fetch was unauthenticated -- if the repository is private this is likely transient, retry", owner, repo, cause)
 	}

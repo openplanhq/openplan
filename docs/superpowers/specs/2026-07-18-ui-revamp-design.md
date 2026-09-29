@@ -1,4 +1,4 @@
-# tflive UI Revamp — Design
+# openplan UI Revamp — Design
 
 ## Context
 

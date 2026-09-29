@@ -23,7 +23,7 @@ type Identity struct {
 }
 
 // LocalAuthenticator checks a username and password against the accounts
-// tflive owns.
+// openplan owns.
 //
 // It issues nothing. The caller takes the returned Identity through the same
 // project-then-mint-a-session path the OIDC callback uses, which is what keeps

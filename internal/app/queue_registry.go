@@ -1,7 +1,7 @@
 package app
 
 import (
-	"github.com/vishu42/tflive/internal/queue"
+	"github.com/vishu42/openplan/internal/queue"
 )
 
 // NewQueueRegistry builds the handlers the control plane's queue loop delivers.

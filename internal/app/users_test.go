@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vishu42/tflive/internal/domain"
+	"github.com/vishu42/openplan/internal/domain"
 )
 
 // The tier now lives in OpenFGA, not in the token: testPlatformAuthorizer

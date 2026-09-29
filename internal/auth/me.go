@@ -3,8 +3,8 @@ package auth
 import (
 	"time"
 
-	"github.com/vishu42/tflive/internal/authn"
-	"github.com/vishu42/tflive/internal/domain"
+	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/domain"
 )
 
 // MeResponse is the identity envelope returned by GET /v1/me.
@@ -15,7 +15,7 @@ type MeResponse struct {
 	GlobalCapabilities GlobalCapabilities `json:"globalCapabilities"`
 	TenantID           string             `json:"tenantID"`
 	// SessionExpiresAt is when this session ends: the earlier of its idle and
-	// absolute bounds, both of which tflive owns. It lets the web client
+	// absolute bounds, both of which openplan owns. It lets the web client
 	// re-authenticate at a quiet moment instead of being interrupted by a 401.
 	// It is not a control: the API rejects an expired session regardless of
 	// what the browser believes.

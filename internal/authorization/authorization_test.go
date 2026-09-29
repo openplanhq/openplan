@@ -8,7 +8,7 @@ import (
 	"github.com/openfga/openfga/pkg/storage/memory"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vishu42/tflive/internal/authorization"
+	"github.com/vishu42/openplan/internal/authorization"
 )
 
 // newTestAuthorization runs a real engine over an in-memory datastore. This is
@@ -17,7 +17,7 @@ import (
 // rather than a fake that restates what the model is assumed to say.
 func newTestAuthorization(t *testing.T) *authorization.Authorization {
 	t.Helper()
-	auth, err := authorization.NewWithDatastore(context.Background(), memory.New(), "tflive-test")
+	auth, err := authorization.NewWithDatastore(context.Background(), memory.New(), "openplan-test")
 	require.NoError(t, err)
 	t.Cleanup(auth.Close)
 	return auth

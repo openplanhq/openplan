@@ -20,7 +20,7 @@ func TestEnsureRealmCreatesOnceThenUpdatesOwnedFields(t *testing.T) {
 			t.Errorf("Authorization = %q", got)
 		}
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/admin/realms/tflive":
+		case r.Method == http.MethodGet && r.URL.Path == "/admin/realms/openplan":
 			if realm == nil {
 				http.NotFound(w, r)
 				return
@@ -31,7 +31,7 @@ func TestEnsureRealmCreatesOnceThenUpdatesOwnedFields(t *testing.T) {
 			creates++
 			decodeTestJSON(t, r, &realm)
 			w.WriteHeader(http.StatusCreated)
-		case r.Method == http.MethodPut && r.URL.Path == "/admin/realms/tflive":
+		case r.Method == http.MethodPut && r.URL.Path == "/admin/realms/openplan":
 			updates++
 			decodeTestJSON(t, r, &realm)
 			w.WriteHeader(http.StatusNoContent)
@@ -42,7 +42,7 @@ func TestEnsureRealmCreatesOnceThenUpdatesOwnedFields(t *testing.T) {
 	defer server.Close()
 
 	client := authenticatedClientForServer(t, server.URL)
-	spec := RealmSpec{Name: "tflive", Enabled: true, AccessTokenLifespan: 300, SSLRequired: "external"}
+	spec := RealmSpec{Name: "openplan", Enabled: true, AccessTokenLifespan: 300, SSLRequired: "external"}
 	for run := 1; run <= 2; run++ {
 		if err := client.EnsureRealm(context.Background(), spec); err != nil {
 			t.Fatalf("EnsureRealm() run %d error = %v", run, err)
@@ -63,21 +63,21 @@ func TestEnsureClientCreatesOnceRepairsDriftAndPreservesUnknownFields(t *testing
 	creates := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/admin/realms/tflive/clients" && clientResource == nil:
+		case r.Method == http.MethodGet && r.URL.Path == "/admin/realms/openplan/clients" && clientResource == nil:
 			writeTestJSON(t, w, http.StatusOK, []any{})
-		case r.Method == http.MethodPost && r.URL.Path == "/admin/realms/tflive/clients":
+		case r.Method == http.MethodPost && r.URL.Path == "/admin/realms/openplan/clients":
 			creates++
 			decodeTestJSON(t, r, &clientResource)
 			clientResource["id"] = "web-uuid"
 			w.WriteHeader(http.StatusCreated)
-		case r.Method == http.MethodGet && r.URL.Path == "/admin/realms/tflive/clients":
-			writeTestJSON(t, w, http.StatusOK, []any{map[string]any{"id": "web-uuid", "clientId": "tflive-web"}})
-		case r.Method == http.MethodGet && r.URL.Path == "/admin/realms/tflive/clients/web-uuid":
+		case r.Method == http.MethodGet && r.URL.Path == "/admin/realms/openplan/clients":
+			writeTestJSON(t, w, http.StatusOK, []any{map[string]any{"id": "web-uuid", "clientId": "openplan-web"}})
+		case r.Method == http.MethodGet && r.URL.Path == "/admin/realms/openplan/clients/web-uuid":
 			clientResource["operatorSetting"] = "preserved"
 			clientResource["publicClient"] = false
 			clientResource["redirectUris"] = []string{"http://drift.invalid/*"}
 			writeTestJSON(t, w, http.StatusOK, clientResource)
-		case r.Method == http.MethodPut && r.URL.Path == "/admin/realms/tflive/clients/web-uuid":
+		case r.Method == http.MethodPut && r.URL.Path == "/admin/realms/openplan/clients/web-uuid":
 			decodeTestJSON(t, r, &clientResource)
 			w.WriteHeader(http.StatusNoContent)
 		default:
@@ -88,8 +88,8 @@ func TestEnsureClientCreatesOnceRepairsDriftAndPreservesUnknownFields(t *testing
 
 	client := authenticatedClientForServer(t, server.URL)
 	spec := ClientSpec{
-		ClientID:            "tflive-web",
-		Name:                "tflive web",
+		ClientID:            "openplan-web",
+		Name:                "openplan web",
 		Enabled:             true,
 		Protocol:            "openid-connect",
 		PublicClient:        true,
@@ -99,11 +99,11 @@ func TestEnsureClientCreatesOnceRepairsDriftAndPreservesUnknownFields(t *testing
 		Attributes:          map[string]string{"pkce.code.challenge.method": "S256"},
 	}
 	for run := 1; run <= 2; run++ {
-		ref, err := client.EnsureClient(context.Background(), "tflive", spec)
+		ref, err := client.EnsureClient(context.Background(), "openplan", spec)
 		if err != nil {
 			t.Fatalf("EnsureClient() run %d error = %v", run, err)
 		}
-		if ref.ID != "web-uuid" || ref.Name != "tflive-web" {
+		if ref.ID != "web-uuid" || ref.Name != "openplan-web" {
 			t.Fatalf("ref = %#v", ref)
 		}
 	}
@@ -124,15 +124,15 @@ func TestEnsureClientRejectsDuplicateExactClientIDs(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeTestJSON(t, w, http.StatusOK, []any{
-			map[string]any{"id": "one", "clientId": "tflive-web"},
-			map[string]any{"id": "two", "clientId": "tflive-web"},
+			map[string]any{"id": "one", "clientId": "openplan-web"},
+			map[string]any{"id": "two", "clientId": "openplan-web"},
 		})
 	}))
 	defer server.Close()
 
 	client := authenticatedClientForServer(t, server.URL)
-	_, err := client.EnsureClient(context.Background(), "tflive", ClientSpec{ClientID: "tflive-web"})
-	if err == nil || !strings.Contains(err.Error(), "multiple clients with clientId tflive-web") {
+	_, err := client.EnsureClient(context.Background(), "openplan", ClientSpec{ClientID: "openplan-web"})
+	if err == nil || !strings.Contains(err.Error(), "multiple clients with clientId openplan-web") {
 		t.Fatalf("EnsureClient() error = %v", err)
 	}
 }
@@ -145,9 +145,9 @@ func TestEnsureUserSetsPasswordOnlyWhenCreatingUser(t *testing.T) {
 	updates := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/admin/realms/tflive/users" && user == nil:
+		case r.Method == http.MethodGet && r.URL.Path == "/admin/realms/openplan/users" && user == nil:
 			writeTestJSON(t, w, http.StatusOK, []any{})
-		case r.Method == http.MethodPost && r.URL.Path == "/admin/realms/tflive/users":
+		case r.Method == http.MethodPost && r.URL.Path == "/admin/realms/openplan/users":
 			creates++
 			decodeTestJSON(t, r, &user)
 			credentials, ok := user["credentials"].([]any)
@@ -157,18 +157,18 @@ func TestEnsureUserSetsPasswordOnlyWhenCreatingUser(t *testing.T) {
 			user["id"] = "user-uuid"
 			delete(user, "credentials")
 			w.WriteHeader(http.StatusCreated)
-		case r.Method == http.MethodGet && r.URL.Path == "/admin/realms/tflive/users":
-			writeTestJSON(t, w, http.StatusOK, []any{map[string]any{"id": "user-uuid", "username": "tflive-platform-admin"}})
-		case r.Method == http.MethodGet && r.URL.Path == "/admin/realms/tflive/users/user-uuid":
+		case r.Method == http.MethodGet && r.URL.Path == "/admin/realms/openplan/users":
+			writeTestJSON(t, w, http.StatusOK, []any{map[string]any{"id": "user-uuid", "username": "openplan-platform-admin"}})
+		case r.Method == http.MethodGet && r.URL.Path == "/admin/realms/openplan/users/user-uuid":
 			user["operatorSetting"] = "preserved"
 			writeTestJSON(t, w, http.StatusOK, user)
-		case r.Method == http.MethodPut && r.URL.Path == "/admin/realms/tflive/users/user-uuid":
+		case r.Method == http.MethodPut && r.URL.Path == "/admin/realms/openplan/users/user-uuid":
 			updates++
 			decodeTestJSON(t, r, &user)
 			if _, ok := user["credentials"]; ok {
 				t.Fatal("user update must not contain credentials")
 			}
-			if user["email"] != "tflive-platform-admin@local.test" || user["firstName"] != "tflive" || user["lastName"] != "Platform Administrator" || user["emailVerified"] != true {
+			if user["email"] != "openplan-platform-admin@local.test" || user["firstName"] != "openplan" || user["lastName"] != "Platform Administrator" || user["emailVerified"] != true {
 				t.Fatalf("user profile = %#v", user)
 			}
 			w.WriteHeader(http.StatusNoContent)
@@ -180,11 +180,11 @@ func TestEnsureUserSetsPasswordOnlyWhenCreatingUser(t *testing.T) {
 
 	client := authenticatedClientForServer(t, server.URL)
 	spec := UserSpec{
-		Username: "tflive-platform-admin", Password: "platform-local-only-secret", Enabled: true,
-		Email: "tflive-platform-admin@local.test", FirstName: "tflive", LastName: "Platform Administrator", EmailVerified: true,
+		Username: "openplan-platform-admin", Password: "platform-local-only-secret", Enabled: true,
+		Email: "openplan-platform-admin@local.test", FirstName: "openplan", LastName: "Platform Administrator", EmailVerified: true,
 	}
 	for run := 1; run <= 2; run++ {
-		if _, err := client.EnsureUser(context.Background(), "tflive", spec); err != nil {
+		if _, err := client.EnsureUser(context.Background(), "openplan", spec); err != nil {
 			t.Fatalf("EnsureUser() run %d error = %v", run, err)
 		}
 	}

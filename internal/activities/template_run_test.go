@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vishu42/tflive/internal/domain"
-	"github.com/vishu42/tflive/internal/githubapp"
-	gitrunner "github.com/vishu42/tflive/internal/runner"
-	"github.com/vishu42/tflive/internal/runseal"
+	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/githubapp"
+	gitrunner "github.com/vishu42/openplan/internal/runner"
+	"github.com/vishu42/openplan/internal/runseal"
 	"go.temporal.io/sdk/temporal"
 )
 
@@ -246,7 +246,7 @@ func TestRunTerraformDelegatesToRunner(t *testing.T) {
 	input := domain.RunTerraformActivityInput{
 		RunID:         domain.TemplateRunID("run_123"),
 		TenantID:      domain.TenantID("tenant_123"),
-		WorkspacePath: "/tmp/tflive/runs/tenant_123/run_123",
+		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandPlan,
 		RunPhase:      domain.RunPhasePlan,
@@ -582,7 +582,7 @@ func TestRunTerraformWrapsRunnerError(t *testing.T) {
 	_, err := activities.RunTerraform(context.Background(), domain.RunTerraformActivityInput{
 		RunID:         domain.TemplateRunID("run_123"),
 		TenantID:      domain.TenantID("tenant_123"),
-		WorkspacePath: "/tmp/tflive/runs/tenant_123/run_123",
+		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandApply,
 	})

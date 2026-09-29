@@ -18,7 +18,7 @@
 
 -- Runs left non-terminal by a failure that predates the workflow recording it
 -- (#157) would be duplicate keys the index cannot be built over, and a stack
--- template holding one could never start another run. tflive is pre-production,
+-- template holding one could never start another run. openplan is pre-production,
 -- so they are closed out here rather than migrated.
 update template_runs
 set

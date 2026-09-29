@@ -9,9 +9,9 @@ import (
 	openfgav1 "github.com/openfga/api/proto/openfga/v1"
 	"github.com/openfga/openfga/pkg/storage"
 	"github.com/openfga/openfga/pkg/storage/memory"
-	"github.com/vishu42/tflive/internal/authn"
+	"github.com/vishu42/openplan/internal/authn"
 
-	"github.com/vishu42/tflive/internal/authorization"
+	"github.com/vishu42/openplan/internal/authorization"
 )
 
 type fakeAccounts struct {
@@ -52,7 +52,7 @@ func (f *fakeAccounts) EnsureLocalAccount(_ context.Context, account authn.Local
 // whether the root relationship is already present.
 func newAuthorization(t *testing.T) *authorization.Authorization {
 	t.Helper()
-	auth, err := authorization.NewWithDatastore(context.Background(), memory.New(), "tflive-test")
+	auth, err := authorization.NewWithDatastore(context.Background(), memory.New(), "openplan-test")
 	if err != nil {
 		t.Fatalf("build authorization: %v", err)
 	}
@@ -105,7 +105,7 @@ func (d *failAfterBootstrap) Write(ctx context.Context, store string, deletes st
 func newFailingAuthorization(t *testing.T, err error) *authorization.Authorization {
 	t.Helper()
 	datastore := &failAfterBootstrap{OpenFGADatastore: memory.New(), err: err}
-	auth, err2 := authorization.NewWithDatastore(context.Background(), datastore, "tflive-test")
+	auth, err2 := authorization.NewWithDatastore(context.Background(), datastore, "openplan-test")
 	if err2 != nil {
 		t.Fatalf("build authorization: %v", err2)
 	}

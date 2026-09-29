@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vishu42/tflive/internal/domain"
+	"github.com/vishu42/openplan/internal/domain"
 )
 
 // A running run records the step it starts, and a new step replaces the last.

@@ -21,7 +21,7 @@ const { authMethods, signInWithPassword } = await import("../api/client");
 const authMethodsMock = vi.mocked(authMethods);
 const signInMock = vi.mocked(signInWithPassword);
 
-const attemptsKey = "tflive.auth.loginAttempts";
+const attemptsKey = "openplan.auth.loginAttempts";
 const assign = vi.fn();
 const reload = vi.fn();
 

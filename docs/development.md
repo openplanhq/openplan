@@ -1,6 +1,6 @@
 # Local development
 
-Instructions for working on tflive itself. To simply run it, see the
+Instructions for working on openplan itself. To simply run it, see the
 [README](../README.md).
 
 ## Running the app on the host
@@ -59,7 +59,7 @@ than both.
 
 `npm run dev` binds and prints `http://127.0.0.1:5173` — exactly how someone
 hits the login trap below. Open `http://localhost:5173` instead: the redirect
-URI is derived from a single `TFLIVE_PUBLIC_URL`, so only that exact origin is
+URI is derived from a single `OPENPLAN_PUBLIC_URL`, so only that exact origin is
 registered with Keycloak, and `127.0.0.1` fails sign-in with "Invalid
 parameter: redirect_uri".
 

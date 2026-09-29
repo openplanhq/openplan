@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vishu42/tflive/internal/authn"
+	"github.com/vishu42/openplan/internal/authn"
 )
 
 func newLocalAccountTestStore(t *testing.T, ctx context.Context) *Store {
@@ -26,7 +26,7 @@ func testLocalAccount(t *testing.T) authn.LocalAccount {
 		Username:     "root",
 		PasswordHash: hash,
 		DisplayName:  "Root",
-		Email:        "root@tflive.local",
+		Email:        "root@openplan.local",
 	}
 }
 

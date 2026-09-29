@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vishu42/tflive/internal/config"
-	"github.com/vishu42/tflive/internal/domain"
-	"github.com/vishu42/tflive/internal/runseal"
-	"github.com/vishu42/tflive/internal/temporal"
+	"github.com/vishu42/openplan/internal/config"
+	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/runseal"
+	"github.com/vishu42/openplan/internal/temporal"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
 	temporalworker "go.temporal.io/sdk/worker"
@@ -39,8 +39,8 @@ func TestRunWiresTemporalWorker(t *testing.T) {
 	if deps.temporalConfig.Address != "localhost:7233" {
 		t.Fatalf("temporal address = %q, want localhost:7233", deps.temporalConfig.Address)
 	}
-	if deps.temporalConfig.Namespace != "tflive" {
-		t.Fatalf("temporal namespace = %q, want tflive", deps.temporalConfig.Namespace)
+	if deps.temporalConfig.Namespace != "openplan" {
+		t.Fatalf("temporal namespace = %q, want openplan", deps.temporalConfig.Namespace)
 	}
 	// The API owns the control queue; this process must never poll it.
 	if deps.workerTaskQueue != domain.ExecutionTaskQueue {
@@ -52,14 +52,14 @@ func TestRunWiresTemporalWorker(t *testing.T) {
 	if deps.activityKeys == nil {
 		t.Fatal("activities were not given a key ring")
 	}
-	if deps.activityRunRoot != "/tmp/tflive-executor-test" {
-		t.Fatalf("activity run root = %q, want /tmp/tflive-executor-test", deps.activityRunRoot)
+	if deps.activityRunRoot != "/tmp/openplan-executor-test" {
+		t.Fatalf("activity run root = %q, want /tmp/openplan-executor-test", deps.activityRunRoot)
 	}
 	if deps.artifactStoreConfig.Kind != config.ArtifactStoreFilesystem {
 		t.Fatalf("artifact store kind = %q, want filesystem", deps.artifactStoreConfig.Kind)
 	}
-	if deps.artifactStoreConfig.FilesystemRoot != "/tmp/tflive-executor-artifacts" {
-		t.Fatalf("artifact store root = %q, want /tmp/tflive-executor-artifacts", deps.artifactStoreConfig.FilesystemRoot)
+	if deps.artifactStoreConfig.FilesystemRoot != "/tmp/openplan-executor-artifacts" {
+		t.Fatalf("artifact store root = %q, want /tmp/openplan-executor-artifacts", deps.artifactStoreConfig.FilesystemRoot)
 	}
 	if deps.activityStores.logs != deps.logStore {
 		t.Fatal("activity log store was not wired")
@@ -134,13 +134,13 @@ func executorTestEnv(key string) string {
 	case "TEMPORAL_ADDRESS":
 		return "localhost:7233"
 	case "TEMPORAL_NAMESPACE":
-		return "tflive"
+		return "openplan"
 	case "EXECUTOR_RUN_ROOT":
-		return "/tmp/tflive-executor-test"
+		return "/tmp/openplan-executor-test"
 	case "ARTIFACT_STORE_KIND":
 		return "filesystem"
 	case "ARTIFACT_STORE_FILESYSTEM_ROOT":
-		return "/tmp/tflive-executor-artifacts"
+		return "/tmp/openplan-executor-artifacts"
 	default:
 		return ""
 	}

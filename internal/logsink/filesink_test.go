@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vishu42/tflive/internal/domain"
+	"github.com/vishu42/openplan/internal/domain"
 )
 
 func TestFileSinkWritesAndAppendsPhaseLog(t *testing.T) {

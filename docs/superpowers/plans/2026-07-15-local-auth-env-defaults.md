@@ -53,18 +53,18 @@ KEYCLOAK_DB_USER=keycloak
 KEYCLOAK_DB_PASSWORD=keycloak-local-only
 
 # Keycloak bootstrap administrator
-KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME=tflive-admin
-KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD=tflive-admin-local-only
+KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME=openplan-admin
+KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD=openplan-admin-local-only
 
 # Keycloak web client
 KEYCLOAK_WEB_REDIRECT_URIS=http://localhost:5173/,http://127.0.0.1:5173/
 KEYCLOAK_WEB_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 
 # Keycloak platform administrator
-KEYCLOAK_PLATFORM_ADMIN_USERNAME=tflive-platform-admin
-KEYCLOAK_PLATFORM_ADMIN_PASSWORD=tflive-platform-admin-local-only
-KEYCLOAK_PLATFORM_ADMIN_EMAIL=tflive-platform-admin@local.test
-KEYCLOAK_PLATFORM_ADMIN_FIRST_NAME=tflive
+KEYCLOAK_PLATFORM_ADMIN_USERNAME=openplan-platform-admin
+KEYCLOAK_PLATFORM_ADMIN_PASSWORD=openplan-platform-admin-local-only
+KEYCLOAK_PLATFORM_ADMIN_EMAIL=openplan-platform-admin@local.test
+KEYCLOAK_PLATFORM_ADMIN_FIRST_NAME=openplan
 KEYCLOAK_PLATFORM_ADMIN_LAST_NAME=Platform Administrator
 
 # OpenFGA database

@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * Drive the tflive web app through a real Keycloak login in headless Chrome,
+ * Drive the openplan web app through a real Keycloak login in headless Chrome,
  * so auth-gated screens can be inspected without a human taking screenshots.
  *
  * Why this exists: every screen except /styleguide sits behind OidcAuthProvider,
  * which always performs a real OIDC redirect — there is no dev bypass, and the
- * VITE_TFLIVE_MOCK_USER_ROLE flag mentioned in .env.example is stale. Deep links
+ * VITE_OPENPLAN_MOCK_USER_ROLE flag mentioned in .env.example is stale. Deep links
  * such as /stacks/<id>/access re-enter the OIDC flow and land back on /stacks,
  * so navigation is done by clicking through the SPA rather than by URL.
  *
@@ -15,11 +15,11 @@
  *                                               # 5173 as a redirect_uri
  *   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
  *     --headless=new --disable-gpu --remote-debugging-port=9222 \
- *     --user-data-dir=/tmp/tflive-chrome --window-size=1512,950 about:blank &
+ *     --user-data-dir=/tmp/openplan-chrome --window-size=1512,950 about:blank &
  *
  * Credentials come from the environment; nothing is hardcoded:
- *   export TFLIVE_USER="$KEYCLOAK_PLATFORM_ADMIN_USERNAME"
- *   export TFLIVE_PASS="$KEYCLOAK_PLATFORM_ADMIN_PASSWORD"
+ *   export OPENPLAN_USER="$KEYCLOAK_PLATFORM_ADMIN_USERNAME"
+ *   export OPENPLAN_PASS="$KEYCLOAK_PLATFORM_ADMIN_PASSWORD"
  *
  * Usage:
  *   node scripts/drive-web.mjs --shot out.png --click "dev" --click "Access"
@@ -49,10 +49,10 @@ for (let i = 0; i < argv.length; i++) {
   else if (argv[i] === "--port") port = Number(next());
 }
 
-const USER = process.env.TFLIVE_USER;
-const PASS = process.env.TFLIVE_PASS;
+const USER = process.env.OPENPLAN_USER;
+const PASS = process.env.OPENPLAN_PASS;
 if (!USER || !PASS) {
-  console.error("TFLIVE_USER and TFLIVE_PASS must be set (see the header of this file).");
+  console.error("OPENPLAN_USER and OPENPLAN_PASS must be set (see the header of this file).");
   process.exit(2);
 }
 

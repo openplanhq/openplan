@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-15
 
-**Issue:** [AUTH-005](https://github.com/vishu42/tflive/issues/7)
+**Issue:** [AUTH-005](https://github.com/vishu42/openplan/issues/7)
 
 **Status:** Approved for implementation planning
 
@@ -99,8 +99,8 @@ helper and returns its error before initializing other API dependencies.
 
 | Variable | Sensitive | Requirement and default |
 |---|---:|---|
-| `TFLIVE_ENVIRONMENT` | No | Optional; empty resolves to `development`; valid explicit values are `development` and `production` |
-| `TFLIVE_TENANT_ID` | No | Required in every mode; safe configured tenant identifier |
+| `OPENPLAN_ENVIRONMENT` | No | Optional; empty resolves to `development`; valid explicit values are `development` and `production` |
+| `OPENPLAN_TENANT_ID` | No | Required in every mode; safe configured tenant identifier |
 | `OIDC_ISSUER_URL` | No | Required in every mode; exact issuer used by later OIDC verification |
 | `OIDC_AUDIENCE` | No | Required in every mode; expected API access-token audience |
 | `OPENFGA_API_URL` | No | Required in every mode; OpenFGA API base URL |
@@ -111,16 +111,16 @@ helper and returns its error before initializing other API dependencies.
 
 The empty environment-mode default is intentionally development for convenient
 local startup. A deployment receives production policy only by explicitly
-setting `TFLIVE_ENVIRONMENT=production`. Unknown non-empty values fail startup
+setting `OPENPLAN_ENVIRONMENT=production`. Unknown non-empty values fail startup
 rather than silently falling back to development.
 
 `.env.example` documents these local values:
 
 ```dotenv
-TFLIVE_ENVIRONMENT=development
-TFLIVE_TENANT_ID=tenant_123
-OIDC_ISSUER_URL=http://localhost:8082/realms/tflive
-OIDC_AUDIENCE=tflive-api
+OPENPLAN_ENVIRONMENT=development
+OPENPLAN_TENANT_ID=tenant_123
+OIDC_ISSUER_URL=http://localhost:8082/realms/openplan
+OIDC_AUDIENCE=openplan-api
 OPENFGA_API_URL=http://localhost:8080
 OPENFGA_STORE_ID=
 OPENFGA_MODEL_ID=
@@ -138,7 +138,7 @@ configuration.
 
 The following rules apply in both development and production:
 
-1. `TFLIVE_TENANT_ID` contains 1 through 128 ASCII characters. It starts with
+1. `OPENPLAN_TENANT_ID` contains 1 through 128 ASCII characters. It starts with
    an ASCII alphanumeric character and contains only ASCII alphanumerics,
    underscore, or hyphen. This accepts the repository's existing
    `tenant_123` shape and UUIDs while rejecting whitespace, path separators,
@@ -163,7 +163,7 @@ exact value and is not silently normalized.
 
 ## Production Validation
 
-When `TFLIVE_ENVIRONMENT=production`, startup additionally requires:
+When `OPENPLAN_ENVIRONMENT=production`, startup additionally requires:
 
 - `OIDC_ISSUER_URL` to use HTTPS;
 - `OPENFGA_API_URL` to use HTTPS; and

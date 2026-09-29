@@ -6,17 +6,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vishu42/tflive/internal/authn"
-	"github.com/vishu42/tflive/internal/bootstrap"
-	"github.com/vishu42/tflive/internal/domain"
-	"github.com/vishu42/tflive/internal/encryption"
-	"github.com/vishu42/tflive/internal/strval"
+	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/bootstrap"
+	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/encryption"
+	"github.com/vishu42/openplan/internal/strval"
 )
 
 // DefaultOpenFGAStoreName is the store the embedded server adopts when
 // OPENFGA_STORE_NAME names none. Bootstrap reconciles against this name, so it
 // is configuration rather than an identifier anyone has to record.
-const DefaultOpenFGAStoreName = "tflive"
+const DefaultOpenFGAStoreName = "openplan"
 
 type RuntimeMode string
 
@@ -128,17 +128,17 @@ func (cfg SecurityConfig) GoString() string {
 }
 
 func loadSecurityConfig(getenv func(string) string) (SecurityConfig, error) {
-	mode, err := parseRuntimeMode(getenv("TFLIVE_ENVIRONMENT"))
+	mode, err := parseRuntimeMode(getenv("OPENPLAN_ENVIRONMENT"))
 	if err != nil {
 		return SecurityConfig{}, err
 	}
 
-	tenantID := strings.TrimSpace(getenv("TFLIVE_TENANT_ID"))
+	tenantID := strings.TrimSpace(getenv("OPENPLAN_TENANT_ID"))
 	if tenantID == "" {
-		return SecurityConfig{}, authConfigError("TFLIVE_TENANT_ID is required")
+		return SecurityConfig{}, authConfigError("OPENPLAN_TENANT_ID is required")
 	}
 	if !validTenantID(tenantID) {
-		return SecurityConfig{}, authConfigError("TFLIVE_TENANT_ID must start with an ASCII alphanumeric character, contain only ASCII alphanumerics, underscore, or hyphen, and be at most 128 characters")
+		return SecurityConfig{}, authConfigError("OPENPLAN_TENANT_ID must start with an ASCII alphanumeric character, contain only ASCII alphanumerics, underscore, or hyphen, and be at most 128 characters")
 	}
 
 	// No check for "at least one method configured": local sign-in is always
@@ -153,7 +153,7 @@ func loadSecurityConfig(getenv func(string) string) (SecurityConfig, error) {
 		return SecurityConfig{}, err
 	}
 
-	publicURL, err := parseConfigURL("TFLIVE_PUBLIC_URL", getenv("TFLIVE_PUBLIC_URL"))
+	publicURL, err := parseConfigURL("OPENPLAN_PUBLIC_URL", getenv("OPENPLAN_PUBLIC_URL"))
 	if err != nil {
 		return SecurityConfig{}, err
 	}
@@ -167,18 +167,18 @@ func loadSecurityConfig(getenv func(string) string) (SecurityConfig, error) {
 		return SecurityConfig{}, authConfigError("SESSION_ENCRYPTION_KEY must be a 32-byte raw, base64, or hex key")
 	}
 
-	sessionAbsoluteTTL, err := optionalPositiveDuration(getenv, "TFLIVE_SESSION_ABSOLUTE_TTL", authn.DefaultSessionAbsoluteTTL)
+	sessionAbsoluteTTL, err := optionalPositiveDuration(getenv, "OPENPLAN_SESSION_ABSOLUTE_TTL", authn.DefaultSessionAbsoluteTTL)
 	if err != nil {
 		return SecurityConfig{}, err
 	}
-	sessionIdleTTL, err := optionalPositiveDuration(getenv, "TFLIVE_SESSION_IDLE_TTL", authn.DefaultSessionIdleTTL)
+	sessionIdleTTL, err := optionalPositiveDuration(getenv, "OPENPLAN_SESSION_IDLE_TTL", authn.DefaultSessionIdleTTL)
 	if err != nil {
 		return SecurityConfig{}, err
 	}
 	// An idle bound past the absolute cap can never be reached, so it is a
 	// configuration mistake rather than a permissive setting.
 	if sessionIdleTTL > sessionAbsoluteTTL {
-		return SecurityConfig{}, authConfigError("TFLIVE_SESSION_IDLE_TTL must not exceed TFLIVE_SESSION_ABSOLUTE_TTL")
+		return SecurityConfig{}, authConfigError("OPENPLAN_SESSION_IDLE_TTL must not exceed OPENPLAN_SESSION_ABSOLUTE_TTL")
 	}
 	// The cookie path only writes LastSeenAt back once every
 	// authn.SessionTouchInterval (authn/middleware.go), and IsLive is
@@ -187,7 +187,7 @@ func loadSecurityConfig(getenv func(string) string) (SecurityConfig, error) {
 	// touched, so it can never slide — a silent hard cap rather than the
 	// sliding window the setting promises.
 	if sessionIdleTTL <= authn.SessionTouchInterval {
-		return SecurityConfig{}, authConfigError("TFLIVE_SESSION_IDLE_TTL must exceed the %s session touch interval, or an idle session expires before it can ever slide", authn.SessionTouchInterval)
+		return SecurityConfig{}, authConfigError("OPENPLAN_SESSION_IDLE_TTL must exceed the %s session touch interval, or an idle session expires before it can ever slide", authn.SessionTouchInterval)
 	}
 
 	openFGA, err := loadOpenFGAConfig(getenv)
@@ -201,7 +201,7 @@ func loadSecurityConfig(getenv func(string) string) (SecurityConfig, error) {
 			return SecurityConfig{}, authConfigError("OIDC_ISSUER_URL must use HTTPS in production")
 		}
 		if publicURL.Scheme != "https" {
-			return SecurityConfig{}, authConfigError("TFLIVE_PUBLIC_URL must use HTTPS in production")
+			return SecurityConfig{}, authConfigError("OPENPLAN_PUBLIC_URL must use HTTPS in production")
 		}
 	}
 
@@ -234,20 +234,20 @@ func loadSecurityConfig(getenv func(string) string) (SecurityConfig, error) {
 // everyone with access to them. Requiring it keeps the most valuable secret in
 // the deployment in the same place as every other one.
 func loadRootConfig(getenv func(string) string) (RootConfig, error) {
-	username := strings.TrimSpace(getenv("TFLIVE_ROOT_USERNAME"))
+	username := strings.TrimSpace(getenv("OPENPLAN_ROOT_USERNAME"))
 	if username == "" {
 		username = bootstrap.DefaultRootUsername
 	}
 	if !strval.SafeOpaque(username) {
-		return RootConfig{}, authConfigError("TFLIVE_ROOT_USERNAME must not contain whitespace or control characters")
+		return RootConfig{}, authConfigError("OPENPLAN_ROOT_USERNAME must not contain whitespace or control characters")
 	}
 
 	// Not trimmed: leading and trailing space is legitimate in a password, and
 	// silently removing it would make the configured secret differ from the
 	// one that was set.
-	password := newSecret(getenv("TFLIVE_ROOT_PASSWORD"))
+	password := newSecret(getenv("OPENPLAN_ROOT_PASSWORD"))
 	if password.Empty() {
-		return RootConfig{}, authConfigError("TFLIVE_ROOT_PASSWORD is required: it seeds the administrator a fresh install is set up from")
+		return RootConfig{}, authConfigError("OPENPLAN_ROOT_PASSWORD is required: it seeds the administrator a fresh install is set up from")
 	}
 	return RootConfig{Username: username, Password: password}, nil
 }
@@ -299,7 +299,7 @@ func loadOIDCConfig(getenv func(string) string) (OIDCConfig, error) {
 // process from the model in this repository, so there is nothing for an
 // operator to record between two startup phases and paste into an environment.
 //
-//	""        → StoreName "tflive"
+//	""        → StoreName "openplan"
 //	"  acme " → StoreName "acme"
 func loadOpenFGAConfig(getenv func(string) string) (OpenFGAConfig, error) {
 	storeName := strings.TrimSpace(getenv("OPENFGA_STORE_NAME"))
@@ -319,7 +319,7 @@ func parseRuntimeMode(raw string) (RuntimeMode, error) {
 	case string(RuntimeProduction):
 		return RuntimeProduction, nil
 	default:
-		return "", authConfigError("TFLIVE_ENVIRONMENT must be development or production")
+		return "", authConfigError("OPENPLAN_ENVIRONMENT must be development or production")
 	}
 }
 

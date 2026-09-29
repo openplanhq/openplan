@@ -3,7 +3,7 @@
 -- event rather than inferred from a status.
 --
 -- A run holding one of the old progress statuses was in flight under a
--- workflow that wrote them, and cannot finish under one that does not. tflive
+-- workflow that wrote them, and cannot finish under one that does not. openplan
 -- is pre-production, so they are closed out, as 0021 and 0023 did.
 --
 -- Operators must terminate open template-run workflows before migrating. A

@@ -1,10 +1,10 @@
-# tflive Architecture
+# openplan Architecture
 
 The authentication and authorization trust boundaries, identity propagation,
 role semantics, failure contracts, and threat model are defined in the
 [Authentication and Authorization Security Architecture](superpowers/specs/2026-07-14-authn-authz-security-architecture-design.md).
 
-This document describes tflive's current MVP product model, system architecture, execution workflows, persistence boundaries, security posture, and deferred design topics. For setup and local development, see the [project README](../README.md).
+This document describes openplan's current MVP product model, system architecture, execution workflows, persistence boundaries, security posture, and deferred design topics. For setup and local development, see the [project README](../README.md).
 
 ## Goals
 
@@ -37,7 +37,7 @@ The architecture also defines a pluggable `EventBus` interface for system events
 The system is split into a control plane and a data plane (design: `docs/superpowers/specs/2026-09-15-control-plane-split.md`). The API process is the control plane: it serves HTTP, owns the database and every key, runs the queue loop that turns committed intents into workflow starts and signals, and polls Temporal's `control` task queue for workflow tasks and the activities that write product state. The executor process is the data plane: it polls only the `execution` task queue and runs workspace preparation, source checkout, and Terraform. It holds no database URL and no key. Neither process calls the other; every exchange goes through Temporal. [Apply run sequence](apply-run-sequence.md) walks an apply through every round trip.
 
 ```text
-UI --> tflive-api  (control plane)                      Temporal Server
+UI --> openplan-api  (control plane)                      Temporal Server
          HTTP                                                 ^       ^
          queue loop ---------- start workflow / signal -------+       |
          worker on "control" -- poll / respond ---------------+       |
@@ -46,7 +46,7 @@ UI --> tflive-api  (control plane)                      Temporal Server
               |                                                       | poll / respond
               v                                                       | "execution"
          App Postgres                                                 |
-           product state, work_queue                    tflive-executor  (data plane)
+           product state, work_queue                    openplan-executor  (data plane)
                                                           PrepareWorkspace (run key)
                                                           FetchSource, RunTerraform --> tofu
                                                           no database, no keys
@@ -130,7 +130,7 @@ live workspace and phase-log spool remain executor-local until the activity
 completes, so an executor crash can lose in-flight local output.
 
 Each Terraform command inside that session is bounded separately by
-`TFLIVE_TERRAFORM_TIMEOUT` (default 45 minutes), read by the API and stamped
+`OPENPLAN_TERRAFORM_TIMEOUT` (default 45 minutes), read by the API and stamped
 onto the workflow input when the run is dispatched, so the budget a run started
 with stays visible in its history. The ceiling is per command, not per run: a
 run issues `init`, workspace selection, and then `plan`, `apply`, or `destroy`,
@@ -442,7 +442,7 @@ backend owned by user/template
 workspace owned by platform
 ```
 
-MVP templates should use workspace-compatible remote backends. Backend state locking is required where the selected backend supports it, because the platform lock prevents concurrent tflive runs but does not replace Terraform's backend-level state lock.
+MVP templates should use workspace-compatible remote backends. Backend state locking is required where the selected backend supports it, because the platform lock prevents concurrent openplan runs but does not replace Terraform's backend-level state lock.
 
 Unsupported or risky backend configurations should fail validation or receive an explicit warning before execution. Examples include:
 

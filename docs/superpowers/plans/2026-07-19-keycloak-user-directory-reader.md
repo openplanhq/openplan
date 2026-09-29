@@ -2,7 +2,7 @@
 
 > **Superseded by #155 (identity projection).** The Keycloak user-directory
 > reader described here has been removed: `internal/keycloak/directory.go`, the
-> `app.UserDirectory` port, and the `tflive-directory-reader` service account
+> `app.UserDirectory` port, and the `openplan-directory-reader` service account
 > are all gone. Grant display names and user search now read a local `users`
 > table projected from each ID token at sign-in — see the "Identity Projection"
 > section of `docs/authentication.md`. Kept as a record of the design that was
@@ -12,7 +12,7 @@
 
 **Goal:** Add a least-privilege Keycloak user-directory reader that uses a dedicated service credential to search realm users, returning only safe display attributes for access management.
 
-**Architecture:** A new `DirectoryClient` in `internal/keycloak/` authenticates with a dedicated `tflive-directory-reader` confidential client via client-credentials grant. It calls the Keycloak Admin REST API user-search endpoint with `enabled=true` filtering. The app layer defines a `UserDirectory` interface, and the API exposes a `GET /v1/tenants/{tenant_id}/users/search` endpoint gated by `platform-admin` role. The existing provisioner is extended to create the directory reader client and assign minimal realm-management roles.
+**Architecture:** A new `DirectoryClient` in `internal/keycloak/` authenticates with a dedicated `openplan-directory-reader` confidential client via client-credentials grant. It calls the Keycloak Admin REST API user-search endpoint with `enabled=true` filtering. The app layer defines a `UserDirectory` interface, and the API exposes a `GET /v1/tenants/{tenant_id}/users/search` endpoint gated by `platform-admin` role. The existing provisioner is extended to create the directory reader client and assign minimal realm-management roles.
 
 **Tech Stack:** Go, Keycloak Admin REST API, OAuth2 client-credentials grant, `httptest` for mocking
 
@@ -120,14 +120,14 @@ git commit -m "feat(keycloak): add least-privilege directory reader client"
 - [ ] **Step 1: Add directory reader constants and extend Result**
 
 In `internal/keycloak/provisioner.go`:
-- Add constant `directoryReaderClientID = "tflive-directory-reader"`
+- Add constant `directoryReaderClientID = "openplan-directory-reader"`
 - Add `var directoryReaderRealmManagementRoles = []string{"query-users", "view-users", "view-realm"}`
 - Extend `Result` with `DirectoryReaderClientID string` and `DirectoryReaderClientSecret string`
 
 - [ ] **Step 2: Add directory reader provisioning**
 
 In `internal/keycloak/provisioner.go`, after the platform admin role mapping block (after `EnsureClientRoleMapping` for platform admin), add:
-- `EnsureClient` for `tflive-directory-reader` with `ServiceAccountsEnabled: true`, `PublicClient: false`, `BearerOnly: false`, `FullScopeAllowed: false`, `Attributes: disabledGrantAttributes()`
+- `EnsureClient` for `openplan-directory-reader` with `ServiceAccountsEnabled: true`, `PublicClient: false`, `BearerOnly: false`, `FullScopeAllowed: false`, `Attributes: disabledGrantAttributes()`
 - Loop over `directoryReaderRealmManagementRoles`, calling `ClientRole` for each
 - `EnsureClientRoleMapping` to assign roles to the directory reader service account
 
@@ -143,7 +143,7 @@ In `internal/keycloak/config.go`, add `DirectoryReaderClientSecret string` field
 
 In `internal/keycloak/provisioner_test.go`, add assertions to `TestProvisionWithBackendIsRepeatableAndUsesApprovedDesiredState`:
 - Verify directory reader client was created with `ServiceAccountsEnabled: true`
-- Verify `Result.DirectoryReaderClientID` equals `tflive-directory-reader`
+- Verify `Result.DirectoryReaderClientID` equals `openplan-directory-reader`
 - Verify client role mapping calls include directory reader roles
 
 - [ ] **Step 6: Run tests**

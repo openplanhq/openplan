@@ -1,6 +1,6 @@
 apiVersion: 1
 providers:
-  - name: tflive
+  - name: openplan
     type: file
     options:
       path: /etc/grafana/provisioning/dashboards

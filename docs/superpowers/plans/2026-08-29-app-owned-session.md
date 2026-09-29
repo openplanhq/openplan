@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make tflive's session lifetime tflive's own, so a BYO-IdP customer's token and SSO-idle settings stop deciding how long a sign-in lasts.
+**Goal:** Make openplan's session lifetime openplan's own, so a BYO-IdP customer's token and SSO-idle settings stop deciding how long a sign-in lasts.
 
 **Architecture:** The OIDC round trip becomes an authentication event rather than the session itself. The callback records a `sessions` row in Postgres and hands the browser an opaque 32-byte reference; the middleware's cookie path resolves that row instead of verifying an ID token. Revocation, which a stateless cookie cannot offer, arrives through an OIDC Back-Channel Logout endpoint.
 
@@ -16,10 +16,10 @@
 - **Branch:** `feat/oidc-server-side-flow`. Do not merge to `main` as part of this plan.
 - **The Bearer path is untouched.** `credential()` accepting `Authorization: Bearer` and verifying via `Verifier.Verify` stays exactly as it is. Only the cookie path changes.
 - **No refresh tokens, no `offline_access`.** Out of scope by design; do not add the scope.
-- **No Redis, no new infrastructure.** Sessions live in the Postgres tflive already runs.
+- **No Redis, no new infrastructure.** Sessions live in the Postgres openplan already runs.
 - **The raw session token is never persisted.** Only its SHA-256 hash reaches the database.
 - **Session TTL defaults:** absolute 8h, idle 1h, touch interval 5 min.
-- **Go tests** run with `go test ./...`. Postgres-backed tests skip unless `tflive_POSTGRES_TEST_DSN` is set; use the existing `openTestPool(t, ctx)` helper in `internal/postgres/store_test.go`.
+- **Go tests** run with `go test ./...`. Postgres-backed tests skip unless `OPENPLAN_POSTGRES_TEST_DSN` is set; use the existing `openTestPool(t, ctx)` helper in `internal/postgres/store_test.go`.
 - **Web tests** run from `web/` with `npx vitest run`.
 
 ---
@@ -200,7 +200,7 @@ import (
 	"time"
 )
 
-// Session is one signed-in browser, owned by tflive rather than by the IdP.
+// Session is one signed-in browser, owned by openplan rather than by the IdP.
 // The claims are copied at sign-in: after that, requests authenticate against
 // this record and the ID token is not re-read, so session lifetime is ours to
 // choose rather than a consequence of the provider's token lifespan.
@@ -319,11 +319,11 @@ git commit -m "feat(authn): add the session record and its lifetime rules"
 Create `internal/postgres/migrations/0018_sessions.sql`:
 
 ```sql
--- A session is tflive's own, not the IdP's.
+-- A session is openplan's own, not the IdP's.
 --
 -- Before this table the session cookie held the raw ID token, so how long a
 -- sign-in lasted was decided by the provider's token lifespan and whether
--- renewal was silent by its SSO idle timeout. tflive is BYO-IdP and sets
+-- renewal was silent by its SSO idle timeout. openplan is BYO-IdP and sets
 -- neither on a customer's provider. A row here is a session we issue, expire,
 -- and revoke on our own terms.
 --
@@ -377,8 +377,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vishu42/tflive/internal/authn"
-	"github.com/vishu42/tflive/internal/secrets"
+	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/secrets"
 )
 
 func newSessionTestStore(t *testing.T, ctx context.Context) *Store {
@@ -568,7 +568,7 @@ func TestRevokeSessionsByIDPSessionIDAndSubject(t *testing.T) {
 Run: `go test ./internal/postgres/ -run TestCreateAndReadSession -v`
 Expected: FAIL — build error, `store.CreateSession undefined`.
 
-(If `tflive_POSTGRES_TEST_DSN` is unset the test skips instead. Set it first — the local stack's value is in `.env`.)
+(If `OPENPLAN_POSTGRES_TEST_DSN` is unset the test skips instead. Set it first — the local stack's value is in `.env`.)
 
 - [ ] **Step 4: Write minimal implementation**
 
@@ -584,7 +584,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/vishu42/tflive/internal/authn"
+	"github.com/vishu42/openplan/internal/authn"
 )
 
 func (store *Store) CreateSession(ctx context.Context, session authn.Session) error {
@@ -734,7 +734,7 @@ func (store *Store) RevokeSessionsBySubject(ctx context.Context, subject string,
 
 Run:
 ```bash
-export tflive_POSTGRES_TEST_DSN='postgres://tflive:tflive@localhost:55432/tflive_test?sslmode=disable'
+export OPENPLAN_POSTGRES_TEST_DSN='postgres://openplan:openplan@localhost:55432/openplan_test?sslmode=disable'
 go test ./internal/postgres/ -run 'Session' -v
 ```
 Expected: PASS for all six session tests.
@@ -764,7 +764,7 @@ git commit -m "feat(postgres): store app-owned sessions"
 - Produces:
   - `VerifiedToken.SessionID string`
   - `AuthConfig.Sessions authn.SessionStore`, `AuthConfig.SessionAbsoluteTTL`, `AuthConfig.SessionIdleTTL time.Duration`, `AuthConfig.Clock func() time.Time`
-  - `SecurityConfig.SessionAbsoluteTTL`, `SecurityConfig.SessionIdleTTL time.Duration`, read from `TFLIVE_SESSION_ABSOLUTE_TTL` / `TFLIVE_SESSION_IDLE_TTL`
+  - `SecurityConfig.SessionAbsoluteTTL`, `SecurityConfig.SessionIdleTTL time.Duration`, read from `OPENPLAN_SESSION_ABSOLUTE_TTL` / `OPENPLAN_SESSION_IDLE_TTL`
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -805,8 +805,8 @@ func TestSessionTTLDefaults(t *testing.T) {
 
 func TestSessionTTLOverrides(t *testing.T) {
 	cfg := loadValidSecurityConfig(t, map[string]string{
-		"TFLIVE_SESSION_ABSOLUTE_TTL": "2h",
-		"TFLIVE_SESSION_IDLE_TTL":     "15m",
+		"OPENPLAN_SESSION_ABSOLUTE_TTL": "2h",
+		"OPENPLAN_SESSION_IDLE_TTL":     "15m",
 	})
 	if cfg.SessionAbsoluteTTL != 2*time.Hour {
 		t.Fatalf("SessionAbsoluteTTL = %v, want 2h", cfg.SessionAbsoluteTTL)
@@ -818,10 +818,10 @@ func TestSessionTTLOverrides(t *testing.T) {
 
 func TestSessionTTLRejectsNonPositiveAndInverted(t *testing.T) {
 	tests := map[string]map[string]string{
-		"zero absolute":         {"TFLIVE_SESSION_ABSOLUTE_TTL": "0s"},
-		"negative idle":         {"TFLIVE_SESSION_IDLE_TTL": "-1m"},
-		"unparseable":           {"TFLIVE_SESSION_IDLE_TTL": "soon"},
-		"idle longer than cap":  {"TFLIVE_SESSION_ABSOLUTE_TTL": "1h", "TFLIVE_SESSION_IDLE_TTL": "2h"},
+		"zero absolute":         {"OPENPLAN_SESSION_ABSOLUTE_TTL": "0s"},
+		"negative idle":         {"OPENPLAN_SESSION_IDLE_TTL": "-1m"},
+		"unparseable":           {"OPENPLAN_SESSION_IDLE_TTL": "soon"},
+		"idle longer than cap":  {"OPENPLAN_SESSION_ABSOLUTE_TTL": "1h", "OPENPLAN_SESSION_IDLE_TTL": "2h"},
 	}
 	for name, env := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -991,18 +991,18 @@ and set `SessionID: sessionID` on the returned `VerifiedToken`.
 In `internal/config/auth.go`, add `SessionAbsoluteTTL` and `SessionIdleTTL time.Duration` to `SecurityConfig`, and in `loadSecurityConfig`, after the `sessionKey` block:
 
 ```go
-	sessionAbsoluteTTL, err := optionalPositiveDuration(getenv, "TFLIVE_SESSION_ABSOLUTE_TTL", authn.DefaultSessionAbsoluteTTL)
+	sessionAbsoluteTTL, err := optionalPositiveDuration(getenv, "OPENPLAN_SESSION_ABSOLUTE_TTL", authn.DefaultSessionAbsoluteTTL)
 	if err != nil {
 		return SecurityConfig{}, err
 	}
-	sessionIdleTTL, err := optionalPositiveDuration(getenv, "TFLIVE_SESSION_IDLE_TTL", authn.DefaultSessionIdleTTL)
+	sessionIdleTTL, err := optionalPositiveDuration(getenv, "OPENPLAN_SESSION_IDLE_TTL", authn.DefaultSessionIdleTTL)
 	if err != nil {
 		return SecurityConfig{}, err
 	}
 	// An idle bound past the absolute cap can never be reached, so it is a
 	// configuration mistake rather than a permissive setting.
 	if sessionIdleTTL > sessionAbsoluteTTL {
-		return SecurityConfig{}, authConfigError("TFLIVE_SESSION_IDLE_TTL must not exceed TFLIVE_SESSION_ABSOLUTE_TTL")
+		return SecurityConfig{}, authConfigError("OPENPLAN_SESSION_IDLE_TTL must not exceed OPENPLAN_SESSION_ABSOLUTE_TTL")
 	}
 ```
 
@@ -1070,7 +1070,7 @@ In `internal/api/auth.go`, replace the tail of `handleAuthCallback` — the `war
 		CreatedAt:         now,
 		LastSeenAt:        now,
 		// The IdP's token lifetime deliberately does not appear here. How long
-		// a tflive session lasts is tflive's to decide; the token's exp bounded
+		// a openplan session lasts is openplan's to decide; the token's exp bounded
 		// only the authentication we just completed.
 		AbsoluteExpiresAt: now.Add(server.auth.SessionAbsoluteTTL),
 	}
@@ -1093,10 +1093,10 @@ Update the `SessionCookieName` comment in `internal/authn/session.go`:
 	// token. Only its SHA-256 reaches the database, so the cookie is useless
 	// to anyone who reads the table, and its size does not depend on how many
 	// claims the provider puts in an ID token.
-	SessionCookieName = "tflive_session"
+	SessionCookieName = "openplan_session"
 ```
 
-- [ ] **Step 6: Wire it up in `cmd/tflive-api`**
+- [ ] **Step 6: Wire it up in `cmd/openplan-api`**
 
 Where `api.WithAuth(api.AuthConfig{...})` is constructed, pass the store and the two TTLs from `SecurityConfig`. Find the call site with:
 
@@ -1281,7 +1281,7 @@ Replace `RequireAuthentication` and `credential` in `internal/authn/middleware.g
 // publicPaths.
 //
 // Two credential kinds resolve to one Principal. A cookie names an app-owned
-// session row, whose lifetime tflive chose; an Authorization header carries an
+// session row, whose lifetime openplan chose; an Authorization header carries an
 // IdP token for a CLI or service caller, verified as it always was. The header
 // wins so a stale browser cookie on the same connection cannot override it.
 func RequireAuthentication(
@@ -1527,7 +1527,7 @@ In `internal/auth/me.go`, the doc comment on `SessionExpiresAt` describes the ID
 
 ```go
 	// SessionExpiresAt is when this session ends: the earlier of its idle and
-	// absolute bounds, both of which tflive owns. It lets the web client
+	// absolute bounds, both of which openplan owns. It lets the web client
 	// re-authenticate at a quiet moment instead of being interrupted by a 401.
 	// It is not a control: the API rejects an expired session regardless of
 	// what the browser believes.
@@ -1853,7 +1853,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vishu42/tflive/internal/authn"
+	"github.com/vishu42/openplan/internal/authn"
 )
 
 func postLogoutToken(t *testing.T, server *Server, body string) *httptest.ResponseRecorder {
@@ -1958,7 +1958,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/vishu42/tflive/internal/authn"
+	"github.com/vishu42/openplan/internal/authn"
 )
 
 // LogoutTokenVerifier authenticates a back-channel logout notification.
@@ -1971,12 +1971,12 @@ type LogoutTokenVerifier interface {
 // handleBackchannelLogout ends sessions on the IdP's instruction.
 //
 // It is unauthenticated by necessity: the notification arrives from the
-// provider's server, which holds no tflive cookie and no bearer token. The
+// provider's server, which holds no openplan cookie and no bearer token. The
 // logout token is the credential, and it is verified against the same JWKS
 // that verifies ID tokens.
 //
-// Without this endpoint, disabling a user at the IdP would not reach tflive
-// until their session hit its own expiry, because tflive stops consulting the
+// Without this endpoint, disabling a user at the IdP would not reach openplan
+// until their session hit its own expiry, because openplan stops consulting the
 // provider once a session exists.
 func (server *Server) handleBackchannelLogout(response http.ResponseWriter, request *http.Request) {
 	response.Header().Set("Cache-Control", "no-store")
@@ -2014,7 +2014,7 @@ func (server *Server) handleBackchannelLogout(response http.ResponseWriter, requ
 		return
 	}
 
-	// 200 whether or not anything matched. Whether tflive holds a session for
+	// 200 whether or not anything matched. Whether openplan holds a session for
 	// a given sid is not something an unauthenticated caller gets to learn.
 	log.Printf("backchannel logout: revoked %d session(s)", revoked)
 	response.WriteHeader(http.StatusOK)
@@ -2031,7 +2031,7 @@ and add `"/v1/auth/backchannel-logout"` to the public-paths list passed to `Requ
 
 - [ ] **Step 4: Register the URI in the provisioner**
 
-In `internal/keycloak/provisioner.go`, where the `tflive-api` client is built, add to its attributes:
+In `internal/keycloak/provisioner.go`, where the `openplan-api` client is built, add to its attributes:
 
 ```go
 	// Keycloak posts the logout notification here when a session it owns ends.
@@ -2188,23 +2188,23 @@ Add after the `SESSION_ENCRYPTION_KEY` block:
 
 ```bash
 # Optional. How long a signed-in session lasts, and how long it survives
-# without a request. tflive owns both: they are deliberately independent of the
+# without a request. openplan owns both: they are deliberately independent of the
 # IdP's token lifespan and SSO idle timeout, so sessions behave the same
 # whichever provider a deployment brings.
 # Defaults: 8h absolute, 1h idle. Idle must not exceed absolute.
-# TFLIVE_SESSION_ABSOLUTE_TTL=8h
-# TFLIVE_SESSION_IDLE_TTL=1h
+# OPENPLAN_SESSION_ABSOLUTE_TTL=8h
+# OPENPLAN_SESSION_IDLE_TTL=1h
 ```
 
-While here, fix the two drifts found on 2026-08-29: add `TFLIVE_DEBUG` (read at `internal/config/config.go:96`, currently undocumented) and change `OIDC_CLIENT_SECRET`'s placeholder from `replace-me-with-a-local-only-secret` to `tflive-api-local-only`, which is the compose fallback the provisioner and API both default to — the mismatch makes a verbatim copy of this file fail token exchange with `invalid_client`.
+While here, fix the two drifts found on 2026-08-29: add `OPENPLAN_DEBUG` (read at `internal/config/config.go:96`, currently undocumented) and change `OIDC_CLIENT_SECRET`'s placeholder from `replace-me-with-a-local-only-secret` to `openplan-api-local-only`, which is the compose fallback the provisioner and API both default to — the mismatch makes a verbatim copy of this file fail token exchange with `invalid_client`.
 
 - [ ] **Step 2: Rewrite the session section of `docs/authentication.md`**
 
-The sections describing the session cookie as the ID token are now wrong. Replace them with: the session is tflive's own record; the cookie is an opaque reference; the two bounds and their defaults; that the ID token is kept encrypted for `id_token_hint`; that claims are copied at sign-in and are therefore stale until the session ends or back-channel logout arrives; the back-channel logout endpoint and the two Keycloak client attributes a BYO IdP must set; and that a provider without back-channel logout degrades to the absolute cap.
+The sections describing the session cookie as the ID token are now wrong. Replace them with: the session is openplan's own record; the cookie is an opaque reference; the two bounds and their defaults; that the ID token is kept encrypted for `id_token_hint`; that claims are copied at sign-in and are therefore stale until the session ends or back-channel logout arrives; the back-channel logout endpoint and the two Keycloak client attributes a BYO IdP must set; and that a provider without back-channel logout degrades to the absolute cap.
 
 - [ ] **Step 3: Note the BYO-IdP requirement in `README.md`**
 
-One paragraph in the auth section: tflive requires no session or timeout configuration on the IdP. To get immediate revocation, point the provider's back-channel logout at `<TFLIVE_PUBLIC_URL>/v1/auth/backchannel-logout` and enable session-required so `sid` is included. Without it, sessions still end at their own bounds.
+One paragraph in the auth section: openplan requires no session or timeout configuration on the IdP. To get immediate revocation, point the provider's back-channel logout at `<OPENPLAN_PUBLIC_URL>/v1/auth/backchannel-logout` and enable session-required so `sid` is included. Without it, sessions still end at their own bounds.
 
 - [ ] **Step 4: Run the full suite**
 
@@ -2226,7 +2226,7 @@ docker compose -f docker-compose.yaml -f docker-compose.app.yaml up -d --build
 1. Sign in at `http://localhost:5173`. `/v1/me` returns an identity.
 2. One row exists and the token is not readable:
    ```bash
-   docker compose exec -T postgres psql -U tflive -d tflive_test \
+   docker compose exec -T postgres psql -U openplan -d openplan_test \
      -c "select subject, idp_session_id, absolute_expires_at, revoked_at from sessions;" \
      -c "select left(id_token_ciphertext, 40) from sessions;"
    ```
@@ -2234,13 +2234,13 @@ docker compose -f docker-compose.yaml -f docker-compose.app.yaml up -d --build
    ```bash
    TOKEN=$(curl -s -X POST http://localhost:8082/realms/master/protocol/openid-connect/token \
      -d grant_type=password -d client_id=admin-cli \
-     -d username=tflive-admin -d password=tflive-admin-local-only \
+     -d username=openplan-admin -d password=openplan-admin-local-only \
      | python3 -c 'import sys,json;print(json.load(sys.stdin)["access_token"])')
    curl -s -X PUT -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-     -d '{"accessTokenLifespan":60}' http://localhost:8082/admin/realms/tflive
+     -d '{"accessTokenLifespan":60}' http://localhost:8082/admin/realms/openplan
    ```
-4. Sign out from Keycloak's account console at `http://keycloak.localhost:8082/realms/tflive/account`, then confirm `revoked_at` is set and the next tflive request 401s.
-5. Restart the API with `TFLIVE_SESSION_IDLE_TTL=60s` and confirm an idle session dies at 60s.
+4. Sign out from Keycloak's account console at `http://keycloak.localhost:8082/realms/openplan/account`, then confirm `revoked_at` is set and the next openplan request 401s.
+5. Restart the API with `OPENPLAN_SESSION_IDLE_TTL=60s` and confirm an idle session dies at 60s.
 
 - [ ] **Step 6: Commit**
 

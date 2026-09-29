@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vishu42/tflive/internal/authn"
+	"github.com/vishu42/openplan/internal/authn"
 )
 
 func TestLoadSecurityConfigDevelopmentModes(t *testing.T) {
@@ -19,7 +19,7 @@ func TestLoadSecurityConfigDevelopmentModes(t *testing.T) {
 			t.Parallel()
 
 			values := validSecurityValues()
-			values["TFLIVE_ENVIRONMENT"] = mode
+			values["OPENPLAN_ENVIRONMENT"] = mode
 			cfg, err := loadSecurityConfig(mapConfigEnv(values))
 			if err != nil {
 				t.Fatalf("loadSecurityConfig returned error: %v", err)
@@ -30,11 +30,11 @@ func TestLoadSecurityConfigDevelopmentModes(t *testing.T) {
 			if cfg.TenantID != "tenant_123" {
 				t.Fatalf("TenantID = %q, want tenant_123", cfg.TenantID)
 			}
-			if got := cfg.OIDC.IssuerURL.String(); got != "http://localhost:8082/realms/tflive" {
+			if got := cfg.OIDC.IssuerURL.String(); got != "http://localhost:8082/realms/openplan" {
 				t.Fatalf("IssuerURL = %q", got)
 			}
-			if cfg.OIDC.ClientID != "tflive-api" {
-				t.Fatalf("ClientID = %q, want tflive-api", cfg.OIDC.ClientID)
+			if cfg.OIDC.ClientID != "openplan-api" {
+				t.Fatalf("ClientID = %q, want openplan-api", cfg.OIDC.ClientID)
 			}
 			// The embedded server has one setting left: the store to adopt.
 			// There is no URL to dial, no token to present, and no identifier
@@ -50,9 +50,9 @@ func TestLoadSecurityConfigProductionAndSecretFormatting(t *testing.T) {
 	t.Parallel()
 
 	values := validSecurityValues()
-	values["TFLIVE_ENVIRONMENT"] = "production"
-	values["TFLIVE_PUBLIC_URL"] = "https://app.example.com"
-	values["OIDC_ISSUER_URL"] = "https://id.example.com/realms/tflive"
+	values["OPENPLAN_ENVIRONMENT"] = "production"
+	values["OPENPLAN_PUBLIC_URL"] = "https://app.example.com"
+	values["OIDC_ISSUER_URL"] = "https://id.example.com/realms/openplan"
 
 	cfg, err := loadSecurityConfig(mapConfigEnv(values))
 	if err != nil {
@@ -97,22 +97,22 @@ func TestLoadSecurityConfigRejectsMissingAndMalformedValues(t *testing.T) {
 		want  string
 	}{
 		{name: "unsafe store name", key: "OPENFGA_STORE_NAME", value: "store name", want: "OPENFGA_STORE_NAME must not contain whitespace or control characters"},
-		{name: "unknown environment", key: "TFLIVE_ENVIRONMENT", value: "staging", want: "TFLIVE_ENVIRONMENT must be development or production"},
-		{name: "missing tenant", key: "TFLIVE_TENANT_ID", value: "", want: "TFLIVE_TENANT_ID is required"},
-		{name: "tenant prefix", key: "TFLIVE_TENANT_ID", value: "-tenant", want: "TFLIVE_TENANT_ID must start"},
-		{name: "tenant slash", key: "TFLIVE_TENANT_ID", value: "tenant/123", want: "TFLIVE_TENANT_ID must start"},
-		{name: "tenant too long", key: "TFLIVE_TENANT_ID", value: strings.Repeat("a", 129), want: "TFLIVE_TENANT_ID must start"},
+		{name: "unknown environment", key: "OPENPLAN_ENVIRONMENT", value: "staging", want: "OPENPLAN_ENVIRONMENT must be development or production"},
+		{name: "missing tenant", key: "OPENPLAN_TENANT_ID", value: "", want: "OPENPLAN_TENANT_ID is required"},
+		{name: "tenant prefix", key: "OPENPLAN_TENANT_ID", value: "-tenant", want: "OPENPLAN_TENANT_ID must start"},
+		{name: "tenant slash", key: "OPENPLAN_TENANT_ID", value: "tenant/123", want: "OPENPLAN_TENANT_ID must start"},
+		{name: "tenant too long", key: "OPENPLAN_TENANT_ID", value: strings.Repeat("a", 129), want: "OPENPLAN_TENANT_ID must start"},
 		// An absent issuer is no longer an error by itself -- it is how a
 		// local-only deployment opts out of OIDC (#211). It is an error only
 		// when client credentials name a provider that would never be
 		// contacted, which is what the rest of this fixture supplies.
 		{name: "client credentials without issuer", key: "OIDC_ISSUER_URL", value: "", want: "OIDC_CLIENT_ID and OIDC_CLIENT_SECRET require OIDC_ISSUER_URL"},
-		{name: "relative issuer", key: "OIDC_ISSUER_URL", value: "/realms/tflive", want: "OIDC_ISSUER_URL must be an absolute HTTP or HTTPS URL"},
-		{name: "issuer user info", key: "OIDC_ISSUER_URL", value: "https://client:client-secret-sentinel@id.example.com/realms/tflive", want: "OIDC_ISSUER_URL must not include user information"},
-		{name: "issuer query", key: "OIDC_ISSUER_URL", value: "https://id.example.com/realms/tflive?x=1", want: "OIDC_ISSUER_URL must not include a query"},
-		{name: "issuer fragment", key: "OIDC_ISSUER_URL", value: "https://id.example.com/realms/tflive#keys", want: "OIDC_ISSUER_URL must not include a fragment"},
+		{name: "relative issuer", key: "OIDC_ISSUER_URL", value: "/realms/openplan", want: "OIDC_ISSUER_URL must be an absolute HTTP or HTTPS URL"},
+		{name: "issuer user info", key: "OIDC_ISSUER_URL", value: "https://client:client-secret-sentinel@id.example.com/realms/openplan", want: "OIDC_ISSUER_URL must not include user information"},
+		{name: "issuer query", key: "OIDC_ISSUER_URL", value: "https://id.example.com/realms/openplan?x=1", want: "OIDC_ISSUER_URL must not include a query"},
+		{name: "issuer fragment", key: "OIDC_ISSUER_URL", value: "https://id.example.com/realms/openplan#keys", want: "OIDC_ISSUER_URL must not include a fragment"},
 		{name: "missing client id", key: "OIDC_CLIENT_ID", value: "", want: "OIDC_CLIENT_ID is required"},
-		{name: "client id whitespace", key: "OIDC_CLIENT_ID", value: "tflive api", want: "OIDC_CLIENT_ID must not contain whitespace or control characters"},
+		{name: "client id whitespace", key: "OIDC_CLIENT_ID", value: "openplan api", want: "OIDC_CLIENT_ID must not contain whitespace or control characters"},
 	}
 
 	for _, test := range tests {
@@ -144,17 +144,17 @@ func TestLoadSecurityConfigRejectsInsecureProductionValues(t *testing.T) {
 		mutate func(map[string]string)
 		want   string
 	}{
-		{name: "HTTP issuer", mutate: func(values map[string]string) { values["OIDC_ISSUER_URL"] = "http://id.example.com/realms/tflive" }, want: "OIDC_ISSUER_URL must use HTTPS in production"},
-		{name: "HTTP public URL", mutate: func(values map[string]string) { values["TFLIVE_PUBLIC_URL"] = "http://app.example.com" }, want: "TFLIVE_PUBLIC_URL must use HTTPS in production"},
+		{name: "HTTP issuer", mutate: func(values map[string]string) { values["OIDC_ISSUER_URL"] = "http://id.example.com/realms/openplan" }, want: "OIDC_ISSUER_URL must use HTTPS in production"},
+		{name: "HTTP public URL", mutate: func(values map[string]string) { values["OPENPLAN_PUBLIC_URL"] = "http://app.example.com" }, want: "OPENPLAN_PUBLIC_URL must use HTTPS in production"},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			values := validSecurityValues()
-			values["TFLIVE_ENVIRONMENT"] = "production"
-			values["TFLIVE_PUBLIC_URL"] = "https://app.example.com"
-			values["OIDC_ISSUER_URL"] = "https://id.example.com/realms/tflive"
+			values["OPENPLAN_ENVIRONMENT"] = "production"
+			values["OPENPLAN_PUBLIC_URL"] = "https://app.example.com"
+			values["OIDC_ISSUER_URL"] = "https://id.example.com/realms/openplan"
 			test.mutate(values)
 			_, err := loadSecurityConfig(mapConfigEnv(values))
 			if !errors.Is(err, ErrInvalidConfig) || err == nil || !strings.Contains(err.Error(), test.want) {
@@ -168,7 +168,7 @@ func TestLoadSecurityConfigRejectsInsecureProductionValues(t *testing.T) {
 }
 
 func TestLoadSecurityConfigRequiresOIDCClientCredentials(t *testing.T) {
-	for _, name := range []string{"OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET", "TFLIVE_PUBLIC_URL", "SESSION_ENCRYPTION_KEY"} {
+	for _, name := range []string{"OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET", "OPENPLAN_PUBLIC_URL", "SESSION_ENCRYPTION_KEY"} {
 		t.Run(name, func(t *testing.T) {
 			env := validSecurityValues()
 			delete(env, name)
@@ -184,7 +184,7 @@ func TestLoadSecurityConfigRejectsRetiredOIDCAudience(t *testing.T) {
 	// Silently accepting the old name would validate a value nobody re-checked.
 	env := validSecurityValues()
 	delete(env, "OIDC_CLIENT_ID")
-	env["OIDC_AUDIENCE"] = "tflive-api"
+	env["OIDC_AUDIENCE"] = "openplan-api"
 	if _, err := loadSecurityConfig(mapConfigEnv(env)); err == nil {
 		t.Fatal("loadSecurityConfig accepted the retired OIDC_AUDIENCE")
 	}
@@ -199,7 +199,7 @@ func TestLoadSecurityConfigReadsPublicURLAndSessionKey(t *testing.T) {
 	if cfg.PublicURL == nil || cfg.PublicURL.String() != "http://localhost:5173" {
 		t.Fatalf("PublicURL = %v", cfg.PublicURL)
 	}
-	if cfg.OIDC.ClientID != "tflive-api" {
+	if cfg.OIDC.ClientID != "openplan-api" {
 		t.Fatalf("ClientID = %q", cfg.OIDC.ClientID)
 	}
 	if cfg.OIDC.ClientSecret.Value() != "oidc-client-secret" {
@@ -235,8 +235,8 @@ func TestSessionTTLDefaults(t *testing.T) {
 
 func TestSessionTTLOverrides(t *testing.T) {
 	cfg := loadValidSecurityConfig(t, map[string]string{
-		"TFLIVE_SESSION_ABSOLUTE_TTL": "2h",
-		"TFLIVE_SESSION_IDLE_TTL":     "15m",
+		"OPENPLAN_SESSION_ABSOLUTE_TTL": "2h",
+		"OPENPLAN_SESSION_IDLE_TTL":     "15m",
 	})
 	if cfg.SessionAbsoluteTTL != 2*time.Hour {
 		t.Fatalf("SessionAbsoluteTTL = %v, want 2h", cfg.SessionAbsoluteTTL)
@@ -248,14 +248,14 @@ func TestSessionTTLOverrides(t *testing.T) {
 
 func TestSessionTTLRejectsNonPositiveAndInverted(t *testing.T) {
 	tests := map[string]map[string]string{
-		"zero absolute":        {"TFLIVE_SESSION_ABSOLUTE_TTL": "0s"},
-		"negative idle":        {"TFLIVE_SESSION_IDLE_TTL": "-1m"},
-		"unparseable":          {"TFLIVE_SESSION_IDLE_TTL": "soon"},
-		"idle longer than cap": {"TFLIVE_SESSION_ABSOLUTE_TTL": "1h", "TFLIVE_SESSION_IDLE_TTL": "2h"},
+		"zero absolute":        {"OPENPLAN_SESSION_ABSOLUTE_TTL": "0s"},
+		"negative idle":        {"OPENPLAN_SESSION_IDLE_TTL": "-1m"},
+		"unparseable":          {"OPENPLAN_SESSION_IDLE_TTL": "soon"},
+		"idle longer than cap": {"OPENPLAN_SESSION_ABSOLUTE_TTL": "1h", "OPENPLAN_SESSION_IDLE_TTL": "2h"},
 		// At or below the touch interval, LastSeenAt is never written back
 		// before IsLive expires the session, so it can never slide.
-		"idle equal to touch interval": {"TFLIVE_SESSION_ABSOLUTE_TTL": "1h", "TFLIVE_SESSION_IDLE_TTL": authn.SessionTouchInterval.String()},
-		"idle below touch interval":    {"TFLIVE_SESSION_ABSOLUTE_TTL": "1h", "TFLIVE_SESSION_IDLE_TTL": "1m"},
+		"idle equal to touch interval": {"OPENPLAN_SESSION_ABSOLUTE_TTL": "1h", "OPENPLAN_SESSION_IDLE_TTL": authn.SessionTouchInterval.String()},
+		"idle below touch interval":    {"OPENPLAN_SESSION_ABSOLUTE_TTL": "1h", "OPENPLAN_SESSION_IDLE_TTL": "1m"},
 	}
 	for name, env := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -288,14 +288,14 @@ func loadSecurityConfigWith(t *testing.T, overrides map[string]string) (Security
 
 func validSecurityValues() map[string]string {
 	return map[string]string{
-		"TFLIVE_ENVIRONMENT":     "development",
-		"TFLIVE_TENANT_ID":       "tenant_123",
-		"TFLIVE_PUBLIC_URL":      "http://localhost:5173",
-		"OIDC_ISSUER_URL":        "http://localhost:8082/realms/tflive",
-		"OIDC_CLIENT_ID":         "tflive-api",
+		"OPENPLAN_ENVIRONMENT":   "development",
+		"OPENPLAN_TENANT_ID":     "tenant_123",
+		"OPENPLAN_PUBLIC_URL":    "http://localhost:5173",
+		"OIDC_ISSUER_URL":        "http://localhost:8082/realms/openplan",
+		"OIDC_CLIENT_ID":         "openplan-api",
 		"OIDC_CLIENT_SECRET":     "oidc-client-secret",
 		"SESSION_ENCRYPTION_KEY": "01234567890123456789012345678901",
-		"TFLIVE_ROOT_PASSWORD":   "root-local-only",
+		"OPENPLAN_ROOT_PASSWORD": "root-local-only",
 	}
 }
 

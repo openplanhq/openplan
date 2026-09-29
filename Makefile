@@ -1,4 +1,4 @@
-# tflive
+# openplan
 #
 # Run `make` or `make help` for the target list.
 
@@ -8,7 +8,7 @@ SPEC := docs/openapi.yaml
 # integration tests somewhere else:
 #
 #   make differential-test TEST_DSN=postgres://…
-TEST_DSN ?= postgres://tflive:tflive@localhost:55432/tflive_test?sslmode=disable
+TEST_DSN ?= postgres://openplan:openplan@localhost:55432/openplan_test?sslmode=disable
 
 # Redocly is pinned per target, deliberately.
 #
@@ -56,4 +56,4 @@ lint: ## Lint the Go code with golangci-lint
 #
 # Run it after every `go get github.com/openfga/openfga@...`.
 differential-test: ## Run the authorization tests that need a real Postgres
-	tflive_POSTGRES_TEST_DSN=$(TEST_DSN) go test ./internal/authorization/ -count=1 -v
+	OPENPLAN_POSTGRES_TEST_DSN=$(TEST_DSN) go test ./internal/authorization/ -count=1 -v

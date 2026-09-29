@@ -61,7 +61,7 @@ const (
 	// a cluster legitimately runs for tens of minutes, and a run killed
 	// mid-apply leaves state the next run has to reconcile. Deployments that
 	// know their templates are shorter than this lower it with
-	// TFLIVE_TERRAFORM_TIMEOUT rather than living with a default that fails
+	// OPENPLAN_TERRAFORM_TIMEOUT rather than living with a default that fails
 	// honest work.
 	DefaultTerraformTimeout = 45 * time.Minute
 

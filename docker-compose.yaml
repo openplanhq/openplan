@@ -11,14 +11,14 @@
 # Local development only. Every credential and key defaulted here is a
 # throwaway matching .env.example, including CREDENTIAL_ENCRYPTION_KEY, which is
 # duplicated there. Never point a real deployment at these values.
-name: tflive-compose
+name: openplan-compose
 services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: ${APP_DB_USER:-tflive}
-      POSTGRES_PASSWORD: ${APP_DB_PASSWORD:-tflive}
-      POSTGRES_DB: ${APP_DB_NAME:-tflive_test}
+      POSTGRES_USER: ${APP_DB_USER:-openplan}
+      POSTGRES_PASSWORD: ${APP_DB_PASSWORD:-openplan}
+      POSTGRES_DB: ${APP_DB_NAME:-openplan_test}
       KEYCLOAK_DB_USER: ${KEYCLOAK_DB_USER:-keycloak}
       KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak-local-only}
       KEYCLOAK_DB_NAME: ${KEYCLOAK_DB_NAME:-keycloak}
@@ -30,7 +30,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./deploy/postgres/init.sh:/docker-entrypoint-initdb.d/10-databases.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${APP_DB_USER:-tflive} -d ${APP_DB_NAME:-tflive_test}"]
+      test: ["CMD-SHELL", "pg_isready -U ${APP_DB_USER:-openplan} -d ${APP_DB_NAME:-openplan_test}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -57,8 +57,8 @@ services:
       KC_DB_URL: jdbc:postgresql://postgres:5432/${KEYCLOAK_DB_NAME:-keycloak}
       KC_DB_USERNAME: ${KEYCLOAK_DB_USER:-keycloak}
       KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak-local-only}
-      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME:-tflive-admin}
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD:-tflive-admin-local-only}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME:-openplan-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD:-openplan-admin-local-only}
       KC_HTTP_PORT: "8082"
       KC_HOSTNAME: http://keycloak.localhost:8082
       KC_HEALTH_ENABLED: "true"
@@ -91,27 +91,27 @@ services:
     environment:
       KEYCLOAK_ADMIN_URL: http://keycloak:8082
       KEYCLOAK_ADMIN_REALM: master
-      KEYCLOAK_ADMIN_USERNAME: ${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME:-tflive-admin}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD:-tflive-admin-local-only}
-      KEYCLOAK_REALM: tflive
-      KEYCLOAK_API_CLIENT_ID: tflive-api
+      KEYCLOAK_ADMIN_USERNAME: ${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME:-openplan-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD:-openplan-admin-local-only}
+      KEYCLOAK_REALM: openplan
+      KEYCLOAK_API_CLIENT_ID: openplan-api
       # The provisioner derives the confidential client's redirect and
-      # post-logout URIs from TFLIVE_PUBLIC_URL, and registers this exact
+      # post-logout URIs from OPENPLAN_PUBLIC_URL, and registers this exact
       # secret on the client, so the API and the IdP always agree.
-      TFLIVE_PUBLIC_URL: ${TFLIVE_PUBLIC_URL:-http://localhost:5173}
+      OPENPLAN_PUBLIC_URL: ${OPENPLAN_PUBLIC_URL:-http://localhost:5173}
       # Back-channel logout is a server-to-server POST from Keycloak's own
-      # container, not a browser redirect — TFLIVE_PUBLIC_URL resolves inside
+      # container, not a browser redirect — OPENPLAN_PUBLIC_URL resolves inside
       # Keycloak to Keycloak's own loopback, not the host's browser-facing
       # port, so this is pinned to the API's address on the Compose network.
-      TFLIVE_BACKCHANNEL_LOGOUT_URL: http://api:8081/v1/auth/backchannel-logout
-      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-tflive-api-local-only}
-      KEYCLOAK_PLATFORM_ADMIN_USERNAME: ${KEYCLOAK_PLATFORM_ADMIN_USERNAME:-tflive-platform-admin}
-      KEYCLOAK_PLATFORM_ADMIN_PASSWORD: ${KEYCLOAK_PLATFORM_ADMIN_PASSWORD:-tflive-platform-admin-local-only}
-      KEYCLOAK_PLATFORM_ADMIN_EMAIL: ${KEYCLOAK_PLATFORM_ADMIN_EMAIL:-tflive-platform-admin@local.test}
-      KEYCLOAK_PLATFORM_ADMIN_FIRST_NAME: ${KEYCLOAK_PLATFORM_ADMIN_FIRST_NAME:-tflive}
+      OPENPLAN_BACKCHANNEL_LOGOUT_URL: http://api:8081/v1/auth/backchannel-logout
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-openplan-api-local-only}
+      KEYCLOAK_PLATFORM_ADMIN_USERNAME: ${KEYCLOAK_PLATFORM_ADMIN_USERNAME:-openplan-platform-admin}
+      KEYCLOAK_PLATFORM_ADMIN_PASSWORD: ${KEYCLOAK_PLATFORM_ADMIN_PASSWORD:-openplan-platform-admin-local-only}
+      KEYCLOAK_PLATFORM_ADMIN_EMAIL: ${KEYCLOAK_PLATFORM_ADMIN_EMAIL:-openplan-platform-admin@local.test}
+      KEYCLOAK_PLATFORM_ADMIN_FIRST_NAME: ${KEYCLOAK_PLATFORM_ADMIN_FIRST_NAME:-openplan}
       KEYCLOAK_PLATFORM_ADMIN_LAST_NAME: ${KEYCLOAK_PLATFORM_ADMIN_LAST_NAME:-Platform Administrator}
       KEYCLOAK_HTTP_TIMEOUT: 10s
-      TFLIVE_ENVIRONMENT: ${TFLIVE_ENVIRONMENT:-development}
+      OPENPLAN_ENVIRONMENT: ${OPENPLAN_ENVIRONMENT:-development}
     restart: "no"
 
   temporal:
@@ -157,8 +157,8 @@ services:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-tflive}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-tflive-secret}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-openplan}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-openplan-secret}
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -172,10 +172,10 @@ services:
       - minio
     entrypoint: >
       /bin/sh -c "
-      until mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-tflive} ${MINIO_ROOT_PASSWORD:-tflive-secret}; do
+      until mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-openplan} ${MINIO_ROOT_PASSWORD:-openplan-secret}; do
         sleep 1;
       done;
-      mc mb --ignore-existing local/${S3_BUCKET:-tflive-artifacts}
+      mc mb --ignore-existing local/${S3_BUCKET:-openplan-artifacts}
       "
 
   api:
@@ -189,10 +189,10 @@ services:
         condition: service_healthy
     environment:
       HTTP_ADDRESS: ":8081"
-      DATABASE_URL: postgres://${APP_DB_USER:-tflive}:${APP_DB_PASSWORD:-tflive}@postgres:5432/${APP_DB_NAME:-tflive_test}?sslmode=disable
+      DATABASE_URL: postgres://${APP_DB_USER:-openplan}:${APP_DB_PASSWORD:-openplan}@postgres:5432/${APP_DB_NAME:-openplan_test}?sslmode=disable
       TEMPORAL_ADDRESS: temporal:7233
-      TFLIVE_ENVIRONMENT: development
-      TFLIVE_TENANT_ID: ${TFLIVE_TENANT_ID:-tenant_123}
+      OPENPLAN_ENVIRONMENT: development
+      OPENPLAN_TENANT_ID: ${OPENPLAN_TENANT_ID:-tenant_123}
       CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:-717cb4d0fd1db07a30442806c2987599580f6d7c6e63b9bddf509bc183a086d3}
       # Empty by default: no issuer means no provider, and the API serves local
       # accounts. The three move together -- the config rejects a client with no
@@ -203,27 +203,27 @@ services:
       OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
-      TFLIVE_PUBLIC_URL: ${TFLIVE_PUBLIC_URL:-http://localhost:5173}
+      OPENPLAN_PUBLIC_URL: ${OPENPLAN_PUBLIC_URL:-http://localhost:5173}
       SESSION_ENCRYPTION_KEY: ${SESSION_ENCRYPTION_KEY:-b6f1d2c4a8e0937516243b8c5d7e9f0a1b2c3d4e5f60718293a4b5c6d7e8f9a0}
       ARTIFACT_STORE_KIND: filesystem
-      ARTIFACT_STORE_FILESYSTEM_ROOT: /var/lib/tflive/artifacts
+      ARTIFACT_STORE_FILESYSTEM_ROOT: /var/lib/openplan/artifacts
       # Template sync runs in the API's control-plane worker and clones private
       # repositories with an installation token.
       GITHUB_APP_ID: ${GITHUB_APP_ID:-}
       GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
       # How long one Terraform command may run. The control plane owns it: it
       # is what tells Temporal when to give up on an executor.
-      TFLIVE_TERRAFORM_TIMEOUT: ${TFLIVE_TERRAFORM_TIMEOUT:-45m}
+      OPENPLAN_TERRAFORM_TIMEOUT: ${OPENPLAN_TERRAFORM_TIMEOUT:-45m}
       # Seeds the bootstrap administrator on first boot. Required by the API --
       # without it the process exits at startup and the service restart-loops.
       # Defaulted here because this file is the local stack; a real deployment
       # sets it from the environment like every other secret.
-      TFLIVE_ROOT_PASSWORD: ${TFLIVE_ROOT_PASSWORD:-root-local-only}
+      OPENPLAN_ROOT_PASSWORD: ${OPENPLAN_ROOT_PASSWORD:-root-local-only}
     restart: on-failure
     ports:
       - "8081:8081"
     volumes:
-      - artifacts:/var/lib/tflive/artifacts
+      - artifacts:/var/lib/openplan/artifacts
 
   # The data plane. It runs tenant Terraform, so it gets no database URL and no
   # key: secrets arrive sealed to a per-run key, and results go back to the API
@@ -244,14 +244,14 @@ services:
     environment:
       TEMPORAL_ADDRESS: temporal:7233
       ARTIFACT_STORE_KIND: filesystem
-      ARTIFACT_STORE_FILESYSTEM_ROOT: /var/lib/tflive/artifacts
-      EXECUTOR_RUN_ROOT: /var/lib/tflive/runs
+      ARTIFACT_STORE_FILESYSTEM_ROOT: /var/lib/openplan/artifacts
+      EXECUTOR_RUN_ROOT: /var/lib/openplan/runs
     restart: on-failure
     volumes:
-      - artifacts:/var/lib/tflive/artifacts
+      - artifacts:/var/lib/openplan/artifacts
       # Shared by both replicas so a provider is downloaded once per host, not
       # once per replica. Holds provider binaries only, never credentials.
-      - plugin-cache:/var/lib/tflive/plugin-cache
+      - plugin-cache:/var/lib/openplan/plugin-cache
 
   web:
     build:

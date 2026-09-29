@@ -1,4 +1,4 @@
-name: tflive stack authorization
+name: openplan stack authorization
 model_file: ./authorization-model.fga
 tuples:
   - user: user:owner
@@ -13,21 +13,21 @@ tuples:
   - user: user:viewer
     relation: viewer
     object: stack:example
-  - user: platform:tflive
+  - user: platform:openplan
     relation: parent
     object: stack:example
   - user: user:root
     relation: root
-    object: platform:tflive
+    object: platform:openplan
   - user: user:admin
     relation: admin
-    object: platform:tflive
+    object: platform:openplan
   - user: user:editor
     relation: editor
-    object: platform:tflive
+    object: platform:openplan
   - user: user:platform-viewer
     relation: viewer
-    object: platform:tflive
+    object: platform:openplan
   # stack:orphan deliberately has no parent tuple.
   - user: user:owner
     relation: owner
@@ -74,7 +74,7 @@ tests:
   - name: every platform role capability
     check:
       - user: user:root
-        object: platform:tflive
+        object: platform:openplan
         assertions:
           can_administer: true
           can_edit: true
@@ -83,7 +83,7 @@ tests:
           can_publish_template: true
           can_read_template: true
       - user: user:admin
-        object: platform:tflive
+        object: platform:openplan
         assertions:
           can_administer: true
           can_edit: true
@@ -92,7 +92,7 @@ tests:
           can_publish_template: true
           can_read_template: true
       - user: user:editor
-        object: platform:tflive
+        object: platform:openplan
         assertions:
           can_administer: false
           can_edit: true
@@ -101,7 +101,7 @@ tests:
           can_publish_template: true
           can_read_template: true
       - user: user:platform-viewer
-        object: platform:tflive
+        object: platform:openplan
         assertions:
           can_administer: false
           can_edit: false
@@ -111,7 +111,7 @@ tests:
           can_publish_template: false
           can_read_template: true
       - user: user:unrelated
-        object: platform:tflive
+        object: platform:openplan
         assertions:
           can_administer: false
           can_edit: false

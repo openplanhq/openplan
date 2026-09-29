@@ -4,7 +4,7 @@
 > (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use
 > checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Let tflive register templates from, and run Terraform against, private GitHub
+**Goal:** Let openplan register templates from, and run Terraform against, private GitHub
 repositories by authenticating its git operations with a short-lived GitHub App installation
 token.
 
@@ -20,7 +20,7 @@ configured, every code path behaves exactly as it does today.
 `github.com/lestrrat-go/jwx/v3` for RS256 JWT signing (already a direct dependency), Temporal
 activities, `git` CLI via the existing `runner.CommandExecutor` boundary.
 
-**Spec:** https://github.com/vishu42/tflive/issues/239 (sub-issue of epic #156). Read it before
+**Spec:** https://github.com/vishu42/openplan/issues/239 (sub-issue of epic #156). Read it before
 starting — it carries the rationale for decisions this plan only states.
 
 ## TL;DR
@@ -58,7 +58,7 @@ security claim — no automated test can reach a real workspace on a real clone.
 - **Go 1.25.0**, toolchain go1.25.14 (`go.mod`).
 - **git ≥ 2.31** required at runtime for `GIT_CONFIG_COUNT`. `Dockerfile.worker` installs git via
   `apk` on Alpine (2.47+). Do not add a version check; note it in docs only.
-- **tflive is pre-production.** No users, disposable state. Never write migrations for backward
+- **openplan is pre-production.** No users, disposable state. Never write migrations for backward
   compatibility, never preserve a deprecated signature "just in case". Deleting
   `GitCommandRemoteAdd` is correct, not a breaking change.
 - **The token must never reach:** argv, a clone URL, `.git/config`, Temporal workflow input or
@@ -679,7 +679,7 @@ func (runner *recordingGitRunner) CheckoutCommit(context.Context, string, string
 ```
 
 Add a `credential gitrunner.GitCredential` field to the `recordingGitRunner` struct and import
-the runner package as `gitrunner "github.com/vishu42/tflive/internal/runner"`.
+the runner package as `gitrunner "github.com/vishu42/openplan/internal/runner"`.
 
 `internal/activities/template_run_test.go` — update `recordingSourceGitRunner` the same way: add
 a `credential gitrunner.GitCredential` field, add the parameter to both `Clone` and
@@ -913,7 +913,7 @@ var ErrAppNotInstalled = errors.New("github app is not installed on the reposito
 Replace `internal/githubapp/doc.go` contents:
 
 ```go
-// Package githubapp authenticates tflive to GitHub as a GitHub App.
+// Package githubapp authenticates openplan to GitHub as a GitHub App.
 //
 // It signs a short-lived App JWT with the App's RSA key, resolves which
 // installation covers a given repository, and exchanges the JWT for a
@@ -1164,7 +1164,7 @@ type Token struct {
 	ExpiresAt time.Time
 }
 
-// Client calls the GitHub App endpoints tflive needs: which installation covers
+// Client calls the GitHub App endpoints openplan needs: which installation covers
 // a repository, and a token for it.
 type Client struct {
 	baseURL    string
@@ -1787,7 +1787,7 @@ Expected: FAIL to compile — `cfg.GitHubApp undefined`.
 - [ ] **Step 3: Implement the loader**
 
 In `internal/config/config.go`, add `"strconv"` and
-`"github.com/vishu42/tflive/internal/githubapp"` to the imports, add the field to
+`"github.com/vishu42/openplan/internal/githubapp"` to the imports, add the field to
 `WorkerConfig`:
 
 ```go
@@ -2072,7 +2072,7 @@ Expected: FAIL to compile — `undefined: WithTemplateSyncTokenSource`, `unknown
 - [ ] **Step 3: Implement in `template_sync.go`**
 
 Replace `publicGitHubRepoURL` and add the token source. New imports: `net/url` is not needed;
-add `"github.com/vishu42/tflive/internal/githubapp"`.
+add `"github.com/vishu42/openplan/internal/githubapp"`.
 
 ```go
 // GitHubTokenSource resolves a short-lived token granting read access to one
@@ -2171,7 +2171,7 @@ In `SyncTemplate`, replace the clone block:
 	if err != nil {
 		if errors.Is(err, githubapp.ErrAppNotInstalled) {
 			return invalidTemplateSyncOutput(
-				"the tflive GitHub App is not installed on %s/%s; ask an organization admin to install it before registering this template",
+				"the openplan GitHub App is not installed on %s/%s; ask an organization admin to install it before registering this template",
 				input.RepoOwner, input.RepoName,
 			), nil
 		}
@@ -2273,7 +2273,7 @@ In `cmd/worker/main.go`, next to the existing `credentialCipher` block (~line 21
 	}
 ```
 
-Add `"github.com/vishu42/tflive/internal/githubapp"` to the imports. Thread `gitHubTokens` down
+Add `"github.com/vishu42/openplan/internal/githubapp"` to the imports. Thread `gitHubTokens` down
 to the two activity constructors, matching however `credentialCipher` is already threaded (a
 struct field on the deps value, or a closure parameter — follow the existing shape rather than
 inventing a new one).
@@ -2335,7 +2335,7 @@ Add near `CREDENTIAL_ENCRYPTION_KEY`:
 # Optional: leave both empty and only public repositories can be registered.
 #
 # Create an App with Repository permission "Contents: Read-only", install it on
-# each organization whose repositories tflive should reach, then set the App's
+# each organization whose repositories openplan should reach, then set the App's
 # numeric id and its private key here. The key may be the PEM GitHub downloads
 # or, more conveniently for a single-line value, that PEM base64-encoded:
 #   base64 -i app-private-key.pem | tr -d '\n'
@@ -2407,8 +2407,8 @@ Automated tests cannot prove the header is accepted by real GitHub. Run this bef
   a fresh mint), search everywhere it could have escaped:
 
 ```bash
-docker compose exec worker sh -c 'grep -ri "ghs_" /var/lib/tflive/runs/ || echo CLEAN'
-docker compose exec worker sh -c 'cat /var/lib/tflive/runs/*/*/source/.git/config'
+docker compose exec worker sh -c 'grep -ri "ghs_" /var/lib/openplan/runs/ || echo CLEAN'
+docker compose exec worker sh -c 'cat /var/lib/openplan/runs/*/*/source/.git/config'
 docker compose exec postgres psql -U postgres -c "select error_summary from template_registrations where error_summary is not null;"
 docker compose logs worker | grep -c "ghs_" || echo CLEAN
 ```

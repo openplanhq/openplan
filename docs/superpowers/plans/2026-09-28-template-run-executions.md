@@ -16,8 +16,8 @@
 - Commit only when the user has asked for commits in this session. Each task's last step is a checkpoint: run its checks, then commit if the user said to, otherwise leave the work in the tree and continue.
 - Table, column, constraint and index names are exactly the spec's. Rows are ordered by their identity `id`, never by a timestamp.
 - `0029_template_run_executions.sql` is the only new migration. Tasks 1, 4 and 6 each add to it: it is unreleased, and every store test builds a fresh schema.
-- tflive is pre-production: no backfill, no close-out of old runs, no compatibility shims. A database with runs in flight is reset (`docker compose down -v`), never migrated in place.
-- Store tests need the Compose Postgres and skip silently without it. Before any store test run: `docker compose up -d postgres` and `export tflive_POSTGRES_TEST_DSN='postgres://tflive:tflive@localhost:55432/tflive_test?sslmode=disable'`. Run them with `-v` and check that the output has no `--- SKIP`; a skipped test is not a passing one.
+- openplan is pre-production: no backfill, no close-out of old runs, no compatibility shims. A database with runs in flight is reset (`docker compose down -v`), never migrated in place.
+- Store tests need the Compose Postgres and skip silently without it. Before any store test run: `docker compose up -d postgres` and `export OPENPLAN_POSTGRES_TEST_DSN='postgres://openplan:openplan@localhost:55432/openplan_test?sslmode=disable'`. Run them with `-v` and check that the output has no `--- SKIP`; a skipped test is not a passing one.
 - Format with `gofmt -w $(rg --files cmd internal -g '*.go')` and lint with `make lint` before each checkpoint.
 - The step check constraint must list exactly `domain.AllTemplateRunSteps`.
 
@@ -81,7 +81,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/vishu42/tflive/internal/domain"
+	"github.com/vishu42/openplan/internal/domain"
 )
 
 // violates reports whether err is Postgres refusing a write with code on
@@ -852,7 +852,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/vishu42/tflive/internal/domain"
+	"github.com/vishu42/openplan/internal/domain"
 )
 
 // A run's workflow executions are written in the same transaction as the run
@@ -2396,7 +2396,7 @@ func TestLocalProcessRunnerCountsASavedPlanApplyFromItsOutput(t *testing.T) {
 			var log bytes.Buffer
 
 			result, err := runner.Run(context.Background(), TerraformCommand{
-				WorkspacePath: "/tmp/tflive/runs/tenant_123/run_123",
+				WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 				WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 				Command:       testCase.command,
 				Stdout:        &log,
@@ -2581,7 +2581,7 @@ Reset the local database, which still holds the stash's `0029`: `docker compose 
 Then read its timeline (`<run_id>` from the run's URL or `select id from template_runs order by created_at desc limit 1`):
 
 ```bash
-docker exec -i tflive-compose-postgres-1 psql -U tflive -d tflive_test -v run=<run_id> <<'SQL'
+docker exec -i openplan-compose-postgres-1 psql -U openplan -d openplan_test -v run=<run_id> <<'SQL'
 select 'step' as kind, w.phase, s.step as name, s.status, s.started_at, s.finished_at
 from template_run_step_executions s
 join template_run_workflow_executions w on w.id = s.workflow_execution_id

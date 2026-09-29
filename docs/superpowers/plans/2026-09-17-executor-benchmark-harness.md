@@ -43,9 +43,9 @@ calls a cloud; 10–11 drive and observe it; 12 produces the numbers.
 | 3 | Temporal SDK metrics | `MetricsHandler` on both clients — schedule-to-start latency, worker slots |
 | 4 | Terraform command metrics | Per-command duration, CPU-seconds, peak RSS, active runs, workspace bytes |
 | 5 | Concurrency knobs | Executor session/activity caps and queue worker pool become configuration |
-| 6 | Mock OpenTofu provider | `tflivemock_workload` with duration, CPU, allocation and state-size knobs |
+| 6 | Mock OpenTofu provider | `openplanmock_workload` with duration, CPU, allocation and state-size knobs |
 | 7 | Provider filesystem mirror | Provider baked into `Dockerfile.executor`; `tofu init` resolves offline |
-| 8 | Configurable git base URL | `TFLIVE_GIT_BASE_URL` + a `git daemon` container; no run fetches from github.com |
+| 8 | Configurable git base URL | `OPENPLAN_GIT_BASE_URL` + a `git daemon` container; no run fetches from github.com |
 | 9 | Bench fixture module | The `.tf` module the benchmark runs, served from the local git daemon |
 | 10 | `cmd/bench` load harness | Logs in, provisions, fires runs on an arrival schedule, records timelines |
 | 11 | Bench compose overlay | Prometheus, Grafana, cadvisor, node-exporter, pinned CPU and memory per service |
@@ -71,7 +71,7 @@ Recorded here so they are not relitigated mid-implementation.
 
 **The 45-minute timeout and heartbeats are already done.** Commit `10d65d1` ("fix: bound Terraform
 commands by a configurable timeout and heartbeat them") landed `DefaultTerraformTimeout = 45m`
-configurable through `TFLIVE_TERRAFORM_TIMEOUT` (`internal/domain/workflow.go:57`,
+configurable through `OPENPLAN_TERRAFORM_TIMEOUT` (`internal/domain/workflow.go:57`,
 `internal/config/config.go:155`), `TerraformHeartbeatInterval = 20s` /
 `TerraformHeartbeatTimeout = 2m` (`internal/domain/workflow.go:74-75`), `startHeartbeat` in
 `internal/activities/template_run.go:320`, and `HeartbeatTimeout` on the activity options at
@@ -107,7 +107,7 @@ result.
   `go.temporal.io/sdk/contrib/tally`. `github.com/prometheus/client_golang` is already present as
   indirect (`go.mod:29`) and is promoted to direct. Everything else is stdlib.
 - **Go 1.25.0**, toolchain go1.25.14 (`go.mod`).
-- **tflive is pre-production.** No users, disposable state. Never write a migration for backward
+- **openplan is pre-production.** No users, disposable state. Never write a migration for backward
   compatibility, never keep a deprecated signature "just in case". Workflow changes need no
   Temporal versioning.
 - **New knobs default to today's behaviour.** `EXECUTOR_MAX_CONCURRENT_SESSIONS` unset means the
@@ -130,12 +130,12 @@ result.
 |---|---|
 | `internal/observability/registry.go` | Prometheus registry, Go + process collectors, `http.Handler` with `/metrics` and `/debug/pprof` |
 | `internal/observability/registry_test.go` | Handler serves both paths; registry carries runtime collectors |
-| `internal/observability/terraform.go` | The `tflive_terraform_*` and `tflive_executor_*` collectors and their recording helpers |
+| `internal/observability/terraform.go` | The `openplan_terraform_*` and `openplan_executor_*` collectors and their recording helpers |
 | `internal/observability/terraform_test.go` | Recording helpers produce the expected series and labels |
-| `internal/observability/queue.go` | `tflive_queue_depth`, `tflive_queue_claim_latency_seconds` |
+| `internal/observability/queue.go` | `openplan_queue_depth`, `openplan_queue_claim_latency_seconds` |
 | `bench/provider/go.mod` | Separate module — keeps `terraform-plugin-framework` out of the root graph |
 | `bench/provider/main.go` | Provider entrypoint |
-| `bench/provider/workload_resource.go` | `tflivemock_workload` and its knobs |
+| `bench/provider/workload_resource.go` | `openplanmock_workload` and its knobs |
 | `bench/provider/workload_resource_test.go` | Knob semantics: durations honoured, payload sized, CPU burn bounded |
 | `bench/fixtures/mock-workload/main.tf` | The module the benchmark runs |
 | `bench/fixtures/mock-workload/variables.tf` | Variables mapped from stack template config via `TF_VAR_*` |
@@ -487,12 +487,12 @@ and stop, which is exactly where timing and accounting belong.
 
 | Metric | Type | Labels |
 |---|---|---|
-| `tflive_terraform_command_duration_seconds` | histogram | `command` |
-| `tflive_terraform_command_cpu_seconds_total` | counter | `command`, `mode` (`user`/`sys`) |
-| `tflive_terraform_command_max_rss_bytes` | histogram | `command` |
-| `tflive_terraform_command_total` | counter | `command`, `outcome` (`success`/`failure`) |
-| `tflive_executor_active_runs` | gauge | — |
-| `tflive_run_workspace_bytes` | histogram | — |
+| `openplan_terraform_command_duration_seconds` | histogram | `command` |
+| `openplan_terraform_command_cpu_seconds_total` | counter | `command`, `mode` (`user`/`sys`) |
+| `openplan_terraform_command_max_rss_bytes` | histogram | `command` |
+| `openplan_terraform_command_total` | counter | `command`, `outcome` (`success`/`failure`) |
+| `openplan_executor_active_runs` | gauge | — |
+| `openplan_run_workspace_bytes` | histogram | — |
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -530,8 +530,8 @@ Run: `go test ./internal/observability/ ./internal/activities/ && go build ./...
 
 - [ ] **Step 5: Verify against ground truth**
 
-Start one run. Compare `tflive_terraform_command_cpu_seconds_total` and
-`tflive_terraform_command_max_rss_bytes` against `docker stats` and, on the executor container,
+Start one run. Compare `openplan_terraform_command_cpu_seconds_total` and
+`openplan_terraform_command_max_rss_bytes` against `docker stats` and, on the executor container,
 `/usr/bin/time -v tofu plan` in the same workspace. They should be close. If they are not, the
 accounting is wrong and every later experiment is invalid — stop and fix it here.
 
@@ -596,8 +596,8 @@ For `DATABASE_MAX_CONNS`, use `pgxpool.ParseConfig` and set `MaxConns` rather th
 
 - [ ] **Step 4: Add queue metrics**
 
-`internal/observability/queue.go` defines `tflive_queue_depth{kind}` and
-`tflive_queue_claim_latency_seconds{kind}`; record them in `internal/queue/controller.go` around
+`internal/observability/queue.go` defines `openplan_queue_depth{kind}` and
+`openplan_queue_claim_latency_seconds{kind}`; record them in `internal/queue/controller.go` around
 the claim and deliver paths. The controller takes an optional recorder, nil-safe, so its existing
 tests are untouched.
 
@@ -645,7 +645,7 @@ With `count` in the fixture module, resource-graph width is a sixth knob.
 - [ ] **Step 1: Initialise the module**
 
 ```bash
-cd bench/provider && go mod init github.com/vishu42/tflive/bench/provider
+cd bench/provider && go mod init github.com/vishu42/openplan/bench/provider
 go get github.com/hashicorp/terraform-plugin-framework
 ```
 
@@ -660,7 +660,7 @@ Unit-test the knob semantics directly against the resource's logic, without a ru
 - [ ] **Step 3: Implement**
 
 Protocol 6 via terraform-plugin-framework; OpenTofu 1.12 supports it. Provider address
-`registry.opentofu.org/tflive/tflivemock`, resource type `tflivemock_workload`. All durations
+`registry.opentofu.org/openplan/openplanmock`, resource type `openplanmock_workload`. All durations
 accept Go duration strings. Every sleep must honour the request context so a cancelled run kills
 the provider promptly.
 
@@ -697,7 +697,7 @@ variance we do not control; a local mirror makes `init` offline and deterministi
 Add a build stage that compiles `bench/provider` and copies the binary to the mirror layout:
 
 ```
-/opt/tf-mirror/registry.opentofu.org/tflive/tflivemock/0.1.0/linux_${TARGETARCH}/terraform-provider-tflivemock_v0.1.0
+/opt/tf-mirror/registry.opentofu.org/openplan/openplanmock/0.1.0/linux_${TARGETARCH}/terraform-provider-openplanmock_v0.1.0
 ```
 
 `Dockerfile.executor` already takes `ARG TARGETARCH` for the OpenTofu download at `:11-22`; reuse it.
@@ -710,10 +710,10 @@ Add a build stage that compiles `bench/provider` and copies the binary to the mi
 provider_installation {
   filesystem_mirror {
     path    = "/opt/tf-mirror"
-    include = ["registry.opentofu.org/tflive/*"]
+    include = ["registry.opentofu.org/openplan/*"]
   }
   direct {
-    exclude = ["registry.opentofu.org/tflive/*"]
+    exclude = ["registry.opentofu.org/openplan/*"]
   }
 }
 ```
@@ -768,7 +768,7 @@ Run: `go test ./internal/activities/ -run RepoURL`
 
 - [ ] **Step 3: Implement**
 
-Add `TFLIVE_GIT_BASE_URL`, defaulting to `https://github.com`. Thread it into the activities
+Add `OPENPLAN_GIT_BASE_URL`, defaulting to `https://github.com`. Thread it into the activities
 constructors. **Keep `validateRepoIdentifier` exactly as it is** — the doc comment at
 `internal/activities/template_sync.go:185-191` explains that the authority is fixed before the
 first path separator so no user-supplied value can redirect the request to another host. That
@@ -803,8 +803,8 @@ git commit -m "feat: make the git base url configurable"
 
 - [ ] **Step 1: Write the module**
 
-`main.tf` declares `required_providers` pointing at `registry.opentofu.org/tflive/tflivemock` and
-a `count`-ed `tflivemock_workload`. `variables.tf` declares one variable per knob plus
+`main.tf` declares `required_providers` pointing at `registry.opentofu.org/openplan/openplanmock` and
+a `count`-ed `openplanmock_workload`. `variables.tf` declares one variable per knob plus
 `resource_count`.
 
 Values reach the run as `TF_VAR_*` through `terraformVariableEnv`
@@ -814,7 +814,7 @@ template config through the API — no rebuild, no redeploy, one `PATCH .../conf
 - [ ] **Step 2: Serve it over git**
 
 Add a `git daemon --base-path=/srv/git --export-all --reuseaddr` container to the bench overlay,
-with the fixture directory initialised as a bare repository. Set `TFLIVE_GIT_BASE_URL=git://gitserver`
+with the fixture directory initialised as a bare repository. Set `OPENPLAN_GIT_BASE_URL=git://gitserver`
 on api and executor.
 
 - [ ] **Step 3: Verify end to end**
@@ -840,7 +840,7 @@ git commit -m "feat: add the benchmark fixture module and a local git source"
 **Auth is simple and needs no new API surface.** `POST /v1/auth/login` as root with
 `Content-Type: application/json` and **no** `Origin` or `Sec-Fetch-Site` header —
 `internal/api/local_login.go:71-88` treats the absence of both as a non-browser client and passes
-the CSRF check deliberately. The response is 204 with a `tflive_session` cookie; a
+the CSRF check deliberately. The response is 204 with a `openplan_session` cookie; a
 `net/http/cookiejar` carries it from there. There are no API tokens
 (`internal/authn/middleware.go:16-28` is explicit that the cookie is the only credential).
 
@@ -935,7 +935,7 @@ Note that `deploy.resources.limits` is ignored outside swarm; use the service-le
 - [ ] **Step 3: Verify the accounting cross-check**
 
 Bring the stack up, run the `plan-only` scenario, and compare cadvisor's container CPU and RSS for
-the executor against the sum of `tflive_terraform_command_*` over the same window. They must agree
+the executor against the sum of `openplan_terraform_command_*` over the same window. They must agree
 within a sane margin. **If they diverge badly, the Task 1 accounting is wrong and every experiment
 result is invalid** — stop here.
 
@@ -980,7 +980,7 @@ It must state, explicitly:
   implies for a target concurrency.
 - **The caveats.** A local provider mirror removes provider-download cost, and run workspaces are
   never reclaimed. Real-world disk consumption and `init` duration will therefore be materially
-  worse than these numbers. Cite `tflive_run_workspace_bytes` (Task 4) for the measured growth and
+  worse than these numbers. Cite `openplan_run_workspace_bytes` (Task 4) for the measured growth and
   name both defects as open issues rather than letting a clean benchmark hide them.
 - One paragraph per experiment where the result contradicted the expectation.
 
@@ -1010,8 +1010,8 @@ Run after Task 11, before Task 12.
    write path.
 3. `curl -s localhost:8081/metrics` and `curl -s localhost:8090/metrics` — both return `go_*`,
    `process_*` and `temporal_*` series.
-4. One real run through the UI: `tflive_terraform_command_cpu_seconds_total` and
-   `tflive_terraform_command_max_rss_bytes` appear with per-command labels and plausible values,
+4. One real run through the UI: `openplan_terraform_command_cpu_seconds_total` and
+   `openplan_terraform_command_max_rss_bytes` appear with per-command labels and plausible values,
    cross-checked against `docker stats`.
 5. `EXECUTOR_MAX_CONCURRENT_SESSIONS=1`, two runs fired: the second waits, and
    `temporal_worker_task_slots_available` reads 0 while the first holds the slot.

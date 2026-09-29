@@ -5,14 +5,14 @@ Status: outline, pre-design. Nothing here is decided.
 
 ## 1. What this is
 
-Serve tflive's own modules over HashiCorp's [module registry
+Serve openplan's own modules over HashiCorp's [module registry
 protocol](https://developer.hashicorp.com/terraform/internals/module-registry-protocol)
-so that a `source = "registry.tflive.example/acme/vpc/aws"` line in someone's
+so that a `source = "registry.openplan.example/acme/vpc/aws"` line in someone's
 Terraform resolves against us — both from a developer's laptop and from our own
 executor during `tofu init`.
 
 This is adjacent to, but not the same as, the existing template catalogue.
-Templates are *things tflive runs for you*. Registry modules are *things other
+Templates are *things openplan runs for you*. Registry modules are *things other
 people's Terraform consumes*. They can share a source of truth; they should not
 share an identity model (see §6.1).
 
@@ -47,7 +47,7 @@ Three things a registry buys over that, verified 2026-09-17:
 3. **Credential centralisation.** `git::` makes every consumer authenticate to
    the private source repo. A registry serving tarballs means only the registry
    does -- and we already hold a GitHub App installation token that consumers
-   cannot. Strongest argument for tflive specifically; see §6.7.
+   cannot. Strongest argument for openplan specifically; see §6.7.
 
 **OpenTofu's `oci://` sources** are the push-standardised option and deserve an
 explicit rejection rather than silence. They work against any OCI registry a
@@ -65,7 +65,7 @@ Terraform proper.
 
 **The open strategic question.** In-platform consumption is already solved by
 the template catalogue. A registry only earns its keep for Terraform running
-*outside* tflive -- a laptop, someone's CI. That repositions tflive from "a
+*outside* openplan -- a laptop, someone's CI. That repositions openplan from "a
 place you run infrastructure" to "a source of truth other people's Terraform
 points at." That may be right, but it is a product decision that should be made
 deliberately and not arrived at by building.
@@ -135,7 +135,7 @@ the executor runs `tofu`.
 
 Version ordering is semver; the CLI does the constraint solving, we just list.
 
-## 3. What tflive already has
+## 3. What openplan already has
 
 - **Async ingest-from-git with validation**, end to end: `TemplateRegistration`
   → Temporal `template_sync` workflow → `internal/activities/template_sync.go`
@@ -157,7 +157,7 @@ Version ordering is semver; the CLI does the constraint solving, we just list.
 
 ## 4. The gaps, worst first
 
-**4.1 There is no machine credential.** This is the whole problem. tflive
+**4.1 There is no machine credential.** This is the whole problem. openplan
 authenticates humans: OIDC login, an app-owned session, a cookie
 (`internal/authn`). `grep` finds no API token, PAT, or service-account concept
 anywhere in `internal/` or `cmd/`. The Terraform CLI will send
@@ -182,7 +182,7 @@ answer, not an env var we bend.
 `/v1` and `/healthz`; everything else falls through to the SPA. A request for
 `/.well-known/terraform.json` currently returns `index.html`. One new `location`
 block, but it is a deployment-topology fact, not an application detail — anyone
-fronting tflive differently has to replicate it.
+fronting openplan differently has to replicate it.
 
 **4.4 Versions are a new concept.** Templates are keyed by git ref → resolved
 commit SHA, with a single `latest_template_revision_id` pointer. Registry
@@ -231,7 +231,7 @@ Against those, our one REST caller — token minting, once per repository per ho
 — is noise at any volume. The figure that should worry us is the 60/hr
 unauthenticated limit: `TokenSource.Token` returns an empty string when no
 GitHub App is configured and the fetch proceeds unauthenticated by design, which
-is fine at demo scale and a cliff for anyone running tflive at size without
+is fine at demo scale and a cliff for anyone running openplan at size without
 configuring the App.
 
 **Token minting is already solved.** `githubapp.TokenSource` caches per
@@ -242,18 +242,18 @@ is the one already handled.
 **Measured, 2026-09-17, on the local stack** (2 executor replicas, OpenTofu
 1.12.5, container writable layer, 395 GB free).
 
-One plan through tflive on the currently registered template
+One plan through openplan on the currently registered template
 (`vishu42/terraform-templates`, root `vpc`): **4.9 s** wall, **344 KB**
 workspace, **~20 KB** network. The whole run landed on one executor and the
 other never moved, confirming the Temporal session pins a run to a host. But
 that module declares no `required_providers` and no provider block — it is a
-stub, so this is tflive's orchestration floor and says nothing about providers.
+stub, so this is openplan's orchestration floor and says nothing about providers.
 
 The same `tofu` binary against a realistic `hashicorp/aws ~> 5.0` module:
 
 | configuration | init time | downloaded | workspace disk |
 |---|---|---|---|
-| no plugin cache (what tflive does today) | 36 s | ~154 MB | **642 MB** |
+| no plugin cache (what openplan does today) | 36 s | ~154 MB | **642 MB** |
 | `TF_PLUGIN_CACHE_DIR`, no lock file | 30 s | ~148 MB | 28 KB |
 | `TF_PLUGIN_CACHE_DIR` + `.terraform.lock.hcl` | **1 s** | **0 B** | 28 KB |
 
@@ -261,7 +261,7 @@ Two things follow that were not obvious. First, the cache **symlinks** rather
 than copies, so a workspace drops from 642 MB to 28 KB. Second, **the cache
 alone does not stop the download**: without a lock file recording provider
 hashes, OpenTofu still fetches to verify, so only the lock file turns this into
-a 36x speedup and zero egress. Since every tflive run materialises a fresh
+a 36x speedup and zero egress. Since every openplan run materialises a fresh
 workspace from a git fetch, the lock file has to be committed in the module
 repository or preserved by us — a cache volume on its own buys much less than
 it appears to.
@@ -275,7 +275,7 @@ Extrapolating one burst of 100 concurrent plans on a real module:
 | init latency | 36 s before plan starts | 1 s |
 
 **Run workspaces are never reclaimed.** Verified directly: after the run above,
-two run directories persist under `/var/lib/tflive/runs/tenant_123/`, one per
+two run directories persist under `/var/lib/openplan/runs/tenant_123/`, one per
 historical run, with no cleanup path anywhere. `EXECUTOR_RUN_ROOT` is not a
 volume either, so this grows the container writable layer without bound. At
 642 MB per run it is roughly 600 runs to fill this host.
@@ -350,14 +350,14 @@ executor needs) are different products. Building only the first and reusing it
 for runs would put a durable credential into every Terraform subprocess.
 
 Distribution is a second axis. The cheap path is copy-paste: generate a PAT in
-the UI, paste it into `.tofurc` or `TF_TOKEN_registry_tflive_example`. The
+the UI, paste it into `.tofurc` or `TF_TOKEN_registry_openplan_example`. The
 ergonomic path is implementing `login.v1`, which makes
-`tofu login registry.tflive.example` run an OAuth authorization-code flow
+`tofu login registry.openplan.example` run an OAuth authorization-code flow
 (local redirect listener on ports 10000-10010) and write the token into the
-CLI's own credentials store. That requires tflive to *be* an OAuth
+CLI's own credentials store. That requires openplan to *be* an OAuth
 authorization server, which it is not — it is an OIDC client to Keycloak today.
 So this is either a real build or a delegation question: can Keycloak serve as
-the `authz`/`token` endpoints for a `terraform-cli` public client, with tflive
+the `authz`/`token` endpoints for a `terraform-cli` public client, with openplan
 exchanging the result for its own token? Worth answering before §7 step 1 is
 scoped.
 

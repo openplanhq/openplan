@@ -1,6 +1,6 @@
 # #214 — generalize the authz port to (Subject, Relation, Object)
 
-Design for [#214](https://github.com/vishu42/tflive/issues/214). 2026-08-22.
+Design for [#214](https://github.com/vishu42/openplan/issues/214). 2026-08-22.
 
 The shape comes from [decision 3 of the IAM surface analysis](./2026-08-20-iam-openfga-surface-analysis.md).
 The open questions were worked through in
@@ -44,7 +44,7 @@ Each was tested against the real model with the `fga` CLI rather than assumed,
 | `user:alice can_view stack:X` — derived relation | **REJECTED** — `type 'user' is not an allowed type restriction for 'stack#can_view'` |
 | `user:* viewer stack:X` — typed wildcard, grants everyone | **REJECTED** — wildcard not an allowed type restriction |
 | `user:alice#member viewer stack:X` — userset injection | **REJECTED** — `relation 'user#member' not found` |
-| `platform:tflive parent stack:X` — structural edge | **ACCEPTED** |
+| `platform:openplan parent stack:X` — structural edge | **ACCEPTED** |
 | `user:alice viewer stack:X` — control | ACCEPTED |
 
 To be explicit, since the first row is easy to misread: `can_view` is rejected
@@ -133,7 +133,7 @@ it cannot.
 
 `Subject` wraps `Object` because on the wire both slots hold `type:id`, and
 because that is what lets the userset suffix arrive later without restructuring.
-A `SubjectFromObject` constructor — needed to put `platform:tflive` in the user
+A `SubjectFromObject` constructor — needed to put `platform:openplan` in the user
 slot — is **not** included: nothing writes that tuple until #141, and it arrives
 with its caller.
 
@@ -296,7 +296,7 @@ starts mattering at #141.
 > `RevokeStackRole` diff against it. A silently shortened list is a wrong
 > premise for a mutation.
 
-## 5. Chunking — the live 13-stack bug ([#220](https://github.com/vishu42/tflive/issues/220))
+## 5. Chunking — the live 13-stack bug ([#220](https://github.com/vishu42/openplan/issues/220))
 
 `ResolveStacksCapabilities`
 ([authorization.go:230](../../../internal/app/authorization.go#L230)) builds
@@ -335,7 +335,7 @@ do not originate.
 - `NewGrant` with a non-grantable relation errors, however the relation was
   built.
 
-**Chunking regression** ([#220](https://github.com/vishu42/tflive/issues/220)) —
+**Chunking regression** ([#220](https://github.com/vishu42/openplan/issues/220)) —
 a 51-check `BatchCheck` against the adapter asserting two upstream requests and
 correctly ordered merged results, plus a 13-stack case through
 `ResolveStacksCapabilities`. Both written first and observed failing.

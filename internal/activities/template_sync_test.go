@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vishu42/tflive/internal/domain"
-	"github.com/vishu42/tflive/internal/githubapp"
-	gitrunner "github.com/vishu42/tflive/internal/runner"
+	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/githubapp"
+	gitrunner "github.com/vishu42/openplan/internal/runner"
 )
 
 func TestRecordTemplateRegistrationStatusDelegatesToRecorder(t *testing.T) {

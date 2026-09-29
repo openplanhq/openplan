@@ -2,7 +2,7 @@
 
 > **Superseded by #155 (identity projection).** The Keycloak user-directory
 > reader described here has been removed: `internal/keycloak/directory.go`, the
-> `app.UserDirectory` port, and the `tflive-directory-reader` service account
+> `app.UserDirectory` port, and the `openplan-directory-reader` service account
 > are all gone. Grant display names and user search now read a local `users`
 > table projected from each ID token at sign-in — see the "Identity Projection"
 > section of `docs/authentication.md`. Kept as a record of the design that was
@@ -54,11 +54,11 @@ AUTH-017 (access management APIs) needs to resolve Keycloak users when assigning
 
 ## New Keycloak Client
 
-The provisioner creates a confidential client `tflive-directory-reader` in the tflive realm:
+The provisioner creates a confidential client `openplan-directory-reader` in the openplan realm:
 
 | Property | Value |
 |---|---|
-| `clientId` | `tflive-directory-reader` (configurable via `KEYCLOAK_DIRECTORY_READER_CLIENT_ID`) |
+| `clientId` | `openplan-directory-reader` (configurable via `KEYCLOAK_DIRECTORY_READER_CLIENT_ID`) |
 | `protocol` | `openid-connect` |
 | `serviceAccountsEnabled` | `true` |
 | `publicClient` | `false` |
@@ -104,7 +104,7 @@ Uses OAuth2 client-credentials grant against the realm token endpoint:
 POST /realms/{realm}/protocol/openid-connect/token
 Content-Type: application/x-www-form-urlencoded
 
-client_id=tflive-directory-reader&client_secret=...&grant_type=client_credentials
+client_id=openplan-directory-reader&client_secret=...&grant_type=client_credentials
 ```
 
 Token is held in memory only, same pattern as the existing `Client.Authenticate()`.
@@ -146,7 +146,7 @@ type DirectoryReaderConfig struct {
 ```
 
 Environment variables:
-- `KEYCLOAK_DIRECTORY_READER_CLIENT_ID` (required in production, defaults to `tflive-directory-reader`)
+- `KEYCLOAK_DIRECTORY_READER_CLIENT_ID` (required in production, defaults to `openplan-directory-reader`)
 - `KEYCLOAK_DIRECTORY_READER_CLIENT_SECRET` (required in production)
 - `KEYCLOAK_DIRECTORY_READER_HTTP_TIMEOUT` (optional, default 10s)
 
@@ -231,7 +231,7 @@ An empty `q` parameter returns `400 invalid_request`. This prevents accidental f
 
 Extend `internal/keycloak/provisioner.go` to:
 
-1. Create the `tflive-directory-reader` confidential client with service accounts enabled
+1. Create the `openplan-directory-reader` confidential client with service accounts enabled
 2. Look up `query-users`, `view-users`, `view-realm` from the `realm-management` client
 3. Assign these client roles to the directory reader's service account
 4. Return the client secret in `Result` (for deployment configuration)

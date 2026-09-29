@@ -58,11 +58,11 @@ describe("loginAttempts", () => {
     recordLoginAttempt();
     clearLoginAttempts();
     expect(readLoginAttempts()).toBe(0);
-    expect(sessionStorage.getItem("tflive.auth.loginAttempts")).toBeNull();
+    expect(sessionStorage.getItem("openplan.auth.loginAttempts")).toBeNull();
   });
 
   it("ignores a corrupted stored value", () => {
-    sessionStorage.setItem("tflive.auth.loginAttempts", "not-a-number");
+    sessionStorage.setItem("openplan.auth.loginAttempts", "not-a-number");
     expect(readLoginAttempts()).toBe(0);
   });
 

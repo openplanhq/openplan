@@ -7,7 +7,7 @@ import (
 	openfgav1 "github.com/openfga/api/proto/openfga/v1"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	"github.com/vishu42/tflive/internal/strval"
+	"github.com/vishu42/openplan/internal/strval"
 )
 
 // bootstrapPageSize is how many stores or models one reconcile page asks for.

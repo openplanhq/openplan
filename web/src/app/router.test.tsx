@@ -28,7 +28,7 @@ describe("routeConfig", () => {
   // redirect is a loader, so it resolves during router initialization —
   // before any element renders — which is what this asserts.
   it("redirects the index route to /stacks without rendering a screen", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
 
     const testRouter = createMemoryRouter(routeConfig, { initialEntries: ["/"] });
@@ -38,7 +38,7 @@ describe("routeConfig", () => {
   });
 
   it("renders a placeholder for every reserved screen a signed-in operator can reach", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
 
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
@@ -98,7 +98,7 @@ describe("routeConfig", () => {
   });
 
   it("renders the stack template list at /stacks/:stackId/templates", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
     const { queryKeys } = await import("../api/queryKeys");
@@ -135,7 +135,7 @@ describe("routeConfig", () => {
   });
 
   it("renders the stacks list screen at /stacks", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
 
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
@@ -174,7 +174,7 @@ describe("routeConfig", () => {
   });
 
   it("renders the template registry screen at /templates", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
 
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
@@ -216,7 +216,7 @@ describe("routeConfig", () => {
   });
 
   it("renders the template registration screen at /templates/new", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
 
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
@@ -237,7 +237,7 @@ describe("routeConfig", () => {
   });
 
   it("renders a 404, not a permission leak, when canView is denied for a stack route", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
 
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
@@ -276,7 +276,7 @@ describe("routeConfig", () => {
   });
 
   it("renders AccessDenied for /stacks/:stackId/access when canManageAccess is denied but canView is allowed", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
 
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
@@ -315,7 +315,7 @@ describe("routeConfig", () => {
   });
 
   it("renders the CreateStackScreen when canCreateStack is allowed", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
 
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
@@ -339,7 +339,7 @@ describe("routeConfig", () => {
   // Nested, it could never mount. SessionProvider is mocked here, so the proof
   // is that the screen renders with no AuthContext around it at all.
   it("renders the sign-in screen at /signin outside the session boundary", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
 
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -355,7 +355,7 @@ describe("routeConfig", () => {
   });
 
   it("renders the 404 screen for unknown paths", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
 
 
@@ -370,7 +370,7 @@ describe("routeConfig", () => {
   });
 
   it("renders the add template screen at /stacks/:stackId/templates/new", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
     const { createMemoryRouter, RouterProvider } = await import("react-router-dom");
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
@@ -406,7 +406,7 @@ describe("routeConfig", () => {
   });
 
   it("renders the upgrade screen at /stacks/:stackId/templates/:stackTemplateId/upgrade", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
     const { createMemoryRouter, RouterProvider } = await import("react-router-dom");
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
@@ -446,7 +446,7 @@ describe("routeConfig", () => {
   });
 
   it("renders AccessDenied for /stacks/:stackId/templates/new when canOperate is denied but canView is allowed", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
     const { createMemoryRouter, RouterProvider } = await import("react-router-dom");
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
@@ -481,7 +481,7 @@ describe("routeConfig", () => {
   });
 
   it("renders AccessDenied for /stacks/:stackId/templates/:stackTemplateId/upgrade when canOperate is denied but canView is allowed", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
     const { createMemoryRouter, RouterProvider } = await import("react-router-dom");
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");

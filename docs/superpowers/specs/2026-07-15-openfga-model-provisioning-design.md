@@ -4,20 +4,20 @@
 
 **Date:** 2026-07-15
 
-**Issue:** [AUTH-004](https://github.com/vishu42/tflive/issues/6)
+**Issue:** [AUTH-004](https://github.com/vishu42/openplan/issues/6)
 
 **Scope:** Version and provision the fixed per-stack authorization model for
-the configured single tflive tenant.
+the configured single openplan tenant.
 
 ## Purpose
 
-This design defines the first tflive OpenFGA authorization model and the
+This design defines the first openplan OpenFGA authorization model and the
 repeatable process used to create or verify its store and immutable model
 version. It implements the role and permission semantics already approved in
 the authentication and authorization security architecture.
 
 The result must give deployments explicit OpenFGA store and model IDs. The
-tflive API will receive those IDs through environment configuration and will
+openplan API will receive those IDs through environment configuration and will
 never select a store by name or silently use the latest model.
 
 Runtime authorization checks, relationship writes, grant replacement,
@@ -119,7 +119,7 @@ The command reads:
 | Variable | Bootstrap | Verify | Meaning |
 |---|---|---|---|
 | `OPENFGA_API_URL` | Required | Required | Base URL for the OpenFGA HTTP API |
-| `OPENFGA_STORE_NAME` | Optional | Optional | Bootstrap discovery name; defaults to `tflive` |
+| `OPENFGA_STORE_NAME` | Optional | Optional | Bootstrap discovery name; defaults to `openplan` |
 | `OPENFGA_STORE_ID` | Not required | Required | Exact configured store identifier |
 | `OPENFGA_MODEL_ID` | Not required | Required | Exact configured authorization model identifier |
 | `OPENFGA_HTTP_TIMEOUT` | Optional | Optional | Positive request timeout; defaults to ten seconds |

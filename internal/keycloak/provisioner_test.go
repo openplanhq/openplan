@@ -18,7 +18,7 @@ func TestProvisionWithBackendIsRepeatableAndUsesApprovedDesiredState(t *testing.
 		if err != nil {
 			t.Fatalf("provisionWithBackend() run %d error = %v", run, err)
 		}
-		if result.Realm != "tflive" || result.APIClientID != "tflive-api" {
+		if result.Realm != "openplan" || result.APIClientID != "openplan-api" {
 			t.Fatalf("result = %#v", result)
 		}
 	}
@@ -27,7 +27,7 @@ func TestProvisionWithBackendIsRepeatableAndUsesApprovedDesiredState(t *testing.
 	if err != nil {
 		t.Fatalf("provisionWithBackend() final run error = %v", err)
 	}
-	if last.Realm != "tflive" || last.APIClientID != "tflive-api" || last.PlatformAdminUsername != cfg.PlatformAdminUsername {
+	if last.Realm != "openplan" || last.APIClientID != "openplan-api" || last.PlatformAdminUsername != cfg.PlatformAdminUsername {
 		t.Fatalf("final result = %#v", last)
 	}
 
@@ -114,7 +114,7 @@ func TestProvisionCreatesOneConfidentialClient(t *testing.T) {
 		t.Fatalf("provisionWithBackend returned error: %v", err)
 	}
 
-	if _, exists := backend.clients["tflive-web"]; exists {
+	if _, exists := backend.clients["openplan-web"]; exists {
 		t.Fatal("the public browser client still exists")
 	}
 

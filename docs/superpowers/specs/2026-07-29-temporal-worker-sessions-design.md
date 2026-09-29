@@ -2,7 +2,7 @@
 
 ## Goal
 
-Allow multiple `tflive` worker replicas to share the Temporal task queue while keeping every filesystem-dependent activity for one `TemplateRun` on the same worker replica.
+Allow multiple `openplan` worker replicas to share the Temporal task queue while keeping every filesystem-dependent activity for one `TemplateRun` on the same worker replica.
 
 ## Context
 

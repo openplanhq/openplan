@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Remove mock auth completely (`MockAuthProvider`, `mockUsers`, `VITE_TFLIVE_MOCK_USER_ROLE`)
+- Remove mock auth completely (`MockAuthProvider`, `mockUsers`, `VITE_OPENPLAN_MOCK_USER_ROLE`)
 - Tokens never touch localStorage or sessionStorage
 - PKCE S256, Authorization Code flow, public client (no client secret)
 - `useRefreshToken: true` for silent refresh (no iframe-based silent renew)
@@ -214,8 +214,8 @@ git commit -m "feat(web): add in-memory StateStore adapter for oidc-client-ts"
 ```ts
 // web/src/auth/oidcConfig.ts
 export const oidcConfig = {
-  authority: import.meta.env.VITE_OIDC_ISSUER ?? "http://localhost:8082/realms/tflive",
-  client_id: import.meta.env.VITE_OIDC_CLIENT_ID ?? "tflive-web",
+  authority: import.meta.env.VITE_OIDC_ISSUER ?? "http://localhost:8082/realms/openplan",
+  client_id: import.meta.env.VITE_OIDC_CLIENT_ID ?? "openplan-web",
   redirect_uri: import.meta.env.VITE_OIDC_REDIRECT_URI ?? "http://localhost:5173/auth/callback",
   post_logout_redirect_uri: import.meta.env.VITE_OIDC_REDIRECT_URI ?? "http://localhost:5173/auth/callback",
   response_type: "code",
@@ -260,7 +260,7 @@ describe("getUserManager", () => {
   it("returns a UserManager with the configured authority", async () => {
     const manager = getUserManager();
     // settings are available on the instance
-    expect(manager.settings.authority).toContain("tflive");
+    expect(manager.settings.authority).toContain("openplan");
   });
 
   it("uses PKCE (response_type is code)", () => {
@@ -509,7 +509,7 @@ vi.mock("./userManager", () => ({
     signoutRedirect: mockSignoutRedirect,
     signoutRedirectCallback: mockSignoutRedirectCallback,
     signinSilent: mockSigninSilent,
-    settings: { authority: "http://localhost:8082/realms/tflive" },
+    settings: { authority: "http://localhost:8082/realms/openplan" },
   }),
 }));
 
@@ -1258,7 +1258,7 @@ describe("AppShell", () => {
   });
 
   it("renders nav, an identity slot, a static tenant indicator, and routed content", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { default: AppShell } = await import("./AppShell");
 
     const testRouter = createMemoryRouter(
@@ -1288,7 +1288,7 @@ describe("AppShell", () => {
   });
 
   it("displays the user's display name and a logout control", async () => {
-    vi.stubEnv("VITE_TFLIVE_TENANT_ID", "tenant_123");
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { default: AppShell } = await import("./AppShell");
 
     const testRouter = createMemoryRouter(

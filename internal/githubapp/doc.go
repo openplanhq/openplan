@@ -1,4 +1,4 @@
-// Package githubapp authenticates tflive to GitHub as a GitHub App.
+// Package githubapp authenticates openplan to GitHub as a GitHub App.
 //
 // It signs a short-lived App JWT with the App's RSA key, resolves which
 // installation covers a given repository, and exchanges the JWT for a

@@ -18,8 +18,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vishu42/tflive/internal/config"
-	"github.com/vishu42/tflive/internal/domain"
+	"github.com/vishu42/openplan/internal/config"
+	"github.com/vishu42/openplan/internal/domain"
 )
 
 const logContentType = "text/plain; charset=utf-8"

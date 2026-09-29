@@ -32,8 +32,8 @@
   - Writes from the workflow happen in a fixed order in its history.
 
   No activity calls `RecordTemplateRunStep` or `RecordTemplateRunEvent` on the store except the control activity that is that write. Progress within a step (for example, apply counts) goes in heartbeat details, not in new step values.
-- **tflive is pre-production.** A migration closes out unfinished rows instead of mapping them; there is no backfill and no backward compatibility.
-- **Store tests skip silently without a database.** Run every `internal/postgres` test with `tflive_POSTGRES_TEST_DSN='postgres://tflive:tflive@localhost:55432/tflive_test?sslmode=disable'` after `docker compose up -d postgres`. A "PASS" without the DSN proves nothing.
+- **openplan is pre-production.** A migration closes out unfinished rows instead of mapping them; there is no backfill and no backward compatibility.
+- **Store tests skip silently without a database.** Run every `internal/postgres` test with `OPENPLAN_POSTGRES_TEST_DSN='postgres://openplan:openplan@localhost:55432/openplan_test?sslmode=disable'` after `docker compose up -d postgres`. A "PASS" without the DSN proves nothing.
 - **Formatting:** `gofmt -w` every Go file you touch.
 - **Commits:** subjects use a lowercase prefix (`feat:`, `refactor:`, `test:`, `docs:`) and end with the trailer `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 
@@ -305,7 +305,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vishu42/tflive/internal/domain"
+	"github.com/vishu42/openplan/internal/domain"
 )
 
 // A running run records the step it starts, and a new step replaces the last.
@@ -600,7 +600,7 @@ func TestBeginTemplateApplyClaimIsIdempotent(t *testing.T) {
 
 - [ ] **Step 5: Run the tests to verify they fail**
 
-Run: `tflive_POSTGRES_TEST_DSN='postgres://tflive:tflive@localhost:55432/tflive_test?sslmode=disable' go test ./internal/postgres/ -run 'TestRecordTemplateRunStep|TestRecordTemplateRunEvent|TestBeginTemplateApplyClaimIsIdempotent' -count=1`
+Run: `OPENPLAN_POSTGRES_TEST_DSN='postgres://openplan:openplan@localhost:55432/openplan_test?sslmode=disable' go test ./internal/postgres/ -run 'TestRecordTemplateRunStep|TestRecordTemplateRunEvent|TestBeginTemplateApplyClaimIsIdempotent' -count=1`
 Expected: a build failure, because `store.RecordTemplateRunStep` and `store.RecordTemplateRunEvent` are undefined.
 
 - [ ] **Step 6: Refactor the stack-template helpers to take plain identifiers**
@@ -708,7 +708,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/vishu42/tflive/internal/domain"
+	"github.com/vishu42/openplan/internal/domain"
 )
 
 // RecordTemplateRunStep records the step a running run has started. Only a
@@ -880,7 +880,7 @@ Add `step` to that schema's `required` list, directly after `status`. Then add t
 
 - [ ] **Step 10: Run the tests to verify they pass**
 
-Run: `gofmt -w internal/domain internal/postgres internal/activities && go build ./... && tflive_POSTGRES_TEST_DSN='postgres://tflive:tflive@localhost:55432/tflive_test?sslmode=disable' go test ./internal/postgres/ ./internal/domain/ -count=1`
+Run: `gofmt -w internal/domain internal/postgres internal/activities && go build ./... && OPENPLAN_POSTGRES_TEST_DSN='postgres://openplan:openplan@localhost:55432/openplan_test?sslmode=disable' go test ./internal/postgres/ ./internal/domain/ -count=1`
 Expected: PASS. That includes the in-flight index test, which walks `AllTemplateRunStatuses`, so `running` is now covered too.
 
 - [ ] **Step 11: Commit**
@@ -1664,7 +1664,7 @@ func TestLifecycleStatusMigrationClosesRunsMidProgress(t *testing.T) {
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `tflive_POSTGRES_TEST_DSN='postgres://tflive:tflive@localhost:55432/tflive_test?sslmode=disable' go test ./internal/postgres/ -run 'TestRecordTemplateRunStatus|TestLifecycleStatusMigration' -count=1`
+Run: `OPENPLAN_POSTGRES_TEST_DSN='postgres://openplan:openplan@localhost:55432/openplan_test?sslmode=disable' go test ./internal/postgres/ -run 'TestRecordTemplateRunStatus|TestLifecycleStatusMigration' -count=1`
 Expected: a build failure, because `ErrTemplateRunTransition` is undefined.
 
 - [ ] **Step 3: Narrow the domain**
@@ -1709,7 +1709,7 @@ Create `internal/postgres/migrations/0027_run_status_is_lifecycle.sql`:
 -- event rather than inferred from a status.
 --
 -- A run holding one of the old progress statuses was in flight under a
--- workflow that wrote them, and cannot finish under one that does not. tflive
+-- workflow that wrote them, and cannot finish under one that does not. openplan
 -- is pre-production, so they are closed out, as 0021 and 0023 did.
 update template_runs
 set
@@ -1951,7 +1951,7 @@ Keep the paragraph that follows, but change "fails after `destroy_started`" to "
 
 - [ ] **Step 8: Run everything**
 
-Run: `gofmt -w internal cmd && go vet ./... && tflive_POSTGRES_TEST_DSN='postgres://tflive:tflive@localhost:55432/tflive_test?sslmode=disable' go test ./... -count=1`
+Run: `gofmt -w internal cmd && go vet ./... && OPENPLAN_POSTGRES_TEST_DSN='postgres://openplan:openplan@localhost:55432/openplan_test?sslmode=disable' go test ./... -count=1`
 Expected: PASS. Then run `rtk proxy grep -rnE "TemplateRun(Locked|LockReleased|WorkspacePrepared|SourceFetched|WorkspaceSelected|InitStarted|InitFinished|PlanStarted|PlanFinished|ApplyStarted|ApplyFinished|DestroyStarted|DestroyFinished)\b" internal cmd`. Expected: no matches.
 
 - [ ] **Step 9: Commit**

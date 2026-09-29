@@ -8,7 +8,7 @@
 
 Prevent authenticated callers from selecting an arbitrary tenant through an
 HTTP path. Every tenant-scoped request must match the single tenant already
-validated from `TFLIVE_TENANT_ID` before an API handler can access application
+validated from `OPENPLAN_TENANT_ID` before an API handler can access application
 services, repositories, log artifacts, or future authorization data.
 
 The React application must use deployment configuration for tenant context
@@ -114,14 +114,14 @@ captured value can only pass by being the configured valid value.
 ## Frontend Configuration
 
 A focused frontend configuration module reads
-`VITE_TFLIVE_TENANT_ID`, trims it, and validates the same tenant syntax used by
+`VITE_OPENPLAN_TENANT_ID`, trims it, and validates the same tenant syntax used by
 the backend: 1 through 128 ASCII characters, an ASCII alphanumeric first
 character, and only ASCII alphanumerics, underscore, or hyphen thereafter.
 
 `tenant_123` remains only as the documented local-development fallback. A
 production build with a missing or malformed value fails closed with a clear
 configuration error before issuing API requests. Deployment documentation
-requires `VITE_TFLIVE_TENANT_ID` to equal backend `TFLIVE_TENANT_ID`.
+requires `VITE_OPENPLAN_TENANT_ID` to equal backend `OPENPLAN_TENANT_ID`.
 
 `App` imports one configured tenant constant instead of storing tenant in
 React state. The Tenant control becomes read-only context in the application
@@ -175,8 +175,8 @@ Development follows red-green-refactor cycles.
 
 ## Documentation and Completion
 
-`.env.example` documents `VITE_TFLIVE_TENANT_ID=tenant_123` beside
-`TFLIVE_TENANT_ID=tenant_123`. Authentication operations documentation explains
+`.env.example` documents `VITE_OPENPLAN_TENANT_ID=tenant_123` beside
+`OPENPLAN_TENANT_ID=tenant_123`. Authentication operations documentation explains
 that the values must match, that the backend value is authoritative, and that
 authenticated tenant mismatches intentionally return `404`.
 

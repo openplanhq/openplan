@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/vishu42/tflive/internal/authn"
+	"github.com/vishu42/openplan/internal/authn"
 )
 
 // maxLoginBodyBytes bounds the login request body. A username and a password
@@ -50,7 +50,7 @@ func (server *Server) handleAuthMethods(response http.ResponseWriter, _ *http.Re
 	})
 }
 
-// isSameSiteLogin reports whether the request could have come from tflive's
+// isSameSiteLogin reports whether the request could have come from openplan's
 // own origin, which is what stands between this route and cross-site request
 // forgery.
 //
@@ -102,7 +102,7 @@ func hasJSONContentType(request *http.Request) bool {
 	return err == nil && mediaType == "application/json"
 }
 
-// handleLocalLogin signs in against tflive's own account table.
+// handleLocalLogin signs in against openplan's own account table.
 //
 // It issues no token. On success it ends in exactly the tail the OIDC callback
 // ends in — project, mint a session row, set the cookie — so every request

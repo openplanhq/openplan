@@ -4,7 +4,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/tflive-executor ./cmd/executor
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/openplan-executor ./cmd/executor
 
 FROM alpine:3.21
 
@@ -21,11 +21,11 @@ RUN apk add --no-cache ca-certificates git \
     && tar -xzf "tofu_${OPENTOFU_VERSION}_linux_${TARGETARCH}.tar.gz" -C /usr/local/bin tofu \
     && rm -f "tofu_${OPENTOFU_VERSION}_linux_${TARGETARCH}.tar.gz" "tofu_${OPENTOFU_VERSION}_SHA256SUMS" \
     && cd / \
-    && addgroup -S tflive \
-    && adduser -S -D -H -G tflive tflive \
-    && mkdir -p /var/lib/tflive/artifacts /var/lib/tflive/runs /var/lib/tflive/plugin-cache \
-    && chown -R tflive:tflive /var/lib/tflive
-COPY --from=build /out/tflive-executor /usr/local/bin/tflive-executor
+    && addgroup -S openplan \
+    && adduser -S -D -H -G openplan openplan \
+    && mkdir -p /var/lib/openplan/artifacts /var/lib/openplan/runs /var/lib/openplan/plugin-cache \
+    && chown -R openplan:openplan /var/lib/openplan
+COPY --from=build /out/openplan-executor /usr/local/bin/openplan-executor
 
 # tofu inherits this from the executor, so every init reuses providers already
 # unpacked here. It only skips the download when the template commits a
@@ -33,7 +33,7 @@ COPY --from=build /out/tflive-executor /usr/local/bin/tflive-executor
 # re-downloads to verify. Do not set TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE:
 # the cache is shared by every tenant's run and writable by them, and that flag
 # makes tofu trust whatever binary is in it.
-ENV TF_PLUGIN_CACHE_DIR=/var/lib/tflive/plugin-cache
+ENV TF_PLUGIN_CACHE_DIR=/var/lib/openplan/plugin-cache
 
-USER tflive
-ENTRYPOINT ["/usr/local/bin/tflive-executor"]
+USER openplan
+ENTRYPOINT ["/usr/local/bin/openplan-executor"]

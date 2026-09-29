@@ -35,11 +35,11 @@ function envValue(name) {
 }
 
 for (const [name, value] of Object.entries({
-  TFLIVE_ENVIRONMENT: "development",
-  TFLIVE_TENANT_ID: "tenant_123",
-  OIDC_ISSUER_URL: "http://keycloak.localhost:8082/realms/tflive",
-  TFLIVE_PUBLIC_URL: "http://localhost:5173",
-  OIDC_CLIENT_ID: "tflive-api",
+  OPENPLAN_ENVIRONMENT: "development",
+  OPENPLAN_TENANT_ID: "tenant_123",
+  OIDC_ISSUER_URL: "http://keycloak.localhost:8082/realms/openplan",
+  OPENPLAN_PUBLIC_URL: "http://localhost:5173",
+  OIDC_CLIENT_ID: "openplan-api",
 })) {
   assert.equal(envValue(name), value, `${name} has the wrong local example value`);
 }
@@ -79,9 +79,9 @@ assert.ok(
   "keycloak needs the keycloak.localhost alias so one issuer string resolves from both sides",
 );
 assert.equal(
-  keycloakProvision.environment?.TFLIVE_PUBLIC_URL,
-  envValue("TFLIVE_PUBLIC_URL"),
-  "keycloak-provision must derive the client's redirect and post-logout URIs from the same TFLIVE_PUBLIC_URL as the API",
+  keycloakProvision.environment?.OPENPLAN_PUBLIC_URL,
+  envValue("OPENPLAN_PUBLIC_URL"),
+  "keycloak-provision must derive the client's redirect and post-logout URIs from the same OPENPLAN_PUBLIC_URL as the API",
 );
 assert.equal(
   keycloakProvision.environment?.OIDC_CLIENT_SECRET,
@@ -94,25 +94,25 @@ assert.equal(
   "the API must not start before the realm and client it authenticates against exist",
 );
 
-// TFLIVE_PUBLIC_URL is the one value all three parties to the OIDC handshake
+// OPENPLAN_PUBLIC_URL is the one value all three parties to the OIDC handshake
 // must agree on: the API derives its redirect and post-logout URIs from it,
 // and the Keycloak provisioner registers those same URIs on the client. A
 // stale default in any one of these three spots would only surface at login
-// time as invalid_redirect_uri, so pin every "${TFLIVE_PUBLIC_URL:-...}"
+// time as invalid_redirect_uri, so pin every "${OPENPLAN_PUBLIC_URL:-...}"
 // default in Compose to the .env.example value.
 const publicURLDefaults = [
-  ...source.matchAll(/\$\{TFLIVE_PUBLIC_URL:-([^}]*)\}/g),
+  ...source.matchAll(/\$\{OPENPLAN_PUBLIC_URL:-([^}]*)\}/g),
 ].map((match) => match[1]);
 assert.equal(
   publicURLDefaults.length,
   3,
-  "expected TFLIVE_PUBLIC_URL to default in keycloak-provision, api, and worker",
+  "expected OPENPLAN_PUBLIC_URL to default in keycloak-provision, api, and worker",
 );
 for (const value of publicURLDefaults) {
   assert.equal(
     value,
-    envValue("TFLIVE_PUBLIC_URL"),
-    "every TFLIVE_PUBLIC_URL default in Compose must match .env.example, or the derived redirect URI can drift from what Keycloak has registered",
+    envValue("OPENPLAN_PUBLIC_URL"),
+    "every OPENPLAN_PUBLIC_URL default in Compose must match .env.example, or the derived redirect URI can drift from what Keycloak has registered",
   );
 }
 

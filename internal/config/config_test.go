@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vishu42/tflive/internal/domain"
+	"github.com/vishu42/openplan/internal/domain"
 )
 
 func TestLoadAPIConfigReadsAPISettings(t *testing.T) {
@@ -26,13 +26,13 @@ func TestLoadAPIConfigReadsAPISettings(t *testing.T) {
 		case "TEMPORAL_ADDRESS":
 			return " localhost:7233 "
 		case "TEMPORAL_NAMESPACE":
-			return " tflive "
+			return " openplan "
 		case "ARTIFACT_STORE_KIND":
 			return " s3 "
 		case "ARTIFACT_STORE_FILESYSTEM_ROOT":
-			return " /var/lib/tflive/artifacts "
+			return " /var/lib/openplan/artifacts "
 		case "S3_BUCKET":
-			return " tflive-artifacts "
+			return " openplan-artifacts "
 		case "S3_REGION":
 			return " us-east-1 "
 		case "S3_ENDPOINT":
@@ -60,7 +60,7 @@ func TestLoadAPIConfigReadsAPISettings(t *testing.T) {
 	if cfg.TemporalAddress != "localhost:7233" {
 		t.Fatalf("TemporalAddress = %q", cfg.TemporalAddress)
 	}
-	if cfg.TemporalNamespace != "tflive" {
+	if cfg.TemporalNamespace != "openplan" {
 		t.Fatalf("TemporalNamespace = %q", cfg.TemporalNamespace)
 	}
 	if cfg.Security.TenantID != "tenant_123" {
@@ -131,7 +131,7 @@ func TestLoadAPIConfigReadsTerraformTimeout(t *testing.T) {
 					return "postgres://user:pass@localhost:5432/db?sslmode=disable"
 				case "TEMPORAL_ADDRESS":
 					return "localhost:7233"
-				case "TFLIVE_TERRAFORM_TIMEOUT":
+				case "OPENPLAN_TERRAFORM_TIMEOUT":
 					return testCase.value
 				default:
 					return ""
@@ -164,7 +164,7 @@ func TestLoadAPIConfigRejectsUnusableTerraformTimeout(t *testing.T) {
 					return "postgres://user:pass@localhost:5432/db?sslmode=disable"
 				case "TEMPORAL_ADDRESS":
 					return "localhost:7233"
-				case "TFLIVE_TERRAFORM_TIMEOUT":
+				case "OPENPLAN_TERRAFORM_TIMEOUT":
 					return value
 				default:
 					return ""
@@ -173,8 +173,8 @@ func TestLoadAPIConfigRejectsUnusableTerraformTimeout(t *testing.T) {
 			if !errors.Is(err, ErrInvalidConfig) {
 				t.Fatalf("error = %v, want ErrInvalidConfig", err)
 			}
-			if err == nil || !strings.Contains(err.Error(), "TFLIVE_TERRAFORM_TIMEOUT") {
-				t.Fatalf("error = %v, want it to name TFLIVE_TERRAFORM_TIMEOUT", err)
+			if err == nil || !strings.Contains(err.Error(), "OPENPLAN_TERRAFORM_TIMEOUT") {
+				t.Fatalf("error = %v, want it to name OPENPLAN_TERRAFORM_TIMEOUT", err)
 			}
 		})
 	}
@@ -298,11 +298,11 @@ func assertArtifactStoreConfig(t *testing.T, cfg ArtifactStoreConfig) {
 	if cfg.Kind != ArtifactStoreS3 {
 		t.Fatalf("ArtifactStore.Kind = %q, want %q", cfg.Kind, ArtifactStoreS3)
 	}
-	if cfg.FilesystemRoot != "/var/lib/tflive/artifacts" {
-		t.Fatalf("ArtifactStore.FilesystemRoot = %q, want /var/lib/tflive/artifacts", cfg.FilesystemRoot)
+	if cfg.FilesystemRoot != "/var/lib/openplan/artifacts" {
+		t.Fatalf("ArtifactStore.FilesystemRoot = %q, want /var/lib/openplan/artifacts", cfg.FilesystemRoot)
 	}
-	if cfg.S3.Bucket != "tflive-artifacts" {
-		t.Fatalf("S3.Bucket = %q, want tflive-artifacts", cfg.S3.Bucket)
+	if cfg.S3.Bucket != "openplan-artifacts" {
+		t.Fatalf("S3.Bucket = %q, want openplan-artifacts", cfg.S3.Bucket)
 	}
 	if cfg.S3.Region != "us-east-1" {
 		t.Fatalf("S3.Region = %q, want us-east-1", cfg.S3.Region)
@@ -442,11 +442,11 @@ func TestLoadExecutorConfigReadsExecutorSettings(t *testing.T) {
 
 	values := map[string]string{
 		"TEMPORAL_ADDRESS":               " localhost:7233 ",
-		"TEMPORAL_NAMESPACE":             " tflive ",
-		"EXECUTOR_RUN_ROOT":              " /var/lib/tflive/runs ",
+		"TEMPORAL_NAMESPACE":             " openplan ",
+		"EXECUTOR_RUN_ROOT":              " /var/lib/openplan/runs ",
 		"ARTIFACT_STORE_KIND":            " s3 ",
-		"ARTIFACT_STORE_FILESYSTEM_ROOT": " /var/lib/tflive/artifacts ",
-		"S3_BUCKET":                      " tflive-artifacts ",
+		"ARTIFACT_STORE_FILESYSTEM_ROOT": " /var/lib/openplan/artifacts ",
+		"S3_BUCKET":                      " openplan-artifacts ",
 		"S3_REGION":                      " us-east-1 ",
 		"S3_ENDPOINT":                    " https://s3.us-east-1.amazonaws.com ",
 		"S3_ACCESS_KEY_ID":               " access-key ",
@@ -458,11 +458,11 @@ func TestLoadExecutorConfigReadsExecutorSettings(t *testing.T) {
 		t.Fatalf("LoadExecutorConfig returned error: %v", err)
 	}
 
-	if cfg.TemporalAddress != "localhost:7233" || cfg.TemporalNamespace != "tflive" {
+	if cfg.TemporalAddress != "localhost:7233" || cfg.TemporalNamespace != "openplan" {
 		t.Fatalf("temporal = %q in %q", cfg.TemporalAddress, cfg.TemporalNamespace)
 	}
-	if cfg.RunRoot != "/var/lib/tflive/runs" {
-		t.Fatalf("RunRoot = %q, want /var/lib/tflive/runs", cfg.RunRoot)
+	if cfg.RunRoot != "/var/lib/openplan/runs" {
+		t.Fatalf("RunRoot = %q, want /var/lib/openplan/runs", cfg.RunRoot)
 	}
 	assertArtifactStoreConfig(t, cfg.ArtifactStore)
 }

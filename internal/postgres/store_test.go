@@ -15,10 +15,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/vishu42/tflive/internal/app"
-	"github.com/vishu42/tflive/internal/domain"
-	"github.com/vishu42/tflive/internal/logsink"
-	"github.com/vishu42/tflive/internal/queue"
+	"github.com/vishu42/openplan/internal/app"
+	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/logsink"
+	"github.com/vishu42/openplan/internal/queue"
 )
 
 const (
@@ -2944,9 +2944,9 @@ func sameJSON(t *testing.T, got, want []byte) bool {
 func openTestPool(t *testing.T, ctx context.Context) *pgxpool.Pool {
 	t.Helper()
 
-	dsn := os.Getenv("tflive_POSTGRES_TEST_DSN")
+	dsn := os.Getenv("OPENPLAN_POSTGRES_TEST_DSN")
 	if dsn == "" {
-		t.Skip("tflive_POSTGRES_TEST_DSN is not set")
+		t.Skip("OPENPLAN_POSTGRES_TEST_DSN is not set")
 	}
 
 	admin, err := pgxpool.New(ctx, dsn)
@@ -2955,7 +2955,7 @@ func openTestPool(t *testing.T, ctx context.Context) *pgxpool.Pool {
 	}
 	t.Cleanup(admin.Close)
 
-	schema := fmt.Sprintf("tflive_test_%d_%d", time.Now().UnixNano(), testSchemaCounter.Add(1))
+	schema := fmt.Sprintf("openplan_test_%d_%d", time.Now().UnixNano(), testSchemaCounter.Add(1))
 	quotedSchema := pgx.Identifier{schema}.Sanitize()
 	if _, err := admin.Exec(ctx, "create schema "+quotedSchema); err != nil {
 		t.Fatalf("create test schema: %v", err)

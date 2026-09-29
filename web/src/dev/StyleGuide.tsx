@@ -157,7 +157,7 @@ export default function StyleGuide() {
     <div className="sg" data-testid="styleguide">
       <aside className="sg__nav">
         <div className="sg__brand">
-          tflive
+          openplan
           <span>Design system</span>
         </div>
         <nav aria-label="Design system sections">

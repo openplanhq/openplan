@@ -4,19 +4,19 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/tflive-api ./cmd/api
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/openplan-api ./cmd/api
 
 FROM alpine:3.21
 
 # git: template sync clones repositories, and it runs in the API's control-plane
 # worker.
 RUN apk add --no-cache ca-certificates git \
-    && addgroup -S tflive \
-    && adduser -S -D -H -G tflive tflive \
-    && mkdir -p /var/lib/tflive/artifacts \
-    && chown -R tflive:tflive /var/lib/tflive
-COPY --from=build /out/tflive-api /usr/local/bin/tflive-api
+    && addgroup -S openplan \
+    && adduser -S -D -H -G openplan openplan \
+    && mkdir -p /var/lib/openplan/artifacts \
+    && chown -R openplan:openplan /var/lib/openplan
+COPY --from=build /out/openplan-api /usr/local/bin/openplan-api
 
-USER tflive
+USER openplan
 EXPOSE 8081
-ENTRYPOINT ["/usr/local/bin/tflive-api"]
+ENTRYPOINT ["/usr/local/bin/openplan-api"]

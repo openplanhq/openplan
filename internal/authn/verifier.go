@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/vishu42/tflive/internal/strval"
+	"github.com/vishu42/openplan/internal/strval"
 )
 
 var (

@@ -14,7 +14,7 @@
 
 - Go floor is `go 1.24.0` with `toolchain go1.24.1` (`go.mod`). Do not raise either.
 - Pinned images, unchanged from the current compose file: `postgres:16-alpine`, `quay.io/keycloak/keycloak:26.6.3`, `openfga/openfga:v1.15.1`, `temporalio/auto-setup:1.28.1`, `temporalio/ui:2.49.1`.
-- The canonical issuer string is `http://keycloak.localhost:8082/realms/tflive`. It must be byte-identical everywhere it appears: `OIDC_ISSUER_URL`, `VITE_OIDC_ISSUER`, and Keycloak's `KC_HOSTNAME` origin.
+- The canonical issuer string is `http://keycloak.localhost:8082/realms/openplan`. It must be byte-identical everywhere it appears: `OIDC_ISSUER_URL`, `VITE_OIDC_ISSUER`, and Keycloak's `KC_HOSTNAME` origin.
 - Keycloak's internal and external ports must both be `8082`, because the port is part of the issuer string.
 - No change to `internal/authn`. The issuer equality check at `internal/authn/oidc_provider.go:65` stays exactly as it is.
 - OpenFGA store and model identifiers are **not secrets** — they are already printed to stdout by the current documented workflow. Identifier files are mode `0644`.
@@ -370,8 +370,8 @@ func TestRunWithoutOutputDirWritesNoFiles(t *testing.T) {
 ```
 
 Required imports: `bytes`, `context`, `os`, `path/filepath`, `strings`, `testing`,
-plus `openfga "github.com/vishu42/tflive/internal/openfga"` and
-`openfgamodel "github.com/vishu42/tflive/openfga"`.
+plus `openfga "github.com/vishu42/openplan/internal/openfga"` and
+`openfgamodel "github.com/vishu42/openplan/openfga"`.
 
 - [ ] **Step 2: Run the test to verify it fails**
 
@@ -445,7 +445,7 @@ the current host-based workflow.
 
 **Interfaces:**
 - Consumes: nothing from earlier tasks.
-- Produces: a `postgres` compose service on host port `55432`, hosting databases `tflive_test`, `keycloak`, `openfga`, `temporal`, and `temporal_visibility`. Task 7 points `api` and `worker` at it.
+- Produces: a `postgres` compose service on host port `55432`, hosting databases `openplan_test`, `keycloak`, `openfga`, `temporal`, and `temporal_visibility`. Task 7 points `api` and `worker` at it.
 
 - [ ] **Step 1: Write the database init script**
 
@@ -489,9 +489,9 @@ In `docker-compose.yaml`, delete the `app-postgres`, `keycloak-postgres`,
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: ${APP_DB_USER:-tflive}
-      POSTGRES_PASSWORD: ${APP_DB_PASSWORD:-tflive}
-      POSTGRES_DB: ${APP_DB_NAME:-tflive_test}
+      POSTGRES_USER: ${APP_DB_USER:-openplan}
+      POSTGRES_PASSWORD: ${APP_DB_PASSWORD:-openplan}
+      POSTGRES_DB: ${APP_DB_NAME:-openplan_test}
       KEYCLOAK_DB_USER: ${KEYCLOAK_DB_USER:-keycloak}
       KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak-local-only}
       KEYCLOAK_DB_NAME: ${KEYCLOAK_DB_NAME:-keycloak}
@@ -506,7 +506,7 @@ In `docker-compose.yaml`, delete the `app-postgres`, `keycloak-postgres`,
       - postgres-data:/var/lib/postgresql/data
       - ./deploy/postgres/init.sh:/docker-entrypoint-initdb.d/10-databases.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${APP_DB_USER:-tflive} -d ${APP_DB_NAME:-tflive_test}"]
+      test: ["CMD-SHELL", "pg_isready -U ${APP_DB_USER:-openplan} -d ${APP_DB_NAME:-openplan_test}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -558,10 +558,10 @@ Every `depends_on` above keeps `condition: service_healthy`.
 docker compose --env-file .env.example down -v
 docker compose --env-file .env.example up -d postgres
 sleep 10
-docker compose --env-file .env.example exec postgres psql -U tflive -d tflive_test -c "\l"
+docker compose --env-file .env.example exec postgres psql -U openplan -d openplan_test -c "\l"
 ```
 
-Expected: `tflive_test`, `keycloak`, `openfga`, `temporal`, and
+Expected: `openplan_test`, `keycloak`, `openfga`, `temporal`, and
 `temporal_visibility` all listed, owned by their respective roles.
 
 ```bash
@@ -596,7 +596,7 @@ git commit -m "refactor(compose): consolidate four Postgres instances into one"
 
 **Interfaces:**
 - Consumes: `resolveOpenFGAIdentifier` behavior from Task 2 — these images read `OPENFGA_STORE_ID_FILE` and `OPENFGA_MODEL_ID_FILE` at runtime.
-- Produces: images whose entrypoints are `/usr/local/bin/tflive-api` and `/usr/local/bin/tflive-worker`. Task 7 builds both from compose.
+- Produces: images whose entrypoints are `/usr/local/bin/openplan-api` and `/usr/local/bin/openplan-worker`. Task 7 builds both from compose.
 
 - [ ] **Step 1: Add a .dockerignore**
 
@@ -628,18 +628,18 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/tflive-api ./cmd/api
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/openplan-api ./cmd/api
 
 FROM alpine:3.21
 
 RUN apk add --no-cache ca-certificates \
-    && addgroup -S tflive \
-    && adduser -S -D -H -G tflive tflive
-COPY --from=build /out/tflive-api /usr/local/bin/tflive-api
+    && addgroup -S openplan \
+    && adduser -S -D -H -G openplan openplan
+COPY --from=build /out/openplan-api /usr/local/bin/openplan-api
 
-USER tflive
+USER openplan
 EXPOSE 8081
-ENTRYPOINT ["/usr/local/bin/tflive-api"]
+ENTRYPOINT ["/usr/local/bin/openplan-api"]
 ```
 
 - [ ] **Step 3: Write Dockerfile.worker**
@@ -655,7 +655,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/tflive-worker ./cmd/worker
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/openplan-worker ./cmd/worker
 
 FROM alpine:3.21
 
@@ -667,12 +667,12 @@ RUN apk add --no-cache ca-certificates git \
         "https://github.com/opentofu/opentofu/releases/download/v${OPENTOFU_VERSION}/tofu_${OPENTOFU_VERSION}_linux_${TARGETARCH}.tar.gz" \
     && tar -xzf /tmp/tofu.tar.gz -C /usr/local/bin tofu \
     && rm /tmp/tofu.tar.gz \
-    && addgroup -S tflive \
-    && adduser -S -D -H -G tflive tflive
-COPY --from=build /out/tflive-worker /usr/local/bin/tflive-worker
+    && addgroup -S openplan \
+    && adduser -S -D -H -G openplan openplan
+COPY --from=build /out/openplan-worker /usr/local/bin/openplan-worker
 
-USER tflive
-ENTRYPOINT ["/usr/local/bin/tflive-worker"]
+USER openplan
+ENTRYPOINT ["/usr/local/bin/openplan-worker"]
 ```
 
 If `OPENTOFU_VERSION` no longer exists upstream, bump the ARG default to the
@@ -681,11 +681,11 @@ current release rather than unpinning it.
 - [ ] **Step 4: Verify both images build and the binaries run**
 
 ```bash
-docker build -f Dockerfile.api -t tflive-api:dev .
-docker build -f Dockerfile.worker -t tflive-worker:dev .
-docker run --rm tflive-worker:dev --help 2>&1 | head -5 || true
-docker run --rm --entrypoint tofu tflive-worker:dev version
-docker run --rm --entrypoint git tflive-worker:dev --version
+docker build -f Dockerfile.api -t openplan-api:dev .
+docker build -f Dockerfile.worker -t openplan-worker:dev .
+docker run --rm openplan-worker:dev --help 2>&1 | head -5 || true
+docker run --rm --entrypoint tofu openplan-worker:dev version
+docker run --rm --entrypoint git openplan-worker:dev --version
 ```
 
 Expected: both images build; `tofu version` prints the pinned version; `git`
@@ -751,14 +751,14 @@ runtime environment.
 ```dockerfile
 FROM node:22-alpine3.21 AS build
 
-ARG VITE_OIDC_ISSUER=http://keycloak.localhost:8082/realms/tflive
-ARG VITE_OIDC_CLIENT_ID=tflive-web
+ARG VITE_OIDC_ISSUER=http://keycloak.localhost:8082/realms/openplan
+ARG VITE_OIDC_CLIENT_ID=openplan-web
 ARG VITE_OIDC_REDIRECT_URI=http://localhost:5173/auth/callback
-ARG VITE_TFLIVE_TENANT_ID=tenant_123
+ARG VITE_OPENPLAN_TENANT_ID=tenant_123
 ENV VITE_OIDC_ISSUER=$VITE_OIDC_ISSUER \
     VITE_OIDC_CLIENT_ID=$VITE_OIDC_CLIENT_ID \
     VITE_OIDC_REDIRECT_URI=$VITE_OIDC_REDIRECT_URI \
-    VITE_TFLIVE_TENANT_ID=$VITE_TFLIVE_TENANT_ID
+    VITE_OPENPLAN_TENANT_ID=$VITE_OPENPLAN_TENANT_ID
 
 WORKDIR /src
 COPY web/package.json web/package-lock.json ./
@@ -780,8 +780,8 @@ and commit it — `npm ci` requires a lockfile and gives reproducible builds.
 - [ ] **Step 3: Verify the image builds and serves the SPA**
 
 ```bash
-docker build -f Dockerfile.web -t tflive-web:dev .
-docker run --rm -d --name web-probe -p 5173:5173 tflive-web:dev
+docker build -f Dockerfile.web -t openplan-web:dev .
+docker run --rm -d --name web-probe -p 5173:5173 openplan-web:dev
 sleep 3
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:5173/
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:5173/stacks
@@ -827,7 +827,7 @@ output directory:
         condition: service_healthy
     environment:
       OPENFGA_API_URL: http://openfga:8080
-      OPENFGA_STORE_NAME: tflive
+      OPENFGA_STORE_NAME: openplan
       OPENFGA_ID_OUTPUT_DIR: /run/openfga
       OPENFGA_HTTP_TIMEOUT: ${OPENFGA_HTTP_TIMEOUT:-10s}
       OPENFGA_API_TOKEN: ${OPENFGA_API_TOKEN:-}
@@ -853,8 +853,8 @@ and network alias:
       KC_DB_URL: jdbc:postgresql://postgres:5432/${KEYCLOAK_DB_NAME:-keycloak}
       KC_DB_USERNAME: ${KEYCLOAK_DB_USER:-keycloak}
       KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak-local-only}
-      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME:-tflive-admin}
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD:-tflive-admin-local-only}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME:-openplan-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD:-openplan-admin-local-only}
       KC_HTTP_PORT: "8082"
       KC_HOSTNAME: http://keycloak.localhost:8082
       KC_HEALTH_ENABLED: "true"
@@ -893,24 +893,24 @@ unaffected by `KC_HTTP_PORT`. Leave it as it is.
         condition: service_completed_successfully
     environment:
       HTTP_ADDRESS: ":8081"
-      DATABASE_URL: postgres://${APP_DB_USER:-tflive}:${APP_DB_PASSWORD:-tflive}@postgres:5432/${APP_DB_NAME:-tflive_test}?sslmode=disable
+      DATABASE_URL: postgres://${APP_DB_USER:-openplan}:${APP_DB_PASSWORD:-openplan}@postgres:5432/${APP_DB_NAME:-openplan_test}?sslmode=disable
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-terraform-runs}
-      TFLIVE_ENVIRONMENT: development
-      TFLIVE_TENANT_ID: ${TFLIVE_TENANT_ID:-tenant_123}
+      OPENPLAN_ENVIRONMENT: development
+      OPENPLAN_TENANT_ID: ${OPENPLAN_TENANT_ID:-tenant_123}
       CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:?set CREDENTIAL_ENCRYPTION_KEY}
-      OIDC_ISSUER_URL: http://keycloak.localhost:8082/realms/tflive
-      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-tflive-api}
+      OIDC_ISSUER_URL: http://keycloak.localhost:8082/realms/openplan
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-openplan-api}
       OPENFGA_API_URL: http://openfga:8080
       OPENFGA_STORE_ID_FILE: /run/openfga/store_id
       OPENFGA_MODEL_ID_FILE: /run/openfga/model_id
       ARTIFACT_STORE_KIND: filesystem
-      ARTIFACT_STORE_FILESYSTEM_ROOT: /var/lib/tflive/artifacts
+      ARTIFACT_STORE_FILESYSTEM_ROOT: /var/lib/openplan/artifacts
     ports:
       - "8081:8081"
     volumes:
       - openfga-ids:/run/openfga:ro
-      - artifacts:/var/lib/tflive/artifacts
+      - artifacts:/var/lib/openplan/artifacts
 
   worker:
     build:
@@ -924,23 +924,23 @@ unaffected by `KC_HTTP_PORT`. Leave it as it is.
       openfga-provision:
         condition: service_completed_successfully
     environment:
-      DATABASE_URL: postgres://${APP_DB_USER:-tflive}:${APP_DB_PASSWORD:-tflive}@postgres:5432/${APP_DB_NAME:-tflive_test}?sslmode=disable
+      DATABASE_URL: postgres://${APP_DB_USER:-openplan}:${APP_DB_PASSWORD:-openplan}@postgres:5432/${APP_DB_NAME:-openplan_test}?sslmode=disable
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-terraform-runs}
-      TFLIVE_ENVIRONMENT: development
-      TFLIVE_TENANT_ID: ${TFLIVE_TENANT_ID:-tenant_123}
+      OPENPLAN_ENVIRONMENT: development
+      OPENPLAN_TENANT_ID: ${OPENPLAN_TENANT_ID:-tenant_123}
       CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:?set CREDENTIAL_ENCRYPTION_KEY}
-      OIDC_ISSUER_URL: http://keycloak.localhost:8082/realms/tflive
-      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-tflive-api}
+      OIDC_ISSUER_URL: http://keycloak.localhost:8082/realms/openplan
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-openplan-api}
       OPENFGA_API_URL: http://openfga:8080
       OPENFGA_STORE_ID_FILE: /run/openfga/store_id
       OPENFGA_MODEL_ID_FILE: /run/openfga/model_id
       ARTIFACT_STORE_KIND: filesystem
-      ARTIFACT_STORE_FILESYSTEM_ROOT: /var/lib/tflive/artifacts
-      WORKER_RUN_ROOT: /var/lib/tflive/runs
+      ARTIFACT_STORE_FILESYSTEM_ROOT: /var/lib/openplan/artifacts
+      WORKER_RUN_ROOT: /var/lib/openplan/runs
     volumes:
       - openfga-ids:/run/openfga:ro
-      - artifacts:/var/lib/tflive/artifacts
+      - artifacts:/var/lib/openplan/artifacts
 
   web:
     build:
@@ -977,12 +977,12 @@ started.
 
 ```bash
 curl -s http://localhost:8081/healthz
-curl -s http://keycloak.localhost:8082/realms/tflive/.well-known/openid-configuration | head -c 200
+curl -s http://keycloak.localhost:8082/realms/openplan/.well-known/openid-configuration | head -c 200
 docker compose --env-file .env.example logs api | grep -i "openfga\|error" | head
 ```
 
 Expected: the API is healthy; the discovery document's `issuer` is exactly
-`http://keycloak.localhost:8082/realms/tflive`; the API logs show no OpenFGA
+`http://keycloak.localhost:8082/realms/openplan`; the API logs show no OpenFGA
 configuration error, proving the file handoff worked.
 
 Then open `http://localhost:5173`, log in as the platform admin from

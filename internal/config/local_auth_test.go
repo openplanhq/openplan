@@ -23,7 +23,7 @@ func TestLoadSecurityConfigHasNoLocalAuthSetting(t *testing.T) {
 	t.Parallel()
 
 	values := validSecurityValues()
-	values["TFLIVE_LOCAL_AUTH_ENABLED"] = "false"
+	values["OPENPLAN_LOCAL_AUTH_ENABLED"] = "false"
 
 	// Accepted and ignored: an unknown variable is not an error, and the point
 	// is that setting it changes nothing.
@@ -75,7 +75,7 @@ func TestLoadSecurityConfigRejectsClientCredentialsWithoutAnIssuer(t *testing.T)
 	t.Parallel()
 
 	values := localOnlyValues()
-	values["OIDC_CLIENT_ID"] = "tflive-api"
+	values["OIDC_CLIENT_ID"] = "openplan-api"
 
 	_, err := loadSecurityConfig(mapConfigEnv(values))
 	if err == nil {
@@ -92,8 +92,8 @@ func TestLoadSecurityConfigAllowsLocalOnlyProduction(t *testing.T) {
 	t.Parallel()
 
 	values := localOnlyValues()
-	values["TFLIVE_ENVIRONMENT"] = "production"
-	values["TFLIVE_PUBLIC_URL"] = "https://app.example.com"
+	values["OPENPLAN_ENVIRONMENT"] = "production"
+	values["OPENPLAN_PUBLIC_URL"] = "https://app.example.com"
 	values["OPENFGA_API_URL"] = "https://openfga.example.com"
 	values["OPENFGA_API_TOKEN"] = "openfga-token"
 
@@ -109,14 +109,14 @@ func TestLoadSecurityConfigRequiresARootPassword(t *testing.T) {
 	t.Parallel()
 
 	values := validSecurityValues()
-	delete(values, "TFLIVE_ROOT_PASSWORD")
+	delete(values, "OPENPLAN_ROOT_PASSWORD")
 
 	_, err := loadSecurityConfig(mapConfigEnv(values))
 	if err == nil {
 		t.Fatal("loadSecurityConfig accepted a configuration with no root password")
 	}
-	if !strings.Contains(err.Error(), "TFLIVE_ROOT_PASSWORD") {
-		t.Fatalf("error = %v, want it to name TFLIVE_ROOT_PASSWORD", err)
+	if !strings.Contains(err.Error(), "OPENPLAN_ROOT_PASSWORD") {
+		t.Fatalf("error = %v, want it to name OPENPLAN_ROOT_PASSWORD", err)
 	}
 }
 
@@ -136,7 +136,7 @@ func TestLoadSecurityConfigReadsTheRootUsername(t *testing.T) {
 	t.Parallel()
 
 	values := validSecurityValues()
-	values["TFLIVE_ROOT_USERNAME"] = "administrator"
+	values["OPENPLAN_ROOT_USERNAME"] = "administrator"
 
 	cfg, err := loadSecurityConfig(mapConfigEnv(values))
 	if err != nil {
@@ -153,7 +153,7 @@ func TestSecurityConfigStringRedactsTheRootPassword(t *testing.T) {
 	t.Parallel()
 
 	values := validSecurityValues()
-	values["TFLIVE_ROOT_PASSWORD"] = "root-password-sentinel"
+	values["OPENPLAN_ROOT_PASSWORD"] = "root-password-sentinel"
 
 	cfg, err := loadSecurityConfig(mapConfigEnv(values))
 	if err != nil {

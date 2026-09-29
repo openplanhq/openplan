@@ -128,7 +128,7 @@ import { resolveMockUser } from "./mockUsers";
 import type { Me } from "./types";
 
 export default function MockAuthProvider({ children }: { children: ReactNode }) {
-  const mockUser = useMemo(() => resolveMockUser(import.meta.env.VITE_TFLIVE_MOCK_USER_ROLE), []);
+  const mockUser = useMemo(() => resolveMockUser(import.meta.env.VITE_OPENPLAN_MOCK_USER_ROLE), []);
   const [session, setSession] = useState<{ me: Me | null; status: AuthStatus }>({
     me: mockUser,
     status: "authenticated"

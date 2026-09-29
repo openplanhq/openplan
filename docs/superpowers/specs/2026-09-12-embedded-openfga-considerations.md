@@ -188,7 +188,7 @@ fail-closed branch has to be re-established deliberately — this is the one pla
 where a sloppy translation turns a dependency failure into a grant.
 
 **PR 3 — in-process bootstrap.** `internal/openfga/provisioner.go` (94) keeps its
-ambiguity checks (>1 store named `tflive` → fail) but gets a server-backed
+ambiguity checks (>1 store named `openplan` → fail) but gets a server-backed
 `Backend` instead of `*Client`. Store and model resolve at API startup;
 `OPENFGA_STORE_ID`/`OPENFGA_MODEL_ID` leave the environment. Retire
 `cmd/openfga-provisioner` (86 + 145 test) and `Dockerfile.openfga-provisioner`.
@@ -235,7 +235,7 @@ it is not re-proposed.
 2. **Worker → a second embedded server** over the same database. OpenFGA holds no
    authoritative state outside its datastore, so multiple servers on one Postgres
    is its normal deployment. Preserves the current topology.
-3. **Tuples live in the app database** (`tflive_test`), on the app's `*pgxpool.Pool`.
+3. **Tuples live in the app database** (`openplan_test`), on the app's `*pgxpool.Pool`.
    This is a hard prerequisite: a tuple write can only join our transaction if it
    is the same pool and the same database. `deploy/postgres/init.sh` sheds the
    `openfga` role and database.

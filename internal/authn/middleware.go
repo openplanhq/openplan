@@ -14,7 +14,7 @@ const invalidCredentialsCode = "unauthorized"
 // publicPaths.
 //
 // The session cookie is the only credential. It names an app-owned session row
-// whose lifetime tflive chose, and identity comes off that row rather than off
+// whose lifetime openplan chose, and identity comes off that row rather than off
 // a token presented per request — the ID token behind it was verified once, at
 // the callback, and its claims copied onto the row there.
 //
@@ -25,7 +25,7 @@ const invalidCredentialsCode = "unauthorized"
 // signed token is also not revocable: logout, back-channel logout, and an admin
 // disabling an account all mark a session row, and none of them can reach a
 // copy of a JWT somebody already holds. A caller that needs non-browser access
-// wants a credential tflive issues and can revoke, not this.
+// wants a credential openplan issues and can revoke, not this.
 func RequireAuthentication(
 	sessions SessionStore,
 	idleTTL time.Duration,

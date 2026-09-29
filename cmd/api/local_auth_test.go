@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vishu42/tflive/internal/authn"
-	"github.com/vishu42/tflive/internal/authorization"
-	"github.com/vishu42/tflive/internal/bootstrap"
+	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/authorization"
+	"github.com/vishu42/openplan/internal/bootstrap"
 )
 
 func cookieByName(response *httptest.ResponseRecorder, name string) *http.Cookie {
@@ -101,7 +101,7 @@ func TestRunAlwaysServesLocalLoginEvenWithOIDCConfigured(t *testing.T) {
 	t.Parallel()
 
 	values := apiTestValues()
-	values["TFLIVE_LOCAL_AUTH_ENABLED"] = "false"
+	values["OPENPLAN_LOCAL_AUTH_ENABLED"] = "false"
 
 	deps := newRecordingAPIDependencies(t)
 	if err := runWithDependencies(context.Background(), apiTestGetenv(values), deps.apiDependencies); err != nil {

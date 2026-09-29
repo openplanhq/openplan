@@ -263,7 +263,7 @@ export function authMethods(): Promise<AuthMethods> {
   return requestJSON(`/v1/auth/methods`, {}, { redirectOnUnauthorized: false });
 }
 
-// Signs in against tflive's own account table. Answers 204 and sets the session
+// Signs in against openplan's own account table. Answers 204 and sets the session
 // cookie; the identity comes from the /v1/me the caller makes afterwards.
 //
 // The 401 redirect is off. Here a 401 is a wrong password, not a lost session,
