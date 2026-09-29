@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import HeroGraphic from "../shared/HeroGraphic";
 import { LogStep, LogSteps } from "../shared/LogSteps";
-import StatBand from "../shared/StatBand";
 import StatusRow from "../shared/StatusRow";
 import { statusGlyph, statusTone } from "../shared/statusTone";
 import "./styleguide.css";
@@ -34,7 +33,6 @@ const SECTIONS: { id: string; title: string }[] = [
   { id: "panels", title: "Panels" },
   { id: "status", title: "Status tones" },
   { id: "roles", title: "Role badges" },
-  { id: "stats", title: "Stat band" },
   { id: "messaging", title: "Messaging" },
   { id: "tabs", title: "Tabs" },
   { id: "tables", title: "Tables" },
@@ -403,10 +401,6 @@ export default function StyleGuide() {
                 <h2>Featured</h2>
                 <p className="muted">Gradient border, drawn with no wrapper element.</p>
               </section>
-              <section className="panel panel--inverted">
-                <h2>Inverted</h2>
-                <p>Dark surface with a dot texture, used for emphasis bands.</p>
-              </section>
             </div>
           </Specimen>
         </Section>
@@ -434,17 +428,6 @@ export default function StyleGuide() {
             <span className="role-badge role-badge--operator">operator</span>
             <span className="role-badge role-badge--approver">approver</span>
             <span className="role-badge role-badge--viewer">viewer</span>
-          </Specimen>
-        </Section>
-
-        <Section id="stats" title="Stat band">
-          <Specimen label="StatBand" hint="real component" stack>
-            <StatBand
-              items={[
-                { label: "Stacks", value: 4 },
-                { label: "You can operate", value: 3 }
-              ]}
-            />
           </Specimen>
         </Section>
 

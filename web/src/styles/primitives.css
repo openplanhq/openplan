@@ -243,28 +243,6 @@ textarea {
   }
 }
 
-.panel--inverted {
-  position: relative;
-  overflow: hidden;
-  border-color: var(--legacy-color-fg);
-  color: var(--legacy-color-card);
-  background: var(--legacy-color-fg);
-}
-
-.panel--inverted::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.03;
-  background-image: radial-gradient(circle, var(--legacy-color-card) 1px, transparent 1px);
-  background-size: 32px 32px;
-}
-
-.panel--inverted > * {
-  position: relative;
-}
-
 /* ---- Breadcrumb ----
    Every screen's title bar. The current crumb is the page's h1, set at crumb
    size rather than heading size: the trail says where you are, and the
@@ -376,46 +354,6 @@ textarea {
 :where(.muted > svg) {
   display: revert;
   vertical-align: revert;
-}
-
-/* ---- Stat band ---- */
-.stat-band {
-  margin: var(--legacy-space-8) 0;
-}
-
-.stat-band__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--legacy-space-6);
-  margin: 0;
-}
-
-@media (min-width: 768px) {
-  .stat-band__grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
-.stat-band__item {
-  display: flex;
-  flex-direction: column-reverse;
-  gap: var(--legacy-space-1);
-}
-
-.stat-band__value {
-  margin: 0;
-  font-family: var(--legacy-font-display);
-  font-weight: 400;
-  font-size: var(--legacy-text-3xl);
-  line-height: var(--legacy-leading-none);
-}
-
-.stat-band__label {
-  color: var(--legacy-color-border);
-  font-family: var(--legacy-font-mono);
-  font-size: var(--legacy-text-xs);
-  letter-spacing: var(--legacy-tracking-label);
-  text-transform: uppercase;
 }
 
 /* ---- Hero graphic ---- */
