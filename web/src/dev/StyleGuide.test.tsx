@@ -47,6 +47,12 @@ describe("StyleGuide", () => {
     expect(within(nav).getByRole("heading", { level: 1 }).textContent).toBe("Run #4");
   });
 
+  it("renders the real LogSteps in the shadcn section", () => {
+    render(<StyleGuide />);
+    const section = within(screen.getByTestId("sg-theme"));
+    expect(section.getByRole("button", { name: "plan" }).getAttribute("aria-expanded")).toBe("true");
+  });
+
   it("shows every shadcn Button variant", () => {
     render(<StyleGuide />);
     const section = within(screen.getByTestId("sg-theme"));

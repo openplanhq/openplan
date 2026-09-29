@@ -39,7 +39,6 @@ const SECTIONS: { id: string; title: string }[] = [
   { id: "messaging", title: "Messaging" },
   { id: "tabs", title: "Tabs" },
   { id: "tables", title: "Tables" },
-  { id: "log", title: "Log panel" },
   { id: "showpiece", title: "Showpieces" }
 ];
 
@@ -284,6 +283,9 @@ export default function StyleGuide() {
                   detail="acme/vpc · main"
                 />
               </WithRouter>
+            </Specimen>
+            <Specimen label="LogSteps" hint="real component, on Collapsible" stack>
+              <LogStepsSpecimen />
             </Specimen>
           </Section>
         </div>
@@ -542,16 +544,6 @@ export default function StyleGuide() {
                 </tbody>
               </table>
             </div>
-          </Specimen>
-        </Section>
-
-        <Section
-          id="log"
-          title="Log panel"
-          note="Phases stack in the order they ran, each a row that opens onto its log. The log deliberately carries no texture: patterning behind a monospace log stream measurably hurts scanning for errors."
-        >
-          <Specimen label="LogSteps" hint="real component" stack>
-            <LogStepsSpecimen />
           </Specimen>
         </Section>
 
