@@ -98,6 +98,12 @@ button:disabled {
   transition: all var(--legacy-duration-fast) var(--legacy-ease-out);
 }
 
+/* Preflight audit: restores the browser's button padding. :where() keeps it at
+   browser-default precedence, so any legacy rule that sets padding still wins. */
+:where(.icon-button) {
+  padding: revert;
+}
+
 .icon-button:hover {
   color: var(--legacy-color-fg);
   background: var(--legacy-color-muted);
@@ -198,6 +204,12 @@ textarea {
 
 /* Headings keep the wider gap they had before that rule existed. The element
    selector puts this one rung above the rule above, which it has to clear. */
+/* Preflight audit: paragraphs in a panel relied on the browser's bottom margin.
+   :where() keeps it at browser-default precedence, below every legacy rule. */
+:where(.panel p) {
+  margin-bottom: revert;
+}
+
 .panel > h2 + :not(:first-child) {
   margin-top: var(--legacy-space-5);
 }

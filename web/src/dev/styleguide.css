@@ -171,6 +171,11 @@
   gap: var(--legacy-space-2);
 }
 
+/* Preflight audit: the swatch <dl>s relied on the browser's margins. */
+:where(.sg__swatch) {
+  margin-block: revert;
+}
+
 .sg__swatch-chip {
   height: 56px;
   border: 1px solid var(--legacy-color-border);

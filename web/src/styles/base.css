@@ -32,6 +32,10 @@ body {
   /* Interface text is 14px. Headings set their own size in rem, so they are
      unaffected by this and keep scaling off the 16px root. */
   font-size: var(--legacy-text-sm);
+  /* Preflight audit: theme.css paints body with shadcn's colours; legacy
+     screens inherit theirs from :root until PR 9 deletes this file. */
+  color: inherit;
+  background: none;
 }
 
 /* ---- Typography ---- */

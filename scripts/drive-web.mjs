@@ -33,6 +33,9 @@
  *   --probe <expr>    evaluate a JS expression in the page and print the result
  *   --fields          print every input/select/textarea width vs its parent,
  *                     which is how field-stretch regressions get caught
+ *   --goto <path>     client-side navigate to path (repeatable, applied before
+ *                     clicks, 3.5s settle between each)
+ *   --signed-out      skip signing in; no credentials needed
  *   --port <n>        devtools port (default 9222)
  */
 import { writeFileSync } from "node:fs";
@@ -40,6 +43,7 @@ import { writeFileSync } from "node:fs";
 const argv = process.argv.slice(2);
 const clicks = [];
 let shot = null, probe = null, fields = false, port = 9222;
+let gotos = [], signedOut = false;
 for (let i = 0; i < argv.length; i++) {
   const next = () => argv[++i];
   if (argv[i] === "--click") clicks.push(next());
@@ -47,11 +51,13 @@ for (let i = 0; i < argv.length; i++) {
   else if (argv[i] === "--probe") probe = next();
   else if (argv[i] === "--fields") fields = true;
   else if (argv[i] === "--port") port = Number(next());
+  else if (argv[i] === "--goto") gotos.push(next());
+  else if (argv[i] === "--signed-out") signedOut = true;
 }
 
 const USER = process.env.OPENPLAN_USER;
 const PASS = process.env.OPENPLAN_PASS;
-if (!USER || !PASS) {
+if (!signedOut && (!USER || !PASS)) {
   console.error("OPENPLAN_USER and OPENPLAN_PASS must be set (see the header of this file).");
   process.exit(2);
 }
@@ -91,6 +97,7 @@ await send("Runtime.enable");
 await send("Page.navigate", { url: "http://localhost:5173/stacks" });
 await settle(6000);
 
+<<<<<<< HEAD
 // Signed out, the app lands on its sign-in screen: one button that leaves for
 // the provider.
 if (await evaluate("!!document.querySelector('[data-testid=signin-submit]')")) {
@@ -101,6 +108,27 @@ if (await evaluate("!!document.querySelector('[data-testid=signin-submit]')")) {
 // Dex's login page is server-rendered, so setting .value and submitting the
 // form is enough — no React synthetic-event plumbing needed.
 if (await evaluate("!!document.querySelector('#login')")) {
+=======
+// The app's own sign-in form submits through React, so .submit() would skip
+// its handler; requestSubmit() fires the submit event React listens for.
+if (!signedOut && await evaluate("!!document.querySelector('#signin-username')")) {
+  await evaluate(`(() => {
+    const u = document.querySelector('#signin-username'), p = document.querySelector('#signin-password');
+    const set = (el, v) => {
+      Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set.call(el, v);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    set(u, ${JSON.stringify(USER)});
+    set(p, ${JSON.stringify(PASS)});
+    u.form.requestSubmit();
+  })()`);
+  await settle(8000);
+}
+
+// Keycloak's login page is server-rendered, so setting .value and submitting the
+// form is enough — no React synthetic-event plumbing needed.
+if (!signedOut && await evaluate("!!document.querySelector('#username')")) {
+>>>>>>> 121652f (fix(web): restore browser defaults legacy screens relied on under preflight)
   await evaluate(`(() => {
     const u = document.querySelector('#login'), p = document.querySelector('#password');
     const set = (el, v) => {
@@ -114,6 +142,13 @@ if (await evaluate("!!document.querySelector('#login')")) {
   await settle(8000);
 }
 console.error("signed in at:", await evaluate("location.pathname"));
+
+// Client-side navigation: react-router follows popstate, and a full load
+// would drop the in-memory session state the SPA holds.
+for (const path of gotos) {
+  await evaluate(`history.pushState({}, "", ${JSON.stringify(path)}); dispatchEvent(new PopStateEvent("popstate"))`);
+  await settle(3500);
+}
 
 for (const label of clicks) {
   const result = await evaluate(`(() => {

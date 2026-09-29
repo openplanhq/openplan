@@ -608,6 +608,14 @@
   background: var(--legacy-color-danger-soft);
 }
 
+/* Preflight audit: Preflight makes svg block-level, which would stack the icon
+   above its label in these inline buttons. :where() keeps browser-default
+   precedence. */
+:where(.grant-actions button svg) {
+  display: revert;
+  vertical-align: revert;
+}
+
 /* ---- Credentials ---- */
 .credentials-panel {
   grid-column: 1 / -1;
