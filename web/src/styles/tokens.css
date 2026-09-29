@@ -18,7 +18,6 @@
 
   --legacy-color-accent-soft:   rgba(0, 82, 255, 0.05);
   --legacy-color-accent-border: rgba(0, 82, 255, 0.30);
-  --legacy-color-accent-wash:   rgba(0, 82, 255, 0.03);
 
   /* Semantic status.
      The -dot values are brighter and are ONLY for dots and fills, where the
@@ -38,10 +37,10 @@
   /* Typefaces */
   /* Vercel's own Geist, as on vercel.com. Display and body are the same face,
      so headings separate by size and tracking alone. */
-  --legacy-font-display: Geist, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --legacy-font-body:    Geist, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --legacy-font-mono:    "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco,
-                  Consolas, "Liberation Mono", monospace;
+  --legacy-font-display: "Geist Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --legacy-font-body:    "Geist Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --legacy-font-mono:    "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco,
+                         Consolas, "Liberation Mono", monospace;
 
   /* Type scale. Every step is a size on Geist's own ramp. */
   --legacy-text-xs:   0.75rem;

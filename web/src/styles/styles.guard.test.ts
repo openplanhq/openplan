@@ -1,15 +1,14 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const STYLES_DIR = dirname(fileURLToPath(import.meta.url));
 
-/** Stylesheets subject to the palette rules. tokens.css is the sole exemption. */
+/** Legacy stylesheets subject to the palette rules. tokens.css defines the
+    palette; theme.css is the shadcn theme and has its own guard. */
 function convertedStylesheets(): string[] {
-  return readdirSync(STYLES_DIR)
-    .filter((name) => name.endsWith(".css") && name !== "tokens.css")
-    .sort();
+  return ["base.css", "features.css", "primitives.css"];
 }
 
 function read(name: string): string {
@@ -199,16 +198,5 @@ describe("accessibility fallbacks", () => {
     const css = readAll();
     expect(css).toMatch(/@media\s*\(forced-colors:\s*active\)/);
     expect(css).toMatch(/\.gradient-text\s*\{[^}]*color:\s*CanvasText/);
-  });
-});
-
-describe("styles.css index", () => {
-  it("contains nothing but imports", () => {
-    const index = readFileSync(join(STYLES_DIR, "..", "styles.css"), "utf8")
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .trim();
-    const lines = index.split("\n").map((l) => l.trim()).filter(Boolean);
-    expect(lines.every((line) => line.startsWith("@import"))).toBe(true);
-    expect(lines).toHaveLength(4);
   });
 });

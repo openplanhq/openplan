@@ -1,4 +1,11 @@
-@import "./styles/tokens.css";
-@import "./styles/base.css";
-@import "./styles/primitives.css";
-@import "./styles/features.css";
+@layer theme, base, legacy, components, utilities;
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+@import "./styles/theme.css";
+@import "./styles/tokens.css" layer(legacy);
+@import "./styles/base.css" layer(legacy);
+@import "./styles/primitives.css" layer(legacy);
+@import "./styles/features.css" layer(legacy);

@@ -4,6 +4,10 @@
    latter. It still uses tokens exclusively — the gallery should not be able
    to demonstrate values the design system does not define. */
 
+/* Imported from JavaScript, not from styles.css, so it names its layer itself;
+   unlayered it would beat Tailwind's utilities. */
+@layer legacy {
+
 .sg {
   display: grid;
   grid-template-columns: 1fr;
@@ -217,4 +221,5 @@
   height: 72px;
   border: 2px solid var(--legacy-color-accent);
   background: var(--legacy-color-accent-soft);
+}
 }
