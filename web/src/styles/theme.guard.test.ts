@@ -105,6 +105,32 @@ describe("theme.css", () => {
   });
 });
 
+// The theme's values pass on their own, but the Button paints them translucent:
+// hover:bg-primary/80 under white text is 4.11:1 with the brand blue. Read the
+// alphas out of the component so a regenerated button.tsx is re-checked.
+describe("Button variants on theme.css", () => {
+  const vars = rootVariables(theme());
+  const colour = (name: string) => rgb(vars[name]);
+  const button = readFileSync(join(STYLES_DIR, "..", "components", "ui", "button.tsx"), "utf8");
+  const variant = (name: string) => button.match(new RegExp(`\\b${name}:\\s*"([^"]*)"`))?.[1] ?? "";
+  const alpha = (classes: string, utility: string) => {
+    const match = classes.match(new RegExp(`(?:^|\\s)${utility}/(\\d+)(?:\\s|$)`));
+    if (!match) throw new Error(`${utility}/<n> not found in "${classes}"`);
+    return Number(match[1]) / 100;
+  };
+  const background = () => colour("background");
+
+  it("keeps the default button's hover at 4.5:1", () => {
+    const surface = tint(colour("primary"), alpha(variant("default"), "hover:bg-primary"), background());
+    expect(contrast(colour("primary-foreground"), surface)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it.each(["bg-destructive", "hover:bg-destructive"])("keeps the destructive button's %s tint at 4.5:1", (utility) => {
+    const surface = tint(colour("destructive"), alpha(variant("destructive"), utility), background());
+    expect(contrast(colour("destructive"), surface)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
 describe("styles.css entry", () => {
   const lines = stripComments(readFileSync(join(STYLES_DIR, "..", "styles.css"), "utf8"))
     .split("\n")
