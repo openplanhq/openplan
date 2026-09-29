@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -29,5 +29,34 @@ describe("legacy custom properties", () => {
       [...readSheet(path).matchAll(/(?<![\w-])--(?!legacy-)[a-zA-Z][\w-]*/g)].map((m) => m[0])
     );
     expect([...foreign], `prefix with --legacy-: ${[...foreign].join(", ")}`).toEqual([]);
+  });
+});
+
+function componentSources(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return componentSources(path);
+    return entry.name.endsWith(".tsx") && !entry.name.includes(".test.") ? [readFileSync(path, "utf8")] : [];
+  });
+}
+
+describe("legacy class usage", () => {
+  const source = componentSources(SRC_DIR).join("\n");
+  // `status-tone--${tone}` builds class names at runtime; its literal prefix
+  // vouches for every class it can produce.
+  const prefixes = [...source.matchAll(/([A-Za-z0-9_-]+)\$\{/g)].map((m) => m[1]);
+  const isUsed = (name: string) =>
+    new RegExp(`(?<![\\w-])${name}(?![\\w-])`).test(source) || prefixes.some((p) => name.startsWith(p));
+
+  // Each screen PR deletes the rules it stops using. Without this guard, dead
+  // CSS would pile up in the legacy layer until PR 9.
+  it.each(LEGACY_SHEETS)("%s styles only classes a component uses", (path) => {
+    const classes = new Set<string>();
+    for (const [, selector] of readSheet(path).matchAll(/([^{}]+)\{/g)) {
+      if (selector.trim().startsWith("@")) continue;
+      for (const [, name] of selector.matchAll(/\.([A-Za-z_][\w-]*)/g)) classes.add(name);
+    }
+    const dead = [...classes].filter((name) => !isUsed(name));
+    expect(dead, `delete the rules for: ${dead.join(", ")}`).toEqual([]);
   });
 });

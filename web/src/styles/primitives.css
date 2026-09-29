@@ -353,15 +353,6 @@ textarea {
   font-weight: 400;
 }
 
-/* A blocked action that is nobody's mistake — a stale plan reads as a warning,
-   not a failure, so it stays distinct from .error-text. */
-.hint-text {
-  margin: var(--legacy-space-3) 0 0;
-  color: var(--legacy-color-warning);
-  font-size: var(--legacy-text-sm);
-  font-weight: 400;
-}
-
 .muted {
   margin: 0;
   color: var(--legacy-color-muted-fg);

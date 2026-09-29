@@ -667,8 +667,7 @@
   transition: background var(--legacy-duration-fast) var(--legacy-ease-out);
 }
 
-.search-result-item:hover,
-.search-result-item.focused {
+.search-result-item:hover {
   background: var(--legacy-color-accent-soft);
 }
 
@@ -789,20 +788,6 @@
 }
 
 /* ---- Template lists ---- */
-.stack-template-list {
-  display: grid;
-  gap: var(--legacy-space-3);
-  margin-top: var(--legacy-space-5);
-  border-top: 1px solid var(--legacy-color-border);
-  padding-top: var(--legacy-space-4);
-}
-
-.stack-template-list h3 {
-  margin: 0;
-  font-size: var(--legacy-text-sm);
-  font-weight: 400;
-}
-
 /* The stack's installed templates: one bordered list with a rule between
    rows, like a template's runs. Each row is a link to that template's page. */
 .stack-template-items {
