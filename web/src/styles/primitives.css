@@ -445,24 +445,6 @@ textarea {
 }
 
 /* ---- Status tones ---- */
-.status-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--legacy-space-3);
-  margin-top: var(--legacy-space-4);
-  border-top: 1px solid var(--legacy-color-border);
-  padding-top: var(--legacy-space-3);
-  color: var(--legacy-color-muted-fg);
-  font-size: var(--legacy-text-sm);
-}
-
-.status-row strong {
-  min-width: 0;
-  font-weight: 400;
-  text-align: right;
-}
-
 .status-tone {
   display: inline-flex;
   align-items: center;

@@ -15,18 +15,29 @@ describe("StyleGuide", () => {
   });
 
   it("renders the real status tones rather than copies of their markup", () => {
-    const { container } = render(<StyleGuide />);
-    // If StatusRow's own class contract changed, this breaks — which is the
-    // point: the gallery must not be able to drift from the components.
+    render(<StyleGuide />);
+    // StatusBadge marks its tone. If the gallery drew a copy of the markup
+    // instead, this would break, which is the point: the gallery must not
+    // drift from the components.
+    const section = screen.getByTestId("sg-theme");
     for (const tone of ["settled", "progress", "waiting", "failed", "canceled"]) {
-      expect(container.querySelector(`.status-tone--${tone}`), `missing tone ${tone}`).toBeTruthy();
+      expect(section.querySelector(`[data-tone="${tone}"]`), `missing tone ${tone}`).toBeTruthy();
     }
   });
 
-  it("shows every role badge variant", () => {
-    const { container } = render(<StyleGuide />);
+  it("shows every role badge", () => {
+    render(<StyleGuide />);
+    const section = screen.getByTestId("sg-theme");
     for (const role of ["owner", "operator", "approver", "viewer"]) {
-      expect(container.querySelector(`.role-badge--${role}`), `missing role ${role}`).toBeTruthy();
+      expect(section.querySelector(`[data-role="${role}"]`), `missing role ${role}`).toBeTruthy();
+    }
+  });
+
+  it("shows every Badge variant", () => {
+    render(<StyleGuide />);
+    const section = screen.getByTestId("sg-theme");
+    for (const variant of ["default", "secondary", "outline", "destructive", "success", "progress", "warning", "muted"]) {
+      expect(section.querySelector(`[data-slot="badge"][data-variant="${variant}"]`), `missing ${variant}`).toBeTruthy();
     }
   });
 

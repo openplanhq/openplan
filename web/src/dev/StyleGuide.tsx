@@ -3,9 +3,12 @@ import type { ReactNode } from "react";
 import HeroGraphic from "../shared/HeroGraphic";
 import { LogStep, LogSteps } from "../shared/LogSteps";
 import StatusRow from "../shared/StatusRow";
-import { statusGlyph, statusTone } from "../shared/statusTone";
+import { statusTone } from "../shared/statusTone";
+import RoleBadge from "../shared/RoleBadge";
+import StatusBadge from "../shared/StatusBadge";
 import "./styleguide.css";
 import { Plus } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -31,8 +34,6 @@ const SECTIONS: { id: string; title: string }[] = [
   { id: "buttons", title: "Buttons" },
   { id: "inputs", title: "Inputs" },
   { id: "panels", title: "Panels" },
-  { id: "status", title: "Status tones" },
-  { id: "roles", title: "Role badges" },
   { id: "messaging", title: "Messaging" },
   { id: "tabs", title: "Tabs" },
   { id: "tables", title: "Tables" },
@@ -56,6 +57,10 @@ const THEME_SWATCHES = [
 
 const BUTTON_VARIANTS = ["default", "outline", "secondary", "ghost", "destructive", "link"] as const;
 const BUTTON_SIZES = ["xs", "sm", "default", "lg"] as const;
+const BADGE_VARIANTS = ["default", "secondary", "outline", "destructive", "success", "progress", "warning", "muted"] as const;
+// One status per tone: settled, progress, waiting, failed, canceled.
+const STATUS_SAMPLES = ["completed", "running", "waiting_approval", "failed", "canceled"];
+const ROLES = ["owner", "operator", "approver", "viewer"];
 const titleCase = (word: string) => word[0].toUpperCase() + word.slice(1);
 
 const COLOUR_TOKENS = [
@@ -234,6 +239,35 @@ export default function StyleGuide() {
                 <Plus />
               </Button>
             </Specimen>
+            <Specimen label="Badge variants">
+              {BADGE_VARIANTS.map((variant) => (
+                <Badge key={variant} variant={variant}>
+                  {variant}
+                </Badge>
+              ))}
+            </Specimen>
+            <Specimen label="StatusBadge" hint="real component, tone from statusTone()">
+              {STATUS_SAMPLES.map((status) => (
+                <StatusBadge key={status} tone={statusTone(status)}>
+                  {status}
+                </StatusBadge>
+              ))}
+            </Specimen>
+            <Specimen label="StatusRow" hint="real component" stack>
+              <div className="w-full max-w-md">
+                <StatusRow label="Template" value="completed" />
+                <StatusRow label="Plan" value="running" />
+                <StatusRow label="Approval" value="waiting_approval" />
+                <StatusRow label="Apply" value="failed" />
+                <StatusRow label="Cancelled" value="canceled" />
+                <StatusRow label="Approved" value="approved" />
+              </div>
+            </Specimen>
+            <Specimen label="RoleBadge" hint="real component">
+              {ROLES.map((role) => (
+                <RoleBadge key={role} role={role} />
+              ))}
+            </Specimen>
           </Section>
         </div>
 
@@ -405,32 +439,6 @@ export default function StyleGuide() {
           </Specimen>
         </Section>
 
-        <Section
-          id="status"
-          title="Status tones"
-          note="Sixteen status values across three API unions map onto five tones via statusTone(). Each pill pairs a glyph with the literal status text, so colour is never the only carrier of meaning."
-        >
-          <Specimen label="StatusRow" hint="real component" stack>
-            <div style={{ maxWidth: "480px" }}>
-              <StatusRow label="Template" value="completed" />
-              <StatusRow label="Plan" value="running" />
-              <StatusRow label="Approval" value="waiting_approval" />
-              <StatusRow label="Apply" value="failed" />
-              <StatusRow label="Cancelled" value="canceled" />
-              <StatusRow label="Approved" value="approved" />
-            </div>
-          </Specimen>
-        </Section>
-
-        <Section id="roles" title="Role badges" note="Tinted pills; the tint encodes the role, the text always states it.">
-          <Specimen label="Variants">
-            <span className="role-badge role-badge--owner">owner</span>
-            <span className="role-badge role-badge--operator">operator</span>
-            <span className="role-badge role-badge--approver">approver</span>
-            <span className="role-badge role-badge--viewer">viewer</span>
-          </Specimen>
-        </Section>
-
         <Section id="messaging" title="Messaging">
           <Specimen label="Variants" stack>
             <div className="alert">Could not reach the authorization service.</div>
@@ -494,12 +502,7 @@ export default function StyleGuide() {
                       </td>
                       <td>{row.operation}</td>
                       <td>
-                        <span className={`status-tone status-tone--${statusTone(row.status)}`}>
-                          <span className="status-tone__glyph" aria-hidden="true">
-                            {statusGlyph(statusTone(row.status))}
-                          </span>
-                          {row.status}
-                        </span>
+                        <StatusBadge tone={statusTone(row.status)}>{row.status}</StatusBadge>
                       </td>
                       <td className="data-table__mono" title={row.actor}>
                         {row.actor}
