@@ -41,6 +41,12 @@ describe("StyleGuide", () => {
     }
   });
 
+  it("renders the real Breadcrumb without a router around the page", () => {
+    render(<StyleGuide />);
+    const nav = within(screen.getByTestId("sg-theme")).getByRole("navigation", { name: "Breadcrumb" });
+    expect(within(nav).getByRole("heading", { level: 1 }).textContent).toBe("Run #4");
+  });
+
   it("shows every shadcn Button variant", () => {
     render(<StyleGuide />);
     const section = within(screen.getByTestId("sg-theme"));

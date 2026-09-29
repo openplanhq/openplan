@@ -44,7 +44,7 @@ export default function StacksListScreen() {
   return (
     <section className="stacks-list-screen">
       <header className="stacks-list-header">
-        <Breadcrumb items={[{ label: "Stacks" }]} />
+        <Breadcrumb items={[{ label: "Stacks" }]} className="mb-0" />
         <RequireCapability capability="canCreateStack">
           <Link className="primary-button" to="/stacks/new" data-testid="create-stack-link">
             <Plus size={16} />

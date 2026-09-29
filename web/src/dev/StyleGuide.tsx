@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { MemoryRouter, useInRouterContext } from "react-router-dom";
+import Breadcrumb from "../shared/Breadcrumb";
 import HeroGraphic from "../shared/HeroGraphic";
 import { LogStep, LogSteps } from "../shared/LogSteps";
 import StatusRow from "../shared/StatusRow";
@@ -153,6 +155,12 @@ function Specimen({
   );
 }
 
+// Breadcrumb links need a router. The app mounts this page inside its own
+// router, and a second one there would throw; the standalone test has none.
+function WithRouter({ children }: { children: ReactNode }) {
+  return useInRouterContext() ? <>{children}</> : <MemoryRouter>{children}</MemoryRouter>;
+}
+
 function LogStepsSpecimen() {
   const [open, setOpen] = useState<Record<string, boolean>>({ plan: true });
   const toggle = (name: string) => setOpen((current) => ({ ...current, [name]: !current[name] }));
@@ -267,6 +275,15 @@ export default function StyleGuide() {
               {ROLES.map((role) => (
                 <RoleBadge key={role} role={role} />
               ))}
+            </Specimen>
+            <Specimen label="Breadcrumb" hint="real component" stack>
+              <WithRouter>
+                <Breadcrumb
+                  className="mb-0"
+                  items={[{ label: "Stacks", to: "#theme" }, { label: "payments", to: "#theme" }, { label: "Run #4" }]}
+                  detail="acme/vpc · main"
+                />
+              </WithRouter>
             </Specimen>
           </Section>
         </div>
