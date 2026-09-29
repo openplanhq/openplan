@@ -22,8 +22,11 @@ describe("queryKeys", () => {
     expect(queryKeys.templateRunLogs("tenant_123", "run_1", "completed")).not.toEqual(
       queryKeys.templateRunLogs("tenant_123", "run_1", "planned")
     );
-    expect(queryKeys.templateRunLog("tenant_123", "run_1", "plan", "planned")).toEqual([
-      "templateRunLog", "tenant_123", "run_1", "plan", "planned"
+  });
+
+  it("keys a log body by its upload, which a new upload of the phase replaces", () => {
+    expect(queryKeys.templateRunLog("tenant_123", "run_1", "plan", "2026-07-20T00:01:00Z")).toEqual([
+      "templateRunLog", "tenant_123", "run_1", "plan", "2026-07-20T00:01:00Z"
     ]);
   });
 });

@@ -4,11 +4,11 @@ import { useParams } from "react-router-dom";
 import {
   useApproveRunMutation,
   useDiscardRunMutation,
-  useTemplateRunLogQuery,
   useTemplateRunLogsQuery,
   useTemplateRunQuery,
   useTemplateRunsQuery
 } from "../../api/queries";
+import { isTerminalRunStatus } from "../../api/polling";
 import { tenantID } from "../../config";
 import { formatDateTime } from "../../shared/formatTimestamp";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
@@ -23,17 +23,13 @@ import { WaitingRunActions } from "./TemplateRunHistory";
 // run's number within its template, which is what people see; the run's id,
 // which every run endpoint takes, comes from the template's runs list. That
 // list is the one the Runs tab already loaded, so arriving from there costs no
-// extra request. Logs arrive in the order their commands ran, and the screen
-// opens on the latest: the plan, or the apply once there is one. Phase
-// selection is derived (not effect-synced) so a stale choice falls back to the
-// latest phase instead of rendering nothing.
+// extra request. The run's logs stack in the order their commands ran.
 export default function RunDetailScreen() {
   const {
     stackId = "",
     stackTemplateId = "",
     runNumber = ""
   } = useParams<{ stackId: string; stackTemplateId: string; runNumber: string }>();
-  const [chosenPhase, setChosenPhase] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
   const runsQuery = useTemplateRunsQuery(tenantID, stackTemplateId);
@@ -45,10 +41,6 @@ export default function RunDetailScreen() {
 
   const progressTag = run ? runProgressTag(run) : "";
   const logsQuery = useTemplateRunLogsQuery(tenantID, runId, progressTag);
-  const logs = logsQuery.data ?? [];
-  const selectedPhase = logs.find((log) => log.phase === chosenPhase)?.phase ?? logs[logs.length - 1]?.phase ?? "";
-  const logQuery = useTemplateRunLogQuery(tenantID, runId, selectedPhase, progressTag);
-  const logBody = logQuery.data ?? "";
 
   const approveRunMutation = useApproveRunMutation(tenantID);
   const discardRunMutation = useDiscardRunMutation(tenantID);
@@ -187,7 +179,13 @@ export default function RunDetailScreen() {
           {run.error_summary && <p className="error-text">{run.error_summary}</p>}
         </>
       )}
-      <RunLogsPanel logs={logs} selectedPhase={selectedPhase} onSelectPhase={setChosenPhase} logBody={logBody} />
+      <RunLogsPanel
+        key={runId}
+        runId={runId}
+        logs={logsQuery.data}
+        failed={logsQuery.isError}
+        finished={Boolean(run && isTerminalRunStatus(run.status))}
+      />
     </section>
   );
 }

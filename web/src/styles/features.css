@@ -472,7 +472,6 @@
 
 /* ---- Tabs ---- */
 .button-row,
-.phase-row,
 .stack-detail-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -480,7 +479,6 @@
   margin-bottom: var(--space-6);
 }
 
-.phase-row button,
 .stack-detail-tabs a {
   position: relative;
   min-height: var(--touch-target);
@@ -497,19 +495,16 @@
   transition: all var(--duration-fast) var(--ease-out);
 }
 
-.phase-row button:hover,
 .stack-detail-tabs a:hover {
   color: var(--color-fg);
   background: var(--color-muted);
   text-decoration: none;
 }
 
-.phase-row button.active,
 .stack-detail-tabs a.active {
   color: var(--color-accent);
 }
 
-.phase-row button.active::after,
 .stack-detail-tabs a.active::after {
   content: "";
   position: absolute;
@@ -921,15 +916,67 @@
 }
 
 /* ---- Metadata grids ---- */
-/* ---- Log panel. Deliberately carries no texture: patterning behind a
-   monospace log stream measurably hurts scanning for errors. ---- */
-.log-panel pre {
-  min-height: 260px;
+/* ---- Log panel. A run's log phases stack in the order they ran, each a
+   row that opens onto its log, as CI systems lay out a job's steps. The log
+   itself deliberately carries no texture: patterning behind a monospace log
+   stream measurably hurts scanning for errors. ---- */
+.log-steps {
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.log-step + .log-step {
+  border-top: 1px solid var(--color-border);
+}
+
+.log-step__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--touch-target);
+  border: 0;
+  padding: 0 var(--space-4);
+  color: var(--color-fg);
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.log-step__toggle:hover {
+  background: var(--color-muted);
+}
+
+.log-step__chevron {
+  flex: none;
+  color: var(--color-muted-fg);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.log-step__toggle[aria-expanded="true"] .log-step__chevron {
+  transform: rotate(90deg);
+}
+
+/* The list clips to its rounded corners, which would cut off the focus ring
+   drawn outside these full-width rows, so it is drawn inside them. */
+.log-step__toggle:focus-visible,
+.log-step__log:focus-visible {
+  outline-offset: -2px;
+}
+
+.log-step__log {
   max-height: 460px;
   overflow: auto;
-  border-radius: var(--radius-xl);
   margin: 0;
-  padding: var(--space-5);
+  padding: var(--space-4) var(--space-5);
   color: var(--color-card);
   background: var(--color-fg);
   font-family: var(--font-mono);

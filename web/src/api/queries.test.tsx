@@ -201,15 +201,45 @@ describe("polling-aware query hooks", () => {
     expect(result.current.isPlaceholderData).toBe(false);
   });
 
-  it("fetches a single log phase as text", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response("plan output\n", { status: 200, headers: { "content-type": "text/plain" } })
+  it("does not carry one run's logs over to another run while its fetch is in flight", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementationOnce(() =>
+      Promise.resolve(jsonResponse([{ phase: "plan" }]))
     );
-    const { result } = renderHook(() => useTemplateRunLogQuery("tenant_123", "run_1", "plan", "running"), {
-      wrapper: wrapper(testQueryClient())
-    });
+    const queryClient = testQueryClient();
+    const { result, rerender } = renderHook(
+      ({ runID }: { runID: string }) => useTemplateRunLogsQuery("tenant_123", runID, "completed"),
+      { wrapper: wrapper(queryClient), initialProps: { runID: "run_1" } }
+    );
+    await waitFor(() => expect(result.current.data).toEqual([{ phase: "plan" }]));
+
+    fetchMock.mockImplementationOnce(() => new Promise(() => {}));
+    rerender({ runID: "run_2" });
+
+    await waitFor(() => expect(result.current.isFetching).toBe(true));
+    expect(result.current.data).toBeUndefined();
+  });
+
+  it("fetches a single log phase as text, once per upload", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(() =>
+      Promise.resolve(new Response("plan output\n", { status: 200, headers: { "content-type": "text/plain" } }))
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result, rerender } = renderHook(
+      ({ uploadedAt }: { uploadedAt: string }) => useTemplateRunLogQuery("tenant_123", "run_1", "plan", uploadedAt),
+      { wrapper: wrapper(queryClient), initialProps: { uploadedAt: "2026-07-20T00:01:00Z" } }
+    );
 
     await waitFor(() => expect(result.current.data).toBe("plan output\n"));
+    // Opening the same upload again reads the cache, although the client's
+    // default staleTime would refetch on mount.
+    const reopened = renderHook(() => useTemplateRunLogQuery("tenant_123", "run_1", "plan", "2026-07-20T00:01:00Z"), {
+      wrapper: wrapper(queryClient)
+    });
+    expect(reopened.result.current.data).toBe("plan output\n");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    rerender({ uploadedAt: "2026-07-20T00:02:00Z" });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
   });
 });
 

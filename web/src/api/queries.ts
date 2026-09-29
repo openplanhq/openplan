@@ -111,20 +111,27 @@ export function useTemplateRunsQuery(tenantID: string, stackTemplateID: string) 
   });
 }
 
+// A run's log list refetches whenever the run moves. The previous list stays
+// on screen while it does, but only for the same run: another run's phases
+// would be requested under this run's id.
 export function useTemplateRunLogsQuery(tenantID: string, runID: string, statusTag: string) {
   return useQuery({
     queryKey: queryKeys.templateRunLogs(tenantID, runID, statusTag),
     queryFn: () => client.listTemplateRunLogs(tenantID, runID),
     enabled: runID !== "",
-    placeholderData: keepPreviousData
+    placeholderData: (previous, previousQuery) => (previousQuery?.queryKey[2] === runID ? previous : undefined)
   });
 }
 
-export function useTemplateRunLogQuery(tenantID: string, runID: string, phase: string, statusTag: string) {
+// A phase's log is recorded once its command exits and is replaced only by a
+// new upload, which moves uploadedAt. So one upload's body never changes, and
+// is fetched once.
+export function useTemplateRunLogQuery(tenantID: string, runID: string, phase: string, uploadedAt: string) {
   return useQuery({
-    queryKey: queryKeys.templateRunLog(tenantID, runID, phase, statusTag),
+    queryKey: queryKeys.templateRunLog(tenantID, runID, phase, uploadedAt),
     queryFn: () => client.getTemplateRunLog(tenantID, runID, phase),
     enabled: runID !== "" && phase !== "",
+    staleTime: Infinity,
     placeholderData: keepPreviousData
   });
 }
