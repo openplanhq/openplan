@@ -79,7 +79,7 @@ type (
 //
 // Its status is lifecycle's.
 func TemplatePlanWorkflow(ctx workflow.Context, input domain.TemplateRunWorkflowInput) error {
-	w := &planWorkflow{newRun(ctx, input)}
+	w := &planWorkflow{newRun(ctx, input, domain.RunPhasePlan)}
 	return w.lifecycle()
 }
 
@@ -95,7 +95,7 @@ func TemplatePlanWorkflow(ctx workflow.Context, input domain.TemplateRunWorkflow
 //
 // Its status is lifecycle's.
 func TemplateApplyWorkflow(ctx workflow.Context, input domain.TemplateRunWorkflowInput) error {
-	w := &applyWorkflow{newRun(ctx, input)}
+	w := &applyWorkflow{newRun(ctx, input, domain.RunPhaseApply)}
 	return w.lifecycle()
 }
 
@@ -179,6 +179,7 @@ func (w *applyWorkflow) lifecycle() (err error) {
 		TenantID:    w.input.TenantID,
 		RunID:       w.input.RunID,
 		AutoApprove: w.input.AutoApprove,
+		WorkflowID:  w.workflowID,
 	}).Get(w.ctx, &claim); err != nil {
 		return err
 	}
@@ -200,18 +201,23 @@ func (w *applyWorkflow) lifecycle() (err error) {
 type run struct {
 	ctx   workflow.Context
 	input domain.TemplateRunWorkflowInput
+	// phase is which of the run's workflow executions this workflow is, and
+	// workflowID the Temporal workflow it runs as. Status writes and the
+	// apply's claim record both on the execution.
+	phase      domain.RunPhase
+	workflowID string
 }
 
 // newRun sets the baseline options for every activity the run schedules
 // through it: control-plane work, on the control queue. Executor work goes
 // through the session inSession opens, on the execution queue.
-func newRun(ctx workflow.Context, input domain.TemplateRunWorkflowInput) *run {
+func newRun(ctx workflow.Context, input domain.TemplateRunWorkflowInput, phase domain.RunPhase) *run {
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		TaskQueue:           domain.ControlTaskQueue,
 		StartToCloseTimeout: time.Minute,
 		RetryPolicy:         defaultRunRetryPolicy,
 	})
-	return &run{ctx: ctx, input: input}
+	return &run{ctx: ctx, input: input, phase: phase, workflowID: workflow.GetInfo(ctx).WorkflowExecution.ID}
 }
 
 // setStatus records the run's status. Only the two lifecycles call it, and
@@ -227,6 +233,8 @@ func (r *run) setStatus(status domain.TemplateRunStatus, errorSummary string) er
 			Operation:       r.input.Operation,
 			Status:          status,
 			ErrorSummary:    errorSummary,
+			Phase:           r.phase,
+			WorkflowID:      r.workflowID,
 		},
 	).Get(r.ctx, nil)
 }
@@ -304,8 +312,8 @@ func (w *planWorkflow) plan(s *session) (domain.RunTerraformActivityOutput, erro
 // plan, or, for an auto-approved apply run, applies without one. It records
 // what the command does to the stack template around it: a destroy marks the
 // template destroying before it starts and destroyed once it succeeds, and an
-// apply records what it applied as live, with the counts an auto-approved
-// apply reports, since it had no plan to count.
+// apply records what it applied as live. Either way the event carries what the
+// command did, which is the apply execution's counts.
 func (w *applyWorkflow) apply(s *session) error {
 	if err := s.ready(!w.input.AutoApprove); err != nil {
 		return err
@@ -330,13 +338,9 @@ func (w *applyWorkflow) apply(s *session) error {
 		return err
 	}
 	if destroy {
-		return w.event(domain.TemplateRunDestroyed, nil)
+		return w.event(domain.TemplateRunDestroyed, &output.Summary)
 	}
-	var summary *domain.PlanSummary
-	if w.input.AutoApprove {
-		summary = &output.Summary
-	}
-	return w.event(domain.TemplateRunApplied, summary)
+	return w.event(domain.TemplateRunApplied, &output.Summary)
 }
 
 // workspace is one phase's working directory on its executor, and the key the

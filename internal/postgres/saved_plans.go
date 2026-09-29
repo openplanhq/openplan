@@ -136,21 +136,15 @@ func (store *Store) FinishTemplatePlan(ctx context.Context, input domain.FinishP
 		}
 		outcome = domain.PlanOutcomeNoChanges
 	case input.Operation == domain.OperationPlan:
-		if _, err := tx.Exec(ctx, `
-			update template_runs
-			set plan_add = $1, plan_change = $2, plan_destroy = $3
-			where tenant_id = $4 and id = $5
-		`, input.Summary.Add, input.Summary.Change, input.Summary.Destroy, input.TenantID, input.RunID); err != nil {
-			return "", fmt.Errorf("record plan with changes: %w", err)
+		if err := recordPlanCounts(ctx, tx, input.TenantID, input.RunID, input.Summary); err != nil {
+			return "", err
 		}
 		outcome = domain.PlanOutcomePlanned
 	default:
 		outcome = domain.PlanOutcomeWaiting
 		if _, err := tx.Exec(ctx, `
-			update template_runs
-			set status = $1, plan_add = $2, plan_change = $3, plan_destroy = $4
-			where tenant_id = $5 and id = $6
-		`, domain.TemplateRunWaitingApproval, input.Summary.Add, input.Summary.Change, input.Summary.Destroy, input.TenantID, input.RunID); err != nil {
+			update template_runs set status = $1 where tenant_id = $2 and id = $3
+		`, domain.TemplateRunWaitingApproval, input.TenantID, input.RunID); err != nil {
 			return "", fmt.Errorf("record plan with changes: %w", err)
 		}
 		if _, err := tx.Exec(ctx, `
@@ -168,6 +162,22 @@ func (store *Store) FinishTemplatePlan(ctx context.Context, input domain.FinishP
 		`, input.TenantID, input.RunID); err != nil {
 			return "", fmt.Errorf("record pending plan: %w", err)
 		}
+		if err := recordPlanCounts(ctx, tx, input.TenantID, input.RunID, input.Summary); err != nil {
+			return "", err
+		}
+		// The plan is done, and nothing runs while the run waits for a
+		// person, so its execution ends here. A run already waiting is this
+		// write retried, and its plan already ended. A retry that finds the
+		// run approved, or claimed by its apply, fails and rolls back the
+		// writes above: the run is past waiting, and a running apply is not
+		// the plan's to end.
+		ended, err := finishRunningExecution(ctx, tx, input.TenantID, input.RunID, domain.RunPhasePlan, domain.TemplateRunExecutionSucceeded, "")
+		if err != nil {
+			return "", err
+		}
+		if !ended && status != domain.TemplateRunWaitingApproval {
+			return "", fmt.Errorf("finish plan: run %s has no running plan execution", input.RunID)
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -178,20 +188,27 @@ func (store *Store) FinishTemplatePlan(ctx context.Context, input domain.FinishP
 
 // BeginTemplateApply claims a run for its apply phase by moving it to running:
 // from approved, or, for an auto-approved apply run that never had a plan to
-// approve, from queued. Losing the claim means the plan was discarded first;
-// the conditional update is what makes that race safe, because
+// approve, from queued. The claim starts the run's apply execution as
+// workflowID. Losing the claim means the plan was discarded first; the
+// conditional update is what makes that race safe, because
 // discardTemplateRun makes the same kind of update from the other side.
 //
 // A run already running is this claim retried after its acknowledgement was
 // lost. Nothing else moves an approved or auto-approved run to running, and
 // the plan workflow of an approved run has already ended, so it reports the
-// claim rather than a lost race.
-func (store *Store) BeginTemplateApply(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, autoApprove bool) (bool, error) {
+// claim rather than a lost race, and finds its apply execution already there.
+func (store *Store) BeginTemplateApply(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, autoApprove bool, workflowID string) (bool, error) {
 	from := domain.TemplateRunApproved
 	if autoApprove {
 		from = domain.TemplateRunQueued
 	}
-	commandTag, err := store.pool.Exec(ctx, `
+	tx, err := store.pool.Begin(ctx)
+	if err != nil {
+		return false, fmt.Errorf("begin claim run for apply: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	commandTag, err := tx.Exec(ctx, `
 		update template_runs
 		set status = $1
 		where tenant_id = $2 and id = $3 and status in ($4, $1) and auto_approve = $5
@@ -199,7 +216,16 @@ func (store *Store) BeginTemplateApply(ctx context.Context, tenantID domain.Tena
 	if err != nil {
 		return false, fmt.Errorf("claim run for apply: %w", err)
 	}
-	return commandTag.RowsAffected() == 1, nil
+	if commandTag.RowsAffected() != 1 {
+		return false, nil
+	}
+	if _, err := insertWorkflowExecution(ctx, tx, tenantID, runID, domain.RunPhaseApply, workflowID, domain.TemplateRunExecutionRunning, ""); err != nil {
+		return false, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return false, fmt.Errorf("commit claim run for apply: %w", err)
+	}
+	return true, nil
 }
 
 // discardTemplateRun discards a run whose plan is waiting for approval, or

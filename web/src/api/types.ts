@@ -171,10 +171,12 @@ export interface TemplateRun {
   backend_type: string;
   backend_config_hash: string;
   status: TemplateRunStatus;
-  // Empty until the run starts its first step.
+  // The latest step of the workflow that started last. Empty until that
+  // workflow starts a step, so also between an apply's claim and its first
+  // step, and for an apply that failed before its claim.
   step: TemplateRunStep | "";
   trigger_actor: string;
-  started_at: string;
+  created_at: string;
   completed_at?: string;
   error_summary: string;
   // Counts runs within one stack template, from 1. Shown as "Run #N".

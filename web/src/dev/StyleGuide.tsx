@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import HeroGraphic from "../shared/HeroGraphic";
+import { LogStep, LogSteps } from "../shared/LogSteps";
 import StatBand from "../shared/StatBand";
 import StatusRow from "../shared/StatusRow";
 import { statusGlyph, statusTone } from "../shared/statusTone";
@@ -124,6 +125,25 @@ function Specimen({
       </div>
       <div className={`sg__specimen-body${stack ? " sg__specimen-body--stack" : ""}`}>{children}</div>
     </div>
+  );
+}
+
+function LogStepsSpecimen() {
+  const [open, setOpen] = useState<Record<string, boolean>>({ plan: true });
+  const toggle = (name: string) => setOpen((current) => ({ ...current, [name]: !current[name] }));
+  return (
+    <LogSteps>
+      <LogStep name="plan-init" open={open["plan-init"] ?? false} onToggle={() => toggle("plan-init")}>
+        {`Initializing the backend...
+Successfully configured the backend "s3"!`}
+      </LogStep>
+      <LogStep name="plan" open={open.plan ?? false} onToggle={() => toggle("plan")}>
+        {`Initializing the backend...
+Terraform v1.9.5 on darwin_arm64
+Plan: 3 to add, 1 to change, 0 to destroy.
+Error: creating S3 Bucket: BucketAlreadyExists`}
+      </LogStep>
+    </LogSteps>
   );
 }
 
@@ -467,15 +487,10 @@ export default function StyleGuide() {
         <Section
           id="log"
           title="Log panel"
-          note="Deliberately carries no texture. Patterning behind a monospace log stream measurably hurts scanning for errors."
+          note="Phases stack in the order they ran, each a row that opens onto its log. The log deliberately carries no texture: patterning behind a monospace log stream measurably hurts scanning for errors."
         >
-          <Specimen label="log-panel" stack>
-            <div className="log-panel">
-              <pre>{`Initializing the backend...
-Terraform v1.9.5 on darwin_arm64
-Plan: 3 to add, 1 to change, 0 to destroy.
-Error: creating S3 Bucket: BucketAlreadyExists`}</pre>
-            </div>
+          <Specimen label="LogSteps" hint="real component" stack>
+            <LogStepsSpecimen />
           </Specimen>
         </Section>
 

@@ -120,6 +120,13 @@ type TemplateRunStatusActivityInput struct {
 	Operation       OperationType
 	Status          TemplateRunStatus
 	ErrorSummary    string
+	// Phase is the workflow execution the write belongs to: the one a running
+	// write starts, and the one a failed write records when its workflow
+	// failed before it could claim the run.
+	Phase RunPhase
+	// WorkflowID is the Temporal workflow making the write, recorded on the
+	// execution the write starts or records.
+	WorkflowID string
 }
 
 // TemplateRunStepActivityInput records the step a running run has started.
@@ -137,9 +144,9 @@ type TemplateRunEventActivityInput struct {
 	StackTemplateID StackTemplateID
 	Operation       OperationType
 	Event           TemplateRunEvent
-	// Summary, when set, records the run's change counts with the event. An
-	// auto-approved apply has no plan to count, so it records what the apply
-	// itself reported with TemplateRunApplied.
+	// Summary, when set, records what the run's apply did, on its apply
+	// execution. Every apply and destroy carries it; a plan's destroyed
+	// event, for a destroy with nothing to destroy, does not.
 	Summary *PlanSummary
 }
 
@@ -231,6 +238,11 @@ const (
 	RunPhaseApply RunPhase = "apply"
 )
 
+// Valid reports whether the phase is one a run has.
+func (phase RunPhase) Valid() bool {
+	return phase == RunPhasePlan || phase == RunPhaseApply
+}
+
 // RunTerraformActivityInput asks the executor to run one Terraform subprocess command.
 type RunTerraformActivityInput struct {
 	RunID           TemplateRunID
@@ -255,8 +267,8 @@ type RunTerraformActivityOutput struct {
 	// Log describes the uploaded phase log. The executor has no database, so
 	// the workflow records it through a control activity.
 	Log TemplateRunLog
-	// HasChanges and Summary describe a plan: whether it would change
-	// anything, and what. Zero for every other command.
+	// HasChanges and Summary describe a plan or an apply: whether it would
+	// change, or changed, anything, and what. Zero for every other command.
 	HasChanges bool
 	Summary    PlanSummary
 }
@@ -323,6 +335,9 @@ type BeginApplyActivityInput struct {
 	TenantID    TenantID
 	RunID       TemplateRunID
 	AutoApprove bool
+	// WorkflowID is the apply workflow claiming the run, recorded on the
+	// apply execution the claim starts.
+	WorkflowID string
 }
 
 // BeginApplyActivityOutput reports whether the claim won. It loses when the

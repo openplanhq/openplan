@@ -115,6 +115,9 @@ type TemplateRunRepository interface {
 	ListTemplateRuns(ctx context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID) ([]domain.TemplateRun, error)
 	// ApproveTemplateRun records approval only when the tenant-owned run is waiting for approval.
 	ApproveTemplateRun(ctx context.Context, approval domain.TemplateRunApproval) error
+	// ListTemplateRunExecutions returns the workflow executions that carried a
+	// run, with their steps, in the order they started.
+	ListTemplateRunExecutions(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) ([]domain.TemplateRunWorkflowExecution, error)
 }
 
 // TemplateRegistrationRepository persists template registration attempts.
@@ -763,7 +766,7 @@ func (service *Service) StartTemplateRun(ctx context.Context, command StartTempl
 		ConfigJSON:        desiredConfigJSON,
 		Status:            domain.TemplateRunQueued,
 		TriggerActor:      actor,
-		StartedAt:         service.Clock.Now(),
+		CreatedAt:         service.Clock.Now(),
 		AutoApprove:       command.AutoApprove,
 	}
 
@@ -1654,7 +1657,9 @@ func (service *Service) DiscardRun(ctx context.Context, command DiscardRunComman
 	return nil
 }
 
-// GetTemplateRun returns one tenant-owned run.
+// GetTemplateRun returns one tenant-owned run, with the workflow executions
+// that carried it. Only this read loads them: every other run endpoint reads
+// the run for authorization alone.
 func (service *Service) GetTemplateRun(ctx context.Context, command GetTemplateRunCommand) (domain.TemplateRun, error) {
 	if err := validateGetTemplateRunCommand(command); err != nil {
 		return domain.TemplateRun{}, err
@@ -1664,6 +1669,11 @@ func (service *Service) GetTemplateRun(ctx context.Context, command GetTemplateR
 	if err != nil {
 		return domain.TemplateRun{}, fmt.Errorf("get template run: %w", err)
 	}
+	executions, err := service.TemplateRuns.ListTemplateRunExecutions(ctx, command.TenantID, command.RunID)
+	if err != nil {
+		return domain.TemplateRun{}, fmt.Errorf("get template run executions: %w", err)
+	}
+	run.Executions = executions
 
 	return run, nil
 }

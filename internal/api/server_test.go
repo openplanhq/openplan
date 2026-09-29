@@ -327,8 +327,8 @@ func TestStartTemplateRunCallsService(t *testing.T) {
 	if body.Status != domain.TemplateRunQueued {
 		t.Fatalf("status = %q, want queued", body.Status)
 	}
-	if !body.StartedAt.Equal(startedAt) {
-		t.Fatalf("started_at = %v, want %v", body.StartedAt, startedAt)
+	if !body.CreatedAt.Equal(startedAt) {
+		t.Fatalf("created_at = %v, want %v", body.CreatedAt, startedAt)
 	}
 }
 
@@ -1218,7 +1218,7 @@ func TestListTemplateRunsReturnsRunsForStackTemplate(t *testing.T) {
 			Operation:       domain.OperationPlan,
 			Status:          domain.TemplateRunWaitingApproval,
 			TriggerActor:    domain.UserID("user_456"),
-			StartedAt:       startedAt,
+			CreatedAt:       startedAt,
 		},
 	}
 	deps.stackTemplates.stackTemplate = domain.StackTemplate{
@@ -1296,6 +1296,10 @@ func TestGetTemplateRunReturnsRun(t *testing.T) {
 		Operation:       domain.OperationPlan,
 		Status:          domain.TemplateRunCompleted,
 	}
+	deps.templateRuns.executions = []domain.TemplateRunWorkflowExecution{{
+		Phase: domain.RunPhasePlan, WorkflowID: "template-run/tenant_123/run_123", Status: domain.TemplateRunExecutionSucceeded,
+		Steps: []domain.TemplateRunStepExecution{{Step: domain.TemplateRunStepPlanning, Status: domain.TemplateRunExecutionSucceeded}},
+	}}
 	server := NewServer(deps.service(), configuredTenantID)
 	response := httptest.NewRecorder()
 	request := authenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/template-runs/run_123", nil)
@@ -1321,6 +1325,62 @@ func TestGetTemplateRunReturnsRun(t *testing.T) {
 	}
 	if body.Status != domain.TemplateRunCompleted {
 		t.Fatalf("status = %q, want completed", body.Status)
+	}
+	if len(body.Executions) != 1 || len(body.Executions[0].Steps) != 1 || body.Executions[0].Steps[0].Step != domain.TemplateRunStepPlanning {
+		t.Fatalf("executions = %#v, want the plan with its planning step", body.Executions)
+	}
+}
+
+// A single read always sends executions, as [] for a run no workflow has
+// carried yet; the run list never sends them.
+func TestTemplateRunExecutionsArePresentOnlyOnASingleRead(t *testing.T) {
+	t.Parallel()
+
+	run := domain.TemplateRun{
+		ID:              domain.TemplateRunID("run_123"),
+		TenantID:        domain.TenantID("tenant_123"),
+		StackTemplateID: domain.StackTemplateID("stack_template_123"),
+		Operation:       domain.OperationPlan,
+		Status:          domain.TemplateRunQueued,
+	}
+	deps := newAPITestDependencies(t)
+	deps.templateRuns.run = run
+	deps.templateRuns.executions = []domain.TemplateRunWorkflowExecution{}
+	deps.templateRuns.list = []domain.TemplateRun{run}
+	deps.stackTemplates.stackTemplate = domain.StackTemplate{
+		ID:       domain.StackTemplateID("stack_template_123"),
+		TenantID: domain.TenantID("tenant_123"),
+		StackID:  domain.StackID("stack_123"),
+	}
+	server := NewServer(deps.service(), configuredTenantID)
+
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/template-runs/run_123", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("get status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	var single map[string]json.RawMessage
+	if err := json.NewDecoder(response.Body).Decode(&single); err != nil {
+		t.Fatalf("decode run: %v", err)
+	}
+	if got := string(single["executions"]); got != "[]" {
+		t.Fatalf("executions = %q, want []", got)
+	}
+
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/stack-templates/stack_template_123/runs", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("list status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	var listed []map[string]json.RawMessage
+	if err := json.NewDecoder(response.Body).Decode(&listed); err != nil {
+		t.Fatalf("decode runs: %v", err)
+	}
+	if len(listed) != 1 {
+		t.Fatalf("runs = %d, want 1", len(listed))
+	}
+	if got, ok := listed[0]["executions"]; ok {
+		t.Fatalf("listed run has executions %s, want none", got)
 	}
 }
 
@@ -2913,6 +2973,7 @@ type recordingTemplateRunRepository struct {
 	created                domain.TemplateRun
 	run                    domain.TemplateRun
 	list                   []domain.TemplateRun
+	executions             []domain.TemplateRunWorkflowExecution
 	approval               domain.TemplateRunApproval
 	discarded              domain.TemplateRunDiscard
 	gotGetTenantID         domain.TenantID
@@ -2932,6 +2993,10 @@ func (repository *recordingTemplateRunRepository) CreateTemplateRun(_ context.Co
 	}
 	repository.created = run
 	return 1, nil
+}
+
+func (repository *recordingTemplateRunRepository) ListTemplateRunExecutions(context.Context, domain.TenantID, domain.TemplateRunID) ([]domain.TemplateRunWorkflowExecution, error) {
+	return repository.executions, nil
 }
 
 func (repository *recordingTemplateRunRepository) ListTemplateRuns(_ context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID) ([]domain.TemplateRun, error) {

@@ -55,16 +55,15 @@ func NewLocalProcessRunnerWithExecutor(executor CommandExecutor) *LocalProcessRu
 // it back at the same path before applying it.
 const PlanFileName = "tfplan"
 
-// Result reports what a command found out. A plan and an auto-approved apply
-// fill it in.
+// Result reports what a command found out. A plan and every apply fill it in.
 type Result struct {
 	// HasChanges is whether the plan would change anything, read from
 	// `-detailed-exitcode`: 0 means no changes, 2 means changes. For an
-	// auto-approved apply, whether it changed anything.
+	// apply, whether it changed anything.
 	HasChanges bool
-	// Summary counts the changes, from `tofu show -json` on the saved plan, or
-	// from an auto-approved apply's "Apply complete!" line. Zero when there are
-	// none.
+	// Summary counts the changes: a plan's from `tofu show -json` on the saved
+	// plan, an apply's from its closing "Apply complete!" or "Destroy
+	// complete!" line. Zero when there are none.
 	Summary domain.PlanSummary
 }
 
@@ -79,7 +78,8 @@ type Result struct {
 // plan and nothing else: what was approved is exactly what runs, the variables
 // come from inside the plan, and tofu refuses the file outright if the state
 // has moved since it was written. An auto-approved apply has no saved plan, so
-// it plans and applies in one command, with the run's variables.
+// it plans and applies in one command, with the run's variables. Every apply
+// reports what it did, counted from its closing line.
 func (runner *LocalProcessRunner) Run(ctx context.Context, input TerraformCommand) (Result, error) {
 	if strings.TrimSpace(input.WorkspacePath) == "" {
 		return Result{}, fmt.Errorf("workspace path is required")
@@ -96,9 +96,13 @@ func (runner *LocalProcessRunner) Run(ctx context.Context, input TerraformComman
 	case domain.TerraformCommandPlan, domain.TerraformCommandPlanDestroy:
 		return runner.plan(ctx, input)
 	case domain.TerraformCommandApply, domain.TerraformCommandDestroy:
-		return Result{}, runner.run(ctx, input, sortedEnvironment(input.Environment), "apply", "-input=false", "-auto-approve", "-no-color", PlanFileName)
+		return runner.apply(input, func(input TerraformCommand) error {
+			return runner.run(ctx, input, sortedEnvironment(input.Environment), "apply", "-input=false", "-auto-approve", "-no-color", PlanFileName)
+		})
 	case domain.TerraformCommandApplyAutoApprove:
-		return runner.applyAutoApprove(ctx, input)
+		return runner.apply(input, func(input TerraformCommand) error {
+			return runner.runWithTerraformVariables(ctx, input, "apply", "-input=false", "-auto-approve", "-no-color")
+		})
 	default:
 		return Result{}, fmt.Errorf("unsupported terraform command %q", input.Command)
 	}
@@ -128,14 +132,13 @@ func (runner *LocalProcessRunner) plan(ctx context.Context, input TerraformComma
 	return Result{HasChanges: true, Summary: summary}, nil
 }
 
-// applyAutoApprove plans and applies in one command, with no saved plan, and
-// counts what the apply did from its closing "Apply complete!" line. The
+// apply runs an apply and counts what it did from its closing line. The
 // output still goes to the command's writers; the counts are read from a copy.
-func (runner *LocalProcessRunner) applyAutoApprove(ctx context.Context, input TerraformCommand) (Result, error) {
+func (runner *LocalProcessRunner) apply(input TerraformCommand, run func(TerraformCommand) error) (Result, error) {
 	var output bytes.Buffer
 	stdout, _ := outputWriters(input)
 	input.Stdout = io.MultiWriter(stdout, &output)
-	if err := runner.runWithTerraformVariables(ctx, input, "apply", "-input=false", "-auto-approve", "-no-color"); err != nil {
+	if err := run(input); err != nil {
 		return Result{}, err
 	}
 	summary := summarizeApplyOutput(output.String())
@@ -143,8 +146,10 @@ func (runner *LocalProcessRunner) applyAutoApprove(ctx context.Context, input Te
 }
 
 // applyCompleteLine is tofu's closing line for a successful apply, such as
-// "Apply complete! Resources: 1 imported, 2 added, 0 changed, 1 destroyed."
-var applyCompleteLine = regexp.MustCompile(`Apply complete! Resources: ([^\n]*)`)
+// "Apply complete! Resources: 1 imported, 2 added, 0 changed, 1 destroyed.",
+// or "Destroy complete! Resources: 3 destroyed." when it prints that one for
+// a destroy.
+var applyCompleteLine = regexp.MustCompile(`(?:Apply|Destroy) complete! Resources: ([^\n]*)`)
 
 // applyCount is one "N verb" count on that line.
 var applyCount = regexp.MustCompile(`(\d+) (added|changed|destroyed)`)

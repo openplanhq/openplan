@@ -249,6 +249,7 @@ func TestSummarizeApplyOutput(t *testing.T) {
 		{name: "no changes", output: "No changes.\n\nApply complete! Resources: 0 added, 0 changed, 0 destroyed.\n"},
 		{name: "no summary line", output: "Error: something\n"},
 		{name: "counts after the line are not its", output: "Apply complete! Resources: 0 added, 0 changed, 0 destroyed.\nOutputs:\nx = \"5 added\"\n"},
+		{name: "destroy", output: "Destroy complete! Resources: 3 destroyed.\n", want: domain.PlanSummary{Destroy: 3}},
 	}
 	for _, tt := range tests {
 		if got := summarizeApplyOutput(tt.output); got != tt.want {
@@ -566,4 +567,45 @@ type recordedCommand struct {
 	env  []string
 	name string
 	args []string
+}
+
+// An approved apply and a destroy apply a saved plan, and count what they did
+// from the closing line, as an auto-approved apply does, whichever of tofu's
+// two lines it prints.
+func TestLocalProcessRunnerCountsASavedPlanApplyFromItsOutput(t *testing.T) {
+	t.Parallel()
+
+	for _, testCase := range []struct {
+		name    string
+		command domain.TerraformCommandType
+		stdout  string
+		want    domain.PlanSummary
+	}{
+		{name: "apply", command: domain.TerraformCommandApply, stdout: "Apply complete! Resources: 2 added, 1 changed, 0 destroyed.\n", want: domain.PlanSummary{Add: 2, Change: 1}},
+		{name: "destroy", command: domain.TerraformCommandDestroy, stdout: "Destroy complete! Resources: 3 destroyed.\n", want: domain.PlanSummary{Destroy: 3}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			executor := &recordingCommandExecutor{stdout: testCase.stdout}
+			runner := NewLocalProcessRunnerWithExecutor(executor)
+			var log bytes.Buffer
+
+			result, err := runner.Run(context.Background(), TerraformCommand{
+				WorkspacePath: "/tmp/tflive/runs/tenant_123/run_123",
+				WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
+				Command:       testCase.command,
+				Stdout:        &log,
+			})
+			if err != nil {
+				t.Fatalf("Run returned error: %v", err)
+			}
+			if want := (Result{HasChanges: true, Summary: testCase.want}); result != want {
+				t.Fatalf("result = %#v, want %#v", result, want)
+			}
+			if log.String() != testCase.stdout {
+				t.Fatalf("log = %q, want the apply output", log.String())
+			}
+		})
+	}
 }

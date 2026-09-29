@@ -14,8 +14,8 @@ export const queryKeys = {
   templateRuns: (tenantID: string, stackTemplateID: string) => ["templateRuns", tenantID, stackTemplateID] as const,
   templateRunLogs: (tenantID: string, runID: string, statusTag: string) =>
     ["templateRunLogs", tenantID, runID, statusTag] as const,
-  templateRunLog: (tenantID: string, runID: string, phase: string, statusTag: string) =>
-    ["templateRunLog", tenantID, runID, phase, statusTag] as const,
+  templateRunLog: (tenantID: string, runID: string, phase: string, uploadedAt: string) =>
+    ["templateRunLog", tenantID, runID, phase, uploadedAt] as const,
   stackGrants: (tenantID: string, stackID: string) => ["stackGrants", tenantID, stackID] as const,
   userSearch: (tenantID: string, query: string) => ["userSearch", tenantID, query] as const
 };

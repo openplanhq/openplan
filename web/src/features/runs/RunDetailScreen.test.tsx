@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../../auth/AuthContext";
@@ -41,7 +41,7 @@ function run(overrides: Partial<TemplateRun> = {}): TemplateRun {
     status: "completed",
     step: "",
     trigger_actor: "user_123",
-    started_at: "2026-07-20T00:00:00Z",
+    created_at: "2026-07-20T00:00:00Z",
     error_summary: "",
     run_number: 1,
     auto_approve: false,
@@ -217,12 +217,12 @@ describe("RunDetailScreen", () => {
     expect(fetchMock.mock.calls.filter(([reqInput]) => String(reqInput).endsWith("/template-runs/run_1")).length).toBe(2);
   });
 
-  it("renders the run summary and logs, switching phase and log body when a phase tab is clicked", async () => {
+  it("renders the run summary and stacks its logs, the latest open and the rest opening on click", async () => {
     const queryClient = testQueryClient();
     seedCapabilities(queryClient, allAllowed);
     queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), run({ status: "completed", run_number: 4 }));
 
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
       if (url.endsWith("/logs")) {
         return jsonResponse([runLog({ phase: "init" }), runLog({ phase: "plan" })]);
@@ -242,9 +242,144 @@ describe("RunDetailScreen", () => {
     expect(screen.getByTestId("run-detail-status").textContent).toContain("No changes");
     expect(screen.getByText("main @ abcdef1")).toBeTruthy();
     await waitFor(() => expect(screen.getByText("plan log body")).toBeTruthy());
+    const initToggle = screen.getByRole("button", { name: "init" });
+    const planToggle = screen.getByRole("button", { name: "plan" });
+    expect(initToggle.getAttribute("aria-expanded")).toBe("false");
+    expect(planToggle.getAttribute("aria-expanded")).toBe("true");
+    // A closed phase does not fetch its log.
+    expect(fetchMock.mock.calls.some(([reqInput]) => String(reqInput).endsWith("/logs/init"))).toBe(false);
 
-    fireEvent.click(screen.getByRole("button", { name: "init" }));
+    // Opening one phase leaves the others as they were.
+    fireEvent.click(initToggle);
     await waitFor(() => expect(screen.getByText("init log body")).toBeTruthy());
+    expect(screen.getByText("plan log body")).toBeTruthy();
+
+    fireEvent.click(planToggle);
+    expect(planToggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText("plan log body")).toBeNull();
+    expect(screen.getByText("init log body")).toBeTruthy();
+  });
+
+  it("opens each newer phase as it arrives, keeps the rows already open or closed, and fetches each log once", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    let current = run({ status: "running", step: "initializing" });
+    let phases = ["plan-init"];
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), current);
+
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/template-runs/run_1")) {
+        return jsonResponse(current);
+      }
+      if (url.endsWith("/logs")) {
+        return jsonResponse(phases.map((phase) => runLog({ phase })));
+      }
+      const phase = url.split("/logs/")[1];
+      if (phase) {
+        return new Response(`${phase} log body`, { status: 200, headers: { "content-type": "text/plain" } });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    // The run moving is what refetches its log list.
+    function advance(step: TemplateRun["step"], nextPhases: string[]) {
+      phases = nextPhases;
+      current = run({ status: "running", step });
+      act(() => queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), current));
+    }
+
+    renderScreen(queryClient);
+    await waitFor(() => expect(screen.getByText("plan-init log body")).toBeTruthy());
+
+    advance("selecting_workspace", ["plan-init", "plan-workspace"]);
+    await waitFor(() => expect(screen.getByText("plan-workspace log body")).toBeTruthy());
+    expect(screen.getByText("plan-init log body")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "plan-workspace" }));
+    advance("planning", ["plan-init", "plan-workspace", "plan"]);
+    await waitFor(() => expect(screen.getByText("plan log body")).toBeTruthy());
+    expect(screen.getByRole("button", { name: "plan-workspace" }).getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByText("plan-init log body")).toBeTruthy();
+
+    // The run moved three times; a log that was already fetched is not fetched again.
+    const logFetches = (phase: string) =>
+      fetchMock.mock.calls.filter(([reqInput]) => String(reqInput).endsWith(`/logs/${phase}`)).length;
+    expect(logFetches("plan-init")).toBe(1);
+    expect(logFetches("plan-workspace")).toBe(1);
+  });
+
+  it("says the logs are loading until the list arrives, and then that a running run has none yet", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    const running = run({ status: "running", step: "waiting_for_executor" });
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), running);
+    let resolveLogs: ((response: Response) => void) | undefined;
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input);
+      if (url.endsWith("/template-runs/run_1")) {
+        return Promise.resolve(jsonResponse(running));
+      }
+      if (url.endsWith("/logs")) {
+        return new Promise((resolve) => {
+          resolveLogs = resolve;
+        });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    renderScreen(queryClient);
+
+    expect(screen.getByText("Loading logs…")).toBeTruthy();
+    await waitFor(() => expect(resolveLogs).toBeDefined());
+    resolveLogs?.(jsonResponse([]));
+    await waitFor(() => expect(screen.getByText("No logs yet.")).toBeTruthy());
+  });
+
+  it("says a finished run with no logs has none", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), run({ status: "canceled" }));
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => jsonResponse([]));
+
+    renderScreen(queryClient);
+
+    await waitFor(() => expect(screen.getByText("No logs.")).toBeTruthy());
+  });
+
+  it("says so when the run's logs, or one log, cannot be loaded", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), run());
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => jsonResponse({ error: "internal", message: "boom" }, 500));
+
+    renderScreen(queryClient);
+
+    await waitFor(() => expect(screen.getByText("Could not load this run's logs.")).toBeTruthy());
+  });
+
+  it("shows a log loading, and then that it could not be loaded", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), run());
+    let resolveLog: ((response: Response) => void) | undefined;
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input);
+      if (url.endsWith("/logs")) {
+        return Promise.resolve(jsonResponse([runLog({ phase: "plan" })]));
+      }
+      if (url.endsWith("/logs/plan")) {
+        return new Promise((resolve) => {
+          resolveLog = resolve;
+        });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    renderScreen(queryClient);
+
+    await waitFor(() => expect(screen.getByText("Loading…")).toBeTruthy());
+    resolveLog?.(jsonResponse({ error: "internal", message: "boom" }, 500));
+    await waitFor(() => expect(screen.getByText("Could not load this log.")).toBeTruthy());
   });
 
   it("renders the activity failure summary for a failed run", () => {

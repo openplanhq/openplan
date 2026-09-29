@@ -1018,7 +1018,7 @@ func (store *controlStoreStub) FinishTemplatePlan(_ context.Context, input domai
 	return store.outcome, nil
 }
 
-func (store *controlStoreStub) BeginTemplateApply(context.Context, domain.TenantID, domain.TemplateRunID, bool) (bool, error) {
+func (store *controlStoreStub) BeginTemplateApply(context.Context, domain.TenantID, domain.TemplateRunID, bool, string) (bool, error) {
 	return store.claimed, nil
 }
 

@@ -927,14 +927,13 @@ func createTemplateRun(ctx context.Context, exec pgxExecutor, run domain.Templat
 			backend_config_hash,
 			status,
 			trigger_actor,
-			started_at,
+			created_at,
 			completed_at,
-			error_summary,
 			auto_approve,
 			run_number
 		) values (
 			$1, $2, $3, $4, $5, $6, $7, $8,
-			$9, $10::jsonb, $11, $12, $13, $14, $15, $16, $17, $18,
+			$9, $10::jsonb, $11, $12, $13, $14, $15, $16, $17,
 			(
 				select coalesce(max(run_number), 0) + 1
 				from template_runs
@@ -958,9 +957,8 @@ func createTemplateRun(ctx context.Context, exec pgxExecutor, run domain.Templat
 		run.BackendConfigHash,
 		run.Status,
 		run.TriggerActor,
-		nullTime(run.StartedAt),
+		nullTime(run.CreatedAt),
 		nullTime(run.CompletedAt),
-		run.ErrorSummary,
 		run.AutoApprove,
 	).Scan(&runNumber)
 	// The gate against concurrent runs on one stack template: the insert is the
@@ -981,41 +979,75 @@ func createTemplateRun(ctx context.Context, exec pgxExecutor, run domain.Templat
 	return runNumber, nil
 }
 
-func (store *Store) GetTemplateRun(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) (domain.TemplateRun, error) {
-	var run domain.TemplateRun
-	var startedAt sql.NullTime
-	var completedAt sql.NullTime
-	var planAdd, planChange, planDestroy *int
+// templateRunSelect reads a run as domain.TemplateRun has it. A run's step,
+// error and counts are its workflow executions', so they are derived here:
+//
+//   - step is the latest step of the execution that started last, or none if
+//     that execution has not started one: an apply between its claim and its
+//     first step reads no step, not the plan's last;
+//   - the error is the latest failed execution's;
+//   - the counts are the plan execution's if the run has one, and otherwise
+//     the apply's, which an auto-approved run has instead.
+//
+// Each is a lateral lookup on an indexed key, so a list of runs is still one
+// query. Callers append the where clause, and the order for a list.
+const templateRunSelect = `
+	select
+		r.id,
+		r.tenant_id,
+		r.stack_template_id,
+		r.template_revision_id,
+		r.source_template_id,
+		r.operation,
+		r.selected_ref,
+		r.resolved_commit_sha,
+		r.workspace_name,
+		r.config_json,
+		r.backend_type,
+		r.backend_config_hash,
+		r.status,
+		coalesce(latest_step.step, ''),
+		r.trigger_actor,
+		r.created_at,
+		r.completed_at,
+		coalesce(failed.error_summary, ''),
+		r.run_number,
+		r.auto_approve,
+		counts.resource_add,
+		counts.resource_change,
+		counts.resource_destroy
+	from template_runs r
+	left join lateral (
+		select s.step
+		from template_run_workflow_executions e
+		left join template_run_step_executions s on s.workflow_execution_id = e.id
+		where e.tenant_id = r.tenant_id and e.run_id = r.id
+		order by e.id desc, s.id desc nulls last
+		limit 1
+	) latest_step on true
+	left join lateral (
+		select e.error_summary
+		from template_run_workflow_executions e
+		where e.tenant_id = r.tenant_id and e.run_id = r.id and e.status = 'failed'
+		order by e.id desc
+		limit 1
+	) failed on true
+	left join lateral (
+		select e.resource_add, e.resource_change, e.resource_destroy
+		from template_run_workflow_executions e
+		where e.tenant_id = r.tenant_id and e.run_id = r.id
+		order by e.phase = 'plan' desc, e.id
+		limit 1
+	) counts on true
+`
 
-	err := store.pool.QueryRow(ctx, `
-		select
-			id,
-			tenant_id,
-			stack_template_id,
-			template_revision_id,
-			source_template_id,
-			operation,
-			selected_ref,
-			resolved_commit_sha,
-			workspace_name,
-			config_json,
-			backend_type,
-			backend_config_hash,
-			status,
-			step,
-			trigger_actor,
-			started_at,
-			completed_at,
-			error_summary,
-			run_number,
-			auto_approve,
-			plan_add,
-			plan_change,
-			plan_destroy
-		from template_runs
-		where tenant_id = $1
-			and id = $2
-	`, tenantID, runID).Scan(
+// scanTemplateRun scans one row of templateRunSelect.
+func scanTemplateRun(row pgx.Row) (domain.TemplateRun, error) {
+	var run domain.TemplateRun
+	var createdAt sql.NullTime
+	var completedAt sql.NullTime
+	var add, change, destroy *int
+	if err := row.Scan(
 		&run.ID,
 		&run.TenantID,
 		&run.StackTemplateID,
@@ -1031,34 +1063,41 @@ func (store *Store) GetTemplateRun(ctx context.Context, tenantID domain.TenantID
 		&run.Status,
 		&run.Step,
 		&run.TriggerActor,
-		&startedAt,
+		&createdAt,
 		&completedAt,
 		&run.ErrorSummary,
 		&run.RunNumber,
 		&run.AutoApprove,
-		&planAdd,
-		&planChange,
-		&planDestroy,
-	)
+		&add,
+		&change,
+		&destroy,
+	); err != nil {
+		return domain.TemplateRun{}, err
+	}
+	if createdAt.Valid {
+		run.CreatedAt = createdAt.Time
+	}
+	if completedAt.Valid {
+		run.CompletedAt = completedAt.Time
+	}
+	run.PlanSummary = planSummary(add, change, destroy)
+	return run, nil
+}
+
+func (store *Store) GetTemplateRun(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) (domain.TemplateRun, error) {
+	run, err := scanTemplateRun(store.pool.QueryRow(ctx, templateRunSelect+`
+		where r.tenant_id = $1 and r.id = $2
+	`, tenantID, runID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.TemplateRun{}, app.ErrNotFound
 	}
 	if err != nil {
 		return domain.TemplateRun{}, fmt.Errorf("get template run: %w", err)
 	}
-
-	if startedAt.Valid {
-		run.StartedAt = startedAt.Time
-	}
-	if completedAt.Valid {
-		run.CompletedAt = completedAt.Time
-	}
-	run.PlanSummary = planSummary(planAdd, planChange, planDestroy)
-
 	return run, nil
 }
 
-// planSummary reassembles a run's plan counts, which are written together:
+// planSummary reassembles an execution's counts, which are written together:
 // either all three are set or none is.
 func planSummary(add, change, destroy *int) *domain.PlanSummary {
 	if add == nil || change == nil || destroy == nil {
@@ -1068,35 +1107,9 @@ func planSummary(add, change, destroy *int) *domain.PlanSummary {
 }
 
 func (store *Store) ListTemplateRuns(ctx context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID) ([]domain.TemplateRun, error) {
-	rows, err := store.pool.Query(ctx, `
-		select
-			id,
-			tenant_id,
-			stack_template_id,
-			template_revision_id,
-			source_template_id,
-			operation,
-			selected_ref,
-			resolved_commit_sha,
-			workspace_name,
-			config_json,
-			backend_type,
-			backend_config_hash,
-			status,
-			step,
-			trigger_actor,
-			started_at,
-			completed_at,
-			error_summary,
-			run_number,
-			auto_approve,
-			plan_add,
-			plan_change,
-			plan_destroy
-		from template_runs
-		where tenant_id = $1
-			and stack_template_id = $2
-		order by started_at desc nulls last, id desc
+	rows, err := store.pool.Query(ctx, templateRunSelect+`
+		where r.tenant_id = $1 and r.stack_template_id = $2
+		order by r.created_at desc nulls last, r.id desc
 	`, tenantID, stackTemplateID)
 	if err != nil {
 		return nil, fmt.Errorf("list template runs: %w", err)
@@ -1105,50 +1118,15 @@ func (store *Store) ListTemplateRuns(ctx context.Context, tenantID domain.Tenant
 
 	runs := []domain.TemplateRun{}
 	for rows.Next() {
-		var run domain.TemplateRun
-		var startedAt sql.NullTime
-		var completedAt sql.NullTime
-		var planAdd, planChange, planDestroy *int
-		if err := rows.Scan(
-			&run.ID,
-			&run.TenantID,
-			&run.StackTemplateID,
-			&run.TemplateRevisionID,
-			&run.SourceTemplateID,
-			&run.Operation,
-			&run.SelectedRef,
-			&run.ResolvedCommitSHA,
-			&run.WorkspaceName,
-			&run.ConfigJSON,
-			&run.BackendType,
-			&run.BackendConfigHash,
-			&run.Status,
-			&run.Step,
-			&run.TriggerActor,
-			&startedAt,
-			&completedAt,
-			&run.ErrorSummary,
-			&run.RunNumber,
-			&run.AutoApprove,
-			&planAdd,
-			&planChange,
-			&planDestroy,
-		); err != nil {
+		run, err := scanTemplateRun(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scan template run: %w", err)
 		}
-		if startedAt.Valid {
-			run.StartedAt = startedAt.Time
-		}
-		if completedAt.Valid {
-			run.CompletedAt = completedAt.Time
-		}
-		run.PlanSummary = planSummary(planAdd, planChange, planDestroy)
 		runs = append(runs, run)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("list template runs: %w", err)
 	}
-
 	return runs, nil
 }
 
@@ -1368,7 +1346,13 @@ var workflowStatusSources = map[domain.TemplateRunStatus][]domain.TemplateRunSta
 //
 // Becoming terminal sets completed_at, drops the run's saved plan, and, for a
 // destroy that failed after it began destroying, leaves the stack template
-// failed. The step is never touched: a failed run keeps the one it failed on.
+// failed.
+//
+// The run's workflow execution moves with it: running starts the plan's,
+// and becoming terminal ends the input phase's and the step it was on (see
+// endWorkflowExecution). A failed run still reads the step it failed on. A
+// terminal write from a workflow that no longer carries the run, such as a
+// plan failing after its lost FinishPlan acknowledgement, changes nothing.
 func (store *Store) RecordTemplateRunStatus(ctx context.Context, input domain.TemplateRunStatusActivityInput) error {
 	sources, ok := workflowStatusSources[input.Status]
 	if !ok {
@@ -1403,6 +1387,9 @@ func (store *Store) RecordTemplateRunStatus(ctx context.Context, input domain.Te
 	if !slices.Contains(sources, current) {
 		return fmt.Errorf("%w: %q cannot become %q", ErrTemplateRunTransition, current, input.Status)
 	}
+	if !input.Phase.Valid() {
+		return fmt.Errorf("record template run status: unknown phase %q", input.Phase)
+	}
 
 	if !input.Status.Terminal() {
 		if _, err := tx.Exec(ctx, `
@@ -1410,17 +1397,27 @@ func (store *Store) RecordTemplateRunStatus(ctx context.Context, input domain.Te
 		`, input.Status, input.TenantID, input.RunID); err != nil {
 			return fmt.Errorf("record template run status: %w", err)
 		}
+		// Running is the only status recorded here, and only the plan
+		// workflow records it: an apply claims its run with
+		// BeginTemplateApply. The plan's execution starts with it.
+		if _, err := insertWorkflowExecution(ctx, tx, input.TenantID, input.RunID, input.Phase, input.WorkflowID, domain.TemplateRunExecutionRunning, ""); err != nil {
+			return err
+		}
 		return commitTemplateRunStatus(ctx, tx)
 	}
 
+	carried, err := endWorkflowExecution(ctx, tx, input)
+	if err != nil {
+		return err
+	}
+	if !carried {
+		return nil
+	}
 	if _, err := tx.Exec(ctx, `
 		update template_runs
-		set
-			status = $1,
-			error_summary = case when $2 <> '' then $2 else error_summary end,
-			completed_at = coalesce(completed_at, now())
-		where tenant_id = $3 and id = $4
-	`, input.Status, input.ErrorSummary, input.TenantID, input.RunID); err != nil {
+		set status = $1, completed_at = coalesce(completed_at, now())
+		where tenant_id = $2 and id = $3
+	`, input.Status, input.TenantID, input.RunID); err != nil {
 		return fmt.Errorf("record template run status: %w", err)
 	}
 	if input.Status == domain.TemplateRunFailed && input.Operation == domain.OperationDestroy {

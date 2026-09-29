@@ -199,6 +199,10 @@ func TestRecordTemplateRunEventRecordsTheCountsItCarries(t *testing.T) {
 	if run.PlanSummary == nil || *run.PlanSummary != (domain.PlanSummary{Add: 2, Change: 1}) {
 		t.Fatalf("plan summary = %#v, want the counts the event carried", run.PlanSummary)
 	}
+	rows := workflowExecutionRows(t, ctx, pool, "run_123")
+	if len(rows) != 1 || rows[0].Add == nil || *rows[0].Add != 2 || *rows[0].Change != 1 || *rows[0].Destroy != 0 {
+		t.Fatalf("executions = %#v, want the apply execution holding 2/1/0", rows)
+	}
 }
 
 // A destroy run moves its stack template to destroying before it destroys,
@@ -264,6 +268,7 @@ func TestRecordTemplateRunStatusIsIdempotent(t *testing.T) {
 	completed := domain.TemplateRunStatusActivityInput{
 		TenantID: "tenant_123", RunID: "run_123", StackTemplateID: "stack_template_123",
 		Operation: run.Operation, Status: domain.TemplateRunCompleted,
+		Phase: domain.RunPhasePlan, WorkflowID: "template-run/tenant_123/run_123",
 	}
 
 	for attempt := 1; attempt <= 2; attempt++ {
@@ -351,6 +356,7 @@ func TestRecordTemplateRunStatusKeepsTheStep(t *testing.T) {
 	if err := store.RecordTemplateRunStatus(ctx, domain.TemplateRunStatusActivityInput{
 		TenantID: "tenant_123", RunID: "run_123", StackTemplateID: "stack_template_123",
 		Operation: run.Operation, Status: domain.TemplateRunFailed, ErrorSummary: "clone failed",
+		Phase: domain.RunPhasePlan, WorkflowID: "template-run/tenant_123/run_123",
 	}); err != nil {
 		t.Fatal(err)
 	}

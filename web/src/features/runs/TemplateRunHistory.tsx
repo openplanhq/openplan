@@ -142,8 +142,8 @@ function RunRow({ run, to, hasActions, stackId, approvingRunID, discardingRunID,
         {run.trigger_actor}
       </td>
       <td className="data-table__mono">
-        <time dateTime={run.started_at} title={run.started_at}>
-          {formatDateTime(run.started_at)}
+        <time dateTime={run.created_at} title={run.created_at}>
+          {formatDateTime(run.created_at)}
         </time>
       </td>
       {hasActions && (

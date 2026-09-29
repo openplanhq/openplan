@@ -9,24 +9,73 @@ import (
 	"github.com/vishu42/tflive/internal/domain"
 )
 
-// RecordTemplateRunStep records the step a running run has started. Only a
-// running run has a step to start, so any other run is not found.
+// RecordTemplateRunStep records the step a running run has started, as a step
+// of its running workflow execution, and ends the step before it: a step runs
+// until the next one starts. Only a running run has a step to start, so any
+// other run is not found.
+//
+// Writing the step the execution is already on changes nothing: it is this
+// write retried after its acknowledgement was lost. That check comes first,
+// because ending the running step would otherwise end the retried step's own
+// row. A step the execution already finished is an error, not a retry: each
+// step runs once per execution, and a second row would corrupt its timeline.
 func (store *Store) RecordTemplateRunStep(ctx context.Context, input domain.TemplateRunStepActivityInput) error {
 	if !input.Step.Valid() {
 		return fmt.Errorf("record template run step: unknown step %q", input.Step)
 	}
-	commandTag, err := store.pool.Exec(ctx, `
-		update template_runs
-		set step = $1
-		where tenant_id = $2
-			and id = $3
-			and status = $4
-	`, input.Step, input.TenantID, input.RunID, domain.TemplateRunRunning)
+	tx, err := store.pool.Begin(ctx)
 	if err != nil {
+		return fmt.Errorf("begin record template run step: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var executionID int64
+	err = tx.QueryRow(ctx, `
+		select e.id
+		from template_run_workflow_executions e
+		join template_runs r on r.tenant_id = e.tenant_id and r.id = e.run_id
+		where e.tenant_id = $1
+			and e.run_id = $2
+			and e.status = 'running'
+			and r.status = $3
+		for update of e
+	`, input.TenantID, input.RunID, domain.TemplateRunRunning).Scan(&executionID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("read running workflow execution: %w", err)
+	}
+
+	var existing domain.TemplateRunExecutionStatus
+	err = tx.QueryRow(ctx, `
+		select status from template_run_step_executions
+		where workflow_execution_id = $1 and step = $2
+	`, executionID, input.Step).Scan(&existing)
+	switch {
+	case err == nil && existing == domain.TemplateRunExecutionRunning:
+		return nil
+	case err == nil:
+		return fmt.Errorf("record template run step: %q already ran in this workflow execution", input.Step)
+	case !errors.Is(err, pgx.ErrNoRows):
+		return fmt.Errorf("read template run step: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		update template_run_step_executions
+		set status = $2, finished_at = now()
+		where workflow_execution_id = $1 and status = 'running'
+	`, executionID, domain.TemplateRunExecutionSucceeded); err != nil {
+		return fmt.Errorf("end previous template run step: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		insert into template_run_step_executions (workflow_execution_id, run_id, tenant_id, step, status, started_at)
+		values ($1, $2, $3, $4, $5, now())
+	`, executionID, input.RunID, input.TenantID, input.Step, domain.TemplateRunExecutionRunning); err != nil {
 		return fmt.Errorf("record template run step: %w", err)
 	}
-	if commandTag.RowsAffected() == 0 {
-		return ErrNotFound
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit template run step: %w", err)
 	}
 	return nil
 }
@@ -76,12 +125,8 @@ func (store *Store) RecordTemplateRunEvent(ctx context.Context, input domain.Tem
 	}
 
 	if input.Summary != nil {
-		if _, err := tx.Exec(ctx, `
-			update template_runs
-			set plan_add = $1, plan_change = $2, plan_destroy = $3
-			where tenant_id = $4 and id = $5
-		`, input.Summary.Add, input.Summary.Change, input.Summary.Destroy, input.TenantID, input.RunID); err != nil {
-			return fmt.Errorf("record template run event counts: %w", err)
+		if err := recordRunningCounts(ctx, tx, input.TenantID, input.RunID, *input.Summary); err != nil {
+			return err
 		}
 	}
 
