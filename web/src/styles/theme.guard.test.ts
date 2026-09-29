@@ -73,6 +73,13 @@ describe("theme.css", () => {
     expect(vars.radius).toBe("0.625rem");
   });
 
+  // `shadcn add` appends a component's variables (sidebar, chart) to :root as
+  // oklch(), which the contrast checks cannot read. Every colour must be hex.
+  it("writes every :root colour as 6-digit hex", () => {
+    const offenders = Object.entries(vars).filter(([name, value]) => name !== "radius" && !/^#[0-9a-f]{6}$/i.test(value));
+    expect(offenders, `convert to hex: ${offenders.map(([n, v]) => `--${n}: ${v}`).join(", ")}`).toEqual([]);
+  });
+
   it.each(TEXT_PAIRS)("--%s on --%s meets 4.5:1", (fg, bg) => {
     expect(contrast(colour(fg), colour(bg))).toBeGreaterThanOrEqual(4.5);
   });
