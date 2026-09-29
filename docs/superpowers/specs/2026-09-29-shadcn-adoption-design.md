@@ -1,8 +1,8 @@
 # Adopt shadcn/ui in `web/`
 
 **Date:** 2026-09-29
-**Status:** Draft. Foundation and migration order agreed in conversation; the
-guard and testing sections are new in this document and need review.
+**Status:** Approved. Guard and testing sections reviewed with PR 1, which
+also settled the details recorded below.
 
 ## Problem
 
@@ -60,11 +60,11 @@ This design keeps Tailwind but answers both:
 | Topic | Choice | Reason |
 |---|---|---|
 | Primitives library | Base UI (`@base-ui/react`) | shadcn's default since July 2026. New docs, blocks and `shadcn add` output lead with it. |
-| shadcn preset | `base-nova`, base colour `neutral`, CSS variables on | The CLI's stock setup. |
+| shadcn preset | `shadcn init --base base --preset nova`, which `components.json` records as `"style": "base-nova"`; base colour `neutral`, CSS variables on. `cn` comes from the `cn` package, re-exported by `src/lib/utils.ts`. | The CLI's stock setup. |
 | React | 19 | shadcn's components no longer use `forwardRef`; under React 18, refs would not reach the DOM through them. |
 | File locations | `src/components/ui/` for shadcn components, `src/lib/utils.ts` for `cn()`, `@/` alias to `src/` | shadcn's defaults, which the CLI, its docs and agents all expect. App-specific shared components stay in `src/shared/`. |
 | Icons | `lucide-react` | Already a dependency, and shadcn's default. |
-| Fonts | Geist and Geist Mono, adding 500 and 600 weights | shadcn uses `font-medium` and `font-semibold`. With only the 400 face shipped, browsers render 500 as 400 and fake 600 by smearing the glyphs. |
+| Fonts | Geist and Geist Mono from `@fontsource-variable/geist` and `@fontsource-variable/geist-mono`, bundled at build time; the vendored 400-weight files and `scripts/vendor-fonts.sh` are removed | shadcn uses `font-medium` and `font-semibold`. Variable fonts carry every weight; with only the 400 face shipped, browsers render 500 as 400 and fake 600 by smearing the glyphs. |
 | Radius | shadcn's `0.625rem` | Stock look. |
 | Dark mode | None | Non-goal. |
 
@@ -95,7 +95,12 @@ Other rules:
 
 - **Clear Tailwind's built-in palette.** The `@theme` block sets
   `--color-*: initial`, then maps only the variables above. Classes like
-  `bg-blue-500` or `text-white` generate no CSS.
+  `bg-blue-500` generate no CSS. `--color-black` and `--color-white` stay
+  defined, because vendored components use them (`alert-dialog`'s overlay is
+  `bg-black/10`); the class guard bars app code from them.
+- **Keep `@custom-variant dark (&:is(.dark *));`.** shadcn components carry
+  `dark:` classes, and Tailwind's default `dark:` follows the OS setting. Scoped
+  to a `.dark` ancestor, which the app never sets, they stay light.
 - **Leave out the chart and sidebar variables** until a component needs them.
   The CLI adds them when it installs such a component.
 - **`--accent` is not the brand colour.** In shadcn it is the neutral hover
@@ -151,8 +156,21 @@ names with Tailwind or shadcn variables, for example `--color-accent`,
 Declared in the `legacy` layer, they would override Tailwind's theme layer on
 `:root`, and shadcn components would render with the old values: `bg-accent`
 would hover blue, and `rounded-lg` would be 8px. PR 1 prefixes every old token
-with `--legacy-` in the four legacy files and in `dev/StyleGuide.tsx`, the only
-TSX file that reads them.
+with `--legacy-` in the five legacy files (`tokens.css`, `base.css`,
+`primitives.css`, `features.css`, and `src/dev/styleguide.css`, which
+`StyleGuide.tsx` imports directly and which wraps itself in `@layer legacy { … }`)
+and in `dev/StyleGuide.tsx`, the only TSX file that reads them. The rename covers
+77 names: every custom property the legacy sheets declare or read, including
+`--data-table-min-width` (declared in `features.css`) and `--reveal-delay` (read
+in `base.css`, never set).
+
+**Restore what Preflight takes.** PR 1 diffed the computed styles of all 19
+screens before and after adding Tailwind. Five restorations brought the diff to
+zero: `body` keeps its inherited legacy colours instead of `theme.css`'s, and four
+browser defaults come back where legacy markup relied on them. Each restoration
+is written `:where(<legacy class> …) { <property>: revert; }`: `revert` is exactly
+the browser default Preflight removed, and `:where()` gives it browser-default
+precedence, so every existing legacy rule still wins over it.
 
 **Known leak, accepted until PR 9.** `base.css` styles bare elements (`h1`–`h4`,
 `a`, `button`, `input`, `select`, `textarea`, `code`). Those rules still apply on
@@ -166,7 +184,7 @@ migrated and unmigrated screens side by side.
 | PR | Scope | Main shadcn pieces |
 |---|---|---|
 | 0 | Upgrade React 18 to 19, nothing else | none |
-| 1 | Tooling, theme, layer setup, token rename, Geist 500/600, new guards; removes the page glows (`body::before`). No screen changes. | none |
+| 1 | Tooling, theme, layer setup, token rename, Fontsource Geist, new guards, Preflight restorations; removes the page glows (`body::before`, and `body > *`, which only lifted content above them); adds the Button to `/styleguide`. No screen changes. | Button |
 | 2 | App shell (`AppShell`) and `src/shared/` components | Breadcrumb; Badge (status tones, roles); Card (`StatBand`, `IdsPanel`); Collapsible (`LogSteps`) |
 | 3 | Standalone screens: sign-in, access denied, not found, service unavailable, route placeholder | Card, Button, Alert |
 | 4 | Stacks: list, create, detail shell, environment, credentials | Table, Input, Label, Button |
@@ -235,18 +253,19 @@ Table migration)
   reason is unchanged: with automatic layout, a status changing from `queued`
   to `waiting_approval` shifts every column after it.
 
-**Dead-CSS guard** (PR 1, deleted in PR 9). Every class selector in the four
+**Dead-CSS guard** (PR 1, deleted in PR 9). Every class selector in the five
 legacy files appears in some `.tsx` file, either literally or as the literal
 prefix of a template string (`status-tone--${tone}` counts for every
 `status-tone--*`).
 
-**Legacy-token guard** (PR 1, deleted in PR 9). The four legacy files reference
+**Legacy-token guard** (PR 1, deleted in PR 9). The five legacy files reference
 only `--legacy-*` custom properties, so an unrenamed token can't slip through.
 
-**Existing guards.** `styles.guard.test.ts` is scoped to the four legacy files
-by name. Today it scans every CSS file in `styles/`, which would flag
-`theme.css`. Its "`styles.css` contains nothing but imports" test is updated to
-allow the leading `@layer` statement. The whole file is deleted in PR 9.
+**Existing guards.** `styles.guard.test.ts` is scoped by name to `base.css`,
+`primitives.css` and `features.css`. It used to scan every CSS file in
+`styles/`, which would flag `theme.css`. Its "`styles.css` contains nothing but
+imports" test moves to `theme.guard.test.ts`, which also requires the leading
+`@layer` statement. `styles.guard.test.ts` is deleted in PR 9.
 
 ## Testing
 
