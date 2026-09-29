@@ -105,19 +105,23 @@ describe("theme.css", () => {
   });
 });
 
-// The theme's values pass on their own, but the Button paints them translucent:
+// The theme's values pass on their own, but components paint them translucent:
 // hover:bg-primary/80 under white text is 4.11:1 with the brand blue. Read the
-// alphas out of the component so a regenerated button.tsx is re-checked.
+// alphas out of the components so a regenerated one is re-checked.
+const uiSource = (file: string) => readFileSync(join(STYLES_DIR, "..", "components", "ui", file), "utf8");
+const variantIn = (source: string) => (name: string) =>
+  source.match(new RegExp(`\\b${name}:\\s*"([^"]*)"`))?.[1] ?? "";
+
+function alpha(classes: string, utility: string): number {
+  const match = classes.match(new RegExp(`(?:^|\\s)${utility}/(\\d+)(?:\\s|$)`));
+  if (!match) throw new Error(`${utility}/<n> not found in "${classes}"`);
+  return Number(match[1]) / 100;
+}
+
 describe("Button variants on theme.css", () => {
   const vars = rootVariables(theme());
   const colour = (name: string) => rgb(vars[name]);
-  const button = readFileSync(join(STYLES_DIR, "..", "components", "ui", "button.tsx"), "utf8");
-  const variant = (name: string) => button.match(new RegExp(`\\b${name}:\\s*"([^"]*)"`))?.[1] ?? "";
-  const alpha = (classes: string, utility: string) => {
-    const match = classes.match(new RegExp(`(?:^|\\s)${utility}/(\\d+)(?:\\s|$)`));
-    if (!match) throw new Error(`${utility}/<n> not found in "${classes}"`);
-    return Number(match[1]) / 100;
-  };
+  const variant = variantIn(uiSource("button.tsx"));
   const background = () => colour("background");
 
   it("keeps the default button's hover at 4.5:1", () => {
@@ -128,6 +132,30 @@ describe("Button variants on theme.css", () => {
   it.each(["bg-destructive", "hover:bg-destructive"])("keeps the destructive button's %s tint at 4.5:1", (utility) => {
     const surface = tint(colour("destructive"), alpha(variant("destructive"), utility), background());
     expect(contrast(colour("destructive"), surface)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+// StatusBadge and RoleBadge set each colour's text on a tint of that colour.
+describe("Badge variants on theme.css", () => {
+  const vars = rootVariables(theme());
+  const colour = (name: string) => rgb(vars[name]);
+  const variant = variantIn(uiSource("badge.tsx"));
+
+  it.each([
+    ["destructive", "destructive"],
+    ["success", "success"],
+    ["progress", "primary"],
+    ["warning", "warning"]
+  ])("keeps the %s badge's text on its tint at 4.5:1", (name, themeColour) => {
+    const classes = variant(name);
+    expect(classes.split(/\s+/)).toContain(`text-${themeColour}`);
+    const surface = tint(colour(themeColour), alpha(classes, `bg-${themeColour}`), colour("background"));
+    expect(contrast(colour(themeColour), surface)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  // TEXT_PAIRS above already checks muted-foreground on muted.
+  it("paints the muted badge with a checked pair", () => {
+    expect(variant("muted").split(/\s+/)).toEqual(expect.arrayContaining(["bg-muted", "text-muted-foreground"]));
   });
 });
 
