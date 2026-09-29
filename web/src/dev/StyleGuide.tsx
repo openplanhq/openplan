@@ -39,42 +39,42 @@ const SECTIONS: { id: string; title: string }[] = [
 ];
 
 const COLOUR_TOKENS = [
-  "--color-bg",
-  "--color-fg",
-  "--color-card",
-  "--color-muted",
-  "--color-muted-fg",
-  "--color-border",
-  "--color-accent",
-  "--color-accent-2",
-  "--color-success",
-  "--color-warning",
-  "--color-danger",
-  "--color-success-dot",
-  "--color-warning-dot"
+  "--legacy-color-bg",
+  "--legacy-color-fg",
+  "--legacy-color-card",
+  "--legacy-color-muted",
+  "--legacy-color-muted-fg",
+  "--legacy-color-border",
+  "--legacy-color-accent",
+  "--legacy-color-accent-2",
+  "--legacy-color-success",
+  "--legacy-color-warning",
+  "--legacy-color-danger",
+  "--legacy-color-success-dot",
+  "--legacy-color-warning-dot"
 ];
 
-const RADIUS_TOKENS = ["--radius-sm", "--radius-md", "--radius-lg", "--radius-xl", "--radius-full"];
+const RADIUS_TOKENS = ["--legacy-radius-sm", "--legacy-radius-md", "--legacy-radius-lg", "--legacy-radius-xl", "--legacy-radius-full"];
 
 const SHADOW_TOKENS = [
-  "--shadow-sm",
-  "--shadow-md",
-  "--shadow-lg",
-  "--shadow-xl",
-  "--shadow-accent",
-  "--shadow-accent-lg"
+  "--legacy-shadow-sm",
+  "--legacy-shadow-md",
+  "--legacy-shadow-lg",
+  "--legacy-shadow-xl",
+  "--legacy-shadow-accent",
+  "--legacy-shadow-accent-lg"
 ];
 
 const TYPE_STEPS = [
-  "--text-xs",
-  "--text-sm",
-  "--text-base",
-  "--text-lg",
-  "--text-xl",
-  "--text-2xl",
-  "--text-3xl",
-  "--text-4xl",
-  "--text-5xl"
+  "--legacy-text-xs",
+  "--legacy-text-sm",
+  "--legacy-text-base",
+  "--legacy-text-lg",
+  "--legacy-text-xl",
+  "--legacy-text-2xl",
+  "--legacy-text-3xl",
+  "--legacy-text-4xl",
+  "--legacy-text-5xl"
 ];
 
 /** Reads custom properties off the document root, so nothing is restated here. */
@@ -184,7 +184,7 @@ export default function StyleGuide() {
         <Section
           id="colour"
           title="Colour"
-          note="The accent is the only saturated colour in ordinary use. The three status colours are reserved for state. Note that --color-success-dot and --color-warning-dot are brighter variants restricted to dots and fills: they measure roughly 3.2:1 on white and fail AA for text, which is why the text-bearing tokens are darker."
+          note="The accent is the only saturated colour in ordinary use. The three status colours are reserved for state. Note that --legacy-color-success-dot and --legacy-color-warning-dot are brighter variants restricted to dots and fills: they measure roughly 3.2:1 on white and fail AA for text, which is why the text-bearing tokens are darker."
         >
           <Specimen label="Palette" hint="values read from tokens.css at runtime">
             <div className="sg__swatches">
@@ -202,13 +202,13 @@ export default function StyleGuide() {
             </div>
           </Specimen>
 
-          <Specimen label="Gradient" hint="--gradient-accent">
+          <Specimen label="Gradient" hint="--legacy-gradient-accent">
             <div
               style={{
                 width: "100%",
                 height: "72px",
-                borderRadius: "var(--radius-lg)",
-                background: "var(--gradient-accent)"
+                borderRadius: "var(--legacy-radius-lg)",
+                background: "var(--legacy-gradient-accent)"
               }}
             />
           </Specimen>
@@ -220,13 +220,13 @@ export default function StyleGuide() {
           note="Geist carries headings, body and UI; Geist Mono carries every technical signal — labels, IDs, timestamps, status and logs."
         >
           <Specimen label="Families" stack>
-            <p style={{ fontFamily: "var(--font-display)", fontWeight: 400, fontSize: "var(--text-4xl)", margin: 0 }}>
+            <p style={{ fontFamily: "var(--legacy-font-display)", fontWeight: 400, fontSize: "var(--legacy-text-4xl)", margin: 0 }}>
               Geist display
             </p>
-            <p style={{ fontFamily: "var(--font-body)", fontSize: "var(--text-lg)", margin: "var(--space-4) 0 0" }}>
+            <p style={{ fontFamily: "var(--legacy-font-body)", fontSize: "var(--legacy-text-lg)", margin: "var(--legacy-space-4) 0 0" }}>
               Geist body — the quick brown fox jumps over the lazy dog, 0123456789
             </p>
-            <p style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", margin: "var(--space-4) 0 0" }}>
+            <p style={{ fontFamily: "var(--legacy-font-mono)", fontSize: "var(--legacy-text-sm)", margin: "var(--legacy-space-4) 0 0" }}>
               Geist Mono — stack_1a2b3c · 2026-08-11T09:14:22Z
             </p>
           </Specimen>
@@ -238,7 +238,7 @@ export default function StyleGuide() {
                   <dt className="sg__row-name">
                     {step} · {type[step] || "—"}
                   </dt>
-                  <dd style={{ margin: 0, fontSize: `var(${step})`, lineHeight: "var(--leading-tight)" }}>
+                  <dd style={{ margin: 0, fontSize: `var(${step})`, lineHeight: "var(--legacy-leading-tight)" }}>
                     Terraform
                   </dd>
                 </div>
@@ -250,7 +250,7 @@ export default function StyleGuide() {
         <Section id="radii" title="Radii">
           <Specimen label="Scale">
             {RADIUS_TOKENS.map((token) => (
-              <div key={token} style={{ display: "grid", gap: "var(--space-2)", justifyItems: "center" }}>
+              <div key={token} style={{ display: "grid", gap: "var(--legacy-space-2)", justifyItems: "center" }}>
                 <div className="sg__radius-tile" style={{ borderRadius: `var(${token})` }} />
                 <span className="sg__row-name">{token}</span>
                 <span className="sg__row-name">{radii[token] || "—"}</span>
@@ -314,11 +314,11 @@ export default function StyleGuide() {
               Stack name
               <input placeholder="payments-core" />
             </label>
-            <label style={{ maxWidth: "360px", marginTop: "var(--space-5)" }}>
+            <label style={{ maxWidth: "360px", marginTop: "var(--legacy-space-5)" }}>
               Description
               <textarea placeholder="What does this stack manage?" />
             </label>
-            <label style={{ maxWidth: "360px", marginTop: "var(--space-5)" }}>
+            <label style={{ maxWidth: "360px", marginTop: "var(--legacy-space-5)" }}>
               Role
               <select defaultValue="operator">
                 <option value="owner">owner</option>
@@ -336,7 +336,7 @@ export default function StyleGuide() {
           note="The featured variant paints its gradient border from a background layer, so it carries a forced-colors fallback; without one it would lose all emphasis in Windows High Contrast."
         >
           <Specimen label="Variants" stack>
-            <div style={{ display: "grid", gap: "var(--space-5)" }}>
+            <div style={{ display: "grid", gap: "var(--legacy-space-5)" }}>
               <section className="panel">
                 <h2>Standard</h2>
                 <p className="muted">One border, one shadow, rounded corners.</p>
@@ -418,7 +418,7 @@ export default function StyleGuide() {
         >
           <Specimen label="data-table" hint="xs · sm · lg · md · slack · actions" stack>
             <div className="data-table-frame">
-              <table className="data-table" style={{ ["--data-table-min-width" as string]: "1040px" }}>
+              <table className="data-table" style={{ ["--legacy-data-table-min-width" as string]: "1040px" }}>
                 <colgroup>
                   <col className="data-table__col--xs" />
                   <col className="data-table__col--sm" />

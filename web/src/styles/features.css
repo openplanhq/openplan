@@ -13,52 +13,52 @@
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: var(--space-3) var(--space-6);
-  border-bottom: 1px solid var(--color-border);
+  gap: var(--legacy-space-3) var(--legacy-space-6);
+  border-bottom: 1px solid var(--legacy-color-border);
   /* Header height is emergent from this padding plus the nav link's line box —
-     no --control-height reaches it — so density has to be set here directly.
+     no --legacy-control-height reaches it — so density has to be set here directly.
      12px + 37px + 12px = 61px. */
-  padding: var(--space-3) var(--space-6);
+  padding: var(--legacy-space-3) var(--legacy-space-6);
   /* Geist's header carries no shadow and no border, measured while scrolled.
      The hairline stays here because this bar is sticky over scrolling content
      and theirs is not; the shadow does not, since the border already separates
      the two surfaces and doubling them is what read as heavy. */
-  background: var(--color-card);
+  background: var(--legacy-color-card);
 }
 
 .app-frame-brand {
   display: flex;
   align-items: center;
-  gap: var(--space-8);
+  gap: var(--legacy-space-8);
 }
 
 .app-wordmark {
-  font-family: var(--font-display);
+  font-family: var(--legacy-font-display);
   font-weight: 400;
-  font-size: var(--text-xl);
+  font-size: var(--legacy-text-xl);
   line-height: 1;
 }
 
 .app-nav {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--legacy-space-2);
 }
 
 .app-nav a {
   position: relative;
-  border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-3);
-  color: var(--color-muted-fg);
-  font-size: var(--text-sm);
+  border-radius: var(--legacy-radius-md);
+  padding: var(--legacy-space-2) var(--legacy-space-3);
+  color: var(--legacy-color-muted-fg);
+  font-size: var(--legacy-text-sm);
   font-weight: 400;
   text-decoration: none;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: all var(--legacy-duration-fast) var(--legacy-ease-out);
 }
 
 .app-nav a:hover {
-  color: var(--color-fg);
-  background: var(--color-muted);
+  color: var(--legacy-color-fg);
+  background: var(--legacy-color-muted);
   text-decoration: none;
 }
 
@@ -66,87 +66,87 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--space-3) var(--space-5);
-  font-size: var(--text-sm);
+  gap: var(--legacy-space-3) var(--legacy-space-5);
+  font-size: var(--legacy-text-sm);
 }
 
 .identity-menu {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  color: var(--color-muted-fg);
+  gap: var(--legacy-space-3);
+  color: var(--legacy-color-muted-fg);
 }
 
 .identity-menu button {
-  min-height: var(--touch-target);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: 0 var(--space-4);
-  color: var(--color-fg);
+  min-height: var(--legacy-touch-target);
+  border: 1px solid var(--legacy-color-border);
+  border-radius: var(--legacy-radius-lg);
+  padding: 0 var(--legacy-space-4);
+  color: var(--legacy-color-fg);
   background: transparent;
-  font-size: var(--text-sm);
+  font-size: var(--legacy-text-sm);
   font-weight: 400;
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: all var(--legacy-duration-fast) var(--legacy-ease-out);
 }
 
 .identity-menu button:hover {
-  border-color: var(--color-accent-border);
-  background: var(--color-muted);
+  border-color: var(--legacy-color-accent-border);
+  background: var(--legacy-color-muted);
 }
 
 .app-frame-identity .runtime-field {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--legacy-space-2);
 }
 
 .app-frame-identity .runtime-value {
   min-height: 0;
-  padding: var(--space-1) var(--space-3);
-  font-size: var(--text-xs);
+  padding: var(--legacy-space-1) var(--legacy-space-3);
+  font-size: var(--legacy-text-xs);
 }
 
 .app-frame-content {
   width: min(1280px, 100%);
   margin: 0 auto;
-  padding: var(--space-6) var(--space-4);
+  padding: var(--legacy-space-6) var(--legacy-space-4);
 }
 
 .runtime-field {
   display: grid;
-  gap: var(--space-2);
-  color: var(--color-muted-fg);
-  font-size: var(--text-sm);
+  gap: var(--legacy-space-2);
+  color: var(--legacy-color-muted-fg);
+  font-size: var(--legacy-text-sm);
 }
 
 .runtime-value {
   display: flex;
   align-items: center;
-  min-height: var(--control-height);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  min-height: var(--legacy-control-height);
+  border: 1px solid var(--legacy-color-border);
+  border-radius: var(--legacy-radius-lg);
   /* No vertical padding: 8px + a 21px line box + 8px is 37px, which overshoots
-     --control-height and leaves the token inert. Zero it and the token governs,
+     --legacy-control-height and leaves the token inert. Zero it and the token governs,
      with align-items centring the text. */
-  padding: 0 var(--space-3);
-  color: var(--color-fg);
-  background: var(--color-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  padding: 0 var(--legacy-space-3);
+  color: var(--legacy-color-fg);
+  background: var(--legacy-color-muted);
+  font-family: var(--legacy-font-mono);
+  font-size: var(--legacy-text-sm);
 }
 
 .debug-panel {
-  margin: var(--space-8) var(--space-6);
-  border-top: 1px solid var(--color-border);
-  padding-top: var(--space-4);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  margin: var(--legacy-space-8) var(--legacy-space-6);
+  border-top: 1px solid var(--legacy-color-border);
+  padding-top: var(--legacy-space-4);
+  font-family: var(--legacy-font-mono);
+  font-size: var(--legacy-text-xs);
 }
 
 .debug-panel summary {
-  color: var(--color-muted-fg);
-  letter-spacing: var(--tracking-label);
+  color: var(--legacy-color-muted-fg);
+  letter-spacing: var(--legacy-tracking-label);
   text-transform: uppercase;
   cursor: pointer;
 }
@@ -154,28 +154,28 @@
 .id-grid {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  gap: var(--space-2) var(--space-4);
-  margin: var(--space-4) 0 0;
+  gap: var(--legacy-space-2) var(--legacy-space-4);
+  margin: var(--legacy-space-4) 0 0;
 }
 
 .id-grid dt {
-  color: var(--color-muted-fg);
+  color: var(--legacy-color-muted-fg);
 }
 
 .id-grid dd {
   min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
-  font-family: var(--font-mono);
+  font-family: var(--legacy-font-mono);
 }
 
 /* ---- Full-viewport showcase screens ---- */
 .showcase {
   display: grid;
   align-items: center;
-  gap: var(--space-12);
+  gap: var(--legacy-space-12);
   min-height: 60vh;
-  padding: var(--space-12) 0;
+  padding: var(--legacy-space-12) 0;
 }
 
 @media (min-width: 900px) {
@@ -186,32 +186,32 @@
 
 .showcase__body {
   display: grid;
-  gap: var(--space-5);
+  gap: var(--legacy-space-5);
   justify-items: start;
 }
 
 .showcase__title {
   margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--text-5xl);
+  font-family: var(--legacy-font-display);
+  font-size: var(--legacy-text-5xl);
   /* 52px and 64px both sit in Geist's >=40px tier, where tracking is -0.06em
      and leading approaches 1.0 (their 56px and 64px headings both set 1:1). */
-  letter-spacing: var(--tracking-tightest);
-  line-height: var(--leading-none);
+  letter-spacing: var(--legacy-tracking-tightest);
+  line-height: var(--legacy-leading-none);
 }
 
 @media (min-width: 768px) {
   .showcase__title {
-    font-size: var(--text-6xl);
+    font-size: var(--legacy-text-6xl);
   }
 }
 
 .showcase__lede {
   max-width: 46ch;
   margin: 0;
-  color: var(--color-muted-fg);
-  font-size: var(--text-lg);
-  line-height: var(--leading-relaxed);
+  color: var(--legacy-color-muted-fg);
+  font-size: var(--legacy-text-lg);
+  line-height: var(--legacy-leading-relaxed);
 }
 
 /* The decorative graphic is noise on a small screen — hide it rather than
@@ -235,12 +235,12 @@
 }
 
 .showcase--compact .showcase__title {
-  font-size: var(--text-4xl);
+  font-size: var(--legacy-text-4xl);
 }
 
 @media (min-width: 768px) {
   .showcase--compact .showcase__title {
-    font-size: var(--text-5xl);
+    font-size: var(--legacy-text-5xl);
   }
 }
 
@@ -253,14 +253,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-4);
-  margin-bottom: var(--space-6);
+  gap: var(--legacy-space-4);
+  margin-bottom: var(--legacy-space-6);
 }
 
 .stacks-list,
 .templates-list {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--legacy-space-3);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -270,20 +270,20 @@
 .templates-list li {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-xl);
-  padding: var(--space-2) var(--space-4);
-  background: var(--color-card);
-  box-shadow: var(--shadow-sm);
-  transition: all var(--duration-lift) var(--ease-out);
+  gap: var(--legacy-space-4);
+  border: 1px solid var(--legacy-color-border);
+  border-radius: var(--legacy-radius-xl);
+  padding: var(--legacy-space-2) var(--legacy-space-4);
+  background: var(--legacy-color-card);
+  box-shadow: var(--legacy-shadow-sm);
+  transition: all var(--legacy-duration-lift) var(--legacy-ease-out);
 }
 
 .stacks-list li:hover,
 .templates-list li:hover {
   transform: translateY(-2px);
-  border-color: var(--color-accent-border);
-  box-shadow: var(--shadow-lg);
+  border-color: var(--legacy-color-accent-border);
+  box-shadow: var(--legacy-shadow-lg);
 }
 
 /* Row names for both lists. Grouped rather than declared twice: these lists
@@ -291,8 +291,8 @@
    two separate rules the sizes silently drifted apart (18px vs 16px). */
 .stacks-list li a,
 .templates-list__name {
-  color: var(--color-fg);
-  font-size: var(--text-base);
+  color: var(--legacy-color-fg);
+  font-size: var(--legacy-text-base);
   font-weight: 400;
 }
 
@@ -302,9 +302,9 @@
 }
 
 .stacks-list li small {
-  color: var(--color-muted-fg);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  color: var(--legacy-color-muted-fg);
+  font-family: var(--legacy-font-mono);
+  font-size: var(--legacy-text-xs);
 }
 
 /* The stacks empty state reuses `.showcase .showcase--compact` from Task 5.
@@ -315,7 +315,7 @@
    heading is a landmark, not a control. */
 .templates-groups {
   display: grid;
-  gap: var(--space-6);
+  gap: var(--legacy-space-6);
   /* Groups size to their contents. As a stretched grid item — which is what it
      becomes in the install picker's left pane — align-content resolves to
      stretch and inflates these auto rows to fill the taller column, opening a
@@ -326,26 +326,26 @@
 .templates-group__heading {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  margin: 0 0 var(--space-3);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  gap: var(--legacy-space-3);
+  margin: 0 0 var(--legacy-space-3);
+  font-family: var(--legacy-font-mono);
+  font-size: var(--legacy-text-sm);
   font-weight: 400;
   letter-spacing: 0.01em;
 }
 
 .templates-group__repo {
-  color: var(--color-muted-fg);
+  color: var(--legacy-color-muted-fg);
   overflow-wrap: anywhere;
 }
 
 .templates-group__count {
   flex: none;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-full);
-  padding: 0 var(--space-2);
-  color: var(--color-muted-fg);
-  font-size: var(--text-xs);
+  border: 1px solid var(--legacy-color-border);
+  border-radius: var(--legacy-radius-full);
+  padding: 0 var(--legacy-space-2);
+  color: var(--legacy-color-muted-fg);
+  font-size: var(--legacy-text-xs);
   line-height: 1.6;
 }
 
@@ -357,13 +357,13 @@
    the accent border rather than a fill so the row still reads as one of the
    list, and so the cue survives a reload of the shared URL. */
 .templates-list li[data-selected="true"] {
-  border-color: var(--color-accent-border);
-  box-shadow: var(--shadow-md);
+  border-color: var(--legacy-color-accent-border);
+  box-shadow: var(--legacy-shadow-md);
 }
 
 .templates-list__main {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--legacy-space-1);
   min-width: 0;
 }
 
@@ -374,9 +374,9 @@
 
 .templates-list li small,
 .template-choices small {
-  color: var(--color-muted-fg);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  color: var(--legacy-color-muted-fg);
+  font-family: var(--legacy-font-mono);
+  font-size: var(--legacy-text-xs);
   overflow-wrap: anywhere;
 }
 
@@ -387,13 +387,13 @@
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--legacy-space-3);
 }
 
 .templates-list__rev {
-  color: var(--color-muted-fg);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  color: var(--legacy-color-muted-fg);
+  font-family: var(--legacy-font-mono);
+  font-size: var(--legacy-text-xs);
 }
 
 /* ---- Template detail: the revisions of one template ---- */
@@ -409,7 +409,7 @@
   flex: none;
   flex-direction: column;
   align-items: flex-end;
-  gap: var(--space-2);
+  gap: var(--legacy-space-2);
 }
 
 /* Empty until a sync settles. An empty block has no line box, so the column
@@ -417,13 +417,13 @@
 .template-detail__sync-result,
 .template-detail__sync .error-text {
   margin: 0;
-  font-size: var(--text-sm);
+  font-size: var(--legacy-text-sm);
   text-align: right;
 }
 
 .revisions-list {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--legacy-space-2);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -432,26 +432,26 @@
 .revisions-list li {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
-  border-top: 1px solid var(--color-border);
-  padding: var(--space-3) 0;
+  gap: var(--legacy-space-4);
+  border-top: 1px solid var(--legacy-color-border);
+  padding: var(--legacy-space-3) 0;
 }
 
 .revisions-list li[data-selected="true"] .revisions-list__sha {
-  color: var(--color-accent);
+  color: var(--legacy-color-accent);
 }
 
 .revisions-list__sha {
   flex: none;
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  font-family: var(--legacy-font-mono);
+  font-size: var(--legacy-text-sm);
   font-weight: 400;
 }
 
 .revisions-list__date {
   flex: 1;
-  color: var(--color-muted-fg);
-  font-size: var(--text-sm);
+  color: var(--legacy-color-muted-fg);
+  font-size: var(--legacy-text-sm);
 }
 
 /* Marks the revision a new stack install would pick. It annotates the status
@@ -459,9 +459,9 @@
    tracking treatment reads as a section heading and out-shouted it. */
 .revisions-list__latest {
   flex: none;
-  color: var(--color-muted-fg);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  color: var(--legacy-color-muted-fg);
+  font-family: var(--legacy-font-mono);
+  font-size: var(--legacy-text-xs);
 }
 
 /* Reserves the word's width on the rows it does not apply to. Without it the
@@ -475,50 +475,50 @@
 .stack-detail-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-bottom: var(--space-6);
+  gap: var(--legacy-space-2);
+  margin-bottom: var(--legacy-space-6);
 }
 
 .stack-detail-tabs a {
   position: relative;
-  min-height: var(--touch-target);
+  min-height: var(--legacy-touch-target);
   border: 0;
-  border-radius: var(--radius-md);
-  padding: 0 var(--space-4);
-  color: var(--color-muted-fg);
+  border-radius: var(--legacy-radius-md);
+  padding: 0 var(--legacy-space-4);
+  color: var(--legacy-color-muted-fg);
   background: transparent;
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-family: var(--legacy-font-body);
+  font-size: var(--legacy-text-sm);
   font-weight: 400;
   text-decoration: none;
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: all var(--legacy-duration-fast) var(--legacy-ease-out);
 }
 
 .stack-detail-tabs a:hover {
-  color: var(--color-fg);
-  background: var(--color-muted);
+  color: var(--legacy-color-fg);
+  background: var(--legacy-color-muted);
   text-decoration: none;
 }
 
 .stack-detail-tabs a.active {
-  color: var(--color-accent);
+  color: var(--legacy-color-accent);
 }
 
 .stack-detail-tabs a.active::after {
   content: "";
   position: absolute;
-  left: var(--space-4);
-  right: var(--space-4);
+  left: var(--legacy-space-4);
+  right: var(--legacy-space-4);
   bottom: 2px;
   height: 2px;
-  border-radius: var(--radius-full);
-  background: var(--gradient-accent);
+  border-radius: var(--legacy-radius-full);
+  background: var(--legacy-gradient-accent);
 }
 
 /* A light rule under the tabs; the active tab's underline sits on it. */
 .stack-detail-tabs {
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--legacy-color-border);
 }
 
 .stack-detail-tabs a.active::after {
@@ -533,7 +533,7 @@
 /* ---- Grants ---- */
 .grants-list {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--legacy-space-2);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -543,16 +543,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-card);
-  transition: border-color var(--duration-fast) var(--ease-out);
+  gap: var(--legacy-space-3);
+  border: 1px solid var(--legacy-color-border);
+  border-radius: var(--legacy-radius-lg);
+  padding: var(--legacy-space-3) var(--legacy-space-4);
+  background: var(--legacy-color-card);
+  transition: border-color var(--legacy-duration-fast) var(--legacy-ease-out);
 }
 
 .grant-row:hover {
-  border-color: var(--color-accent-border);
+  border-color: var(--legacy-color-accent-border);
 }
 
 /* flex: 1 makes the name column absorb the row's free space. Without it the
@@ -563,49 +563,49 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--legacy-space-1);
   min-width: 0;
 }
 
 .grant-row .grant-user span {
-  font-size: var(--text-sm);
+  font-size: var(--legacy-text-sm);
   font-weight: 400;
 }
 
 .grant-row .grant-user small {
-  color: var(--color-muted-fg);
-  font-size: var(--text-xs);
+  color: var(--legacy-color-muted-fg);
+  font-size: var(--legacy-text-xs);
 }
 
 .grant-actions {
   display: flex;
-  gap: var(--space-2);
+  gap: var(--legacy-space-2);
 }
 
 .grant-actions button {
-  min-height: var(--touch-target);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 0 var(--space-3);
-  color: var(--color-fg);
+  min-height: var(--legacy-touch-target);
+  border: 1px solid var(--legacy-color-border);
+  border-radius: var(--legacy-radius-md);
+  padding: 0 var(--legacy-space-3);
+  color: var(--legacy-color-fg);
   background: transparent;
-  font-size: var(--text-sm);
+  font-size: var(--legacy-text-sm);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: all var(--legacy-duration-fast) var(--legacy-ease-out);
 }
 
 .grant-actions button:hover {
-  border-color: var(--color-accent-border);
-  background: var(--color-muted);
+  border-color: var(--legacy-color-accent-border);
+  background: var(--legacy-color-muted);
 }
 
 .grant-actions button.danger {
-  color: var(--color-danger);
+  color: var(--legacy-color-danger);
 }
 
 .grant-actions button.danger:hover {
-  border-color: var(--color-danger);
-  background: var(--color-danger-soft);
+  border-color: var(--legacy-color-danger);
+  background: var(--legacy-color-danger-soft);
 }
 
 /* ---- Credentials ---- */
@@ -615,7 +615,7 @@
 
 .credentials-list {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--legacy-space-2);
   margin: 0;
 }
 
@@ -623,18 +623,18 @@
   display: grid;
   grid-template-columns: minmax(160px, 1fr) auto auto;
   align-items: center;
-  gap: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-3) var(--space-4);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  gap: var(--legacy-space-3);
+  border: 1px solid var(--legacy-color-border);
+  border-radius: var(--legacy-radius-lg);
+  padding: var(--legacy-space-3) var(--legacy-space-4);
+  font-family: var(--legacy-font-mono);
+  font-size: var(--legacy-text-sm);
 }
 
 .credential-form {
   display: grid;
   grid-template-columns: minmax(160px, 1fr) minmax(180px, 1fr) auto;
-  gap: var(--space-4);
+  gap: var(--legacy-space-4);
   align-items: end;
 }
 
@@ -653,59 +653,59 @@
   z-index: 10;
   max-height: 240px;
   overflow-y: auto;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  margin-top: var(--space-1);
-  background: var(--color-card);
-  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--legacy-color-border);
+  border-radius: var(--legacy-radius-lg);
+  margin-top: var(--legacy-space-1);
+  background: var(--legacy-color-card);
+  box-shadow: var(--legacy-shadow-lg);
 }
 
 .search-result-item {
-  padding: var(--space-3) var(--space-4);
-  font-size: var(--text-sm);
+  padding: var(--legacy-space-3) var(--legacy-space-4);
+  font-size: var(--legacy-text-sm);
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out);
+  transition: background var(--legacy-duration-fast) var(--legacy-ease-out);
 }
 
 .search-result-item:hover,
 .search-result-item.focused {
-  background: var(--color-accent-soft);
+  background: var(--legacy-color-accent-soft);
 }
 
 .search-result-item.assigned {
-  color: var(--color-muted-fg);
-  background: var(--color-muted);
+  color: var(--legacy-color-muted-fg);
+  background: var(--legacy-color-muted);
   cursor: default;
 }
 
 .search-result-item small {
   display: block;
-  color: var(--color-muted-fg);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  color: var(--legacy-color-muted-fg);
+  font-family: var(--legacy-font-mono);
+  font-size: var(--legacy-text-xs);
 }
 
 .selected-user-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
-  border: 1px solid var(--color-accent-border);
-  border-radius: var(--radius-lg);
-  margin-top: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-accent-soft);
+  gap: var(--legacy-space-3);
+  border: 1px solid var(--legacy-color-accent-border);
+  border-radius: var(--legacy-radius-lg);
+  margin-top: var(--legacy-space-3);
+  padding: var(--legacy-space-3) var(--legacy-space-4);
+  background: var(--legacy-color-accent-soft);
 }
 
 .selected-user-card span {
-  font-size: var(--text-sm);
+  font-size: var(--legacy-text-sm);
   font-weight: 400;
 }
 
 .selected-user-card button {
   border: 0;
-  padding: var(--space-1);
-  color: var(--color-muted-fg);
+  padding: var(--legacy-space-1);
+  color: var(--legacy-color-muted-fg);
   background: none;
   cursor: pointer;
 }
@@ -713,30 +713,30 @@
 /* ---- Undo banner ---- */
 .undo-banner {
   position: fixed;
-  bottom: var(--space-6);
+  bottom: var(--legacy-space-6);
   left: 50%;
   transform: translateX(-50%);
   /* Must stay ABOVE .app-frame-header (5) and .search-dropdown (10). */
   z-index: 20;
   display: flex;
   align-items: center;
-  gap: var(--space-4);
-  border-radius: var(--radius-xl);
-  padding: var(--space-3) var(--space-5);
-  color: var(--color-card);
-  background: var(--color-fg);
-  box-shadow: var(--shadow-xl);
-  font-size: var(--text-sm);
+  gap: var(--legacy-space-4);
+  border-radius: var(--legacy-radius-xl);
+  padding: var(--legacy-space-3) var(--legacy-space-5);
+  color: var(--legacy-color-card);
+  background: var(--legacy-color-fg);
+  box-shadow: var(--legacy-shadow-xl);
+  font-size: var(--legacy-text-sm);
 }
 
 .undo-banner button {
-  min-height: var(--touch-target);
+  min-height: var(--legacy-touch-target);
   border: 0;
-  border-radius: var(--radius-md);
-  padding: 0 var(--space-4);
-  color: var(--color-accent-fg);
-  background: var(--gradient-accent);
-  font-size: var(--text-sm);
+  border-radius: var(--legacy-radius-md);
+  padding: 0 var(--legacy-space-4);
+  color: var(--legacy-color-accent-fg);
+  background: var(--legacy-gradient-accent);
+  font-size: var(--legacy-text-sm);
   font-weight: 400;
   cursor: pointer;
 }
@@ -745,14 +745,14 @@
 .workflow-grid {
   display: grid;
   grid-template-columns: minmax(280px, 0.85fr) minmax(320px, 1.15fr);
-  gap: var(--space-6);
+  gap: var(--legacy-space-6);
 }
 
 .form-grid,
 .variable-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(160px, 1fr));
-  gap: var(--space-5);
+  gap: var(--legacy-space-5);
 }
 
 /* The submit button is the last child of these two-column forms, so without
@@ -769,15 +769,15 @@
 
 .form-row {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--legacy-space-4);
 }
 
 .form-actions {
-  margin: var(--space-6) 0 0;
+  margin: var(--legacy-space-6) 0 0;
 }
 
 .selector-label {
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--legacy-space-4);
 }
 
 /* The breadcrumb's bottom margin is page-level spacing; inside these header
@@ -791,23 +791,23 @@
 /* ---- Template lists ---- */
 .stack-template-list {
   display: grid;
-  gap: var(--space-3);
-  margin-top: var(--space-5);
-  border-top: 1px solid var(--color-border);
-  padding-top: var(--space-4);
+  gap: var(--legacy-space-3);
+  margin-top: var(--legacy-space-5);
+  border-top: 1px solid var(--legacy-color-border);
+  padding-top: var(--legacy-space-4);
 }
 
 .stack-template-list h3 {
   margin: 0;
-  font-size: var(--text-sm);
+  font-size: var(--legacy-text-sm);
   font-weight: 400;
 }
 
 /* The stack's installed templates: one bordered list with a rule between
    rows, like a template's runs. Each row is a link to that template's page. */
 .stack-template-items {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border: 1px solid var(--legacy-color-border);
+  border-radius: var(--legacy-radius-lg);
   display: grid;
   /* Clips the hover fill of the first and last rows to the rounded corners. */
   overflow: hidden;
@@ -816,22 +816,22 @@
 .stack-template-items a {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--legacy-space-3);
   /* A control-height button with 8px either side, whether or not the row
      has one, so rows keep one height. */
-  min-height: calc(var(--control-height) + var(--space-4));
-  padding: 0 var(--space-4);
-  color: var(--color-fg);
+  min-height: calc(var(--legacy-control-height) + var(--legacy-space-4));
+  padding: 0 var(--legacy-space-4);
+  color: var(--legacy-color-fg);
   text-decoration: none;
-  transition: background var(--duration-fast) var(--ease-out);
+  transition: background var(--legacy-duration-fast) var(--legacy-ease-out);
 }
 
 .stack-template-items a + a {
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--legacy-color-border);
 }
 
 .stack-template-items a:hover {
-  background: var(--color-muted);
+  background: var(--legacy-color-muted);
   text-decoration: none;
 }
 
@@ -842,14 +842,14 @@
 }
 
 .stack-template-items span {
-  font-size: var(--text-sm);
+  font-size: var(--legacy-text-sm);
   font-weight: 400;
 }
 
 .stack-template-items small {
-  color: var(--color-muted-fg);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  color: var(--legacy-color-muted-fg);
+  font-family: var(--legacy-font-mono);
+  font-size: var(--legacy-text-xs);
 }
 
 /* The name takes the row's slack so the state label sits at the far edge. */
@@ -865,24 +865,24 @@
      defined in one place, but drops the tint those carry for pills: behind a
      bare glyph it reads as a stray swatch. */
   background: none;
-  font-size: var(--text-sm);
+  font-size: var(--legacy-text-sm);
   line-height: 1;
 }
 
 /* ---- A template's state, at the top of its page ---- */
 .stack-template-state {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--legacy-space-2);
   justify-items: start;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-4);
-  background: var(--color-card);
+  border: 1px solid var(--legacy-color-border);
+  border-radius: var(--legacy-radius-lg);
+  padding: var(--legacy-space-4);
+  background: var(--legacy-color-card);
 }
 
 .stack-template-state p {
   margin: 0;
-  font-size: var(--text-sm);
+  font-size: var(--legacy-text-sm);
 }
 
 /* A template's own page: its state, its tabs, then the tab's content. Each tab
@@ -891,7 +891,7 @@
 .stack-template-tab {
   align-content: start;
   display: grid;
-  gap: var(--space-6);
+  gap: var(--legacy-space-6);
   min-width: 0;
 }
 
@@ -901,13 +901,13 @@
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2) var(--space-4);
+  gap: var(--legacy-space-2) var(--legacy-space-4);
   justify-content: space-between;
 }
 
 /* The rule runs under the whole row, state included, not just the tabs. */
 .stack-template-tabbar {
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--legacy-color-border);
 }
 
 .stack-template-tabbar .stack-detail-tabs {
@@ -922,43 +922,43 @@
    stream measurably hurts scanning for errors. ---- */
 .log-steps {
   overflow: hidden;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border: 1px solid var(--legacy-color-border);
+  border-radius: var(--legacy-radius-lg);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .log-step + .log-step {
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--legacy-color-border);
 }
 
 .log-step__toggle {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--legacy-space-2);
   width: 100%;
-  min-height: var(--touch-target);
+  min-height: var(--legacy-touch-target);
   border: 0;
-  padding: 0 var(--space-4);
-  color: var(--color-fg);
+  padding: 0 var(--legacy-space-4);
+  color: var(--legacy-color-fg);
   background: transparent;
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-family: var(--legacy-font-body);
+  font-size: var(--legacy-text-sm);
   font-weight: 400;
   text-align: left;
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out);
+  transition: background var(--legacy-duration-fast) var(--legacy-ease-out);
 }
 
 .log-step__toggle:hover {
-  background: var(--color-muted);
+  background: var(--legacy-color-muted);
 }
 
 .log-step__chevron {
   flex: none;
-  color: var(--color-muted-fg);
-  transition: transform var(--duration-fast) var(--ease-out);
+  color: var(--legacy-color-muted-fg);
+  transition: transform var(--legacy-duration-fast) var(--legacy-ease-out);
 }
 
 .log-step__toggle[aria-expanded="true"] .log-step__chevron {
@@ -976,12 +976,12 @@
   max-height: 460px;
   overflow: auto;
   margin: 0;
-  padding: var(--space-4) var(--space-5);
-  color: var(--color-card);
-  background: var(--color-fg);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  line-height: var(--leading-normal);
+  padding: var(--legacy-space-4) var(--legacy-space-5);
+  color: var(--legacy-color-card);
+  background: var(--legacy-color-fg);
+  font-family: var(--legacy-font-mono);
+  font-size: var(--legacy-text-sm);
+  line-height: var(--legacy-leading-normal);
   white-space: pre-wrap;
 }
 
@@ -991,11 +991,11 @@
 
 /* ---- Inline-style drain (Task 8) ---- */
 .alert .secondary-button {
-  margin-left: var(--space-3);
+  margin-left: var(--legacy-space-3);
 }
 
 .confirm-label {
-  font-size: var(--text-sm);
+  font-size: var(--legacy-text-sm);
 }
 
 @media (max-width: 920px) {
@@ -1008,15 +1008,15 @@
 
 @media (max-width: 760px) {
   .app-frame-header {
-    padding: var(--space-3) var(--space-4);
+    padding: var(--legacy-space-3) var(--legacy-space-4);
   }
 
   .app-frame-brand {
-    gap: var(--space-4);
+    gap: var(--legacy-space-4);
   }
 
   .app-frame-content {
-    padding: var(--space-6) var(--space-4);
+    padding: var(--legacy-space-6) var(--legacy-space-4);
   }
 
   .stacks-list-header,
@@ -1039,7 +1039,7 @@
   .templates-list li {
     align-items: flex-start;
     flex-direction: column;
-    gap: var(--space-2);
+    gap: var(--legacy-space-2);
   }
 
   .credential-form,
@@ -1052,7 +1052,7 @@
      h1 is unaffected; .breadcrumb h1 outranks this selector. */
   h1,
   .showcase__title {
-    font-size: var(--text-2xl);
+    font-size: var(--legacy-text-2xl);
   }
 
   .showcase__title {
@@ -1073,14 +1073,14 @@
   .app-nav a,
   .icon-button,
   .selected-user-card button {
-    min-height: var(--touch-target);
+    min-height: var(--legacy-touch-target);
     display: inline-flex;
     align-items: center;
   }
 
   .undo-banner {
-    left: var(--space-4);
-    right: var(--space-4);
+    left: var(--legacy-space-4);
+    right: var(--legacy-space-4);
     transform: none;
   }
 }
@@ -1088,7 +1088,7 @@
 .panel-header {
   align-items: center;
   display: flex;
-  gap: var(--space-4);
+  gap: var(--legacy-space-4);
   justify-content: space-between;
 }
 
@@ -1098,28 +1098,28 @@
 
 .stack-template-list-content {
   display: grid;
-  gap: var(--space-5);
+  gap: var(--legacy-space-5);
 }
 
 .stack-template-revision-action {
   align-items: center;
-  background: var(--color-muted);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  background: var(--legacy-color-muted);
+  border: 1px solid var(--legacy-color-border);
+  border-radius: var(--legacy-radius-lg);
   display: flex;
-  gap: var(--space-3);
+  gap: var(--legacy-space-3);
   justify-content: space-between;
   /* 12px of vertical padding made a 64px band around a 36px control. This is
      as tight as the row goes without the button fouling it: the button is
-     --control-height plus its own 1px borders, so a zero-padding row would
+     --legacy-control-height plus its own 1px borders, so a zero-padding row would
      have its corners clipped by this one's radius. */
-  padding: var(--space-1) var(--space-4);
+  padding: var(--legacy-space-1) var(--legacy-space-4);
 }
 
 .stack-template-revision-action p {
   align-items: center;
   display: flex;
-  gap: var(--space-2);
+  gap: var(--legacy-space-2);
   margin: 0;
 }
 
@@ -1130,18 +1130,18 @@
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: var(--legacy-space-2);
   justify-content: flex-end;
 }
 
 .template-run-controls p {
   margin: 0;
-  font-size: var(--text-sm);
+  font-size: var(--legacy-text-sm);
 }
 
 .template-run-actions {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--legacy-space-3);
 }
 
 /* .button-row's trailing margin separates it from content below it outside a
@@ -1157,11 +1157,11 @@
    minimum widths are the fixed columns (664px) plus 160px for the time, and
    the actions column on top. */
 .run-table {
-  --data-table-min-width: 824px;
+  --legacy-data-table-min-width: 824px;
 }
 
 .run-table--actions {
-  --data-table-min-width: 1144px;
+  --legacy-data-table-min-width: 1144px;
 }
 
 /* A waiting destroy's actions, Discard and "Destroy N", are wider than the
@@ -1172,8 +1172,8 @@
 
 /* A plan's counts, "+3 ~1 -0", in the mono face the other values use. */
 .run-table__summary {
-  color: var(--color-muted-fg);
-  font-family: var(--font-mono);
+  color: var(--legacy-color-muted-fg);
+  font-family: var(--legacy-font-mono);
 }
 
 @media (max-width: 760px) {
@@ -1188,63 +1188,63 @@
    the actions it still takes. Facts sit in one row of label/value pairs. */
 .run-detail-screen {
   display: grid;
-  gap: var(--space-6);
+  gap: var(--legacy-space-6);
 }
 
 .run-detail-header {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-4);
+  gap: var(--legacy-space-4);
   justify-content: space-between;
 }
 
 .run-detail-title {
   align-items: center;
   display: flex;
-  gap: var(--space-3);
+  gap: var(--legacy-space-3);
 }
 
 .run-detail-number {
-  font-size: var(--text-xl);
-  letter-spacing: var(--tracking-tight);
+  font-size: var(--legacy-text-xl);
+  letter-spacing: var(--legacy-tracking-tight);
 }
 
 .run-detail-actions {
   display: flex;
-  gap: var(--space-2);
+  gap: var(--legacy-space-2);
 }
 
 .run-detail-facts {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border: 1px solid var(--legacy-color-border);
+  border-radius: var(--legacy-radius-lg);
   display: grid;
-  gap: var(--space-4);
+  gap: var(--legacy-space-4);
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
   margin: 0;
-  padding: var(--space-4);
+  padding: var(--legacy-space-4);
 }
 
 .run-detail-facts dt {
-  color: var(--color-muted-fg);
-  font-size: var(--text-xs);
-  margin-bottom: var(--space-1);
+  color: var(--legacy-color-muted-fg);
+  font-size: var(--legacy-text-xs);
+  margin-bottom: var(--legacy-space-1);
 }
 
 .run-detail-facts dd {
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  font-family: var(--legacy-font-mono);
+  font-size: var(--legacy-text-sm);
   margin: 0;
   overflow-wrap: anywhere;
 }
 
 .danger-zone {
-  background: var(--color-danger-soft);
-  border-color: var(--color-danger);
+  background: var(--legacy-color-danger-soft);
+  border-color: var(--legacy-color-danger);
 }
 
 .danger-zone h2 {
-  color: var(--color-danger);
+  color: var(--legacy-color-danger);
 }
 
 /* The install picker's rows. Deliberately NOT .templates-list: that class
@@ -1254,7 +1254,7 @@
    cluster, which are only ever about the row's contents. */
 .template-choices {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--legacy-space-3);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1267,34 +1267,34 @@
 .template-choice {
   align-items: flex-start;
   text-align: left;
-  background: var(--color-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-sm);
-  color: var(--color-fg);
+  background: var(--legacy-color-card);
+  border: 1px solid var(--legacy-color-border);
+  border-radius: var(--legacy-radius-xl);
+  box-shadow: var(--legacy-shadow-sm);
+  color: var(--legacy-color-fg);
   cursor: pointer;
   display: flex;
-  gap: var(--space-4);
+  gap: var(--legacy-space-4);
   justify-content: space-between;
-  padding: var(--space-2) var(--space-4);
-  transition: all var(--duration-lift) var(--ease-out);
+  padding: var(--legacy-space-2) var(--legacy-space-4);
+  transition: all var(--legacy-duration-lift) var(--legacy-ease-out);
   width: 100%;
 }
 
 .template-choice:hover:not(:disabled) {
   transform: translateY(-2px);
-  border-color: var(--color-accent-border);
-  box-shadow: var(--shadow-lg);
+  border-color: var(--legacy-color-accent-border);
+  box-shadow: var(--legacy-shadow-lg);
 }
 
 .template-choice:disabled {
-  color: var(--color-muted-fg);
+  color: var(--legacy-color-muted-fg);
   cursor: not-allowed;
 }
 
 .template-choice[data-selected="true"] {
-  border-color: var(--color-accent-border);
-  box-shadow: var(--shadow-ring);
+  border-color: var(--legacy-color-accent-border);
+  box-shadow: var(--legacy-shadow-ring);
 }
 
 /* ---- Install: browse on the left, configure on the right ---- */
@@ -1303,7 +1303,7 @@
    breakpoint, where a sticky panel would pin the form over the list instead. */
 .template-configure {
   position: sticky;
-  top: var(--space-6);
+  top: var(--legacy-space-6);
   align-self: start;
 }
 
@@ -1318,19 +1318,19 @@
 }
 
 .upgrade-variable-notes {
-  color: var(--color-muted-fg);
-  font-size: var(--text-sm);
+  color: var(--legacy-color-muted-fg);
+  font-size: var(--legacy-text-sm);
   list-style: none;
-  margin: var(--space-3) 0 0;
+  margin: var(--legacy-space-3) 0 0;
   padding: 0;
 }
 
 .upgrade-variable-notes li {
-  padding: var(--space-1) 0;
+  padding: var(--legacy-space-1) 0;
 }
 
 .upgrade-variable-notes--removed li {
-  color: var(--color-warning);
+  color: var(--legacy-color-warning);
 }
 
 /* ---- Sign in ---- */
@@ -1341,7 +1341,7 @@
   display: grid;
   place-items: center;
   min-height: 100vh;
-  padding: var(--space-6);
+  padding: var(--legacy-space-6);
 }
 
 .signin-card {
@@ -1351,36 +1351,69 @@
 }
 
 .signin-header {
-  margin-bottom: var(--space-6);
+  margin-bottom: var(--legacy-space-6);
 }
 
 .signin-wordmark {
-  margin: 0 0 var(--space-2);
-  color: var(--color-muted-fg);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: var(--tracking-label);
+  margin: 0 0 var(--legacy-space-2);
+  color: var(--legacy-color-muted-fg);
+  font-family: var(--legacy-font-mono);
+  font-size: var(--legacy-text-xs);
+  letter-spacing: var(--legacy-tracking-label);
   text-transform: uppercase;
 }
 
 .signin-title {
   margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--text-2xl);
+  font-family: var(--legacy-font-display);
+  font-size: var(--legacy-text-2xl);
   font-weight: 400;
-  letter-spacing: var(--tracking-tighter);
-  line-height: var(--leading-tight);
+  letter-spacing: var(--legacy-tracking-tighter);
+  line-height: var(--legacy-leading-tight);
 }
 
 .signin-lede {
-  margin: 0 0 var(--space-4);
-  font-size: var(--text-sm);
-  line-height: var(--leading-normal);
+  margin: 0 0 var(--legacy-space-4);
+  font-size: var(--legacy-text-sm);
+  line-height: var(--legacy-leading-normal);
 }
 
-/* The one action spans the card. A content-width button in a card that holds
-   nothing else reads as an afterthought rather than the action the screen
-   exists for. */
+.signin-form {
+  display: grid;
+  gap: var(--legacy-space-4);
+}
+
+/* The submit and the SSO button both span the card. Everything above them is
+   full width, and a content-width button under a full-width field reads as an
+   afterthought rather than the action the screen exists for. */
 .signin-submit {
   width: 100%;
+}
+
+/* A rule with the word set into it. The pseudo-elements are the two halves of
+   the line, so the gap tracks the label's own width at any font size. */
+.signin-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--legacy-space-3);
+  margin: var(--legacy-space-5) 0;
+  color: var(--legacy-color-muted-fg);
+  font-size: var(--legacy-text-xs);
+  letter-spacing: var(--legacy-tracking-wide);
+  text-transform: uppercase;
+}
+
+.signin-divider::before,
+.signin-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--legacy-color-border);
+}
+
+/* .panel > * + * spaces a trailing action from the content above it. Here the
+   divider already sets that separation, and the two together open a gap wide
+   enough to read as the SSO button belonging to something else. */
+.signin-card > .signin-divider + .secondary-button {
+  margin-top: 0;
 }
