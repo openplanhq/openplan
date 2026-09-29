@@ -153,27 +153,6 @@ button svg {
   outline-offset: 2px;
 }
 
-/* ---- Skip link ---- */
-.skip-link {
-  position: absolute;
-  top: var(--legacy-space-2);
-  left: var(--legacy-space-2);
-  z-index: 100;
-  transform: translateY(-200%);
-  border-radius: var(--legacy-radius-lg);
-  padding: var(--legacy-space-3) var(--legacy-space-4);
-  color: var(--legacy-color-accent-fg);
-  background: var(--legacy-gradient-accent);
-  font-family: var(--legacy-font-mono);
-  font-size: var(--legacy-text-xs);
-  letter-spacing: var(--legacy-tracking-label);
-  text-transform: uppercase;
-}
-
-.skip-link:focus {
-  transform: translateY(0);
-}
-
 /* ---- Reduced motion. Continuous animation stops, and reveals resolve to
    VISIBLE — disabling only the transition would leave content hidden. ---- */
 @media (prefers-reduced-motion: reduce) {

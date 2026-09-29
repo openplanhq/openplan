@@ -1,174 +1,3 @@
-/* ---- Application frame ---- */
-.app-frame {
-  min-height: 100vh;
-}
-
-.app-frame-header {
-  position: sticky;
-  top: 0;
-  /* Must stay below .search-dropdown (10) and .undo-banner (20) in
-     styles.css — those overlays need to paint above the sticky header. */
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--legacy-space-3) var(--legacy-space-6);
-  border-bottom: 1px solid var(--legacy-color-border);
-  /* Header height is emergent from this padding plus the nav link's line box —
-     no --legacy-control-height reaches it — so density has to be set here directly.
-     12px + 37px + 12px = 61px. */
-  padding: var(--legacy-space-3) var(--legacy-space-6);
-  /* Geist's header carries no shadow and no border, measured while scrolled.
-     The hairline stays here because this bar is sticky over scrolling content
-     and theirs is not; the shadow does not, since the border already separates
-     the two surfaces and doubling them is what read as heavy. */
-  background: var(--legacy-color-card);
-}
-
-.app-frame-brand {
-  display: flex;
-  align-items: center;
-  gap: var(--legacy-space-8);
-}
-
-.app-wordmark {
-  font-family: var(--legacy-font-display);
-  font-weight: 400;
-  font-size: var(--legacy-text-xl);
-  line-height: 1;
-}
-
-.app-nav {
-  display: flex;
-  align-items: center;
-  gap: var(--legacy-space-2);
-}
-
-.app-nav a {
-  position: relative;
-  border-radius: var(--legacy-radius-md);
-  padding: var(--legacy-space-2) var(--legacy-space-3);
-  color: var(--legacy-color-muted-fg);
-  font-size: var(--legacy-text-sm);
-  font-weight: 400;
-  text-decoration: none;
-  transition: all var(--legacy-duration-fast) var(--legacy-ease-out);
-}
-
-.app-nav a:hover {
-  color: var(--legacy-color-fg);
-  background: var(--legacy-color-muted);
-  text-decoration: none;
-}
-
-.app-frame-identity {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--legacy-space-3) var(--legacy-space-5);
-  font-size: var(--legacy-text-sm);
-}
-
-.identity-menu {
-  display: flex;
-  align-items: center;
-  gap: var(--legacy-space-3);
-  color: var(--legacy-color-muted-fg);
-}
-
-.identity-menu button {
-  min-height: var(--legacy-touch-target);
-  border: 1px solid var(--legacy-color-border);
-  border-radius: var(--legacy-radius-lg);
-  padding: 0 var(--legacy-space-4);
-  color: var(--legacy-color-fg);
-  background: transparent;
-  font-size: var(--legacy-text-sm);
-  font-weight: 400;
-  cursor: pointer;
-  transition: all var(--legacy-duration-fast) var(--legacy-ease-out);
-}
-
-.identity-menu button:hover {
-  border-color: var(--legacy-color-accent-border);
-  background: var(--legacy-color-muted);
-}
-
-.app-frame-identity .runtime-field {
-  display: flex;
-  align-items: center;
-  gap: var(--legacy-space-2);
-}
-
-.app-frame-identity .runtime-value {
-  min-height: 0;
-  padding: var(--legacy-space-1) var(--legacy-space-3);
-  font-size: var(--legacy-text-xs);
-}
-
-.app-frame-content {
-  width: min(1280px, 100%);
-  margin: 0 auto;
-  padding: var(--legacy-space-6) var(--legacy-space-4);
-}
-
-.runtime-field {
-  display: grid;
-  gap: var(--legacy-space-2);
-  color: var(--legacy-color-muted-fg);
-  font-size: var(--legacy-text-sm);
-}
-
-.runtime-value {
-  display: flex;
-  align-items: center;
-  min-height: var(--legacy-control-height);
-  border: 1px solid var(--legacy-color-border);
-  border-radius: var(--legacy-radius-lg);
-  /* No vertical padding: 8px + a 21px line box + 8px is 37px, which overshoots
-     --legacy-control-height and leaves the token inert. Zero it and the token governs,
-     with align-items centring the text. */
-  padding: 0 var(--legacy-space-3);
-  color: var(--legacy-color-fg);
-  background: var(--legacy-color-muted);
-  font-family: var(--legacy-font-mono);
-  font-size: var(--legacy-text-sm);
-}
-
-.debug-panel {
-  margin: var(--legacy-space-8) var(--legacy-space-6);
-  border-top: 1px solid var(--legacy-color-border);
-  padding-top: var(--legacy-space-4);
-  font-family: var(--legacy-font-mono);
-  font-size: var(--legacy-text-xs);
-}
-
-.debug-panel summary {
-  color: var(--legacy-color-muted-fg);
-  letter-spacing: var(--legacy-tracking-label);
-  text-transform: uppercase;
-  cursor: pointer;
-}
-
-.id-grid {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: var(--legacy-space-2) var(--legacy-space-4);
-  margin: var(--legacy-space-4) 0 0;
-}
-
-.id-grid dt {
-  color: var(--legacy-color-muted-fg);
-}
-
-.id-grid dd {
-  min-width: 0;
-  margin: 0;
-  overflow-wrap: anywhere;
-  font-family: var(--legacy-font-mono);
-}
-
 /* ---- Full-viewport showcase screens ---- */
 .showcase {
   display: grid;
@@ -656,8 +485,8 @@
   top: 100%;
   left: 0;
   right: 0;
-  /* Must stay ABOVE .app-frame-header (5) — the sticky header is opaque and
-     would otherwise clip this dropdown once the page scrolls. */
+  /* Must stay ABOVE the app header (z-5 in AppShell.tsx): the sticky header is
+     opaque and would otherwise clip this dropdown once the page scrolls. */
   z-index: 10;
   max-height: 240px;
   overflow-y: auto;
@@ -730,7 +559,7 @@
   bottom: var(--legacy-space-6);
   left: 50%;
   transform: translateX(-50%);
-  /* Must stay ABOVE .app-frame-header (5) and .search-dropdown (10). */
+  /* Must stay ABOVE the app header (z-5 in AppShell.tsx) and .search-dropdown (10). */
   z-index: 20;
   display: flex;
   align-items: center;
@@ -937,18 +766,6 @@
 }
 
 @media (max-width: 760px) {
-  .app-frame-header {
-    padding: var(--legacy-space-3) var(--legacy-space-4);
-  }
-
-  .app-frame-brand {
-    gap: var(--legacy-space-4);
-  }
-
-  .app-frame-content {
-    padding: var(--legacy-space-6) var(--legacy-space-4);
-  }
-
   .stacks-list-header,
   .templates-list-header,
   .template-detail-header {
@@ -1000,7 +817,6 @@
   }
 
   /* 44px minimum touch targets where density and accessibility conflict. */
-  .app-nav a,
   .icon-button,
   .selected-user-card button {
     min-height: var(--legacy-touch-target);
