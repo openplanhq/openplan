@@ -3,11 +3,8 @@ import { LogIn } from "lucide-react";
 import { ssoLoginURL } from "../api/client";
 import { clearLoginAttempts, loginLoopDetected, recordLoginAttempt } from "./loginAttempts";
 import AuthCard, { AuthCardTitle } from "./AuthCard";
-import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { CardContent, CardHeader } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 /** Where a sign-in with no return_to lands. The index route redirects onward. */
 const defaultReturnTo = "/";
@@ -91,10 +88,12 @@ export default function SignInScreen() {
 
   if (cookiesBlocked) {
     return (
-      <main className="signin-page">
-        <section className="panel signin-card" data-testid="signin-cookies-blocked">
-          <h1 className="signin-title">We could not keep you signed in</h1>
-          <p className="muted signin-lede">
+      <AuthCard data-testid="signin-cookies-blocked">
+        <CardHeader>
+          <AuthCardTitle>We could not keep you signed in</AuthCardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          <p className="text-muted-foreground">
             Sign-in worked, but this browser did not hold on to the session, so every page load
             started it over. That happens when cookies are blocked for this site — by browser
             settings, an extension, or a privacy mode that clears them between page loads.
@@ -117,12 +116,12 @@ export default function SignInScreen() {
         <p className="font-mono text-xs tracking-wide text-muted-foreground uppercase">openplan</p>
         <AuthCardTitle>Sign in</AuthCardTitle>
       </CardHeader>
-
-        <button type="button" className="primary-button signin-submit" onClick={handleSignIn} data-testid="signin-submit">
-          <LogIn size={16} />
+      <CardContent>
+        <Button className="w-full pointer-coarse:h-11" onClick={handleSignIn} data-testid="signin-submit">
+          <LogIn />
           Sign in
-        </button>
-      </section>
-    </main>
+        </Button>
+      </CardContent>
+    </AuthCard>
   );
 }
