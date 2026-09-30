@@ -69,9 +69,9 @@ describe("legacy field rules", () => {
   // exactly as they did.
   //
   // Only rules that start at the element are checked. A descendant rule such
-  // as `.credential-form input` names a legacy class, and when a screen PR
-  // migrates that markup the class goes with it and the dead-CSS guard above
-  // makes the rule go too.
+  // as `.checkbox-label input[type="checkbox"]` names a legacy class, and when
+  // a screen PR migrates that markup the class goes with it and the dead-CSS
+  // guard above makes the rule go too.
   it.each(LEGACY_SHEETS)("%s skips elements that carry data-slot", (path) => {
     const unscoped = [...readSheet(path).matchAll(/([^{}]+)\{/g)]
       .flatMap(([, selector]) => selector.split(","))

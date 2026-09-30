@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import EnvironmentScreen from "./EnvironmentScreen";
@@ -19,6 +20,12 @@ function authValue(): AuthContextValue {
 
 function testQueryClient(): QueryClient {
   return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+}
+
+const credential = { id: "credential_1", name: "TF_VAR_TEST", scope: "stack" as const, created_at: "2026-07-19T00:00:00Z" };
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
 function renderScreen(queryClient: QueryClient) {
@@ -85,6 +92,143 @@ describe("EnvironmentScreen", () => {
       expect.stringContaining("/stacks/stack_1/credentials"),
       expect.objectContaining({ method: "POST", body: JSON.stringify({ name: "TF_VAR_TEST", value: "secret-value" }) })
     ));
+  });
+
+  it("lists the credentials in a table, one row each, with a delete button", () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), [
+      credential,
+      { ...credential, id: "credential_2", name: "AWS_ACCESS_KEY_ID" }
+    ]);
+
+    renderScreen(queryClient);
+
+    const table = screen.getByRole("table");
+    expect(table.classList).toContain("table-fixed");
+    expect(within(table).getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual(["Name", "Value", "Actions"]);
+    const rows = within(table).getAllByRole("row").slice(1);
+    expect(rows.map((row) => within(row).getAllByRole("cell").slice(0, 2).map((cell) => cell.textContent))).toEqual([
+      ["TF_VAR_TEST", "configured"],
+      ["AWS_ACCESS_KEY_ID", "configured"]
+    ]);
+    expect(within(rows[1]).getByRole("button", { name: "Delete AWS_ACCESS_KEY_ID" })).toBeTruthy();
+  });
+
+  it("says so when no credentials are configured", () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+
+    renderScreen(queryClient);
+
+    expect(screen.getByText("No credentials configured")).toBeTruthy();
+    expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  // base.css gives every h2 the legacy 32px display type until PR 9.
+  it("titles the panel with an h2 that sets its own type", () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+
+    renderScreen(queryClient);
+
+    const heading = screen.getByRole("heading", { level: 2, name: "Environment credentials" });
+    for (const name of ["font-heading", "text-base", "font-medium", "tracking-normal"]) {
+      expect(heading.classList).toContain(name);
+    }
+    expect(heading.closest('[data-slot="card"]')?.classList).toContain("text-foreground");
+  });
+
+  // The value is a secret: masked while typed, and gone from the page once
+  // the server has it. A failed add keeps it, so the user can try again.
+  it("masks the secret, and clears both fields once the credential is added", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(credential, 201));
+    renderScreen(queryClient);
+    const user = userEvent.setup();
+
+    const name = screen.getByLabelText<HTMLInputElement>("Environment credential name");
+    const value = screen.getByLabelText<HTMLInputElement>("Environment credential value");
+    expect(value.type).toBe("password");
+    await user.type(name, "TF_VAR_TEST");
+    await user.type(value, "secret-value");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+
+    await waitFor(() => expect(value.value).toBe(""));
+    expect(name.value).toBe("");
+    expect(document.querySelector("[data-unsaved='true']")).toBeNull();
+  });
+
+  it("keeps what was typed, and says why, when the add fails", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({ error: "conflict", message: "A credential with that name already exists" }, 409)
+    );
+    renderScreen(queryClient);
+    const user = userEvent.setup();
+
+    await user.type(screen.getByLabelText("Environment credential name"), "TF_VAR_TEST");
+    await user.type(screen.getByLabelText("Environment credential value"), "secret-value");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("A credential with that name already exists");
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(screen.getByLabelText<HTMLInputElement>("Environment credential value").value).toBe("secret-value");
+  });
+
+  it("asks for both fields before sending anything", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    renderScreen(queryClient);
+    const user = userEvent.setup();
+
+    await user.type(screen.getByLabelText("Environment credential name"), "TF_VAR_TEST");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain("Name and value are required");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("uses shadcn fields for the credential form", () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+
+    renderScreen(queryClient);
+
+    for (const label of ["Environment credential name", "Environment credential value"]) {
+      expect(screen.getByLabelText(label).getAttribute("data-slot")).toBe("input");
+    }
+  });
+
+  // --legacy-touch-target gave every control 44px on a touch screen.
+  it("gives every control a 44px target on coarse pointers", () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), [credential]);
+
+    renderScreen(queryClient);
+
+    expect(screen.getByLabelText("Environment credential name").classList).toContain("pointer-coarse:h-11");
+    expect(screen.getByLabelText("Environment credential value").classList).toContain("pointer-coarse:h-11");
+    expect(screen.getByRole("button", { name: "Add" }).classList).toContain("pointer-coarse:h-11");
+    expect(screen.getByRole("button", { name: "Delete TF_VAR_TEST" }).classList).toContain("pointer-coarse:size-11");
+  });
+
+  it("retries a failed load", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ error: "internal", message: "boom" }, 500))
+      .mockResolvedValueOnce(jsonResponse([credential]));
+
+    renderScreen(testQueryClient());
+
+    const retry = await screen.findByTestId("environment-retry");
+    expect(retry.classList).toContain("pointer-coarse:h-11");
+    await userEvent.setup().click(retry);
+    await screen.findByTestId("environment-screen");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("deletes a stack credential through the existing API mutation", async () => {

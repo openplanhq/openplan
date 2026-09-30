@@ -8,6 +8,7 @@ import {
 import { tenantID } from "../../config";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import CredentialsPanel from "./CredentialsPanel";
+import { Button } from "@/components/ui/button";
 
 export default function EnvironmentScreen() {
   const { stackId = "" } = useParams<{ stackId: string }>();
@@ -18,8 +19,8 @@ export default function EnvironmentScreen() {
 
   if (credentialsQuery.status === "pending") {
     return (
-      <section className="stack-environment-screen" data-testid="environment-loading">
-        <p className="muted">Loading environment…</p>
+      <section className="text-foreground" data-testid="environment-loading">
+        <p className="text-muted-foreground">Loading environment…</p>
       </section>
     );
   }
@@ -29,18 +30,18 @@ export default function EnvironmentScreen() {
       return <>{boundary}</>;
     }
     return (
-      <section className="stack-environment-screen" data-testid="environment-error">
-        <p className="muted">Something went wrong while loading the environment.</p>
-        <button className="primary-button" type="button" data-testid="environment-retry" onClick={() => credentialsQuery.refetch()}>
-          <RefreshCw size={16} />
+      <section className="grid justify-items-start gap-4 text-foreground" data-testid="environment-error">
+        <p className="text-muted-foreground">Something went wrong while loading the environment.</p>
+        <Button className="pointer-coarse:h-11" data-testid="environment-retry" onClick={() => credentialsQuery.refetch()}>
+          <RefreshCw data-icon="inline-start" aria-hidden="true" />
           Retry
-        </button>
+        </Button>
       </section>
     );
   }
 
   return (
-    <section className="stack-environment-screen" data-testid="environment-screen">
+    <section data-testid="environment-screen">
       <CredentialsPanel
         title="Environment credentials"
         credentials={credentialsQuery.data ?? []}

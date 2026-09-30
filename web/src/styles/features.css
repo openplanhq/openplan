@@ -423,36 +423,6 @@
   vertical-align: revert;
 }
 
-/* ---- Credentials ---- */
-.credentials-panel {
-  grid-column: 1 / -1;
-}
-
-.credentials-list {
-  display: grid;
-  gap: var(--legacy-space-2);
-  margin: 0;
-}
-
-.credential-row {
-  display: grid;
-  grid-template-columns: minmax(160px, 1fr) auto auto;
-  align-items: center;
-  gap: var(--legacy-space-3);
-  border: 1px solid var(--legacy-color-border);
-  border-radius: var(--legacy-radius-lg);
-  padding: var(--legacy-space-3) var(--legacy-space-4);
-  font-family: var(--legacy-font-mono);
-  font-size: var(--legacy-text-sm);
-}
-
-.credential-form {
-  display: grid;
-  grid-template-columns: minmax(160px, 1fr) minmax(180px, 1fr) auto;
-  gap: var(--legacy-space-4);
-  align-items: end;
-}
-
 /* ---- User search ---- */
 .search-wrapper {
   position: relative;
@@ -764,11 +734,6 @@
     align-items: flex-start;
     flex-direction: column;
     gap: var(--legacy-space-2);
-  }
-
-  .credential-form,
-  .credential-row {
-    grid-template-columns: 1fr;
   }
 
   .showcase__title {
