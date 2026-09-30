@@ -16,10 +16,10 @@ import (
 	"github.com/vishu42/openplan/internal/queue"
 )
 
-const keycloakSubject = "6fdb4b4c-2a8f-4cf7-945f-38f67f6a0e91"
+const oidcSubject = "6fdb4b4c-2a8f-4cf7-945f-38f67f6a0e91"
 
 func authenticatedContext() context.Context {
-	return authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: keycloakSubject})
+	return authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: oidcSubject})
 }
 
 func TestActorMutationsRejectMissingPrincipal(t *testing.T) {
@@ -113,8 +113,8 @@ func TestCreateStackDerivesSlugAndPersistsStack(t *testing.T) {
 	if stack.Slug != "acme-prod" {
 		t.Fatalf("slug = %q, want acme-prod", stack.Slug)
 	}
-	if stack.CreatedBy != domain.UserID(keycloakSubject) {
-		t.Fatalf("created by = %q, want %q", stack.CreatedBy, keycloakSubject)
+	if stack.CreatedBy != domain.UserID(oidcSubject) {
+		t.Fatalf("created by = %q, want %q", stack.CreatedBy, oidcSubject)
 	}
 	if !stack.CreatedAt.Equal(now) {
 		t.Fatalf("created at = %v, want %v", stack.CreatedAt, now)
@@ -222,7 +222,7 @@ func TestGetStackPassesTenantAndIDAndNormalizesNilTemplates(t *testing.T) {
 		},
 	}
 	service := NewService(Service{Stacks: stacks, Authorization: testPlatformAuthorizer(t)})
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: keycloakSubject})
+	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: oidcSubject})
 
 	view, err := service.GetStack(ctx, GetStackCommand{
 		TenantID: domain.TenantID("tenant_123"),
@@ -307,7 +307,7 @@ func TestGetStackResolvesTemplateDisplayName(t *testing.T) {
 		},
 	}
 	service := NewService(Service{Stacks: stacks, TemplateRevisions: revisions, Authorization: testPlatformAuthorizer(t)})
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: keycloakSubject})
+	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: oidcSubject})
 
 	view, err := service.GetStack(ctx, GetStackCommand{
 		TenantID: domain.TenantID("tenant_123"),
@@ -348,7 +348,7 @@ func TestListStacksPassesTenantAndNormalizesNilStacks(t *testing.T) {
 
 	stacks := &recordingStackRepository{list: nil}
 	service := NewService(Service{Stacks: stacks, Authorization: newTestAuthorization(t)})
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: keycloakSubject})
+	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: oidcSubject})
 
 	got, err := service.ListStacks(ctx, ListStacksCommand{
 		TenantID: domain.TenantID("tenant_123"),
@@ -450,8 +450,8 @@ func TestAddTemplateToStackValidatesVariablesAndPersistsStackTemplate(t *testing
 	if stackTemplate.Lifecycle != domain.StackTemplateActive {
 		t.Fatalf("lifecycle = %q, want active", stackTemplate.Lifecycle)
 	}
-	if stackTemplate.CreatedBy != domain.UserID(keycloakSubject) {
-		t.Fatalf("created by = %q, want %q", stackTemplate.CreatedBy, keycloakSubject)
+	if stackTemplate.CreatedBy != domain.UserID(oidcSubject) {
+		t.Fatalf("created by = %q, want %q", stackTemplate.CreatedBy, oidcSubject)
 	}
 	if stackTemplate.ComponentKey != "primary-vpc" {
 		t.Fatalf("component key = %q, want primary-vpc", stackTemplate.ComponentKey)
@@ -465,8 +465,8 @@ func TestAddTemplateToStackValidatesVariablesAndPersistsStackTemplate(t *testing
 	if string(stackTemplate.DesiredConfigJSON) != `{"region":"us-east-1"}` {
 		t.Fatalf("desired config json = %s", stackTemplate.DesiredConfigJSON)
 	}
-	if installer.created.CreatedBy != domain.UserID(keycloakSubject) {
-		t.Fatalf("persisted created by = %q, want %q", installer.created.CreatedBy, keycloakSubject)
+	if installer.created.CreatedBy != domain.UserID(oidcSubject) {
+		t.Fatalf("persisted created by = %q, want %q", installer.created.CreatedBy, oidcSubject)
 	}
 	if string(installer.created.InstalledConfigJSON) != `{"region":"us-east-1"}` {
 		t.Fatalf("config json = %s", installer.created.InstalledConfigJSON)
@@ -635,8 +635,8 @@ func TestStartTemplateRunCreatesQueuedRunWithoutDispatchingWorkflow(t *testing.T
 	if run.Status != domain.TemplateRunQueued {
 		t.Fatalf("run.Status = %q, want %q", run.Status, domain.TemplateRunQueued)
 	}
-	if run.TriggerActor != domain.UserID(keycloakSubject) {
-		t.Fatalf("run.TriggerActor = %q, want %q", run.TriggerActor, keycloakSubject)
+	if run.TriggerActor != domain.UserID(oidcSubject) {
+		t.Fatalf("run.TriggerActor = %q, want %q", run.TriggerActor, oidcSubject)
 	}
 
 	if run.WorkspaceName != "mtp_acme_prod_vpc_a13f9c" {
@@ -1014,7 +1014,7 @@ func TestStartTemplateRunAutoApproveRequiresApproveAccess(t *testing.T) {
 	newService := func(t *testing.T, grant authorization.Relation) (*Service, *recordingTemplateRunRepository, *recordingUnitOfWork) {
 		runs := &recordingTemplateRunRepository{}
 		work := &recordingUnitOfWork{templateRuns: runs}
-		authorizer := seedGrants(t, newPlatformAuthorizer(t), mustGrant(t, keycloakSubject, "stack_123", grant))
+		authorizer := seedGrants(t, newPlatformAuthorizer(t), mustGrant(t, oidcSubject, "stack_123", grant))
 		return NewService(Service{
 			Authorization:            authorizer,
 			Work:                     work,
@@ -1117,7 +1117,7 @@ func TestDiscardRunDiscardsAWaitingPlan(t *testing.T) {
 	if err := service.DiscardRun(authenticatedContext(), DiscardRunCommand{TenantID: "tenant_123", RunID: "run_123", Reason: "discard"}); err != nil {
 		t.Fatalf("DiscardRun returned error: %v", err)
 	}
-	if runs.discarded.RunID != "run_123" || runs.discarded.RequestedBy != domain.UserID(keycloakSubject) {
+	if runs.discarded.RunID != "run_123" || runs.discarded.RequestedBy != domain.UserID(oidcSubject) {
 		t.Fatalf("discarded = %#v, want run_123 by the caller", runs.discarded)
 	}
 	if len(work.requests) != 0 {
@@ -1379,8 +1379,8 @@ func TestRegisterTemplateCreatesPendingRegistrationAndDispatchesWorkflow(t *test
 	if registration.Status != domain.TemplateRegistrationPending {
 		t.Fatalf("registration.Status = %q, want %q", registration.Status, domain.TemplateRegistrationPending)
 	}
-	if registration.RequestedBy != domain.UserID(keycloakSubject) {
-		t.Fatalf("registration.RequestedBy = %q, want %q", registration.RequestedBy, keycloakSubject)
+	if registration.RequestedBy != domain.UserID(oidcSubject) {
+		t.Fatalf("registration.RequestedBy = %q, want %q", registration.RequestedBy, oidcSubject)
 	}
 	if !registration.RequestedAt.Equal(now) {
 		t.Fatalf("registration.RequestedAt = %v, want %v", registration.RequestedAt, now)
@@ -1479,8 +1479,8 @@ func TestApproveRunRecordsApprovalAndQueuesTheApply(t *testing.T) {
 		t.Fatalf("approval tenant ID = %q, want tenant_123", runs.approval.TenantID)
 	}
 
-	if runs.approval.ApprovedBy != domain.UserID(keycloakSubject) {
-		t.Fatalf("approval actor = %q, want %q", runs.approval.ApprovedBy, keycloakSubject)
+	if runs.approval.ApprovedBy != domain.UserID(oidcSubject) {
+		t.Fatalf("approval actor = %q, want %q", runs.approval.ApprovedBy, oidcSubject)
 	}
 
 	if !runs.approval.ApprovedAt.Equal(now) {
@@ -1529,7 +1529,7 @@ func TestApproveRunAllowsSelfApproval(t *testing.T) {
 		TenantID:        "tenant_123",
 		StackTemplateID: "stack_template_123",
 		Status:          domain.TemplateRunWaitingApproval,
-		TriggerActor:    domain.UserID(keycloakSubject),
+		TriggerActor:    domain.UserID(oidcSubject),
 	}}
 	work := &recordingUnitOfWork{templateRuns: runs}
 	audit := &recordingAuditRepository{}
@@ -1563,13 +1563,13 @@ func TestApproveRunAllowsSelfApproval(t *testing.T) {
 func TestApproveRunSelfApprovalWorksForPlatformAdmins(t *testing.T) {
 	t.Parallel()
 
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: keycloakSubject})
+	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: oidcSubject})
 	runs := &recordingTemplateRunRepository{run: domain.TemplateRun{
 		ID:              "run_123",
 		TenantID:        "tenant_123",
 		StackTemplateID: "stack_template_123",
 		Status:          domain.TemplateRunWaitingApproval,
-		TriggerActor:    domain.UserID(keycloakSubject),
+		TriggerActor:    domain.UserID(oidcSubject),
 	}}
 	work := &recordingUnitOfWork{templateRuns: runs}
 	audit := &recordingAuditRepository{}
@@ -1690,7 +1690,7 @@ func TestGetTemplateRunReturnsTenantScopedRun(t *testing.T) {
 		TemplateRuns:   runs,
 		StackTemplates: &recordingStackTemplateRepository{stackTemplate: domain.StackTemplate{ID: "stack_template_123", TenantID: "tenant_123", StackID: "stack_123"}},
 	})
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: keycloakSubject})
+	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: oidcSubject})
 
 	run, err := service.GetTemplateRun(ctx, GetTemplateRunCommand{
 		TenantID: domain.TenantID("tenant_123"),
@@ -1728,7 +1728,7 @@ func TestListTemplateRunsReturnsRunsScopedToStackTemplate(t *testing.T) {
 		TemplateRuns:   runs,
 		StackTemplates: &recordingStackTemplateRepository{stackTemplate: domain.StackTemplate{ID: "stack_template_123", TenantID: "tenant_123", StackID: "stack_123"}},
 	})
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: keycloakSubject})
+	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: oidcSubject})
 
 	got, err := service.ListTemplateRuns(ctx, ListTemplateRunsCommand{
 		TenantID:        domain.TenantID("tenant_123"),
@@ -1757,7 +1757,7 @@ func TestListTemplateRunsNormalizesNilAndRequiresStackTemplateID(t *testing.T) {
 		TemplateRuns:   &recordingTemplateRunRepository{},
 		StackTemplates: &recordingStackTemplateRepository{stackTemplate: domain.StackTemplate{ID: "stack_template_123", TenantID: "tenant_123", StackID: "stack_123"}},
 	})
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: keycloakSubject})
+	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: oidcSubject})
 
 	got, err := service.ListTemplateRuns(ctx, ListTemplateRunsCommand{
 		TenantID:        domain.TenantID("tenant_123"),
@@ -1958,7 +1958,7 @@ func TestGetTemplateRunLogDoesNotReadObjectWhenMetadataIsMissing(t *testing.T) {
 		TemplateRunLogMetadata: metadata,
 	})
 
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: keycloakSubject})
+	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: oidcSubject})
 	_, err := service.GetTemplateRunLog(ctx, GetTemplateRunLogCommand{
 		TenantID: domain.TenantID("tenant_123"),
 		RunID:    domain.TemplateRunID("run_123"),
@@ -2057,7 +2057,7 @@ func TestListTemplateRunLogsChecksRunOwnershipBeforeListingMetadata(t *testing.T
 		TemplateRunLogMetadata: metadata,
 	})
 
-	logs, err := service.ListTemplateRunLogs(authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: keycloakSubject}), ListTemplateRunLogsCommand{
+	logs, err := service.ListTemplateRunLogs(authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: oidcSubject}), ListTemplateRunLogsCommand{
 		TenantID: domain.TenantID("tenant_123"),
 		RunID:    domain.TemplateRunID("run_123"),
 	})
@@ -2115,14 +2115,14 @@ func TestCreateStackAuditsOwnerGrant(t *testing.T) {
 		t.Fatalf("audit events = %d, want 1", len(work.audits))
 	}
 	event := work.audits[0]
-	if event.ActorSubject != keycloakSubject {
-		t.Fatalf("actor_subject = %q, want %q", event.ActorSubject, keycloakSubject)
+	if event.ActorSubject != oidcSubject {
+		t.Fatalf("actor_subject = %q, want %q", event.ActorSubject, oidcSubject)
 	}
 	if event.Action != domain.AuditActionGrant {
 		t.Fatalf("action = %q, want %q", event.Action, domain.AuditActionGrant)
 	}
-	if event.TargetUser != keycloakSubject {
-		t.Fatalf("target_user = %q, want %q", event.TargetUser, keycloakSubject)
+	if event.TargetUser != oidcSubject {
+		t.Fatalf("target_user = %q, want %q", event.TargetUser, oidcSubject)
 	}
 	if event.TenantID != domain.TenantID("tenant_123") {
 		t.Fatalf("tenant_id = %q, want tenant_123", event.TenantID)
@@ -2208,7 +2208,7 @@ func TestAddTemplateToStackAuditsAuthorizationDenial(t *testing.T) {
 	})
 
 	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{
-		Subject: keycloakSubject,
+		Subject: oidcSubject,
 	})
 
 	_, err := service.AddTemplateToStack(ctx, AddTemplateToStackCommand{
@@ -2231,8 +2231,8 @@ func TestAddTemplateToStackAuditsAuthorizationDenial(t *testing.T) {
 	if event.Outcome != domain.AuditOutcomeFailure {
 		t.Fatalf("outcome = %q, want %q", event.Outcome, domain.AuditOutcomeFailure)
 	}
-	if event.ActorSubject != keycloakSubject {
-		t.Fatalf("actor_subject = %q, want %q", event.ActorSubject, keycloakSubject)
+	if event.ActorSubject != oidcSubject {
+		t.Fatalf("actor_subject = %q, want %q", event.ActorSubject, oidcSubject)
 	}
 }
 
@@ -2736,7 +2736,7 @@ func TestRegisterTemplatePairsRegistrationWithSyncIntentInTransaction(t *testing
 	if work.inTxCalls != 1 || registrations.created.ID != registration.ID {
 		t.Fatalf("transaction calls = %d, registration = %#v", work.inTxCalls, registrations.created)
 	}
-	if len(work.requests) != 1 || work.requests[0].Kind != KindStartTemplateSync || work.requests[0].ActorSubject != keycloakSubject || work.requests[0].TenantID != "tenant_123" {
+	if len(work.requests) != 1 || work.requests[0].Kind != KindStartTemplateSync || work.requests[0].ActorSubject != oidcSubject || work.requests[0].TenantID != "tenant_123" {
 		t.Fatalf("requests = %#v", work.requests)
 	}
 	var payload StartTemplateSyncPayload
@@ -2773,7 +2773,7 @@ func TestStartTemplateRunPairsRunWithStartIntentInTransaction(t *testing.T) {
 	if work.inTxCalls != 1 || runs.created.ID != run.ID {
 		t.Fatalf("transaction calls = %d, run = %#v", work.inTxCalls, runs.created)
 	}
-	if len(work.requests) != 1 || work.requests[0].Kind != KindStartTemplateRun || work.requests[0].ActorSubject != keycloakSubject || work.requests[0].TenantID != "tenant_123" {
+	if len(work.requests) != 1 || work.requests[0].Kind != KindStartTemplateRun || work.requests[0].ActorSubject != oidcSubject || work.requests[0].TenantID != "tenant_123" {
 		t.Fatalf("requests = %#v", work.requests)
 	}
 	var payload StartTemplateRunPayload
@@ -2813,7 +2813,7 @@ func TestApproveRunPairsApprovalAuditAndApplyIntentInTransaction(t *testing.T) {
 	if work.inTxCalls != 1 || runs.approval.RunID != "run_123" || len(work.audits) != 1 {
 		t.Fatalf("transaction calls = %d, approval = %#v, audits = %#v", work.inTxCalls, runs.approval, work.audits)
 	}
-	if len(work.requests) != 1 || work.requests[0].Kind != KindStartTemplateApply || work.requests[0].ActorSubject != keycloakSubject || work.requests[0].TenantID != "tenant_123" || workflows.approvalRunID != "" {
+	if len(work.requests) != 1 || work.requests[0].Kind != KindStartTemplateApply || work.requests[0].ActorSubject != oidcSubject || work.requests[0].TenantID != "tenant_123" || workflows.approvalRunID != "" {
 		t.Fatalf("requests = %#v, direct approval = %q", work.requests, workflows.approvalRunID)
 	}
 	var payload StartTemplateApplyPayload
@@ -3097,8 +3097,8 @@ func TestOperableStackTemplateCommandsAuditRefusals(t *testing.T) {
 			if event.Outcome != domain.AuditOutcomeFailure {
 				t.Fatalf("outcome = %q, want %q", event.Outcome, domain.AuditOutcomeFailure)
 			}
-			if event.ActorSubject != keycloakSubject {
-				t.Fatalf("actor_subject = %q, want %q", event.ActorSubject, keycloakSubject)
+			if event.ActorSubject != oidcSubject {
+				t.Fatalf("actor_subject = %q, want %q", event.ActorSubject, oidcSubject)
 			}
 			if event.TenantID != domain.TenantID("tenant_123") {
 				t.Fatalf("tenant_id = %q, want %q", event.TenantID, "tenant_123")

@@ -15,16 +15,11 @@ cp .env.example .env
 docker compose up -d --wait
 ```
 
-That stack has no identity provider, and the API serves local accounts. For
-Keycloak and OIDC sign-in, uncomment the `OIDC_ISSUER_URL` and `OIDC_CLIENT_*`
-lines in `.env` and bring the profile up:
-
-```bash
-docker compose --profile auth up -d --wait
-```
-
-The two go together. An issuer in the environment with no Keycloak running is a
-boot failure: the API discovers the provider while it starts.
+That stack includes Dex, the local OIDC provider, at
+`http://dex.localhost:5556/dex` (see `docs/authentication.md`). An issuer with
+no provider reachable behind it is a boot failure: the API discovers the
+provider while it starts. For a host-run API, `dex.localhost` resolves to
+loopback, where Compose publishes Dex's port.
 
 Nothing to copy afterwards. OpenFGA runs inside the API and resolves its store
 and authorization model from the model in this repository at startup.
@@ -60,20 +55,8 @@ than both.
 `npm run dev` binds and prints `http://127.0.0.1:5173` — exactly how someone
 hits the login trap below. Open `http://localhost:5173` instead: the redirect
 URI is derived from a single `OPENPLAN_PUBLIC_URL`, so only that exact origin is
-registered with Keycloak, and `127.0.0.1` fails sign-in with "Invalid
-parameter: redirect_uri".
-
-## The Keycloak hostname
-
-Keycloak is reached at `http://keycloak.localhost:8082` from both the browser
-and from inside containers. That name resolves to loopback for the browser and
-to the container through Docker's DNS, which is what lets a single issuer string
-satisfy both — the API compares the discovery document's issuer to
-`OIDC_ISSUER_URL` byte-for-byte, so the two cannot differ.
-
-One trap worth knowing: `curl` resolves `*.localhost` to its own loopback and
-ignores the Docker alias, so a `curl` test from inside a container fails
-misleadingly. Use `wget` or a language HTTP client instead.
+registered with an identity provider, and `127.0.0.1` fails OIDC sign-in with
+an invalid `redirect_uri`.
 
 ## The authorization model
 
@@ -126,7 +109,7 @@ npm run build
 ## Layout
 
 ```text
-cmd/                  API, executor, and provisioner entry points
+cmd/                  API and executor entry points
 internal/app/         application use cases and ports
 internal/api/         HTTP transport
 internal/postgres/    product persistence and migrations
@@ -138,6 +121,5 @@ internal/runseal/     per-run sealing of secrets sent to the executor
 internal/runner/      OpenTofu execution
 internal/authn/       token verification
 internal/authorization/  embedded OpenFGA: model, bootstrap, checks, transactional tuple writes
-internal/keycloak/    realm provisioning (local demo IdP only)
 web/                  Vite UI
 ```

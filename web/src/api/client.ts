@@ -232,11 +232,9 @@ export function searchUsers(tenantID: string, q: string, first: number, max: num
   return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/users/search?${params.toString()}`);
 }
 
-// The app's own sign-in screen. Not a server route: local accounts always
-// exist — root is one and cannot be locked out — so there is always a password
-// form to render, and an SSO button beside it only where a provider is
-// configured. Which method to use is the person's choice, and sending the
-// browser straight to the IdP would make it the client's.
+// The app's own sign-in screen. Not a server route: it is a page with one
+// button that starts the OIDC flow, so a lost session lands somewhere the user
+// chooses to leave rather than bouncing straight to the identity provider.
 export const signInPath = "/signin";
 
 export function loginURL(): string {
@@ -244,37 +242,11 @@ export function loginURL(): string {
   return `${signInPath}?return_to=${encodeURIComponent(returnTo)}`;
 }
 
-// The OIDC authorization request, reached by a full navigation from the SSO
-// button. Never fetch: it redirects to the provider's origin, where an XHR
-// dies on CORS.
+// The OIDC authorization request, reached by a full navigation from the
+// sign-in button. Never fetch: it redirects to the provider's origin, where an
+// XHR dies on CORS.
 export function ssoLoginURL(returnTo: string): string {
   return `/v1/auth/login?return_to=${encodeURIComponent(returnTo)}`;
-}
-
-export interface AuthMethods {
-  local: boolean;
-  oidc: boolean;
-}
-
-// Which ways in this deployment has, so the sign-in screen renders the ones
-// that exist rather than discovering them by failing. Public and pre-session by
-// necessity: it is read before anyone has signed in.
-export function authMethods(): Promise<AuthMethods> {
-  return requestJSON(`/v1/auth/methods`, {}, { redirectOnUnauthorized: false });
-}
-
-// Signs in against openplan's own account table. Answers 204 and sets the session
-// cookie; the identity comes from the /v1/me the caller makes afterwards.
-//
-// The 401 redirect is off. Here a 401 is a wrong password, not a lost session,
-// and sending the browser to the sign-in screen it is already looking at would
-// replace the error message with a page reload that loses what was typed.
-export function signInWithPassword(username: string, password: string): Promise<void> {
-  return requestNoContent(
-    `/v1/auth/login`,
-    { method: "POST", body: JSON.stringify({ username, password }) },
-    { redirectOnUnauthorized: false }
-  );
 }
 
 // Every request this module makes carries the session cookie, and the server
@@ -289,14 +261,7 @@ export function apiRequestsMade(): number {
   return requestsMade;
 }
 
-// Per-request overrides. Only the 401 behaviour is negotiable, and only two
-// requests negotiate it: the ones the sign-in screen itself makes, where a 401
-// is an answer rather than a lost session.
-interface RequestOptions {
-  redirectOnUnauthorized?: boolean;
-}
-
-async function fetchWithAuth(path: string, init: RequestInit, options: RequestOptions = {}): Promise<Response> {
+async function fetchWithAuth(path: string, init: RequestInit): Promise<Response> {
   const headers = new Headers(init.headers);
   if (!headers.has("content-type")) {
     headers.set("content-type", "application/json");
@@ -309,14 +274,11 @@ async function fetchWithAuth(path: string, init: RequestInit, options: RequestOp
   // requests that actually reached it and could have slid the bound.
   requestsMade += 1;
 
-  const redirect = options.redirectOnUnauthorized !== false;
   if (
     response.status === 401 &&
-    redirect &&
     !loginLoopDetected() &&
-    // Already there. The sign-in screen's own requests opt out above, so this
-    // only catches a future one that forgets to, but the failure it prevents is
-    // a reload that wipes the form mid-typing.
+    // Already there. Navigating again would only reload the screen the user
+    // is looking at.
     globalThis.location.pathname !== signInPath
   ) {
     // A full navigation rather than a router push: this runs outside React, and
@@ -342,8 +304,8 @@ export function logout(): void {
   form.submit();
 }
 
-async function requestJSON<T>(path: string, init: RequestInit = {}, options: RequestOptions = {}): Promise<T> {
-  const response = await fetchWithAuth(path, init, options);
+async function requestJSON<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetchWithAuth(path, init);
   await throwForError(response);
   return response.json() as Promise<T>;
 }
@@ -354,8 +316,8 @@ async function requestText(path: string, init: RequestInit = {}): Promise<string
   return response.text();
 }
 
-async function requestNoContent(path: string, init: RequestInit = {}, options: RequestOptions = {}): Promise<void> {
-  const response = await fetchWithAuth(path, init, options);
+async function requestNoContent(path: string, init: RequestInit = {}): Promise<void> {
+  const response = await fetchWithAuth(path, init);
   await throwForError(response);
 }
 

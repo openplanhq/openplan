@@ -1346,8 +1346,7 @@
 
 .signin-card {
   width: 100%;
-  /* Geist keeps its auth cards near 380px: wide enough that a long username is
-     not scrolled, narrow enough that the two fields still read as one column. */
+  /* Geist keeps its auth cards near 380px. */
   max-width: 380px;
 }
 
@@ -1379,42 +1378,9 @@
   line-height: var(--leading-normal);
 }
 
-.signin-form {
-  display: grid;
-  gap: var(--space-4);
-}
-
-/* The submit and the SSO button both span the card. Everything above them is
-   full width, and a content-width button under a full-width field reads as an
-   afterthought rather than the action the screen exists for. */
+/* The one action spans the card. A content-width button in a card that holds
+   nothing else reads as an afterthought rather than the action the screen
+   exists for. */
 .signin-submit {
   width: 100%;
-}
-
-/* A rule with the word set into it. The pseudo-elements are the two halves of
-   the line, so the gap tracks the label's own width at any font size. */
-.signin-divider {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin: var(--space-5) 0;
-  color: var(--color-muted-fg);
-  font-size: var(--text-xs);
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
-}
-
-.signin-divider::before,
-.signin-divider::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--color-border);
-}
-
-/* .panel > * + * spaces a trailing action from the content above it. Here the
-   divider already sets that separation, and the two together open a gap wide
-   enough to read as the SSO button belonging to something else. */
-.signin-card > .signin-divider + .secondary-button {
-  margin-top: 0;
 }

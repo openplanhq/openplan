@@ -30,11 +30,11 @@ export default function SessionProvider() {
 
   const login = useCallback(() => {
     if (navigated.current) return;
-    // Attempts are recorded by the sign-in screen, on authentications the
-    // server actually accepted -- not here. Arriving at the screen is not a lap
-    // of anything: with a password form the visitor can be sent here simply
-    // because they have not signed in yet, and counting that would end in
-    // telling them their cookies are blocked when nothing has failed.
+    // Attempts are recorded by the sign-in screen, when it sends the browser
+    // to the identity provider -- not here. Arriving at the screen is not a lap
+    // of anything: the visitor can be sent here simply because they have not
+    // signed in yet, and counting that would end in telling them their cookies
+    // are blocked when nothing has failed.
     if (loginLoopDetected()) {
       setStatus("loop");
       return;

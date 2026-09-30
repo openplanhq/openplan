@@ -276,11 +276,11 @@ describe("SessionProvider", () => {
     expect(sessionStorage.getItem(attemptsKey)).toBeNull();
   });
 
-  // Being sent to the sign-in screen is not an attempt at anything. The screen
-  // is a password form, so a visitor who has simply not signed in yet lands
-  // there on every page load; spending the allowance on that would end in
-  // telling them their cookies are blocked when they have typed nothing. The
-  // count is spent by SignInScreen, on sign-ins the server accepted.
+  // Being sent to the sign-in screen is not an attempt at anything. A visitor
+  // who has simply not signed in yet lands there on every page load; spending
+  // the allowance on that would end in telling them their cookies are blocked
+  // when nothing has failed. The count is spent by SignInScreen, when it sends
+  // the browser to the identity provider.
   it("does not spend a login attempt merely on being sent to sign in", async () => {
     getMe.mockRejectedValue(new ApiRequestError(401, "unauthorized", "unauthorized"));
     renderProvider(<div data-testid="child">ready</div>);

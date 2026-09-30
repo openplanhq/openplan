@@ -65,7 +65,7 @@ var linkedTestStacks = []string{"stack_123", "stack_abc", "stack_a", "stack_b"}
 func testPlatformAuthorizer(t *testing.T) *authorization.Authorization {
 	t.Helper()
 	return newPlatformAuthorizer(t,
-		platformAdmin(keycloakSubject),
+		platformAdmin(oidcSubject),
 		platformAdmin("admin-subject"),
 		platformAdmin("admin_123"),
 		platformEditor("user-subject"),

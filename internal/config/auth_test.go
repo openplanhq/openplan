@@ -102,17 +102,17 @@ func TestLoadSecurityConfigRejectsMissingAndMalformedValues(t *testing.T) {
 		{name: "tenant prefix", key: "OPENPLAN_TENANT_ID", value: "-tenant", want: "OPENPLAN_TENANT_ID must start"},
 		{name: "tenant slash", key: "OPENPLAN_TENANT_ID", value: "tenant/123", want: "OPENPLAN_TENANT_ID must start"},
 		{name: "tenant too long", key: "OPENPLAN_TENANT_ID", value: strings.Repeat("a", 129), want: "OPENPLAN_TENANT_ID must start"},
-		// An absent issuer is no longer an error by itself -- it is how a
-		// local-only deployment opts out of OIDC (#211). It is an error only
-		// when client credentials name a provider that would never be
-		// contacted, which is what the rest of this fixture supplies.
-		{name: "client credentials without issuer", key: "OIDC_ISSUER_URL", value: "", want: "OIDC_CLIENT_ID and OIDC_CLIENT_SECRET require OIDC_ISSUER_URL"},
+		// The identity provider is the only way in, so there is no
+		// deployment without one.
+		{name: "missing issuer", key: "OIDC_ISSUER_URL", value: "", want: "OIDC_ISSUER_URL is required"},
 		{name: "relative issuer", key: "OIDC_ISSUER_URL", value: "/realms/openplan", want: "OIDC_ISSUER_URL must be an absolute HTTP or HTTPS URL"},
 		{name: "issuer user info", key: "OIDC_ISSUER_URL", value: "https://client:client-secret-sentinel@id.example.com/realms/openplan", want: "OIDC_ISSUER_URL must not include user information"},
 		{name: "issuer query", key: "OIDC_ISSUER_URL", value: "https://id.example.com/realms/openplan?x=1", want: "OIDC_ISSUER_URL must not include a query"},
 		{name: "issuer fragment", key: "OIDC_ISSUER_URL", value: "https://id.example.com/realms/openplan#keys", want: "OIDC_ISSUER_URL must not include a fragment"},
 		{name: "missing client id", key: "OIDC_CLIENT_ID", value: "", want: "OIDC_CLIENT_ID is required"},
 		{name: "client id whitespace", key: "OIDC_CLIENT_ID", value: "openplan api", want: "OIDC_CLIENT_ID must not contain whitespace or control characters"},
+		{name: "missing root subject", key: "OPENPLAN_ROOT_SUBJECT", value: "", want: "OPENPLAN_ROOT_SUBJECT is required"},
+		{name: "root subject whitespace", key: "OPENPLAN_ROOT_SUBJECT", value: "root subject", want: "OPENPLAN_ROOT_SUBJECT must not contain whitespace or control characters"},
 	}
 
 	for _, test := range tests {
@@ -168,7 +168,7 @@ func TestLoadSecurityConfigRejectsInsecureProductionValues(t *testing.T) {
 }
 
 func TestLoadSecurityConfigRequiresOIDCClientCredentials(t *testing.T) {
-	for _, name := range []string{"OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET", "OPENPLAN_PUBLIC_URL", "SESSION_ENCRYPTION_KEY"} {
+	for _, name := range []string{"OIDC_ISSUER_URL", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET", "OPENPLAN_PUBLIC_URL", "SESSION_ENCRYPTION_KEY", "OPENPLAN_ROOT_SUBJECT"} {
 		t.Run(name, func(t *testing.T) {
 			env := validSecurityValues()
 			delete(env, name)
@@ -187,6 +187,39 @@ func TestLoadSecurityConfigRejectsRetiredOIDCAudience(t *testing.T) {
 	env["OIDC_AUDIENCE"] = "openplan-api"
 	if _, err := loadSecurityConfig(mapConfigEnv(env)); err == nil {
 		t.Fatal("loadSecurityConfig accepted the retired OIDC_AUDIENCE")
+	}
+}
+
+// Root is whoever the identity provider says holds this sub. It is the sub and
+// never an email: an upstream connector can assert any address, but Dex's sub
+// includes the connector, so another connector cannot mint it.
+func TestLoadSecurityConfigReadsRootSubject(t *testing.T) {
+	t.Parallel()
+
+	cfg := loadValidSecurityConfig(t, map[string]string{"OPENPLAN_ROOT_SUBJECT": "  CgRyb290EgVsb2NhbA  "})
+	if cfg.Root.Subject != "CgRyb290EgVsb2NhbA" {
+		t.Fatalf("Root.Subject = %q, want the trimmed sub", cfg.Root.Subject)
+	}
+}
+
+// openplan holds no passwords any more. A root password left in an
+// environment would be a secret protecting nothing while looking like it does,
+// so it is refused by name rather than ignored.
+func TestLoadSecurityConfigRejectsRetiredLocalRootSettings(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range []string{"OPENPLAN_ROOT_PASSWORD", "OPENPLAN_ROOT_USERNAME"} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := loadSecurityConfigWith(t, map[string]string{name: "retired-value-sentinel"})
+			if !errors.Is(err, ErrInvalidConfig) || !strings.Contains(err.Error(), name+" is retired") {
+				t.Fatalf("error = %v, want ErrInvalidConfig naming %s as retired", err, name)
+			}
+			if strings.Contains(err.Error(), "retired-value-sentinel") {
+				t.Fatalf("error leaked the value: %v", err)
+			}
+		})
 	}
 }
 
@@ -295,7 +328,7 @@ func validSecurityValues() map[string]string {
 		"OIDC_CLIENT_ID":         "openplan-api",
 		"OIDC_CLIENT_SECRET":     "oidc-client-secret",
 		"SESSION_ENCRYPTION_KEY": "01234567890123456789012345678901",
-		"OPENPLAN_ROOT_PASSWORD": "root-local-only",
+		"OPENPLAN_ROOT_SUBJECT":  "root-subject",
 	}
 }
 

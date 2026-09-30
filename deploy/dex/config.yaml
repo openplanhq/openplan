@@ -1,0 +1,64 @@
+# Dex, the local stack's identity provider. Local development only: every
+# secret here, or defaulted by docker-compose.yaml, is a throwaway.
+#
+# $VARS are expanded from Dex's environment at startup (Dex's expand_env
+# feature flag, on by default), which is how the client secret and database
+# password stay in one place with the API's copy.
+
+# The one issuer string both sides use. dex.localhost resolves to loopback in
+# the browser and to this container through its Compose network alias, and the
+# API compares the discovery document's issuer to OIDC_ISSUER_URL byte for
+# byte, so the two cannot differ.
+issuer: http://dex.localhost:5556/dex
+
+storage:
+  type: postgres
+  config:
+    host: postgres
+    port: 5432
+    database: dex
+    user: $DEX_DB_USER
+    password: $DEX_DB_PASSWORD
+    ssl:
+      mode: disable
+
+web:
+  http: 0.0.0.0:5556
+
+# /healthz/ready for the Compose health check. Not published.
+telemetry:
+  http: 0.0.0.0:5558
+
+oauth2:
+  responseTypes: ["code"]
+  # openplan is Dex's only client and the only one it will ever show a user;
+  # a consent page for sharing a profile with it asks nothing.
+  skipApprovalScreen: true
+  # No passwordConnector: openplan signs in only through the authorization-code
+  # flow, so the resource-owner password grant stays off. The login page still
+  # goes straight to the password form, because Dex skips its connector picker
+  # when there is only one connector.
+
+staticClients:
+  - id: openplan-api
+    name: openplan
+    secretEnv: OIDC_CLIENT_SECRET
+    # Derived by the API as <OPENPLAN_PUBLIC_URL>/v1/auth/callback. Must match
+    # OPENPLAN_PUBLIC_URL's default in docker-compose.yaml and .env.example.
+    redirectURIs:
+      - http://localhost:5173/v1/auth/callback
+
+enablePasswordDB: true
+
+# The local stack's administrator. Its userID is fixed because the OIDC sub
+# Dex issues is derived from it and the connector ID ("local"), and that sub is
+# what openplan grants authority to. Changing either strands every grant.
+#
+# The hash is bcrypt of "admin-local-only", base64-encoded: a raw bcrypt hash
+# contains "$", which the env expansion above would eat.
+staticPasswords:
+  - email: admin@openplan.local
+    hash: JDJhJDEwJGJwakNYR2JtVTB6NFdPL0JrZFhLUk9pc2NobTM3d2UuTVlmd3J3SjdzQldlMEc1dDdlWWZX
+    username: admin
+    name: openplan admin
+    userID: 7c4b2f0e-3d1a-4e8b-9f6c-2a5d8e1b0c47

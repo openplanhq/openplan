@@ -8,7 +8,7 @@ afterEach(cleanup);
 describe("StyleGuide", () => {
   it("renders without a backend, an auth provider, or a router", () => {
     // The whole point of this page is that it mounts standalone: the app
-    // itself cannot render without Keycloak, so anything this gallery needed
+    // itself cannot render without an identity provider, so anything this gallery needed
     // from context would make it useless for viewing the design system.
     render(<StyleGuide />);
     expect(screen.getByTestId("styleguide")).toBeTruthy();

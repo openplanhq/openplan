@@ -1253,7 +1253,7 @@ func (service *Service) ListStackGrants(ctx context.Context, command ListStackGr
 	}
 
 	// One lookup for every grant on the stack, rather than one per grant. This
-	// read used to be an N+1 of Keycloak admin API calls, which put the
+	// read used to be an N+1 of IdP admin API calls, which put the
 	// customer's IdP on the critical path for rendering a list.
 	subs := make([]string, 0, len(grants))
 	for _, grant := range grants {

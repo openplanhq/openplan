@@ -777,6 +777,42 @@ func TestNewServerPanicsWithoutAUserRepository(t *testing.T) {
 	NewServer(app.NewService(app.Service{}), "tenant_123", WithAuth(cfg))
 }
 
-func withLocalAuthenticator(authenticator LocalAuthenticator) authTestOption {
-	return func(cfg *AuthConfig) { cfg.LocalAuthenticator = authenticator }
+// The identity provider is the only way in. openplan checks no password, so
+// there is no local sign-in route to reach, and no methods endpoint for a
+// sign-in screen to choose between ways in: there is one.
+func TestAuthServesNoLocalSignInOrMethodsRoute(t *testing.T) {
+	sealer, err := encryption.NewCipher("01234567890123456789012345678901")
+	if err != nil {
+		t.Fatalf("NewCipher returned error: %v", err)
+	}
+	// NewAuthenticatedServer, so the public-paths list is in play: a route
+	// still listed there would answer a signed-out caller instead of 401.
+	server := NewAuthenticatedServer(app.NewService(app.Service{Users: &apiFakeUserRepository{}}), "tenant_123", false,
+		WithAuth(AuthConfig{
+			Flow:               &stubFlow{authorizationURL: "https://idp.test/authorize"},
+			Verifier:           stubVerifier{},
+			Sealer:             sealer,
+			PublicURL:          "http://localhost:5173",
+			Sessions:           newFakeSessionStore(),
+			SessionAbsoluteTTL: authn.DefaultSessionAbsoluteTTL,
+			SessionIdleTTL:     authn.DefaultSessionIdleTTL,
+		}))
+
+	login := httptest.NewRequest(http.MethodPost, "/v1/auth/login", strings.NewReader(`{"username":"root","password":"x"}`))
+	login.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, login)
+	// 405, not 401: GET /v1/auth/login exists, so the path matches, but no
+	// handler takes a POST.
+	if response.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("POST /v1/auth/login status = %d, want 405", response.Code)
+	}
+
+	// 401, not 404: with no route and no public-path entry, a signed-out
+	// caller meets the authentication gate like on any other unknown path.
+	methods := httptest.NewRecorder()
+	server.ServeHTTP(methods, httptest.NewRequest(http.MethodGet, "/v1/auth/methods", nil))
+	if methods.Code != http.StatusUnauthorized {
+		t.Fatalf("GET /v1/auth/methods status = %d, want 401", methods.Code)
+	}
 }

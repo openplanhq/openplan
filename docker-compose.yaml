@@ -19,9 +19,8 @@ services:
       POSTGRES_USER: ${APP_DB_USER:-openplan}
       POSTGRES_PASSWORD: ${APP_DB_PASSWORD:-openplan}
       POSTGRES_DB: ${APP_DB_NAME:-openplan_test}
-      KEYCLOAK_DB_USER: ${KEYCLOAK_DB_USER:-keycloak}
-      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak-local-only}
-      KEYCLOAK_DB_NAME: ${KEYCLOAK_DB_NAME:-keycloak}
+      DEX_DB_USER: ${DEX_DB_USER:-dex}
+      DEX_DB_PASSWORD: ${DEX_DB_PASSWORD:-dex-local-only}
       TEMPORAL_DB_USER: ${TEMPORAL_DB_USER:-temporal}
       TEMPORAL_DB_PASSWORD: ${TEMPORAL_DB_PASSWORD:-temporal}
     ports:
@@ -35,84 +34,32 @@ services:
       timeout: 5s
       retries: 10
 
-  # An identity provider, opt in:
-  #
-  #   docker compose --profile auth up -d
-  #
-  # The API serves local accounts with no IdP at all, and that is the default
-  # stack: Keycloak is a JVM and a provisioning run nobody needs to pay for on
-  # every up. Enabling the profile means enabling the OIDC_* block in .env too
-  # -- the API reads the issuer from the environment, and a profile cannot set
-  # one. Issuer set with no Keycloak behind it is a boot failure, not a
-  # degraded login, because discovery happens while the API starts.
-  keycloak:
-    profiles: ["auth"]
-    image: quay.io/keycloak/keycloak:26.6.3
-    command: start-dev
+  # The identity provider. Configured in deploy/dex/config.yaml; see
+  # docs/authentication.md.
+  dex:
+    image: ghcr.io/dexidp/dex:v2.45.1
+    command: ["dex", "serve", "/etc/dex/config.yaml"]
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/${KEYCLOAK_DB_NAME:-keycloak}
-      KC_DB_USERNAME: ${KEYCLOAK_DB_USER:-keycloak}
-      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak-local-only}
-      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME:-openplan-admin}
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD:-openplan-admin-local-only}
-      KC_HTTP_PORT: "8082"
-      KC_HOSTNAME: http://keycloak.localhost:8082
-      KC_HEALTH_ENABLED: "true"
-      KC_METRICS_ENABLED: "true"
+      DEX_DB_USER: ${DEX_DB_USER:-dex}
+      DEX_DB_PASSWORD: ${DEX_DB_PASSWORD:-dex-local-only}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-openplan-api-local-only}
+    volumes:
+      - ./deploy/dex/config.yaml:/etc/dex/config.yaml:ro
     ports:
-      - "8082:8082"
+      - "5556:5556"
     networks:
       default:
         aliases:
-          - keycloak.localhost
+          - dex.localhost
     healthcheck:
-      test:
-        - CMD-SHELL
-        - >-
-          { printf 'HEAD /health/ready HTTP/1.0\r\n\r\n' >&0;
-          grep 'HTTP/1.0 200'; } 0<>/dev/tcp/localhost/9000
-      interval: 10s
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:5558/healthz/ready"]
+      interval: 5s
       timeout: 5s
-      retries: 18
-      start_period: 30s
-
-  keycloak-provision:
-    profiles: ["auth"]
-    build:
-      context: .
-      dockerfile: Dockerfile.keycloak-provisioner
-    depends_on:
-      keycloak:
-        condition: service_healthy
-    environment:
-      KEYCLOAK_ADMIN_URL: http://keycloak:8082
-      KEYCLOAK_ADMIN_REALM: master
-      KEYCLOAK_ADMIN_USERNAME: ${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME:-openplan-admin}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD:-openplan-admin-local-only}
-      KEYCLOAK_REALM: openplan
-      KEYCLOAK_API_CLIENT_ID: openplan-api
-      # The provisioner derives the confidential client's redirect and
-      # post-logout URIs from OPENPLAN_PUBLIC_URL, and registers this exact
-      # secret on the client, so the API and the IdP always agree.
-      OPENPLAN_PUBLIC_URL: ${OPENPLAN_PUBLIC_URL:-http://localhost:5173}
-      # Back-channel logout is a server-to-server POST from Keycloak's own
-      # container, not a browser redirect — OPENPLAN_PUBLIC_URL resolves inside
-      # Keycloak to Keycloak's own loopback, not the host's browser-facing
-      # port, so this is pinned to the API's address on the Compose network.
-      OPENPLAN_BACKCHANNEL_LOGOUT_URL: http://api:8081/v1/auth/backchannel-logout
-      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-openplan-api-local-only}
-      KEYCLOAK_PLATFORM_ADMIN_USERNAME: ${KEYCLOAK_PLATFORM_ADMIN_USERNAME:-openplan-platform-admin}
-      KEYCLOAK_PLATFORM_ADMIN_PASSWORD: ${KEYCLOAK_PLATFORM_ADMIN_PASSWORD:-openplan-platform-admin-local-only}
-      KEYCLOAK_PLATFORM_ADMIN_EMAIL: ${KEYCLOAK_PLATFORM_ADMIN_EMAIL:-openplan-platform-admin@local.test}
-      KEYCLOAK_PLATFORM_ADMIN_FIRST_NAME: ${KEYCLOAK_PLATFORM_ADMIN_FIRST_NAME:-openplan}
-      KEYCLOAK_PLATFORM_ADMIN_LAST_NAME: ${KEYCLOAK_PLATFORM_ADMIN_LAST_NAME:-Platform Administrator}
-      KEYCLOAK_HTTP_TIMEOUT: 10s
-      OPENPLAN_ENVIRONMENT: ${OPENPLAN_ENVIRONMENT:-development}
-    restart: "no"
+      retries: 12
+    restart: on-failure
 
   temporal:
     image: temporalio/auto-setup:1.28.1
@@ -187,6 +134,10 @@ services:
         condition: service_healthy
       temporal:
         condition: service_healthy
+      # The API discovers the provider while it starts, and an unreachable
+      # issuer is a boot failure.
+      dex:
+        condition: service_healthy
     environment:
       HTTP_ADDRESS: ":8081"
       DATABASE_URL: postgres://${APP_DB_USER:-openplan}:${APP_DB_PASSWORD:-openplan}@postgres:5432/${APP_DB_NAME:-openplan_test}?sslmode=disable
@@ -194,15 +145,11 @@ services:
       OPENPLAN_ENVIRONMENT: development
       OPENPLAN_TENANT_ID: ${OPENPLAN_TENANT_ID:-tenant_123}
       CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:-717cb4d0fd1db07a30442806c2987599580f6d7c6e63b9bddf509bc183a086d3}
-      # Empty by default: no issuer means no provider, and the API serves local
-      # accounts. The three move together -- the config rejects a client with no
-      # issuer -- and .env turns them on alongside --profile auth. Ordering is
-      # left to restart: on-failure rather than depends_on, because Compose
-      # rejects the whole project when a profile-less service depends on a
-      # profiled one.
-      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
-      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
-      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      # Dex by default. The secret must match what Dex registers for the
+      # client, which reads the same variable.
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://dex.localhost:5556/dex}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-openplan-api}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-openplan-api-local-only}
       OPENPLAN_PUBLIC_URL: ${OPENPLAN_PUBLIC_URL:-http://localhost:5173}
       SESSION_ENCRYPTION_KEY: ${SESSION_ENCRYPTION_KEY:-b6f1d2c4a8e0937516243b8c5d7e9f0a1b2c3d4e5f60718293a4b5c6d7e8f9a0}
       ARTIFACT_STORE_KIND: filesystem
@@ -214,11 +161,10 @@ services:
       # How long one Terraform command may run. The control plane owns it: it
       # is what tells Temporal when to give up on an executor.
       OPENPLAN_TERRAFORM_TIMEOUT: ${OPENPLAN_TERRAFORM_TIMEOUT:-45m}
-      # Seeds the bootstrap administrator on first boot. Required by the API --
-      # without it the process exits at startup and the service restart-loops.
-      # Defaulted here because this file is the local stack; a real deployment
-      # sets it from the environment like every other secret.
-      OPENPLAN_ROOT_PASSWORD: ${OPENPLAN_ROOT_PASSWORD:-root-local-only}
+      # The Dex user root is granted to: the sub of admin@openplan.local in
+      # deploy/dex/config.yaml. Required by the API -- without it the process
+      # exits at startup and the service restart-loops.
+      OPENPLAN_ROOT_SUBJECT: ${OPENPLAN_ROOT_SUBJECT:-CiQ3YzRiMmYwZS0zZDFhLTRlOGItOWY2Yy0yYTVkOGUxYjBjNDcSBWxvY2Fs}
     restart: on-failure
     ports:
       - "8081:8081"

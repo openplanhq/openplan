@@ -89,6 +89,34 @@ func TestMigrateAppliesSchema(t *testing.T) {
 	}
 }
 
+// openplan holds no credentials: passwords live in the identity provider.
+// local_accounts is created by 0020 and must be gone once the chain has run,
+// or a deployment keeps a table of password hashes nothing reads.
+func TestMigrateDropsLocalAccounts(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openTestPool(t, ctx)
+
+	if err := Migrate(ctx, pool); err != nil {
+		t.Fatalf("Migrate returned error: %v", err)
+	}
+	var exists bool
+	if err := pool.QueryRow(ctx, `
+		select exists (
+			select 1
+			from information_schema.tables
+			where table_schema = current_schema()
+				and table_name = 'local_accounts'
+		)
+	`).Scan(&exists); err != nil {
+		t.Fatalf("query table existence: %v", err)
+	}
+	if exists {
+		t.Fatal("local_accounts still exists after migrating")
+	}
+}
+
 func TestWorkflowOutboxMigrationDefinesDurablePendingQueue(t *testing.T) {
 	t.Parallel()
 

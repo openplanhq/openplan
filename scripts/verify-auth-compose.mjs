@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -37,9 +37,7 @@ function envValue(name) {
 for (const [name, value] of Object.entries({
   OPENPLAN_ENVIRONMENT: "development",
   OPENPLAN_TENANT_ID: "tenant_123",
-  OIDC_ISSUER_URL: "http://keycloak.localhost:8082/realms/openplan",
   OPENPLAN_PUBLIC_URL: "http://localhost:5173",
-  OIDC_CLIENT_ID: "openplan-api",
 })) {
   assert.equal(envValue(name), value, `${name} has the wrong local example value`);
 }
@@ -57,63 +55,83 @@ function hasVolume(value, sourceName) {
 }
 
 const postgres = service("postgres");
-const keycloak = service("keycloak");
-const keycloakProvision = service("keycloak-provision");
 const api = service("api");
 
 assert.equal(postgres.image, "postgres:16-alpine");
-assert.equal(keycloak.image, "quay.io/keycloak/keycloak:26.6.3");
-
 assert.ok(postgres.healthcheck, "the shared Postgres needs a health check");
-assert.ok(keycloak.healthcheck?.test?.join(" ").includes("/health/ready"));
-assert.equal(keycloak.depends_on?.postgres?.condition, "service_healthy");
-assert.equal(keycloakProvision.depends_on?.keycloak?.condition, "service_healthy");
-assert.equal(keycloakProvision.restart, "no");
-assert.equal(keycloakProvision.build?.dockerfile, "Dockerfile.keycloak-provisioner");
-assert.deepEqual(keycloakProvision.ports ?? [], []);
-assert.equal(keycloakProvision.environment?.KEYCLOAK_ADMIN_URL, "http://keycloak:8082");
-assert.equal(keycloak.environment?.KC_HTTP_PORT, "8082");
-assert.equal(keycloak.environment?.KC_HOSTNAME, "http://keycloak.localhost:8082");
-assert.ok(
-  keycloak.networks?.default?.aliases?.includes("keycloak.localhost"),
-  "keycloak needs the keycloak.localhost alias so one issuer string resolves from both sides",
-);
-assert.equal(
-  keycloakProvision.environment?.OPENPLAN_PUBLIC_URL,
-  envValue("OPENPLAN_PUBLIC_URL"),
-  "keycloak-provision must derive the client's redirect and post-logout URIs from the same OPENPLAN_PUBLIC_URL as the API",
-);
-assert.equal(
-  keycloakProvision.environment?.OIDC_CLIENT_SECRET,
-  envValue("OIDC_CLIENT_SECRET"),
-  "keycloak-provision must register the same client secret the API authenticates with",
-);
-assert.equal(
-  api.depends_on?.["keycloak-provision"]?.condition,
-  "service_completed_successfully",
-  "the API must not start before the realm and client it authenticates against exist",
-);
 
-// OPENPLAN_PUBLIC_URL is the one value all three parties to the OIDC handshake
-// must agree on: the API derives its redirect and post-logout URIs from it,
-// and the Keycloak provisioner registers those same URIs on the client. A
-// stale default in any one of these three spots would only surface at login
-// time as invalid_redirect_uri, so pin every "${OPENPLAN_PUBLIC_URL:-...}"
-// default in Compose to the .env.example value.
+// OPENPLAN_PUBLIC_URL is what the API derives its OIDC redirect and
+// post-logout URIs from, and what a provider must register. A stale Compose
+// default would only surface at sign-in as invalid_redirect_uri, so pin every
+// "${OPENPLAN_PUBLIC_URL:-...}" default to the .env.example value.
 const publicURLDefaults = [
   ...source.matchAll(/\$\{OPENPLAN_PUBLIC_URL:-([^}]*)\}/g),
 ].map((match) => match[1]);
-assert.equal(
-  publicURLDefaults.length,
-  3,
-  "expected OPENPLAN_PUBLIC_URL to default in keycloak-provision, api, and worker",
-);
+assert.ok(publicURLDefaults.length > 0, "expected OPENPLAN_PUBLIC_URL to default in the api service");
 for (const value of publicURLDefaults) {
   assert.equal(
     value,
     envValue("OPENPLAN_PUBLIC_URL"),
-    "every OPENPLAN_PUBLIC_URL default in Compose must match .env.example, or the derived redirect URI can drift from what Keycloak has registered",
+    "every OPENPLAN_PUBLIC_URL default in Compose must match .env.example",
   );
+}
+assert.equal(api.environment?.OPENPLAN_PUBLIC_URL, envValue("OPENPLAN_PUBLIC_URL"));
+
+// Dex is the default stack's identity provider. The API and Dex must agree on
+// the issuer, the client, and its secret, and Compose defaults must match
+// .env.example so the stack runs identically with or without .env.
+const dex = service("dex");
+assert.equal(dex.image, "ghcr.io/dexidp/dex:v2.45.1");
+assert.equal(dex.depends_on?.postgres?.condition, "service_healthy");
+assert.ok(dex.healthcheck?.test?.join(" ").includes("/healthz/ready"));
+assert.ok(
+  dex.networks?.default?.aliases?.includes("dex.localhost"),
+  "dex needs the dex.localhost alias so one issuer string resolves from both sides",
+);
+assert.equal(api.depends_on?.dex?.condition, "service_healthy");
+for (const name of ["OIDC_ISSUER_URL", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET"]) {
+  assert.equal(api.environment?.[name], envValue(name), `api ${name} must match .env.example`);
+}
+assert.equal(
+  dex.environment?.OIDC_CLIENT_SECRET,
+  api.environment?.OIDC_CLIENT_SECRET,
+  "Dex must register the same client secret the API authenticates with",
+);
+
+const dexConfig = readFileSync(resolve(root, "deploy/dex/config.yaml"), "utf8");
+assert.match(
+  dexConfig,
+  new RegExp(`^issuer: ${envValue("OIDC_ISSUER_URL").replace(/[.]/g, "\\.")}$`, "m"),
+  "Dex's issuer must be OIDC_ISSUER_URL exactly",
+);
+assert.match(dexConfig, new RegExp(`- id: ${envValue("OIDC_CLIENT_ID")}$`, "m"));
+assert.ok(
+  dexConfig.includes(`- ${envValue("OPENPLAN_PUBLIC_URL")}/v1/auth/callback`),
+  "Dex must register the redirect URI the API derives from OPENPLAN_PUBLIC_URL",
+);
+
+// Root is a Dex user plus a tuple the API seeds for OPENPLAN_ROOT_SUBJECT. Dex
+// derives the sub from the static password's userID and the "local"
+// connector, so a changed userID would leave the tuple on a sub nobody can sign
+// in as and the install with no administrator. Derive it the way Dex does
+// (server/oauth2.go genSubject: base64url of protobuf {1: user_id, 2: conn_id})
+// and hold the configured value to it.
+function protobufString(field, value) {
+  const bytes = Buffer.from(value, "utf8");
+  assert.ok(bytes.length < 128, "a one-byte length prefix is all this encoder writes");
+  return Buffer.concat([Buffer.from([(field << 3) | 2, bytes.length]), bytes]);
+}
+const staticUserIDs = [...dexConfig.matchAll(/^\s+userID: (\S+)$/gm)].map((match) => match[1]);
+assert.equal(staticUserIDs.length, 1, "deploy/dex/config.yaml must hold exactly one static password user");
+const rootSubject = Buffer.concat([protobufString(1, staticUserIDs[0]), protobufString(2, "local")]).toString("base64url");
+assert.equal(envValue("OPENPLAN_ROOT_SUBJECT"), rootSubject, "OPENPLAN_ROOT_SUBJECT must be the Dex sub of the static root user");
+assert.equal(api.environment?.OPENPLAN_ROOT_SUBJECT, rootSubject, "the api's OPENPLAN_ROOT_SUBJECT default must match .env.example");
+
+// openplan holds no passwords. The API refuses these at startup, so one left in
+// Compose or .env.example would restart-loop the stack.
+for (const retired of ["OPENPLAN_ROOT_PASSWORD", "OPENPLAN_ROOT_USERNAME"]) {
+  assert.ok(!source.includes(retired), `${retired} is retired; docker-compose.yaml must not set it`);
+  assert.ok(!envExample.includes(retired), `${retired} is retired; .env.example must not set it`);
 }
 
 // OpenFGA is embedded in the API. A service, a provisioner, or a required
@@ -133,32 +151,10 @@ assert.doesNotMatch(
 assert.ok(hasVolume(postgres, "postgres-data"));
 assert.ok(config.volumes?.["postgres-data"]);
 
-for (const name of [
-  "OIDC_CLIENT_SECRET",
-  "SESSION_ENCRYPTION_KEY",
-  "KEYCLOAK_DB_NAME",
-  "KEYCLOAK_DB_USER",
-  "KEYCLOAK_DB_PASSWORD",
-  "KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME",
-  "KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD",
-  "KEYCLOAK_PLATFORM_ADMIN_USERNAME",
-  "KEYCLOAK_PLATFORM_ADMIN_PASSWORD",
-  "KEYCLOAK_PLATFORM_ADMIN_EMAIL",
-  "KEYCLOAK_PLATFORM_ADMIN_FIRST_NAME",
-  "KEYCLOAK_PLATFORM_ADMIN_LAST_NAME",
-]) {
-  assert.match(
-    source,
-    new RegExp(`\\$\\{${name}:-`),
-    `${name} must have an inline default so the stack runs without .env`,
-  );
-}
-
-const provisionerDockerfile = resolve(root, "Dockerfile.keycloak-provisioner");
-assert.ok(existsSync(provisionerDockerfile), "missing provisioner Dockerfile");
-const provisionerImage = readFileSync(provisionerDockerfile, "utf8");
-assert.match(provisionerImage, /^FROM golang:1\.25\.14-alpine3\.23 AS build/m);
-assert.match(provisionerImage, /^FROM alpine:3\.21$/m);
-assert.match(provisionerImage, /^USER keycloak-provisioner$/m);
+assert.match(
+  source,
+  /\$\{SESSION_ENCRYPTION_KEY:-/,
+  "SESSION_ENCRYPTION_KEY must have an inline default so the stack runs without .env",
+);
 
 console.log("authentication Compose contract verified");

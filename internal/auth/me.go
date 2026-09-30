@@ -23,7 +23,7 @@ type MeResponse struct {
 }
 
 // GlobalCapabilities encodes coarse-grained permissions answered by OpenFGA.
-// The JSON names predate the move off Keycloak realm roles and are kept: they
+// The JSON names predate the move off IdP role claims and are kept: they
 // are the web client's contract, and only the source of the answers changed.
 type GlobalCapabilities struct {
 	IsPlatformAdmin bool `json:"isPlatformAdmin"`

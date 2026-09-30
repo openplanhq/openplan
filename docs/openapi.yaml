@@ -22,15 +22,10 @@ info:
     verified in exactly one place, the OIDC callback, and what the browser
     carries afterwards is a session openplan owns.
 
-    Get a session one of two ways:
-
-    - **Local accounts** — `POST /v1/auth/login` with a username and password.
-      Sets the cookie and returns `204`.
-    - **OIDC / SSO** — send the browser to `GET /v1/auth/login`, which
-      redirects to the identity provider and comes back through
-      `GET /v1/auth/callback`.
-
-    `GET /v1/auth/methods` reports which of the two a deployment has enabled.
+    Get a session by sending the browser to `GET /v1/auth/login`, which
+    redirects to the identity provider and comes back through
+    `GET /v1/auth/callback`. The provider is the only way in: openplan checks
+    no password of its own.
 
     A session ends at the earlier of its idle and absolute bounds, both of
     which openplan owns independently of the provider's token lifetimes.
@@ -112,35 +107,6 @@ paths:
                     const: ok
                 required: [status]
 
-  /v1/auth/methods:
-    get:
-      tags: [Authentication]
-      summary: List enabled sign-in methods
-      description: |
-        Read before rendering a sign-in screen, so the client shows the methods
-        that exist instead of discovering them by failing. A method that is off
-        has no route at all — this endpoint is what lets the client tell "local
-        auth is disabled" from "wrong password".
-
-        Registered only when at least one sign-in method is configured.
-      operationId: listAuthMethods
-      security: []
-      responses:
-        "200":
-          description: The methods this deployment accepts.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  local:
-                    type: boolean
-                    description: Username and password against openplan's own account table.
-                  oidc:
-                    type: boolean
-                    description: Redirect-based sign-in against a configured identity provider.
-                required: [local, oidc]
-
   /v1/auth/login:
     get:
       tags: [Authentication]
@@ -151,8 +117,6 @@ paths:
         discovery the verifier already cached. Sets a short-lived sealed
         transaction cookie (`openplan_auth_tx`) carrying state, nonce and PKCE
         verifier.
-
-        Registered only when an OIDC provider is configured.
       operationId: startOIDCLogin
       security: []
       parameters:
@@ -175,88 +139,6 @@ paths:
               schema: { type: string }
         "401":
           $ref: "#/components/responses/SignInFailedHTML"
-    post:
-      tags: [Authentication]
-      summary: Sign in with a local account
-      description: |
-        Authenticates against openplan's own account table and ends in exactly
-        the tail the OIDC callback ends in — project the user, mint a session
-        row, set the cookie. Nothing downstream can tell which method was used.
-
-        Issues no token, and returns no identity: refetch `GET /v1/me`, which
-        is the one place identity is rendered from.
-
-        Two checks stand between this route and cross-site request forgery, and
-        both can reject before the password is ever read: the request must look
-        same-site (`Sec-Fetch-Site`, falling back to `Origin`), and it must
-        declare `Content-Type: application/json`, which an HTML form cannot do.
-
-        Registered only when local accounts are configured.
-      operationId: localLogin
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                username:
-                  type: string
-                  description: |
-                    Passed through untouched. Folding and trimming belong to
-                    the authenticator, which defines what makes two spellings
-                    the same account.
-                password:
-                  type: string
-                  format: password
-              required: [username, password]
-            example:
-              username: root
-              password: "change-me"
-      responses:
-        "204":
-          description: Signed in. The session cookie is set.
-          headers:
-            Set-Cookie:
-              description: The `openplan_session` cookie.
-              schema: { type: string }
-        "400":
-          description: |
-            Malformed, empty, or oversized body (the limit is 4 KiB). The three
-            are deliberately not distinguished — none of them is a sign-in
-            request.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
-              example: { error: invalid_request, message: malformed request body }
-        "401":
-          description: |
-            Authentication failed. One answer for a wrong password and an
-            unknown username: the authenticator equalises the cost of the two,
-            and saying which it was would undo that.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
-              example: { error: unauthorized, message: authentication failed }
-        "403":
-          description: The request did not look same-site.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
-              example:
-                error: forbidden
-                message: cross-site sign-in requests are not accepted
-        "415":
-          description: "`Content-Type` was not `application/json`."
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
-              example:
-                error: unsupported_media_type
-                message: content-type must be application/json
-        "500":
-          $ref: "#/components/responses/InternalError"
 
   /v1/auth/callback:
     get:
@@ -271,8 +153,6 @@ paths:
         Every failure renders one identical page. Distinguishing "bad state"
         from "expired code" from "nonce mismatch" would tell an attacker which
         check they tripped.
-
-        Registered only when an OIDC provider is configured.
       operationId: completeOIDCLogin
       security: []
       parameters:
@@ -319,11 +199,10 @@ paths:
 
         The redirect carries the raw ID token as `id_token_hint`, which is how
         RP-initiated logout is specified and what stops the provider
-        interrupting with a confirmation page. A session with no ID token — a
-        local sign-in — redirects to the site root instead.
-
-        Works for both sign-in methods, and is registered whenever either one
-        is configured.
+        interrupting with a confirmation page. A provider that advertises no
+        end-session endpoint — Dex, today — gets the site root instead. Dex
+        v2.45.1 keeps no browser session, so nothing of the sign-in outlives
+        openplan's session except an upstream connector's own.
       operationId: logout
       security: []
       responses:
@@ -342,18 +221,17 @@ paths:
       summary: Accept an OIDC back-channel logout token
       description: |
         A server-to-server POST from the identity provider, not a redirect the
-        browser follows. Point the provider at an address **it** can reach:
-        `OPENPLAN_BACKCHANNEL_LOGOUT_URL`, which is deliberately separate from
-        `OPENPLAN_PUBLIC_URL` because the two differ whenever the provider runs
-        on an internal network or behind split-horizon DNS.
+        browser follows. The address is registered on the provider, not
+        configured in openplan, and must be one **it** can reach — often not
+        `OPENPLAN_PUBLIC_URL`, because the two differ whenever the provider
+        runs on an internal network or behind split-horizon DNS.
 
         Without this endpoint, disabling a user at the provider would not reach
         openplan until their session hit its own expiry — openplan stops consulting
         the provider once a session exists. Enable session-required logout so
         the token carries `sid`.
 
-        The body is capped at 64 KiB. Registered only when an OIDC provider is
-        configured.
+        The body is capped at 64 KiB.
       operationId: backchannelLogout
       security: []
       requestBody:
@@ -1437,7 +1315,6 @@ components:
             - invalid_request
             - invalid_json
             - unknown_user
-            - unsupported_media_type
             - plan_stale
             - run_in_flight
             - conflict
@@ -1453,8 +1330,8 @@ components:
     Me:
       type: object
       description: |
-        Note the camelCase field names. They predate the move off Keycloak
-        realm roles and are kept because they are the web client's contract;
+        Note the camelCase field names. They predate the move off IdP role
+        claims and are kept because they are the web client's contract;
         only the source of the answers changed.
       properties:
         sub:

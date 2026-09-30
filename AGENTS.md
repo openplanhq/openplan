@@ -30,8 +30,8 @@ npm run build
 ```
 
 `npm test` runs Vitest; `npm run build` type-checks and builds the Vite app.
-For local integration work, copy `.env.example` to `.env`, provision OpenFGA
-and Keycloak as described in `README.md`, then run `go run ./cmd/api` and
+For local integration work, copy `.env.example` to `.env`, start the
+dependencies as described in `README.md`, then run `go run ./cmd/api` and
 `go run ./cmd/executor` in separate shells. Start the UI with `npm run dev`.
 
 ## Coding Style & Naming Conventions

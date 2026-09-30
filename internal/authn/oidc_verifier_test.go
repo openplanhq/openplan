@@ -717,7 +717,7 @@ func TestOIDCVerifierUsesFreshCachedKeyDuringProviderOutage(t *testing.T) {
 	defer v.Close(context.Background())
 
 	now = now.Add(9 * time.Second)
-	s.setUnavailable("keycloak-down")
+	s.setUnavailable("idp-down")
 	if _, err := v.Verify(context.Background(), s.sign(t, "key-a", nil)); err != nil {
 		t.Fatalf("Verify() error = %v", err)
 	}
@@ -746,7 +746,7 @@ func TestOIDCVerifierFailsClosedAfterJWKSFreshnessExpiresDuringProviderOutage(t 
 	if jwks != 1 {
 		t.Fatalf("automatic JWKS requests = %d, want 1", jwks)
 	}
-	s.setUnavailable("keycloak-down")
+	s.setUnavailable("idp-down")
 	_, err = v.Verify(context.Background(), s.sign(t, "key-a", nil))
 	if !errors.Is(err, ErrVerifierUnavailable) {
 		t.Fatalf("Verify() error = %v, want ErrVerifierUnavailable", err)
@@ -775,7 +775,7 @@ func TestOIDCVerifierRejectsExpiredCachedKeyDuringProviderOutage(t *testing.T) {
 	defer v.Close(context.Background())
 
 	now = now.Add(11 * time.Second)
-	s.setUnavailable("keycloak-down")
+	s.setUnavailable("idp-down")
 	_, err = v.Verify(context.Background(), s.sign(t, "key-a", nil))
 	if !errors.Is(err, ErrVerifierUnavailable) {
 		t.Fatalf("Verify() error = %v, want ErrVerifierUnavailable", err)
@@ -797,7 +797,7 @@ func TestOIDCVerifierReturnsUnavailableWhenNoUsableKeyCanBeFetched(t *testing.T)
 	defer v.Close(context.Background())
 
 	s.addRSAKey(t, "key-b")
-	s.setUnavailable("keycloak-down")
+	s.setUnavailable("idp-down")
 	_, err = v.Verify(context.Background(), s.sign(t, "key-b", nil))
 	if !errors.Is(err, ErrVerifierUnavailable) {
 		t.Fatalf("Verify() error = %v", err)
@@ -1211,7 +1211,7 @@ func TestOIDCVerifierAcceptsProviderTokenShapes(t *testing.T) {
 		{
 			// realm_access is malformed on purpose: authorization is OpenFGA's,
 			// so the claim is not read and cannot fail verification.
-			name: "Keycloak shaped token with a malformed realm_access",
+			name: "realm_access shaped token with a malformed realm_access",
 			mutate: func(tok jwt.Token) {
 				_ = tok.Set("name", "Ada Lovelace")
 				_ = tok.Set("preferred_username", "ada")
@@ -1221,7 +1221,7 @@ func TestOIDCVerifierAcceptsProviderTokenShapes(t *testing.T) {
 			want: VerifiedToken{Subject: "user-123", Name: "Ada Lovelace", PreferredUsername: "ada", Email: "ada@example.test"},
 		},
 		{
-			name: "Keycloak shaped token with typ Bearer and realm_access",
+			name: "realm_access shaped token with typ Bearer and realm_access",
 			mutate: func(tok jwt.Token) {
 				_ = tok.Set("typ", "Bearer")
 				_ = tok.Set("name", "Ada Lovelace")
@@ -1232,7 +1232,7 @@ func TestOIDCVerifierAcceptsProviderTokenShapes(t *testing.T) {
 			want: VerifiedToken{Subject: "user-123", Name: "Ada Lovelace", PreferredUsername: "ada", Email: "ada@example.test"},
 		},
 		{
-			name: "Keycloak shaped ID token with typ ID",
+			name: "realm_access shaped ID token with typ ID",
 			mutate: func(tok jwt.Token) {
 				_ = tok.Set("typ", "ID")
 				_ = tok.Set("name", "Ada Lovelace")

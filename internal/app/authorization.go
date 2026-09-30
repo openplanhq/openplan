@@ -43,7 +43,7 @@ func requirePrincipalAndAuthorizer(ctx context.Context, auth *authorization.Auth
 
 // authorizePlatform answers "may the request's principal do relation to the
 // platform singleton?" -- the global questions that used to be answered from
-// Keycloak realm role claims.
+// IdP role claims.
 //
 // The relation is always a capability (can_create_stack, can_read_template),
 // never a tier. Which tier satisfies a capability is the model's business, so
