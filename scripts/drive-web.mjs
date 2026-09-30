@@ -46,6 +46,9 @@
  *                     before --reload (repeatable, 1.5s settle after each)
  *   --reload          reload the page after --eval, so every query runs again
  *                     against --fail
+ *   --width <px>      emulate a phone that wide: mobile viewport, touch, and
+ *                     so a coarse pointer. Headless Chrome won't size a window
+ *                     below 500px, so --window-size can't do this.
  *   --signed-out      skip signing in; no credentials needed
  *   --port <n>        devtools port (default 9222)
  */
@@ -54,7 +57,7 @@ import { writeFileSync } from "node:fs";
 const argv = process.argv.slice(2);
 const clicks = [], fails = [], evals = [];
 let shot = null, probe = null, fields = false, port = 9222;
-let gotos = [], signedOut = false, reload = false;
+let gotos = [], signedOut = false, reload = false, width = null;
 for (let i = 0; i < argv.length; i++) {
   const next = () => argv[++i];
   if (argv[i] === "--click") clicks.push(next());
@@ -67,6 +70,7 @@ for (let i = 0; i < argv.length; i++) {
   else if (argv[i] === "--fail") fails.push(next());
   else if (argv[i] === "--eval") evals.push(next());
   else if (argv[i] === "--reload") reload = true;
+  else if (argv[i] === "--width") width = Number(next());
 }
 
 // --fail specs, split at the last "=" so a glob may contain one.
@@ -141,7 +145,6 @@ await send("Runtime.enable");
 await send("Page.navigate", { url: "http://localhost:5173/stacks" });
 await settle(6000);
 
-<<<<<<< HEAD
 // Signed out, the app lands on its sign-in screen: one button that leaves for
 // the provider.
 if (await evaluate("!!document.querySelector('[data-testid=signin-submit]')")) {
@@ -152,27 +155,6 @@ if (await evaluate("!!document.querySelector('[data-testid=signin-submit]')")) {
 // Dex's login page is server-rendered, so setting .value and submitting the
 // form is enough — no React synthetic-event plumbing needed.
 if (await evaluate("!!document.querySelector('#login')")) {
-=======
-// The app's own sign-in form submits through React, so .submit() would skip
-// its handler; requestSubmit() fires the submit event React listens for.
-if (!signedOut && await evaluate("!!document.querySelector('#signin-username')")) {
-  await evaluate(`(() => {
-    const u = document.querySelector('#signin-username'), p = document.querySelector('#signin-password');
-    const set = (el, v) => {
-      Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set.call(el, v);
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-    };
-    set(u, ${JSON.stringify(USER)});
-    set(p, ${JSON.stringify(PASS)});
-    u.form.requestSubmit();
-  })()`);
-  await settle(8000);
-}
-
-// Keycloak's login page is server-rendered, so setting .value and submitting the
-// form is enough — no React synthetic-event plumbing needed.
-if (!signedOut && await evaluate("!!document.querySelector('#username')")) {
->>>>>>> 121652f (fix(web): restore browser defaults legacy screens relied on under preflight)
   await evaluate(`(() => {
     const u = document.querySelector('#login'), p = document.querySelector('#password');
     const set = (el, v) => {
