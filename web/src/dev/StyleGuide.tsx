@@ -512,9 +512,6 @@ export default function StyleGuide() {
             <button type="button" className="destructive-button">
               Destroy <span className="btn-arrow">→</span>
             </button>
-            <button type="button" className="icon-button" aria-label="Remove">
-              ✕
-            </button>
           </Specimen>
 
           <Specimen label="States">

@@ -84,31 +84,6 @@ button:disabled {
   opacity: 0.5;
 }
 
-.icon-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: var(--legacy-space-8);
-  min-height: var(--legacy-space-8);
-  border: 0;
-  border-radius: var(--legacy-radius-md);
-  color: var(--legacy-color-muted-fg);
-  background: transparent;
-  cursor: pointer;
-  transition: all var(--legacy-duration-fast) var(--legacy-ease-out);
-}
-
-/* Preflight audit: restores the browser's button padding. :where() keeps it at
-   browser-default precedence, so any legacy rule that sets padding still wins. */
-:where(.icon-button) {
-  padding: revert;
-}
-
-.icon-button:hover {
-  color: var(--legacy-color-fg);
-  background: var(--legacy-color-muted);
-}
-
 /* ---- Inputs ---- */
 /* Every selector here skips [data-slot]: shadcn's Label, Input and Textarea
    carry it, and these element rules would otherwise beat what they leave to

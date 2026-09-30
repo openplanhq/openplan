@@ -751,7 +751,6 @@
   }
 
   /* 44px minimum touch targets where density and accessibility conflict. */
-  .icon-button,
   .selected-user-card button {
     min-height: var(--legacy-touch-target);
     display: inline-flex;
