@@ -666,7 +666,7 @@ export default function StyleGuide() {
             <HeroGraphic />
           </Specimen>
 
-          <Specimen label="showcase" hint="stacks and registry empty states" stack>
+          <Specimen label="showcase" hint="registry empty state" stack>
             <section className="showcase showcase--compact">
               <div className="showcase__body">
                 <h2 className="showcase__title gradient-text">No templates yet</h2>

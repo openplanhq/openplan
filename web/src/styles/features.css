@@ -56,9 +56,9 @@
   }
 }
 
-/* Compact variant, used by the stacks empty state in Task 6: it sits inside
-   a page that already has a header, so it neither fills the viewport nor
-   needs a full-size title. These two values are the only difference. */
+/* Compact variant, used by the registry's empty state: it sits inside a page
+   that already has a header, so it neither fills the viewport nor needs a
+   full-size title. These two values are the only difference. */
 .showcase--compact {
   min-height: 0;
 }
@@ -73,10 +73,7 @@
   }
 }
 
-/* ---- Stacks list ---- */
-/* The templates list shares the stacks list's card treatment; only its row
-   contents differ, so the shell rules are grouped rather than duplicated. */
-.stacks-list-header,
+/* ---- Title rows and the templates list's cards ---- */
 .templates-list-header,
 .template-detail-header {
   display: flex;
@@ -86,7 +83,6 @@
   margin-bottom: var(--legacy-space-6);
 }
 
-.stacks-list,
 .templates-list {
   display: grid;
   gap: var(--legacy-space-3);
@@ -95,7 +91,6 @@
   list-style: none;
 }
 
-.stacks-list li,
 .templates-list li {
   display: flex;
   align-items: center;
@@ -108,36 +103,19 @@
   transition: all var(--legacy-duration-lift) var(--legacy-ease-out);
 }
 
-.stacks-list li:hover,
 .templates-list li:hover {
   transform: translateY(-2px);
   border-color: var(--legacy-color-accent-border);
   box-shadow: var(--legacy-shadow-lg);
 }
 
-/* Row names for both lists. Grouped rather than declared twice: these lists
-   already share their card treatment above, and when the typography lived in
-   two separate rules the sizes silently drifted apart (18px vs 16px). */
-.stacks-list li a,
+/* Row names. */
 .templates-list__name {
   color: var(--legacy-color-fg);
   font-size: var(--legacy-text-base);
   font-weight: 400;
-}
-
-.stacks-list li a,
-.templates-list__name {
   text-decoration: none;
 }
-
-.stacks-list li small {
-  color: var(--legacy-color-muted-fg);
-  font-family: var(--legacy-font-mono);
-  font-size: var(--legacy-text-xs);
-}
-
-/* The stacks empty state reuses `.showcase .showcase--compact` from Task 5.
-   No `.empty-state` rules are needed — do not add any. */
 
 /* ---- Templates list ---- */
 /* Revisions are grouped by repository. Groups are always expanded — the
@@ -196,7 +174,7 @@
   min-width: 0;
 }
 
-/* Typography is set with .stacks-list li a above; only the wrapping differs. */
+/* Typography is set above, with the cards; only the wrapping differs. */
 .templates-list__name {
   overflow-wrap: anywhere;
 }
@@ -766,7 +744,6 @@
 }
 
 @media (max-width: 760px) {
-  .stacks-list-header,
   .templates-list-header,
   .template-detail-header {
     align-items: stretch;
@@ -803,7 +780,6 @@
   .form-actions .primary-button,
   .form-grid > .primary-button,
   .variable-grid > .primary-button,
-  .stacks-list-header .primary-button,
   .templates-list-header .primary-button,
   .template-detail__sync .secondary-button {
     width: 100%;
