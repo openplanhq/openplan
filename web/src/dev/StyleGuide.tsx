@@ -18,6 +18,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 /**
@@ -351,6 +353,49 @@ export default function StyleGuide() {
                 description="The page you were looking for doesn't exist."
                 testId="sg-route-message"
               />
+            </Specimen>
+            <Specimen label="Table" hint="fixed layout: widths in a <colgroup>, one column takes the slack" stack>
+              <div className="w-full overflow-hidden rounded-lg border">
+                <Table>
+                  <colgroup>
+                    <col />
+                    <col className="w-48" />
+                  </colgroup>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Slug</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {[
+                      ["Payments", "payments"],
+                      ["A stack whose name is too long for its column", "a-stack-whose-name-is-too-long-for-its-column"]
+                    ].map(([name, slug]) => (
+                      <TableRow key={slug}>
+                        <TableCell className="truncate font-medium" title={name}>
+                          {name}
+                        </TableCell>
+                        <TableCell className="truncate font-mono text-xs text-muted-foreground" title={slug}>
+                          {slug}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </Specimen>
+            <Specimen label="Tabs" hint="line variant; RouteTabs renders each tab as a link" stack>
+              <Tabs defaultValue="templates">
+                <TabsList variant="line" aria-label="Tabs specimen">
+                  <TabsTrigger value="overview">Overview</TabsTrigger>
+                  <TabsTrigger value="templates">Templates</TabsTrigger>
+                  <TabsTrigger value="environment">Environment</TabsTrigger>
+                </TabsList>
+                <TabsContent value="overview">The stack at a glance.</TabsContent>
+                <TabsContent value="templates">The templates installed on this stack.</TabsContent>
+                <TabsContent value="environment">Credentials every template on this stack receives.</TabsContent>
+              </Tabs>
             </Specimen>
           </Section>
         </div>

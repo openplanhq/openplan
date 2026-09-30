@@ -74,6 +74,17 @@ describe("StyleGuide", () => {
     expect(within(section).getByLabelText("Stack name").getAttribute("data-slot")).toBe("input");
   });
 
+  it("shows the components PR 4 added", () => {
+    render(<StyleGuide />);
+    const section = within(screen.getByTestId("sg-theme"));
+    const table = section.getByRole("table");
+    expect(table.getAttribute("data-slot")).toBe("table");
+    expect(table.classList).toContain("table-fixed");
+    expect(table.querySelector("colgroup")).not.toBeNull();
+    expect(section.getByRole("tablist").getAttribute("data-variant")).toBe("line");
+    expect(section.getByRole("tab", { name: "Templates" }).getAttribute("aria-selected")).toBe("true");
+  });
+
   it("renders the real RouteMessage", () => {
     render(<StyleGuide />);
     const message = within(screen.getByTestId("sg-theme")).getByTestId("sg-route-message");
