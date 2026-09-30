@@ -2,6 +2,12 @@ import { useSearchParams } from "react-router-dom";
 import { LogIn } from "lucide-react";
 import { ssoLoginURL } from "../api/client";
 import { clearLoginAttempts, loginLoopDetected, recordLoginAttempt } from "./loginAttempts";
+import AuthCard, { AuthCardTitle } from "./AuthCard";
+import { Alert, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { CardContent, CardHeader } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 /** Where a sign-in with no return_to lands. The index route redirects onward. */
 const defaultReturnTo = "/";
@@ -93,25 +99,24 @@ export default function SignInScreen() {
             started it over. That happens when cookies are blocked for this site — by browser
             settings, an extension, or a privacy mode that clears them between page loads.
           </p>
-          <p className="muted signin-lede">
+          <p className="text-muted-foreground">
             Allow cookies for this site and try again. If it keeps failing, contact your
             administrator.
           </p>
-          <button type="button" className="primary-button signin-submit" onClick={handleRetry} data-testid="signin-cookies-retry">
+          <Button className="w-full pointer-coarse:h-11" onClick={handleRetry} data-testid="signin-cookies-retry">
             Try again
-          </button>
-        </section>
-      </main>
+          </Button>
+        </CardContent>
+      </AuthCard>
     );
   }
 
   return (
-    <main className="signin-page">
-      <section className="panel signin-card">
-        <header className="signin-header">
-          <p className="signin-wordmark">openplan</p>
-          <h1 className="signin-title">Sign in</h1>
-        </header>
+    <AuthCard>
+      <CardHeader>
+        <p className="font-mono text-xs tracking-wide text-muted-foreground uppercase">openplan</p>
+        <AuthCardTitle>Sign in</AuthCardTitle>
+      </CardHeader>
 
         <button type="button" className="primary-button signin-submit" onClick={handleSignIn} data-testid="signin-submit">
           <LogIn size={16} />
