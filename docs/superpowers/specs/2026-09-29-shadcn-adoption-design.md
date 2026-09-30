@@ -295,8 +295,9 @@ state, and the component file goes when its last user migrates (PR 7:
    ID.
 4. Add each newly installed shadcn component to the `/styleguide` dev page.
 5. Include before/after screenshots in the PR description. The local stack
-   (`docker compose --profile auth up` plus `npm run dev`) serves every screen,
-   and `scripts/drive-web.mjs` can take them through a real Keycloak login.
+   (`docker compose up` plus `npm run dev`) serves every screen, and
+   `scripts/drive-web.mjs` can take them through a real sign-in as the local
+   `root` account. Keycloak is only needed to test single sign-on.
 6. Give each control a 44px target on coarse pointers, as
    `--legacy-touch-target` did: `pointer-coarse:h-11` on fixed-height
    controls, `pointer-coarse:min-h-11` on rows whose height comes from their
