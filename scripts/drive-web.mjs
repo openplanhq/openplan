@@ -41,7 +41,8 @@
  *                     and the API's JSON error body (repeatable). Takes effect
  *                     after sign-in, so sign-in itself still works. In the
  *                     glob, `*` is any run of characters and `?` is exactly
- *                     one, so a literal `?` can't be matched.
+ *                     one, so a literal `?` can't be matched. Chrome reads a
+ *                     backslash as an escape, so globs may not contain one.
  *   --eval <expr>     evaluate an expression in the page after --goto and
  *                     before --reload (repeatable, 1.5s settle after each)
  *   --reload          reload the page after --eval, so every query runs again
@@ -74,14 +75,18 @@ for (let i = 0; i < argv.length; i++) {
 }
 
 // --fail specs, split at the last "=" so a glob may contain one.
-const failures = fails.map((spec) => {
+const failures = fails.map((spec = "") => {
   const at = spec.lastIndexOf("=");
-  const glob = spec.slice(0, at);
+  const glob = at > 0 ? spec.slice(0, at) : "";
   const pattern = glob.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".");
   return { glob, status: Number(spec.slice(at + 1)), test: new RegExp(`^${pattern}$`) };
 });
-if (failures.some((f) => !f.glob || !Number.isInteger(f.status))) {
-  console.error("--fail takes <glob>=<status>, for example '*/v1/me=500'.");
+// Chrome refuses to answer with a status outside 100-599 and leaves the
+// request hanging, so refuse it here. A backslash escapes in Chrome's pattern
+// but not in the regex that picks each paused request's status, and a request
+// the two disagree on would go through unfailed.
+if (failures.some((f) => !f.glob || f.glob.includes("\\") || !Number.isInteger(f.status) || f.status < 100 || f.status > 599)) {
+  console.error("--fail takes <glob>=<status>: a glob with no backslash and a status from 100 to 599, for example '*/v1/me=500'.");
   process.exit(2);
 }
 
@@ -125,7 +130,13 @@ const answer = ({ requestId, request }) => {
 ws.addEventListener("message", (event) => {
   const msg = JSON.parse(event.data);
   if (msg.method === "Fetch.requestPaused") {
-    answer(msg.params).catch((error) => console.error("--fail:", error.message));
+    // A request left paused hangs the page, and the screenshot would show that
+    // rather than the error state. Let it through and fail the run instead.
+    answer(msg.params).catch((error) => {
+      console.error("--fail: Chrome refused the answer:", error.message);
+      process.exitCode = 1;
+      send("Fetch.continueRequest", { requestId: msg.params.requestId }).catch(() => {});
+    });
     return;
   }
   const slot = msg.id && pending.get(msg.id);
@@ -181,15 +192,24 @@ for (const path of gotos) {
   await settle(3500);
 }
 
+// A setup expression that throws leaves the page in some other state, and
+// every step after it would capture that, so stop here.
 for (const expression of evals) {
-  console.error("eval:", await evaluate(expression));
+  const { result, exceptionDetails } = await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true });
+  if (exceptionDetails) {
+    console.error("--eval threw:", exceptionDetails.exception?.description ?? exceptionDetails.text);
+    ws.close();
+    process.exit(1);
+  }
+  console.error("eval:", result.value);
   await settle(1500);
 }
 
 if (reload) {
   await send("Page.reload");
-  // A failing query retries three times, 2 to 3 seconds apart, before its
-  // screen gives up and shows the error (queryClient.ts, polling.ts).
+  // A failing query retries three times, 1.5, 2 and 2.5 seconds apart
+  // (queryClient.ts, polling.ts), before its screen gives up and shows the
+  // error. 12s covers that with room for the requests themselves.
   await settle(12000);
 }
 
@@ -226,4 +246,4 @@ if (shot) {
 }
 
 ws.close();
-process.exit(0);
+process.exit(process.exitCode ?? 0);
