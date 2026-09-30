@@ -228,6 +228,36 @@ describe("StackDetailShell", () => {
     expect(markup).toMatch(/aria-current="page"[^>]*>Templates|href="\/stacks\/stack_1\/templates"[^>]*aria-current="page"/);
   });
 
+  // The tab's selected state comes from stackSection(), and its link's
+  // aria-current from NavLink. They must name the same tab on every route,
+  // or a screen reader hears one tab selected and another current.
+  it.each([
+    ["/stacks/stack_1", "Overview"],
+    ["/stacks/stack_1/templates", "Templates"],
+    ["/stacks/stack_1/templates/new", "Templates"],
+    ["/stacks/stack_1/environment", "Environment"],
+    ["/stacks/stack_1/access", "Access"]
+  ])("selects exactly one tab at %s: %s, the one its link marks current", async (path, tab) => {
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
+    const markup = await renderStackRoute(path, allAllowed);
+
+    const tabs = [...markup.matchAll(/<a [^>]*role="tab"[^>]*>([^<]*)<\/a>/g)].map(([tag, label]) => ({
+      label,
+      selected: tag.includes('aria-selected="true"'),
+      current: tag.includes('aria-current="page"')
+    }));
+    expect(tabs.map(({ label }) => label)).toEqual(["Overview", "Templates", "Environment", "Access"]);
+    expect(tabs.filter(({ selected }) => selected).map(({ label }) => label)).toEqual([tab]);
+    expect(tabs.filter(({ current }) => current).map(({ label }) => label)).toEqual([tab]);
+  });
+
+  it("names the stack's tab list", async () => {
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
+    const markup = await renderStackRoute("/stacks/stack_1", allAllowed);
+
+    expect(markup).toMatch(/<div [^>]*role="tablist"[^>]*aria-label="Stack sections"/);
+  });
+
   it("still renders NotFound (no shell chrome) when canView is denied", async () => {
     vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const markup = await renderStackRoute("/stacks/stack_1", {

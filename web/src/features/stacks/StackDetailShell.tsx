@@ -1,10 +1,22 @@
-import { matchPath, NavLink, Outlet, useLocation, useParams } from "react-router-dom";
+import { matchPath, Outlet, useLocation, useParams } from "react-router-dom";
 import { useStackQuery } from "../../api/queries";
 import RequireCapability from "../../auth/RequireCapability";
 import { tenantID } from "../../config";
 import Breadcrumb from "../../shared/Breadcrumb";
 import type { Crumb } from "../../shared/Breadcrumb";
+import { RouteTab, RouteTabs } from "../../shared/RouteTabs";
 import { stackTemplateLabel } from "./stackWorkflow";
+
+// The stack tab a path belongs to: the same match each tab's NavLink makes,
+// so the selected tab is always the one marked aria-current. Templates owns
+// everything below it; Overview is the stack's own path only.
+function stackSection(pathname: string): string | null {
+  if (matchPath("/stacks/:stackId", pathname)) return "overview";
+  if (matchPath({ path: "/stacks/:stackId/templates", end: false }, pathname)) return "templates";
+  if (matchPath("/stacks/:stackId/environment", pathname)) return "environment";
+  if (matchPath("/stacks/:stackId/access", pathname)) return "access";
+  return null;
+}
 
 // Where a page sits below the Templates tab, which the stack tabs alone
 // cannot say. The template's own name is a crumb once you are on its page;
@@ -63,19 +75,28 @@ export default function StackDetailShell() {
     : [{ label: "Stacks", to: "/stacks" }, stackCrumb];
 
   return (
-    <section className="stack-detail-shell" data-testid="stack-detail-shell">
+    // No text colour here: the shell wraps screens still on the legacy
+    // layer (templates, access), which inherit theirs from body until they
+    // migrate. RouteTabs sets its own.
+    <section data-testid="stack-detail-shell">
       <Breadcrumb items={crumbs} />
       {!currentTemplate && (
-        <nav className="stack-detail-tabs" aria-label="Stack sections">
-          <NavLink to="." end>
+        <RouteTabs value={stackSection(pathname)} label="Stack sections">
+          <RouteTab value="overview" to="." end>
             Overview
-          </NavLink>
-          <NavLink to="templates">Templates</NavLink>
+          </RouteTab>
+          <RouteTab value="templates" to="templates">
+            Templates
+          </RouteTab>
           <RequireCapability capability="canManageAccess">
-            <NavLink to="environment">Environment</NavLink>
-            <NavLink to="access">Access</NavLink>
+            <RouteTab value="environment" to="environment">
+              Environment
+            </RouteTab>
+            <RouteTab value="access" to="access">
+              Access
+            </RouteTab>
           </RequireCapability>
-        </nav>
+        </RouteTabs>
       )}
       <Outlet />
     </section>
