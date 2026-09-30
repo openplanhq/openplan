@@ -205,11 +205,10 @@ func loadSecurityConfig(getenv func(string) string) (SecurityConfig, error) {
 		}
 	}
 
-	// No Keycloak configuration is read here. Identity reaches the API as an
-	// OIDC token from whatever provider OIDC_ISSUER_URL names, and display
-	// names now come from the local projection rather than a vendor admin API,
-	// so the API binary has no Keycloak-shaped setting left. The provisioner
-	// still has its own.
+	// No provider-specific configuration is read here. Identity reaches the
+	// API as an OIDC token from whatever provider OIDC_ISSUER_URL names, and
+	// display names come from the local projection rather than a vendor admin
+	// API.
 
 	return SecurityConfig{
 		Mode:     mode,

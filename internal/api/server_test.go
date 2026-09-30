@@ -23,18 +23,18 @@ import (
 	"github.com/vishu42/openplan/internal/queue"
 )
 
-const apiKeycloakSubject = "6fdb4b4c-2a8f-4cf7-945f-38f67f6a0e91"
+const apiOIDCSubject = "6fdb4b4c-2a8f-4cf7-945f-38f67f6a0e91"
 const configuredTenantID = domain.TenantID("tenant_123")
 
 func authenticatedRequest(method, target string, body io.Reader) *http.Request {
 	request := httptest.NewRequest(method, target, body)
-	ctx := authn.ContextWithPrincipal(request.Context(), authn.Principal{Subject: apiKeycloakSubject})
+	ctx := authn.ContextWithPrincipal(request.Context(), authn.Principal{Subject: apiOIDCSubject})
 	return request.WithContext(ctx)
 }
 
 func ordinaryAuthenticatedRequest(method, target string, body io.Reader) *http.Request {
 	request := httptest.NewRequest(method, target, body)
-	ctx := authn.ContextWithPrincipal(request.Context(), authn.Principal{Subject: apiKeycloakSubject})
+	ctx := authn.ContextWithPrincipal(request.Context(), authn.Principal{Subject: apiOIDCSubject})
 	return request.WithContext(ctx)
 }
 
@@ -313,8 +313,8 @@ func TestStartTemplateRunCallsService(t *testing.T) {
 	if deps.templateRuns.created.Operation != domain.OperationPlan {
 		t.Fatalf("operation = %q", deps.templateRuns.created.Operation)
 	}
-	if deps.templateRuns.created.TriggerActor != domain.UserID(apiKeycloakSubject) {
-		t.Fatalf("trigger actor = %q, want %q", deps.templateRuns.created.TriggerActor, apiKeycloakSubject)
+	if deps.templateRuns.created.TriggerActor != domain.UserID(apiOIDCSubject) {
+		t.Fatalf("trigger actor = %q, want %q", deps.templateRuns.created.TriggerActor, apiOIDCSubject)
 	}
 
 	var body domain.TemplateRun
@@ -587,8 +587,8 @@ func TestRegisterTemplateCallsService(t *testing.T) {
 	if deps.registrations.created.SourceRef != "v0.0.1" {
 		t.Fatalf("source ref = %q", deps.registrations.created.SourceRef)
 	}
-	if deps.registrations.created.RequestedBy != domain.UserID(apiKeycloakSubject) {
-		t.Fatalf("requested by = %q, want %q", deps.registrations.created.RequestedBy, apiKeycloakSubject)
+	if deps.registrations.created.RequestedBy != domain.UserID(apiOIDCSubject) {
+		t.Fatalf("requested by = %q, want %q", deps.registrations.created.RequestedBy, apiOIDCSubject)
 	}
 	if len(deps.work.requests) != 1 || deps.work.requests[0].Kind != app.KindStartTemplateSync {
 		t.Fatalf("queued requests = %#v, want one start_template_sync request", deps.work.requests)
@@ -671,8 +671,8 @@ func TestCreateStackCallsService(t *testing.T) {
 	if deps.stacks.created.Slug != "acme-prod" {
 		t.Fatalf("slug = %q, want acme-prod", deps.stacks.created.Slug)
 	}
-	if deps.stacks.created.CreatedBy != domain.UserID(apiKeycloakSubject) {
-		t.Fatalf("created by = %q, want %q", deps.stacks.created.CreatedBy, apiKeycloakSubject)
+	if deps.stacks.created.CreatedBy != domain.UserID(apiOIDCSubject) {
+		t.Fatalf("created by = %q, want %q", deps.stacks.created.CreatedBy, apiOIDCSubject)
 	}
 
 	var body stackResponse
@@ -711,7 +711,7 @@ func TestCreateStackRejectsPrincipalWithoutCreatorRole(t *testing.T) {
 	deps := newBareAPITestDependencies(t)
 	server := NewServer(deps.service(), configuredTenantID)
 	request := httptest.NewRequest(http.MethodPost, "/v1/tenants/tenant_123/stacks", strings.NewReader(`{"name":"Acme"}`))
-	request = request.WithContext(authn.ContextWithPrincipal(request.Context(), authn.Principal{Subject: apiKeycloakSubject}))
+	request = request.WithContext(authn.ContextWithPrincipal(request.Context(), authn.Principal{Subject: apiOIDCSubject}))
 	response := httptest.NewRecorder()
 
 	server.ServeHTTP(response, request)
@@ -911,8 +911,8 @@ func TestAddTemplateToStackCallsService(t *testing.T) {
 	if deps.stackTemplateInstaller.created.StackID != domain.StackID("stack_123") {
 		t.Fatalf("stack id = %q, want stack_123", deps.stackTemplateInstaller.created.StackID)
 	}
-	if deps.stackTemplateInstaller.created.CreatedBy != domain.UserID(apiKeycloakSubject) {
-		t.Fatalf("created by = %q, want %q", deps.stackTemplateInstaller.created.CreatedBy, apiKeycloakSubject)
+	if deps.stackTemplateInstaller.created.CreatedBy != domain.UserID(apiOIDCSubject) {
+		t.Fatalf("created by = %q, want %q", deps.stackTemplateInstaller.created.CreatedBy, apiOIDCSubject)
 	}
 
 	var body map[string]any
@@ -925,8 +925,8 @@ func TestAddTemplateToStackCallsService(t *testing.T) {
 	if body["id"] != "stack_template_a1b2c3d4" {
 		t.Fatalf("response id = %q, want stack_template_a1b2c3d4", body["id"])
 	}
-	if body["created_by"] != apiKeycloakSubject {
-		t.Fatalf("response created by = %q, want %q", body["created_by"], apiKeycloakSubject)
+	if body["created_by"] != apiOIDCSubject {
+		t.Fatalf("response created by = %q, want %q", body["created_by"], apiOIDCSubject)
 	}
 	config, ok := body["config"].(map[string]any)
 	if !ok || config["region"] != "us-east-1" {
@@ -1572,8 +1572,8 @@ func TestApproveRunCallsService(t *testing.T) {
 	if deps.templateRuns.approval.RunID != domain.TemplateRunID("run_123") {
 		t.Fatalf("run id = %q", deps.templateRuns.approval.RunID)
 	}
-	if deps.templateRuns.approval.ApprovedBy != domain.UserID(apiKeycloakSubject) {
-		t.Fatalf("approved by = %q, want %q", deps.templateRuns.approval.ApprovedBy, apiKeycloakSubject)
+	if deps.templateRuns.approval.ApprovedBy != domain.UserID(apiOIDCSubject) {
+		t.Fatalf("approved by = %q, want %q", deps.templateRuns.approval.ApprovedBy, apiOIDCSubject)
 	}
 	if len(deps.work.requests) != 1 || deps.work.requests[0].Kind != app.KindStartTemplateApply {
 		t.Fatalf("queued requests = %#v, want one start_template_apply request", deps.work.requests)
@@ -1589,7 +1589,7 @@ func TestApproveRunAllowsSelfApproval(t *testing.T) {
 		TenantID:        "tenant_123",
 		StackTemplateID: "stack_template_123",
 		Status:          domain.TemplateRunWaitingApproval,
-		TriggerActor:    domain.UserID(apiKeycloakSubject),
+		TriggerActor:    domain.UserID(apiOIDCSubject),
 	}
 	server := NewServer(deps.service(), configuredTenantID)
 	response := httptest.NewRecorder()
@@ -1635,8 +1635,8 @@ func TestDiscardRunCallsService(t *testing.T) {
 	if deps.templateRuns.discarded.RunID != domain.TemplateRunID("run_123") {
 		t.Fatalf("run id = %q", deps.templateRuns.discarded.RunID)
 	}
-	if deps.templateRuns.discarded.RequestedBy != domain.UserID(apiKeycloakSubject) {
-		t.Fatalf("requested by = %q, want %q", deps.templateRuns.discarded.RequestedBy, apiKeycloakSubject)
+	if deps.templateRuns.discarded.RequestedBy != domain.UserID(apiOIDCSubject) {
+		t.Fatalf("requested by = %q, want %q", deps.templateRuns.discarded.RequestedBy, apiOIDCSubject)
 	}
 	if deps.templateRuns.discarded.Reason != "testing" {
 		t.Fatalf("reason = %q", deps.templateRuns.discarded.Reason)
@@ -2102,7 +2102,7 @@ func TestStackListFiltersMixedDecisions(t *testing.T) {
 		{ID: "stack_allowed", TenantID: "tenant_123", CreatedAt: time.Unix(2, 0)},
 		{ID: "stack_denied", TenantID: "tenant_123", CreatedAt: time.Unix(1, 0)},
 	}
-	deps.withGrants(mustAPIGrant(t, apiKeycloakSubject, "stack_allowed", authorization.RelationViewer))
+	deps.withGrants(mustAPIGrant(t, apiOIDCSubject, "stack_allowed", authorization.RelationViewer))
 	server := NewServer(deps.service(), configuredTenantID)
 	response := httptest.NewRecorder()
 	request := ordinaryAuthenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/stacks", nil)
@@ -2662,7 +2662,7 @@ func newBareAPITestDependencies(t *testing.T) *apiTestDependencies {
 // holds. Replacing rather than adding is what lets the default administrator
 // harness be narrowed by a test that wants a weaker tier.
 func (deps *apiTestDependencies) withPlatformTier(tier string) *apiTestDependencies {
-	return deps.withPlatformTierFor(apiKeycloakSubject, tier)
+	return deps.withPlatformTierFor(apiOIDCSubject, tier)
 }
 
 func (deps *apiTestDependencies) withPlatformTierFor(sub, tier string) *apiTestDependencies {
@@ -2706,7 +2706,7 @@ func (deps *apiTestDependencies) withStackRole(role authorization.Relation) *api
 	if role == (authorization.Relation{}) {
 		return deps
 	}
-	subject, err := authorization.SubjectFromOIDCSub(apiKeycloakSubject)
+	subject, err := authorization.SubjectFromOIDCSub(apiOIDCSubject)
 	if err != nil {
 		deps.t.Fatalf("SubjectFromOIDCSub: %v", err)
 	}
@@ -3294,7 +3294,7 @@ func TestMeReturnsIdentityWithGlobalCapabilities(t *testing.T) {
 			response := httptest.NewRecorder()
 			request := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
 			ctx := authn.ContextWithPrincipal(request.Context(), authn.Principal{
-				Subject: apiKeycloakSubject,
+				Subject: apiOIDCSubject,
 				Name:    "Test User",
 				Email:   "test@example.com",
 			})
@@ -3323,8 +3323,8 @@ func TestMeReturnsIdentityWithGlobalCapabilities(t *testing.T) {
 				t.Fatalf("decode response: %v", err)
 			}
 
-			if body.Sub != apiKeycloakSubject {
-				t.Errorf("sub = %q, want %q", body.Sub, apiKeycloakSubject)
+			if body.Sub != apiOIDCSubject {
+				t.Errorf("sub = %q, want %q", body.Sub, apiOIDCSubject)
 			}
 			if body.DisplayName != "Test User" {
 				t.Errorf("displayName = %q, want %q", body.DisplayName, "Test User")
@@ -3528,10 +3528,10 @@ func TestRevokeStackRoleLastOwnerReturnsConflict(t *testing.T) {
 	t.Parallel()
 
 	deps := newAPITestDependencies(t)
-	deps.withGrants(testGrant(t, apiKeycloakSubject, "stack_123", "owner"))
+	deps.withGrants(testGrant(t, apiOIDCSubject, "stack_123", "owner"))
 	server := NewServer(deps.service(), configuredTenantID)
 	response := httptest.NewRecorder()
-	request := authenticatedRequest(http.MethodDelete, "/v1/tenants/tenant_123/stacks/stack_123/grants/"+apiKeycloakSubject, nil)
+	request := authenticatedRequest(http.MethodDelete, "/v1/tenants/tenant_123/stacks/stack_123/grants/"+apiOIDCSubject, nil)
 
 	server.ServeHTTP(response, request)
 
@@ -3545,15 +3545,15 @@ func TestAssignStackRoleLastOwnerDemotionReturnsConflict(t *testing.T) {
 
 	deps := newAPITestDependencies(t)
 	deps.users = apiFakeUserRepository{
-		users: []app.UserProfile{{Sub: apiKeycloakSubject, DisplayName: "admin", Email: "admin@example.com"}},
+		users: []app.UserProfile{{Sub: apiOIDCSubject, DisplayName: "admin", Email: "admin@example.com"}},
 	}
-	deps.withGrants(testGrant(t, apiKeycloakSubject, "stack_123", "owner"))
+	deps.withGrants(testGrant(t, apiOIDCSubject, "stack_123", "owner"))
 	server := NewServer(deps.service(), configuredTenantID)
 	response := httptest.NewRecorder()
 	request := authenticatedRequest(
 		http.MethodPost,
 		"/v1/tenants/tenant_123/stacks/stack_123/grants",
-		strings.NewReader(`{"user_sub":"`+apiKeycloakSubject+`","role":"viewer"}`),
+		strings.NewReader(`{"user_sub":"`+apiOIDCSubject+`","role":"viewer"}`),
 	)
 
 	server.ServeHTTP(response, request)
@@ -3632,7 +3632,7 @@ func TestListQueueReturnsOnlyCallerItems(t *testing.T) {
 	if body.Items[0].Summary != "reconcile_stack_grant" {
 		t.Fatalf("summary = %q, want the kind as fallback", body.Items[0].Summary)
 	}
-	if reader.tenantID != "tenant_123" || reader.actorSubject != apiKeycloakSubject {
+	if reader.tenantID != "tenant_123" || reader.actorSubject != apiOIDCSubject {
 		t.Fatalf("reader called with tenant %q actor %q, want the authenticated caller", reader.tenantID, reader.actorSubject)
 	}
 }

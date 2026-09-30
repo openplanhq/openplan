@@ -70,7 +70,7 @@ func TestCanonicalIdentifiersRejectTupleSyntax(t *testing.T) {
 	}
 }
 
-// Guards the identifier tightening against over-rejecting: real Keycloak,
+// Guards the identifier tightening against over-rejecting: real IdP,
 // Okta, and UUID subjects must keep working.
 func TestCanonicalIdentifiersAcceptOrdinarySubjects(t *testing.T) {
 	// UUID and Okta-style subs must keep working.

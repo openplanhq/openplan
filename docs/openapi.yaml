@@ -1453,8 +1453,8 @@ components:
     Me:
       type: object
       description: |
-        Note the camelCase field names. They predate the move off Keycloak
-        realm roles and are kept because they are the web client's contract;
+        Note the camelCase field names. They predate the move off IdP role
+        claims and are kept because they are the web client's contract;
         only the source of the answers changed.
       properties:
         sub:

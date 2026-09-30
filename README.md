@@ -60,8 +60,8 @@ explicit, guarded action.
   to it as an explicit, reviewable step instead of drifting silently.
 - **Control access per stack.** Grant people access to the stacks they need,
   rather than to everything.
-- **Sign in with SSO.** Authentication is standard OIDC, and the local stack
-  ships an identity provider so there is nothing to wire up to try it.
+- **Sign in with SSO.** Authentication is standard OIDC. The local stack signs
+  in with a local account, so there is nothing to wire up to try it.
 
 openplan requires no session or timeout configuration on your identity provider:
 signed-in sessions are openplan's own record, bounded by its own absolute and
@@ -77,9 +77,9 @@ browser — a back-channel logout is a server-to-server POST, not a redirect
 the browser follows. The two addresses differ whenever the IdP runs on an
 internal network or behind split-horizon DNS, which is why it is a separate
 setting, `OPENPLAN_BACKCHANNEL_LOGOUT_URL`, rather than always derived from
-`OPENPLAN_PUBLIC_URL`: on this local stack, Keycloak resolves
-`http://localhost:5173` (`OPENPLAN_PUBLIC_URL`) inside its own container, not
-the host's browser-facing port, so the provisioner registers
+`OPENPLAN_PUBLIC_URL`: an IdP running in a container resolves
+`http://localhost:5173` (`OPENPLAN_PUBLIC_URL`) to its own loopback, not the
+host's browser-facing port, so it would need
 `http://api:8081/v1/auth/backchannel-logout` instead.
 
 ## Running it locally
@@ -88,12 +88,9 @@ Requires Docker. No Go or Node toolchain.
 
 > [!NOTE]
 > **Upgrading an existing local stack?** Run `docker compose down -v` before
-> starting it back up. Two reasons. The provisioner no longer creates the
-> `openplan-web` public client or its audience mapper, but an existing Keycloak
-> volume keeps them from before — and a stale public client can still mint
-> browser-held access tokens, which is the posture that change exists to end.
-> Separately, OpenFGA's tables moved out of their own database and into the
-> application database, so tuples written before the move are not carried over.
+> starting it back up. OpenFGA's tables moved out of their own database and
+> into the application database, so tuples written before the move are not
+> carried over.
 
 **1. Start everything.**
 
@@ -109,13 +106,14 @@ in the application database and resolves the store and authorization model from
 the model in this repository at startup. Nothing has to be recorded between
 phases, and nothing has to be pasted into `.env`.
 
-**2. Open http://localhost:5173** and sign in with the platform administrator
-credentials from `.env.example`.
+**2. Open http://localhost:5173** and sign in as `root` with
+`OPENPLAN_ROOT_PASSWORD` from `.env.example`.
 
 > [!IMPORTANT]
 > Use `localhost`, not `127.0.0.1`. The redirect URI is derived from a single
-> `OPENPLAN_PUBLIC_URL`, so only that exact origin is registered with Keycloak —
-> `127.0.0.1` fails sign-in with "Invalid parameter: redirect_uri".
+> `OPENPLAN_PUBLIC_URL`, so only that exact origin is registered with an
+> identity provider — `127.0.0.1` fails OIDC sign-in with an invalid
+> `redirect_uri`.
 
 ### Stopping it
 

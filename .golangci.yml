@@ -95,10 +95,6 @@ linters:
       - path: internal/authorization/(read|write)\.go
         linters:
           - goconst
-      # REST path segments and JSON keys of the Keycloak Admin API.
-      - path: internal/keycloak/
-        linters:
-          - goconst
 
 issues:
   max-issues-per-linter: 0

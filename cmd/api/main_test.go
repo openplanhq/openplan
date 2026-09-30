@@ -83,7 +83,6 @@ func TestWriteStartupErrorDoesNotLeakSecuritySecrets(t *testing.T) {
 	values := apiTestValues()
 	values["OPENPLAN_ENVIRONMENT"] = "production"
 	values["OIDC_ISSUER_URL"] = "https://client:oidc-client-secret-sentinel@id.example.com/realms/openplan"
-	values["KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD"] = "bootstrap-password-sentinel"
 
 	err := runWithDependencies(context.Background(), apiTestGetenv(values), apiDependencies{})
 	if !errors.Is(err, config.ErrInvalidConfig) {
@@ -94,7 +93,6 @@ func TestWriteStartupErrorDoesNotLeakSecuritySecrets(t *testing.T) {
 	for _, secret := range []string{
 		"oidc-client-secret-sentinel",
 		"openfga-api-token-sentinel",
-		"bootstrap-password-sentinel",
 	} {
 		if strings.Contains(output.String(), secret) {
 			t.Fatalf("startup log leaked %q: %s", secret, output.String())

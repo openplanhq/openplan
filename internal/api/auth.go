@@ -191,7 +191,7 @@ func (server *Server) establishSession(
 // real: a copy of the cookie taken beforehand stops working too.
 //
 // The URL it redirects to carries the raw ID token as id_token_hint, which is
-// how RP-initiated logout is specified and what stops Keycloak interrupting
+// how RP-initiated logout is specified and what stops the provider interrupting
 // with a confirmation page. That token is an identity assertion and nothing
 // more — the middleware authenticates against the session store alone, so a
 // copy read out of browser history or an access log opens nothing.

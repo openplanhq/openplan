@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Drive the openplan web app through a real Keycloak login in headless Chrome,
+ * Drive the openplan web app through a real OIDC login in headless Chrome,
  * so auth-gated screens can be inspected without a human taking screenshots.
  *
  * Why this exists: every screen except /styleguide sits behind OidcAuthProvider,
@@ -11,15 +11,15 @@
  *
  * Setup:
  *   cd web && npm run dev                       # must be port 5173: the
- *                                               # Keycloak client only registers
+ *                                               # OIDC client only registers
  *                                               # 5173 as a redirect_uri
  *   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
  *     --headless=new --disable-gpu --remote-debugging-port=9222 \
  *     --user-data-dir=/tmp/openplan-chrome --window-size=1512,950 about:blank &
  *
  * Credentials come from the environment; nothing is hardcoded:
- *   export OPENPLAN_USER="$KEYCLOAK_PLATFORM_ADMIN_USERNAME"
- *   export OPENPLAN_PASS="$KEYCLOAK_PLATFORM_ADMIN_PASSWORD"
+ *   export OPENPLAN_USER=<identity provider username>
+ *   export OPENPLAN_PASS=<identity provider password>
  *
  * Usage:
  *   node scripts/drive-web.mjs --shot out.png --click "dev" --click "Access"
@@ -89,7 +89,7 @@ await send("Runtime.enable");
 await send("Page.navigate", { url: "http://127.0.0.1:5173/stacks" });
 await settle(6000);
 
-// Keycloak's login page is server-rendered, so setting .value and submitting the
+// The IdP's login page is server-rendered, so setting .value and submitting the
 // form is enough — no React synthetic-event plumbing needed.
 if (await evaluate("!!document.querySelector('#username')")) {
   await evaluate(`(() => {
@@ -100,7 +100,7 @@ if (await evaluate("!!document.querySelector('#username')")) {
     };
     set(u, ${JSON.stringify(USER)});
     set(p, ${JSON.stringify(PASS)});
-    (document.querySelector('#kc-form-login') || u.form).submit();
+    u.form.submit();
   })()`);
   await settle(8000);
 }

@@ -16,7 +16,7 @@ import "./styleguide.css";
  * tokens.css either.
  *
  * It is mounted OUTSIDE SessionProvider (see app/router.tsx) so it renders
- * with no Keycloak and no backend — the app itself cannot mount without
+ * with no identity provider and no backend — the app itself cannot mount without
  * them, which makes this the only way to see the design system locally.
  */
 

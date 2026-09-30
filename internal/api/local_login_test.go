@@ -582,7 +582,7 @@ func TestLogoutWithAnIDTokenAndNoFlowRedirectsHome(t *testing.T) {
 	idHash := authn.HashSessionID(sessionID)
 	if err := sessions.CreateSession(context.Background(), authn.Session{
 		IDHash:  idHash,
-		Subject: "keycloak-subject",
+		Subject: "federated-subject",
 		IDToken: "an.id.token",
 	}); err != nil {
 		t.Fatalf("CreateSession returned error: %v", err)

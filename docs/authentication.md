@@ -1,122 +1,45 @@
 # Authentication and Authorization
 
-This document defines the Keycloak realm and identity resources provisioned for
-openplan and the OpenFGA model used for per-stack authorization. The broader
+This document defines how openplan authenticates against an OIDC identity
+provider and the OpenFGA model used for per-stack authorization. The broader
 trust model and authorization invariants remain in the
 [authentication and authorization security architecture](superpowers/specs/2026-07-14-authn-authz-security-architecture-design.md).
 
-## Local Realm
+## Identity Provider
 
-Docker Compose runs Keycloak 26.6.3 at `http://keycloak.localhost:8082` and executes the
-`keycloak-provision` one-shot service after Keycloak reports healthy. The
-service reconciles named resources through the Keycloak Admin REST API and
-exits non-zero if any operation fails.
+openplan works with any compliant OIDC provider named by `OIDC_ISSUER_URL`.
+With no issuer configured, the API serves local accounts only. openplan
+provisions nothing on the provider: a deployment registers one confidential
+client itself.
 
-The local issuer is:
-
-```text
-http://keycloak.localhost:8082/realms/openplan
-```
-
-The realm has a one-hour access-token lifespan, is enabled, does not permit
-self-registration, and uses Keycloak's `external` SSL policy. Local loopback
-HTTP exists only for development; production uses one canonical HTTPS issuer.
-This lifespan no longer bounds a browser session: it governs only the ID
-token's freshness during the sign-in round trip itself. See "Browser Session"
-below for the session openplan owns after that, deliberately independent of it.
-
-## OIDC Clients and Claims
-
-| Resource | Configuration |
-|---|---|
-| `openplan-api` | Confidential OpenID Connect client; Authorization Code flow with PKCE S256; implicit, password, device, CIBA, service-account, and standard token-exchange grants disabled |
-
-There is one client, not two. The API is the only OIDC client and the only
-party that ever talks to Keycloak: `/v1/auth/login`, `/v1/auth/callback`, and
-`/v1/auth/logout` on the API run the entire authorization-code exchange
-server-side, holding the client secret, and the browser receives nothing but
-an httpOnly session cookie (see "Browser Session" below). An earlier revision
-of this design split a public `openplan-web` browser client from a bearer-only
-`openplan-api` audience client; both the second client and the client scope and
-mapper it needed are gone along with it.
-
-The client's one registered redirect URI is derived, never configured
-separately:
+The client's one redirect URI is derived, never configured separately:
 
 ```text
 Redirect URIs:
   <OPENPLAN_PUBLIC_URL>/v1/auth/callback
 ```
 
-`WebOrigins` is empty and stays empty: the browser only ever calls the API's
-own origin, so no CORS configuration exists anywhere in `internal/api`.
+Allowed web origins stay empty: the browser only ever calls the API's own
+origin, so no CORS configuration exists anywhere in `internal/api`.
+
+## OIDC Client and Claims
+
+There is one client. The API is the only OIDC client and the only party that
+ever talks to the provider: `/v1/auth/login`, `/v1/auth/callback`, and
+`/v1/auth/logout` on the API run the entire authorization-code exchange
+server-side with PKCE S256, holding the client secret, and the browser receives
+nothing but an httpOnly session cookie (see "Browser Session" below).
 
 The API verifies **ID tokens**, not access tokens, and checks `aud` against
-`OIDC_CLIENT_ID`. An ID token's `aud` is the client ID by construction, which
-is the whole reason ID tokens replaced access tokens here: forcing a resource
-identifier into an access token's `aud` used to require a dedicated client
-scope and protocol mapper on Keycloak, and on Okta a custom authorization
-server, which is a paid add-on. Verifying the ID token instead means the
-audience is already correct and nothing needs to mint it.
+`OIDC_CLIENT_ID`. An ID token's `aud` is the client ID by construction, so the
+audience is already correct and no provider-side mapper or custom
+authorization server is needed to mint it.
 
 ## Global Roles
 
-| Role | Meaning |
-|---|---|
-| `platform-admin` | Administer openplan and bypass ordinary stack checks, but never authentication, tenant validation, audit requirements, last-owner protection, dependency fail-closed behavior, or self-approval prevention |
-| `stack-creator` | Create a stack and become its initial OpenFGA owner |
-
-These are realm roles and appear in `realm_access.roles`. Per-stack roles never
-belong in Keycloak; AUTH-004 provisions those relationships in OpenFGA.
-
-## Administrator Boundary
-
-Two different identities serve different purposes:
-
-1. The master-realm bootstrap administrator is supplied to Keycloak itself and
-   is used by the one-shot provisioner. Its credentials are not shared for
-   daily platform administration.
-2. The initial openplan platform administrator is a user inside the `openplan`
-   realm. It receives the `platform-admin` realm role and only these
-   `realm-management` client roles: `query-users`, `view-users`,
-   `manage-users`, and `view-realm`.
-
-The openplan administrator can use the dedicated console at
-`http://keycloak.localhost:8082/admin/openplan/console/` to find and manage openplan users
-and assign the fixed global roles. It does not receive the broad `realm-admin`
-composite and cannot administer the master realm.
-
-Keycloak 26's default user profile requires email, first name, and last name for
-normal realm users. Provisioning reconciles those attributes and marks the
-trusted bootstrap email as verified so the initial administrator is immediately
-usable. The password is set only when the user is first created; later reruns do
-not overwrite a password rotated by a deployment administrator.
-
-## Keycloak Provisioner Configuration
-
-The provisioner requires these values. Local-only examples live in
-`.env.example`; production supplies them through its secret/config delivery
-system and must not reuse the examples.
-
-| Variable | Sensitive | Purpose |
-|---|---:|---|
-| `KEYCLOAK_ADMIN_URL` | No | Admin API base URL; Compose fixes it to `http://keycloak:8082`. Provisioner only — the API no longer reads any Keycloak setting |
-| `KEYCLOAK_ADMIN_REALM` | No | Bootstrap administrator realm; defaults to `master` |
-| `KEYCLOAK_ADMIN_USERNAME` | Yes | Master bootstrap administrator username |
-| `KEYCLOAK_ADMIN_PASSWORD` | Yes | Master bootstrap administrator password |
-| `KEYCLOAK_REALM` | No | Product realm; defaults to `openplan` |
-| `KEYCLOAK_API_CLIENT_ID` | No | The confidential client's ID; defaults to `openplan-api` |
-| `OPENPLAN_PUBLIC_URL` | No | Origin the browser reaches; the provisioner derives the client's redirect URI (`<OPENPLAN_PUBLIC_URL>/v1/auth/callback`) and post-logout redirect URI from it |
-| `OIDC_CLIENT_SECRET` | Yes | Secret registered on the confidential client; must match what the API is configured with |
-| `KEYCLOAK_PLATFORM_ADMIN_USERNAME` | Yes | Initial openplan platform administrator username |
-| `KEYCLOAK_PLATFORM_ADMIN_PASSWORD` | Yes | Initial password, used only when creating the user |
-| `KEYCLOAK_PLATFORM_ADMIN_EMAIL` | No | Required trusted bootstrap profile email |
-| `KEYCLOAK_PLATFORM_ADMIN_FIRST_NAME` | No | Required bootstrap profile first name |
-| `KEYCLOAK_PLATFORM_ADMIN_LAST_NAME` | No | Required bootstrap profile last name |
-| `KEYCLOAK_HTTP_TIMEOUT` | No | Per-client HTTP timeout; defaults to 10 seconds |
-
-Configured passwords and in-memory admin tokens are redacted from surfaced
-errors and never written to successful logs.
+Global roles are relationships on the OpenFGA `platform` singleton, not IdP
+claims. Nothing in an ID token grants authority; see "OpenFGA Stack
+Authorization" below.
 
 ## API Runtime Security Configuration
 
@@ -128,7 +51,7 @@ connects to Postgres or Temporal or starts its HTTP listener.
 | `OPENPLAN_ENVIRONMENT` | No | Optional runtime mode; empty defaults to `development`; valid values are `development` and `production` |
 | `OPENPLAN_TENANT_ID` | No | Required single configured tenant identifier |
 | `VITE_OPENPLAN_TENANT_ID` | No | Frontend build-time tenant context; must exactly match `OPENPLAN_TENANT_ID`; local development falls back to `tenant_123` |
-| `OIDC_ISSUER_URL` | No | Required exact OIDC issuer URL; any compliant provider, not only the local Keycloak |
+| `OIDC_ISSUER_URL` | No | Exact OIDC issuer URL; any compliant provider |
 | `OIDC_CLIENT_ID` | No | Required OAuth client ID; also the ID token audience the verifier checks against |
 | `OIDC_CLIENT_SECRET` | Yes | Required; the API is a confidential client and authenticates as one when it exchanges a code |
 | `OPENPLAN_PUBLIC_URL` | No | Required; the origin the browser reaches. The API derives its own OIDC redirect URI (`<OPENPLAN_PUBLIC_URL>/v1/auth/callback`) and post-logout redirect URI from it — never from `Host` or `X-Forwarded-Proto`, which an attacker can set |
@@ -159,8 +82,6 @@ its tables in the application database, and resolves the store and the
 authorization model from the model in this repository at startup — adopting an
 existing store and model when they match, and refusing to start when more than
 one matches, because picking one would silently decide which tuples count.
-Keycloak bootstrap passwords and provisioner administrator tokens are not API
-runtime credentials.
 
 `OIDC_AUDIENCE` is retired: it named a resource identifier that used to be
 forced into an access token's `aud`, and that concept does not exist for the
@@ -181,9 +102,9 @@ sealed into the transaction cookie; PKCE plus a confidential client already
 closes code injection, so this is defence in depth rather than the
 load-bearing control.
 
-Keycloak discovery and JWKS signing keys are cached. A new or replaced signing
+Provider discovery and JWKS signing keys are cached. A new or replaced signing
 key triggers one bounded refresh, so routine key rotation does not require an
-API restart. A fresh cached key continues to work through a short Keycloak
+API restart. A fresh cached key continues to work through a short provider
 outage. If the verifier cannot fetch required public keys, it fails closed and
 exposes no token or provider-response detail.
 
@@ -294,7 +215,7 @@ Two cookies carry the interactive flow:
 
 Both are `SameSite=Lax`, not `Strict`. The IdP's callback to
 `/v1/auth/callback` is a cross-site top-level GET — the browser is navigating
-back from `keycloak.localhost`, not from openplan's own origin — and `Strict`
+back from the IdP's origin, not from openplan's own origin — and `Strict`
 would withhold the transaction cookie on exactly that request, breaking every
 login. It would look like a random state-mismatch failure rather than an
 obviously misconfigured cookie.
@@ -370,7 +291,7 @@ are a snapshot rather than live.
 
 The row also keeps the raw ID token, encrypted at rest, solely so
 `handleAuthLogout` can pass it to the IdP as `id_token_hint` during
-RP-initiated logout — without it, Keycloak shows a logout confirmation page
+RP-initiated logout — without it, a provider may show a logout confirmation page
 instead of signing out silently. Despite that parameter's name it is the whole
 token, not a reference to one. It is encrypted with
 `SESSION_ENCRYPTION_KEY` — the same required key that seals the transaction
@@ -399,7 +320,7 @@ Storing and rotating one was evaluated and rejected: correct handling needs a
 transactional store with row locking to survive concurrent requests racing a
 single-use refresh token, the new cookie has nowhere reliable to ride out on a
 streaming log response, and `offline_access` means three different things
-across Keycloak, Okta, and Google. The full reasoning, including the ArgoCD
+across providers such as Okta and Google. The full reasoning, including the ArgoCD
 comparison that shaped it, is in the [design
 doc](superpowers/specs/2026-08-25-oidc-server-side-flow-design.md). What has
 changed is what "expired" means: it is no longer the IdP's ID token `exp` but
@@ -407,17 +328,15 @@ openplan's own idle and absolute bounds.
 
 ### What ends a session, and what does not
 
-An expiring IdP session does **not** end a openplan session. Keycloak's cleanup
-task removes expired sessions from its own storage and notifies nobody
-(`ClearExpiredUserSessions` calls `removeAllExpired()` and nothing else), so
-back-channel logout fires only on explicit events — a logout, or an admin
-disabling a user. This is the independence the app-owned session was built for.
+An expiring IdP session does **not** end a openplan session. Providers
+typically expire their own sessions without notifying anyone, so back-channel
+logout fires only on explicit events — a logout, or an admin disabling a
+user. This is the independence the app-owned session was built for.
 
 Re-authentication is **not** silent, though. openplan never contacts the IdP
-after the callback — no refresh, no userinfo call — so Keycloak's SSO idle
-timer starts at sign-in and is never refreshed. At Keycloak's default
-`ssoSessionIdleTimeout` of 1800s it is always dead thirty minutes in, long
-before openplan's own session ends. When a openplan session does expire, the trip
+after the callback — no refresh, no userinfo call — so the IdP's SSO idle
+timer starts at sign-in and is never refreshed. With a typical 30-minute SSO
+idle timeout it is dead long before openplan's own session ends. When a openplan session does expire, the trip
 through `/v1/auth/login` therefore finds no SSO session to pick up and the user
 gets a full credential prompt.
 
@@ -465,22 +384,14 @@ nothing it can reach, and the notification silently never arrives.
 
 `OPENPLAN_BACKCHANNEL_LOGOUT_URL` (optional; defaults to
 `<OPENPLAN_PUBLIC_URL>/v1/auth/backchannel-logout`, unchanged from before) lets
-a deployment register a different, IdP-reachable address. On the local
-Compose stack, the provisioner sets it to `http://api:8081/v1/auth/backchannel-logout`
-— the API's address on the Compose network, which is what Keycloak resolves,
-rather than `http://localhost:5173`, which inside Keycloak's own container
-means Keycloak's own loopback.
+a deployment register a different, IdP-reachable address. An IdP on the local
+Compose network would use `http://api:8081/v1/auth/backchannel-logout` — the
+API's address there — rather than `http://localhost:5173`, which inside the
+IdP's own container means its own loopback.
 
 Also enable session-required logout so the provider includes `sid` in both the
 ID token and the logout token — without it, openplan can only match on `sub`,
-so signing one device out signs out every session the user has. On Keycloak,
-the provisioner (`internal/keycloak/provisioner.go`) sets this automatically
-on the `openplan-api` client:
-
-| Attribute | Value | Effect |
-|---|---|---|
-| `backchannel.logout.url` | `OPENPLAN_BACKCHANNEL_LOGOUT_URL`, or `<OPENPLAN_PUBLIC_URL>/v1/auth/backchannel-logout` if unset | Where Keycloak posts the logout token |
-| `backchannel.logout.session.required` | `true` | Includes `sid` in the ID token and the logout token |
+so signing one device out signs out every session the user has.
 
 Matching prefers `sid` over `sub`, so a provider that signs one device out does
 not sign the user out everywhere. When the `sid` matches no row the handler
@@ -510,10 +421,8 @@ one client, not a credential. It is only true here because `/v1` no longer
 accepts bearer tokens — while it did, a copy read out of any of those logs was
 a working API credential that survived the very logout that wrote it there.
 
-The realm's `accessTokenLifespan` is 300 seconds, which bounds the ID token
-too — Keycloak has no separate ID-token lifespan, since `TokenManager` copies
-the access token's `exp` onto it. That is hygiene rather than a control now.
-RP-Initiated Logout 1.0 says the OP **SHOULD** honour an expired
+The ID token's lifespan is the provider's and is hygiene rather than a control
+now. RP-Initiated Logout 1.0 says the OP **SHOULD** honour an expired
 `id_token_hint` (conditioned on the RP having a current or recent session at
 the OP, and a `sid` matching neither MAY be declined as suspect), and a session
 running up to eight hours means ours is normally expired at logout anyway.
@@ -529,8 +438,7 @@ user, and cross-user lookup is vendor-specific admin API territory — Okta's
 Users API, Microsoft Graph, Google's Admin SDK. Each needs elevated permissions
 a customer's security team must approve, and each would put that provider on
 the critical path for rendering a grants list. openplan previously did exactly
-this against the Keycloak Admin API, with a service account holding
-`query-users` and `view-users` on the realm. That is gone.
+this against one provider's admin API. That is gone.
 
 Instead, every ID token openplan verifies already carries what the UI needs, and
 the callback writes it down:
@@ -569,29 +477,6 @@ There is no pending-grant mechanism and no email-to-`sub` reconciliation, both
 of which would mean inventing an identity openplan has not been told about. SCIM
 is the answer if pre-provisioning is ever genuinely required, and is
 out of scope here and in the security architecture.
-
-## Operation and Reruns
-
-Start or reconcile the realm with:
-
-```bash
-docker compose --env-file .env up --build keycloak-provision
-```
-
-A successful run exits `0` once every resource is reconciled. Re-run
-the same command after configuration changes. The provisioner looks up realms,
-clients, roles, scopes, mappers, and users by their immutable names, creates
-missing resources, and repairs fields owned by openplan without discarding
-unrelated representation fields managed by a deployment administrator.
-
-To prove idempotence locally:
-
-```bash
-docker compose --env-file .env up --build --force-recreate keycloak-provision
-```
-
-Duplicate exact client IDs, usernames, client-scope names, or mapper names fail
-the run instead of making an arbitrary choice.
 
 ## OpenFGA Stack Authorization
 

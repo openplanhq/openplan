@@ -119,7 +119,7 @@ func (f *Flow) Exchange(ctx context.Context, code, codeVerifier string) (string,
 //
 // idTokenHint is the whole ID token, not a reference to one. Without it the OP
 // cannot tell the request came from us rather than from anything else able to
-// navigate the browser, so Keycloak stops to ask the user to confirm.
+// navigate the browser, so a provider stops to ask the user to confirm.
 func (f *Flow) EndSessionURL(idTokenHint, postLogoutRedirectURI string) string {
 	endpoint := f.cfg.Endpoints.Endpoints().EndSession
 	if endpoint == "" {

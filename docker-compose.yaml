@@ -19,9 +19,6 @@ services:
       POSTGRES_USER: ${APP_DB_USER:-openplan}
       POSTGRES_PASSWORD: ${APP_DB_PASSWORD:-openplan}
       POSTGRES_DB: ${APP_DB_NAME:-openplan_test}
-      KEYCLOAK_DB_USER: ${KEYCLOAK_DB_USER:-keycloak}
-      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak-local-only}
-      KEYCLOAK_DB_NAME: ${KEYCLOAK_DB_NAME:-keycloak}
       TEMPORAL_DB_USER: ${TEMPORAL_DB_USER:-temporal}
       TEMPORAL_DB_PASSWORD: ${TEMPORAL_DB_PASSWORD:-temporal}
     ports:
@@ -34,85 +31,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-
-  # An identity provider, opt in:
-  #
-  #   docker compose --profile auth up -d
-  #
-  # The API serves local accounts with no IdP at all, and that is the default
-  # stack: Keycloak is a JVM and a provisioning run nobody needs to pay for on
-  # every up. Enabling the profile means enabling the OIDC_* block in .env too
-  # -- the API reads the issuer from the environment, and a profile cannot set
-  # one. Issuer set with no Keycloak behind it is a boot failure, not a
-  # degraded login, because discovery happens while the API starts.
-  keycloak:
-    profiles: ["auth"]
-    image: quay.io/keycloak/keycloak:26.6.3
-    command: start-dev
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/${KEYCLOAK_DB_NAME:-keycloak}
-      KC_DB_USERNAME: ${KEYCLOAK_DB_USER:-keycloak}
-      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak-local-only}
-      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME:-openplan-admin}
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD:-openplan-admin-local-only}
-      KC_HTTP_PORT: "8082"
-      KC_HOSTNAME: http://keycloak.localhost:8082
-      KC_HEALTH_ENABLED: "true"
-      KC_METRICS_ENABLED: "true"
-    ports:
-      - "8082:8082"
-    networks:
-      default:
-        aliases:
-          - keycloak.localhost
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - >-
-          { printf 'HEAD /health/ready HTTP/1.0\r\n\r\n' >&0;
-          grep 'HTTP/1.0 200'; } 0<>/dev/tcp/localhost/9000
-      interval: 10s
-      timeout: 5s
-      retries: 18
-      start_period: 30s
-
-  keycloak-provision:
-    profiles: ["auth"]
-    build:
-      context: .
-      dockerfile: Dockerfile.keycloak-provisioner
-    depends_on:
-      keycloak:
-        condition: service_healthy
-    environment:
-      KEYCLOAK_ADMIN_URL: http://keycloak:8082
-      KEYCLOAK_ADMIN_REALM: master
-      KEYCLOAK_ADMIN_USERNAME: ${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME:-openplan-admin}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD:-openplan-admin-local-only}
-      KEYCLOAK_REALM: openplan
-      KEYCLOAK_API_CLIENT_ID: openplan-api
-      # The provisioner derives the confidential client's redirect and
-      # post-logout URIs from OPENPLAN_PUBLIC_URL, and registers this exact
-      # secret on the client, so the API and the IdP always agree.
-      OPENPLAN_PUBLIC_URL: ${OPENPLAN_PUBLIC_URL:-http://localhost:5173}
-      # Back-channel logout is a server-to-server POST from Keycloak's own
-      # container, not a browser redirect — OPENPLAN_PUBLIC_URL resolves inside
-      # Keycloak to Keycloak's own loopback, not the host's browser-facing
-      # port, so this is pinned to the API's address on the Compose network.
-      OPENPLAN_BACKCHANNEL_LOGOUT_URL: http://api:8081/v1/auth/backchannel-logout
-      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-openplan-api-local-only}
-      KEYCLOAK_PLATFORM_ADMIN_USERNAME: ${KEYCLOAK_PLATFORM_ADMIN_USERNAME:-openplan-platform-admin}
-      KEYCLOAK_PLATFORM_ADMIN_PASSWORD: ${KEYCLOAK_PLATFORM_ADMIN_PASSWORD:-openplan-platform-admin-local-only}
-      KEYCLOAK_PLATFORM_ADMIN_EMAIL: ${KEYCLOAK_PLATFORM_ADMIN_EMAIL:-openplan-platform-admin@local.test}
-      KEYCLOAK_PLATFORM_ADMIN_FIRST_NAME: ${KEYCLOAK_PLATFORM_ADMIN_FIRST_NAME:-openplan}
-      KEYCLOAK_PLATFORM_ADMIN_LAST_NAME: ${KEYCLOAK_PLATFORM_ADMIN_LAST_NAME:-Platform Administrator}
-      KEYCLOAK_HTTP_TIMEOUT: 10s
-      OPENPLAN_ENVIRONMENT: ${OPENPLAN_ENVIRONMENT:-development}
-    restart: "no"
 
   temporal:
     image: temporalio/auto-setup:1.28.1
@@ -196,10 +114,7 @@ services:
       CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:-717cb4d0fd1db07a30442806c2987599580f6d7c6e63b9bddf509bc183a086d3}
       # Empty by default: no issuer means no provider, and the API serves local
       # accounts. The three move together -- the config rejects a client with no
-      # issuer -- and .env turns them on alongside --profile auth. Ordering is
-      # left to restart: on-failure rather than depends_on, because Compose
-      # rejects the whole project when a profile-less service depends on a
-      # profiled one.
+      # issuer -- and .env sets them when an external OIDC provider is in use.
       OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
