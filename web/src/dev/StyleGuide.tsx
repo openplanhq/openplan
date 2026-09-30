@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { MemoryRouter, useInRouterContext } from "react-router-dom";
+import RouteMessage from "../app/RouteMessage";
 import Breadcrumb from "../shared/Breadcrumb";
 import HeroGraphic from "../shared/HeroGraphic";
 import { LogStep, LogSteps } from "../shared/LogSteps";
@@ -343,6 +344,14 @@ export default function StyleGuide() {
                 </EmptyHeader>
               </Empty>
             </Specimen>
+            <Specimen label="RouteMessage" hint="real component, on Empty" stack>
+              <RouteMessage
+                icon={SearchX}
+                title="Page not found"
+                description="The page you were looking for doesn't exist."
+                testId="sg-route-message"
+              />
+            </Specimen>
           </Section>
         </div>
 
@@ -612,16 +621,11 @@ export default function StyleGuide() {
             <HeroGraphic />
           </Specimen>
 
-          <Specimen label="showcase" stack>
-            <section className="showcase" style={{ minHeight: 0 }}>
+          <Specimen label="showcase" hint="stacks and registry empty states" stack>
+            <section className="showcase showcase--compact">
               <div className="showcase__body">
-                <h1 className="showcase__title gradient-text">Authorization service unavailable</h1>
-                <p className="showcase__lede">
-                  We could not reach the authorization service. Retry in a moment.
-                </p>
-                <a className="secondary-button" href="#showpiece">
-                  Back to stacks
-                </a>
+                <h2 className="showcase__title gradient-text">No templates yet</h2>
+                <p className="showcase__lede">Register a Terraform module to make it available to your stacks.</p>
               </div>
               <div className="showcase__visual">
                 <HeroGraphic />

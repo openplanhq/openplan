@@ -103,6 +103,14 @@
   line-height: var(--legacy-leading-relaxed);
 }
 
+/* The one bare h1 left in the app. base.css sizes every h1 at 40px, and the
+   phone-width rule that shrank it went with the last screen that needed it. */
+@media (max-width: 760px) {
+  .sg__intro h1 {
+    font-size: var(--legacy-text-2xl);
+  }
+}
+
 .sg__section {
   margin-bottom: var(--legacy-space-16);
   scroll-margin-top: var(--legacy-space-6);

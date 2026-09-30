@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import StyleGuide from "./StyleGuide";
@@ -69,6 +72,27 @@ describe("StyleGuide", () => {
     }
     // The Label is wired to its Input, as every form on the app must be.
     expect(within(section).getByLabelText("Stack name").getAttribute("data-slot")).toBe("input");
+  });
+
+  it("renders the real RouteMessage", () => {
+    render(<StyleGuide />);
+    const message = within(screen.getByTestId("sg-theme")).getByTestId("sg-route-message");
+    expect(message.getAttribute("data-slot")).toBe("empty");
+  });
+
+  // The showcase is left only to the stacks and registry empty states. The
+  // service-unavailable screen it used to show is a RouteMessage now.
+  it("shows the showcase with copy from a screen that still uses it", () => {
+    render(<StyleGuide />);
+    expect(screen.getByText("No templates yet")).toBeTruthy();
+    expect(screen.queryByText("Authorization service unavailable")).toBeNull();
+  });
+
+  // base.css sizes every bare h1 at 40px, and the intro's is the one bare h1
+  // left, so the gallery sizes it down on a phone itself.
+  it("sizes its intro heading down on phones", () => {
+    const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "styleguide.css"), "utf8");
+    expect(css).toMatch(/@media \(max-width: 760px\) \{\s*\.sg__intro h1 \{\s*font-size: var\(--legacy-text-2xl\);/);
   });
 
   it("swatches every theme colour", () => {
