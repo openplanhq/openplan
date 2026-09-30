@@ -794,15 +794,8 @@
     grid-template-columns: 1fr;
   }
 
-  /* Bare h1 is included deliberately: the auth-loop error screen renders a
-     plain h1, which would otherwise stay at 40px on a phone. The breadcrumb's
-     h1 is unaffected: its text-sm utility outranks the legacy layer. */
-  h1,
   .showcase__title {
     font-size: var(--legacy-text-2xl);
-  }
-
-  .showcase__title {
     overflow-wrap: break-word;
   }
 
