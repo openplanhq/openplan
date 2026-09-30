@@ -44,6 +44,9 @@
  *                     glob, `*` is any run of characters and `?` is exactly
  *                     one, so a literal `?` can't be matched. Chrome reads a
  *                     backslash as an escape, so globs may not contain one.
+ *                     Only the page's fetch() calls are intercepted, never the
+ *                     document or its scripts, so a loose glob such as
+ *                     '*stacks' can't catch the /stacks page itself.
  *   --respond <glob>=<json>
  *                     answer requests whose URL matches glob with 200 and that
  *                     JSON body (repeatable), such as an empty list. Split at
@@ -233,8 +236,12 @@ if (await evaluate("!!document.querySelector('#login')")) {
 console.error("signed in at:", await evaluate("location.pathname"));
 
 // After sign-in, so a --fail on /v1/me doesn't stop the driver signing in.
+// Only fetch() requests, which is how the app calls the API: a glob that also
+// matched the document or a Vite module would hang or replace the page.
 if (intercepted.length) {
-  await send("Fetch.enable", { patterns: intercepted.map((i) => ({ urlPattern: i.glob, requestStage: "Request" })) });
+  await send("Fetch.enable", {
+    patterns: intercepted.map((i) => ({ urlPattern: i.glob, resourceType: "Fetch", requestStage: "Request" }))
+  });
 }
 
 // Client-side navigation: react-router follows popstate, and a full load
