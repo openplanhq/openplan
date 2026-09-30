@@ -1,8 +1,8 @@
 # Adopt shadcn/ui in `web/`
 
 **Date:** 2026-09-29
-**Status:** Approved. Guard and testing sections reviewed with PR 1. PR 1 and
-PR 2 settled the details recorded below.
+**Status:** Approved. Guard and testing sections reviewed with PR 1. PRs 1 to
+3 settled the details recorded below.
 
 ## Problem
 
@@ -179,7 +179,8 @@ a `session-error` class to hang them on). Each restoration is written
 browser default Preflight removed, and `:where()` gives it browser-default
 precedence, so every existing legacy rule still wins over it. Screen PRs should
 audit the same way, and also reach loading, error and transient states, for
-example by stalling or failing `/v1/*` requests over the DevTools protocol.
+example by stalling or failing `/v1/*` requests over the DevTools protocol
+(`scripts/drive-web.mjs --fail`).
 
 **Known leak, accepted until PR 9.** `base.css` styles bare elements (`h1`–`h4`,
 `a`, `button`, `input`, `select`, `textarea`, `code`). Those rules still apply on
@@ -197,8 +198,8 @@ migrated and unmigrated screens side by side.
 | 0 | Upgrade React 18 to 19, nothing else | none |
 | 1 | Tooling, theme, layer setup, token rename, Fontsource Geist, new guards, Preflight restorations; removes the page glows (`body::before`, and `body > *`, which only lifted content above them); adds the Button to `/styleguide`. No screen changes. | Button |
 | 2 | App shell (`AppShell`) and `src/shared/` components; deletes the unused `StatBand` and `IdsPanel` | Breadcrumb; Badge (status tones, roles); Collapsible (`LogSteps`) |
-| 3 | Standalone screens: sign-in, access denied, not found, service unavailable, route placeholder | Card, Button, Alert |
-| 4 | Stacks: list, create, detail shell, environment, credentials | Table, Input, Label, Button |
+| 3 | Standalone screens: sign-in, access denied, not found, service unavailable, route placeholder, and the two session-error screens | Card, Button, Alert, Input, Label; Empty for the route messages |
+| 4 | Stacks: list, create, detail shell, environment, credentials | Table; reuses Input, Label and Button |
 | 5 | Stack access | Combobox for the user search; Select for the role picker |
 | 6 | Stack templates: list, detail shell and its four tabs, config panel, variable fields, add, upgrade | Tabs tied to the route, so each tab keeps its URL; Select; Textarea |
 | 7 | Template registry: registry, registration, detail | Table, Card, Input |
@@ -219,6 +220,29 @@ migrated and unmigrated screens side by side.
 - The app header is `z-5`, below the legacy `.search-dropdown` (10) and
   `.undo-banner` (20). `AppShell.test.tsx` checks that order until those
   overlays migrate.
+
+**What PR 3 settled.**
+
+- The sign-in form needed Input and Label, so they arrived in PR 3 instead
+  of PR 4. The route messages use shadcn's Empty, which PR 4 and PR 7 can
+  reuse for the stacks and registry empty states.
+- SessionProvider's two session-error screens migrated with sign-in. No PR
+  row named them, and they relied on Preflight restorations PR 9 would
+  delete.
+- The four route messages (not found, not permitted, service unavailable,
+  the placeholder) are `src/app/RouteMessage.tsx`: Empty with a real `h1`.
+  Screens outside the shell frame themselves with `src/auth/AuthCard.tsx`.
+- The legacy `label`, `input`, `textarea` and `select` rules skip elements
+  with a `data-slot`, written `input:where(:not([data-slot]))` so legacy
+  fields keep their specificity. Without that, the legacy 36px `min-height`
+  outgrew Input's `h-8`, and labels turned muted. `legacy.guard.test.ts`
+  checks every such selector.
+- `scripts/drive-web.mjs --fail <glob>=<status>` answers matching requests
+  with an error, and `--eval` and `--reload` set up state before a fresh
+  load. That is how PR 3 reached the 403, 503 and session-error screens.
+  `--width <px>` emulates a phone, touch included: headless Chrome won't
+  size a window below 500px, so `--window-size` can't measure a 375px
+  screen.
 
 `HeroGraphic` (the decorative shapes on error and empty-state screens) has no
 counterpart in the stock look. Each migrating screen drops it for a plain empty
