@@ -69,16 +69,20 @@ describe("tables", () => {
     });
 
     // Every legacy <table> is a .data-table (primitives.css): fixed layout
-    // with its widths in a <colgroup>, inside a .data-table-frame.
+    // with its widths in a <colgroup>, inside a .data-table-frame. Each table
+    // must open with its own <colgroup>: a count across the file would also
+    // count the shadcn <Table>s' and any "<colgroup>" in text.
     it("builds every legacy table on .data-table", () => {
       const violations: string[] = [];
       for (const { name, source } of legacy) {
         const tables = [...source.matchAll(/<table\b([^>]*)>/g)];
-        for (const [tag, attributes] of tables) {
+        for (const match of tables) {
+          const [tag, attributes] = match;
           if (!/className=[{"][^>]*\bdata-table\b/.test(attributes)) violations.push(`${name}: ${tag} lacks the data-table class`);
+          if (!source.slice(match.index + tag.length).trimStart().startsWith("<colgroup>")) {
+            violations.push(`${name}: ${tag} is not followed by <colgroup>`);
+          }
         }
-        const colgroups = source.match(/<colgroup>/g)?.length ?? 0;
-        if (colgroups < tables.length) violations.push(`${name}: ${tables.length} table(s) but ${colgroups} <colgroup>`);
         const frames = source.match(/\bdata-table-frame\b/g)?.length ?? 0;
         if (frames < tables.length) violations.push(`${name}: ${tables.length} table(s) but ${frames} data-table-frame`);
       }
