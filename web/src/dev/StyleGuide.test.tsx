@@ -61,6 +61,16 @@ describe("StyleGuide", () => {
     }
   });
 
+  it("shows the components PR 3 added", () => {
+    render(<StyleGuide />);
+    const section = screen.getByTestId("sg-theme");
+    for (const slot of ["card", "alert", "input", "label", "empty"]) {
+      expect(section.querySelector(`[data-slot="${slot}"]`), `missing ${slot}`).toBeTruthy();
+    }
+    // The Label is wired to its Input, as every form on the app must be.
+    expect(within(section).getByLabelText("Stack name").getAttribute("data-slot")).toBe("input");
+  });
+
   it("swatches every theme colour", () => {
     const { container } = render(<StyleGuide />);
     for (const name of ["background", "foreground", "primary", "secondary", "muted", "accent", "destructive", "success", "warning", "border"]) {

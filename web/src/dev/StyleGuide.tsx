@@ -9,9 +9,14 @@ import { statusTone } from "../shared/statusTone";
 import RoleBadge from "../shared/RoleBadge";
 import StatusBadge from "../shared/StatusBadge";
 import "./styleguide.css";
-import { Plus } from "lucide-react";
+import { CircleAlert, Info, Plus, SearchX } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 /**
@@ -286,6 +291,57 @@ export default function StyleGuide() {
             </Specimen>
             <Specimen label="LogSteps" hint="real component, on Collapsible" stack>
               <LogStepsSpecimen />
+            </Specimen>
+            <Specimen label="Card" stack>
+              <Card className="w-full max-w-sm">
+                <CardHeader>
+                  <CardTitle>payments-core</CardTitle>
+                  <CardDescription>3 templates · last run 21 Sept</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground">One subject per card: a sign-in, a summary, a form.</p>
+                </CardContent>
+              </Card>
+            </Specimen>
+            <Specimen label="Alert" stack>
+              <div className="grid w-full max-w-md gap-3">
+                <Alert>
+                  <Info />
+                  <AlertTitle>Plan queued</AlertTitle>
+                  <AlertDescription>It starts when a worker is free.</AlertDescription>
+                </Alert>
+                <Alert variant="destructive">
+                  <CircleAlert />
+                  <AlertTitle>Incorrect username or password.</AlertTitle>
+                </Alert>
+              </div>
+            </Specimen>
+            <Specimen label="Input and Label" stack>
+              <div className="grid w-full max-w-sm gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="sg-input">Stack name</Label>
+                  <Input id="sg-input" placeholder="payments-core" />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="sg-input-invalid">Invalid</Label>
+                  <Input id="sg-input-invalid" defaultValue="Payments Core" aria-invalid />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="sg-input-disabled">Disabled</Label>
+                  <Input id="sg-input-disabled" defaultValue="payments-core" disabled />
+                </div>
+              </div>
+            </Specimen>
+            <Specimen label="Empty" stack>
+              <Empty>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <SearchX />
+                  </EmptyMedia>
+                  <EmptyTitle>No stacks yet</EmptyTitle>
+                  <EmptyDescription>Stacks you can see appear here.</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             </Specimen>
           </Section>
         </div>
