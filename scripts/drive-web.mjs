@@ -26,6 +26,7 @@
  *   node scripts/drive-web.mjs --click Templates --probe 'document.title'
  *   node scripts/drive-web.mjs --fields --click "dev" --click Environment
  *   node scripts/drive-web.mjs --fail '*v1/me=500' --reload --shot err.png
+ *   node scripts/drive-web.mjs --respond '*v1/tenants/*stacks=[]' --reload --shot empty.png
  *
  * Flags:
  *   --click <label>   click the <a>/<button> whose text matches (repeatable,
@@ -43,6 +44,14 @@
  *                     glob, `*` is any run of characters and `?` is exactly
  *                     one, so a literal `?` can't be matched. Chrome reads a
  *                     backslash as an escape, so globs may not contain one.
+ *   --respond <glob>=<json>
+ *                     answer requests whose URL matches glob with 200 and that
+ *                     JSON body (repeatable), such as an empty list. Split at
+ *                     the first "=" whose remainder parses as JSON. Globs and
+ *                     timing as for --fail.
+ *   --stall <glob>    never answer requests whose URL matches glob
+ *                     (repeatable), so their screen stays in its loading
+ *                     state. Globs and timing as for --fail.
  *   --eval <expr>     evaluate an expression in the page after --goto and
  *                     before --reload (repeatable, 1.5s settle after each)
  *   --reload          reload the page after --eval, so every query runs again
@@ -56,7 +65,7 @@
 import { writeFileSync } from "node:fs";
 
 const argv = process.argv.slice(2);
-const clicks = [], fails = [], evals = [];
+const clicks = [], fails = [], evals = [], responds = [], stalls = [];
 let shot = null, probe = null, fields = false, port = 9222;
 let gotos = [], signedOut = false, reload = false, width = null;
 for (let i = 0; i < argv.length; i++) {
@@ -69,17 +78,23 @@ for (let i = 0; i < argv.length; i++) {
   else if (argv[i] === "--goto") gotos.push(next());
   else if (argv[i] === "--signed-out") signedOut = true;
   else if (argv[i] === "--fail") fails.push(next());
+  else if (argv[i] === "--respond") responds.push(next());
+  else if (argv[i] === "--stall") stalls.push(next());
   else if (argv[i] === "--eval") evals.push(next());
   else if (argv[i] === "--reload") reload = true;
   else if (argv[i] === "--width") width = Number(next());
 }
 
+// Chrome's URL pattern syntax, as a regex that picks which spec a paused
+// request belongs to.
+const globTest = (glob) =>
+  new RegExp(`^${glob.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".")}$`);
+
 // --fail specs, split at the last "=" so a glob may contain one.
 const failures = fails.map((spec = "") => {
   const at = spec.lastIndexOf("=");
   const glob = at > 0 ? spec.slice(0, at) : "";
-  const pattern = glob.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".");
-  return { glob, status: Number(spec.slice(at + 1)), test: new RegExp(`^${pattern}$`) };
+  return { glob, status: Number(spec.slice(at + 1)), test: globTest(glob) };
 });
 // Chrome refuses to answer with a status outside 100-599 and leaves the
 // request hanging, so refuse it here. A backslash escapes in Chrome's pattern
@@ -89,6 +104,31 @@ if (failures.some((f) => !f.glob || f.glob.includes("\\") || !Number.isInteger(f
   console.error("--fail takes <glob>=<status>: a glob with no backslash and a status from 100 to 599, for example '*/v1/me=500'.");
   process.exit(2);
 }
+
+// --respond specs, split at the first "=" whose remainder is JSON, so a glob
+// may contain one and so may the body.
+const responses = responds.map((spec = "") => {
+  for (let at = spec.indexOf("="); at > 0; at = spec.indexOf("=", at + 1)) {
+    try {
+      const body = JSON.stringify(JSON.parse(spec.slice(at + 1)));
+      return { glob: spec.slice(0, at), body, test: globTest(spec.slice(0, at)) };
+    } catch {
+      // Not JSON from here; the "=" belongs to the glob.
+    }
+  }
+  return { glob: "" };
+});
+if (responses.some((r) => !r.glob || r.glob.includes("\\"))) {
+  console.error("--respond takes <glob>=<json>: a glob with no backslash and a JSON body, for example '*/v1/tenants/*/stacks=[]'.");
+  process.exit(2);
+}
+
+const stalled = stalls.map((glob = "") => ({ glob, test: globTest(glob) }));
+if (stalled.some((s) => !s.glob || s.glob.includes("\\"))) {
+  console.error("--stall takes a glob with no backslash, for example '*/v1/tenants/*/stacks'.");
+  process.exit(2);
+}
+const intercepted = [...stalled, ...responses, ...failures];
 
 const USER = process.env.OPENPLAN_USER;
 const PASS = process.env.OPENPLAN_PASS;
@@ -113,10 +153,21 @@ const send = (method, params = {}) =>
     pending.set(msgId, { resolve, reject });
     ws.send(JSON.stringify({ id: msgId, method, params }));
   });
-// Chrome pauses each request a --fail glob matches and waits for an answer.
-// The body is the API's error shape, so the app's error handling runs as it
-// would for a real failure.
+// Chrome pauses each request a --stall, --respond or --fail glob matches and
+// waits for an answer. A stalled one never gets one. A --fail body is the
+// API's error shape, so the app's error handling runs as it would for a real
+// failure.
 const answer = ({ requestId, request }) => {
+  if (stalled.some((s) => s.test.test(request.url))) return Promise.resolve();
+  const response = responses.find((r) => r.test.test(request.url));
+  if (response) {
+    return send("Fetch.fulfillRequest", {
+      requestId,
+      responseCode: 200,
+      responseHeaders: [{ name: "Content-Type", value: "application/json" }],
+      body: Buffer.from(response.body).toString("base64")
+    });
+  }
   const failure = failures.find((f) => f.test.test(request.url));
   if (!failure) return send("Fetch.continueRequest", { requestId });
   const body = JSON.stringify({ error: "injected", message: `drive-web --fail ${failure.glob}` });
@@ -130,10 +181,11 @@ const answer = ({ requestId, request }) => {
 ws.addEventListener("message", (event) => {
   const msg = JSON.parse(event.data);
   if (msg.method === "Fetch.requestPaused") {
-    // A request left paused hangs the page, and the screenshot would show that
-    // rather than the error state. Let it through and fail the run instead.
+    // A request left paused by accident hangs the page, and the screenshot
+    // would show that rather than the state asked for. Let it through and
+    // fail the run instead.
     answer(msg.params).catch((error) => {
-      console.error("--fail: Chrome refused the answer:", error.message);
+      console.error("Chrome refused the answer:", error.message);
       process.exitCode = 1;
       send("Fetch.continueRequest", { requestId: msg.params.requestId }).catch(() => {});
     });
@@ -181,8 +233,8 @@ if (await evaluate("!!document.querySelector('#login')")) {
 console.error("signed in at:", await evaluate("location.pathname"));
 
 // After sign-in, so a --fail on /v1/me doesn't stop the driver signing in.
-if (failures.length) {
-  await send("Fetch.enable", { patterns: failures.map((f) => ({ urlPattern: f.glob, requestStage: "Request" })) });
+if (intercepted.length) {
+  await send("Fetch.enable", { patterns: intercepted.map((i) => ({ urlPattern: i.glob, requestStage: "Request" })) });
 }
 
 // Client-side navigation: react-router follows popstate, and a full load
