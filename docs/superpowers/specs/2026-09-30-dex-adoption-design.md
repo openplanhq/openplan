@@ -1,6 +1,6 @@
 # Dex adoption — design
 
-Status: draft, 2026-09-30.
+Status: implemented, 2026-09-30. Phases 1–3 landed on `dex-adoption`.
 
 ## Goal
 
@@ -134,7 +134,11 @@ The session model, the middleware, the callback's ID-token verification, the
 
 ## Open questions
 
-- Should a missing root tuple for `OPENPLAN_ROOT_SUBJECT` be checked against
-  Dex at boot (is there a password entry with that user)? Proposed: no — the
-  API does not talk to Dex's admin API, and a wrong subject is visible
-  immediately as a root who gets 403.
+- ~~Should a missing root tuple for `OPENPLAN_ROOT_SUBJECT` be checked against
+  Dex at boot?~~ Settled: no. The API does not talk to Dex's admin API, and a
+  wrong subject is visible immediately as a root who gets 403. The local
+  stack's value is instead derived from `deploy/dex/config.yaml` by
+  `scripts/verify-auth-compose.mjs`, so the two cannot drift there.
+- Settled during implementation: `OPENPLAN_ROOT_PASSWORD` and
+  `OPENPLAN_ROOT_USERNAME` are refused at startup rather than ignored, and
+  migration 0030 drops `local_accounts`.

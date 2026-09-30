@@ -1,9 +1,6 @@
-import { useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { KeyRound, Loader2, LogIn } from "lucide-react";
-import { ApiRequestError, authMethods, signInWithPassword, ssoLoginURL } from "../api/client";
-import { queryKeys } from "../api/queryKeys";
+import { LogIn } from "lucide-react";
+import { ssoLoginURL } from "../api/client";
 import { clearLoginAttempts, loginLoopDetected, recordLoginAttempt } from "./loginAttempts";
 
 /** Where a sign-in with no return_to lands. The index route redirects onward. */
@@ -28,9 +25,7 @@ const relativeBase = "https://return-to.invalid";
 // survives that round trip cannot be talked out of the app.
 //
 // The server applies the same rule to the copy it receives (authn.SafeReturnTo).
-// Both check, because each is reachable without the other: this one guards the
-// client-side navigation after a password sign-in, which never reaches the
-// server at all.
+// Both check, so neither side has to trust the other to have done it.
 export function safeReturnTo(raw: string | null): string {
   if (!raw || !raw.startsWith("/")) return defaultReturnTo;
   // The parser drops control characters before it decides what the string
@@ -59,72 +54,26 @@ export function safeReturnTo(raw: string | null): string {
   return raw;
 }
 
-function errorMessageFor(error: unknown): string {
-  if (error instanceof ApiRequestError && error.status === 401) {
-    // The server answers the same way for an unknown username and a wrong
-    // password, and so does this: naming which one was wrong would undo it.
-    return "Incorrect username or password.";
-  }
-  return "Sign-in is unavailable right now. Try again in a moment.";
-}
-
 /**
- * The sign-in screen, and the only place the app asks for a password.
+ * The sign-in screen: one button that hands the browser to the identity
+ * provider. openplan asks for no credential itself, so there is nothing to
+ * type here and nothing to ask the server before rendering.
  *
  * It sits outside SessionProvider: everything under "/" needs a session to
- * render, and this is the screen you see because you do not have one.
- *
- * The password form is unconditional. Local accounts always exist — root is one
- * and cannot be locked out — so there is always something to sign in with, and
- * rendering the form while /v1/auth/methods is still in flight keeps the first
- * paint from being an empty card. SSO is the part that varies, so its button
- * waits for the answer rather than being guessed at.
+ * render, and this is the screen you see because you do not have one. It is a
+ * button rather than an automatic redirect so that landing here never spends a
+ * trip to the provider on its own.
  */
 export default function SignInScreen() {
   const [searchParams] = useSearchParams();
   const returnTo = safeReturnTo(searchParams.get("return_to"));
 
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const { data: methods } = useQuery({
-    queryKey: queryKeys.authMethods,
-    queryFn: authMethods,
-    // A deployment does not gain or lose a provider while someone is looking at
-    // this screen, and a failed answer must not retry behind a form that is
-    // already usable without it.
-    staleTime: Infinity,
-    retry: false
-  });
-
-  // Reached only after sign-ins that the server accepted and the browser then
-  // failed to remember. Each attempt below is recorded on a 204, so a spent
-  // count means the credentials were right every time and the cookie never
-  // survived the trip.
+  // Reached only after sign-ins that completed at the provider and that the
+  // browser then failed to remember. A spent count means every trip came back
+  // with a session and the cookie never survived it.
   const cookiesBlocked = loginLoopDetected();
 
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await signInWithPassword(username, password);
-      recordLoginAttempt();
-      // A full navigation, not a router push. The session cookie arrived on the
-      // response above and the app's caches were built without one, so a reload
-      // is what starts the signed-in app from a clean slate — and it is also
-      // the trip that proves the cookie stuck.
-      globalThis.location.assign(returnTo);
-    } catch (caught) {
-      setError(errorMessageFor(caught));
-      setBusy(false);
-    }
-  };
-
-  const handleSSO = () => {
+  const handleSignIn = () => {
     recordLoginAttempt();
     globalThis.location.assign(ssoLoginURL(returnTo));
   };
@@ -140,10 +89,9 @@ export default function SignInScreen() {
         <section className="panel signin-card" data-testid="signin-cookies-blocked">
           <h1 className="signin-title">We could not keep you signed in</h1>
           <p className="muted signin-lede">
-            Your username and password were accepted, but this browser did not hold on to the
-            session, so every page load started it over. That happens when cookies are blocked for
-            this site — by browser settings, an extension, or a privacy mode that clears them
-            between page loads.
+            Sign-in worked, but this browser did not hold on to the session, so every page load
+            started it over. That happens when cookies are blocked for this site — by browser
+            settings, an extension, or a privacy mode that clears them between page loads.
           </p>
           <p className="muted signin-lede">
             Allow cookies for this site and try again. If it keeps failing, contact your
@@ -165,57 +113,10 @@ export default function SignInScreen() {
           <h1 className="signin-title">Sign in</h1>
         </header>
 
-        {error && (
-          <div className="alert" role="alert" data-testid="signin-error">
-            {error}
-          </div>
-        )}
-
-        <form className="signin-form" onSubmit={handleSubmit}>
-          <label htmlFor="signin-username">
-            Username
-            <input
-              id="signin-username"
-              name="username"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              autoComplete="username"
-              autoFocus
-              required
-            />
-          </label>
-          <label htmlFor="signin-password">
-            Password
-            <input
-              id="signin-password"
-              name="password"
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              autoComplete="current-password"
-              required
-            />
-          </label>
-          <button type="submit" className="primary-button signin-submit" disabled={busy}>
-            {busy ? <Loader2 size={16} className="spin" /> : <LogIn size={16} />}
-            Sign in
-          </button>
-        </form>
-
-        {methods?.oidc && (
-          <>
-            <p className="signin-divider">or</p>
-            <button
-              type="button"
-              className="secondary-button signin-submit"
-              onClick={handleSSO}
-              data-testid="signin-sso"
-            >
-              <KeyRound size={16} />
-              Continue with single sign-on
-            </button>
-          </>
-        )}
+        <button type="button" className="primary-button signin-submit" onClick={handleSignIn} data-testid="signin-submit">
+          <LogIn size={16} />
+          Sign in
+        </button>
       </section>
     </main>
   );

@@ -4,7 +4,6 @@ import {
   addTemplateToStack,
   ApiRequestError,
   approveRun,
-  authMethods,
   discardRun,
   createStack,
   getTemplateRunLog,
@@ -13,7 +12,7 @@ import {
   listTemplateRuns,
   logout,
   registerTemplate,
-  signInWithPassword,
+  ssoLoginURL,
   startTemplateRun,
   updateStackTemplateConfig,
   upgradeStackTemplate
@@ -288,24 +287,7 @@ describe("api client — session cookie auth", () => {
     expect(assign).toHaveBeenCalledWith("/signin?return_to=%2Fstacks%3Fselected%3Dst_1");
   });
 
-  // The sign-in screen's own 401 is an answer -- a wrong password -- not a lost
-  // session. Navigating would reload the page the user is typing into and
-  // throw away what they had entered.
-  it("does not navigate when the sign-in request itself is rejected", async () => {
-    vi.stubGlobal("location", { assign, pathname: "/signin", search: "" });
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ error: "unauthorized", message: "authentication failed" }), {
-        status: 401,
-        headers: { "content-type": "application/json" }
-      })
-    );
-
-    await expect(signInWithPassword("root", "wrong")).rejects.toBeInstanceOf(ApiRequestError);
-    expect(assign).not.toHaveBeenCalled();
-  });
-
-  // Belt and braces for the rule above: a request from the sign-in screen that
-  // forgets to opt out still must not reload the form out from under the user.
+  // Already on the sign-in screen: a 401 there must not reload it.
   it("does not navigate away from the sign-in screen on any 401", async () => {
     vi.stubGlobal("location", { assign, pathname: "/signin", search: "" });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -319,31 +301,8 @@ describe("api client — session cookie auth", () => {
     expect(assign).not.toHaveBeenCalled();
   });
 
-  it("posts credentials as JSON to the local sign-in route", async () => {
-    vi.stubGlobal("location", { assign, pathname: "/signin", search: "" });
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
-
-    await signInWithPassword("root", "hunter2");
-
-    const [path, init] = fetchMock.mock.calls[0];
-    expect(path).toBe("/v1/auth/login");
-    expect(init?.method).toBe("POST");
-    expect(JSON.parse(init?.body as string)).toEqual({ username: "root", password: "hunter2" });
-    // The server refuses anything that is not declared as JSON: an HTML form
-    // can only send text/plain, urlencoded, or multipart, which is what makes
-    // the declaration a CSRF defence rather than a formality.
-    expect((init?.headers as Headers).get("content-type")).toBe("application/json");
-    expect(init?.credentials).toBe("same-origin");
-  });
-
-  it("reads the enabled sign-in methods", async () => {
-    vi.stubGlobal("location", { assign, pathname: "/signin", search: "" });
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(jsonResponse({ local: true, oidc: false }));
-
-    expect(await authMethods()).toEqual({ local: true, oidc: false });
-    expect(fetchMock.mock.calls[0][0]).toBe("/v1/auth/methods");
+  it("builds the OIDC sign-in route with the return path encoded", () => {
+    expect(ssoLoginURL("/stacks?selected=st_1")).toBe("/v1/auth/login?return_to=%2Fstacks%3Fselected%3Dst_1");
   });
 });
 

@@ -92,6 +92,8 @@ Requires Docker. No Go or Node toolchain.
 > into the application database, so tuples written before the move are not
 > carried over. Dex's database is created only when Postgres initializes an
 > empty volume, so on an old volume Dex cannot start, and the API waits on it.
+> Grants held by the old `root` local account do not carry over either: root
+> is now a Dex user.
 
 **1. Start everything.**
 
@@ -107,9 +109,10 @@ in the application database and resolves the store and authorization model from
 the model in this repository at startup. Nothing has to be recorded between
 phases, and nothing has to be pasted into `.env`.
 
-**2. Open http://localhost:5173** and sign in as `root` with
-`OPENPLAN_ROOT_PASSWORD` from `.env.example`, or through Dex as
-`admin@openplan.local` / `admin-local-only`.
+**2. Open http://localhost:5173** and sign in through Dex as
+`admin@openplan.local` / `admin-local-only`. That user is root: the API grants
+the platform `root` relationship to its `sub` (`OPENPLAN_ROOT_SUBJECT`) at every
+boot.
 
 > [!IMPORTANT]
 > Use `localhost`, not `127.0.0.1`. The redirect URI is derived from a single

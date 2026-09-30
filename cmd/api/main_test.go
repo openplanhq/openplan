@@ -415,13 +415,10 @@ func TestRunWrapsWireServiceFailure(t *testing.T) {
 // Not parallel, because it redirects the global logger. Bound to port 0 so the
 // result no longer depends on what else is running on the machine.
 //
-// Configured local-only, with no IdP. This test is about migrations and
-// wiring, and it runs against defaultAPIDependencies -- so while OIDC was
-// mandatory it also had to reach a live provider's discovery document, and
-// failed with "token verifier unavailable" on any machine where that provider
-// was absent, misconfigured, or simply a different realm. Nothing it asserts
-// needed an IdP; it needed one only because the configuration would not load
-// without it.
+// The verifier is stubbed. This test is about migrations and wiring, and it
+// runs against defaultAPIDependencies, whose verifier fetches a live
+// provider's discovery document -- which would fail it on any machine where
+// that provider is absent. Nothing it asserts needs an IdP.
 func TestRunMigratesRealPostgresWhenDSNIsSet(t *testing.T) {
 	dsn := os.Getenv("OPENPLAN_POSTGRES_TEST_DSN")
 	if dsn == "" {
@@ -436,7 +433,7 @@ func TestRunMigratesRealPostgresWhenDSNIsSet(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	values := localOnlyAPIValues()
+	values := apiTestValues()
 	values["DATABASE_URL"] = dsn
 	values["HTTP_ADDRESS"] = "127.0.0.1:0"
 
@@ -446,6 +443,9 @@ func TestRunMigratesRealPostgresWhenDSNIsSet(t *testing.T) {
 	// neither of which it asserts anything about. Everything it does assert,
 	// migrations and wiring, still runs against the real Postgres.
 	deps := defaultAPIDependencies()
+	deps.newVerifier = func(context.Context, authn.OIDCVerifierConfig) (tokenVerifier, error) {
+		return testTokenVerifier{}, nil
+	}
 	deps.newAuthorization = func(ctx context.Context, _ postgresPool, storeName string) (*authorization.Authorization, error) {
 		return authorization.NewWithDatastore(ctx, memory.New(), storeName)
 	}
@@ -556,7 +556,7 @@ func apiTestValues() map[string]string {
 		"OIDC_CLIENT_ID":                 "openplan-api",
 		"OIDC_CLIENT_SECRET":             "oidc-client-secret",
 		"SESSION_ENCRYPTION_KEY":         "01234567890123456789012345678901",
-		"OPENPLAN_ROOT_PASSWORD":         "root-local-only",
+		"OPENPLAN_ROOT_SUBJECT":          "root-subject",
 	}
 }
 
@@ -748,13 +748,7 @@ func (pool *recordingPostgresPool) Close() {
 	pool.closed = true
 }
 
-type recordingStore struct {
-	// Local account state, so root seeding can be asserted on. Seeding both
-	// reads and writes, so the read has to see what a previous write left.
-	accounts         map[string]authn.LocalAccount
-	ensuredAccounts  []authn.LocalAccount
-	ensureAccountErr error
-}
+type recordingStore struct{}
 
 func (recordingStore) CreateStack(context.Context, domain.Stack) error {
 	return nil
@@ -962,43 +956,6 @@ func (store *recordingStore) Enqueue(context.Context, ...queue.Request) error { 
 
 func (store *recordingStore) ListByActor(context.Context, string, string, int) ([]queue.Status, error) {
 	return nil, nil
-}
-
-// LocalAccountByUsername, LocalAccountBySubject and EnsureLocalAccount make
-// recordingStore satisfy authn.LocalAccountStore and bootstrap.Accounts, both
-// of which runWithDependencies asserts for. They keep real state rather than
-// returning fixed answers, because root seeding writes an account and the
-// sign-in tests then read it back.
-func (store *recordingStore) LocalAccountByUsername(_ context.Context, username string) (authn.LocalAccount, error) {
-	account, ok := store.accounts[username]
-	if !ok {
-		return authn.LocalAccount{}, authn.ErrLocalAccountNotFound
-	}
-	return account, nil
-}
-
-func (store *recordingStore) LocalAccountBySubject(_ context.Context, subject string) (authn.LocalAccount, error) {
-	for _, account := range store.accounts {
-		if account.Subject == subject {
-			return account, nil
-		}
-	}
-	return authn.LocalAccount{}, authn.ErrLocalAccountNotFound
-}
-
-func (store *recordingStore) EnsureLocalAccount(_ context.Context, account authn.LocalAccount, _ time.Time) (bool, error) {
-	if store.ensureAccountErr != nil {
-		return false, store.ensureAccountErr
-	}
-	if _, exists := store.accounts[account.Username]; exists {
-		return false, nil
-	}
-	if store.accounts == nil {
-		store.accounts = map[string]authn.LocalAccount{}
-	}
-	store.accounts[account.Username] = account
-	store.ensuredAccounts = append(store.ensuredAccounts, account)
-	return true, nil
 }
 
 // Control plane store surface: the queue loop's backend and the status write.

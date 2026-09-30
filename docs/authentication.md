@@ -7,10 +7,10 @@ trust model and authorization invariants remain in the
 
 ## Identity Provider
 
-openplan works with any compliant OIDC provider named by `OIDC_ISSUER_URL`.
-With no issuer configured, the API serves local accounts only. openplan
-provisions nothing on the provider: a deployment registers one confidential
-client itself.
+openplan works with any compliant OIDC provider named by `OIDC_ISSUER_URL`, and
+the provider is the only way in: openplan holds no passwords and checks no
+credential of its own. It provisions nothing on the provider either; a
+deployment registers one confidential client itself.
 
 The client's one redirect URI is derived, never configured separately:
 
@@ -28,7 +28,9 @@ Compose runs [Dex](https://dexidp.io) v2.45.1 at `http://dex.localhost:5556/dex`
 configured by `deploy/dex/config.yaml` and stored in its own `dex` database on
 the shared Postgres server. It registers the `openplan-api` client with the
 same `OIDC_CLIENT_SECRET` the API reads, and one static password user,
-`admin@openplan.local` / `admin-local-only`.
+`admin@openplan.local` / `admin-local-only`, who is root (see "Root" below).
+Local users are Dex's password DB; add more to `staticPasswords` in the config,
+or through Dex's gRPC API, which takes a bcrypt hash and never plaintext.
 
 `dex.localhost` resolves to loopback in the browser and to the Dex container
 through its Compose network alias, so one issuer string satisfies both — the
@@ -60,6 +62,36 @@ Global roles are relationships on the OpenFGA `platform` singleton, not IdP
 claims. Nothing in an ID token grants authority; see "OpenFGA Stack
 Authorization" below.
 
+### Root
+
+A fresh install has no administrator, and granting admin requires already
+being one. The API breaks that loop at every boot: before it serves, it writes
+the `{user:<OPENPLAN_ROOT_SUBJECT>, root, platform:openplan}` tuple if it is
+absent, and refuses to start if it cannot.
+
+Root is an identity-provider user plus that tuple, nothing more. openplan holds
+no credential for it; whoever the provider signs in with that `sub` is root.
+It is keyed on `sub`, never on email: an upstream connector can assert any
+address, whereas Dex's `sub` includes the connector, so a GitHub user who
+shares an address with the static entry cannot claim root. On the local stack
+the value is the sub of `admin@openplan.local`, and
+`scripts/verify-auth-compose.mjs` derives it from `deploy/dex/config.yaml` so
+the two cannot drift.
+
+Seeding is add-only. Changing `OPENPLAN_ROOT_SUBJECT` adds a root and leaves the
+previous one standing, and `root` is outside the grantable set, so the grant
+API cannot remove it either. Recovering a lost root password is a change to the
+provider's user, not to openplan's database.
+
+The API does not check with the provider that the subject exists. It does not
+talk to Dex's admin API, and a wrong subject shows up at once as a root who
+gets `403` everywhere.
+
+`OPENPLAN_ROOT_PASSWORD` and `OPENPLAN_ROOT_USERNAME` are retired along with the
+local accounts they seeded. Setting either is a startup error rather than being
+ignored: a root password left in an environment would be a secret that
+protects nothing while looking as if it does.
+
 ## API Runtime Security Configuration
 
 The API validates its authentication and authorization configuration before it
@@ -70,13 +102,14 @@ connects to Postgres or Temporal or starts its HTTP listener.
 | `OPENPLAN_ENVIRONMENT` | No | Optional runtime mode; empty defaults to `development`; valid values are `development` and `production` |
 | `OPENPLAN_TENANT_ID` | No | Required single configured tenant identifier |
 | `VITE_OPENPLAN_TENANT_ID` | No | Frontend build-time tenant context; must exactly match `OPENPLAN_TENANT_ID`; local development falls back to `tenant_123` |
-| `OIDC_ISSUER_URL` | No | Exact OIDC issuer URL; any compliant provider |
+| `OIDC_ISSUER_URL` | No | Required exact OIDC issuer URL; any compliant provider |
 | `OIDC_CLIENT_ID` | No | Required OAuth client ID; also the ID token audience the verifier checks against |
 | `OIDC_CLIENT_SECRET` | Yes | Required; the API is a confidential client and authenticates as one when it exchanges a code |
 | `OPENPLAN_PUBLIC_URL` | No | Required; the origin the browser reaches. The API derives its own OIDC redirect URI (`<OPENPLAN_PUBLIC_URL>/v1/auth/callback`) and post-logout redirect URI from it — never from `Host` or `X-Forwarded-Proto`, which an attacker can set |
 | `SESSION_ENCRYPTION_KEY` | Yes | Required 32-byte key (raw, base64, or hex) that seals the short-lived login transaction cookie (`state`, `nonce`, PKCE verifier, `return_to`) and encrypts each session row's stored ID token at rest |
 | `OPENPLAN_SESSION_ABSOLUTE_TTL` | No | Optional hard cap on a session from sign-in, never extended; defaults to `8h` |
 | `OPENPLAN_SESSION_IDLE_TTL` | No | Optional idle bound, sliding on activity; defaults to `1h`; must not exceed `OPENPLAN_SESSION_ABSOLUTE_TTL` |
+| `OPENPLAN_ROOT_SUBJECT` | No | Required OIDC `sub` of the bootstrap administrator; see "Root" above |
 | `OPENFGA_STORE_NAME` | No | Optional name of the store the API adopts; defaults to `openplan` |
 
 `OPENPLAN_TENANT_ID` is the authoritative security boundary. Every authenticated
@@ -175,39 +208,20 @@ feeds an access decision. Handlers and application services obtain it with
 ## Browser Session
 
 The browser never speaks OIDC. Three API routes run the entire
-authorization-code flow on its behalf, plus one more the IdP calls directly,
-and two that belong to local sign-in rather than to any provider:
+authorization-code flow on its behalf, plus one more the IdP calls directly:
 
 | Route | Purpose |
 |---|---|
-| `GET /v1/auth/methods` | Unauthenticated; reports which ways in exist, so the sign-in screen renders the ones that do |
-| `POST /v1/auth/login` | Signs in against openplan's own account table and mints the same session row a federated sign-in would |
 | `GET /v1/auth/login` | Starts the OIDC flow: generates `state`, `nonce`, and a PKCE verifier, seals them into the transaction cookie, and redirects to the IdP |
 | `GET /v1/auth/callback` | Redeems the code on the back channel, verifies the resulting ID token, creates a session row, and hands the browser the session cookie |
 | `POST /v1/auth/logout` | Revokes the session row, clears the session cookie, and redirects to the IdP's RP-initiated logout where there is one |
 | `POST /v1/auth/backchannel-logout` | Unauthenticated; ends sessions on the IdP's own instruction — see "Back-Channel Logout" below |
 
-The two sign-in routes share a method and differ by verb, because they are the
-same operation by different means and end in the same place: a session row and
-the opaque cookie that names it. Nothing downstream can tell which was used.
-Only `GET /v1/auth/login` and the callback need a provider, so an install with
-no `OIDC_ISSUER_URL` simply does not register them; logout registers either
-way, since ending a session is not an OIDC operation.
-
-`POST /v1/auth/login` is the one authenticated-by-credentials route in the API,
-and it is the only one with no transaction behind it, so it carries its own
-CSRF defence: the body must be declared `application/json`, and `Sec-Fetch-Site`
-or `Origin` must say the request came from this origin. Neither header present
-is a non-browser caller — curl, a script — which carries nobody's ambient
-cookies. Without those checks a cross-site form posting `text/plain` decodes as
-JSON and silently signs the visitor into an attacker's account.
-
 The sign-in screen itself is a client route, `/signin`, not a server-rendered
-page. It reads `/v1/auth/methods`, always renders the password form — root is a
-local account and cannot be locked out, so there is always something to sign in
-with — and shows an SSO button beside it only where a provider is configured.
-Choosing between them is the person's decision; sending the browser straight to
-the IdP would have made it the client's.
+page. It is one "Sign in" button that navigates to `GET /v1/auth/login`; every
+credential prompt is the provider's. It is a button rather than an automatic
+redirect so that a lost session lands on a page the user chooses to leave,
+instead of spending a trip to the provider on every bounce.
 
 `GET /v1/auth/login` takes a `return_to` query parameter, the one place the flow
 accepts untrusted input, and `authn.SafeReturnTo` reduces it to a same-origin
@@ -218,8 +232,8 @@ of them is a trap — `return_to=/v1/auth/login` would make the callback restart
 the login it has just finished, and with an SSO session standing the browser
 loops until it gives up. The SPA's own loop guard cannot catch that, because
 server-side redirects never load a page for it to count. `/signin` carries the
-same parameter and applies the same rule to it in the client, because a
-password sign-in navigates to it without the server ever seeing it.
+same parameter and applies the same rule to it in the client before handing
+it on, so neither side has to trust the other to have done it.
 
 Two cookies carry the interactive flow:
 

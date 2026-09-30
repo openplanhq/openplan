@@ -1,0 +1,15 @@
+-- openplan holds no credentials. Every sign-in goes through the identity
+-- provider (Dex on the local stack), which keeps its own password store, and
+-- root is an identity-provider user named by OPENPLAN_ROOT_SUBJECT plus an
+-- OpenFGA tuple. See docs/superpowers/specs/2026-09-30-dex-adoption-design.md.
+--
+-- 0020 created this table and stays as written: migrations are append-only.
+-- Its rows are not carried anywhere. They are argon2id hashes for accounts
+-- that can no longer sign in, and a table of password hashes nothing reads is
+-- a liability rather than a record.
+--
+-- The users projection rows and root tuple those accounts left behind (sub
+-- local_root) are orphans after this, not dangling references: nothing joins
+-- to local_accounts. openplan is pre-production, and the local stack is reset
+-- with `docker compose down -v` rather than migrated in place.
+drop table local_accounts;

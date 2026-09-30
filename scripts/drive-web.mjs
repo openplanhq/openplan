@@ -3,23 +3,23 @@
  * Drive the openplan web app through a real OIDC login in headless Chrome,
  * so auth-gated screens can be inspected without a human taking screenshots.
  *
- * Why this exists: every screen except /styleguide sits behind OidcAuthProvider,
- * which always performs a real OIDC redirect — there is no dev bypass, and the
- * VITE_OPENPLAN_MOCK_USER_ROLE flag mentioned in .env.example is stale. Deep links
- * such as /stacks/<id>/access re-enter the OIDC flow and land back on /stacks,
- * so navigation is done by clicking through the SPA rather than by URL.
+ * Why this exists: every screen except /styleguide needs a session, and the
+ * only way to one is the identity provider (Dex on the local stack) — there is
+ * no dev bypass. The driver clicks the app's "Sign in" button, fills Dex's
+ * password form, and then navigates by clicking through the SPA.
  *
  * Setup:
- *   cd web && npm run dev                       # must be port 5173: the
+ *   cd web && npm run dev                       # must be localhost:5173: the
  *                                               # OIDC client only registers
- *                                               # 5173 as a redirect_uri
+ *                                               # that as a redirect_uri
  *   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
  *     --headless=new --disable-gpu --remote-debugging-port=9222 \
  *     --user-data-dir=/tmp/openplan-chrome --window-size=1512,950 about:blank &
  *
- * Credentials come from the environment; nothing is hardcoded:
- *   export OPENPLAN_USER=<identity provider username>
- *   export OPENPLAN_PASS=<identity provider password>
+ * Credentials come from the environment; nothing is hardcoded. On the local
+ * stack, root is Dex's static user from deploy/dex/config.yaml:
+ *   export OPENPLAN_USER=admin@openplan.local
+ *   export OPENPLAN_PASS=<its password, in docs/authentication.md>
  *
  * Usage:
  *   node scripts/drive-web.mjs --shot out.png --click "dev" --click "Access"
@@ -86,14 +86,23 @@ const settle = (ms) => new Promise((r) => setTimeout(r, ms));
 await new Promise((r) => ws.addEventListener("open", r));
 await send("Page.enable");
 await send("Runtime.enable");
-await send("Page.navigate", { url: "http://127.0.0.1:5173/stacks" });
+// localhost, not 127.0.0.1: the transaction cookie is set on the origin that
+// starts sign-in, and the provider sends the browser back to localhost.
+await send("Page.navigate", { url: "http://localhost:5173/stacks" });
 await settle(6000);
 
-// The IdP's login page is server-rendered, so setting .value and submitting the
+// Signed out, the app lands on its sign-in screen: one button that leaves for
+// the provider.
+if (await evaluate("!!document.querySelector('[data-testid=signin-submit]')")) {
+  await evaluate("document.querySelector('[data-testid=signin-submit]').click()");
+  await settle(4000);
+}
+
+// Dex's login page is server-rendered, so setting .value and submitting the
 // form is enough — no React synthetic-event plumbing needed.
-if (await evaluate("!!document.querySelector('#username')")) {
+if (await evaluate("!!document.querySelector('#login')")) {
   await evaluate(`(() => {
-    const u = document.querySelector('#username'), p = document.querySelector('#password');
+    const u = document.querySelector('#login'), p = document.querySelector('#password');
     const set = (el, v) => {
       Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set.call(el, v);
       el.dispatchEvent(new Event('input', { bubbles: true }));

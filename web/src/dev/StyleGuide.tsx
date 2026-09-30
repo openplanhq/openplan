@@ -442,8 +442,8 @@ export default function StyleGuide() {
                 <tbody>
                   {[
                     { number: 3, operation: "apply", status: "waiting_approval", actor: "a.really-long-username@example.com" },
-                    { number: 2, operation: "plan", status: "completed", actor: "local_root" },
-                    { number: 1, operation: "plan", status: "failed", actor: "local_root" }
+                    { number: 2, operation: "plan", status: "completed", actor: "admin@openplan.local" },
+                    { number: 1, operation: "plan", status: "failed", actor: "admin@openplan.local" }
                   ].map((row) => (
                     <tr key={row.number}>
                       <td>

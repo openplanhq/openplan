@@ -110,6 +110,30 @@ assert.ok(
   "Dex must register the redirect URI the API derives from OPENPLAN_PUBLIC_URL",
 );
 
+// Root is a Dex user plus a tuple the API seeds for OPENPLAN_ROOT_SUBJECT. Dex
+// derives the sub from the static password's userID and the "local"
+// connector, so a changed userID would leave the tuple on a sub nobody can sign
+// in as and the install with no administrator. Derive it the way Dex does
+// (server/oauth2.go genSubject: base64url of protobuf {1: user_id, 2: conn_id})
+// and hold the configured value to it.
+function protobufString(field, value) {
+  const bytes = Buffer.from(value, "utf8");
+  assert.ok(bytes.length < 128, "a one-byte length prefix is all this encoder writes");
+  return Buffer.concat([Buffer.from([(field << 3) | 2, bytes.length]), bytes]);
+}
+const staticUserIDs = [...dexConfig.matchAll(/^\s+userID: (\S+)$/gm)].map((match) => match[1]);
+assert.equal(staticUserIDs.length, 1, "deploy/dex/config.yaml must hold exactly one static password user");
+const rootSubject = Buffer.concat([protobufString(1, staticUserIDs[0]), protobufString(2, "local")]).toString("base64url");
+assert.equal(envValue("OPENPLAN_ROOT_SUBJECT"), rootSubject, "OPENPLAN_ROOT_SUBJECT must be the Dex sub of the static root user");
+assert.equal(api.environment?.OPENPLAN_ROOT_SUBJECT, rootSubject, "the api's OPENPLAN_ROOT_SUBJECT default must match .env.example");
+
+// openplan holds no passwords. The API refuses these at startup, so one left in
+// Compose or .env.example would restart-loop the stack.
+for (const retired of ["OPENPLAN_ROOT_PASSWORD", "OPENPLAN_ROOT_USERNAME"]) {
+  assert.ok(!source.includes(retired), `${retired} is retired; docker-compose.yaml must not set it`);
+  assert.ok(!envExample.includes(retired), `${retired} is retired; .env.example must not set it`);
+}
+
 // OpenFGA is embedded in the API. A service, a provisioner, or a required
 // store or model identifier coming back would reintroduce the two-phase
 // startup the single Compose file exists to remove.

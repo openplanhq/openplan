@@ -161,11 +161,10 @@ services:
       # How long one Terraform command may run. The control plane owns it: it
       # is what tells Temporal when to give up on an executor.
       OPENPLAN_TERRAFORM_TIMEOUT: ${OPENPLAN_TERRAFORM_TIMEOUT:-45m}
-      # Seeds the bootstrap administrator on first boot. Required by the API --
-      # without it the process exits at startup and the service restart-loops.
-      # Defaulted here because this file is the local stack; a real deployment
-      # sets it from the environment like every other secret.
-      OPENPLAN_ROOT_PASSWORD: ${OPENPLAN_ROOT_PASSWORD:-root-local-only}
+      # The Dex user root is granted to: the sub of admin@openplan.local in
+      # deploy/dex/config.yaml. Required by the API -- without it the process
+      # exits at startup and the service restart-loops.
+      OPENPLAN_ROOT_SUBJECT: ${OPENPLAN_ROOT_SUBJECT:-CiQ3YzRiMmYwZS0zZDFhLTRlOGItOWY2Yy0yYTVkOGUxYjBjNDcSBWxvY2Fs}
     restart: on-failure
     ports:
       - "8081:8081"

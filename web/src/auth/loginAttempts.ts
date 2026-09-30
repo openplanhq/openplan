@@ -5,11 +5,10 @@
 // the session cookie is a 43-character opaque reference, not a token, so it
 // cannot run into a size limit. Blocking reports no error to script.
 //
-// Only a completed authentication counts: a 204 from the password form, or the
-// trip to the IdP that an SSO button starts. Merely landing on the sign-in
-// screen is not an attempt — with a password form the visitor lands there
-// whenever they are not signed in, and counting that would end in blaming
-// cookies for someone who has simply not typed a password yet.
+// Only a trip to the identity provider counts, started by the sign-in button.
+// Merely landing on the sign-in screen is not an attempt — the visitor lands
+// there whenever they are not signed in, and counting that would end in
+// blaming cookies for someone who has simply not signed in yet.
 //
 // An in-memory guard cannot see this: every redirect reloads the page and
 // resets it, so it stops one bounce and not a loop. sessionStorage survives
@@ -19,8 +18,8 @@
 const storageKey = "openplan.auth.loginAttempts";
 
 // Sign-ins allowed before we stop and explain. Enough to absorb an expiry
-// racing a page load, few enough that the user is not made to retype a
-// password that was never going to stick.
+// racing a page load, few enough that the user is not sent round a loop that
+// was never going to end.
 export const maxLoginAttempts = 3;
 
 // Used when sessionStorage is unavailable — Safari private browsing throws on
@@ -29,7 +28,7 @@ export const maxLoginAttempts = 3;
 // than breaking sign-in outright.
 let inMemoryAttempts = 0;
 
-// One page load can complete at most one sign-in, and a double-submitted form
+// One page load can start at most one sign-in, and a double-clicked button
 // must not spend two of the allowance. Only the first record per page load
 // counts.
 let recordedThisPageLoad = false;

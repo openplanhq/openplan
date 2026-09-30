@@ -1,56 +1,25 @@
 // @vitest-environment jsdom
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiRequestError } from "../api/client";
 import SignInScreen, { safeReturnTo } from "./SignInScreen";
 import { clearLoginAttempts, maxLoginAttempts } from "./loginAttempts";
-
-vi.mock("../api/client", async () => {
-  const actual = await vi.importActual<typeof import("../api/client")>("../api/client");
-  return {
-    ...actual,
-    authMethods: vi.fn(),
-    signInWithPassword: vi.fn()
-  };
-});
-
-const { authMethods, signInWithPassword } = await import("../api/client");
-const authMethodsMock = vi.mocked(authMethods);
-const signInMock = vi.mocked(signInWithPassword);
 
 const attemptsKey = "openplan.auth.loginAttempts";
 const assign = vi.fn();
 const reload = vi.fn();
 
-function testQueryClient(): QueryClient {
-  return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-}
-
 function renderSignIn(url = "/signin") {
   return render(
-    <QueryClientProvider client={testQueryClient()}>
-      <MemoryRouter initialEntries={[url]}>
-        <SignInScreen />
-      </MemoryRouter>
-    </QueryClientProvider>
+    <MemoryRouter initialEntries={[url]}>
+      <SignInScreen />
+    </MemoryRouter>
   );
-}
-
-async function signIn(username = "root", password = "hunter2") {
-  const user = userEvent.setup();
-  await user.type(screen.getByLabelText("Username"), username);
-  await user.type(screen.getByLabelText("Password"), password);
-  await user.click(screen.getByRole("button", { name: /sign in/i }));
-  return user;
 }
 
 beforeEach(() => {
   vi.stubGlobal("location", { assign, reload, pathname: "/signin", search: "" });
-  authMethodsMock.mockResolvedValue({ local: true, oidc: false });
-  signInMock.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -99,115 +68,60 @@ describe("safeReturnTo", () => {
 });
 
 describe("SignInScreen", () => {
-  // The password form is the one method that always exists -- root is a local
-  // account and cannot be locked out -- so it must not wait on a request to
-  // decide whether to render.
-  it("renders the password form before /v1/auth/methods answers", () => {
-    authMethodsMock.mockReturnValue(new Promise(() => {}));
+  // The identity provider is the only way in, so the screen asks for nothing:
+  // no username, no password, and no request to find out which ways in exist.
+  it("offers one sign-in button and no credential fields", () => {
     renderSignIn();
 
-    expect(screen.getByLabelText("Username")).toBeTruthy();
-    expect(screen.getByLabelText("Password")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /sign in/i })).toBeTruthy();
+    expect(screen.queryByLabelText("Username")).toBeNull();
+    expect(screen.queryByLabelText("Password")).toBeNull();
   });
 
-  it("signs in and lands on the requested page", async () => {
+  // Sign-in leaves the SPA for the provider, carrying where to land afterwards.
+  // A full navigation, never fetch: the route redirects to the provider's
+  // origin, where an XHR dies on CORS.
+  it("starts the OIDC flow with a full navigation to the requested page", async () => {
     renderSignIn("/signin?return_to=%2Fstacks%3Fselected%3Dst_1");
-    await signIn();
 
-    await waitFor(() => {
-      expect(signInMock).toHaveBeenCalledWith("root", "hunter2");
-    });
-    expect(assign).toHaveBeenCalledWith("/stacks?selected=st_1");
+    await userEvent.setup().click(screen.getByRole("button", { name: /sign in/i }));
+
+    expect(assign).toHaveBeenCalledWith("/v1/auth/login?return_to=%2Fstacks%3Fselected%3Dst_1");
   });
 
-  // An accepted sign-in is what the loop guard counts: if the cookie does not
-  // survive the navigation above, this is the record that proves it.
-  it("records the accepted sign-in", async () => {
-    renderSignIn();
-    await signIn();
+  it("refuses an unsafe return_to on the way out", async () => {
+    renderSignIn("/signin?return_to=%2F%2Fevil.test");
 
-    await waitFor(() => {
-      expect(sessionStorage.getItem(attemptsKey)).toBe("1");
-    });
+    await userEvent.setup().click(screen.getByRole("button", { name: /sign in/i }));
+
+    expect(assign).toHaveBeenCalledWith("/v1/auth/login?return_to=%2F");
   });
 
-  it("reports a rejected password without navigating or spending an attempt", async () => {
-    signInMock.mockRejectedValue(new ApiRequestError(401, "unauthorized", "authentication failed"));
+  // A trip to the provider is what the loop guard counts: if the cookie does
+  // not survive the round trip, this is the record that proves it.
+  it("records the sign-in attempt", async () => {
     renderSignIn();
-    await signIn();
 
-    expect((await screen.findByTestId("signin-error")).textContent).toContain(
-      "Incorrect username or password"
-    );
-    expect(assign).not.toHaveBeenCalled();
-    expect(sessionStorage.getItem(attemptsKey)).toBeNull();
-  });
+    await userEvent.setup().click(screen.getByRole("button", { name: /sign in/i }));
 
-  // A wrong password leaves the form usable. Reloading or clearing it would
-  // make the second try start from an empty username.
-  it("keeps what was typed after a rejection", async () => {
-    signInMock.mockRejectedValue(new ApiRequestError(401, "unauthorized", "authentication failed"));
-    renderSignIn();
-    await signIn();
-
-    await screen.findByTestId("signin-error");
-    expect(screen.getByLabelText<HTMLInputElement>("Username").value).toBe("root");
-  });
-
-  // An outage is not a credential decision, and telling the user their password
-  // is wrong would have them retyping a correct one until the store comes back.
-  it("distinguishes an outage from a wrong password", async () => {
-    signInMock.mockRejectedValue(new ApiRequestError(500, "internal_error", "internal error"));
-    renderSignIn();
-    await signIn();
-
-    expect((await screen.findByTestId("signin-error")).textContent).toContain(
-      "Sign-in is unavailable"
-    );
-  });
-
-  it("offers SSO only where a provider is configured", async () => {
-    renderSignIn();
-    await waitFor(() => {
-      expect(authMethodsMock).toHaveBeenCalled();
-    });
-    expect(screen.queryByTestId("signin-sso")).toBeNull();
-
-    cleanup();
-    authMethodsMock.mockResolvedValue({ local: true, oidc: true });
-    renderSignIn();
-    expect(await screen.findByTestId("signin-sso")).toBeTruthy();
-  });
-
-  // The SSO button leaves the SPA for the provider, carrying the same
-  // return_to the password path would have used.
-  it("starts the OIDC flow with a full navigation", async () => {
-    authMethodsMock.mockResolvedValue({ local: true, oidc: true });
-    renderSignIn("/signin?return_to=%2Fstacks");
-
-    const user = userEvent.setup();
-    await user.click(await screen.findByTestId("signin-sso"));
-
-    expect(assign).toHaveBeenCalledWith("/v1/auth/login?return_to=%2Fstacks");
     expect(sessionStorage.getItem(attemptsKey)).toBe("1");
   });
 
-  // Three accepted sign-ins that did not stick is a browser refusing the
-  // cookie, not a user who cannot type their password.
-  it("explains a blocked cookie once the attempts are spent", async () => {
+  // Three completed sign-ins that did not stick is a browser refusing the
+  // cookie, not a user who cannot sign in.
+  it("explains a blocked cookie once the attempts are spent", () => {
     sessionStorage.setItem(attemptsKey, String(maxLoginAttempts));
     renderSignIn();
 
     expect(screen.getByTestId("signin-cookies-blocked")).toBeTruthy();
-    expect(screen.queryByLabelText("Username")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^sign in$/i })).toBeNull();
   });
 
   it("clears the count and reloads when the user tries again", async () => {
     sessionStorage.setItem(attemptsKey, String(maxLoginAttempts));
     renderSignIn();
 
-    const user = userEvent.setup();
-    await user.click(screen.getByTestId("signin-cookies-retry"));
+    await userEvent.setup().click(screen.getByTestId("signin-cookies-retry"));
 
     expect(sessionStorage.getItem(attemptsKey)).toBeNull();
     expect(reload).toHaveBeenCalled();

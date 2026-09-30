@@ -125,14 +125,13 @@ func (server *Server) handleAuthCallback(response http.ResponseWriter, request *
 	http.Redirect(response, request, authn.SafeReturnTo(transaction.ReturnTo), http.StatusFound)
 }
 
-// establishSession is the tail every sign-in ends in, whichever method proved
-// the identity: project the user, mint the session row, hand the browser its
-// cookie. Both callers reach it, so a change to what a session carries cannot
-// land on one path and miss the other.
+// establishSession is the tail of a sign-in once the callback has verified the
+// identity: project the user, mint the session row, hand the browser its
+// cookie.
 //
 // identity supplies only the claim-bearing fields of the session — the caller
-// fills Subject, Name, PreferredUsername, Email, and, for an OIDC sign-in, the
-// IdP's session id and ID token. The lifetimes and the id hash are set here,
+// fills Subject, Name, PreferredUsername, Email, the IdP's session id and the
+// ID token. The lifetimes and the id hash are set here,
 // because they are openplan's to decide rather than the caller's.
 //
 // The projection happens before the session exists, so that a session row
@@ -218,12 +217,7 @@ func (server *Server) handleAuthLogout(response http.ResponseWriter, request *ht
 	http.SetCookie(response, authn.ClearedSessionCookie(server.auth.SecureCookies))
 
 	destination := server.auth.PublicURL + "/"
-	// Both halves are checked. A session carrying an ID token does not imply a
-	// Flow: the row outlives the configuration that created it, so an install
-	// that had OIDC removed still serves logout requests from sessions minted
-	// while it was on, and dereferencing the absent Flow there would panic on
-	// the one route that is supposed to work for every method.
-	if idTokenHint != "" && server.auth.Flow != nil {
+	if idTokenHint != "" {
 		if logoutURL := server.auth.Flow.EndSessionURL(idTokenHint, server.auth.PublicURL+"/"); logoutURL != "" {
 			destination = logoutURL
 		}

@@ -144,9 +144,9 @@ func mustSubject(objectType ObjectType, id string) Subject {
 //
 // Named for its original and still most common caller, a verified ID token's
 // "sub" claim, where the character rules matter most because that identifier
-// is the one openplan does not originate. Local accounts now reach it too, with
-// subs openplan does choose; the rules are the same either way, which is why
-// they are enforced here rather than at each caller.
+// is the one openplan does not originate. Root seeding reaches it too, with the
+// configured OPENPLAN_ROOT_SUBJECT; the rules are the same either way, which is
+// why they are enforced here rather than at each caller.
 //
 //	SubjectFromOIDCSub("00u1b2c3")      → Subject{"user:00u1b2c3"}, nil
 //	SubjectFromOIDCSub("kc-sub-123")    → Subject{"user:kc-sub-123"}, nil
