@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-29
 **Status:** Approved. Guard and testing sections reviewed with PR 1. PRs 1 to
-3 settled the details recorded below.
+4 settled the details recorded below.
 
 ## Problem
 
@@ -199,9 +199,9 @@ migrated and unmigrated screens side by side.
 | 1 | Tooling, theme, layer setup, token rename, Fontsource Geist, new guards, Preflight restorations; removes the page glows (`body::before`, and `body > *`, which only lifted content above them); adds the Button to `/styleguide`. No screen changes. | Button |
 | 2 | App shell (`AppShell`) and `src/shared/` components; deletes the unused `StatBand` and `IdsPanel` | Breadcrumb; Badge (status tones, roles); Collapsible (`LogSteps`) |
 | 3 | Standalone screens: sign-in, access denied, not found, service unavailable, route placeholder, and the two session-error screens | Card, Button, Alert, Input, Label; Empty for the route messages |
-| 4 | Stacks: list, create, detail shell, environment, credentials | Table; reuses Input, Label and Button |
+| 4 | Stacks: list, create, detail shell, environment, credentials | Table; Tabs for the stack's tab row (`RouteTabs`); reuses Card, Input, Label, Button, Alert and Empty |
 | 5 | Stack access | Combobox for the user search; Select for the role picker |
-| 6 | Stack templates: list, detail shell and its four tabs, config panel, variable fields, add, upgrade | Tabs tied to the route, so each tab keeps its URL; Select; Textarea |
+| 6 | Stack templates: list, detail shell and its four tabs, config panel, variable fields, add, upgrade | `RouteTabs` from PR 4 for the template's tabs, so each tab keeps its URL; Select; Textarea |
 | 7 | Template registry: registry, registration, detail | Table, Card, Input |
 | 8 | Runs: detail, logs, history, actions, destroy panel | AlertDialog for the destroy confirmation; ScrollArea for logs |
 | 9 | Cleanup: delete `tokens.css`, `base.css`, `primitives.css`, `features.css`, the `legacy` layer, the old guards and the dead-CSS guard | none |
@@ -243,6 +243,41 @@ migrated and unmigrated screens side by side.
   `--width <px>` emulates a phone, touch included: headless Chrome won't
   size a window below 500px, so `--window-size` can't measure a 375px
   screen.
+
+**What PR 4 settled.**
+
+- Tabs arrived in PR 4, not PR 6: the stack shell has the same tab row as
+  the template shell. `src/shared/RouteTabs.tsx` renders shadcn's line
+  Tabs with each tab a `NavLink`, Base UI's "tabs as links". The caller
+  derives the active value from the pathname, the same match each
+  `NavLink` makes, so the selected tab is always the one marked
+  `aria-current`. PR 6 reuses it for the template's tabs, passing
+  `className="mb-0"` where the row sits beside the template's state.
+- On a coarse pointer each tab is `h-11` and the list `h-auto`. Both
+  override vendored heights because Tailwind 4.3 compiles `group-data-*`
+  inside `:where()`, so source order decides, and the `pointer-coarse`
+  media block comes later.
+- `table.tsx` applies `table-fixed` after the caller's `className`, since
+  `cn` would let a caller's `table-auto` replace it. Tables sit in
+  shadcn's bordered frame (`overflow-hidden rounded-lg border`). Cells with
+  user-chosen text use `truncate` and a `title`. A row's link fills its
+  cell (`block`, `pointer-coarse:py-3`), so the cell is the 44px target.
+- The table guard allows a raw `<table>` only in the files
+  `LEGACY_TABLES` lists (`TemplateRunHistory`, and the legacy specimen on
+  `/styleguide`), held to the old `.data-table` rules. The list can only
+  shrink; PR 8 empties it.
+- `CredentialsPanel` is shared with a template's Credentials tab, so that
+  tab's panel moved in PR 4. Its legacy `.stack-template-tab` wrapper moves
+  in PR 6.
+- An empty state inside a page is Empty with a `border` and a real `h2` in
+  EmptyTitle's look. PR 7's registry empty state can follow it and then
+  share one component.
+- The dead-CSS guard can't see a class whose name survives as a test ID
+  (`stacks-list`). Screen PRs check with `rg` after deleting.
+- `scripts/drive-web.mjs --respond <glob>=<json>` answers matching
+  requests with 200 and that body, and `--stall <glob>` never answers.
+  That is how PR 4 reached empty and loading states and long names. A
+  usage example in the script's header comment can't contain `*/`.
 
 `HeroGraphic` (the decorative shapes on error and empty-state screens) has no
 counterpart in the stock look. Each migrating screen drops it for a plain empty
@@ -303,9 +338,12 @@ PR 9.
 
 **Table guard** (rewrite of `tables.guard.test.ts`, lands with PR 4, the first
 Table migration)
-- No raw `<table` outside `src/components/ui/`.
-- Every `<Table>` has a `<colgroup>`.
-- `src/components/ui/table.tsx` is edited to always apply `table-fixed`. The
+- No raw `<table` outside `src/components/ui/`, except in the files
+  `LEGACY_TABLES` lists, which keep the legacy `.data-table` rules until PR 8
+  moves them.
+- Every `<Table>` opens with a `<colgroup>`.
+- `src/components/ui/table.tsx` is edited to always apply `table-fixed`, after
+  the caller's `className`, so `cn` can't let a `table-auto` replace it. The
   reason is unchanged: with automatic layout, a status changing from `queued`
   to `waiting_approval` shifts every column after it.
 
@@ -343,6 +381,9 @@ component that needed it.
 components respond to pointer events that `fireEvent.click` doesn't send.
 
 **New behaviour tests:**
+- PR 4, RouteTabs: Tab reaches only the active tab; ArrowLeft and ArrowRight
+  move focus without navigating; Enter follows the focused tab; on every stack
+  route the selected tab is the one its link marks `aria-current`.
 - PR 5, Combobox: the input has `role="combobox"` and `aria-expanded`; typing
   filters options with `role="option"`; ArrowDown and ArrowUp move the
   highlight; Enter selects; Escape closes and clears.
