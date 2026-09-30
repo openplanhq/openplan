@@ -12,7 +12,7 @@ describe("RoleBadge", () => {
     ["approver", "warning"],
     ["viewer", "muted"]
   ])("paints %s as the %s variant", (role, variant) => {
-    render(<RoleBadge role={role} />);
+    render(<RoleBadge stackRole={role} />);
     const badge = screen.getByText(role);
     expect(badge.getAttribute("data-variant")).toBe(variant);
     expect(badge.getAttribute("data-role")).toBe(role);
@@ -22,7 +22,7 @@ describe("RoleBadge", () => {
   // renders, named and neutral. A plain lookup object would resolve
   // "constructor" to Object.prototype.constructor.
   it.each(["auditor", "constructor"])("renders the unknown role %s as muted", (role) => {
-    render(<RoleBadge role={role} />);
+    render(<RoleBadge stackRole={role} />);
     expect(screen.getByText(role).getAttribute("data-variant")).toBe("muted");
   });
 });

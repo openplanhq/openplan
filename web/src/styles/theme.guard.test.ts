@@ -61,9 +61,6 @@ const TEXT_PAIRS: [string, string][] = [
   ["warning", "background"]
 ];
 
-// Badges set a colour's text on a 10% tint of itself.
-const TINTED = ["primary", "destructive", "success", "warning"];
-
 describe("theme.css", () => {
   const vars = rootVariables(theme());
   const colour = (name: string) => rgb(vars[name]);
@@ -82,11 +79,6 @@ describe("theme.css", () => {
 
   it.each(TEXT_PAIRS)("--%s on --%s meets 4.5:1", (fg, bg) => {
     expect(contrast(colour(fg), colour(bg))).toBeGreaterThanOrEqual(4.5);
-  });
-
-  it.each(TINTED)("--%s on its own 10%% tint meets 4.5:1", (name) => {
-    const surface = tint(colour(name), 0.1, colour("background"));
-    expect(contrast(colour(name), surface)).toBeGreaterThanOrEqual(4.5);
   });
 
   it("draws the focus ring at 3:1 or better", () => {
@@ -113,7 +105,8 @@ const variantIn = (source: string) => (name: string) =>
   source.match(new RegExp(`\\b${name}:\\s*"([^"]*)"`))?.[1] ?? "";
 
 function alpha(classes: string, utility: string): number {
-  const match = classes.match(new RegExp(`(?:^|\\s)${utility}/(\\d+)(?:\\s|$)`));
+  const escaped = utility.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = classes.match(new RegExp(`(?:^|\\s)${escaped}/(\\d+)(?:\\s|$)`));
   if (!match) throw new Error(`${utility}/<n> not found in "${classes}"`);
   return Number(match[1]) / 100;
 }
@@ -151,6 +144,12 @@ describe("Badge variants on theme.css", () => {
     expect(classes.split(/\s+/)).toContain(`text-${themeColour}`);
     const surface = tint(colour(themeColour), alpha(classes, `bg-${themeColour}`), colour("background"));
     expect(contrast(colour(themeColour), surface)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  // A badge rendered as a link fades on hover, as the default button does.
+  it("keeps the default badge's link hover at 4.5:1", () => {
+    const surface = tint(colour("primary"), alpha(variant("default"), "[a]:hover:bg-primary"), colour("background"));
+    expect(contrast(colour("primary-foreground"), surface)).toBeGreaterThanOrEqual(4.5);
   });
 
   // TEXT_PAIRS above already checks muted-foreground on muted.

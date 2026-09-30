@@ -1,9 +1,7 @@
 import type { ComponentProps } from "react";
-import { Badge } from "@/components/ui/badge";
+import { Badge, type BadgeVariant } from "@/components/ui/badge";
 import { statusGlyph } from "./statusTone";
 import type { StatusTone } from "./statusTone";
-
-type BadgeVariant = NonNullable<ComponentProps<typeof Badge>["variant"]>;
 
 // The tone table in docs/superpowers/specs/2026-09-29-shadcn-adoption-design.md.
 const VARIANTS: Record<StatusTone, BadgeVariant> = {

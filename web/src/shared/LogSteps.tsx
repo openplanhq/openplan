@@ -12,7 +12,7 @@ export function LogSteps({ children }: { children: ReactNode }) {
 interface LogStepProps {
   name: string;
   open: boolean;
-  onToggle: () => void;
+  onOpenChange: (open: boolean) => void;
   // Mounted only while the row is open, so a log fetched by a component
   // passed here is fetched only once someone opens it. Base UI unmounts a
   // closed panel.
@@ -21,9 +21,9 @@ interface LogStepProps {
 
 // The list clips to its rounded corners, which would cut off a focus ring drawn
 // outside these full-width rows, so the rings are drawn inside them.
-export function LogStep({ name, open, onToggle, children }: LogStepProps) {
+export function LogStep({ name, open, onOpenChange, children }: LogStepProps) {
   return (
-    <Collapsible open={open} onOpenChange={onToggle} render={<li />}>
+    <Collapsible open={open} onOpenChange={onOpenChange} render={<li />}>
       <CollapsibleTrigger className="group flex min-h-9 w-full items-center gap-2 px-4 text-left text-sm outline-none transition-colors hover:bg-muted focus-visible:inset-ring-2 focus-visible:inset-ring-ring pointer-coarse:min-h-11">
         <ChevronRight
           className="size-4 shrink-0 text-muted-foreground transition-transform group-aria-expanded:rotate-90"

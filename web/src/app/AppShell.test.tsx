@@ -136,12 +136,29 @@ describe("AppShell", () => {
     }
   });
 
-  // config.ts allows a 128-character tenant ID. It must wrap inside the header
-  // instead of pushing the page sideways on a phone.
-  it("lets a long tenant ID wrap", async () => {
+  // config.ts allows a 128-character tenant ID, and some IdPs make the email
+  // the display name. Each must wrap inside the header instead of pushing the
+  // page sideways on a phone.
+  it("lets a long tenant ID or display name wrap", async () => {
     await renderShell();
 
     expect(screen.getByTestId("shell-tenant-context").classList).toContain("wrap-anywhere");
+    expect(screen.getByTestId("identity-display-name").classList).toContain("wrap-anywhere");
+  });
+
+  // Tailwind's hover: applies only where the device can hover, but the legacy
+  // a:hover underline also matches a link just tapped on a touch screen.
+  it("keeps the header links undecorated on touch screens too", async () => {
+    await renderShell();
+
+    const links = [
+      screen.getByRole("link", { name: "Skip to content" }),
+      ...within(screen.getByRole("navigation", { name: "Primary" })).getAllByRole("link")
+    ];
+    for (const link of links) {
+      expect(link.classList).toContain("no-underline");
+      expect(link.classList).not.toContain("hover:no-underline");
+    }
   });
 });
 
@@ -151,11 +168,16 @@ describe("AppShell", () => {
 // features.css.
 describe("AppShell layering", () => {
   const read = (path: string) => readFileSync(join(dirname(fileURLToPath(import.meta.url)), path), "utf8");
+  const stripComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, "");
   const zIndexOf = (selector: string) =>
-    Number(read("../styles/features.css").match(new RegExp(`\\${selector} \\{[^}]*z-index: (\\d+);`))?.[1]);
+    Number(
+      stripComments(read("../styles/features.css")).match(new RegExp(`\\${selector} \\{[^}]*z-index: (\\d+);`))?.[1]
+    );
 
   it("keeps the sticky header below the legacy overlays", () => {
-    const header = Number(read("AppShell.tsx").match(/<header className="[^"]*\bz-(\d+)\b/)?.[1]);
+    // The bare z-N, not a variant's such as md:z-10.
+    const headerClasses = read("AppShell.tsx").match(/<header className="([^"]*)"/)?.[1] ?? "";
+    const header = Number(headerClasses.match(/(?:^|\s)z-(\d+)(?=\s|$)/)?.[1]);
 
     expect(header).toBeGreaterThan(0);
     expect(header).toBeLessThan(zIndexOf(".search-dropdown"));

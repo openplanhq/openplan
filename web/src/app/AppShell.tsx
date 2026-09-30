@@ -13,29 +13,22 @@ const isDebug = import.meta.env.DEV || import.meta.env.VITE_DEBUG === "true";
 
 // Until PR 9, base.css colours and underlines every bare <a> from the legacy
 // layer, and a rule on the element beats an inherited colour, so each link
-// sets its own.
+// sets its own. no-underline, not hover:no-underline: Tailwind applies hover:
+// only where the device can hover, but the legacy a:hover also matches a link
+// just tapped on a touch screen.
 const navLinkClass = cn(
   buttonVariants({ variant: "ghost", size: "sm" }),
-  "text-muted-foreground hover:no-underline pointer-coarse:h-11"
+  "text-muted-foreground no-underline pointer-coarse:h-11"
 );
 
 export default function AppShell() {
   const { me, logout, status } = useAuth();
-  const debugRows: [label: string, testId: string, value: string][] = [
-    ["Auth status", "debug-auth-status", status],
-    ["User sub", "debug-user-sub", me?.sub ?? "-"],
-    ["Display name", "debug-display-name", me?.displayName ?? "-"],
-    ["Tenant", "debug-tenant", tenantID],
-    ["isPlatformAdmin", "debug-is-platform-admin", me?.globalCapabilities.isPlatformAdmin.toString() ?? "-"],
-    ["canCreateStack", "debug-can-create-stack", me?.globalCapabilities.canCreateStack.toString() ?? "-"],
-    ["canPublishTemplate", "debug-can-publish-template", me?.globalCapabilities.canPublishTemplate.toString() ?? "-"]
-  ];
 
   return (
     <div className="min-h-screen">
       <a
         href="#main-content"
-        className="fixed top-2 left-2 z-50 -translate-y-16 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-transform hover:no-underline focus:translate-y-0"
+        className="fixed top-2 left-2 z-50 -translate-y-16 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground no-underline transition-transform focus:translate-y-0"
       >
         Skip to content
       </a>
@@ -54,11 +47,13 @@ export default function AppShell() {
           </nav>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-3 text-sm">
-          <div className="flex items-center gap-3 text-muted-foreground" data-testid="identity-menu">
+          <div className="flex min-w-0 items-center gap-3 text-muted-foreground" data-testid="identity-menu">
             {status === "loading" && <span data-testid="identity-loading">Loading...</span>}
             {me && (
               <>
-                <span data-testid="identity-display-name">{me.displayName}</span>
+                <span className="min-w-0 wrap-anywhere" data-testid="identity-display-name">
+                  {me.displayName}
+                </span>
                 <Button
                   variant="outline"
                   size="sm"
@@ -85,21 +80,36 @@ export default function AppShell() {
       <main className="mx-auto w-full max-w-7xl px-4 py-6" id="main-content" tabIndex={-1}>
         <Outlet />
       </main>
-      {isDebug && (
-        <details className="mx-4 my-8 border-t pt-4 font-mono text-xs md:mx-6" data-testid="debug-panel">
-          <summary className="cursor-pointer tracking-wide text-muted-foreground uppercase">IDs (debug)</summary>
-          <dl className="mt-4 grid gap-2">
-            {debugRows.map(([label, testId, value]) => (
-              <div key={testId} className="flex gap-4">
-                <dt className="w-36 shrink-0 text-muted-foreground">{label}</dt>
-                <dd className="min-w-0 wrap-anywhere" data-testid={testId}>
-                  {value}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </details>
-      )}
+      {isDebug && <DebugPanel />}
     </div>
+  );
+}
+
+function DebugPanel() {
+  const { me, status } = useAuth();
+  const rows: [label: string, testId: string, value: string][] = [
+    ["Auth status", "debug-auth-status", status],
+    ["User sub", "debug-user-sub", me?.sub ?? "-"],
+    ["Display name", "debug-display-name", me?.displayName ?? "-"],
+    ["Tenant", "debug-tenant", tenantID],
+    ["isPlatformAdmin", "debug-is-platform-admin", me?.globalCapabilities.isPlatformAdmin.toString() ?? "-"],
+    ["canCreateStack", "debug-can-create-stack", me?.globalCapabilities.canCreateStack.toString() ?? "-"],
+    ["canPublishTemplate", "debug-can-publish-template", me?.globalCapabilities.canPublishTemplate.toString() ?? "-"]
+  ];
+
+  return (
+    <details className="mx-4 my-8 border-t pt-4 font-mono text-xs md:mx-6" data-testid="debug-panel">
+      <summary className="cursor-pointer tracking-wide text-muted-foreground uppercase">IDs (debug)</summary>
+      <dl className="mt-4 grid gap-2">
+        {rows.map(([label, testId, value]) => (
+          <div key={testId} className="flex gap-4">
+            <dt className="w-36 shrink-0 text-muted-foreground">{label}</dt>
+            <dd className="min-w-0 wrap-anywhere" data-testid={testId}>
+              {value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </details>
   );
 }

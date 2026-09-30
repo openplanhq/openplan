@@ -23,7 +23,11 @@ export type Crumb = {
 //
 // Until PR 9, base.css styles bare a, a:hover and h1 from the legacy layer, and
 // a rule on the element beats a colour inherited from the list. So the links
-// and the h1 set their own colour, type and decoration.
+// and the h1 set their own colour, type and decoration (AppShell's navLinkClass
+// says why no-underline, not hover:no-underline).
+//
+// Any crumb can hold a long, user-chosen name. wrap-anywhere, unlike shadcn's
+// wrap-break-word, lets a crumb shrink below its longest word.
 export default function Breadcrumb({
   items,
   detail,
@@ -42,14 +46,14 @@ export default function Breadcrumb({
       aria-label="Breadcrumb"
       className={cn("mb-6 flex min-h-9 min-w-0 flex-wrap items-center gap-x-3 gap-y-1", className)}
     >
-      <BreadcrumbList>
+      <BreadcrumbList className="wrap-anywhere">
         {trail.map((crumb, index) => (
           <Fragment key={index}>
             <BreadcrumbItem>
               {crumb.to ? (
                 <BreadcrumbLink
                   render={<Link to={crumb.to} />}
-                  className="text-muted-foreground hover:no-underline"
+                  className="text-muted-foreground no-underline"
                   data-testid={crumb.testId}
                 >
                   {crumb.label}
@@ -65,7 +69,7 @@ export default function Breadcrumb({
           <h1
             aria-current="page"
             data-testid={current.testId}
-            className="font-sans text-sm font-normal tracking-normal text-foreground wrap-anywhere"
+            className="font-sans text-sm font-normal tracking-normal text-foreground"
           >
             {current.label}
           </h1>

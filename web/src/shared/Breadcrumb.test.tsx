@@ -20,7 +20,10 @@ describe("Breadcrumb", () => {
   it("links each ancestor and makes the current page the h1", () => {
     const nav = renderCrumbs([{ label: "Templates", to: "/templates" }, { label: "vpc" }], { detail: "acme/vpc · main" });
 
-    expect(within(nav).getByRole("link", { name: "Templates" }).getAttribute("href")).toBe("/templates");
+    const link = within(nav).getByRole("link", { name: "Templates" });
+    expect(link.getAttribute("href")).toBe("/templates");
+    // Not hover:no-underline, which misses a tap on a touch screen.
+    expect(link.classList).toContain("no-underline");
     const heading = within(nav).getByRole("heading", { level: 1 });
     expect(heading.textContent).toBe("vpc");
     expect(heading.getAttribute("aria-current")).toBe("page");
@@ -61,9 +64,13 @@ describe("Breadcrumb", () => {
     expect(nav.querySelector('[data-slot="breadcrumb-detail"]')?.textContent).toBe("acme/vpc · main");
   });
 
-  // Stack and template names are user-chosen and can be long.
-  it("lets a long page name wrap rather than widen the page", () => {
-    const nav = renderCrumbs([{ label: "a".repeat(120) }]);
-    expect(within(nav).getByRole("heading", { level: 1 }).classList).toContain("wrap-anywhere");
+  // Stack and template names are user-chosen and can be long, and one becomes
+  // an ancestor crumb once a page below it opens. wrap-break-word alone can't
+  // shrink a flex item below its longest word.
+  it("lets a long name wrap rather than widen the page, in any crumb", () => {
+    const nav = renderCrumbs([{ label: "a".repeat(120), to: "/stacks/s1" }, { label: "b".repeat(120) }]);
+    const list = nav.querySelector('[data-slot="breadcrumb-list"]');
+    expect(list?.classList).toContain("wrap-anywhere");
+    expect(list?.classList).not.toContain("wrap-break-word");
   });
 });

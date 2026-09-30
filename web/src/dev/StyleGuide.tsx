@@ -162,14 +162,14 @@ function WithRouter({ children }: { children: ReactNode }) {
 
 function LogStepsSpecimen() {
   const [open, setOpen] = useState<Record<string, boolean>>({ plan: true });
-  const toggle = (name: string) => setOpen((current) => ({ ...current, [name]: !current[name] }));
+  const setStep = (name: string) => (isOpen: boolean) => setOpen((current) => ({ ...current, [name]: isOpen }));
   return (
     <LogSteps>
-      <LogStep name="plan-init" open={open["plan-init"] ?? false} onToggle={() => toggle("plan-init")}>
+      <LogStep name="plan-init" open={open["plan-init"] ?? false} onOpenChange={setStep("plan-init")}>
         {`Initializing the backend...
 Successfully configured the backend "s3"!`}
       </LogStep>
-      <LogStep name="plan" open={open.plan ?? false} onToggle={() => toggle("plan")}>
+      <LogStep name="plan" open={open.plan ?? false} onOpenChange={setStep("plan")}>
         {`Initializing the backend...
 Terraform v1.9.5 on darwin_arm64
 Plan: 3 to add, 1 to change, 0 to destroy.
@@ -272,7 +272,7 @@ export default function StyleGuide() {
             </Specimen>
             <Specimen label="RoleBadge" hint="real component">
               {ROLES.map((role) => (
-                <RoleBadge key={role} role={role} />
+                <RoleBadge key={role} stackRole={role} />
               ))}
             </Specimen>
             <Specimen label="Breadcrumb" hint="real component" stack>

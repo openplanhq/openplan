@@ -16,7 +16,7 @@ function Steps({ initiallyOpen = {} }: { initiallyOpen?: Record<string, boolean>
           key={name}
           name={name}
           open={open[name] ?? false}
-          onToggle={() => setOpen((current) => ({ ...current, [name]: !current[name] }))}
+          onOpenChange={(isOpen) => setOpen((current) => ({ ...current, [name]: isOpen }))}
         >
           {`${name} log body`}
         </LogStep>
@@ -50,7 +50,7 @@ describe("LogSteps", () => {
       const [open, setOpen] = useState(false);
       return (
         <LogSteps>
-          <LogStep name="apply" open={open} onToggle={() => setOpen(!open)}>
+          <LogStep name="apply" open={open} onOpenChange={setOpen}>
             <Log />
           </LogStep>
         </LogSteps>
@@ -64,6 +64,22 @@ describe("LogSteps", () => {
     expect(screen.getByText("apply log body")).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "apply" }));
     expect(screen.queryByText("apply log body")).toBeNull();
+  });
+
+  // Base UI can open a panel without a click (hiddenUntilFound opens it for
+  // find-in-page), so the row reports the state asked for, not a toggle.
+  it("reports the open state the row asks for", async () => {
+    const onOpenChange = vi.fn();
+    render(
+      <LogSteps>
+        <LogStep name="apply" open={true} onOpenChange={onOpenChange}>
+          apply log body
+        </LogStep>
+      </LogSteps>
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "apply" }));
+    expect(onOpenChange.mock.calls.map(([open]) => open)).toEqual([false]);
   });
 
   it("opens one row without touching the others", async () => {
