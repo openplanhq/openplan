@@ -39,10 +39,24 @@ export default function CredentialsPanel({ title, subtitle, credentials, loading
       return;
     }
     setError("");
+    const sentName = name;
+    const sentValue = value;
     try {
       await onCreate(name.trim(), value);
-      setName("");
-      setValue("");
+      // The fields stay editable while the request is out. Clear only what
+      // still holds what was sent, so the next credential, half typed, stays.
+      setName((current) => (current === sentName ? "" : current));
+      setValue((current) => (current === sentValue ? "" : current));
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Request failed");
+    }
+  }
+
+  /** Deletes one credential, and says why in the same Alert when that fails. */
+  async function remove(id: string) {
+    setError("");
+    try {
+      await onDelete(id);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Request failed");
     }
@@ -102,7 +116,7 @@ export default function CredentialsPanel({ title, subtitle, credentials, loading
                         size="icon"
                         className="pointer-coarse:size-11"
                         disabled={busy}
-                        onClick={() => void onDelete(credential.id)}
+                        onClick={() => void remove(credential.id)}
                         aria-label={`Delete ${credential.name}`}
                       >
                         <Trash2 aria-hidden="true" />

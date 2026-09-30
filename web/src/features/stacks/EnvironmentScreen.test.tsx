@@ -143,7 +143,11 @@ describe("EnvironmentScreen", () => {
   it("masks the secret, and clears both fields once the credential is added", async () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(credential, 201));
+    // A fresh Response per call: the POST, then the list refetch it triggers.
+    // A body can be read only once.
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) =>
+      init?.method === "POST" ? jsonResponse(credential, 201) : jsonResponse([credential])
+    );
     renderScreen(queryClient);
     const user = userEvent.setup();
 
@@ -156,6 +160,10 @@ describe("EnvironmentScreen", () => {
 
     await waitFor(() => expect(value.value).toBe(""));
     expect(name.value).toBe("");
+    // Still the panel, now listing the new credential: the checks above mean
+    // nothing if the screen has swapped the panel for an error.
+    expect(await screen.findByRole("cell", { name: "TF_VAR_TEST" })).toBeTruthy();
+    expect(value.isConnected).toBe(true);
     expect(document.querySelector("[data-unsaved='true']")).toBeNull();
   });
 
@@ -176,6 +184,53 @@ describe("EnvironmentScreen", () => {
     expect(alert.textContent).toContain("A credential with that name already exists");
     expect(screen.getAllByRole("alert")).toHaveLength(1);
     expect(screen.getByLabelText<HTMLInputElement>("Environment credential value").value).toBe("secret-value");
+  });
+
+  // The fields stay editable while an add is out. Clearing them when it lands
+  // must not wipe the next credential, half typed.
+  it("keeps what was typed while an add was in flight", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    let answerPost: (response: Response) => void = () => {};
+    vi.spyOn(globalThis, "fetch").mockImplementation((_input, init) =>
+      init?.method === "POST"
+        ? new Promise<Response>((resolve) => {
+            answerPost = resolve;
+          })
+        : Promise.resolve(jsonResponse([credential]))
+    );
+    renderScreen(queryClient);
+    const user = userEvent.setup();
+    const name = screen.getByLabelText<HTMLInputElement>("Environment credential name");
+    const value = screen.getByLabelText<HTMLInputElement>("Environment credential value");
+
+    await user.type(name, "TF_VAR_TEST");
+    await user.type(value, "secret-value");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    await user.clear(name);
+    await user.type(name, "TF_VAR_NEXT");
+    await user.clear(value);
+    await user.type(value, "next-secret");
+    answerPost(jsonResponse(credential, 201));
+
+    expect(await screen.findByRole("cell", { name: "TF_VAR_TEST" })).toBeTruthy();
+    expect(name.value).toBe("TF_VAR_NEXT");
+    expect(value.value).toBe("next-secret");
+    expect(document.querySelector("[data-unsaved='true']")).not.toBeNull();
+  });
+
+  it("says why, and keeps the row, when a delete fails", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), [credential]);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({ error: "conflict", message: "The credential is still in use" }, 409)
+    );
+    renderScreen(queryClient);
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "Delete TF_VAR_TEST" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain("The credential is still in use");
+    expect(screen.getByRole("cell", { name: "TF_VAR_TEST" })).toBeTruthy();
   });
 
   it("asks for both fields before sending anything", async () => {
