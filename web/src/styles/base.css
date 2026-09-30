@@ -83,7 +83,13 @@ a:hover {
   text-decoration: underline;
 }
 
-button, input, textarea, select {
+/* Field selectors skip [data-slot], as in primitives.css. Preflight already
+   gives shadcn's fields font: inherit; this keeps legacy.guard.test.ts's rule
+   free of exceptions. */
+button,
+input:where(:not([data-slot])),
+textarea:where(:not([data-slot])),
+select:where(:not([data-slot])) {
   font: inherit;
 }
 

@@ -67,8 +67,13 @@ describe("legacy field rules", () => {
   // label would turn muted, and Input's h-8 would grow to the legacy 36px
   // min-height. :where() adds no specificity, so legacy fields still match
   // exactly as they did.
-  it("skip elements that carry data-slot", () => {
-    const unscoped = [...readSheet("styles/primitives.css").matchAll(/([^{}]+)\{/g)]
+  //
+  // Only rules that start at the element are checked. A descendant rule such
+  // as `.credential-form input` names a legacy class, and when a screen PR
+  // migrates that markup the class goes with it and the dead-CSS guard above
+  // makes the rule go too.
+  it.each(LEGACY_SHEETS)("%s skips elements that carry data-slot", (path) => {
+    const unscoped = [...readSheet(path).matchAll(/([^{}]+)\{/g)]
       .flatMap(([, selector]) => selector.split(","))
       .map((selector) => selector.trim())
       .filter((selector) => /^(label|input|textarea|select)(?![\w-])/.test(selector))
