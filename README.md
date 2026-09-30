@@ -60,8 +60,8 @@ explicit, guarded action.
   to it as an explicit, reviewable step instead of drifting silently.
 - **Control access per stack.** Grant people access to the stacks they need,
   rather than to everything.
-- **Sign in with SSO.** Authentication is standard OIDC. The local stack signs
-  in with a local account, so there is nothing to wire up to try it.
+- **Sign in with SSO.** Authentication is standard OIDC. The local stack ships
+  Dex as its identity provider, so there is nothing to wire up to try it.
 
 openplan requires no session or timeout configuration on your identity provider:
 signed-in sessions are openplan's own record, bounded by its own absolute and
@@ -90,7 +90,8 @@ Requires Docker. No Go or Node toolchain.
 > **Upgrading an existing local stack?** Run `docker compose down -v` before
 > starting it back up. OpenFGA's tables moved out of their own database and
 > into the application database, so tuples written before the move are not
-> carried over.
+> carried over. Dex's database is created only when Postgres initializes an
+> empty volume, so on an old volume Dex cannot start, and the API waits on it.
 
 **1. Start everything.**
 
@@ -107,7 +108,8 @@ the model in this repository at startup. Nothing has to be recorded between
 phases, and nothing has to be pasted into `.env`.
 
 **2. Open http://localhost:5173** and sign in as `root` with
-`OPENPLAN_ROOT_PASSWORD` from `.env.example`.
+`OPENPLAN_ROOT_PASSWORD` from `.env.example`, or through Dex as
+`admin@openplan.local` / `admin-local-only`.
 
 > [!IMPORTANT]
 > Use `localhost`, not `127.0.0.1`. The redirect URI is derived from a single

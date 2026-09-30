@@ -19,6 +19,8 @@ services:
       POSTGRES_USER: ${APP_DB_USER:-openplan}
       POSTGRES_PASSWORD: ${APP_DB_PASSWORD:-openplan}
       POSTGRES_DB: ${APP_DB_NAME:-openplan_test}
+      DEX_DB_USER: ${DEX_DB_USER:-dex}
+      DEX_DB_PASSWORD: ${DEX_DB_PASSWORD:-dex-local-only}
       TEMPORAL_DB_USER: ${TEMPORAL_DB_USER:-temporal}
       TEMPORAL_DB_PASSWORD: ${TEMPORAL_DB_PASSWORD:-temporal}
     ports:
@@ -31,6 +33,33 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  # The identity provider. Configured in deploy/dex/config.yaml; see
+  # docs/authentication.md.
+  dex:
+    image: ghcr.io/dexidp/dex:v2.45.1
+    command: ["dex", "serve", "/etc/dex/config.yaml"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DEX_DB_USER: ${DEX_DB_USER:-dex}
+      DEX_DB_PASSWORD: ${DEX_DB_PASSWORD:-dex-local-only}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-openplan-api-local-only}
+    volumes:
+      - ./deploy/dex/config.yaml:/etc/dex/config.yaml:ro
+    ports:
+      - "5556:5556"
+    networks:
+      default:
+        aliases:
+          - dex.localhost
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:5558/healthz/ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: on-failure
 
   temporal:
     image: temporalio/auto-setup:1.28.1
@@ -105,6 +134,10 @@ services:
         condition: service_healthy
       temporal:
         condition: service_healthy
+      # The API discovers the provider while it starts, and an unreachable
+      # issuer is a boot failure.
+      dex:
+        condition: service_healthy
     environment:
       HTTP_ADDRESS: ":8081"
       DATABASE_URL: postgres://${APP_DB_USER:-openplan}:${APP_DB_PASSWORD:-openplan}@postgres:5432/${APP_DB_NAME:-openplan_test}?sslmode=disable
@@ -112,12 +145,11 @@ services:
       OPENPLAN_ENVIRONMENT: development
       OPENPLAN_TENANT_ID: ${OPENPLAN_TENANT_ID:-tenant_123}
       CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:-717cb4d0fd1db07a30442806c2987599580f6d7c6e63b9bddf509bc183a086d3}
-      # Empty by default: no issuer means no provider, and the API serves local
-      # accounts. The three move together -- the config rejects a client with no
-      # issuer -- and .env sets them when an external OIDC provider is in use.
-      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
-      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
-      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      # Dex by default. The secret must match what Dex registers for the
+      # client, which reads the same variable.
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://dex.localhost:5556/dex}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-openplan-api}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-openplan-api-local-only}
       OPENPLAN_PUBLIC_URL: ${OPENPLAN_PUBLIC_URL:-http://localhost:5173}
       SESSION_ENCRYPTION_KEY: ${SESSION_ENCRYPTION_KEY:-b6f1d2c4a8e0937516243b8c5d7e9f0a1b2c3d4e5f60718293a4b5c6d7e8f9a0}
       ARTIFACT_STORE_KIND: filesystem

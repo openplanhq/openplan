@@ -22,6 +22,25 @@ Redirect URIs:
 Allowed web origins stay empty: the browser only ever calls the API's own
 origin, so no CORS configuration exists anywhere in `internal/api`.
 
+### Dex on the local stack
+
+Compose runs [Dex](https://dexidp.io) v2.45.1 at `http://dex.localhost:5556/dex`,
+configured by `deploy/dex/config.yaml` and stored in its own `dex` database on
+the shared Postgres server. It registers the `openplan-api` client with the
+same `OIDC_CLIENT_SECRET` the API reads, and one static password user,
+`admin@openplan.local` / `admin-local-only`.
+
+`dex.localhost` resolves to loopback in the browser and to the Dex container
+through its Compose network alias, so one issuer string satisfies both — the
+API compares the discovery document's issuer to `OIDC_ISSUER_URL` byte for
+byte. `curl` resolves `*.localhost` to its own loopback and ignores the alias,
+so test from inside a container with `wget` instead.
+
+Dex v2.45.1 advertises no `end_session_endpoint` and does not send back-channel
+logout, so logout ends the openplan session and returns home while Dex's own
+SSO cookie survives. Dex's `sub` is `base64url(protobuf{user_id, connector_id})`,
+stable for a given user and connector.
+
 ## OIDC Client and Claims
 
 There is one client. The API is the only OIDC client and the only party that

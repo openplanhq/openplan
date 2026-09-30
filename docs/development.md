@@ -15,10 +15,11 @@ cp .env.example .env
 docker compose up -d --wait
 ```
 
-That stack has no identity provider, and the API serves local accounts. For
-OIDC sign-in, set the `OIDC_ISSUER_URL` and `OIDC_CLIENT_*` lines in `.env` to
-an external provider. An issuer with no provider reachable behind it is a boot
-failure: the API discovers the provider while it starts.
+That stack includes Dex, the local OIDC provider, at
+`http://dex.localhost:5556/dex` (see `docs/authentication.md`). An issuer with
+no provider reachable behind it is a boot failure: the API discovers the
+provider while it starts. For a host-run API, `dex.localhost` resolves to
+loopback, where Compose publishes Dex's port.
 
 Nothing to copy afterwards. OpenFGA runs inside the API and resolves its store
 and authorization model from the model in this repository at startup.

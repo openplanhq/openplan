@@ -77,11 +77,38 @@ for (const value of publicURLDefaults) {
 }
 assert.equal(api.environment?.OPENPLAN_PUBLIC_URL, envValue("OPENPLAN_PUBLIC_URL"));
 
-// The three OIDC settings move together and are empty by default: with no
-// issuer the API serves local accounts, so the default stack needs no IdP.
+// Dex is the default stack's identity provider. The API and Dex must agree on
+// the issuer, the client, and its secret, and Compose defaults must match
+// .env.example so the stack runs identically with or without .env.
+const dex = service("dex");
+assert.equal(dex.image, "ghcr.io/dexidp/dex:v2.45.1");
+assert.equal(dex.depends_on?.postgres?.condition, "service_healthy");
+assert.ok(dex.healthcheck?.test?.join(" ").includes("/healthz/ready"));
+assert.ok(
+  dex.networks?.default?.aliases?.includes("dex.localhost"),
+  "dex needs the dex.localhost alias so one issuer string resolves from both sides",
+);
+assert.equal(api.depends_on?.dex?.condition, "service_healthy");
 for (const name of ["OIDC_ISSUER_URL", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET"]) {
-  assert.match(source, new RegExp(`\\$\\{${name}:-\\}`), `${name} must default to empty`);
+  assert.equal(api.environment?.[name], envValue(name), `api ${name} must match .env.example`);
 }
+assert.equal(
+  dex.environment?.OIDC_CLIENT_SECRET,
+  api.environment?.OIDC_CLIENT_SECRET,
+  "Dex must register the same client secret the API authenticates with",
+);
+
+const dexConfig = readFileSync(resolve(root, "deploy/dex/config.yaml"), "utf8");
+assert.match(
+  dexConfig,
+  new RegExp(`^issuer: ${envValue("OIDC_ISSUER_URL").replace(/[.]/g, "\\.")}$`, "m"),
+  "Dex's issuer must be OIDC_ISSUER_URL exactly",
+);
+assert.match(dexConfig, new RegExp(`- id: ${envValue("OIDC_CLIENT_ID")}$`, "m"));
+assert.ok(
+  dexConfig.includes(`- ${envValue("OPENPLAN_PUBLIC_URL")}/v1/auth/callback`),
+  "Dex must register the redirect URI the API derives from OPENPLAN_PUBLIC_URL",
+);
 
 // OpenFGA is embedded in the API. A service, a provisioner, or a required
 // store or model identifier coming back would reintroduce the two-phase
