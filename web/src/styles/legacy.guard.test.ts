@@ -60,3 +60,19 @@ describe("legacy class usage", () => {
     expect(dead, `delete the rules for: ${dead.join(", ")}`).toEqual([]);
   });
 });
+
+describe("legacy field rules", () => {
+  // shadcn's Label, Input and Textarea carry data-slot. A legacy rule on the
+  // element would beat what they leave to inheritance or to their height: the
+  // label would turn muted, and Input's h-8 would grow to the legacy 36px
+  // min-height. :where() adds no specificity, so legacy fields still match
+  // exactly as they did.
+  it("skip elements that carry data-slot", () => {
+    const unscoped = [...readSheet("styles/primitives.css").matchAll(/([^{}]+)\{/g)]
+      .flatMap(([, selector]) => selector.split(","))
+      .map((selector) => selector.trim())
+      .filter((selector) => /^(label|input|textarea|select)(?![\w-])/.test(selector))
+      .filter((selector) => !/^(label|input|textarea|select):where\(:not\(\[data-slot\]\)\)/.test(selector));
+    expect(unscoped, `scope with :where(:not([data-slot])): ${unscoped.join(", ")}`).toEqual([]);
+  });
+});

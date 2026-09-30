@@ -110,7 +110,12 @@ button:disabled {
 }
 
 /* ---- Inputs ---- */
-label {
+/* Every selector here skips [data-slot]: shadcn's Label, Input and Textarea
+   carry it, and these element rules would otherwise beat what they leave to
+   inheritance or to their own height (a muted label, a 36px Input). :where()
+   adds no specificity, so legacy fields match exactly as before.
+   legacy.guard.test.ts checks every selector. */
+label:where(:not([data-slot])) {
   display: grid;
   gap: var(--legacy-space-2);
   color: var(--legacy-color-muted-fg);
@@ -119,9 +124,9 @@ label {
   font-weight: 400;
 }
 
-input,
-textarea,
-select {
+input:where(:not([data-slot])),
+textarea:where(:not([data-slot])),
+select:where(:not([data-slot])) {
   /* Fields are block-level form controls and should fill their container.
      Without this they fall back to an intrinsic inline-block width — roughly
      200px for text inputs and content-width for selects — which only looks
@@ -143,20 +148,20 @@ select {
               box-shadow var(--legacy-duration-fast) var(--legacy-ease-out);
 }
 
-input::placeholder,
-textarea::placeholder {
+input:where(:not([data-slot]))::placeholder,
+textarea:where(:not([data-slot]))::placeholder {
   color: var(--legacy-color-muted-fg);
 }
 
-input:focus,
-textarea:focus,
-select:focus {
+input:where(:not([data-slot])):focus,
+textarea:where(:not([data-slot])):focus,
+select:where(:not([data-slot])):focus {
   border-color: var(--legacy-color-accent);
   box-shadow: var(--legacy-shadow-ring);
   outline: none;
 }
 
-textarea {
+textarea:where(:not([data-slot])) {
   min-height: var(--legacy-space-24);
   /* Multi-line, so it opts back into vertical padding: unlike a single-line
      input it has no centred line box to sit in, and text would touch the edge. */
