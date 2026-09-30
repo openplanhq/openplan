@@ -7,6 +7,7 @@ describe("AccessDenied", () => {
     const markup = renderToStaticMarkup(<AccessDenied />);
 
     expect(markup).toContain('data-testid="route-access-denied"');
+    expect(markup).toContain('data-slot="empty"');
     expect(markup).toContain("Not permitted");
   });
 });

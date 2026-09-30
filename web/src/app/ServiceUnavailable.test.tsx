@@ -7,6 +7,7 @@ describe("ServiceUnavailable", () => {
     const markup = renderToStaticMarkup(<ServiceUnavailable />);
 
     expect(markup).toContain('data-testid="route-service-unavailable"');
+    expect(markup).toContain('data-slot="empty"');
     expect(markup).toContain("Authorization service unavailable — try again shortly.");
   });
 });
