@@ -76,6 +76,11 @@ describe("RouteTabs", () => {
     const user = renderAt("/s/templates");
     await user.tab();
     expect(document.activeElement).toBe(screen.getByRole("tab", { name: "Templates" }));
+    // The next Tab leaves the row instead of stepping through its tabs.
+    await user.tab();
+    expect(screen.getByRole("tablist").contains(document.activeElement)).toBe(false);
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(screen.getByRole("tab", { name: "Templates" }));
 
     await user.keyboard("{ArrowRight}");
     expect(document.activeElement).toBe(screen.getByRole("tab", { name: "Access" }));
