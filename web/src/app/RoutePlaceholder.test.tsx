@@ -7,6 +7,7 @@ describe("RoutePlaceholder", () => {
     const markup = renderToStaticMarkup(<RoutePlaceholder title="Stacks" />);
 
     expect(markup).toContain('data-testid="route-placeholder"');
+    expect(markup).toContain('data-slot="empty"');
     expect(markup).toContain("Stacks");
     expect(markup).toContain("This screen has not been built yet.");
   });

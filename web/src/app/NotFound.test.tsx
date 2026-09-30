@@ -7,6 +7,7 @@ describe("NotFound", () => {
     const markup = renderToStaticMarkup(<NotFound />);
 
     expect(markup).toContain('data-testid="route-not-found"');
+    expect(markup).toContain('data-slot="empty"');
     expect(markup).toContain("Page not found");
   });
 });

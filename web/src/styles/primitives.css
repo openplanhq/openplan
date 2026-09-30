@@ -5,32 +5,32 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-2);
-  /* Height comes from --control-height alone. With vertical padding the
+  gap: var(--legacy-space-2);
+  /* Height comes from --legacy-control-height alone. With vertical padding the
      min-height never binds — padding plus line-height set the height, and the
      token becomes inert. Side padding is deliberately generous; leave it. */
-  min-height: var(--control-height);
-  border-radius: var(--radius-lg);
-  padding: 0 var(--space-6);
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
+  min-height: var(--legacy-control-height);
+  border-radius: var(--legacy-radius-lg);
+  padding: 0 var(--legacy-space-6);
+  font-family: var(--legacy-font-body);
+  font-size: var(--legacy-text-sm);
   font-weight: 400;
-  letter-spacing: var(--tracking-tight);
+  letter-spacing: var(--legacy-tracking-tight);
   white-space: nowrap;
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: all var(--legacy-duration-fast) var(--legacy-ease-out);
 }
 
 .primary-button {
   border: 0;
-  color: var(--color-accent-fg);
-  background: var(--gradient-accent);
-  box-shadow: var(--shadow-sm);
+  color: var(--legacy-color-accent-fg);
+  background: var(--legacy-gradient-accent);
+  box-shadow: var(--legacy-shadow-sm);
 }
 
 .primary-button:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: var(--shadow-accent-lg);
+  box-shadow: var(--legacy-shadow-accent-lg);
   filter: brightness(1.1);
 }
 
@@ -39,34 +39,34 @@
 }
 
 .secondary-button {
-  border: 1px solid var(--color-border);
-  color: var(--color-fg);
+  border: 1px solid var(--legacy-color-border);
+  color: var(--legacy-color-fg);
   background: transparent;
 }
 
 .secondary-button:hover:not(:disabled) {
-  border-color: var(--color-accent-border);
-  background: var(--color-muted);
-  box-shadow: var(--shadow-sm);
+  border-color: var(--legacy-color-accent-border);
+  background: var(--legacy-color-muted);
+  box-shadow: var(--legacy-shadow-sm);
 }
 
 .destructive-button {
   border: 0;
-  color: var(--color-accent-fg);
-  background: var(--color-danger);
-  box-shadow: var(--shadow-sm);
+  color: var(--legacy-color-accent-fg);
+  background: var(--legacy-color-danger);
+  box-shadow: var(--legacy-shadow-sm);
 }
 
 .destructive-button:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--legacy-shadow-lg);
   filter: brightness(1.05);
 }
 
 /* Arrow glyphs advance on hover. */
 .primary-button .btn-arrow,
 .destructive-button .btn-arrow {
-  transition: transform var(--duration-fast) var(--ease-out);
+  transition: transform var(--legacy-duration-fast) var(--legacy-ease-out);
 }
 
 .primary-button:hover .btn-arrow,
@@ -84,38 +84,24 @@ button:disabled {
   opacity: 0.5;
 }
 
-.icon-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: var(--space-8);
-  min-height: var(--space-8);
-  border: 0;
-  border-radius: var(--radius-md);
-  color: var(--color-muted-fg);
-  background: transparent;
-  cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
-}
-
-.icon-button:hover {
-  color: var(--color-fg);
-  background: var(--color-muted);
-}
-
 /* ---- Inputs ---- */
-label {
+/* Every selector here skips [data-slot]: shadcn's Label, Input and Textarea
+   carry it, and these element rules would otherwise beat what they leave to
+   inheritance or to their own height (a muted label, a 36px Input). :where()
+   adds no specificity, so legacy fields match exactly as before.
+   legacy.guard.test.ts checks every selector. */
+label:where(:not([data-slot])) {
   display: grid;
-  gap: var(--space-2);
-  color: var(--color-muted-fg);
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
+  gap: var(--legacy-space-2);
+  color: var(--legacy-color-muted-fg);
+  font-family: var(--legacy-font-body);
+  font-size: var(--legacy-text-sm);
   font-weight: 400;
 }
 
-input,
-textarea,
-select {
+input:where(:not([data-slot])),
+textarea:where(:not([data-slot])),
+select:where(:not([data-slot])) {
   /* Fields are block-level form controls and should fill their container.
      Without this they fall back to an intrinsic inline-block width — roughly
      200px for text inputs and content-width for selects — which only looks
@@ -123,55 +109,55 @@ select {
      and inherits its stretch. A field placed as a sibling of its label instead
      stays stubbornly narrow. */
   width: 100%;
-  min-height: var(--control-height);
+  min-height: var(--legacy-control-height);
   min-width: 0;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  /* Zero vertical padding so --control-height governs; see the button rule. */
-  padding: 0 var(--space-4);
-  color: var(--color-fg);
-  background: var(--color-card);
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-  transition: border-color var(--duration-fast) var(--ease-out),
-              box-shadow var(--duration-fast) var(--ease-out);
+  border: 1px solid var(--legacy-color-border);
+  border-radius: var(--legacy-radius-lg);
+  /* Zero vertical padding so --legacy-control-height governs; see the button rule. */
+  padding: 0 var(--legacy-space-4);
+  color: var(--legacy-color-fg);
+  background: var(--legacy-color-card);
+  font-family: var(--legacy-font-body);
+  font-size: var(--legacy-text-sm);
+  transition: border-color var(--legacy-duration-fast) var(--legacy-ease-out),
+              box-shadow var(--legacy-duration-fast) var(--legacy-ease-out);
 }
 
-input::placeholder,
-textarea::placeholder {
-  color: var(--color-muted-fg);
+input:where(:not([data-slot]))::placeholder,
+textarea:where(:not([data-slot]))::placeholder {
+  color: var(--legacy-color-muted-fg);
 }
 
-input:focus,
-textarea:focus,
-select:focus {
-  border-color: var(--color-accent);
-  box-shadow: var(--shadow-ring);
+input:where(:not([data-slot])):focus,
+textarea:where(:not([data-slot])):focus,
+select:where(:not([data-slot])):focus {
+  border-color: var(--legacy-color-accent);
+  box-shadow: var(--legacy-shadow-ring);
   outline: none;
 }
 
-textarea {
-  min-height: var(--space-24);
+textarea:where(:not([data-slot])) {
+  min-height: var(--legacy-space-24);
   /* Multi-line, so it opts back into vertical padding: unlike a single-line
      input it has no centred line box to sit in, and text would touch the edge. */
-  padding: var(--space-3) var(--space-4);
+  padding: var(--legacy-space-3) var(--legacy-space-4);
   resize: vertical;
 }
 
 /* ---- Panels ---- */
 .panel {
   min-width: 0;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-xl);
-  padding: var(--space-5);
-  background: var(--color-card);
-  box-shadow: var(--shadow-md);
-  transition: box-shadow var(--duration-lift) var(--ease-out);
+  border: 1px solid var(--legacy-color-border);
+  border-radius: var(--legacy-radius-xl);
+  padding: var(--legacy-space-5);
+  background: var(--legacy-color-card);
+  box-shadow: var(--legacy-shadow-md);
+  transition: box-shadow var(--legacy-duration-lift) var(--legacy-ease-out);
 }
 
 @media (min-width: 768px) {
   .panel {
-    padding: var(--space-6);
+    padding: var(--legacy-space-6);
   }
 }
 
@@ -193,25 +179,31 @@ textarea {
    utilities set on themselves — .muted is exactly that, and at equal
    specificity it wins on source order and the gap silently vanishes. */
 .panel > :not(:first-child) {
-  margin-top: var(--space-4);
+  margin-top: var(--legacy-space-4);
 }
 
 /* Headings keep the wider gap they had before that rule existed. The element
    selector puts this one rung above the rule above, which it has to clear. */
+/* Preflight audit: paragraphs in a panel relied on the browser's bottom margin.
+   :where() keeps it at browser-default precedence, below every legacy rule. */
+:where(.panel p) {
+  margin-bottom: revert;
+}
+
 .panel > h2 + :not(:first-child) {
-  margin-top: var(--space-5);
+  margin-top: var(--legacy-space-5);
 }
 
 .panel h2 {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--legacy-space-2);
   margin: 0;
-  font-family: var(--font-body);
+  font-family: var(--legacy-font-body);
   font-weight: 400;
-  font-size: var(--text-xl);
-  letter-spacing: var(--tracking-tight);
-  line-height: var(--leading-snug);
+  font-size: var(--legacy-text-xl);
+  letter-spacing: var(--legacy-tracking-tight);
+  line-height: var(--legacy-leading-snug);
 }
 
 /* Gradient border with no wrapper element: the card colour paints the
@@ -219,8 +211,8 @@ textarea {
 .panel--featured {
   border: 2px solid transparent;
   background:
-    linear-gradient(var(--color-card), var(--color-card)) padding-box,
-    var(--gradient-accent) border-box;
+    linear-gradient(var(--legacy-color-card), var(--legacy-color-card)) padding-box,
+    var(--legacy-gradient-accent) border-box;
 }
 
 /* forced-colors replaces backgrounds, which is where this border's colour
@@ -231,180 +223,47 @@ textarea {
   }
 }
 
-.panel--inverted {
-  position: relative;
-  overflow: hidden;
-  border-color: var(--color-fg);
-  color: var(--color-card);
-  background: var(--color-fg);
-}
-
-.panel--inverted::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.03;
-  background-image: radial-gradient(circle, var(--color-card) 1px, transparent 1px);
-  background-size: 32px 32px;
-}
-
-.panel--inverted > * {
-  position: relative;
-}
-
-/* ---- Breadcrumb ----
-   Every screen's title bar. The current crumb is the page's h1, set at crumb
-   size rather than heading size: the trail says where you are, and the
-   content below says the rest. Separators are drawn here so screen readers
-   count only real crumbs. */
-.breadcrumb {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-1) var(--space-3);
-  min-width: 0;
-  min-height: var(--control-height);
-  align-content: center;
-  margin-bottom: var(--space-6);
-  font-size: var(--text-sm);
-  line-height: var(--leading-normal);
-}
-
-.breadcrumb ol {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-2);
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.breadcrumb li {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.breadcrumb li + li::before {
-  content: "/";
-  color: var(--color-muted-fg);
-  opacity: 0.5;
-}
-
-.breadcrumb a {
-  color: var(--color-muted-fg);
-  font-weight: 400;
-  text-decoration: none;
-  transition: color var(--duration-fast) var(--ease-out);
-}
-
-.breadcrumb a:hover {
-  color: var(--color-fg);
-  text-decoration: none;
-}
-
-.breadcrumb h1 {
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-  font-weight: 400;
-  letter-spacing: var(--tracking-normal);
-  line-height: var(--leading-normal);
-  overflow-wrap: anywhere;
-}
-
-.breadcrumb__detail {
-  color: var(--color-muted-fg);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  overflow-wrap: anywhere;
-}
-
 /* A heading inside a page whose title the breadcrumb already carries. */
 .section-title {
-  margin-bottom: var(--space-4);
-  font-family: var(--font-body);
-  font-size: var(--text-xl);
-  letter-spacing: var(--tracking-tight);
-  line-height: var(--leading-snug);
+  margin-bottom: var(--legacy-space-4);
+  font-family: var(--legacy-font-body);
+  font-size: var(--legacy-text-xl);
+  letter-spacing: var(--legacy-tracking-tight);
+  line-height: var(--legacy-leading-snug);
 }
 
 /* ---- Messaging ---- */
 .alert {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
-  border: 1px solid var(--color-danger);
-  border-radius: var(--radius-lg);
-  padding: var(--space-4);
-  color: var(--color-danger);
-  background: var(--color-danger-soft);
-  font-size: var(--text-sm);
+  gap: var(--legacy-space-3);
+  margin-bottom: var(--legacy-space-4);
+  border: 1px solid var(--legacy-color-danger);
+  border-radius: var(--legacy-radius-lg);
+  padding: var(--legacy-space-4);
+  color: var(--legacy-color-danger);
+  background: var(--legacy-color-danger-soft);
+  font-size: var(--legacy-text-sm);
 }
 
 .error-text {
-  margin: var(--space-3) 0 0;
-  color: var(--color-danger);
-  font-size: var(--text-sm);
-  font-weight: 400;
-}
-
-/* A blocked action that is nobody's mistake — a stale plan reads as a warning,
-   not a failure, so it stays distinct from .error-text. */
-.hint-text {
-  margin: var(--space-3) 0 0;
-  color: var(--color-warning);
-  font-size: var(--text-sm);
+  margin: var(--legacy-space-3) 0 0;
+  color: var(--legacy-color-danger);
+  font-size: var(--legacy-text-sm);
   font-weight: 400;
 }
 
 .muted {
   margin: 0;
-  color: var(--color-muted-fg);
+  color: var(--legacy-color-muted-fg);
 }
 
-/* ---- Stat band ---- */
-.stat-band {
-  margin: var(--space-8) 0;
-}
-
-.stat-band__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-6);
-  margin: 0;
-}
-
-@media (min-width: 768px) {
-  .stat-band__grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
-.stat-band__item {
-  display: flex;
-  flex-direction: column-reverse;
-  gap: var(--space-1);
-}
-
-.stat-band__value {
-  margin: 0;
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-size: var(--text-3xl);
-  line-height: var(--leading-none);
-}
-
-.stat-band__label {
-  color: var(--color-border);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
+/* Preflight audit: loading lines put an icon inline before their text
+   ("⟳ Loading stacks…"); Preflight's block svg would drop the text below it.
+   :where() keeps browser-default precedence. */
+:where(.muted > svg) {
+  display: revert;
+  vertical-align: revert;
 }
 
 /* ---- Hero graphic ---- */
@@ -413,7 +272,7 @@ textarea {
   width: 100%;
   max-width: 420px;
   aspect-ratio: 1;
-  color: var(--color-accent-border);
+  color: var(--legacy-color-accent-border);
 }
 
 .hero-graphic__ring {
@@ -427,21 +286,21 @@ textarea {
 .hero-graphic__blob {
   position: absolute;
   inset: 18%;
-  border-radius: var(--radius-full);
-  background: var(--gradient-accent);
+  border-radius: var(--legacy-radius-full);
+  background: var(--legacy-gradient-accent);
   opacity: 0.12;
 }
 
 .hero-graphic__card {
   position: absolute;
   display: grid;
-  gap: var(--space-2);
+  gap: var(--legacy-space-2);
   width: 45%;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-4);
-  background: var(--color-card);
-  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--legacy-color-border);
+  border-radius: var(--legacy-radius-lg);
+  padding: var(--legacy-space-4);
+  background: var(--legacy-color-card);
+  box-shadow: var(--legacy-shadow-lg);
 }
 
 .hero-graphic__card--one {
@@ -458,13 +317,13 @@ textarea {
 
 .hero-graphic__bar {
   height: 6px;
-  border-radius: var(--radius-full);
-  background: var(--gradient-accent);
+  border-radius: var(--legacy-radius-full);
+  background: var(--legacy-gradient-accent);
 }
 
 .hero-graphic__bar--short {
   width: 55%;
-  background: var(--color-border);
+  background: var(--legacy-color-border);
 }
 
 .hero-graphic__dots {
@@ -473,14 +332,14 @@ textarea {
   top: 8%;
   display: grid;
   grid-template-columns: repeat(3, 4px);
-  gap: var(--space-2);
+  gap: var(--legacy-space-2);
 }
 
 .hero-graphic__dots span {
   width: 4px;
   height: 4px;
-  border-radius: var(--radius-full);
-  background: var(--color-accent);
+  border-radius: var(--legacy-radius-full);
+  background: var(--legacy-color-accent);
   opacity: 0.35;
 }
 
@@ -490,73 +349,55 @@ textarea {
   bottom: 6%;
   width: 48px;
   height: 48px;
-  border-radius: var(--radius-md);
-  background: var(--color-accent);
-  box-shadow: var(--shadow-accent);
+  border-radius: var(--legacy-radius-md);
+  background: var(--legacy-color-accent);
+  box-shadow: var(--legacy-shadow-accent);
 }
 
 /* ---- Status tones ---- */
-.status-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  margin-top: var(--space-4);
-  border-top: 1px solid var(--color-border);
-  padding-top: var(--space-3);
-  color: var(--color-muted-fg);
-  font-size: var(--text-sm);
-}
-
-.status-row strong {
-  min-width: 0;
-  font-weight: 400;
-  text-align: right;
-}
-
 .status-tone {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  border-radius: var(--radius-full);
-  padding: var(--space-1) var(--space-3);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  gap: var(--legacy-space-2);
+  border-radius: var(--legacy-radius-full);
+  padding: var(--legacy-space-1) var(--legacy-space-3);
+  font-family: var(--legacy-font-mono);
+  font-size: var(--legacy-text-xs);
   overflow-wrap: anywhere;
 }
 
 .status-tone__glyph {
-  font-size: var(--text-sm);
+  font-size: var(--legacy-text-sm);
   line-height: 1;
 }
 
 .status-tone--settled {
-  color: var(--color-success);
-  background: var(--color-success-soft);
+  color: var(--legacy-color-success);
+  background: var(--legacy-color-success-soft);
 }
 
 .status-tone--progress {
-  color: var(--color-accent);
-  background: var(--color-accent-soft);
+  color: var(--legacy-color-accent);
+  background: var(--legacy-color-accent-soft);
 }
 
 .status-tone--progress .status-tone__glyph {
-  animation: pulse-dot 2s var(--ease-out) infinite;
+  animation: pulse-dot 2s var(--legacy-ease-out) infinite;
 }
 
 .status-tone--waiting {
-  color: var(--color-warning);
-  background: var(--color-warning-soft);
+  color: var(--legacy-color-warning);
+  background: var(--legacy-color-warning-soft);
 }
 
 .status-tone--failed {
-  color: var(--color-danger);
-  background: var(--color-danger-soft);
+  color: var(--legacy-color-danger);
+  background: var(--legacy-color-danger-soft);
 }
 
 .status-tone--canceled {
-  color: var(--color-muted-fg);
-  background: var(--color-muted);
+  color: var(--legacy-color-muted-fg);
+  background: var(--legacy-color-muted);
 }
 
 /* ---- Role badges ---- */
@@ -569,32 +410,32 @@ textarea {
      and "viewer" hit the floor while "operator" and "approver" measured 86px
      and pushed past it, leaving the column 2px ragged. */
   min-width: 88px;
-  border-radius: var(--radius-full);
-  padding: var(--space-1) var(--space-3);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: var(--tracking-wide);
+  border-radius: var(--legacy-radius-full);
+  padding: var(--legacy-space-1) var(--legacy-space-3);
+  font-family: var(--legacy-font-mono);
+  font-size: var(--legacy-text-xs);
+  letter-spacing: var(--legacy-tracking-wide);
   text-transform: uppercase;
 }
 
 .role-badge--owner {
-  color: var(--color-accent);
-  background: var(--color-accent-soft);
+  color: var(--legacy-color-accent);
+  background: var(--legacy-color-accent-soft);
 }
 
 .role-badge--operator {
-  color: var(--color-success);
-  background: var(--color-success-soft);
+  color: var(--legacy-color-success);
+  background: var(--legacy-color-success-soft);
 }
 
 .role-badge--approver {
-  color: var(--color-warning);
-  background: var(--color-warning-soft);
+  color: var(--legacy-color-warning);
+  background: var(--legacy-color-warning-soft);
 }
 
 .role-badge--viewer {
-  color: var(--color-muted-fg);
-  background: var(--color-muted);
+  color: var(--legacy-color-muted-fg);
+  background: var(--legacy-color-muted);
 }
 
 /* ---- Data tables ----
@@ -615,19 +456,19 @@ textarea {
    actions, so the columns before it stay put when later ones come and go.
    Text too long for its column is cut with an ellipsis, so put the full value
    in a title. The frame owns the border and scrolls sideways, so the page
-   never does; set --data-table-min-width on the table to the sum of its
+   never does; set --legacy-data-table-min-width on the table to the sum of its
    column widths plus room for the flexible one, or on a phone that column
    collapses to nothing. */
 .data-table-frame {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border: 1px solid var(--legacy-color-border);
+  border-radius: var(--legacy-radius-lg);
   overflow-x: auto;
 }
 
 .data-table {
   border-collapse: collapse;
-  font-size: var(--text-sm);
-  min-width: var(--data-table-min-width, 0);
+  font-size: var(--legacy-text-sm);
+  min-width: var(--legacy-data-table-min-width, 0);
   table-layout: fixed;
   width: 100%;
 }
@@ -635,7 +476,7 @@ textarea {
 .data-table th,
 .data-table td {
   overflow: hidden;
-  padding: 0 var(--space-4);
+  padding: 0 var(--legacy-space-4);
   text-align: left;
   text-overflow: ellipsis;
   vertical-align: middle;
@@ -643,10 +484,10 @@ textarea {
 }
 
 .data-table th {
-  background: var(--color-muted);
-  border-bottom: 1px solid var(--color-border);
-  color: var(--color-muted-fg);
-  font-size: var(--text-xs);
+  background: var(--legacy-color-muted);
+  border-bottom: 1px solid var(--legacy-color-border);
+  color: var(--legacy-color-muted-fg);
+  font-size: var(--legacy-text-xs);
   font-weight: 400;
   height: 40px;
 }
@@ -654,11 +495,11 @@ textarea {
 /* A control-height button with 8px either side, whether or not the row has
    one, so rows keep one height. */
 .data-table td {
-  height: calc(var(--control-height) + var(--space-4));
+  height: calc(var(--legacy-control-height) + var(--legacy-space-4));
 }
 
 .data-table tbody tr + tr td {
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--legacy-color-border);
 }
 
 /* Column widths. The scale is small on purpose: pick the step that fits the
@@ -685,8 +526,8 @@ textarea {
 
 /* The cell that names the row and links to it. */
 .data-table__link {
-  color: var(--color-fg);
-  font-family: var(--font-mono);
+  color: var(--legacy-color-fg);
+  font-family: var(--legacy-font-mono);
   text-decoration: none;
 }
 
@@ -696,9 +537,9 @@ textarea {
 
 /* Secondary facts: who, when, identifiers. */
 .data-table__mono {
-  color: var(--color-muted-fg);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  color: var(--legacy-color-muted-fg);
+  font-family: var(--legacy-font-mono);
+  font-size: var(--legacy-text-xs);
 }
 
 .data-table__actions {
@@ -706,7 +547,7 @@ textarea {
 }
 
 .data-table__actions > * + * {
-  margin-left: var(--space-2);
+  margin-left: var(--legacy-space-2);
 }
 
 /* For a column header that has no visible label, like the actions column. */
@@ -727,16 +568,16 @@ textarea {
   align-items: center;
   cursor: pointer;
   display: inline-flex;
-  font-size: var(--text-sm);
-  gap: var(--space-2);
-  min-height: var(--control-height);
+  font-size: var(--legacy-text-sm);
+  gap: var(--legacy-space-2);
+  min-height: var(--legacy-control-height);
 }
 
 .checkbox-label input[type="checkbox"] {
-  accent-color: var(--color-accent);
-  height: var(--space-4);
+  accent-color: var(--legacy-color-accent);
+  height: var(--legacy-space-4);
   margin: 0;
   min-height: 0;
   padding: 0;
-  width: var(--space-4);
+  width: var(--legacy-space-4);
 }

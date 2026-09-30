@@ -35,7 +35,7 @@ export default function StackAccessScreen() {
   const assignMutation = useAssignStackRoleMutation(tenantID, stackId);
   const revokeMutation = useRevokeStackRoleMutation(tenantID, stackId);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const undoTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const undoTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const assignedSubs = new Set(
     (grants.data?.grants ?? []).map((g) => g.userSub)

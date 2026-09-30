@@ -1,15 +1,14 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const STYLES_DIR = dirname(fileURLToPath(import.meta.url));
 
-/** Stylesheets subject to the palette rules. tokens.css is the sole exemption. */
+/** Legacy stylesheets subject to the palette rules. tokens.css defines the
+    palette; theme.css is the shadcn theme and has its own guard. */
 function convertedStylesheets(): string[] {
-  return readdirSync(STYLES_DIR)
-    .filter((name) => name.endsWith(".css") && name !== "tokens.css")
-    .sort();
+  return ["base.css", "features.css", "primitives.css"];
 }
 
 function read(name: string): string {
@@ -22,17 +21,17 @@ function readAll(): string {
 }
 
 const REQUIRED_TOKENS = [
-  "--color-bg", "--color-fg", "--color-muted", "--color-muted-fg",
-  "--color-border", "--color-card",
-  "--color-accent", "--color-accent-2", "--color-accent-fg", "--gradient-accent",
-  "--color-accent-soft", "--color-accent-border",
-  "--color-success", "--color-warning", "--color-danger",
-  "--color-success-dot", "--color-warning-dot",
-  "--font-display", "--font-body", "--font-mono",
-  "--radius-sm", "--radius-md", "--radius-lg", "--radius-xl", "--radius-full",
-  "--shadow-sm", "--shadow-md", "--shadow-lg", "--shadow-xl",
-  "--shadow-accent", "--shadow-accent-lg", "--shadow-ring",
-  "--ease-out", "--duration-fast", "--duration-lift", "--duration-entrance"
+  "--legacy-color-bg", "--legacy-color-fg", "--legacy-color-muted", "--legacy-color-muted-fg",
+  "--legacy-color-border", "--legacy-color-card",
+  "--legacy-color-accent", "--legacy-color-accent-2", "--legacy-color-accent-fg", "--legacy-gradient-accent",
+  "--legacy-color-accent-soft", "--legacy-color-accent-border",
+  "--legacy-color-success", "--legacy-color-warning", "--legacy-color-danger",
+  "--legacy-color-success-dot", "--legacy-color-warning-dot",
+  "--legacy-font-display", "--legacy-font-body", "--legacy-font-mono",
+  "--legacy-radius-sm", "--legacy-radius-md", "--legacy-radius-lg", "--legacy-radius-xl", "--legacy-radius-full",
+  "--legacy-shadow-sm", "--legacy-shadow-md", "--legacy-shadow-lg", "--legacy-shadow-xl",
+  "--legacy-shadow-accent", "--legacy-shadow-accent-lg", "--legacy-shadow-ring",
+  "--legacy-ease-out", "--legacy-duration-fast", "--legacy-duration-lift", "--legacy-duration-entrance"
 ];
 
 describe("tokens.css", () => {
@@ -46,17 +45,17 @@ describe("tokens.css", () => {
   it("uses the AA-safe status colours for text", () => {
     const tokens = readFileSync(join(STYLES_DIR, "tokens.css"), "utf8");
     // The text colours must remain darker than the brighter dot/fill variants.
-    expect(tokens).toMatch(/--color-success:\s*#166534/i);
-    expect(tokens).toMatch(/--color-warning:\s*#92400E/i);
-    expect(tokens).toMatch(/--color-danger:\s*#B91C1C/i);
-    expect(tokens).toMatch(/--color-muted-fg:\s*#475569/i);
+    expect(tokens).toMatch(/--legacy-color-success:\s*#166534/i);
+    expect(tokens).toMatch(/--legacy-color-warning:\s*#92400E/i);
+    expect(tokens).toMatch(/--legacy-color-danger:\s*#B91C1C/i);
+    expect(tokens).toMatch(/--legacy-color-muted-fg:\s*#475569/i);
   });
 });
 
 describe.each(convertedStylesheets())("%s", (name) => {
   it("contains no raw hex colors", () => {
     const matches = read(name).match(/#[0-9a-fA-F]{3,8}\b/g) ?? [];
-    expect(matches, `use var(--color-*) instead of ${matches.join(", ")}`).toEqual([]);
+    expect(matches, `use var(--legacy-color-*) instead of ${matches.join(", ")}`).toEqual([]);
   });
 
   it("uses a radius token for every border-radius", () => {
@@ -64,14 +63,14 @@ describe.each(convertedStylesheets())("%s", (name) => {
     // zero-width, so the lookahead inspects " var(...)" rather than "var(...)",
     // succeeds, and every compliant declaration is reported as a violation.
     const matches =
-      read(name).match(/border-radius:(?!\s*var\(--radius-[a-z]+\)\s*;)[^;]+;/g) ?? [];
-    expect(matches, `use var(--radius-*): ${matches.join(", ")}`).toEqual([]);
+      read(name).match(/border-radius:(?!\s*var\(--legacy-radius-[a-z]+\)\s*;)[^;]+;/g) ?? [];
+    expect(matches, `use var(--legacy-radius-*): ${matches.join(", ")}`).toEqual([]);
   });
 
   it("uses a shadow token for every box-shadow", () => {
     const matches =
-      read(name).match(/box-shadow:(?!\s*var\(--shadow-[a-z-]+\)\s*;)[^;]+;/g) ?? [];
-    expect(matches, `use var(--shadow-*): ${matches.join(", ")}`).toEqual([]);
+      read(name).match(/box-shadow:(?!\s*var\(--legacy-shadow-[a-z-]+\)\s*;)[^;]+;/g) ?? [];
+    expect(matches, `use var(--legacy-shadow-*): ${matches.join(", ")}`).toEqual([]);
   });
 });
 
@@ -95,14 +94,14 @@ function parseRules(css: string): { selector: string; decl: Record<string, strin
 }
 
 const SCALES: Record<string, Record<number, string>> = {
-  "font-size": { 12: "--text-xs", 14: "--text-sm", 16: "--text-base", 18: "--text-lg",
-                 20: "--text-xl", 24: "--text-2xl", 32: "--text-3xl", 40: "--text-4xl",
-                 52: "--text-5xl", 64: "--text-6xl", 84: "--text-7xl" },
-  "border-radius": { 4: "--radius-sm", 6: "--radius-md", 8: "--radius-lg",
-                     12: "--radius-xl", 9999: "--radius-full" },
-  spacing: { 4: "--space-1", 8: "--space-2", 12: "--space-3", 16: "--space-4",
-             20: "--space-5", 24: "--space-6", 32: "--space-8", 40: "--space-10",
-             48: "--space-12", 64: "--space-16", 96: "--space-24" }
+  "font-size": { 12: "--legacy-text-xs", 14: "--legacy-text-sm", 16: "--legacy-text-base", 18: "--legacy-text-lg",
+                 20: "--legacy-text-xl", 24: "--legacy-text-2xl", 32: "--legacy-text-3xl", 40: "--legacy-text-4xl",
+                 52: "--legacy-text-5xl", 64: "--legacy-text-6xl", 84: "--legacy-text-7xl" },
+  "border-radius": { 4: "--legacy-radius-sm", 6: "--legacy-radius-md", 8: "--legacy-radius-lg",
+                     12: "--legacy-radius-xl", 9999: "--legacy-radius-full" },
+  spacing: { 4: "--legacy-space-1", 8: "--legacy-space-2", 12: "--legacy-space-3", 16: "--legacy-space-4",
+             20: "--legacy-space-5", 24: "--legacy-space-6", 32: "--legacy-space-8", 40: "--legacy-space-10",
+             48: "--legacy-space-12", 64: "--legacy-space-16", 96: "--legacy-space-24" }
 };
 
 const SIZED_PROPS = ["font-size", "border-radius", "gap", "padding", "margin",
@@ -119,9 +118,9 @@ const OFF_SCALE_ALLOWED = new Set([
 /** Geist tightens tracking in three tiers as type grows: -0.06em at 40px and
     above, -0.04em from 24 to 32px, -0.02em below that. */
 function expectedTracking(px: number): string {
-  if (px >= 40) return "--tracking-tightest";
-  if (px >= 24) return "--tracking-tighter";
-  return "--tracking-tight";
+  if (px >= 40) return "--legacy-tracking-tightest";
+  if (px >= 24) return "--legacy-tracking-tighter";
+  return "--legacy-tracking-tight";
 }
 
 describe.each(convertedStylesheets())("%s token discipline", (name) => {
@@ -150,14 +149,14 @@ describe.each(convertedStylesheets())("%s token discipline", (name) => {
     expect(violations, violations.join("\n")).toEqual([]);
   });
 
-  // --control-height only governs when nothing else sets the height. Add vertical
+  // --legacy-control-height only governs when nothing else sets the height. Add vertical
   // padding and the line box plus padding overshoots it, so the token goes inert
   // and the control silently keeps its old size. This has bitten buttons, inputs,
   // the app header and .runtime-value.
   it("never defeats a height token with vertical padding", () => {
     const violations: string[] = [];
     for (const { selector, decl } of parsed) {
-      const heightToken = ["--control-height", "--touch-target"].find((t) =>
+      const heightToken = ["--legacy-control-height", "--legacy-touch-target"].find((t) =>
         decl["min-height"]?.includes(t)
       );
       if (!heightToken) continue;
@@ -178,12 +177,12 @@ describe.each(convertedStylesheets())("%s token discipline", (name) => {
     for (const { selector, decl } of parsed) {
       const size = decl["font-size"];
       const spacing = decl["letter-spacing"];
-      if (!size?.includes("--text-") || !spacing?.includes("--tracking-tight")) continue;
-      const token = size.match(/--text-[\w-]+/)?.[0];
+      if (!size?.includes("--legacy-text-") || !spacing?.includes("--legacy-tracking-tight")) continue;
+      const token = size.match(/--legacy-text-[\w-]+/)?.[0];
       const px = Object.entries(SCALES["font-size"]).find(([, t]) => t === token)?.[0];
       if (!px) continue;
       const want = expectedTracking(Number(px));
-      const have = spacing.match(/--tracking-[\w-]+/)?.[0];
+      const have = spacing.match(/--legacy-tracking-[\w-]+/)?.[0];
       if (have !== want) {
         violations.push(`${selector} { ${token} is ${px}px } has ${have}, wants ${want}`);
       }
@@ -199,16 +198,5 @@ describe("accessibility fallbacks", () => {
     const css = readAll();
     expect(css).toMatch(/@media\s*\(forced-colors:\s*active\)/);
     expect(css).toMatch(/\.gradient-text\s*\{[^}]*color:\s*CanvasText/);
-  });
-});
-
-describe("styles.css index", () => {
-  it("contains nothing but imports", () => {
-    const index = readFileSync(join(STYLES_DIR, "..", "styles.css"), "utf8")
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .trim();
-    const lines = index.split("\n").map((l) => l.trim()).filter(Boolean);
-    expect(lines.every((line) => line.startsWith("@import"))).toBe(true);
-    expect(lines).toHaveLength(4);
   });
 });

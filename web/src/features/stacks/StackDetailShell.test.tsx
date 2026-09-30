@@ -51,6 +51,17 @@ async function renderStackRoute(path: string, capabilities: StackCapabilities, t
   );
 }
 
+// The breadcrumb's links and title, read from server-rendered markup without
+// depending on classes or attribute order.
+function breadcrumbOf(markup: string) {
+  const nav = markup.match(/<nav [^>]*aria-label="Breadcrumb"[^>]*>[\s\S]*?<\/nav>/)?.[0] ?? "";
+  return {
+    links: [...nav.matchAll(/<a [^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>/g)].map(([, href, text]) => `${text} ${href}`),
+    title: nav.match(/<h1 [^>]*aria-current="page"[^>]*>([^<]*)<\/h1>/)?.[1],
+    detail: nav.includes('data-slot="breadcrumb-detail"')
+  };
+}
+
 const allAllowed: StackCapabilities = { canView: true, canOperate: true, canApprove: true, canManageAccess: true };
 
 const vpc: StackTemplate = {
@@ -155,8 +166,7 @@ describe("StackDetailShell", () => {
     vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const markup = await renderStackRoute("/stacks/stack_1/templates", allAllowed);
 
-    expect(markup).toMatch(/<nav class="breadcrumb" aria-label="Breadcrumb">.*href="\/stacks">Stacks<.*<h1 aria-current="page">Payments<\/h1>/);
-    expect(markup).not.toContain("breadcrumb__detail");
+    expect(breadcrumbOf(markup)).toEqual({ links: ["Stacks /stacks"], title: "Payments", detail: false });
   });
 
   // A template's page has one row of tabs, the template's; the breadcrumb is
@@ -168,7 +178,7 @@ describe("StackDetailShell", () => {
 
     expect(markup).toContain('aria-label="Template sections"');
     expect(markup).not.toContain('aria-label="Stack sections"');
-    expect(markup).not.toContain("breadcrumb__detail");
+    expect(breadcrumbOf(markup).detail).toBe(false);
     expect(markup).toMatch(/aria-label="Template sections".*<\/nav>.*data-testid="stack-template-state".*changed/);
     expect(markup).toContain("Plan, then apply");
   });
@@ -184,23 +194,31 @@ describe("StackDetailShell", () => {
     vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const markup = await renderStackRoute("/stacks/stack_1/templates/st_1/settings", allAllowed, [vpc]);
 
-    expect(markup).toMatch(
-      /<nav class="breadcrumb".*href="\/stacks\/stack_1">Payments<.*href="\/stacks\/stack_1\/templates">Templates<.*<h1 aria-current="page">Network<\/h1>/
-    );
+    expect(breadcrumbOf(markup)).toMatchObject({
+      links: ["Stacks /stacks", "Payments /stacks/stack_1", "Templates /stacks/stack_1/templates"],
+      title: "Network"
+    });
   });
 
   it("extends the breadcrumb through the template on a page below it", async () => {
     vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const runMarkup = await renderStackRoute("/stacks/stack_1/templates/st_1/runs/4", allAllowed, [vpc]);
-    expect(runMarkup).toMatch(
-      /<nav class="breadcrumb".*href="\/stacks\/stack_1\/templates">Templates<.*href="\/stacks\/stack_1\/templates\/st_1">Network<.*<h1 aria-current="page">Run #4<\/h1>/
-    );
+    expect(breadcrumbOf(runMarkup)).toMatchObject({
+      links: ["Stacks /stacks", "Payments /stacks/stack_1", "Templates /stacks/stack_1/templates", "Network /stacks/stack_1/templates/st_1"],
+      title: "Run #4"
+    });
 
     const upgradeMarkup = await renderStackRoute("/stacks/stack_1/templates/st_1/upgrade", allAllowed, [vpc]);
-    expect(upgradeMarkup).toMatch(/href="\/stacks\/stack_1\/templates\/st_1">Network<.*<h1 aria-current="page">Change revision<\/h1>/);
+    expect(breadcrumbOf(upgradeMarkup)).toMatchObject({
+      links: ["Stacks /stacks", "Payments /stacks/stack_1", "Templates /stacks/stack_1/templates", "Network /stacks/stack_1/templates/st_1"],
+      title: "Change revision"
+    });
 
     const addMarkup = await renderStackRoute("/stacks/stack_1/templates/new", allAllowed);
-    expect(addMarkup).toMatch(/href="\/stacks\/stack_1\/templates">Templates<.*<h1 aria-current="page">Add template<\/h1>/);
+    expect(breadcrumbOf(addMarkup)).toMatchObject({
+      links: ["Stacks /stacks", "Payments /stacks/stack_1", "Templates /stacks/stack_1/templates"],
+      title: "Add template"
+    });
   });
 
   it("marks the tab matching the current route as current", async () => {
@@ -208,6 +226,36 @@ describe("StackDetailShell", () => {
     const markup = await renderStackRoute("/stacks/stack_1/templates", allAllowed);
 
     expect(markup).toMatch(/aria-current="page"[^>]*>Templates|href="\/stacks\/stack_1\/templates"[^>]*aria-current="page"/);
+  });
+
+  // The tab's selected state comes from stackSection(), and its link's
+  // aria-current from NavLink. They must name the same tab on every route,
+  // or a screen reader hears one tab selected and another current.
+  it.each([
+    ["/stacks/stack_1", "Overview"],
+    ["/stacks/stack_1/templates", "Templates"],
+    ["/stacks/stack_1/templates/new", "Templates"],
+    ["/stacks/stack_1/environment", "Environment"],
+    ["/stacks/stack_1/access", "Access"]
+  ])("selects exactly one tab at %s: %s, the one its link marks current", async (path, tab) => {
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
+    const markup = await renderStackRoute(path, allAllowed);
+
+    const tabs = [...markup.matchAll(/<a [^>]*role="tab"[^>]*>([^<]*)<\/a>/g)].map(([tag, label]) => ({
+      label,
+      selected: tag.includes('aria-selected="true"'),
+      current: tag.includes('aria-current="page"')
+    }));
+    expect(tabs.map(({ label }) => label)).toEqual(["Overview", "Templates", "Environment", "Access"]);
+    expect(tabs.filter(({ selected }) => selected).map(({ label }) => label)).toEqual([tab]);
+    expect(tabs.filter(({ current }) => current).map(({ label }) => label)).toEqual([tab]);
+  });
+
+  it("names the stack's tab list", async () => {
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
+    const markup = await renderStackRoute("/stacks/stack_1", allAllowed);
+
+    expect(markup).toMatch(/<div [^>]*role="tablist"[^>]*aria-label="Stack sections"/);
   });
 
   it("still renders NotFound (no shell chrome) when canView is denied", async () => {

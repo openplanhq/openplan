@@ -256,6 +256,8 @@ describe("SessionProvider", () => {
     renderProvider(<div data-testid="child">ready</div>);
     expect(await screen.findByTestId("auth-error")).toBeTruthy();
     expect(assign).not.toHaveBeenCalled();
+    expect(screen.getByTestId("auth-error").getAttribute("data-slot")).toBe("card");
+    expect(screen.getByTestId("auth-retry-button").classList).toContain("pointer-coarse:h-11");
   });
 
   // The session is fine on this path — /v1/me failed for some other reason —
@@ -296,6 +298,9 @@ describe("SessionProvider", () => {
     renderProvider(<div data-testid="child">ready</div>);
     expect(await screen.findByTestId("auth-loop-error")).toBeTruthy();
     expect(assign).not.toHaveBeenCalled();
+    expect(screen.getByTestId("auth-loop-error").getAttribute("data-slot")).toBe("card");
+    expect(screen.getByRole("heading", { level: 1, name: "We could not keep you signed in" })).toBeTruthy();
+    expect(screen.getByTestId("auth-loop-retry-button").classList).toContain("pointer-coarse:h-11");
   });
 
   it("retries from the loop screen with a fresh count", async () => {

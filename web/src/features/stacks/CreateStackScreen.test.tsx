@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../../auth/AuthContext";
@@ -184,6 +185,75 @@ describe("CreateStackScreen", () => {
       const body = JSON.parse(fetchSpy.mock.calls[0]?.[1]?.body as string);
       expect(body.name).toBe("My Stack");
     });
+  });
+
+  it("labels the name field with a shadcn Label and Input", () => {
+    renderScreen();
+
+    const field = screen.getByLabelText("Name");
+    expect(field.getAttribute("data-slot")).toBe("input");
+    expect(document.querySelector(`label[for="${field.id}"]`)?.getAttribute("data-slot")).toBe("label");
+  });
+
+  it("puts the cursor in the name field", () => {
+    renderScreen();
+
+    expect(document.activeElement).toBe(screen.getByLabelText("Name"));
+  });
+
+  it("creates the stack from the keyboard", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(stack()));
+    renderScreen();
+
+    await userEvent.setup().type(screen.getByLabelText("Name"), "My Stack{Enter}");
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(fetchSpy.mock.calls[0]?.[1]?.body as string).name).toBe("My Stack");
+  });
+
+  // A slow answer must not turn a second Enter into a second stack.
+  it("creates one stack when Enter is pressed again while the first is in flight", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
+    renderScreen();
+    const user = userEvent.setup();
+
+    await user.type(screen.getByLabelText("Name"), "My Stack{Enter}");
+    await screen.findByRole("button", { name: /creating/i });
+    await user.type(screen.getByLabelText("Name"), "{Enter}");
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // role="alert" is how a screen reader hears the failure. Alert sets it, so
+  // the screen must not add a second one.
+  it("announces a failed create once", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({ error: "conflict", message: "A stack with that slug already exists" }, 409)
+    );
+    renderScreen();
+
+    await userEvent.setup().type(screen.getByLabelText("Name"), "My Stack{Enter}");
+
+    await screen.findByTestId("create-stack-error");
+    const alerts = screen.getAllByRole("alert");
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].textContent).toContain("A stack with that slug already exists");
+  });
+
+  // --legacy-touch-target gave every control 44px on a touch screen.
+  it("gives every control a 44px target on coarse pointers", () => {
+    renderScreen();
+
+    expect(screen.getByLabelText("Name").classList).toContain("pointer-coarse:h-11");
+    expect(screen.getByRole("button", { name: /create stack/i }).classList).toContain("pointer-coarse:h-11");
+  });
+
+  it("sits in a shadcn Card and sets its own text colour", () => {
+    renderScreen();
+
+    const form = screen.getByLabelText("Name").closest("form") as HTMLElement;
+    expect(form.closest('[data-slot="card"]')).not.toBeNull();
+    expect(form.closest("[data-unsaved], section")?.classList).toContain("text-foreground");
   });
 
   it("shows an inline error message for a handled API error status", async () => {

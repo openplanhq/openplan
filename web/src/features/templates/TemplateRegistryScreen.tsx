@@ -67,7 +67,7 @@ export default function TemplateRegistryScreen() {
   return (
     <section className="template-registry-screen">
       <header className="templates-list-header">
-        <Breadcrumb items={[{ label: "Templates" }]} />
+        <Breadcrumb items={[{ label: "Templates" }]} className="mb-0" />
         <Link className="primary-button" to="/templates/new" data-testid="register-template-link">
           <Plus size={16} />
           Register template

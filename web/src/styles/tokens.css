@@ -1,23 +1,23 @@
-/* The only file in the codebase permitted to contain raw hex literals.
-   Everything else references these custom properties. */
+/* Legacy tokens, prefixed --legacy- so none can shadow a Tailwind or shadcn
+   variable of the same name. With theme.css this is one of only two files
+   permitted raw colour literals. PR 9 of the shadcn migration deletes it. */
 :root {
   /* Canvas and surfaces */
-  --color-bg:        #FAFAFA;
-  --color-fg:        #0F172A;
-  --color-muted:     #F1F5F9;
-  --color-muted-fg:  #475569;
-  --color-border:    #E2E8F0;
-  --color-card:      #FFFFFF;
+  --legacy-color-bg:        #FAFAFA;
+  --legacy-color-fg:        #0F172A;
+  --legacy-color-muted:     #F1F5F9;
+  --legacy-color-muted-fg:  #475569;
+  --legacy-color-border:    #E2E8F0;
+  --legacy-color-card:      #FFFFFF;
 
   /* The signature accent */
-  --color-accent:    #0052FF;
-  --color-accent-2:  #4D7CFF;
-  --color-accent-fg: #FFFFFF;
-  --gradient-accent: linear-gradient(135deg, #0052FF, #4D7CFF);
+  --legacy-color-accent:    #0052FF;
+  --legacy-color-accent-2:  #4D7CFF;
+  --legacy-color-accent-fg: #FFFFFF;
+  --legacy-gradient-accent: linear-gradient(135deg, #0052FF, #4D7CFF);
 
-  --color-accent-soft:   rgba(0, 82, 255, 0.05);
-  --color-accent-border: rgba(0, 82, 255, 0.30);
-  --color-accent-wash:   rgba(0, 82, 255, 0.03);
+  --legacy-color-accent-soft:   rgba(0, 82, 255, 0.05);
+  --legacy-color-accent-border: rgba(0, 82, 255, 0.30);
 
   /* Semantic status.
      The -dot values are brighter and are ONLY for dots and fills, where the
@@ -25,103 +25,102 @@
      #16A34A is 3.24:1 on white and #D97706 is 3.20:1, both failing AA for
      normal text. The darker values below preserve AA contrast on their
      tinted surfaces as well as on the canvas. */
-  --color-success:      #166534;
-  --color-warning:      #92400E;
-  --color-danger:       #B91C1C;
-  --color-success-dot:  #16A34A;
-  --color-warning-dot:  #D97706;
-  --color-success-soft: rgba(22, 163, 74, 0.10);
-  --color-warning-soft: rgba(180, 83, 9, 0.10);
-  --color-danger-soft:  rgba(220, 38, 38, 0.10);
+  --legacy-color-success:      #166534;
+  --legacy-color-warning:      #92400E;
+  --legacy-color-danger:       #B91C1C;
+  --legacy-color-success-dot:  #16A34A;
+  --legacy-color-warning-dot:  #D97706;
+  --legacy-color-success-soft: rgba(22, 163, 74, 0.10);
+  --legacy-color-warning-soft: rgba(180, 83, 9, 0.10);
+  --legacy-color-danger-soft:  rgba(220, 38, 38, 0.10);
 
   /* Typefaces */
   /* Vercel's own Geist, as on vercel.com. Display and body are the same face,
      so headings separate by size and tracking alone. */
-  --font-display: Geist, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-body:    Geist, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono:    "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco,
-                  Consolas, "Liberation Mono", monospace;
+  --legacy-font-display: "Geist Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --legacy-font-body:    "Geist Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --legacy-font-mono:    "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco,
+                         Consolas, "Liberation Mono", monospace;
 
   /* Type scale. Every step is a size on Geist's own ramp. */
-  --text-xs:   0.75rem;
-  --text-sm:   0.875rem;
-  --text-base: 1rem;
-  --text-lg:   1.125rem;
-  --text-xl:   1.25rem;
-  --text-2xl:  1.5rem;
-  --text-3xl:  2rem;
-  --text-4xl:  2.5rem;
-  --text-5xl:  3rem;    /* Geist heading-48 */
-  --text-6xl:  4rem;
-  --text-7xl:  4.5rem;  /* Geist heading-72 */
+  --legacy-text-xs:   0.75rem;
+  --legacy-text-sm:   0.875rem;
+  --legacy-text-base: 1rem;
+  --legacy-text-lg:   1.125rem;
+  --legacy-text-xl:   1.25rem;
+  --legacy-text-2xl:  1.5rem;
+  --legacy-text-3xl:  2rem;
+  --legacy-text-4xl:  2.5rem;
+  --legacy-text-5xl:  3rem;    /* Geist heading-48 */
+  --legacy-text-6xl:  4rem;
+  --legacy-text-7xl:  4.5rem;  /* Geist heading-72 */
 
   /* Tracking. Geist tightens in three tiers as size grows, measured off their
      type ramp: >=40px is -0.06em (40px -> -2.4px, 72px -> -4.32px), 24-32px is
      -0.04em (32px -> -1.28px), and <=20px is -0.02em (20px -> -0.4px). */
-  --tracking-tightest: -0.06em;
-  --tracking-tighter:  -0.04em;
-  --tracking-tight:    -0.02em;
-  --tracking-normal:  0;
-  --tracking-wide:    0.05em;
-  --tracking-label:   0.15em;
+  --legacy-tracking-tightest: -0.06em;
+  --legacy-tracking-tighter:  -0.04em;
+  --legacy-tracking-tight:    -0.02em;
+  --legacy-tracking-wide:    0.05em;
+  --legacy-tracking-label:   0.15em;
 
   /* Leading */
   /* Leading loosens as size shrinks, again following Geist: 40px sets 48px
      (1.2), 32px sets 40px (1.25), 20px sets 26px (1.3), 14-16px set 1.5. */
-  --leading-none:    1.05;
-  --leading-tight:   1.2;
-  --leading-snug:    1.3;
-  --leading-normal:  1.5;
-  --leading-relaxed: 1.7;
+  --legacy-leading-none:    1.05;
+  --legacy-leading-tight:   1.2;
+  --legacy-leading-snug:    1.3;
+  --legacy-leading-normal:  1.5;
+  --legacy-leading-relaxed: 1.7;
 
   /* Spacing, 4px base */
-  --space-1:  4px;
-  --space-2:  8px;
-  --space-3:  12px;
-  --space-4:  16px;
-  --space-5:  20px;
-  --space-6:  24px;
-  --space-8:  32px;
-  --space-10: 40px;
-  --space-12: 48px;
-  --space-16: 64px;
-  --space-24: 96px;
+  --legacy-space-1:  4px;
+  --legacy-space-2:  8px;
+  --legacy-space-3:  12px;
+  --legacy-space-4:  16px;
+  --legacy-space-5:  20px;
+  --legacy-space-6:  24px;
+  --legacy-space-8:  32px;
+  --legacy-space-10: 40px;
+  --legacy-space-12: 48px;
+  --legacy-space-16: 64px;
+  --legacy-space-24: 96px;
 
   /* Radii. Geist runs almost everything at --geist-radius: 6px and reserves 8px
      for its largest controls, so the whole ramp drops one step. */
-  --radius-sm:   4px;
-  --radius-md:   6px;
-  --radius-lg:   8px;
-  --radius-xl:   12px;
-  --radius-full: 9999px;
+  --legacy-radius-sm:   4px;
+  --legacy-radius-md:   6px;
+  --legacy-radius-lg:   8px;
+  --legacy-radius-xl:   12px;
+  --legacy-radius-full: 9999px;
 
-  /* Shadows. --shadow-ring exists so the focus ring can satisfy the guard
+  /* Shadows. --legacy-shadow-ring exists so the focus ring can satisfy the guard
      rule that every box-shadow references a --shadow-* token. */
-  --shadow-sm:        0 1px 3px rgba(0, 0, 0, 0.06);
-  --shadow-md:        0 4px 6px rgba(0, 0, 0, 0.07);
-  --shadow-lg:        0 10px 15px rgba(0, 0, 0, 0.08);
-  --shadow-xl:        0 20px 25px rgba(0, 0, 0, 0.10);
-  --shadow-accent:    0 4px 14px rgba(0, 82, 255, 0.25);
-  --shadow-accent-lg: 0 8px 24px rgba(0, 82, 255, 0.35);
-  --shadow-ring:      0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-accent);
+  --legacy-shadow-sm:        0 1px 3px rgba(0, 0, 0, 0.06);
+  --legacy-shadow-md:        0 4px 6px rgba(0, 0, 0, 0.07);
+  --legacy-shadow-lg:        0 10px 15px rgba(0, 0, 0, 0.08);
+  --legacy-shadow-xl:        0 20px 25px rgba(0, 0, 0, 0.10);
+  --legacy-shadow-accent:    0 4px 14px rgba(0, 82, 255, 0.25);
+  --legacy-shadow-accent-lg: 0 8px 24px rgba(0, 82, 255, 0.35);
+  --legacy-shadow-ring:      0 0 0 2px var(--legacy-color-bg), 0 0 0 4px var(--legacy-color-accent);
 
   /* Motion */
-  --ease-out:          cubic-bezier(0.16, 1, 0.3, 1);
-  --duration-fast:     200ms;
-  --duration-lift:     300ms;
-  --duration-entrance: 700ms;
+  --legacy-ease-out:          cubic-bezier(0.16, 1, 0.3, 1);
+  --legacy-duration-fast:     200ms;
+  --legacy-duration-lift:     300ms;
+  --legacy-duration-entrance: 700ms;
 
   /* Controls. Geist ships three control heights — --ds-size-small: 32px,
      --ds-size-medium: 36px, --ds-size-large: 40px — and uses medium as the
      default. 48px was a full step above their largest. */
-  --control-height: 36px;
+  --legacy-control-height: 36px;
 
-  /* --touch-target is an accessibility floor for pointing devices, so it is
+  /* --legacy-touch-target is an accessibility floor for pointing devices, so it is
      resolved per input type rather than fixed. With a fine pointer it tracks
-     --control-height, which keeps every control the same height and still
+     --legacy-control-height, which keeps every control the same height and still
      clears WCAG 2.5.8 Target Size (Minimum, AA) at 24px by a wide margin.
      Coarse pointers get the full 44px below. */
-  --touch-target:   var(--control-height);
+  --legacy-touch-target:   var(--legacy-control-height);
 }
 
 /* Touch and stylus input: restore the 44px target recommended by WCAG 2.5.5
@@ -131,6 +130,6 @@
    a large tablet still gets the generous ones. */
 @media (pointer: coarse) {
   :root {
-    --touch-target: 44px;
+    --legacy-touch-target: 44px;
   }
 }

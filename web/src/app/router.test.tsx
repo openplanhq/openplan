@@ -350,7 +350,7 @@ describe("routeConfig", () => {
       </QueryClientProvider>
     );
 
-    expect(markup).toContain('class="signin-page"');
+    expect(markup).toContain('id="signin-username"');
     expect(markup).toContain("Sign in");
   });
 

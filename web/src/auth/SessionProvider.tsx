@@ -5,6 +5,9 @@ import { ApiRequestError, apiRequestsMade, loginURL, logout as postLogout } from
 import { AuthContext } from "./AuthContext";
 import { clearLoginAttempts, loginLoopDetected } from "./loginAttempts";
 import { useMeQuery } from "./useMeQuery";
+import AuthCard, { AuthCardTitle } from "./AuthCard";
+import { Button } from "@/components/ui/button";
+import { CardContent, CardHeader } from "@/components/ui/card";
 
 // How long before expiry to re-authenticate. Long enough that the round trip
 // completes with room to spare, short enough that it is rare.
@@ -180,21 +183,25 @@ export default function SessionProvider() {
 
   if (status === "loop") {
     return (
-      <div data-testid="auth-loop-error">
-        <h1>We could not keep you signed in</h1>
-        <p>
-          Sign-in worked, but this browser did not hold on to the session, so every page load
-          started it over. That happens when cookies are blocked for this site — by browser
-          settings, an extension, or a privacy mode that clears them between page loads.
-        </p>
-        <p>
-          Allow cookies for this site and try again. If it keeps failing, contact your
-          administrator.
-        </p>
-        <button type="button" onClick={retryLogin} data-testid="auth-loop-retry-button">
-          Try again
-        </button>
-      </div>
+      <AuthCard data-testid="auth-loop-error">
+        <CardHeader>
+          <AuthCardTitle>We could not keep you signed in</AuthCardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          <p className="text-muted-foreground">
+            Sign-in worked, but this browser did not hold on to the session, so every page load
+            started it over. That happens when cookies are blocked for this site — by browser
+            settings, an extension, or a privacy mode that clears them between page loads.
+          </p>
+          <p className="text-muted-foreground">
+            Allow cookies for this site and try again. If it keeps failing, contact your
+            administrator.
+          </p>
+          <Button className="w-full pointer-coarse:h-11" onClick={retryLogin} data-testid="auth-loop-retry-button">
+            Try again
+          </Button>
+        </CardContent>
+      </AuthCard>
     );
   }
 
@@ -202,12 +209,14 @@ export default function SessionProvider() {
 
   if (status === "error") {
     return (
-      <div data-testid="auth-error">
-        <p>Authentication failed. The identity service may be unavailable.</p>
-        <button type="button" onClick={retryMe} data-testid="auth-retry-button">
-          Retry
-        </button>
-      </div>
+      <AuthCard data-testid="auth-error">
+        <CardContent className="grid gap-4">
+          <p>Authentication failed. The identity service may be unavailable.</p>
+          <Button className="w-full pointer-coarse:h-11" onClick={retryMe} data-testid="auth-retry-button">
+            Retry
+          </Button>
+        </CardContent>
+      </AuthCard>
     );
   }
 

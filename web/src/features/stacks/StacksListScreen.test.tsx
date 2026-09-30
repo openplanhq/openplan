@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../../auth/AuthContext";
@@ -96,6 +96,116 @@ describe("StacksListScreen", () => {
     renderScreen(queryClient);
 
     expect(screen.getByTestId("stacks-list-empty")).toBeTruthy();
+  });
+
+  it("lists the stacks in a table, one row each, name then slug", () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stacks("tenant_123"), [
+      stack(),
+      stack({ id: "stack_2", name: "Billing", slug: "billing" })
+    ]);
+
+    renderScreen(queryClient);
+
+    const table = screen.getByRole("table");
+    expect(within(table).getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual(["Name", "Slug"]);
+    const rows = within(table).getAllByRole("row").slice(1);
+    expect(rows.map((row) => within(row).getAllByRole("cell").map((cell) => cell.textContent))).toEqual([
+      ["Payments", "payments"],
+      ["Billing", "billing"]
+    ]);
+    expect(within(rows[0]).getByRole("link", { name: "Payments" }).getAttribute("href")).toBe("/stacks/stack_1");
+  });
+
+  // Fixed layout keeps each column's width whatever a cell holds. A name or
+  // slug longer than its column ends in an ellipsis, and hovering shows it
+  // whole.
+  it("cuts a long name or slug to its column and shows it whole on hover", () => {
+    const name = "payments-core-production-eu-west-1-and-then-some";
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stacks("tenant_123"), [stack({ name, slug: name })]);
+
+    renderScreen(queryClient);
+
+    const link = screen.getByRole("link", { name });
+    expect(link.getAttribute("title")).toBe(name);
+    expect(link.classList).toContain("truncate");
+    const slug = within(screen.getByRole("table")).getAllByRole("cell")[1];
+    expect(slug.getAttribute("title")).toBe(name);
+    expect(slug.classList).toContain("truncate");
+  });
+
+  it("declares the table's column widths, so a long name moves no column", () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stacks("tenant_123"), [stack()]);
+
+    renderScreen(queryClient);
+
+    const table = screen.getByRole("table");
+    expect(table.classList).toContain("table-fixed");
+    expect(table.querySelectorAll("colgroup > col")).toHaveLength(2);
+  });
+
+  it("says so, under a heading, when there are no stacks", () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stacks("tenant_123"), []);
+
+    renderScreen(queryClient);
+
+    const empty = screen.getByTestId("stacks-list-empty");
+    expect(empty.getAttribute("data-slot")).toBe("empty");
+    expect(within(empty).getByRole("heading", { level: 2, name: "No stacks yet" })).toBeTruthy();
+    expect(within(empty).getByText("No stacks visible to you yet.")).toBeTruthy();
+    expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  // base.css gives every h2 the legacy 32px display type until PR 9.
+  it("sets the empty state's heading type itself", () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stacks("tenant_123"), []);
+
+    renderScreen(queryClient);
+
+    const heading = screen.getByRole("heading", { level: 2 }).classList;
+    for (const name of ["font-heading", "text-sm", "font-medium", "tracking-tight"]) {
+      expect(heading).toContain(name);
+    }
+  });
+
+  // --legacy-touch-target gave every control 44px on a touch screen. The
+  // row's link fills its cell, so padding it out makes the whole cell 44px.
+  it("gives every control a 44px target on coarse pointers", () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stacks("tenant_123"), [stack()]);
+
+    renderScreen(queryClient);
+
+    expect(screen.getByTestId("create-stack-link").classList).toContain("pointer-coarse:h-11");
+    const link = screen.getByRole("link", { name: "Payments" }).classList;
+    expect(link).toContain("block");
+    expect(link).toContain("pointer-coarse:py-3");
+  });
+
+  it("gives the retry button a 44px target on coarse pointers", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("network down"));
+
+    renderScreen(testQueryClient());
+
+    await waitFor(() => expect(screen.getByTestId("stacks-list-retry").classList).toContain("pointer-coarse:h-11"));
+  });
+
+  // Until PR 9, body keeps the legacy text colour and base.css colours bare
+  // links. The screen and its links set their own.
+  it("sets its own text colour and its links' colour", () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stacks("tenant_123"), [stack()]);
+
+    const { container } = renderScreen(queryClient);
+
+    expect((container.firstElementChild as HTMLElement).classList).toContain("text-foreground");
+    const link = screen.getByRole("link", { name: "Payments" }).classList;
+    expect(link).toContain("text-foreground");
+    expect(link).toContain("no-underline");
   });
 
   it("renders the shared boundary screen for a handled API error status", async () => {

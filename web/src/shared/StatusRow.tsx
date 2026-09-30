@@ -1,19 +1,16 @@
-import { statusGlyph, statusTone } from "./statusTone";
+import StatusBadge from "./StatusBadge";
+import { statusTone } from "./statusTone";
 
+// A labelled status under a form or panel: the label at one edge, its status
+// at the other, set off from what is above by a rule.
 export default function StatusRow({ label, value }: { label: string; value: string }) {
-  const tone = statusTone(value);
-
   return (
-    <div className="status-row" data-status={value}>
+    <div
+      className="mt-4 flex items-center justify-between gap-3 border-t pt-3 text-sm text-muted-foreground"
+      data-status={value}
+    >
       <span>{label}</span>
-      <strong>
-        <span className={`status-tone status-tone--${tone}`}>
-          <span className="status-tone__glyph" aria-hidden="true">
-            {statusGlyph(tone)}
-          </span>
-          {value}
-        </span>
-      </strong>
+      <StatusBadge tone={statusTone(value)}>{value}</StatusBadge>
     </div>
   );
 }

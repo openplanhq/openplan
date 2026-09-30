@@ -176,6 +176,7 @@ export default function TemplateDetailScreen() {
               {rootPath !== "" && <> · {rootPath}</>} · {latestRevision.source_ref}
             </span>
           }
+          className="mb-0"
         />
 
         {/* Hidden rather than disabled without the permission: the POST would

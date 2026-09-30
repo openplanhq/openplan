@@ -39,7 +39,7 @@ export default function RunLogsPanel({ runId, logs, failed, finished }: RunLogsP
             key={log.phase}
             name={log.phase}
             open={open[log.phase] ?? false}
-            onToggle={() => setOpen((current) => ({ ...current, [log.phase]: !current[log.phase] }))}
+            onOpenChange={(isOpen) => setOpen((current) => ({ ...current, [log.phase]: isOpen }))}
           >
             <RunLogBody runId={runId} log={log} />
           </LogStep>
