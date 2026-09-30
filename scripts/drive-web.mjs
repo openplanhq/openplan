@@ -25,6 +25,7 @@
  *   node scripts/drive-web.mjs --shot out.png --click "dev" --click "Access"
  *   node scripts/drive-web.mjs --click Templates --probe 'document.title'
  *   node scripts/drive-web.mjs --fields --click "dev" --click Environment
+ *   node scripts/drive-web.mjs --fail '*v1/me=500' --reload --shot err.png
  *
  * Flags:
  *   --click <label>   click the <a>/<button> whose text matches (repeatable,
@@ -35,15 +36,25 @@
  *                     which is how field-stretch regressions get caught
  *   --goto <path>     client-side navigate to path (repeatable, applied before
  *                     clicks, 3.5s settle between each)
+ *   --fail <glob>=<status>
+ *                     answer requests whose URL matches glob with that status
+ *                     and the API's JSON error body (repeatable). Takes effect
+ *                     after sign-in, so sign-in itself still works. In the
+ *                     glob, `*` is any run of characters and `?` is exactly
+ *                     one, so a literal `?` can't be matched.
+ *   --eval <expr>     evaluate an expression in the page after --goto and
+ *                     before --reload (repeatable, 1.5s settle after each)
+ *   --reload          reload the page after --eval, so every query runs again
+ *                     against --fail
  *   --signed-out      skip signing in; no credentials needed
  *   --port <n>        devtools port (default 9222)
  */
 import { writeFileSync } from "node:fs";
 
 const argv = process.argv.slice(2);
-const clicks = [];
+const clicks = [], fails = [], evals = [];
 let shot = null, probe = null, fields = false, port = 9222;
-let gotos = [], signedOut = false;
+let gotos = [], signedOut = false, reload = false;
 for (let i = 0; i < argv.length; i++) {
   const next = () => argv[++i];
   if (argv[i] === "--click") clicks.push(next());
@@ -53,6 +64,21 @@ for (let i = 0; i < argv.length; i++) {
   else if (argv[i] === "--port") port = Number(next());
   else if (argv[i] === "--goto") gotos.push(next());
   else if (argv[i] === "--signed-out") signedOut = true;
+  else if (argv[i] === "--fail") fails.push(next());
+  else if (argv[i] === "--eval") evals.push(next());
+  else if (argv[i] === "--reload") reload = true;
+}
+
+// --fail specs, split at the last "=" so a glob may contain one.
+const failures = fails.map((spec) => {
+  const at = spec.lastIndexOf("=");
+  const glob = spec.slice(0, at);
+  const pattern = glob.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".");
+  return { glob, status: Number(spec.slice(at + 1)), test: new RegExp(`^${pattern}$`) };
+});
+if (failures.some((f) => !f.glob || !Number.isInteger(f.status))) {
+  console.error("--fail takes <glob>=<status>, for example '*/v1/me=500'.");
+  process.exit(2);
 }
 
 const USER = process.env.OPENPLAN_USER;
@@ -78,8 +104,26 @@ const send = (method, params = {}) =>
     pending.set(msgId, { resolve, reject });
     ws.send(JSON.stringify({ id: msgId, method, params }));
   });
+// Chrome pauses each request a --fail glob matches and waits for an answer.
+// The body is the API's error shape, so the app's error handling runs as it
+// would for a real failure.
+const answer = ({ requestId, request }) => {
+  const failure = failures.find((f) => f.test.test(request.url));
+  if (!failure) return send("Fetch.continueRequest", { requestId });
+  const body = JSON.stringify({ error: "injected", message: `drive-web --fail ${failure.glob}` });
+  return send("Fetch.fulfillRequest", {
+    requestId,
+    responseCode: failure.status,
+    responseHeaders: [{ name: "Content-Type", value: "application/json" }],
+    body: Buffer.from(body).toString("base64")
+  });
+};
 ws.addEventListener("message", (event) => {
   const msg = JSON.parse(event.data);
+  if (msg.method === "Fetch.requestPaused") {
+    answer(msg.params).catch((error) => console.error("--fail:", error.message));
+    return;
+  }
   const slot = msg.id && pending.get(msg.id);
   if (!slot) return;
   pending.delete(msg.id);
@@ -143,11 +187,28 @@ if (!signedOut && await evaluate("!!document.querySelector('#username')")) {
 }
 console.error("signed in at:", await evaluate("location.pathname"));
 
+// After sign-in, so a --fail on /v1/me doesn't stop the driver signing in.
+if (failures.length) {
+  await send("Fetch.enable", { patterns: failures.map((f) => ({ urlPattern: f.glob, requestStage: "Request" })) });
+}
+
 // Client-side navigation: react-router follows popstate, and a full load
 // would drop the in-memory session state the SPA holds.
 for (const path of gotos) {
   await evaluate(`history.pushState({}, "", ${JSON.stringify(path)}); dispatchEvent(new PopStateEvent("popstate"))`);
   await settle(3500);
+}
+
+for (const expression of evals) {
+  console.error("eval:", await evaluate(expression));
+  await settle(1500);
+}
+
+if (reload) {
+  await send("Page.reload");
+  // A failing query retries three times, 2 to 3 seconds apart, before its
+  // screen gives up and shows the error (queryClient.ts, polling.ts).
+  await settle(12000);
 }
 
 for (const label of clicks) {
