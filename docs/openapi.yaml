@@ -200,8 +200,9 @@ paths:
         The redirect carries the raw ID token as `id_token_hint`, which is how
         RP-initiated logout is specified and what stops the provider
         interrupting with a confirmation page. A provider that advertises no
-        end-session endpoint — Dex, today — gets the site root instead, and its
-        own SSO session outlives openplan's.
+        end-session endpoint — Dex, today — gets the site root instead. Dex
+        v2.45.1 keeps no browser session, so nothing of the sign-in outlives
+        openplan's session except an upstream connector's own.
       operationId: logout
       security: []
       responses:
@@ -220,10 +221,10 @@ paths:
       summary: Accept an OIDC back-channel logout token
       description: |
         A server-to-server POST from the identity provider, not a redirect the
-        browser follows. Point the provider at an address **it** can reach:
-        `OPENPLAN_BACKCHANNEL_LOGOUT_URL`, which is deliberately separate from
-        `OPENPLAN_PUBLIC_URL` because the two differ whenever the provider runs
-        on an internal network or behind split-horizon DNS.
+        browser follows. The address is registered on the provider, not
+        configured in openplan, and must be one **it** can reach — often not
+        `OPENPLAN_PUBLIC_URL`, because the two differ whenever the provider
+        runs on an internal network or behind split-horizon DNS.
 
         Without this endpoint, disabling a user at the provider would not reach
         openplan until their session hit its own expiry — openplan stops consulting

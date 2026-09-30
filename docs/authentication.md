@@ -38,9 +38,13 @@ API compares the discovery document's issuer to `OIDC_ISSUER_URL` byte for
 byte. `curl` resolves `*.localhost` to its own loopback and ignores the alias,
 so test from inside a container with `wget` instead.
 
-Dex v2.45.1 advertises no `end_session_endpoint` and does not send back-channel
-logout, so logout ends the openplan session and returns home while Dex's own
-SSO cookie survives. Dex's `sub` is `base64url(protobuf{user_id, connector_id})`,
+Dex v2.45.1 advertises no `end_session_endpoint` and sends no back-channel
+logout, so logout ends the openplan session and returns home. That is a
+complete logout on this stack: v2.45.1 keeps no browser session of its own
+(browser sessions exist only on Dex's master branch, behind
+`DEX_SESSIONS_ENABLED`), so the next sign-in asks for the password again. An
+upstream connector such as GitHub keeps its own session, and sign-in through
+one can be silent. Dex's `sub` is `base64url(protobuf{user_id, connector_id})`,
 stable for a given user and connector.
 
 ## OIDC Client and Claims
@@ -415,12 +419,13 @@ back-channel logout is a server-to-server POST from the IdP's own process —
 if the IdP runs in its own container or network, `OPENPLAN_PUBLIC_URL` names
 nothing it can reach, and the notification silently never arrives.
 
-`OPENPLAN_BACKCHANNEL_LOGOUT_URL` (optional; defaults to
-`<OPENPLAN_PUBLIC_URL>/v1/auth/backchannel-logout`, unchanged from before) lets
-a deployment register a different, IdP-reachable address. An IdP on the local
-Compose network would use `http://api:8081/v1/auth/backchannel-logout` — the
-API's address there — rather than `http://localhost:5173`, which inside the
-IdP's own container means its own loopback.
+`OPENPLAN_PUBLIC_URL` is not that address. The back-channel logout URL is
+registered on the identity provider, not read by openplan: the API accepts
+the POST wherever it arrives. An IdP on the local Compose network would
+register `http://api:8081/v1/auth/backchannel-logout` — the API's address
+there — rather than `http://localhost:5173`, which inside the IdP's own
+container means its own loopback. Dex v2.45.1 sends no back-channel logout,
+so the reference stack registers nothing.
 
 Also enable session-required logout so the provider includes `sid` in both the
 ID token and the logout token — without it, openplan can only match on `sub`,

@@ -48,9 +48,12 @@ Two earlier decisions are undone deliberately:
   chosen.
 - **No `end_session_endpoint` in discovery.** `Flow.EndSessionURL` already
   returns `""` for a provider without one (`internal/authn/flow.go:123`), so
-  logout ends the openplan session and returns home. The Dex SSO cookie
-  outlives it; the next sign-in may not re-prompt. Acceptable while openplan is
-  Dex's only client.
+  logout ends the openplan session and returns home. That is a complete
+  logout: v2.45.1 keeps no browser session (the source sets no cookie; browser
+  sessions are master-only, behind `DEX_SESSIONS_ENABLED`), so the next
+  sign-in prompts for the password again. What is missing is RP-initiated and
+  back-channel logout, which matter once Dex has a session to end or a second
+  client to tell.
 - **Password API is hash-only.** The gRPC `CreatePassword` takes a bcrypt hash,
   never plaintext. Any future openplan user admin hashes before calling Dex.
 - **Postgres storage is built in**, so Dex gets its own database on the shared

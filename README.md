@@ -74,10 +74,9 @@ still end at their own bounds — nothing breaks.
 
 That URL must be **reachable from the identity provider**, not from the
 browser — a back-channel logout is a server-to-server POST, not a redirect
-the browser follows. The two addresses differ whenever the IdP runs on an
-internal network or behind split-horizon DNS, which is why it is a separate
-setting, `OPENPLAN_BACKCHANNEL_LOGOUT_URL`, rather than always derived from
-`OPENPLAN_PUBLIC_URL`: an IdP running in a container resolves
+the browser follows. It is registered on the provider, not configured in
+openplan, and the two addresses differ whenever the IdP runs on an internal
+network or behind split-horizon DNS: an IdP running in a container resolves
 `http://localhost:5173` (`OPENPLAN_PUBLIC_URL`) to its own loopback, not the
 host's browser-facing port, so it would need
 `http://api:8081/v1/auth/backchannel-logout` instead.
