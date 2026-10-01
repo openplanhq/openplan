@@ -34,3 +34,18 @@ const GLYPHS: Record<StatusTone, string> = {
 export function statusGlyph(tone: StatusTone): string {
   return GLYPHS[tone];
 }
+
+// A tone's text colour, the one its StatusBadge variant uses, for a glyph or
+// a note that carries the tone without the pill. Literal class names, so
+// Tailwind finds them.
+const TEXT_CLASSES: Record<StatusTone, string> = {
+  settled: "text-success",
+  progress: "text-primary",
+  waiting: "text-warning",
+  failed: "text-destructive",
+  canceled: "text-muted-foreground"
+};
+
+export function toneTextClass(tone: StatusTone): string {
+  return TEXT_CLASSES[tone];
+}
