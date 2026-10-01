@@ -33,7 +33,7 @@ interface UndoEntry {
   displayName: string;
 }
 
-// base.css gives every h2 the legacy 32px display type until PR 9, so each
+// base.css gives every h2 the legacy 32px display type until PR 8, so each
 // heading sets its own family, size, weight and tracking.
 const headingClass = "flex items-center gap-2 font-heading text-base leading-snug font-medium tracking-normal";
 
@@ -141,7 +141,7 @@ export default function StackAccessScreen() {
   return (
     // Two columns on a wide screen, split 3:4 as the legacy grid's 0.85fr and
     // 1.15fr were; one column below lg. The grid sets its own text colour,
-    // since body keeps the legacy one until PR 9.
+    // since body keeps the legacy one until PR 8.
     <section className="grid gap-6 text-foreground lg:grid-cols-7">
       <Card className="lg:col-span-3">
         <CardHeader>

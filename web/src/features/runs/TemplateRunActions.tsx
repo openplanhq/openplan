@@ -7,6 +7,10 @@ import { useStartTemplateRunMutation, useTemplateRunsQuery } from "../../api/que
 import type { StackTemplate } from "../../api/types";
 import RequireCapability from "../../auth/RequireCapability";
 import { tenantID } from "../../config";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { isRunInFlightError } from "./runErrors";
 
 interface TemplateRunActionsProps {
@@ -76,42 +80,67 @@ export default function TemplateRunActions({ stackId, stackTemplate }: TemplateR
     return (
       <>
         {disabledReason && (
-          <p className="muted" data-testid="template-run-actions-disabled-reason">
+          <p className="text-sm text-muted-foreground" data-testid="template-run-actions-disabled-reason">
             {disabledReason}
           </p>
         )}
-        <button className="secondary-button" disabled={disabled} onClick={() => void startRun("plan")} type="button">
-          {startingOperation === "plan" ? <Loader2 size={16} className="spin" /> : <FileSearch size={16} />}
+        <Button
+          variant="outline"
+          className="pointer-coarse:h-11"
+          disabled={disabled}
+          onClick={() => void startRun("plan")}
+          type="button"
+        >
+          {startingOperation === "plan" ? <Loader2 className="size-4 animate-spin" /> : <FileSearch className="size-4" />}
           Plan
-        </button>
-        <button className="primary-button" disabled={disabled} onClick={() => void startRun("apply")} type="button">
-          {startingOperation === "apply" ? <Loader2 size={16} className="spin" /> : <Play size={16} />}
+        </Button>
+        <Button
+          className="pointer-coarse:h-11"
+          disabled={disabled}
+          onClick={() => void startRun("apply")}
+          type="button"
+        >
+          {startingOperation === "apply" ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
           Apply
-        </button>
+        </Button>
       </>
     );
   };
 
   return (
-    <div className="template-run-actions" data-testid="template-run-actions">
-      <header className="panel-header">
-        <h2 className="section-title">Runs</h2>
-        <div className="template-run-controls">
+    <Card className="gap-0" data-testid="template-run-actions">
+      <CardHeader className="flex flex-wrap items-center justify-between gap-4 border-b py-4">
+        <h2 className="font-heading text-base leading-snug font-medium tracking-normal">Runs</h2>
+        <div className="flex flex-wrap items-center justify-end gap-2">
           {/* Auto Apply is an approval given in advance, so it is offered
               only to someone who could approve a plan. It applies to Apply
               alone: a plan applies nothing. */}
           <RequireCapability capability="canApprove" stackId={stackId}>
-            <label className="checkbox-label" data-testid="template-run-auto-approve">
-              <input type="checkbox" checked={autoApprove} onChange={(event) => setAutoApprove(event.target.checked)} />
+            <Label
+              className="flex min-h-8 cursor-pointer items-center gap-2 whitespace-nowrap pointer-coarse:min-h-11"
+              data-testid="template-run-auto-approve"
+            >
+              <input
+                className="size-4 accent-primary"
+                type="checkbox"
+                checked={autoApprove}
+                onChange={(event) => setAutoApprove(event.target.checked)}
+              />
               Auto Apply
-            </label>
+            </Label>
           </RequireCapability>
           <RequireCapability capability="canOperate" stackId={stackId} fallback={runButtons("Starting a run requires operator access")}>
             {runButtons()}
           </RequireCapability>
         </div>
-      </header>
-      {errorMessage && <p className="error-text">{errorMessage}</p>}
-    </div>
+      </CardHeader>
+      {errorMessage && (
+        <CardContent className="pt-4">
+          <Alert variant="destructive">
+            <AlertDescription>{errorMessage}</AlertDescription>
+          </Alert>
+        </CardContent>
+      )}
+    </Card>
   );
 }

@@ -1,6 +1,6 @@
 /* Legacy tokens, prefixed --legacy- so none can shadow a Tailwind or shadcn
    variable of the same name. With theme.css this is one of only two files
-   permitted raw colour literals. PR 9 of the shadcn migration deletes it. */
+   permitted raw colour literals. PR 8 of the shadcn migration deletes it. */
 :root {
   /* Canvas and surfaces */
   --legacy-color-bg:        #FAFAFA;

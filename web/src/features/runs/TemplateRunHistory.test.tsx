@@ -89,6 +89,7 @@ describe("TemplateRunHistory", () => {
 
     renderHistory(queryClient);
 
+    expect(screen.getByRole("table").getAttribute("data-slot")).toBe("table");
     expect(screen.getAllByRole("columnheader").map((header) => header.textContent)).toEqual(["Run", "Status", "Changes", "Actor", "Time"]);
     const cells = within(screen.getByTestId("template-run-row-run_plan_1")).getAllByRole("cell");
     expect(cells).toHaveLength(5);
@@ -97,6 +98,9 @@ describe("TemplateRunHistory", () => {
     expect(cells[2].textContent).toBe("+3 ~1 -0");
     expect(cells[3].textContent).toBe("vishu");
     expect(cells[4].querySelector("time")?.getAttribute("datetime")).toBe("2026-07-20T00:00:00Z");
+
+    const columns = screen.getByTestId("template-run-history").querySelectorAll("colgroup > col");
+    expect(columns[4]?.classList).toContain("w-32");
   });
 
   // Only a plan waiting for approval can be acted on; a run in flight cannot

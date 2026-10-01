@@ -124,7 +124,7 @@ describe("EnvironmentScreen", () => {
     expect(screen.queryByRole("table")).toBeNull();
   });
 
-  // base.css gives every h2 the legacy 32px display type until PR 9.
+  // base.css gives every h2 the legacy 32px display type until PR 8.
   it("titles the panel with an h2 that sets its own type", () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);

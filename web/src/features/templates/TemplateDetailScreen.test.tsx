@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../../auth/AuthContext";
@@ -115,7 +115,9 @@ describe("TemplateDetailScreen", () => {
 
     renderScreen(queryClient);
 
-    const rows = screen.getByTestId("template-revisions").querySelectorAll("li");
+    const table = screen.getByTestId("template-revisions");
+    expect(screen.getByRole("table").getAttribute("data-slot")).toBe("table");
+    const rows = within(table).getAllByRole("row").slice(1);
     expect(rows).toHaveLength(2);
     // The API's created_at desc order is rendered as received, not re-sorted.
     expect(rows[0].textContent).toContain("f17f983");
@@ -151,9 +153,9 @@ describe("TemplateDetailScreen", () => {
     // Same rule as the registry list: active is the ordinary outcome, so its
     // absence is the signal and only the exceptions interrupt a scan.
     expect(screen.getByTestId("revision-row-rev_1").textContent).not.toContain("active");
-    expect(screen.getByTestId("revision-row-rev_1").querySelector(".status-tone")).toBeNull();
+    expect(screen.getByTestId("revision-row-rev_1").querySelector('[data-slot="badge"]')).toBeNull();
     expect(screen.getByTestId("revision-row-rev_2").textContent).toContain("invalid");
-    expect(screen.getByTestId("revision-row-rev_2").querySelector(".status-tone")).toBeTruthy();
+    expect(screen.getByTestId("revision-row-rev_2").querySelector('[data-slot="badge"]')).toBeTruthy();
   });
 
   it("states the identity the rows all share, once, in the header", () => {
@@ -179,6 +181,9 @@ describe("TemplateDetailScreen", () => {
     renderScreen(queryClient);
 
     expect(screen.getByTestId("revision-row-rev_1").textContent).toContain("19 Jul 2026");
+
+    const columns = screen.getByTestId("template-revisions").querySelectorAll("colgroup > col");
+    expect(columns[1]?.classList).toContain("w-32");
   });
 
   it("highlights the revision named by the selected search param", () => {
@@ -308,7 +313,7 @@ describe("TemplateDetailScreen", () => {
     // wait has to outlast it — the tests below start from a terminal
     // registration instead, and stay fast.
     await waitFor(() => expect(screen.getByTestId("revision-row-rev_2")).toBeTruthy(), { timeout: 3000 });
-    expect(screen.getByTestId("revision-latest").closest("li")?.getAttribute("data-testid")).toBe("revision-row-rev_2");
+    expect(screen.getByTestId("revision-latest").closest("tr")?.getAttribute("data-testid")).toBe("revision-row-rev_2");
     expect(screen.queryByTestId("template-sync-result")).toBeNull();
   });
 
@@ -328,7 +333,7 @@ describe("TemplateDetailScreen", () => {
     fireEvent.click(screen.getByTestId("template-sync"));
 
     await waitFor(() => expect(screen.getByTestId("template-sync-result").textContent).toContain("Already up to date"));
-    expect(screen.getByTestId("template-revisions").querySelectorAll("li")).toHaveLength(1);
+    expect(screen.getAllByTestId(/^revision-row-/)).toHaveLength(1);
   });
 
   it("shows the registration's error when the sync fails", async () => {

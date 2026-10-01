@@ -128,7 +128,8 @@ renders `muted`.
 
 ## Running old and new styles side by side
 
-Until PR 9, unmigrated screens keep their old styles. `src/styles.css` becomes:
+Unmigrated screens keep their old styles until PR 7 migrates them; PR 8 removes
+those legacy styles. `src/styles.css` becomes:
 
 ```css
 @layer theme, base, legacy, components, utilities;
@@ -182,13 +183,13 @@ audit the same way, and also reach loading, error and transient states, for
 example by stalling or failing `/v1/*` requests over the DevTools protocol
 (`scripts/drive-web.mjs --fail`).
 
-**Known leak, accepted until PR 9.** `base.css` styles bare elements (`h1`–`h4`,
+**Known leak, accepted until PR 8.** `base.css` styles bare elements (`h1`–`h4`,
 `a`, `button`, `input`, `select`, `textarea`, `code`). Those rules still apply on
 migrated screens for any property the Tailwind classes don't set. Migrated
 components therefore set colour, type and decoration on their own `a` and `h1`
 elements: a rule on the element beats a colour it would inherit.
 
-**Mixed look, accepted until PR 8.** Between PR 2 and PR 8, `main` shows
+**Mixed look, accepted until PR 7.** Between PR 2 and PR 7, `main` shows
 migrated and unmigrated screens side by side.
 
 ## Migration order
@@ -202,9 +203,8 @@ migrated and unmigrated screens side by side.
 | 4 | Stacks: list, create, detail shell, environment, credentials | Table; Tabs for the stack's tab row (`RouteTabs`); reuses Card, Input, Label, Button, Alert and Empty |
 | 5 | Stack access | Combobox for the user search; Select for the role picker; reuses Card, Alert, Button, Label and `RoleBadge` |
 | 6 | Stack templates: list, detail shell and its four tabs, config panel, variable fields, add, upgrade | `RouteTabs` from PR 4 for the template's tabs, so each tab keeps its URL; Select; Textarea (vendored in PR 5) |
-| 7 | Template registry: registry, registration, detail | Table, Card, Input |
-| 8 | Runs: detail, logs, history, actions, destroy panel | AlertDialog for the destroy confirmation; ScrollArea for logs |
-| 9 | Cleanup: delete `tokens.css`, `base.css`, `primitives.css`, `features.css`, the `legacy` layer, the old guards and the dead-CSS guard | none |
+| 7 | Combined migration: template registry (registry, registration, detail) and Runs (detail, logs, history, actions, destroy panel) | Table, Card, Input; AlertDialog for destroy confirmation; ScrollArea for logs |
+| 8 | Cleanup: delete `tokens.css`, `base.css`, `primitives.css`, `features.css`, the `legacy` layer, the old guards and the dead-CSS guard | none |
 
 **What PR 2 settled.**
 
@@ -227,7 +227,7 @@ migrated and unmigrated screens side by side.
   of PR 4. The route messages use shadcn's Empty, which PR 4 and PR 7 can
   reuse for the stacks and registry empty states.
 - SessionProvider's two session-error screens migrated with sign-in. No PR
-  row named them, and they relied on Preflight restorations PR 9 would
+  row named them, and they relied on Preflight restorations PR 8 would
   delete.
 - The four route messages (not found, not permitted, service unavailable,
   the placeholder) are `src/app/RouteMessage.tsx`: Empty with a real `h1`.
@@ -265,7 +265,7 @@ migrated and unmigrated screens side by side.
 - The table guard allows a raw `<table>` only in the files
   `LEGACY_TABLES` lists (`TemplateRunHistory`, and the legacy specimen on
   `/styleguide`), held to the old `.data-table` rules. The list can only
-  shrink; PR 8 empties it.
+  shrink; PR 7 empties it.
 - `CredentialsPanel` is shared with a template's Credentials tab, so that
   tab's panel moved in PR 4. Its legacy `.stack-template-tab` wrapper moves
   in PR 6.
@@ -388,7 +388,7 @@ migrated and unmigrated screens side by side.
   `stack-template-list-content`, `stack-template-revision-action`) were
   deleted by hand, out of the dead-CSS guard's sight.
 - The run components on the Runs and Settings tabs (`TemplateRunActions`,
-  `TemplateRunHistory`, `TemplateDestroyPanel`) stay legacy until PR 8.
+  `TemplateRunHistory`, `TemplateDestroyPanel`) stay legacy until PR 7.
   Until then their Plan, Apply and Destroy buttons are under 44px on a
   phone.
 
@@ -449,12 +449,12 @@ use arbitrary values themselves, such as `ring-[3px]`.
 
 **Raw-colour guard** (PR 1). No hex, `rgb()`, `hsl()` or `oklch()` literals in
 any `.css` or `.tsx` file except `theme.css`. `tokens.css` is also exempt until
-PR 9.
+PR 8.
 
 **Table guard** (rewrite of `tables.guard.test.ts`, lands with PR 4, the first
 Table migration)
 - No raw `<table` outside `src/components/ui/`, except in the files
-  `LEGACY_TABLES` lists, which keep the legacy `.data-table` rules until PR 8
+  `LEGACY_TABLES` lists, which keep the legacy `.data-table` rules until PR 7
   moves them.
 - Every `<Table>` opens with a `<colgroup>`.
 - `src/components/ui/table.tsx` is edited to always apply `table-fixed`, after
@@ -462,19 +462,19 @@ Table migration)
   reason is unchanged: with automatic layout, a status changing from `queued`
   to `waiting_approval` shifts every column after it.
 
-**Dead-CSS guard** (PR 1, deleted in PR 9). Every class selector in the five
+**Dead-CSS guard** (PR 1, deleted in PR 8). Every class selector in the five
 legacy files appears in some `.tsx` file, either literally or as the literal
 prefix of a template string (`status-tone--${tone}` counts for every
 `status-tone--*`).
 
-**Legacy-token guard** (PR 1, deleted in PR 9). The five legacy files reference
+**Legacy-token guard** (PR 1, deleted in PR 8). The five legacy files reference
 only `--legacy-*` custom properties, so an unrenamed token can't slip through.
 
 **Existing guards.** `styles.guard.test.ts` is scoped by name to `base.css`,
 `primitives.css` and `features.css`. It used to scan every CSS file in
 `styles/`, which would flag `theme.css`. Its "`styles.css` contains nothing but
 imports" test moves to `theme.guard.test.ts`, which also requires the leading
-`@layer` statement. `styles.guard.test.ts` is deleted in PR 9.
+`@layer` statement. `styles.guard.test.ts` is deleted in PR 8.
 
 ## Testing
 
@@ -504,7 +504,7 @@ components respond to pointer events that `fireEvent.click` doesn't send.
   ArrowDown and ArrowUp move the highlight; Enter selects; Escape closes and
   clears.
 - PR 5 and PR 6, Select: opens from the keyboard, arrows move, Enter commits.
-- PR 8, AlertDialog: focus moves into the dialog, Tab stays inside, Cancel
+- PR 7, AlertDialog: focus moves into the dialog, Tab stays inside, Cancel
   returns focus to the destroy button, and confirm fires the destroy mutation
   once.
 
@@ -519,6 +519,6 @@ components respond to pointer events that `fireEvent.click` doesn't send.
 |---|---|
 | The layer order doesn't behave as described once Tailwind processes the imports. | PR 1 checks the compiled CSS for the order before any screen depends on it. |
 | An old token is missed by the rename and silently overrides a Tailwind variable. | Legacy-token guard. |
-| `base.css` element rules leak onto migrated screens. | Accepted until PR 9; each PR's screenshots catch visible effects. |
+| `base.css` element rules leak onto migrated screens. | Accepted until PR 8; each PR's screenshots catch visible effects. |
 | Base UI needs more jsdom stand-ins than listed. | Added as found, one comment each. |
 | The React 19 upgrade breaks something unrelated. | It lands alone as PR 0, so its cause is unambiguous. |

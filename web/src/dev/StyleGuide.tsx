@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { MemoryRouter, useInRouterContext } from "react-router-dom";
 import RouteMessage from "../app/RouteMessage";
 import Breadcrumb from "../shared/Breadcrumb";
-import HeroGraphic from "../shared/HeroGraphic";
 import { LogStep, LogSteps } from "../shared/LogSteps";
 import StatusRow from "../shared/StatusRow";
 import { statusTone } from "../shared/statusTone";
@@ -12,6 +11,14 @@ import { STACK_ROLES } from "../shared/roles";
 import StatusBadge from "../shared/StatusBadge";
 import "./styleguide.css";
 import { CircleAlert, Info, Plus, Search, SearchX } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogTitle,
+  AlertDialogTrigger
+} from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ScrollArea, ScrollAreaContent, ScrollAreaScrollbar, ScrollAreaThumb, ScrollAreaViewport } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -50,9 +58,7 @@ const SECTIONS: { id: string; title: string }[] = [
   { id: "inputs", title: "Inputs" },
   { id: "panels", title: "Panels" },
   { id: "messaging", title: "Messaging" },
-  { id: "tabs", title: "Tabs" },
-  { id: "tables", title: "Tables" },
-  { id: "showpiece", title: "Showpieces" }
+  { id: "tabs", title: "Tabs" }
 ];
 
 // Literal class names: Tailwind only generates classes it can find in source.
@@ -390,6 +396,44 @@ export default function StyleGuide() {
                 </Table>
               </div>
             </Specimen>
+            <Specimen label="AlertDialog" hint="modal confirmation with focus containment" stack>
+              <AlertDialog>
+                <AlertDialogTrigger
+                  data-testid="styleguide-alert-dialog-trigger"
+                  render={<Button variant="destructive" className="pointer-coarse:h-11" />}
+                >
+                  Destroy 4
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <div className="grid gap-2">
+                    <AlertDialogTitle>Destroy 4 resources?</AlertDialogTitle>
+                    <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <AlertDialogClose render={<Button variant="outline" className="pointer-coarse:h-11" />}>
+                      Cancel
+                    </AlertDialogClose>
+                    <AlertDialogClose render={<Button variant="destructive" className="pointer-coarse:h-11" />}>
+                      Confirm destroy
+                    </AlertDialogClose>
+                  </div>
+                </AlertDialogContent>
+              </AlertDialog>
+            </Specimen>
+            <Specimen label="ScrollArea" hint="scrollable run log" stack>
+              <ScrollArea className="max-h-40 w-full max-w-md rounded-lg border bg-foreground" data-testid="styleguide-scroll-area">
+                <ScrollAreaViewport className="max-h-40 overflow-auto">
+                  <ScrollAreaContent className="p-4">
+                    <pre className="m-0 font-mono text-xs whitespace-pre-wrap text-background">
+                      {Array.from({ length: 16 }, (_, index) => `plan-${index + 1}: Terraform resource details`).join("\n")}
+                    </pre>
+                  </ScrollAreaContent>
+                </ScrollAreaViewport>
+                <ScrollAreaScrollbar>
+                  <ScrollAreaThumb />
+                </ScrollAreaScrollbar>
+              </ScrollArea>
+            </Specimen>
             <Specimen label="Tabs" hint="line variant; RouteTabs renders each tab as a link" stack>
               <Tabs defaultValue="templates">
                 <TabsList variant="line" aria-label="Tabs specimen">
@@ -637,95 +681,7 @@ export default function StyleGuide() {
           </Specimen>
         </Section>
 
-        <Section
-          id="tables"
-          title="Tables"
-          note="Fixed layout: each column takes its width from a <col>, one column takes the slack, and cell contents never resize a column. Long values end in an ellipsis. The frame scrolls sideways; the page never does."
-        >
-          <Specimen label="data-table" hint="xs · sm · lg · md · slack · actions" stack>
-            <div className="data-table-frame">
-              <table className="data-table" style={{ ["--legacy-data-table-min-width" as string]: "1040px" }}>
-                <colgroup>
-                  <col className="data-table__col--xs" />
-                  <col className="data-table__col--sm" />
-                  <col className="data-table__col--lg" />
-                  <col className="data-table__col--md" />
-                  <col />
-                  <col className="data-table__col--actions" />
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th scope="col">Run</th>
-                    <th scope="col">Type</th>
-                    <th scope="col">Status</th>
-                    <th scope="col">Actor</th>
-                    <th scope="col">Time</th>
-                    <th scope="col">
-                      <span className="visually-hidden">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    { number: 3, operation: "apply", status: "waiting_approval", actor: "a.really-long-username@example.com" },
-                    { number: 2, operation: "plan", status: "completed", actor: "admin@openplan.local" },
-                    { number: 1, operation: "plan", status: "failed", actor: "admin@openplan.local" }
-                  ].map((row) => (
-                    <tr key={row.number}>
-                      <td>
-                        <a className="data-table__link" href="#tables">
-                          #{row.number}
-                        </a>
-                      </td>
-                      <td>{row.operation}</td>
-                      <td>
-                        <StatusBadge tone={statusTone(row.status)}>{row.status}</StatusBadge>
-                      </td>
-                      <td className="data-table__mono" title={row.actor}>
-                        {row.actor}
-                      </td>
-                      <td className="data-table__mono">21 Sept, 10:5{row.number}</td>
-                      <td className="data-table__actions">
-                        {row.number === 3 && (
-                          <>
-                            <button className="secondary-button" type="button">
-                              Cancel
-                            </button>
-                            <button className="primary-button" type="button">
-                              Approve
-                            </button>
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Specimen>
-        </Section>
 
-        <Section
-          id="showpiece"
-          title="Showpieces"
-          note="The hero graphic is decorative and aria-hidden. Its ring rotates over 60 seconds and its cards drift on offset timings; all of it stops under prefers-reduced-motion."
-        >
-          <Specimen label="HeroGraphic" hint="real component">
-            <HeroGraphic />
-          </Specimen>
-
-          <Specimen label="showcase" hint="registry empty state" stack>
-            <section className="showcase showcase--compact">
-              <div className="showcase__body">
-                <h2 className="showcase__title gradient-text">No templates yet</h2>
-                <p className="showcase__lede">Register a Terraform module to make it available to your stacks.</p>
-              </div>
-              <div className="showcase__visual">
-                <HeroGraphic />
-              </div>
-            </section>
-          </Specimen>
-        </Section>
       </main>
     </div>
   );

@@ -191,11 +191,9 @@ describe.each(convertedStylesheets())("%s token discipline", (name) => {
 });
 
 describe("accessibility fallbacks", () => {
-  it("gives gradient text a forced-colors fallback", () => {
-    // background-clip text with color:transparent renders invisible under
-    // Windows High Contrast unless the colour is restored explicitly.
+  it("gives the featured panel a forced-colors border fallback", () => {
     const css = readAll();
     expect(css).toMatch(/@media\s*\(forced-colors:\s*active\)/);
-    expect(css).toMatch(/\.gradient-text\s*\{[^}]*color:\s*CanvasText/);
+    expect(css).toMatch(/\.panel--featured\s*\{[^}]*border-color:\s*CanvasText/);
   });
 });

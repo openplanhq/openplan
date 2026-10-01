@@ -158,6 +158,8 @@ describe("TemplateDestroyPanel", () => {
 
     renderPanel(queryClient);
 
+    expect(screen.getByTestId("template-destroy-panel").getAttribute("data-slot")).toBe("card");
+    expect(screen.getByRole("button", { name: /^Destroy$/ }).getAttribute("data-slot")).toBe("button");
     expect(screen.queryByRole("checkbox", { name: /Auto Apply/ })).toBeNull();
     expect(isDisabled(screen.getByRole("button", { name: /^Destroy$/ }))).toBe(false);
   });

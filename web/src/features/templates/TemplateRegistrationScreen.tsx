@@ -9,6 +9,11 @@ import { useRegisterTemplateMutation, useTemplateRegistrationQuery } from "../..
 import { tenantID } from "../../config";
 import Breadcrumb from "../../shared/Breadcrumb";
 import StatusRow from "../../shared/StatusRow";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 // /templates/new owns the register-then-poll flow. Registration is
 // asynchronous: the POST only returns a registration ID, and the revision the
@@ -72,7 +77,7 @@ export default function TemplateRegistrationScreen() {
   }
 
   return (
-    <section className="template-registration-screen" data-unsaved={hasUnsavedRegistration ? "true" : undefined}>
+    <section className="grid min-w-0 gap-6 text-foreground" data-unsaved={hasUnsavedRegistration ? "true" : undefined}>
       <Breadcrumb
         items={[
           { label: "Templates", to: "/templates", testId: "template-registration-back" },
@@ -80,39 +85,65 @@ export default function TemplateRegistrationScreen() {
         ]}
       />
 
-      <section className="panel">
-        {errorMessage && (
-          <div className="alert" data-testid="template-registration-error">
-            {errorMessage}
-          </div>
-        )}
+      <Card className="gap-0">
+        <CardContent className="grid gap-6 p-4">
+          {errorMessage && (
+            <Alert variant="destructive" data-testid="template-registration-error">
+              <AlertDescription>{errorMessage}</AlertDescription>
+            </Alert>
+          )}
 
-        <form className="form-grid" onSubmit={handleRegister}>
-          <label>
-            Owner
-            <input value={repoOwner} onChange={(event) => setRepoOwner(event.target.value)} />
-          </label>
-          <label>
-            Repository
-            <input value={repoName} onChange={(event) => setRepoName(event.target.value)} />
-          </label>
-          <label>
-            Ref
-            <input value={sourceRef} onChange={(event) => setSourceRef(event.target.value)} />
-          </label>
-          <label>
-            Root path
-            <input value={rootPath} onChange={(event) => setRootPath(event.target.value)} />
-          </label>
-          <button className="primary-button" disabled={busy} type="submit">
-            {busy ? <Loader2 size={16} className="spin" /> : <Send size={16} />}
-            Register
-          </button>
-        </form>
+          <form className="grid gap-4 md:grid-cols-2" onSubmit={handleRegister}>
+            <div className="grid gap-2">
+              <Label htmlFor="template-repo-owner">Owner</Label>
+              <Input
+                id="template-repo-owner"
+                className="pointer-coarse:h-11"
+                value={repoOwner}
+                onChange={(event) => setRepoOwner(event.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="template-repo-name">Repository</Label>
+              <Input
+                id="template-repo-name"
+                className="pointer-coarse:h-11"
+                value={repoName}
+                onChange={(event) => setRepoName(event.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="template-source-ref">Ref</Label>
+              <Input
+                id="template-source-ref"
+                className="pointer-coarse:h-11"
+                value={sourceRef}
+                onChange={(event) => setSourceRef(event.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="template-root-path">Root path</Label>
+              <Input
+                id="template-root-path"
+                className="pointer-coarse:h-11"
+                value={rootPath}
+                onChange={(event) => setRootPath(event.target.value)}
+              />
+            </div>
+            <Button className="justify-self-start pointer-coarse:h-11 md:col-span-2" disabled={busy} type="submit">
+              {busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+              Register
+            </Button>
+          </form>
 
-        <StatusRow label="Registration" value={registrationStatus ?? "not started"} />
-        {registration?.error_summary && <p className="error-text">{registration.error_summary}</p>}
-      </section>
+          <StatusRow label="Registration" value={registrationStatus ?? "not started"} />
+          {registration?.error_summary && (
+            <Alert variant="destructive">
+              <AlertDescription>{registration.error_summary}</AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
     </section>
   );
 }

@@ -13,7 +13,7 @@ describe("AuthCard", () => {
     expect(screen.getByRole("main").contains(card)).toBe(true);
   });
 
-  // body keeps the legacy colours until PR 9, so the frame paints its own.
+  // body keeps the legacy colours until PR 8, so the frame paints its own.
   it("sets its own background and text colour", () => {
     render(<AuthCard>body</AuthCard>);
     const classes = screen.getByRole("main").classList;
@@ -23,7 +23,7 @@ describe("AuthCard", () => {
 });
 
 describe("AuthCardTitle", () => {
-  // base.css gives every h1 the legacy 40px display type until PR 9.
+  // base.css gives every h1 the legacy 40px display type until PR 8.
   it("is a level-one heading that sets its own type", () => {
     render(<AuthCardTitle>Sign in</AuthCardTitle>);
     const heading = screen.getByRole("heading", { level: 1, name: "Sign in" });

@@ -105,7 +105,7 @@ describe("RouteTabs", () => {
     }
   });
 
-  // base.css underlines every bare <a> on hover until PR 9.
+  // base.css underlines every bare <a> on hover until PR 8.
   it("keeps the legacy link underline off its tabs", () => {
     renderAt("/s");
     for (const tab of screen.getAllByRole("tab")) {

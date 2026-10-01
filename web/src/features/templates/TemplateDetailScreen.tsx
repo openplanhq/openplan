@@ -13,9 +13,13 @@ import NotFound from "../../app/NotFound";
 import RequireCapability from "../../auth/RequireCapability";
 import { tenantID } from "../../config";
 import Breadcrumb from "../../shared/Breadcrumb";
+import StatusBadge from "../../shared/StatusBadge";
 import { formatTimestamp } from "../../shared/formatTimestamp";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
-import { statusGlyph } from "../../shared/statusTone";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   revisionsForSourceTemplate,
   shortCommitSHA,
@@ -127,9 +131,9 @@ export default function TemplateDetailScreen() {
 
   if (templateRevisionsQuery.status === "pending") {
     return (
-      <section className="template-detail-screen" data-testid="template-detail-loading">
-        <p className="muted">
-          <Loader2 size={16} className="spin" /> Loading revisions…
+      <section className="grid min-w-0 gap-6 text-foreground" data-testid="template-detail-loading">
+        <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+          <Loader2 className="size-4 animate-spin" /> Loading revisions…
         </p>
       </section>
     );
@@ -140,18 +144,20 @@ export default function TemplateDetailScreen() {
       return <>{boundary}</>;
     }
     return (
-      <section className="template-detail-screen" data-testid="template-detail-error">
+      <section className="grid min-w-0 gap-6 text-foreground" data-testid="template-detail-error">
         <Breadcrumb items={[{ label: "Templates", to: "/templates" }, { label: "Template" }]} />
-        <p className="muted">Something went wrong while loading this template.</p>
-        <button
-          className="primary-button"
+        <Alert variant="destructive">
+          <AlertDescription>Something went wrong while loading this template.</AlertDescription>
+        </Alert>
+        <Button
+          className="justify-self-start pointer-coarse:h-11"
           type="button"
           data-testid="template-detail-retry"
           onClick={() => templateRevisionsQuery.refetch()}
         >
-          <RefreshCw size={16} />
+          <RefreshCw className="size-4" />
           Retry
-        </button>
+        </Button>
       </section>
     );
   }
@@ -166,8 +172,8 @@ export default function TemplateDetailScreen() {
   const rootPath = templateRootPathLabel(latestRevision.root_path, "");
 
   return (
-    <section className="template-detail-screen">
-      <header className="template-detail-header">
+    <section className="grid min-w-0 gap-6 text-foreground">
+      <header className="flex flex-wrap items-start justify-between gap-4">
         <Breadcrumb
           items={[{ label: "Templates", to: "/templates", testId: "template-detail-back" }, { label: name }]}
           detail={
@@ -182,75 +188,100 @@ export default function TemplateDetailScreen() {
         {/* Hidden rather than disabled without the permission: the POST would
             be a 403, so there is nothing the user could do to make it work. */}
         <RequireCapability capability="canPublishTemplate">
-          <div className="template-detail__sync">
-            <button
-              className="secondary-button"
+          <div className="grid justify-items-end gap-2">
+            <Button
+              variant="outline"
+              className="pointer-coarse:h-11"
               type="button"
               data-testid="template-sync"
               disabled={syncing}
               onClick={handleSync}
             >
-              {syncing ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}
+              {syncing ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
               Sync
-            </button>
+            </Button>
             {/* A new commit needs no words — it arrives as a new top row. An
                 unchanged ref would otherwise look like nothing happened.
                 The region is mounted empty rather than with its text, because
                 a live region inserted already populated is not announced. */}
-            <p className="muted template-detail__sync-result" aria-live="polite" role="status">
+            <p className="text-right text-sm text-muted-foreground" aria-live="polite" role="status">
               {syncStatus === "completed" && !syncedSomethingNew && (
                 <span data-testid="template-sync-result">Already up to date</span>
               )}
             </p>
             {syncErrorMessage !== "" && (
-              <p className="error-text" data-testid="template-sync-error" role="alert">
-                {syncErrorMessage}
-              </p>
+              <Alert variant="destructive" className="max-w-md" data-testid="template-sync-error">
+                <AlertDescription>{syncErrorMessage}</AlertDescription>
+              </Alert>
             )}
           </div>
         </RequireCapability>
       </header>
 
-      <section className="panel">
-        <h2>Revisions</h2>
-        <ul className="revisions-list" data-testid="template-revisions">
-          {revisions.map((revision, index) => {
-            const tone = unsettledStatusTone(revision.status);
-            const selected = revision.id === selectedTemplateRevisionID;
-            return (
-              <li
-                key={revision.id}
-                data-testid={`revision-row-${revision.id}`}
-                data-selected={selected ? "true" : undefined}
-                aria-current={selected ? "true" : undefined}
-              >
-                <span className="revisions-list__sha">{shortCommitSHA(revision.resolved_commit_sha)}</span>
-                {/* Registration time, not the commit's authoring date — the
-                    commit's own date is not stored on the revision. */}
-                <span className="revisions-list__date">{formatTimestamp(revision.created_at)}</span>
-                {tone !== null && (
-                  <span className={`status-tone status-tone--${tone}`}>
-                    <span className="status-tone__glyph" aria-hidden="true">
-                      {statusGlyph(tone)}
-                    </span>
-                    {revision.status}
-                  </span>
-                )}
-                {/* Rendered on every row, hidden where it does not apply, so
-                    the word reserves its width and the status pills form a
-                    straight column instead of stepping in and out. */}
-                <span
-                  className="revisions-list__latest"
-                  data-latest={index === 0 ? "true" : undefined}
-                  data-testid={index === 0 ? "revision-latest" : undefined}
-                >
-                  latest
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
+      <Card className="min-w-0 gap-0">
+        <CardHeader className="border-b py-3">
+          <h2 className="font-heading text-base leading-snug font-medium tracking-normal">Revisions</h2>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table data-testid="template-revisions">
+            <colgroup>
+              <col className="w-32" />
+              <col className="w-32" />
+              <col className="w-40" />
+              <col className="w-24" />
+            </colgroup>
+            <TableHeader>
+              <TableRow>
+                <TableHead scope="col">Commit</TableHead>
+                <TableHead scope="col">Registered</TableHead>
+                <TableHead scope="col">Status</TableHead>
+                <TableHead scope="col">Latest</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {revisions.map((revision, index) => {
+                const tone = unsettledStatusTone(revision.status);
+                const selected = revision.id === selectedTemplateRevisionID;
+                return (
+                  <TableRow
+                    key={revision.id}
+                    data-testid={`revision-row-${revision.id}`}
+                    data-selected={selected ? "true" : undefined}
+                    aria-current={selected ? "true" : undefined}
+                  >
+                    <TableCell>
+                      <span className={selected ? "font-mono text-sm text-primary" : "font-mono text-sm"}>
+                        {shortCommitSHA(revision.resolved_commit_sha)}
+                      </span>
+                    </TableCell>
+                    {/* Registration time, not the commit's authoring date — the
+                        commit's own date is not stored on the revision. */}
+                    <TableCell className="text-sm text-muted-foreground">
+                      <time dateTime={revision.created_at} title={revision.created_at}>
+                        {formatTimestamp(revision.created_at)}
+                      </time>
+                    </TableCell>
+                    <TableCell>
+                      {tone !== null && <StatusBadge tone={tone}>{revision.status}</StatusBadge>}
+                    </TableCell>
+                    {/* Rendered on every row, hidden where it does not apply, so
+                        the marker reserves its width for the status column. */}
+                    <TableCell>
+                      <span
+                        className={`font-mono text-xs text-muted-foreground ${index === 0 ? "" : "invisible"}`}
+                        data-latest={index === 0 ? "true" : undefined}
+                        data-testid={index === 0 ? "revision-latest" : undefined}
+                      >
+                        latest
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </section>
   );
 }

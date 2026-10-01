@@ -11,7 +11,7 @@
 - **Settings.** The revision action becomes a muted, bordered band holding an outline Button-styled link, or a disabled Button with its reason.
 - **Add template.** The picker rows become bordered buttons, grouped under each repository's heading, and show a `StatusBadge` when the template's latest revision is not active. The configure pane becomes a Card. Its revision picker becomes a Select.
 - **Change revision.** The target picker becomes a Select inside a Card. The notes about added and removed variables become plain lists.
-- **Out of scope:** the run components the Runs and Settings tabs embed (`TemplateRunActions`, `TemplateRunHistory`, `TemplateDestroyPanel`, run detail) belong to PR 8 and stay legacy. Only their wrappers move.
+- **Out of scope for PR 6:** the run components the Runs and Settings tabs embed (`TemplateRunActions`, `TemplateRunHistory`, `TemplateDestroyPanel`, run detail) stay legacy; the combined PR 7 migration moves them with the template registry screens. Only their wrappers move in PR 6.
 
 **Spec:** `docs/superpowers/specs/2026-09-29-shadcn-adoption-design.md`. Read "What PR 2 settled" through "What PR 5 settled", "What every screen PR must do", and "Guards".
 

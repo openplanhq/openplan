@@ -39,7 +39,7 @@ export function useStackTemplateOutlet(): StackTemplateOutletContext {
 // hands it to the tab routes rendered into <Outlet />. Its state sits at the
 // far end of its tab row.
 //
-// Until PR 9, body keeps the legacy text colour, so each state sets its own.
+// Until PR 8, body keeps the legacy text colour, so each state sets its own.
 //
 // Runs is the first tab and the index redirects to it: operating the template
 // is what people come here for. Run detail nests under runs/, so the Runs tab
@@ -91,8 +91,7 @@ export default function StackTemplateDetailShell() {
   return (
     // The tab row, then the tab's content. grid-cols-1 is minmax(0, 1fr), so
     // a wide child such as the run table scrolls in its own frame instead of
-    // widening the page. The run screens below Runs are still on the legacy
-    // layer until PR 8, and inherit this colour.
+    // widening the page.
     <section className="grid min-w-0 grid-cols-1 content-start gap-6 text-foreground" data-testid="stack-template-detail">
       {/* The template's tabs, with its state at the far end of the same
           row. On a phone the state wraps under the tabs. */}

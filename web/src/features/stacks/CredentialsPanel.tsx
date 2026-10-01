@@ -23,7 +23,7 @@ interface CredentialsPanelProps {
 /**
  * Renders write-only credential management for either a Stack or StackTemplate scope.
  *
- * Until PR 9, body keeps the legacy text colour and base.css gives every h2
+ * Until PR 8, body keeps the legacy text colour and base.css gives every h2
  * the legacy 32px display type, so the card sets its own colour and the
  * heading sets its own family, size, weight and tracking.
  */

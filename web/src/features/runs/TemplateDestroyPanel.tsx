@@ -8,6 +8,9 @@ import { useStartTemplateRunMutation, useTemplateRunsQuery } from "../../api/que
 import type { StackTemplate, TemplateRun } from "../../api/types";
 import RequireCapability from "../../auth/RequireCapability";
 import { tenantID } from "../../config";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { canDestroyStackTemplate, isDestroyingStackTemplate } from "../stacks/stackWorkflow";
 import { isRunInFlightError } from "./runErrors";
 
@@ -65,25 +68,31 @@ export default function TemplateDestroyPanel({ stackId, stackTemplate }: Templat
   const controlProps = { canDestroy, destroying, onDestroy: handleDestroy, destroyBusy };
 
   return (
-    <section className="panel danger-zone" data-testid="template-destroy-panel">
-      <h2>Danger zone</h2>
-      <p className="muted">
-        Plans the destruction of all infrastructure this template manages. Nothing is destroyed until that plan is approved, and then it
-        cannot be undone.
-      </p>
-      {errorMessage && (
-        <p className="error-text" data-testid="template-destroy-error">
-          {errorMessage}
+    <Card className="gap-0 border-destructive bg-destructive/10" data-testid="template-destroy-panel">
+      <CardHeader className="gap-2 pb-0">
+        <h2 className="font-heading text-base leading-snug font-medium tracking-normal text-destructive">Danger zone</h2>
+        <p className="text-sm text-muted-foreground">
+          Plans the destruction of all infrastructure this template manages. Nothing is destroyed until that plan is approved, and then it
+          cannot be undone.
         </p>
+      </CardHeader>
+      {errorMessage && (
+        <CardContent className="pt-4">
+          <Alert variant="destructive" data-testid="template-destroy-error">
+            <AlertDescription>{errorMessage}</AlertDescription>
+          </Alert>
+        </CardContent>
       )}
-      <RequireCapability
-        capability="canOperate"
-        stackId={stackId}
-        fallback={<DestroyControl {...controlProps} disabledReason="Destroying requires operator access" />}
-      >
-        <DestroyControl {...controlProps} />
-      </RequireCapability>
-    </section>
+      <CardContent className="flex flex-wrap items-start gap-3 pt-4">
+        <RequireCapability
+          capability="canOperate"
+          stackId={stackId}
+          fallback={<DestroyControl {...controlProps} disabledReason="Destroying requires operator access" />}
+        >
+          <DestroyControl {...controlProps} />
+        </RequireCapability>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -98,13 +107,13 @@ interface DestroyControlProps {
 function DestroyControl({ canDestroy, destroying, onDestroy, destroyBusy, disabledReason }: DestroyControlProps) {
   const disabled = Boolean(disabledReason) || destroying || !canDestroy || destroyBusy;
   return (
-    <div className="button-row">
-      <button className="destructive-button" disabled={disabled} onClick={onDestroy} type="button">
-        {destroyBusy ? <Loader2 size={16} className="spin" /> : <Trash2 size={16} />}
+    <div className="flex flex-wrap items-center gap-3">
+      <Button variant="destructive" className="pointer-coarse:h-11" disabled={disabled} onClick={onDestroy} type="button">
+        {destroyBusy ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
         Destroy
-      </button>
+      </Button>
       {disabledReason && (
-        <p className="muted" data-testid="template-destroy-disabled-reason">
+        <p className="text-sm text-muted-foreground" data-testid="template-destroy-disabled-reason">
           {disabledReason}
         </p>
       )}

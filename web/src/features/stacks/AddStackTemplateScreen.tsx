@@ -25,7 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
-// base.css gives every h2 the legacy 32px display type until PR 9, so each
+// base.css gives every h2 the legacy 32px display type until PR 8, so each
 // heading sets its own family, size, weight and tracking.
 const headingClass = "font-heading text-base leading-snug font-medium tracking-normal";
 
@@ -41,7 +41,7 @@ const headingClass = "font-heading text-base leading-snug font-medium tracking-n
 // default: installing almost always wants the newest validated commit, and
 // moving between commits afterwards is UpgradeStackTemplateScreen's job.
 //
-// Until PR 9, body keeps the legacy text colour, so each state sets its own.
+// Until PR 8, body keeps the legacy text colour, so each state sets its own.
 export default function AddStackTemplateScreen() {
   const { stackId = "" } = useParams<{ stackId: string }>();
   const navigate = useNavigate();

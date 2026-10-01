@@ -11,7 +11,7 @@ const navItems: { to: string; label: string }[] = [
 
 const isDebug = import.meta.env.DEV || import.meta.env.VITE_DEBUG === "true";
 
-// Until PR 9, base.css colours and underlines every bare <a> from the legacy
+// Until PR 8, base.css colours and underlines every bare <a> from the legacy
 // layer, and a rule on the element beats an inherited colour, so each link
 // sets its own. no-underline, not hover:no-underline: Tailwind applies hover:
 // only where the device can hover, but the legacy a:hover also matches a link
