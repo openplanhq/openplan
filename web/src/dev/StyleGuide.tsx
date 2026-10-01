@@ -10,16 +10,20 @@ import { statusTone } from "../shared/statusTone";
 import RoleBadge from "../shared/RoleBadge";
 import StatusBadge from "../shared/StatusBadge";
 import "./styleguide.css";
-import { CircleAlert, Info, Plus, SearchX } from "lucide-react";
+import { CircleAlert, Info, Plus, Search, SearchX } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from "@/components/ui/combobox";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 /**
@@ -71,6 +75,8 @@ const BADGE_VARIANTS = ["default", "secondary", "outline", "destructive", "succe
 const STATUS_SAMPLES = ["completed", "running", "waiting_approval", "failed", "canceled"];
 const ROLES = ["owner", "operator", "approver", "viewer"];
 const titleCase = (word: string) => word[0].toUpperCase() + word.slice(1);
+const ROLE_ITEMS = ROLES.map((role) => ({ value: role, label: titleCase(role) }));
+const STACK_NAMES = ["payments-core", "payments-edge", "billing", "identity", "search"];
 
 const COLOUR_TOKENS = [
   "--legacy-color-bg",
@@ -396,6 +402,52 @@ export default function StyleGuide() {
                 <TabsContent value="templates">The templates installed on this stack.</TabsContent>
                 <TabsContent value="environment">Credentials every template on this stack receives.</TabsContent>
               </Tabs>
+            </Specimen>
+            <Specimen label="Combobox" hint="filters these five as you type; the stack-access search asks the server instead" stack>
+              <Combobox items={STACK_NAMES}>
+                <ComboboxInput aria-label="Combobox specimen" placeholder="Find a stack" showTrigger={false} className="w-full max-w-sm" />
+                <ComboboxContent>
+                  <ComboboxEmpty>No stacks found</ComboboxEmpty>
+                  <ComboboxList>
+                    {(name: string) => (
+                      <ComboboxItem key={name} value={name}>
+                        {name}
+                      </ComboboxItem>
+                    )}
+                  </ComboboxList>
+                </ComboboxContent>
+              </Combobox>
+            </Specimen>
+            <Specimen label="Select" stack>
+              <div className="grid w-full max-w-sm gap-2">
+                <Label htmlFor="sg-select">Default role</Label>
+                <Select items={ROLE_ITEMS} defaultValue="viewer">
+                  <SelectTrigger id="sg-select" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ROLE_ITEMS.map((role) => (
+                      <SelectItem key={role.value} value={role.value}>
+                        {role.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </Specimen>
+            <Specimen label="Input group" hint="Combobox's input is one" stack>
+              <InputGroup className="max-w-sm">
+                <InputGroupAddon>
+                  <Search />
+                </InputGroupAddon>
+                <InputGroupInput aria-label="Input group specimen" placeholder="Search stacks" />
+              </InputGroup>
+            </Specimen>
+            <Specimen label="Textarea" stack>
+              <div className="grid w-full max-w-sm gap-2">
+                <Label htmlFor="sg-textarea">Description</Label>
+                <Textarea id="sg-textarea" placeholder="What this stack is for" />
+              </div>
             </Specimen>
           </Section>
         </div>

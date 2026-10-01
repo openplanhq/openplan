@@ -85,6 +85,20 @@ describe("StyleGuide", () => {
     expect(section.getByRole("tab", { name: "Templates" }).getAttribute("aria-selected")).toBe("true");
   });
 
+  it("shows the components PR 5 added", () => {
+    render(<StyleGuide />);
+    const section = within(screen.getByTestId("sg-theme"));
+    const combobox = section.getByRole("combobox", { name: "Combobox specimen" });
+    expect(combobox.getAttribute("aria-expanded")).toBe("false");
+    expect(combobox.closest('[data-slot="input-group"]')).not.toBeNull();
+    const select = section.getByRole("combobox", { name: "Default role" });
+    expect(select.getAttribute("data-slot")).toBe("select-trigger");
+    expect(select.querySelector('[data-slot="select-value"]')?.textContent).toBe("Viewer");
+    const field = section.getByRole("textbox", { name: "Input group specimen" });
+    expect(field.closest('[data-slot="input-group"]')).not.toBeNull();
+    expect(section.getByLabelText("Description").getAttribute("data-slot")).toBe("textarea");
+  });
+
   it("renders the real RouteMessage", () => {
     render(<StyleGuide />);
     const message = within(screen.getByTestId("sg-theme")).getByTestId("sg-route-message");
