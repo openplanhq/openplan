@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 // The list is authz-filtered by the backend (AUTH-013) — the screen renders
 // whatever listStacks returns and never filters client-side.
 //
-// Until PR 9, body keeps the legacy text colour and base.css styles bare a
+// Until PR 8, body keeps the legacy text colour and base.css styles bare a
 // and h2 from the legacy layer, so the screen sets its own colour and the
 // links and heading set their own type and decoration.
 export default function StacksListScreen() {

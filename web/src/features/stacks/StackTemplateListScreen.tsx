@@ -10,7 +10,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Empty, EmptyHeader, EmptyMedia } from "@/components/ui/empty";
 import { cn } from "@/lib/utils";
 
-// base.css gives every h2 the legacy 32px display type until PR 9, so each
+// base.css gives every h2 the legacy 32px display type until PR 8, so each
 // heading sets its own family, size, weight and tracking.
 const headingClass = "font-heading text-base leading-snug font-medium tracking-normal";
 
@@ -18,7 +18,7 @@ const headingClass = "font-heading text-base leading-snug font-medium tracking-n
 // else. Each row opens that template's own page at templates/:stackTemplateId,
 // where its runs, variables, credentials and settings live on tabs.
 //
-// Until PR 9, body keeps the legacy text colour and base.css styles bare a
+// Until PR 8, body keeps the legacy text colour and base.css styles bare a
 // and h2, so the screen sets its own colour and the links their decoration.
 export default function StackTemplateListScreen() {
   const { stackId = "" } = useParams<{ stackId: string }>();

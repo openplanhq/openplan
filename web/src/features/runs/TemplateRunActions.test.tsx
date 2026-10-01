@@ -139,6 +139,8 @@ describe("TemplateRunActions", () => {
 
     renderActions(queryClient);
 
+    expect(screen.getByRole("button", { name: /Plan/ }).getAttribute("data-slot")).toBe("button");
+    expect(screen.getByRole("button", { name: /^Apply$/ }).getAttribute("data-slot")).toBe("button");
     expect(isDisabled(screen.getByRole("button", { name: /Plan/ }))).toBe(false);
     expect(isDisabled(screen.getByRole("button", { name: /^Apply$/ }))).toBe(false);
     expect(button(/Approve|Cancel|Discard/)).toBeNull();

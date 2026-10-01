@@ -7,7 +7,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from "@/components/u
  * the screen that couldn't render.
  *
  * shadcn's Empty with a real h1: the message is the page's heading, and
- * EmptyTitle renders a div. Until PR 9, base.css styles every h1 from the
+ * EmptyTitle renders a div. Until PR 8, base.css styles every h1 from the
  * legacy layer, so the h1 sets its own family, size, weight and tracking; and
  * body keeps the legacy text colour, so Empty sets its own.
  */

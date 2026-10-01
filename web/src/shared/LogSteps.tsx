@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ScrollArea, ScrollAreaContent, ScrollAreaScrollbar, ScrollAreaThumb, ScrollAreaViewport } from "@/components/ui/scroll-area";
 
 // Logs laid out as CI systems lay out a job's steps: stacked in the order they
 // ran, each a row that opens onto its log. The caller decides which rows are
@@ -31,11 +32,17 @@ export function LogStep({ name, open, onOpenChange, children }: LogStepProps) {
         />
         {name}
       </CollapsibleTrigger>
-      <CollapsibleContent
-        render={<pre />}
-        className="max-h-115 overflow-auto bg-foreground px-5 py-4 font-mono text-sm whitespace-pre-wrap text-background outline-none focus-visible:inset-ring-2 focus-visible:inset-ring-background"
-      >
-        {children}
+      <CollapsibleContent render={<div />} className="bg-foreground">
+        <ScrollArea data-testid={`log-scroll-area-${name}`} className="max-h-115">
+          <ScrollAreaViewport className="max-h-115 overflow-auto">
+            <ScrollAreaContent>
+              <pre className="m-0 px-5 py-4 font-mono text-sm whitespace-pre-wrap text-background">{children}</pre>
+            </ScrollAreaContent>
+          </ScrollAreaViewport>
+          <ScrollAreaScrollbar>
+            <ScrollAreaThumb />
+          </ScrollAreaScrollbar>
+        </ScrollArea>
       </CollapsibleContent>
     </Collapsible>
   );

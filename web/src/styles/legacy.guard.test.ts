@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 // The stylesheets from before the shadcn migration. They sit in the `legacy`
-// cascade layer until PR 9 of
+// cascade layer until PR 8 of
 // docs/superpowers/specs/2026-09-29-shadcn-adoption-design.md deletes them,
 // and this file goes with them.
 const SRC_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -49,7 +49,7 @@ describe("legacy class usage", () => {
     new RegExp(`(?<![\\w-])${name}(?![\\w-])`).test(source) || prefixes.some((p) => name.startsWith(p));
 
   // Each screen PR deletes the rules it stops using. Without this guard, dead
-  // CSS would pile up in the legacy layer until PR 9.
+  // CSS would pile up in the legacy layer until PR 8.
   it.each(LEGACY_SHEETS)("%s styles only classes a component uses", (path) => {
     const classes = new Set<string>();
     for (const [, selector] of readSheet(path).matchAll(/([^{}]+)\{/g)) {

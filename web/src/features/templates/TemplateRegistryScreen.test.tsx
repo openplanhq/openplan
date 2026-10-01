@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../../auth/AuthContext";
@@ -85,8 +85,8 @@ describe("TemplateRegistryScreen", () => {
 
     expect(screen.getByTestId("templates-list")).toBeTruthy();
     // The name leads the row — it is what answers "what is this?".
-    expect(screen.getByTestId("template-row-tpl_1").querySelector(".templates-list__name")?.textContent).toBe("VPC");
-    expect(screen.getByTestId("template-row-tpl_2").querySelector(".templates-list__name")?.textContent).toBe("EKS");
+    expect(within(screen.getByTestId("template-row-tpl_1")).getByRole("link", { name: "VPC" })).toBeTruthy();
+    expect(within(screen.getByTestId("template-row-tpl_2")).getByRole("link", { name: "EKS" })).toBeTruthy();
   });
 
   it("collapses every revision of one template into a single row", () => {
@@ -112,8 +112,10 @@ describe("TemplateRegistryScreen", () => {
 
     renderScreen(queryClient);
 
-    const link = screen.getByTestId("template-row-tpl_1").querySelector("a");
-    expect(link?.getAttribute("href")).toBe("/templates/tpl_1");
+    const link = within(screen.getByTestId("template-row-tpl_1")).getByRole("link", { name: "VPC" });
+    expect(link.getAttribute("href")).toBe("/templates/tpl_1");
+    expect(link.classList).toContain("pointer-coarse:min-h-11");
+    expect(link.classList).toContain("pointer-coarse:py-3");
   });
 
   it("groups templates under one heading per repository", () => {
@@ -130,6 +132,7 @@ describe("TemplateRegistryScreen", () => {
     const vpcGroup = screen.getByTestId("template-group-hashicorp/terraform-aws-vpc");
     const eksGroup = screen.getByTestId("template-group-hashicorp/terraform-aws-eks");
 
+    expect(vpcGroup.getAttribute("data-slot")).toBe("card");
     expect(vpcGroup.textContent).toContain("hashicorp/terraform-aws-vpc");
     expect(vpcGroup.querySelectorAll("li")).toHaveLength(2);
     expect(eksGroup.querySelectorAll("li")).toHaveLength(1);
@@ -174,10 +177,10 @@ describe("TemplateRegistryScreen", () => {
 
     // Active is the ordinary outcome; its absence is the signal.
     expect(screen.getByTestId("template-row-tpl_1").textContent).not.toContain("active");
-    expect(screen.getByTestId("template-row-tpl_1").querySelector(".status-tone")).toBeNull();
+    expect(screen.getByTestId("template-row-tpl_1").querySelector('[data-slot="badge"]')).toBeNull();
     // Invalid is the one status a user must act on, so it keeps its pill.
     expect(screen.getByTestId("template-row-tpl_2").textContent).toContain("invalid");
-    expect(screen.getByTestId("template-row-tpl_2").querySelector(".status-tone")).toBeTruthy();
+    expect(screen.getByTestId("template-row-tpl_2").querySelector('[data-slot="badge"]')).toBeTruthy();
   });
 
   it("highlights the template holding the revision named by the selected param", () => {

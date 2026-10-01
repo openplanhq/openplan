@@ -21,7 +21,7 @@ export type Crumb = {
 // exactly one top-level heading even though nothing on screen looks like one.
 // The separators are aria-hidden, so assistive tech counts only real crumbs.
 //
-// Until PR 9, base.css styles bare a, a:hover and h1 from the legacy layer, and
+// Until PR 8, base.css styles bare a, a:hover and h1 from the legacy layer, and
 // a rule on the element beats a colour inherited from the list. So the links
 // and the h1 set their own colour, type and decoration (AppShell's navLinkClass
 // says why no-underline, not hover:no-underline).

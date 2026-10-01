@@ -8,8 +8,21 @@ import type { TemplateRun } from "../../api/types";
 import RequireCapability from "../../auth/RequireCapability";
 import { tenantID } from "../../config";
 import { formatDateTime } from "../../shared/formatTimestamp";
-import { statusGlyph, statusTone } from "../../shared/statusTone";
+import StatusBadge from "../../shared/StatusBadge";
+import { statusTone } from "../../shared/statusTone";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { planSummaryLabel } from "../stacks/stackWorkflow";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogTitle,
+  AlertDialogTrigger
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { runStatusLabel } from "./runStatusLabel";
 
 interface TemplateRunHistoryProps {
@@ -55,38 +68,45 @@ export default function TemplateRunHistory({ stackId, stackTemplateId }: Templat
   };
 
   return (
-    <div className="template-run-history" data-testid="template-run-history">
-      {errorMessage && <p className="error-text">{errorMessage}</p>}
+    <div className="grid min-w-0 gap-4" data-testid="template-run-history">
+      {errorMessage && (
+        <Alert variant="destructive">
+          <AlertDescription>{errorMessage}</AlertDescription>
+        </Alert>
+      )}
       {runs.length === 0 ? (
-        <p className="muted" data-testid="template-run-history-empty">
-          No runs yet. Plan to see what this template would change.
-        </p>
+        <Empty className="rounded-lg border px-6 py-8" data-testid="template-run-history-empty">
+          <EmptyHeader>
+            <EmptyTitle>No runs yet</EmptyTitle>
+            <EmptyDescription>Plan to see what this template would change.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
-        <div className="data-table-frame">
-          <table className={hasActions ? "data-table run-table run-table--actions" : "data-table run-table"}>
+        <div className="overflow-hidden rounded-lg border">
+          <Table>
             <colgroup>
-              <col className="data-table__col--xs" />
-              <col className="data-table__col--lg" />
-              <col className="data-table__col--md" />
-              <col className="data-table__col--md" />
-              <col />
-              {hasActions && <col className="data-table__col--actions" />}
+              <col className="w-20" />
+              <col className="w-56" />
+              <col className="w-32" />
+              <col className="w-48" />
+              <col className="w-32" />
+              {hasActions && <col className="w-64" />}
             </colgroup>
-            <thead>
-              <tr>
-                <th scope="col">Run</th>
-                <th scope="col">Status</th>
-                <th scope="col">Changes</th>
-                <th scope="col">Actor</th>
-                <th scope="col">Time</th>
+            <TableHeader>
+              <TableRow>
+                <TableHead scope="col">Run</TableHead>
+                <TableHead scope="col">Status</TableHead>
+                <TableHead scope="col">Changes</TableHead>
+                <TableHead scope="col">Actor</TableHead>
+                <TableHead scope="col">Time</TableHead>
                 {hasActions && (
-                  <th scope="col">
-                    <span className="visually-hidden">Actions</span>
-                  </th>
+                  <TableHead className="w-64" scope="col">
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
                 )}
-              </tr>
-            </thead>
-            <tbody>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {runs.map((run) => (
                 <RunRow
                   key={run.id}
@@ -96,8 +116,8 @@ export default function TemplateRunHistory({ stackId, stackTemplateId }: Templat
                   {...rowActions}
                 />
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       )}
     </div>
@@ -121,46 +141,49 @@ function RunRow({ run, to, hasActions, stackId, approvingRunID, discardingRunID,
   const summary = planSummaryLabel(run.plan_summary);
 
   return (
-    <tr data-testid={`template-run-row-${run.id}`}>
-      <td>
-        <Link className="data-table__link" to={to} data-testid={`template-run-history-${run.id}`}>
+    <TableRow data-testid={`template-run-row-${run.id}`}>
+      <TableCell>
+        <Link className="block font-medium text-primary no-underline hover:underline pointer-coarse:py-3" to={to} data-testid={`template-run-history-${run.id}`}>
           #{run.run_number}
         </Link>
-      </td>
-      <td>
-        <span className={`status-tone status-tone--${tone}`} title={run.status} data-testid={`template-run-status-${run.id}`}>
-          <span className="status-tone__glyph" aria-hidden="true">
-            {statusGlyph(tone)}
-          </span>
+      </TableCell>
+      <TableCell>
+        <StatusBadge tone={tone} title={run.status} data-testid={`template-run-status-${run.id}`}>
           {runStatusLabel(run)}
-        </span>
-      </td>
-      <td className="run-table__summary" title={summary ? "To add, to change, to destroy" : undefined} data-testid={`template-run-summary-${run.id}`}>
+        </StatusBadge>
+      </TableCell>
+      <TableCell
+        className="font-mono text-muted-foreground"
+        title={summary ? "To add, to change, to destroy" : undefined}
+        data-testid={`template-run-summary-${run.id}`}
+      >
         {summary}
-      </td>
-      <td className="data-table__mono" title={run.trigger_actor}>
+      </TableCell>
+      <TableCell className="max-w-48 truncate font-mono text-sm text-muted-foreground" title={run.trigger_actor}>
         {run.trigger_actor}
-      </td>
-      <td className="data-table__mono">
+      </TableCell>
+      <TableCell className="font-mono text-sm text-muted-foreground">
         <time dateTime={run.created_at} title={run.created_at}>
           {formatDateTime(run.created_at)}
         </time>
-      </td>
+      </TableCell>
       {hasActions && (
-        <td className="data-table__actions">
+        <TableCell className="w-64">
           {showApprove && (
-            <WaitingRunActions
-              run={run}
-              stackId={stackId}
-              approveBusy={approvingRunID === run.id}
-              discardBusy={discardingRunID === run.id}
-              onApprove={() => onApprove(run)}
-              onDiscard={() => onDiscard(run)}
-            />
+            <div className="flex flex-wrap gap-2">
+              <WaitingRunActions
+                run={run}
+                stackId={stackId}
+                approveBusy={approvingRunID === run.id}
+                discardBusy={discardingRunID === run.id}
+                onApprove={() => onApprove(run)}
+                onDiscard={() => onDiscard(run)}
+              />
+            </div>
           )}
-        </td>
+        </TableCell>
       )}
-    </tr>
+    </TableRow>
   );
 }
 
@@ -177,48 +200,55 @@ interface WaitingRunActionsProps {
 // throws the plan away, and Approve, which applies exactly that saved plan.
 //
 // On a destroy run approving destroys what the template manages, so the
-// button is red, says how much it destroys, and takes a second click:
-// approving is the irreversible step, since the Settings button only planned
-// it. While it asks, Keep and Confirm take the place of Discard and Destroy,
-// so there are never more than two buttons.
+// red button opens an AlertDialog before the irreversible approval. The dialog
+// offers Cancel and Confirm destroy; the Settings button only plans it.
 export function WaitingRunActions({ run, stackId, approveBusy, discardBusy, onApprove, onDiscard }: WaitingRunActionsProps) {
-  const [confirming, setConfirming] = useState(false);
   const count = run.plan_summary?.destroy ?? 0;
   const title = `Destroy ${count} ${count === 1 ? "resource" : "resources"}`;
-
-  if (confirming) {
-    return (
-      <RequireCapability capability="canApprove" stackId={stackId}>
-        <button className="secondary-button" type="button" disabled={approveBusy} onClick={() => setConfirming(false)}>
-          Keep
-        </button>
-        <button className="destructive-button" type="button" title={title} disabled={approveBusy} onClick={onApprove}>
-          {approveBusy ? <Loader2 size={16} className="spin" /> : <Trash2 size={16} />}
-          Confirm destroy
-        </button>
-      </RequireCapability>
-    );
-  }
 
   return (
     <>
       <RequireCapability capability="canOperate" stackId={stackId}>
-        <button className="secondary-button" type="button" disabled={discardBusy} onClick={onDiscard}>
-          {discardBusy ? <Loader2 size={16} className="spin" /> : <CircleStop size={16} />}
+        <Button variant="outline" className="pointer-coarse:h-11" disabled={discardBusy} onClick={onDiscard} type="button">
+          {discardBusy ? <Loader2 className="size-4 animate-spin" /> : <CircleStop className="size-4" />}
           Discard
-        </button>
+        </Button>
       </RequireCapability>
       <RequireCapability capability="canApprove" stackId={stackId}>
         {run.operation === "destroy" ? (
-          <button className="destructive-button" type="button" title={title} disabled={approveBusy} onClick={() => setConfirming(true)}>
-            <Trash2 size={16} />
-            Destroy {count}
-          </button>
+          <AlertDialog>
+            <AlertDialogTrigger
+              render={<Button variant="destructive" className="pointer-coarse:h-11" disabled={approveBusy} title={title} />}
+            >
+              <Trash2 className="size-4" />
+              Destroy {count}
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <div className="grid gap-2">
+                <AlertDialogTitle>{title}?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Approving this plan destroys these resources. This action cannot be undone.
+                </AlertDialogDescription>
+              </div>
+              <div className="flex flex-wrap justify-end gap-2">
+                <AlertDialogClose render={<Button variant="outline" className="pointer-coarse:h-11" />}>
+                  Cancel
+                </AlertDialogClose>
+                <AlertDialogClose
+                  render={<Button variant="destructive" className="pointer-coarse:h-11" disabled={approveBusy} />}
+                  onClick={onApprove}
+                >
+                  {approveBusy ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                  Confirm destroy
+                </AlertDialogClose>
+              </div>
+            </AlertDialogContent>
+          </AlertDialog>
         ) : (
-          <button className="primary-button" type="button" disabled={approveBusy} onClick={onApprove}>
-            {approveBusy ? <Loader2 size={16} className="spin" /> : <Check size={16} />}
+          <Button className="pointer-coarse:h-11" disabled={approveBusy} onClick={onApprove} type="button">
+            {approveBusy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
             Approve
-          </button>
+          </Button>
         )}
       </RequireCapability>
     </>

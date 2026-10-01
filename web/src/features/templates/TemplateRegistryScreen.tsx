@@ -3,10 +3,13 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useTemplateRevisionsQuery } from "../../api/queries";
 import { tenantID } from "../../config";
 import Breadcrumb from "../../shared/Breadcrumb";
-import HeroGraphic from "../../shared/HeroGraphic";
+import StatusBadge from "../../shared/StatusBadge";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
-import { statusGlyph } from "../../shared/statusTone";
-import { useInView } from "../../shared/useInView";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { buttonVariants, Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import {
   groupTemplatesByRepository,
   revisionCountLabel,
@@ -29,13 +32,12 @@ export default function TemplateRegistryScreen() {
   const selectedTemplateRevisionID = searchParams.get("selected") ?? "";
   const templateRevisionsQuery = useTemplateRevisionsQuery(tenantID);
   const boundary = useQueryErrorBoundary(templateRevisionsQuery.error);
-  const { ref: emptyStateRef, visible: emptyStateVisible } = useInView<HTMLDivElement>();
 
   if (templateRevisionsQuery.status === "pending") {
     return (
-      <section className="template-registry-screen" data-testid="template-registry-loading">
-        <p className="muted">
-          <Loader2 size={16} className="spin" /> Loading templates…
+      <section className="grid min-w-0 gap-6 text-foreground" data-testid="template-registry-loading">
+        <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+          <Loader2 className="size-4 animate-spin" /> Loading templates…
         </p>
       </section>
     );
@@ -46,18 +48,20 @@ export default function TemplateRegistryScreen() {
       return <>{boundary}</>;
     }
     return (
-      <section className="template-registry-screen" data-testid="template-registry-error">
+      <section className="grid min-w-0 gap-6 text-foreground" data-testid="template-registry-error">
         <Breadcrumb items={[{ label: "Templates" }]} />
-        <p className="muted">Something went wrong while loading templates.</p>
-        <button
-          className="primary-button"
+        <Alert variant="destructive">
+          <AlertDescription>Something went wrong while loading templates.</AlertDescription>
+        </Alert>
+        <Button
+          className="justify-self-start pointer-coarse:h-11"
           type="button"
           data-testid="template-registry-retry"
           onClick={() => templateRevisionsQuery.refetch()}
         >
-          <RefreshCw size={16} />
+          <RefreshCw className="size-4" />
           Retry
-        </button>
+        </Button>
       </section>
     );
   }
@@ -65,79 +69,74 @@ export default function TemplateRegistryScreen() {
   const templateRevisions = templateRevisionsQuery.data;
 
   return (
-    <section className="template-registry-screen">
-      <header className="templates-list-header">
+    <section className="grid min-w-0 gap-6 text-foreground">
+      <header className="flex flex-wrap items-center justify-between gap-4">
         <Breadcrumb items={[{ label: "Templates" }]} className="mb-0" />
-        <Link className="primary-button" to="/templates/new" data-testid="register-template-link">
-          <Plus size={16} />
+        <Link className={buttonVariants({ className: "pointer-coarse:h-11" })} to="/templates/new" data-testid="register-template-link">
+          <Plus className="size-4" />
           Register template
         </Link>
       </header>
       {templateRevisions.length === 0 ? (
-        <section className="showcase showcase--compact" data-testid="templates-list-empty">
-          <div className="showcase__body reveal" ref={emptyStateRef} data-visible={emptyStateVisible}>
-            <h2 className="showcase__title gradient-text">No templates yet</h2>
-            <p className="showcase__lede">Register a Terraform module to make it available to your stacks.</p>
-          </div>
-          <div className="showcase__visual">
-            <HeroGraphic />
-          </div>
-        </section>
+        <Empty className="rounded-lg border px-6 py-8" data-testid="templates-list-empty">
+          <EmptyHeader>
+            <EmptyTitle>No templates yet</EmptyTitle>
+            <EmptyDescription>Register a Terraform module to make it available to your stacks.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
-        <div className="templates-groups" data-testid="templates-list">
+        <div className="grid min-w-0 content-start gap-6" data-testid="templates-list">
           {groupTemplatesByRepository(templateRevisions).map((group) => (
-            <section className="templates-group" key={group.key} data-testid={`template-group-${group.key}`}>
-              <h2 className="templates-group__heading">
-                <span className="templates-group__repo">
+            <Card className="min-w-0 gap-0" key={group.key} data-testid={`template-group-${group.key}`}>
+              <CardHeader className="flex flex-row items-center justify-between gap-3 border-b py-3">
+                <h2 className="min-w-0 break-all font-heading text-sm font-medium tracking-normal">
                   {group.repoOwner}/{group.repoName}
-                </span>
-                <span className="templates-group__count" data-testid={`template-group-count-${group.key}`}>
+                </h2>
+                <Badge variant="outline" className="shrink-0" data-testid={`template-group-count-${group.key}`}>
                   {group.sourceTemplates.length}
-                </span>
-              </h2>
-              <ul className="templates-list">
-                {group.sourceTemplates.map((sourceTemplate) => {
-                  const selected = sourceTemplate.revisions.some(
-                    (revision) => revision.id === selectedTemplateRevisionID
-                  );
-                  const { status } = sourceTemplate.latestRevision;
-                  const unsettledTone = unsettledStatusTone(status);
-                  const rootPath = templateRootPathLabel(sourceTemplate.rootPath, sourceTemplate.name);
-                  return (
-                    <li
-                      key={sourceTemplate.sourceTemplateID}
-                      data-testid={`template-row-${sourceTemplate.sourceTemplateID}`}
-                      data-selected={selected ? "true" : undefined}
-                      aria-current={selected ? "true" : undefined}
-                    >
-                      <div className="templates-list__main">
-                        <Link
-                          className="templates-list__name"
-                          to={`/templates/${encodeURIComponent(sourceTemplate.sourceTemplateID)}`}
-                        >
-                          {sourceTemplate.name}
-                        </Link>
-                        {rootPath !== "" && <small className="muted">{rootPath}</small>}
-                      </div>
-                      <span className="templates-list__meta">
-                        {unsettledTone !== null && (
-                          <span className={`status-tone status-tone--${unsettledTone}`}>
-                            <span className="status-tone__glyph" aria-hidden="true">
-                              {statusGlyph(unsettledTone)}
-                            </span>
-                            {status}
+                </Badge>
+              </CardHeader>
+              <CardContent className="p-0">
+                <ul className="divide-y">
+                  {group.sourceTemplates.map((sourceTemplate) => {
+                    const selected = sourceTemplate.revisions.some(
+                      (revision) => revision.id === selectedTemplateRevisionID
+                    );
+                    const { status } = sourceTemplate.latestRevision;
+                    const unsettledTone = unsettledStatusTone(status);
+                    const rootPath = templateRootPathLabel(sourceTemplate.rootPath, sourceTemplate.name);
+                    return (
+                      <li
+                        key={sourceTemplate.sourceTemplateID}
+                        className="flex min-w-0 flex-wrap items-center justify-between gap-4 p-4 hover:bg-muted/50 data-[selected=true]:bg-muted/50"
+                        data-testid={`template-row-${sourceTemplate.sourceTemplateID}`}
+                        data-selected={selected ? "true" : undefined}
+                        aria-current={selected ? "true" : undefined}
+                      >
+                        <div className="grid min-w-0 gap-1">
+                          <Link
+                            className="block min-h-8 break-all font-medium text-foreground no-underline hover:text-primary hover:underline pointer-coarse:min-h-11 pointer-coarse:py-3"
+                            to={`/templates/${encodeURIComponent(sourceTemplate.sourceTemplateID)}`}
+                          >
+                            {sourceTemplate.name}
+                          </Link>
+                          {rootPath !== "" && (
+                            <span className="break-all font-mono text-xs text-muted-foreground">{rootPath}</span>
+                          )}
+                        </div>
+                        <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-3 text-xs text-muted-foreground">
+                          {unsettledTone !== null && <StatusBadge tone={unsettledTone}>{status}</StatusBadge>}
+                          <span className="break-all font-mono">
+                            {sourceTemplate.sourceRef} · {shortCommitSHA(sourceTemplate.latestRevision.resolved_commit_sha)} ·{" "}
+                            {revisionCountLabel(sourceTemplate.revisions.length)}
                           </span>
-                        )}
-                        <span className="templates-list__rev">
-                          {sourceTemplate.sourceRef} · {shortCommitSHA(sourceTemplate.latestRevision.resolved_commit_sha)}{" "}
-                          · {revisionCountLabel(sourceTemplate.revisions.length)}
                         </span>
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}

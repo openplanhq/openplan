@@ -28,7 +28,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
-// base.css gives every h2 the legacy 32px display type until PR 9, so each
+// base.css gives every h2 the legacy 32px display type until PR 8, so each
 // heading sets its own family, size, weight and tracking.
 const headingClass = "font-heading text-base leading-snug font-medium tracking-normal";
 
@@ -38,7 +38,7 @@ const headingClass = "font-heading text-base leading-snug font-medium tracking-n
 // depended on an invisible source-template match; here the candidates are
 // filtered to the valid ones and the variable changes are stated outright.
 //
-// Until PR 9, body keeps the legacy text colour, so each state sets its own.
+// Until PR 8, body keeps the legacy text colour, so each state sets its own.
 export default function UpgradeStackTemplateScreen() {
   const { stackId = "", stackTemplateId = "" } = useParams<{ stackId: string; stackTemplateId: string }>();
   const navigate = useNavigate();

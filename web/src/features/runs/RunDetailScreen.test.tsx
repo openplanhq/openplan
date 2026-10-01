@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../../auth/AuthContext";
@@ -240,8 +241,11 @@ describe("RunDetailScreen", () => {
 
     expect(screen.getByTestId("run-detail-screen")).toBeTruthy();
     expect(screen.getByTestId("run-detail-status").textContent).toContain("No changes");
+    expect(screen.getByTestId("run-detail-status").getAttribute("data-tone")).toBe("settled");
+    expect(screen.getByTestId("run-logs-panel").getAttribute("data-slot")).toBe("card");
     expect(screen.getByText("main @ abcdef1")).toBeTruthy();
     await waitFor(() => expect(screen.getByText("plan log body")).toBeTruthy());
+    expect(screen.getByTestId("log-scroll-area-plan").getAttribute("data-slot")).toBe("scroll-area");
     const initToggle = screen.getByRole("button", { name: "init" });
     const planToggle = screen.getByRole("button", { name: "plan" });
     expect(initToggle.getAttribute("aria-expanded")).toBe("false");
@@ -414,9 +418,9 @@ describe("RunDetailScreen", () => {
     expect(screen.getByText("+2 ~0 -1")).toBeTruthy();
   });
 
-  // Approving a destroy plan is what destroys, so it names the count and takes
-  // a second click before it calls the approval endpoint.
-  it("asks for a second click before approving a destroy plan", async () => {
+  // Approving a destroy plan is what destroys, so it opens an accessible modal
+  // confirmation before it calls the approval endpoint.
+  it("traps focus in destroy confirmation, restores focus on cancel, and approves once", async () => {
     const queryClient = testQueryClient();
     seedCapabilities(queryClient, allAllowed);
     queryClient.setQueryData(
@@ -434,13 +438,34 @@ describe("RunDetailScreen", () => {
     });
 
     renderScreen(queryClient);
+    const user = userEvent.setup();
+    const destroyTrigger = screen.getByRole("button", { name: /Destroy 4/ });
+    await user.click(destroyTrigger);
 
-    fireEvent.click(screen.getByRole("button", { name: /Destroy 4/ }));
+    const dialog = await screen.findByRole("alertdialog");
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+    await user.tab();
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+    await user.tab();
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+    await user.tab();
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(document.activeElement).toBe(destroyTrigger);
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
-    fireEvent.click(screen.getByRole("button", { name: /Confirm/ }));
+
+    await user.click(destroyTrigger);
+    const reopenedDialog = await screen.findByRole("alertdialog");
+    await user.click(within(reopenedDialog).getByRole("button", { name: /Confirm destroy/ }));
     await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/template-runs/run_1/approval"), expect.objectContaining({ method: "POST" }))
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/template-runs/run_1/approval"),
+        expect.objectContaining({ method: "POST" })
+      )
     );
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
   });
 
   it("hides Approve when canApprove is denied", async () => {

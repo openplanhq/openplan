@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
  * centred on the viewport, which marks them as a threshold rather than a place
  * inside the product.
  *
- * Until PR 9, body keeps the legacy colours (see base.css), so the frame sets
+ * Until PR 8, body keeps the legacy colours (see base.css), so the frame sets
  * its own background and text colour.
  */
 export default function AuthCard({ className, ...props }: ComponentProps<typeof Card>) {
@@ -20,7 +20,7 @@ export default function AuthCard({ className, ...props }: ComponentProps<typeof 
 }
 
 /**
- * CardTitle's look on a real h1, since CardTitle renders a div. Until PR 9,
+ * CardTitle's look on a real h1, since CardTitle renders a div. Until PR 8,
  * base.css gives every h1 the legacy 40px display type, and a rule on the
  * element beats anything it would inherit, so this sets its own family, size,
  * weight and tracking.

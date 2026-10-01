@@ -79,6 +79,8 @@ describe("TemplateRegistrationScreen", () => {
     expect(screen.getByLabelText(/Repository/)).toBeTruthy();
     expect(screen.getByLabelText(/Ref/)).toBeTruthy();
     expect(screen.getByLabelText(/Root path/)).toBeTruthy();
+    expect(screen.getByLabelText(/Owner/).getAttribute("data-slot")).toBe("input");
+    expect(screen.getByRole("button", { name: /Register/ }).getAttribute("data-slot")).toBe("button");
     expect(screen.getByRole("button", { name: /Register/ })).toBeTruthy();
   });
 

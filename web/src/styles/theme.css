@@ -1,4 +1,4 @@
-/* The shadcn theme. With tokens.css (legacy, until PR 9) this is one of only
+/* The shadcn theme. With tokens.css (legacy, until PR 8) this is one of only
    two files permitted raw colour literals. Values are hex, converted from
    shadcn's neutral oklch() defaults, so theme.guard.test.ts can compute
    contrast. Light only: there is deliberately no .dark block. */

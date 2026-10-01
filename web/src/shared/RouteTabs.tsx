@@ -43,7 +43,7 @@ export function RouteTabs({
  * One tab of a RouteTabs row. `to` and `end` are NavLink's: `end` keeps a
  * parent route's tab from matching its children.
  *
- * Until PR 9, base.css underlines every bare <a> on hover from the legacy
+ * Until PR 8, base.css underlines every bare <a> on hover from the legacy
  * layer, so the tab sets no-underline itself (AppShell's navLinkClass says
  * why not hover:no-underline).
  */

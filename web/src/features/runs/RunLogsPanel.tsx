@@ -3,6 +3,7 @@ import { SquareTerminal } from "lucide-react";
 import { useTemplateRunLogQuery } from "../../api/queries";
 import type { TemplateRunLog } from "../../api/types";
 import { tenantID } from "../../config";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { LogStep, LogSteps } from "../../shared/LogSteps";
 
 interface RunLogsPanelProps {
@@ -28,9 +29,9 @@ export default function RunLogsPanel({ runId, logs, failed, finished }: RunLogsP
 
   let content;
   if (logs === undefined) {
-    content = <p className="muted">{failed ? "Could not load this run's logs." : "Loading logs…"}</p>;
+    content = <p className="text-sm text-muted-foreground">{failed ? "Could not load this run's logs." : "Loading logs…"}</p>;
   } else if (logs.length === 0) {
-    content = <p className="muted">{finished ? "No logs." : "No logs yet."}</p>;
+    content = <p className="text-sm text-muted-foreground">{finished ? "No logs." : "No logs yet."}</p>;
   } else {
     content = (
       <LogSteps>
@@ -49,13 +50,13 @@ export default function RunLogsPanel({ runId, logs, failed, finished }: RunLogsP
   }
 
   return (
-    <section className="panel wide">
-      <h2>
-        <SquareTerminal size={18} />
-        Logs
-      </h2>
-      {content}
-    </section>
+    <Card className="gap-0" data-testid="run-logs-panel">
+      <CardHeader className="flex flex-row items-center gap-2 py-3">
+        <SquareTerminal className="size-4 text-muted-foreground" aria-hidden="true" />
+        <h2 className="font-heading text-base leading-snug font-medium tracking-normal">Logs</h2>
+      </CardHeader>
+      <CardContent className="min-w-0">{content}</CardContent>
+    </Card>
   );
 }
 

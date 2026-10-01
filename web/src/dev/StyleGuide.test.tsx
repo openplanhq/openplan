@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import StyleGuide from "./StyleGuide";
 
@@ -105,12 +106,18 @@ describe("StyleGuide", () => {
     expect(message.getAttribute("data-slot")).toBe("empty");
   });
 
-  // The showcase is left only to the stacks and registry empty states. The
-  // service-unavailable screen it used to show is a RouteMessage now.
-  it("shows the showcase with copy from a screen that still uses it", () => {
+  it("shows the AlertDialog and ScrollArea components used by PR 7", async () => {
     render(<StyleGuide />);
-    expect(screen.getByText("No templates yet")).toBeTruthy();
-    expect(screen.queryByText("Authorization service unavailable")).toBeNull();
+    const section = within(screen.getByTestId("sg-theme"));
+    expect(section.getByTestId("styleguide-scroll-area").getAttribute("data-slot")).toBe("scroll-area");
+    await userEvent.setup().click(section.getByTestId("styleguide-alert-dialog-trigger"));
+    expect(screen.getByRole("alertdialog")).toBeTruthy();
+  });
+
+  it("omits the retired hero graphic and registry showcase", () => {
+    render(<StyleGuide />);
+    expect(screen.queryByText("HeroGraphic")).toBeNull();
+    expect(screen.queryByText("No templates yet")).toBeNull();
   });
 
   // base.css sizes every bare h1 at 40px, and the intro's is the one bare h1

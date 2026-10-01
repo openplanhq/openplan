@@ -11,8 +11,12 @@ import {
 import { isTerminalRunStatus } from "../../api/polling";
 import { tenantID } from "../../config";
 import { formatDateTime } from "../../shared/formatTimestamp";
+import StatusBadge from "../../shared/StatusBadge";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
-import { statusGlyph, statusTone } from "../../shared/statusTone";
+import { statusTone } from "../../shared/statusTone";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { planSummaryLabel } from "../stacks/stackWorkflow";
 import RunLogsPanel from "./RunLogsPanel";
 import { runProgressTag, runStatusLabel } from "./runStatusLabel";
@@ -74,8 +78,8 @@ export default function RunDetailScreen() {
   // lacks only means "no such run" once a refetch has confirmed it.
   if (runsQuery.status === "success" && !runsQuery.isFetching && runId === "") {
     return (
-      <section className="run-detail-screen" data-testid="run-detail-missing">
-        <p className="muted">This template has no run #{runNumber}.</p>
+      <section className="grid min-w-0 gap-6 text-foreground" data-testid="run-detail-missing">
+        <p className="text-sm text-muted-foreground">This template has no run #{runNumber}.</p>
       </section>
     );
   }
@@ -85,47 +89,46 @@ export default function RunDetailScreen() {
       return <>{boundary}</>;
     }
     return (
-      <section className="run-detail-screen" data-testid="run-detail-error">
-        <p className="muted">Something went wrong while loading the run.</p>
-        <button
-          className="primary-button"
+      <section className="grid min-w-0 gap-6 text-foreground" data-testid="run-detail-error">
+        <Alert variant="destructive">
+          <AlertDescription>Something went wrong while loading the run.</AlertDescription>
+        </Alert>
+        <Button
+          className="pointer-coarse:h-11"
           type="button"
           data-testid="run-detail-retry"
           onClick={() => (runsQuery.status === "error" ? runsQuery.refetch() : runQuery.refetch())}
         >
-          <RefreshCw size={16} />
+          <RefreshCw className="size-4" />
           Retry
-        </button>
+        </Button>
       </section>
     );
   }
 
   if (runQuery.status === "pending") {
     return (
-      <section className="run-detail-screen" data-testid="run-detail-loading">
-        <p className="muted">
-          <Loader2 size={16} className="spin" /> Loading run…
+      <section className="grid min-w-0 gap-6 text-foreground" data-testid="run-detail-loading">
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" /> Loading run…
         </p>
       </section>
     );
   }
 
   return (
-    <section className="run-detail-screen" data-testid="run-detail-screen">
+    <section className="grid min-w-0 gap-6 text-foreground" data-testid="run-detail-screen">
       {run && (
         <>
-          <header className="run-detail-header">
-            <span className="run-detail-title">
-              <span className="run-detail-number">Run #{run.run_number}</span>
-              <span className={`status-tone status-tone--${statusTone(run.status)}`} title={run.status} data-testid="run-detail-status">
-                <span className="status-tone__glyph" aria-hidden="true">
-                  {statusGlyph(statusTone(run.status))}
-                </span>
+          <header className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex min-w-0 flex-wrap items-center gap-3">
+              <span className="font-heading text-xl font-semibold tracking-tight">Run #{run.run_number}</span>
+              <StatusBadge tone={statusTone(run.status)} title={run.status} data-testid="run-detail-status">
                 {runStatusLabel(run)}
-              </span>
-            </span>
+              </StatusBadge>
+            </div>
             {canApprove && (
-              <span className="run-detail-actions">
+              <div className="flex flex-wrap gap-2">
                 <WaitingRunActions
                   run={run}
                   stackId={stackId}
@@ -134,49 +137,61 @@ export default function RunDetailScreen() {
                   onApprove={handleApprove}
                   onDiscard={handleDiscard}
                 />
-              </span>
-            )}
-          </header>
-          {errorMessage && <div className="alert">{errorMessage}</div>}
-          <dl className="run-detail-facts">
-            <div>
-              <dt>Started</dt>
-              <dd>
-                <time dateTime={run.created_at} title={run.created_at}>
-                  {formatDateTime(run.created_at)}
-                </time>
-              </dd>
-            </div>
-            <div>
-              <dt>Completed</dt>
-              <dd>
-                {hasCompleted(run.completed_at) ? (
-                  <time dateTime={run.completed_at} title={run.completed_at}>
-                    {formatDateTime(run.completed_at ?? "")}
-                  </time>
-                ) : (
-                  "—"
-                )}
-              </dd>
-            </div>
-            {run.plan_summary && (
-              <div>
-                <dt>Changes</dt>
-                <dd title="To add, to change, to destroy">{planSummaryLabel(run.plan_summary)}</dd>
               </div>
             )}
-            <div>
-              <dt>Started by</dt>
-              <dd>{run.trigger_actor}</dd>
-            </div>
-            <div>
-              <dt>Source</dt>
-              <dd>
-                {run.selected_ref} @ {run.resolved_commit_sha.slice(0, 7)}
-              </dd>
-            </div>
-          </dl>
-          {run.error_summary && <p className="error-text">{run.error_summary}</p>}
+          </header>
+          {errorMessage && (
+            <Alert variant="destructive">
+              <AlertDescription>{errorMessage}</AlertDescription>
+            </Alert>
+          )}
+          <Card className="gap-0">
+            <dl className="grid min-w-0 gap-x-6 gap-y-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="min-w-0">
+                <dt className="mb-1 text-xs text-muted-foreground">Started</dt>
+                <dd className="break-words font-mono text-sm">
+                  <time dateTime={run.created_at} title={run.created_at}>
+                    {formatDateTime(run.created_at)}
+                  </time>
+                </dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="mb-1 text-xs text-muted-foreground">Completed</dt>
+                <dd className="break-words font-mono text-sm">
+                  {hasCompleted(run.completed_at) ? (
+                    <time dateTime={run.completed_at} title={run.completed_at}>
+                      {formatDateTime(run.completed_at ?? "")}
+                    </time>
+                  ) : (
+                    "—"
+                  )}
+                </dd>
+              </div>
+              {run.plan_summary && (
+                <div className="min-w-0">
+                  <dt className="mb-1 text-xs text-muted-foreground">Changes</dt>
+                  <dd className="break-words font-mono text-sm" title="To add, to change, to destroy">
+                    {planSummaryLabel(run.plan_summary)}
+                  </dd>
+                </div>
+              )}
+              <div className="min-w-0">
+                <dt className="mb-1 text-xs text-muted-foreground">Started by</dt>
+                <dd className="break-words font-mono text-sm">{run.trigger_actor}</dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="mb-1 text-xs text-muted-foreground">Source</dt>
+                <dd className="break-words font-mono text-sm">
+                  {run.selected_ref} @ {run.resolved_commit_sha.slice(0, 7)}
+                </dd>
+              </div>
+            </dl>
+          </Card>
+          {run.error_summary && (
+            <Alert variant="destructive">
+              <AlertDescription>{run.error_summary}</AlertDescription>
+            </Alert>
+          )}
         </>
       )}
       <RunLogsPanel

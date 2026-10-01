@@ -16,9 +16,9 @@ function componentFiles(dir: string): string[] {
   });
 }
 
-// Files still on the legacy .data-table. Each leaves this list when its screen
-// PR moves it to <Table>, and the legacy rules below go with the last one.
-const LEGACY_TABLES = [join("features", "runs", "TemplateRunHistory.tsx"), join("dev", "StyleGuide.tsx")];
+// This list only shrinks as screen PRs move tables to <Table>; the combined
+// registry-and-runs migration leaves no legacy tables.
+const LEGACY_TABLES: string[] = [];
 
 // Every table has fixed layout, with its column widths declared in a
 // <colgroup>. Left to automatic layout, a table re-sizes its columns whenever
