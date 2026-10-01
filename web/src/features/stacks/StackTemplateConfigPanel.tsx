@@ -1,6 +1,8 @@
 import { Loader2, Save } from "lucide-react";
 import type { TemplateVariable } from "../../api/types";
 import VariableFields from "./VariableFields";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 interface StackTemplateConfigPanelProps {
   variables: TemplateVariable[];
@@ -18,6 +20,9 @@ interface StackTemplateConfigPanelProps {
  * Variables for the installed template's desired revision, with a single
  * action. Installing and upgrading live on their own screens, so this panel
  * never has to switch modes.
+ *
+ * base.css gives every h2 the legacy 32px display type until PR 9, so the
+ * heading sets its own family, size, weight and tracking.
  */
 export default function StackTemplateConfigPanel({
   variables,
@@ -30,25 +35,36 @@ export default function StackTemplateConfigPanel({
 }: StackTemplateConfigPanelProps) {
   const locked = Boolean(disabledReason);
   return (
-    <section className="panel wide" data-testid="stack-template-config">
-      <h2>Variables</h2>
-      <VariableFields
-        variables={variables}
-        variableValues={variableValues}
-        onVariableValueChange={onVariableValueChange}
-        disabled={locked}
-      />
-      <div className="button-row form-actions">
-        <button className="primary-button" disabled={locked || !canSave || saveBusy} onClick={onSave} type="button">
-          {saveBusy ? <Loader2 size={16} className="spin" /> : <Save size={16} />}
+    <Card data-testid="stack-template-config">
+      <CardHeader>
+        <h2 className="font-heading text-base leading-snug font-medium tracking-normal">Variables</h2>
+      </CardHeader>
+      <CardContent className="grid gap-6">
+        <VariableFields
+          variables={variables}
+          variableValues={variableValues}
+          onVariableValueChange={onVariableValueChange}
+          disabled={locked}
+        />
+        {/* Its own width, or the full width on a phone. */}
+        <Button
+          className="w-full pointer-coarse:h-11 md:w-auto md:justify-self-start"
+          disabled={locked || !canSave || saveBusy}
+          onClick={onSave}
+        >
+          {saveBusy ? (
+            <Loader2 data-icon="inline-start" aria-hidden="true" className="animate-spin" />
+          ) : (
+            <Save data-icon="inline-start" aria-hidden="true" />
+          )}
           Save config
-        </button>
-      </div>
-      {disabledReason && (
-        <p className="muted" data-testid="variables-disabled-reason">
-          {disabledReason}
-        </p>
-      )}
-    </section>
+        </Button>
+        {disabledReason && (
+          <p className="text-sm text-muted-foreground" data-testid="variables-disabled-reason">
+            {disabledReason}
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
