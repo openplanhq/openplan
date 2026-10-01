@@ -206,6 +206,12 @@ const settle = (ms) => new Promise((r) => setTimeout(r, ms));
 await new Promise((r) => ws.addEventListener("open", r));
 await send("Page.enable");
 await send("Runtime.enable");
+// Before the first load, so the app starts on a phone: a mobile viewport,
+// and touch, which is what makes (pointer: coarse) match.
+if (width) {
+  await send("Emulation.setDeviceMetricsOverride", { width, height: 812, deviceScaleFactor: 1, mobile: true });
+  await send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+}
 // localhost, not 127.0.0.1: the transaction cookie is set on the origin that
 // starts sign-in, and the provider sends the browser back to localhost.
 await send("Page.navigate", { url: "http://localhost:5173/stacks" });
@@ -213,14 +219,14 @@ await settle(6000);
 
 // Signed out, the app lands on its sign-in screen: one button that leaves for
 // the provider.
-if (await evaluate("!!document.querySelector('[data-testid=signin-submit]')")) {
+if (!signedOut && await evaluate("!!document.querySelector('[data-testid=signin-submit]')")) {
   await evaluate("document.querySelector('[data-testid=signin-submit]').click()");
   await settle(4000);
 }
 
 // Dex's login page is server-rendered, so setting .value and submitting the
 // form is enough — no React synthetic-event plumbing needed.
-if (await evaluate("!!document.querySelector('#login')")) {
+if (!signedOut && await evaluate("!!document.querySelector('#login')")) {
   await evaluate(`(() => {
     const u = document.querySelector('#login'), p = document.querySelector('#password');
     const set = (el, v) => {
