@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { CircleAlert, Loader2, Search, Shield, Trash2, X } from "lucide-react";
+import { CircleAlert, Loader2, RefreshCw, Search, Shield, Trash2, X } from "lucide-react";
 import {
   useStackGrantsQuery,
   useSearchUsersQuery,
@@ -9,6 +9,7 @@ import {
 } from "../../api/queries";
 import type { GrantView, UserProfile } from "../../api/types";
 import { tenantID } from "../../config";
+import RoleBadge from "../../shared/RoleBadge";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -118,76 +119,86 @@ export default function StackAccessScreen() {
   }, [revokeMutation.isSuccess, assignMutation.isSuccess]);
 
   return (
-    <section className="workflow-grid">
-      <section className="panel">
-        <h2>
-          <Shield size={16} />
-          Current Grants
-        </h2>
-        {grants.isLoading && (
-          <p className="muted">
-            <Loader2 size={14} className="spin" /> Loading grants...
-          </p>
-        )}
-        {grants.isError && (
-          <div className="alert">
-            Failed to load grants.
-            <button
-              className="secondary-button"
-              onClick={() => grants.refetch()}
-            >
-              Retry
-            </button>
-          </div>
-        )}
-        {grants.data && grants.data.grants.length === 0 && (
-          <p className="muted">
-            No users have been assigned access yet. Use the panel on the right
-            to add the first grant.
-          </p>
-        )}
-        {grants.data && grants.data.grants.length > 0 && (
-          <ul className="grants-list">
-            {grants.data.grants.map((grant) => (
-              <li key={grant.userSub} className="grant-row">
-                <div className="grant-user">
-                  <span>{grant.displayName}</span>
-                  {grant.email && <small>{grant.email}</small>}
-                </div>
-                <span className={`role-badge role-badge--${grant.role}`}>{grant.role}</span>
-                <div className="grant-actions">
-                  {confirmRevoke === grant.userSub ? (
-                    <>
-                      <span className="confirm-label">
-                        Remove access?
+    // Two columns on a wide screen, split 3:4 as the legacy grid's 0.85fr and
+    // 1.15fr were; one column below lg. The grid sets its own text colour,
+    // since body keeps the legacy one until PR 9.
+    <section className="grid gap-6 text-foreground lg:grid-cols-7">
+      <Card className="lg:col-span-3">
+        <CardHeader>
+          <h2 className={headingClass}>
+            <Shield aria-hidden="true" className="size-4" />
+            Current Grants
+          </h2>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          {grants.isLoading && (
+            <p className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 aria-hidden="true" className="size-4 animate-spin" /> Loading grants...
+            </p>
+          )}
+          {grants.isError && (
+            <div className="grid justify-items-start gap-3">
+              <Alert variant="destructive">
+                <CircleAlert aria-hidden="true" />
+                <AlertTitle>Failed to load grants.</AlertTitle>
+              </Alert>
+              <Button variant="outline" className="pointer-coarse:h-11" onClick={() => grants.refetch()}>
+                <RefreshCw data-icon="inline-start" aria-hidden="true" />
+                Retry
+              </Button>
+            </div>
+          )}
+          {grants.data && grants.data.grants.length === 0 && (
+            <p className="text-muted-foreground">
+              No users have been assigned access yet. Use the panel on the right to add the first grant.
+            </p>
+          )}
+          {grants.data && grants.data.grants.length > 0 && (
+            <ul className="divide-y rounded-lg border">
+              {grants.data.grants.map((grant) => (
+                <li key={grant.userSub} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
+                  <div className="grid min-w-0 flex-1 gap-0.5">
+                    <span className="truncate" title={grant.displayName}>
+                      {grant.displayName}
+                    </span>
+                    {grant.email && (
+                      <span className="truncate text-xs text-muted-foreground" title={grant.email}>
+                        {grant.email}
                       </span>
-                      <button
-                        className="danger"
-                        onClick={() => handleRevoke(grant)}
+                    )}
+                  </div>
+                  <RoleBadge stackRole={grant.role} />
+                  <div className="ml-auto flex items-center gap-2">
+                    {confirmRevoke === grant.userSub ? (
+                      <>
+                        <span>Remove access?</span>
+                        <Button variant="destructive" className="pointer-coarse:h-11" onClick={() => handleRevoke(grant)}>
+                          Confirm
+                        </Button>
+                        <Button variant="outline" className="pointer-coarse:h-11" onClick={() => setConfirmRevoke(null)}>
+                          Cancel
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="pointer-coarse:size-11"
+                        onClick={() => setConfirmRevoke(grant.userSub)}
+                        aria-label={`Revoke ${grant.displayName}'s ${grant.role} role`}
                       >
-                        Confirm
-                      </button>
-                      <button onClick={() => setConfirmRevoke(null)}>
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      className="danger"
-                      onClick={() => setConfirmRevoke(grant.userSub)}
-                      aria-label={`Revoke ${grant.displayName}'s ${grant.role} role`}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+                        <Trash2 aria-hidden="true" />
+                      </Button>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
 
-      <Card>
+      <Card className="lg:col-span-4">
         <CardHeader>
           <h2 className={headingClass}>
             <Search aria-hidden="true" className="size-4" />
@@ -300,18 +311,20 @@ export default function StackAccessScreen() {
         </CardContent>
       </Card>
 
+      {/* A toast: fixed above the page, centred, and inside the screen's
+          edges on a phone. z-20 puts it over the sticky header (z-5) and
+          under Base UI's popups (z-50); AppShell.test.tsx checks the order. */}
       {undoEntry && (
-        <div className="undo-banner">
+        <div
+          role="status"
+          className="fixed inset-x-4 bottom-6 z-20 mx-auto flex w-fit items-center gap-4 rounded-lg border bg-popover py-2 pr-2 pl-4 text-sm text-popover-foreground shadow-lg"
+        >
           <span>
             Removed {undoEntry.displayName}&apos;s {undoEntry.role} access.
           </span>
-          <button onClick={handleUndo}>
-            {assignMutation.isPending ? (
-              <Loader2 size={14} className="spin" />
-            ) : (
-              "Undo"
-            )}
-          </button>
+          <Button className="pointer-coarse:h-11" onClick={handleUndo} aria-label="Undo">
+            {assignMutation.isPending ? <Loader2 aria-hidden="true" className="animate-spin" /> : "Undo"}
+          </Button>
         </div>
       )}
     </section>

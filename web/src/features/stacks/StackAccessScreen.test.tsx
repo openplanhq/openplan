@@ -544,4 +544,61 @@ describe("StackAccessScreen", () => {
     await user.click(assign);
     expect(sent.filter(({ method }) => method === "POST")).toHaveLength(1);
   });
+  describe("current grants", () => {
+    it("shows each grant's role as a RoleBadge", async () => {
+      serve({ grants: twoGrants.grants });
+      await renderWithGrants(twoGrants.grants);
+
+      const owner = screen.getByText("owner");
+      expect(owner.getAttribute("data-slot")).toBe("badge");
+      expect(owner.getAttribute("data-role")).toBe("owner");
+    });
+
+    it("cuts a long name or email short and shows it whole on hover", async () => {
+      const name = "Bartholomew Montgomery-Fitzwilliam the Third, Platform Operations";
+      const email = "bartholomew.montgomery-fitzwilliam@platform-operations.example.com";
+      serve({ grants: [{ userSub: "u9", role: "viewer", displayName: name, email }] });
+      render(<StackAccessScreen />, { wrapper: wrapper() });
+
+      for (const text of [name, email]) {
+        const element = await screen.findByText(text);
+        expect(element.classList).toContain("truncate");
+        expect(element.getAttribute("title")).toBe(text);
+      }
+    });
+
+    it("puts a failed load in an Alert, with a Retry that loads again", async () => {
+      let calls = 0;
+      vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+        calls += 1;
+        return calls === 1
+          ? new Response(JSON.stringify({ error: "internal", message: "boom" }), {
+              status: 500,
+              headers: { "content-type": "application/json" }
+            })
+          : new Response(JSON.stringify(twoGrants), { status: 200, headers: { "content-type": "application/json" } });
+      });
+      render(<StackAccessScreen />, { wrapper: wrapper() });
+
+      expect((await screen.findByRole("alert")).textContent).toContain("Failed to load grants.");
+      await userEvent.setup().click(screen.getByRole("button", { name: "Retry" }));
+      expect(await screen.findByText("Alice")).toBeDefined();
+    });
+
+    it("offers Undo in a status banner after a revoke, and Undo restores the role", async () => {
+      const sent = serve({ grants: twoGrants.grants });
+      await renderWithGrants(twoGrants.grants);
+      const user = userEvent.setup();
+
+      await user.click(screen.getByRole("button", { name: "Revoke Bob's viewer role" }));
+      await user.click(screen.getByRole("button", { name: "Confirm" }));
+      const banner = (await screen.findByText(/Removed Bob.*viewer access/)).closest<HTMLElement>('[role="status"]');
+      expect(banner).not.toBeNull();
+
+      await user.click(within(banner as HTMLElement).getByRole("button", { name: "Undo" }));
+      await waitFor(() =>
+        expect(sent.find(({ method }) => method === "POST")?.body).toEqual({ user_sub: "u2", role: "viewer" })
+      );
+    });
+  });
 });

@@ -337,130 +337,6 @@
   align-items: center;
 }
 
-/* ---- Grants ---- */
-.grants-list {
-  display: grid;
-  gap: var(--legacy-space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.grant-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--legacy-space-3);
-  border: 1px solid var(--legacy-color-border);
-  border-radius: var(--legacy-radius-lg);
-  padding: var(--legacy-space-3) var(--legacy-space-4);
-  background: var(--legacy-color-card);
-  transition: border-color var(--legacy-duration-fast) var(--legacy-ease-out);
-}
-
-.grant-row:hover {
-  border-color: var(--legacy-color-accent-border);
-}
-
-/* flex: 1 makes the name column absorb the row's free space. Without it the
-   row's space-between distributes that slack around the badge, so the badge
-   lands at a different x on every row depending on how long the email is —
-   the pills stop forming a column. */
-.grant-row .grant-user {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: var(--legacy-space-1);
-  min-width: 0;
-}
-
-.grant-row .grant-user span {
-  font-size: var(--legacy-text-sm);
-  font-weight: 400;
-}
-
-.grant-row .grant-user small {
-  color: var(--legacy-color-muted-fg);
-  font-size: var(--legacy-text-xs);
-}
-
-.grant-actions {
-  display: flex;
-  gap: var(--legacy-space-2);
-}
-
-.grant-actions button {
-  min-height: var(--legacy-touch-target);
-  border: 1px solid var(--legacy-color-border);
-  border-radius: var(--legacy-radius-md);
-  padding: 0 var(--legacy-space-3);
-  color: var(--legacy-color-fg);
-  background: transparent;
-  font-size: var(--legacy-text-sm);
-  cursor: pointer;
-  transition: all var(--legacy-duration-fast) var(--legacy-ease-out);
-}
-
-.grant-actions button:hover {
-  border-color: var(--legacy-color-accent-border);
-  background: var(--legacy-color-muted);
-}
-
-.grant-actions button.danger {
-  color: var(--legacy-color-danger);
-}
-
-.grant-actions button.danger:hover {
-  border-color: var(--legacy-color-danger);
-  background: var(--legacy-color-danger-soft);
-}
-
-/* Preflight audit: Preflight makes svg block-level, which would stack the icon
-   above its label in these inline buttons. :where() keeps browser-default
-   precedence. */
-:where(.grant-actions button svg) {
-  display: revert;
-  vertical-align: revert;
-}
-
-/* ---- Undo banner ---- */
-.undo-banner {
-  position: fixed;
-  bottom: var(--legacy-space-6);
-  left: 50%;
-  transform: translateX(-50%);
-  /* Must stay ABOVE the app header (z-5 in AppShell.tsx). */
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  gap: var(--legacy-space-4);
-  border-radius: var(--legacy-radius-xl);
-  padding: var(--legacy-space-3) var(--legacy-space-5);
-  color: var(--legacy-color-card);
-  background: var(--legacy-color-fg);
-  box-shadow: var(--legacy-shadow-xl);
-  font-size: var(--legacy-text-sm);
-}
-
-.undo-banner button {
-  min-height: var(--legacy-touch-target);
-  border: 0;
-  border-radius: var(--legacy-radius-md);
-  padding: 0 var(--legacy-space-4);
-  color: var(--legacy-color-accent-fg);
-  background: var(--legacy-gradient-accent);
-  font-size: var(--legacy-text-sm);
-  font-weight: 400;
-  cursor: pointer;
-}
-
-/* Preflight audit: the pending spinner sits inline in this button, which is
-   not a flex container. :where() keeps browser-default precedence. */
-:where(.undo-banner button svg) {
-  display: revert;
-  vertical-align: revert;
-}
-
 /* ---- Layout grids ---- */
 .workflow-grid {
   display: grid;
@@ -613,15 +489,6 @@
   animation: spin 0.9s linear infinite;
 }
 
-/* ---- Inline-style drain (Task 8) ---- */
-.alert .secondary-button {
-  margin-left: var(--legacy-space-3);
-}
-
-.confirm-label {
-  font-size: var(--legacy-text-sm);
-}
-
 @media (max-width: 920px) {
   .workflow-grid,
   .form-grid,
@@ -665,12 +532,6 @@
   .templates-list-header .primary-button,
   .template-detail__sync .secondary-button {
     width: 100%;
-  }
-
-  .undo-banner {
-    left: var(--legacy-space-4);
-    right: var(--legacy-space-4);
-    transform: none;
   }
 }
 

@@ -400,44 +400,6 @@ textarea:where(:not([data-slot])) {
   background: var(--legacy-color-muted);
 }
 
-/* ---- Role badges ---- */
-.role-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  /* Wide enough for the longest role label, so every badge renders at exactly
-     this width and the pills line up as a column down a list. At 84px "owner"
-     and "viewer" hit the floor while "operator" and "approver" measured 86px
-     and pushed past it, leaving the column 2px ragged. */
-  min-width: 88px;
-  border-radius: var(--legacy-radius-full);
-  padding: var(--legacy-space-1) var(--legacy-space-3);
-  font-family: var(--legacy-font-mono);
-  font-size: var(--legacy-text-xs);
-  letter-spacing: var(--legacy-tracking-wide);
-  text-transform: uppercase;
-}
-
-.role-badge--owner {
-  color: var(--legacy-color-accent);
-  background: var(--legacy-color-accent-soft);
-}
-
-.role-badge--operator {
-  color: var(--legacy-color-success);
-  background: var(--legacy-color-success-soft);
-}
-
-.role-badge--approver {
-  color: var(--legacy-color-warning);
-  background: var(--legacy-color-warning-soft);
-}
-
-.role-badge--viewer {
-  color: var(--legacy-color-muted-fg);
-  background: var(--legacy-color-muted);
-}
-
 /* ---- Data tables ----
    Every table uses these, so they all behave the same:
 

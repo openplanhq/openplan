@@ -164,11 +164,10 @@ describe("AppShell", () => {
 
 // The header is sticky and opaque. Whatever opens over scrolled content must
 // paint above it: the Combobox and Select popups, which Base UI portals to the
-// body, and the legacy .undo-banner on stack access until Task 3 of PR 5 moves
-// it. Update this test when an overlay is added or moves.
+// body, and the undo banner on stack access. Update this test when an overlay
+// is added or moves.
 describe("AppShell layering", () => {
   const read = (path: string) => readFileSync(join(dirname(fileURLToPath(import.meta.url)), path), "utf8");
-  const stripComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, "");
   // The bare z-N, not a variant's such as md:z-10.
   const zIndex = (classes: string) => Number(classes.match(/(?:^|\s)z-(\d+)(?=\s|$)/)?.[1]);
   const positioner = (path: string, primitive: string) =>
@@ -179,8 +178,8 @@ describe("AppShell layering", () => {
     const overlays = {
       "Combobox popup": zIndex(positioner("../components/ui/combobox.tsx", "ComboboxPrimitive")),
       "Select popup": zIndex(positioner("../components/ui/select.tsx", "SelectPrimitive")),
-      ".undo-banner": Number(
-        stripComments(read("../styles/features.css")).match(/\.undo-banner \{[^}]*z-index: (\d+);/)?.[1]
+      "undo banner": zIndex(
+        read("../features/stacks/StackAccessScreen.tsx").match(/<div\s+role="status"\s+className="([^"]*)"/)?.[1] ?? ""
       )
     };
 

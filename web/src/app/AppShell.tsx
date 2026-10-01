@@ -33,7 +33,7 @@ export default function AppShell() {
         Skip to content
       </a>
       {/* z-5 keeps the overlays that open over this bar above it: Base UI's
-          popups (z-50) and the legacy .undo-banner (20) in features.css.
+          popups (z-50) and the undo banner on stack access (z-20).
           AppShell.test.tsx checks the order. */}
       <header className="sticky top-0 z-5 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b bg-background px-4 py-3 md:px-6">
         <div className="flex items-center gap-4 md:gap-8">
