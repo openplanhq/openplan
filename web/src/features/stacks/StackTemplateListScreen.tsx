@@ -10,16 +10,14 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Empty, EmptyHeader, EmptyMedia } from "@/components/ui/empty";
 import { cn } from "@/lib/utils";
 
-// base.css gives every h2 the legacy 32px display type until PR 8, so each
-// heading sets its own family, size, weight and tracking.
+// Preflight leaves a heading with the body's type, so each heading sets
+// CardTitle's look: family, size, weight and tracking.
 const headingClass = "font-heading text-base leading-snug font-medium tracking-normal";
 
 // /stacks/:stackId/templates — the templates installed on a stack, and nothing
 // else. Each row opens that template's own page at templates/:stackTemplateId,
 // where its runs, variables, credentials and settings live on tabs.
 //
-// Until PR 8, body keeps the legacy text colour and base.css styles bare a
-// and h2, so the screen sets its own colour and the links their decoration.
 export default function StackTemplateListScreen() {
   const { stackId = "" } = useParams<{ stackId: string }>();
   const stackQuery = useStackQuery(tenantID, stackId);
@@ -28,7 +26,7 @@ export default function StackTemplateListScreen() {
 
   if (stackQuery.status === "pending") {
     return (
-      <section className="text-foreground" data-testid="stack-template-loading">
+      <section data-testid="stack-template-loading">
         <p className="flex items-center gap-2 text-muted-foreground">
           <Loader2 aria-hidden="true" className="size-4 animate-spin" /> Loading templates…
         </p>
@@ -41,7 +39,7 @@ export default function StackTemplateListScreen() {
       return <>{boundary}</>;
     }
     return (
-      <section className="grid justify-items-start gap-4 text-foreground" data-testid="stack-template-error">
+      <section className="grid justify-items-start gap-4" data-testid="stack-template-error">
         <p className="text-muted-foreground">Something went wrong while loading the stack templates.</p>
         <Button className="pointer-coarse:h-11" data-testid="stack-template-retry" onClick={() => stackQuery.refetch()}>
           <RefreshCw data-icon="inline-start" aria-hidden="true" />
@@ -52,7 +50,7 @@ export default function StackTemplateListScreen() {
   }
 
   return (
-    <section className="text-foreground" data-testid="stack-template-list-screen">
+    <section data-testid="stack-template-list-screen">
       <div className="grid gap-5" data-testid="stack-template-list-content">
         {/* The heading and the page's action; on a phone the link takes the
             full width under the heading. */}
@@ -63,7 +61,7 @@ export default function StackTemplateListScreen() {
           <h2 className={headingClass}>Stack templates</h2>
           <RequireCapability capability="canOperate">
             <Link
-              className={cn(buttonVariants(), "w-full no-underline pointer-coarse:h-11 md:w-auto")}
+              className={cn(buttonVariants(), "w-full pointer-coarse:h-11 md:w-auto")}
               to={`/stacks/${stackId}/templates/new`}
               data-testid="add-stack-template-link"
             >
@@ -97,7 +95,7 @@ export default function StackTemplateListScreen() {
                   key={item.id}
                   to={`/stacks/${stackId}/templates/${item.id}`}
                   data-testid={`stack-template-link-${item.id}`}
-                  className="flex min-h-12 items-center gap-3 px-4 text-sm text-foreground no-underline hover:bg-muted focus-visible:-outline-offset-2"
+                  className="flex min-h-12 items-center gap-3 px-4 text-sm text-foreground hover:bg-muted focus-visible:-outline-offset-2"
                 >
                   {/* The state icon, named for assistive technology; the
                       template's own page explains what the state means. */}

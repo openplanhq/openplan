@@ -90,7 +90,7 @@ describe("LogSteps", () => {
     expect(screen.getByText("plan log body")).toBeTruthy();
   });
 
-  // --legacy-touch-target gave these rows 44px on touch screens.
+  // Each row takes a 44px target on a coarse pointer.
   it("gives each row a 44px target on coarse pointers", () => {
     render(<Steps />);
     for (const button of screen.getAllByRole("button")) {

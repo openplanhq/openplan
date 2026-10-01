@@ -95,21 +95,13 @@ describe("RouteTabs", () => {
     expect(screen.getAllByRole("tab").map((tab) => tab.getAttribute("aria-selected"))).toEqual(["false", "false", "false"]);
   });
 
-  // --legacy-touch-target gave every tab 44px on a touch screen. The list
-  // drops its fixed height there so the taller tabs fit inside it.
+  // Every tab takes a 44px target on a coarse pointer. The list drops its
+  // fixed height there so the taller tabs fit inside it.
   it("gives every tab a 44px target on coarse pointers", () => {
     renderAt("/s");
     expect(screen.getByRole("tablist").classList).toContain("pointer-coarse:h-auto");
     for (const tab of screen.getAllByRole("tab")) {
       expect(tab.classList).toContain("pointer-coarse:h-11");
-    }
-  });
-
-  // base.css underlines every bare <a> on hover until PR 8.
-  it("keeps the legacy link underline off its tabs", () => {
-    renderAt("/s");
-    for (const tab of screen.getAllByRole("tab")) {
-      expect(tab.classList).toContain("no-underline");
     }
   });
 });

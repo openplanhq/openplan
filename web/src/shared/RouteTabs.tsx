@@ -43,9 +43,6 @@ export function RouteTabs({
  * One tab of a RouteTabs row. `to` and `end` are NavLink's: `end` keeps a
  * parent route's tab from matching its children.
  *
- * Until PR 8, base.css underlines every bare <a> on hover from the legacy
- * layer, so the tab sets no-underline itself (AppShell's navLinkClass says
- * why not hover:no-underline).
  */
 export function RouteTab({ value, to, end, children }: { value: string; to: string; end?: boolean; children: ReactNode }) {
   return (
@@ -53,7 +50,7 @@ export function RouteTab({ value, to, end, children }: { value: string; to: stri
       value={value}
       nativeButton={false}
       render={<NavLink to={to} end={end} />}
-      className="no-underline pointer-coarse:h-11"
+      className="pointer-coarse:h-11"
     >
       {children}
     </TabsTrigger>

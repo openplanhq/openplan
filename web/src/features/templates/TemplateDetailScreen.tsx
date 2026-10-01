@@ -131,7 +131,7 @@ export default function TemplateDetailScreen() {
 
   if (templateRevisionsQuery.status === "pending") {
     return (
-      <section className="grid min-w-0 gap-6 text-foreground" data-testid="template-detail-loading">
+      <section className="grid min-w-0 gap-6" data-testid="template-detail-loading">
         <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
           <Loader2 className="size-4 animate-spin" /> Loading revisions…
         </p>
@@ -144,7 +144,7 @@ export default function TemplateDetailScreen() {
       return <>{boundary}</>;
     }
     return (
-      <section className="grid min-w-0 gap-6 text-foreground" data-testid="template-detail-error">
+      <section className="grid min-w-0 gap-6" data-testid="template-detail-error">
         <Breadcrumb items={[{ label: "Templates", to: "/templates" }, { label: "Template" }]} />
         <Alert variant="destructive">
           <AlertDescription>Something went wrong while loading this template.</AlertDescription>
@@ -172,7 +172,7 @@ export default function TemplateDetailScreen() {
   const rootPath = templateRootPathLabel(latestRevision.root_path, "");
 
   return (
-    <section className="grid min-w-0 gap-6 text-foreground">
+    <section className="grid min-w-0 gap-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <Breadcrumb
           items={[{ label: "Templates", to: "/templates", testId: "template-detail-back" }, { label: name }]}

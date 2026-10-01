@@ -23,9 +23,8 @@ interface CredentialsPanelProps {
 /**
  * Renders write-only credential management for either a Stack or StackTemplate scope.
  *
- * Until PR 8, body keeps the legacy text colour and base.css gives every h2
- * the legacy 32px display type, so the card sets its own colour and the
- * heading sets its own family, size, weight and tracking.
+ * Preflight leaves a heading with the body's type, so the heading sets
+ * CardTitle's look: family, size, weight and tracking.
  */
 export default function CredentialsPanel({ title, subtitle, credentials, loading, busy, onCreate, onDelete }: CredentialsPanelProps) {
   const [name, setName] = useState("");
@@ -71,7 +70,7 @@ export default function CredentialsPanel({ title, subtitle, credentials, loading
   const fieldLabel = title.replace(/ credentials$/, " credential");
 
   return (
-    <Card className="text-foreground" data-unsaved={hasUnsavedCredential ? "true" : undefined}>
+    <Card data-unsaved={hasUnsavedCredential ? "true" : undefined}>
       <CardHeader>
         <h2 className="font-heading text-base leading-snug font-medium tracking-normal">{title}</h2>
         {subtitle && <CardDescription>{subtitle}</CardDescription>}

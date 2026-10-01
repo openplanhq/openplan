@@ -1,7 +1,4 @@
 // @vitest-environment jsdom
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
@@ -120,11 +117,11 @@ describe("StyleGuide", () => {
     expect(screen.queryByText("No templates yet")).toBeNull();
   });
 
-  // base.css sizes every bare h1 at 40px, and the intro's is the one bare h1
-  // left, so the gallery sizes it down on a phone itself.
   it("sizes its intro heading down on phones", () => {
-    const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "styleguide.css"), "utf8");
-    expect(css).toMatch(/@media \(max-width: 760px\) \{\s*\.sg__intro h1 \{\s*font-size: var\(--legacy-text-2xl\);/);
+    render(<StyleGuide />);
+    const heading = screen.getByRole("heading", { level: 1, name: "Design system" });
+    expect(heading.classList).toContain("text-2xl");
+    expect(heading.classList).toContain("sm:text-4xl");
   });
 
   it("swatches every theme colour", () => {
@@ -136,10 +133,11 @@ describe("StyleGuide", () => {
 
   it("links to every section it documents", () => {
     const { container } = render(<StyleGuide />);
-    const links = Array.from(container.querySelectorAll(".sg__nav a")).map((a) => a.getAttribute("href"));
+    const nav = screen.getByRole("navigation", { name: "Design system sections" });
+    const links = within(nav).getAllByRole("link");
     expect(links.length).toBeGreaterThan(0);
-    for (const href of links) {
-      const id = href?.replace("#", "") ?? "";
+    for (const link of links) {
+      const id = link.getAttribute("href")?.replace("#", "") ?? "";
       expect(container.querySelector(`#${id}`), `nav links to missing section #${id}`).toBeTruthy();
     }
   });

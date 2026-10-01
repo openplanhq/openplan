@@ -123,7 +123,7 @@ describe("AppShell", () => {
     expect(main.getAttribute("tabindex")).toBe("-1");
   });
 
-  // --legacy-touch-target gave these controls 44px on touch screens.
+  // Every control takes a 44px target on a coarse pointer.
   it("gives its controls a 44px target on coarse pointers", async () => {
     await renderShell();
 
@@ -144,21 +144,6 @@ describe("AppShell", () => {
 
     expect(screen.getByTestId("shell-tenant-context").classList).toContain("wrap-anywhere");
     expect(screen.getByTestId("identity-display-name").classList).toContain("wrap-anywhere");
-  });
-
-  // Tailwind's hover: applies only where the device can hover, but the legacy
-  // a:hover underline also matches a link just tapped on a touch screen.
-  it("keeps the header links undecorated on touch screens too", async () => {
-    await renderShell();
-
-    const links = [
-      screen.getByRole("link", { name: "Skip to content" }),
-      ...within(screen.getByRole("navigation", { name: "Primary" })).getAllByRole("link")
-    ];
-    for (const link of links) {
-      expect(link.classList).toContain("no-underline");
-      expect(link.classList).not.toContain("hover:no-underline");
-    }
   });
 });
 

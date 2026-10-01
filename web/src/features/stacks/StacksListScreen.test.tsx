@@ -159,7 +159,7 @@ describe("StacksListScreen", () => {
     expect(screen.queryByRole("table")).toBeNull();
   });
 
-  // base.css gives every h2 the legacy 32px display type until PR 8.
+  // Preflight leaves a heading with the body's type.
   it("sets the empty state's heading type itself", () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.stacks("tenant_123"), []);
@@ -172,8 +172,8 @@ describe("StacksListScreen", () => {
     }
   });
 
-  // --legacy-touch-target gave every control 44px on a touch screen. The
-  // row's link fills its cell, so padding it out makes the whole cell 44px.
+  // Every control takes a 44px target on a coarse pointer. The row's link
+  // fills its cell, so padding it out makes the whole cell 44px.
   it("gives every control a 44px target on coarse pointers", () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.stacks("tenant_123"), [stack()]);
@@ -192,20 +192,6 @@ describe("StacksListScreen", () => {
     renderScreen(testQueryClient());
 
     await waitFor(() => expect(screen.getByTestId("stacks-list-retry").classList).toContain("pointer-coarse:h-11"));
-  });
-
-  // Until PR 8, body keeps the legacy text colour and base.css colours bare
-  // links. The screen and its links set their own.
-  it("sets its own text colour and its links' colour", () => {
-    const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stacks("tenant_123"), [stack()]);
-
-    const { container } = renderScreen(queryClient);
-
-    expect((container.firstElementChild as HTMLElement).classList).toContain("text-foreground");
-    const link = screen.getByRole("link", { name: "Payments" }).classList;
-    expect(link).toContain("text-foreground");
-    expect(link).toContain("no-underline");
   });
 
   it("renders the shared boundary screen for a handled API error status", async () => {

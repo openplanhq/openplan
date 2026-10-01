@@ -7,9 +7,8 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from "@/components/u
  * the screen that couldn't render.
  *
  * shadcn's Empty with a real h1: the message is the page's heading, and
- * EmptyTitle renders a div. Until PR 8, base.css styles every h1 from the
- * legacy layer, so the h1 sets its own family, size, weight and tracking; and
- * body keeps the legacy text colour, so Empty sets its own.
+ * EmptyTitle renders a div. Preflight leaves a heading with the body's type,
+ * so the h1 sets its own family, size, weight and tracking.
  */
 export default function RouteMessage({
   icon: Icon,
@@ -23,7 +22,7 @@ export default function RouteMessage({
   testId: string;
 }) {
   return (
-    <Empty className="py-16 text-foreground md:py-24" data-testid={testId}>
+    <Empty className="py-16 md:py-24" data-testid={testId}>
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <Icon aria-hidden="true" />

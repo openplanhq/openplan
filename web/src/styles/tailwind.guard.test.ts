@@ -99,7 +99,7 @@ describe("app code", () => {
 
 describe("raw colours", () => {
   const RAW = /#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?|oklch|oklab|lab|lch|hwb)\(/g;
-  const EXEMPT = [join("styles", "theme.css"), join("styles", "tokens.css")];
+  const EXEMPT = [join("styles", "theme.css")];
   const guarded = files(SRC_DIR, (p) => (p.endsWith(".css") || p.endsWith(".tsx")) && !isTest(p))
     .filter((p) => !EXEMPT.includes(relative(SRC_DIR, p)));
 

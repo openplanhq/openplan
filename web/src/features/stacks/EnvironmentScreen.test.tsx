@@ -124,7 +124,7 @@ describe("EnvironmentScreen", () => {
     expect(screen.queryByRole("table")).toBeNull();
   });
 
-  // base.css gives every h2 the legacy 32px display type until PR 8.
+  // Preflight leaves a heading with the body's type.
   it("titles the panel with an h2 that sets its own type", () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
@@ -135,7 +135,6 @@ describe("EnvironmentScreen", () => {
     for (const name of ["font-heading", "text-base", "font-medium", "tracking-normal"]) {
       expect(heading.classList).toContain(name);
     }
-    expect(heading.closest('[data-slot="card"]')?.classList).toContain("text-foreground");
   });
 
   // The value is a secret: masked while typed, and gone from the page once
@@ -258,7 +257,7 @@ describe("EnvironmentScreen", () => {
     }
   });
 
-  // --legacy-touch-target gave every control 44px on a touch screen.
+  // Every control takes a 44px target on a coarse pointer.
   it("gives every control a 44px target on coarse pointers", () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), [credential]);

@@ -41,15 +41,12 @@ describe("RouteMessage", () => {
     expect(container.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
   });
 
-  // Until PR 8, base.css gives every h1 the legacy 40px display type, and body
-  // the legacy text colour. A rule on the element beats anything inherited, so
-  // the h1 sets its own type and the message sets its own colour.
-  it("sets its own type and colour", () => {
+  // Preflight leaves a heading with the body's type, so the h1 sets its own.
+  it("sets its own type", () => {
     renderMessage();
     const heading = screen.getByRole("heading", { level: 1 }).classList;
     for (const name of ["font-heading", "text-lg", "font-medium", "tracking-tight"]) {
       expect(heading).toContain(name);
     }
-    expect(screen.getByTestId("route-not-found").classList).toContain("text-foreground");
   });
 });

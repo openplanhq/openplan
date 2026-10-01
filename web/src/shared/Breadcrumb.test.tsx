@@ -22,8 +22,6 @@ describe("Breadcrumb", () => {
 
     const link = within(nav).getByRole("link", { name: "Templates" });
     expect(link.getAttribute("href")).toBe("/templates");
-    // Not hover:no-underline, which misses a tap on a touch screen.
-    expect(link.classList).toContain("no-underline");
     const heading = within(nav).getByRole("heading", { level: 1 });
     expect(heading.textContent).toBe("vpc");
     expect(heading.getAttribute("aria-current")).toBe("page");

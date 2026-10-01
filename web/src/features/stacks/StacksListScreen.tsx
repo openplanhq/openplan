@@ -13,16 +13,13 @@ import { cn } from "@/lib/utils";
 // The list is authz-filtered by the backend (AUTH-013) — the screen renders
 // whatever listStacks returns and never filters client-side.
 //
-// Until PR 8, body keeps the legacy text colour and base.css styles bare a
-// and h2 from the legacy layer, so the screen sets its own colour and the
-// links and heading set their own type and decoration.
 export default function StacksListScreen() {
   const { data: stacks, status, error, refetch } = useStacksQuery(tenantID);
   const boundary = useQueryErrorBoundary(error);
 
   if (status === "pending") {
     return (
-      <section className="text-foreground" data-testid="stacks-list-loading">
+      <section data-testid="stacks-list-loading">
         <p className="flex items-center gap-2 text-muted-foreground">
           <Loader2 aria-hidden="true" className="size-4 animate-spin" /> Loading stacks…
         </p>
@@ -35,7 +32,7 @@ export default function StacksListScreen() {
       return <>{boundary}</>;
     }
     return (
-      <section className="grid justify-items-start gap-4 text-foreground" data-testid="stacks-list-error">
+      <section className="grid justify-items-start gap-4" data-testid="stacks-list-error">
         <Breadcrumb items={[{ label: "Stacks" }]} className="mb-0" />
         <p className="text-muted-foreground">Something went wrong while loading stacks.</p>
         <Button className="pointer-coarse:h-11" data-testid="stacks-list-retry" onClick={() => refetch()}>
@@ -47,14 +44,14 @@ export default function StacksListScreen() {
   }
 
   return (
-    <section className="text-foreground">
+    <section>
       <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <Breadcrumb items={[{ label: "Stacks" }]} className="mb-0" />
         <RequireCapability capability="canCreateStack">
           {/* A link that looks like the page's primary action. Full width on
               a phone, where the header stacks. */}
           <Link
-            className={cn(buttonVariants(), "w-full no-underline pointer-coarse:h-11 md:w-auto")}
+            className={cn(buttonVariants(), "w-full pointer-coarse:h-11 md:w-auto")}
             to="/stacks/new"
             data-testid="create-stack-link"
           >
@@ -98,7 +95,7 @@ export default function StacksListScreen() {
                       outline is drawn inside, where the frame can't clip it. */}
                   <TableCell className="p-0">
                     <Link
-                      className="block truncate p-2 font-medium text-foreground no-underline hover:underline focus-visible:-outline-offset-2 pointer-coarse:py-3"
+                      className="block truncate p-2 font-medium text-foreground hover:underline focus-visible:-outline-offset-2 pointer-coarse:py-3"
                       to={`/stacks/${stack.id}`}
                       title={stack.name}
                     >

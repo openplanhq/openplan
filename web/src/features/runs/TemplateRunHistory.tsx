@@ -143,7 +143,7 @@ function RunRow({ run, to, hasActions, stackId, approvingRunID, discardingRunID,
   return (
     <TableRow data-testid={`template-run-row-${run.id}`}>
       <TableCell>
-        <Link className="block font-medium text-primary no-underline hover:underline pointer-coarse:py-3" to={to} data-testid={`template-run-history-${run.id}`}>
+        <Link className="block font-medium text-primary hover:underline pointer-coarse:py-3" to={to} data-testid={`template-run-history-${run.id}`}>
           #{run.run_number}
         </Link>
       </TableCell>

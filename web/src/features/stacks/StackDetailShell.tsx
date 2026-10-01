@@ -75,9 +75,8 @@ export default function StackDetailShell() {
     : [{ label: "Stacks", to: "/stacks" }, stackCrumb];
 
   return (
-    // No text colour here: the shell wraps the template screens, still on
-    // the legacy layer, which inherit theirs from body until they migrate.
-    // RouteTabs sets its own.
+    // No text colour here: the screens below inherit it from body, as
+    // RouteTabs does.
     <section data-testid="stack-detail-shell">
       <Breadcrumb items={crumbs} />
       {!currentTemplate && (

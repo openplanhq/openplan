@@ -1,8 +1,9 @@
 # Adopt shadcn/ui in `web/`
 
 **Date:** 2026-09-29
-**Status:** Approved. Guard and testing sections reviewed with PR 1. PRs 1 to
-6 settled the details recorded below.
+**Status:** Approved. PRs 0 to 7 are merged; PR 8, the cleanup below, is on
+`feat/shadcn-cleanup`. The sections below are the design as approved plus what
+each PR settled.
 
 ## Problem
 
@@ -396,6 +397,71 @@ migrated and unmigrated screens side by side.
 counterpart in the stock look. Each migrating screen drops it for a plain empty
 state, and the component file goes when its last user migrates (PR 7:
 `TemplateRegistryScreen`), along with its `/styleguide` section.
+
+**What PR 7 settled.**
+
+- The registry, registration, revision detail and Runs migrated as one PR, as
+  the plan says: `AlertDialog` for the destroy confirmation, `ScrollArea` for
+  logs, and `HeroGraphic` deleted with its last user.
+- `LEGACY_TABLES` emptied, so the table guard now holds every table in the app
+  to `<Table>` with a `<colgroup>`.
+- Run and revision timestamp columns reserve 128px, so fixed layout cannot
+  collapse them on a phone.
+- Rules whose class names survived as test IDs were deleted by hand, out of
+  the dead-CSS guard's sight.
+
+**What PR 8 settled.**
+
+- Deleted: `tokens.css`, `base.css`, `primitives.css`, `features.css`,
+  `dev/styleguide.css`, the `legacy` cascade layer and its imports,
+  `styles.guard.test.ts`, `legacy.guard.test.ts` and `scripts/audit-css.py`
+  (which audited the sheets by name). `styles.css` is imports only, and
+  `theme.guard.test.ts` holds it to that: Tailwind, `tw-animate-css`,
+  `shadcn/tailwind.css`, the two Geist faces, and `theme.css` last.
+- Four things the deleted sheets still carried moved into `theme.css`'s base
+  layer, because Preflight does not do them and components do not set them:
+  body text is `text-sm leading-normal` (14px/21px, the size every migrated
+  screen was audited at, so loading and error lines that set no size of their
+  own still match the components) and `min-width: 320px` (the narrowest
+  viewport the app supports), `html` is `antialiased` and
+  `text-rendering: optimizeLegibility` (a type decision, not a component one),
+  `:focus-visible` draws a solid 2px `outline-ring` at offset 2 (the browser
+  default, an auto outline in `ring/50`, is too faint for the plain links and
+  `summary` elements that draw no focus style of their own), and the
+  `prefers-reduced-motion` block. Nothing else moved: Preflight already gives
+  every heading the body's type, which is why each screen's heading sets
+  CardTitle's look itself. `body`'s `min-height: 100vh` is deliberately not
+  restored — `min-h-screen` and `min-h-svh` already give the shells their
+  height, and 100vh is taller than the visible viewport on a phone.
+- The workarounds the screens carried for the legacy layer came out: the
+  section-level `text-foreground` and the `no-underline` on links that only
+  existed to outrank `base.css`, and the tests that pinned them.
+- `/styleguide` is Tailwind and shadcn only. The legacy Colour, Typography,
+  Radii, Shadows, Buttons, Inputs, Panels, Messaging and Tabs sections are
+  gone; its remaining token sections read `theme.css` and Tailwind's own
+  `--text-*` and `--radius-*` out of the cascade, so nothing is restated.
+- Audited the way PR 1 was: computed styles of all 19 screens at 1512px and
+  375px, plus the loading, error, 403 and 503 states, diffed before and after.
+  What remains, and why each is accepted:
+  - Body text takes the theme's foreground rather than the legacy slate, and
+    the page canvas is the theme's white rather than the legacy `#fafafa`.
+    Both hexes are the legacy palette's; `--foreground` and `--background` are
+    the theme's, and the stock look is white on white with borders doing the
+    separating. The shell's `bg-background` and every card already said white.
+  - The font stack is the theme's `--font-sans`, `ui-sans-serif, system-ui,
+    sans-serif`, rather than the legacy sheet's `system-ui, -apple-system,
+    "Segoe UI", sans-serif`. Same first family, Geist; the fallbacks are
+    shadcn's.
+  - The template screen's Auto Apply row and its checkbox are 4px shorter,
+    because the legacy input `min-height` was stretching them; the row's own
+    `min-h-8` is what it meant.
+  - A destroy button in the template Settings tab is foreground rather than
+    the blue the legacy `a` rule leaked into an outline button.
+  - A disabled button no longer shows `cursor: not-allowed`, since shadcn's
+    Button disables with `pointer-events-none`. It is unclickable either way.
+  - Base UI's hidden form inputs lose the legacy input rule's `min-height`,
+    `border-radius` and background. They are `aria-hidden` and clipped to a
+    1px box.
 
 ### What every screen PR must do
 
