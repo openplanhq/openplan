@@ -64,6 +64,8 @@ function ComboboxInput({
         render={<InputGroupInput disabled={disabled} />}
         {...props}
       />
+      {/* Only with something in it: an empty addon still pads the input. */}
+      {(showTrigger || showClear) && (
       <InputGroupAddon align="inline-end">
         {showTrigger && (
           <InputGroupButton
@@ -77,6 +79,7 @@ function ComboboxInput({
         )}
         {showClear && <ComboboxClear disabled={disabled} />}
       </InputGroupAddon>
+      )}
       {children}
     </InputGroup>
   )
@@ -278,6 +281,7 @@ function useComboboxAnchor() {
 export {
   Combobox,
   ComboboxInput,
+  ComboboxClear,
   ComboboxContent,
   ComboboxList,
   ComboboxItem,
