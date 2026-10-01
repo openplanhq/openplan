@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { Loader2, RefreshCw, ShieldCheck } from "lucide-react";
+import { CircleAlert, Layers, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAddTemplateToStackMutation, useTemplateRevisionVariablesQuery, useTemplateRevisionsQuery } from "../../api/queries";
 import { tenantID } from "../../config";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import { formatTimestamp } from "../../shared/formatTimestamp";
-import { statusGlyph } from "../../shared/statusTone";
+import StatusBadge from "../../shared/StatusBadge";
 import {
   activeRevisions,
   groupTemplatesByRepository,
@@ -17,6 +17,17 @@ import {
 } from "../templates/templateWorkflow";
 import { configFromVariableValues } from "./stackWorkflow";
 import VariableFields from "./VariableFields";
+import { Alert, AlertAction, AlertTitle } from "@/components/ui/alert";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia } from "@/components/ui/empty";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+
+// base.css gives every h2 the legacy 32px display type until PR 9, so each
+// heading sets its own family, size, weight and tracking.
+const headingClass = "font-heading text-base leading-snug font-medium tracking-normal";
 
 // /stacks/:stackId/templates/new — installing a template, extracted from the
 // template screen where an always-present Install button sat next to an
@@ -29,6 +40,8 @@ import VariableFields from "./VariableFields";
 // offers the rest in a dropdown. Picking a revision outright was the wrong
 // default: installing almost always wants the newest validated commit, and
 // moving between commits afterwards is UpgradeStackTemplateScreen's job.
+//
+// Until PR 9, body keeps the legacy text colour, so each state sets its own.
 export default function AddStackTemplateScreen() {
   const { stackId = "" } = useParams<{ stackId: string }>();
   const navigate = useNavigate();
@@ -97,9 +110,9 @@ export default function AddStackTemplateScreen() {
 
   if (templateRevisionsQuery.status === "pending") {
     return (
-      <section className="add-stack-template-screen" data-testid="add-stack-template-loading">
-        <p className="muted">
-          <Loader2 size={16} className="spin" /> Loading templates…
+      <section className="text-foreground" data-testid="add-stack-template-loading">
+        <p className="flex items-center gap-2 text-muted-foreground">
+          <Loader2 aria-hidden="true" className="size-4 animate-spin" /> Loading templates…
         </p>
       </section>
     );
@@ -110,58 +123,72 @@ export default function AddStackTemplateScreen() {
       return <>{boundary}</>;
     }
     return (
-      <section className="add-stack-template-screen" data-testid="add-stack-template-load-error">
-        <p className="muted">Something went wrong while loading templates.</p>
-        <button
-          className="primary-button"
-          type="button"
-          data-testid="add-stack-template-retry"
-          onClick={() => templateRevisionsQuery.refetch()}
-        >
-          <RefreshCw size={16} />
+      <section className="grid justify-items-start gap-4 text-foreground" data-testid="add-stack-template-load-error">
+        <p className="text-muted-foreground">Something went wrong while loading templates.</p>
+        <Button className="pointer-coarse:h-11" data-testid="add-stack-template-retry" onClick={() => templateRevisionsQuery.refetch()}>
+          <RefreshCw data-icon="inline-start" aria-hidden="true" />
           Retry
-        </button>
+        </Button>
       </section>
     );
   }
 
+  // The revision picker's options: the commit and its registration date. The
+  // name and ref are fixed for the whole template and already named in the
+  // row. Select shows the chosen option's label from these.
+  const revisionItems = chosenTemplateRevisions.map((candidate, index) => ({
+    value: candidate.id,
+    label: `${shortCommitSHA(candidate.resolved_commit_sha)} · ${formatTimestamp(candidate.created_at)}${index === 0 ? " · latest" : ""}`
+  }));
+
   return (
     <section
-      className="add-stack-template-screen"
+      className="grid gap-6 text-foreground"
       data-testid="add-stack-template-screen"
       data-unsaved={hasUnsavedValues ? "true" : undefined}
     >
       {errorMessage && (
-        <div className="alert" data-testid="add-stack-template-error">
-          {errorMessage}
-        </div>
+        <Alert variant="destructive" data-testid="add-stack-template-error">
+          <CircleAlert aria-hidden="true" />
+          <AlertTitle>{errorMessage}</AlertTitle>
+        </Alert>
       )}
 
       {templateRevisions.length === 0 ? (
-        <section className="panel" data-testid="add-stack-template-none">
-          <p className="muted">No templates are registered for this tenant yet.</p>
-          <Link className="primary-button" to="/templates/new" data-testid="register-template-link">
-            Register template
-          </Link>
-        </section>
+        <Empty className="border" data-testid="add-stack-template-none">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Layers aria-hidden="true" />
+            </EmptyMedia>
+            <EmptyDescription>No templates are registered for this tenant yet.</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Link
+              className={cn(buttonVariants(), "no-underline pointer-coarse:h-11")}
+              to="/templates/new"
+              data-testid="register-template-link"
+            >
+              Register template
+            </Link>
+          </EmptyContent>
+        </Empty>
       ) : (
-        // Browse on the left, configure on the right. Stacked, the config panel
-        // landed under the last repository group and read as belonging to it
-        // rather than to the row actually chosen further up the page.
-        <div className="workflow-grid">
-          <div className="templates-groups">
+        // Browse on the left, configure on the right, split 3:4 as the legacy
+        // grid's 0.85fr and 1.15fr were. Stacked, the config panel landed
+        // under the last repository group and read as belonging to it rather
+        // than to the row actually chosen further up the page.
+        <div className="grid gap-6 lg:grid-cols-7">
+          <div className="grid content-start gap-6 lg:col-span-3">
             {repositoryGroups.map((group) => (
-              <section className="templates-group" key={group.key} data-testid={`template-group-${group.key}`}>
+              <section className="grid gap-3" key={group.key} data-testid={`template-group-${group.key}`}>
                 {/* No count pill here, unlike the registry. It counts
                     templates while the rows count installable revisions, and
                     two small numbers a few pixels apart reading "1" then
                     "2 revisions" invite the guess that they disagree. */}
-                <h2 className="templates-group__heading">
-                  <span className="templates-group__repo">
-                    {group.repoOwner}/{group.repoName}
-                  </span>
+                <h2 className="font-mono text-sm font-normal tracking-normal wrap-anywhere text-muted-foreground">
+                  {group.repoOwner}/{group.repoName}
                 </h2>
-                <ul className="template-choices">
+                <ul className="grid gap-3">
                   {group.sourceTemplates.map((sourceTemplate) => {
                     const installable = latestActiveRevision(sourceTemplate.revisions);
                     const chosenHere = sourceTemplate.revisions.some((revision) => revision.id === chosenRevisionID);
@@ -174,9 +201,13 @@ export default function AddStackTemplateScreen() {
                     const shownRevision = installable ?? sourceTemplate.latestRevision;
                     return (
                       <li key={sourceTemplate.sourceTemplateID}>
+                        {/* The button is the card: the name and root path on
+                            the left, the ref and commit on the right, wrapping
+                            under the name on a phone. The chosen row takes the
+                            primary border and ring. */}
                         <button
                           type="button"
-                          className="template-choice"
+                          className="flex w-full flex-wrap items-start justify-between gap-x-4 gap-y-1 rounded-lg border bg-card px-4 py-2 text-left text-card-foreground shadow-xs transition-colors outline-none hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-card data-[selected=true]:border-primary data-[selected=true]:ring-3 data-[selected=true]:ring-primary/20 pointer-coarse:min-h-11"
                           data-testid={`add-template-choice-${sourceTemplate.sourceTemplateID}`}
                           data-selected={chosenHere ? "true" : undefined}
                           // No active revision means nothing here can be
@@ -185,20 +216,15 @@ export default function AddStackTemplateScreen() {
                           disabled={installable === null}
                           onClick={() => installable && handleChoose(installable.id)}
                         >
-                          <span className="templates-list__main">
-                            <span className="templates-list__name">{sourceTemplate.name}</span>
-                            {rootPath !== "" && <small className="muted">{rootPath}</small>}
-                          </span>
-                          <span className="templates-list__meta">
-                            {tone !== null && (
-                              <span className={`status-tone status-tone--${tone}`}>
-                                <span className="status-tone__glyph" aria-hidden="true">
-                                  {statusGlyph(tone)}
-                                </span>
-                                {sourceTemplate.latestRevision.status}
-                              </span>
+                          <span className="grid min-w-0 gap-1">
+                            <span className="text-sm wrap-anywhere">{sourceTemplate.name}</span>
+                            {rootPath !== "" && (
+                              <span className="font-mono text-xs wrap-anywhere text-muted-foreground">{rootPath}</span>
                             )}
-                            <span className="templates-list__rev">
+                          </span>
+                          <span className="flex flex-wrap items-center gap-3">
+                            {tone !== null && <StatusBadge tone={tone}>{sourceTemplate.latestRevision.status}</StatusBadge>}
+                            <span className="font-mono text-xs text-muted-foreground">
                               {sourceTemplate.sourceRef} · {shortCommitSHA(shownRevision.resolved_commit_sha)}
                               {/* Only worth saying where it means the dropdown
                                   below has something to offer. */}
@@ -214,77 +240,103 @@ export default function AddStackTemplateScreen() {
             ))}
           </div>
 
-          <div className="template-configure">
+          {/* Sticky so the panel stays beside the row that opened it however
+              far the list runs on. Below lg the columns stack, where a sticky
+              panel would pin the form over the list instead. */}
+          <div className="lg:sticky lg:top-6 lg:col-span-4 lg:self-start">
             {chosenRevision && chosenTemplate ? (
-              <section className="panel" data-testid="add-stack-template-variables">
-                {/* Names what is being configured. Proximity alone was not
-                    enough: stacked below the list, this panel read as belonging
-                    to whichever template happened to be rendered last. */}
-                <h2 className="template-configure__name">{chosenTemplate.name}</h2>
-                {/* Only where there is a choice to make. One active revision needs no
-                    control, and the row click has already selected it. Options carry
-                    the commit and its registration date — the name and ref are fixed
-                    for the whole template and already named in the row above. */}
-                {chosenTemplateRevisions.length > 1 && (
-                  <label className="selector-label">
-                    Revision
-                    <select
-                      data-testid="add-template-revision-select"
-                      value={chosenRevisionID}
-                      onChange={(event) => handleChoose(event.target.value)}
-                    >
-                      {chosenTemplateRevisions.map((candidate, index) => (
-                        <option key={candidate.id} value={candidate.id}>
-                          {shortCommitSHA(candidate.resolved_commit_sha)} · {formatTimestamp(candidate.created_at)}
-                          {index === 0 ? " · latest" : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
+              <Card data-testid="add-stack-template-variables">
+                <CardHeader>
+                  {/* Names what is being configured. Proximity alone was not
+                      enough: stacked below the list, this panel read as
+                      belonging to whichever template happened to be rendered
+                      last. */}
+                  <h2 className={cn(headingClass, "wrap-anywhere")}>{chosenTemplate.name}</h2>
+                </CardHeader>
+                <CardContent className="grid gap-6">
+                  {/* Only where there is a choice to make. One active revision
+                      needs no control, and the row click has already selected
+                      it. */}
+                  {revisionItems.length > 1 && (
+                    <div className="grid gap-2">
+                      <Label htmlFor="add-template-revision">Revision</Label>
+                      <Select
+                        items={revisionItems}
+                        value={chosenRevisionID}
+                        onValueChange={(revisionID) => {
+                          // Base UI types the value as nullable; a revision is always chosen.
+                          if (revisionID !== null) handleChoose(revisionID);
+                        }}
+                      >
+                        <SelectTrigger
+                          id="add-template-revision"
+                          data-testid="add-template-revision-select"
+                          className="w-full pointer-coarse:data-[size=default]:h-11"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {revisionItems.map((item) => (
+                            <SelectItem key={item.value} value={item.value} className="pointer-coarse:min-h-11">
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
-                <h2>Variables</h2>
-                {variablesLoading ? (
-                  <p className="muted" data-testid="add-stack-template-variables-loading">
-                    <Loader2 size={16} className="spin" /> Loading variables…
-                  </p>
-                ) : variablesFailed ? (
-                  // Distinct from the empty message on purpose: an unresolved fetch
-                  // must never read as "this template declares no variables", which
-                  // is a claim we cannot make when we could not load them. Kept
-                  // inline rather than replacing the screen, so the picker above
-                  // stays usable and another revision can be chosen.
-                  <p className="muted" data-testid="add-stack-template-variables-error">
-                    Could not load this template&rsquo;s variables.{" "}
-                    <button className="secondary-button" type="button" onClick={() => variablesQuery.refetch()}>
-                      <RefreshCw size={16} />
-                      Retry
-                    </button>
-                  </p>
-                ) : (
-                  <VariableFields
-                    variables={variables}
-                    variableValues={values}
-                    onVariableValueChange={(name, value) => setValues((current) => ({ ...current, [name]: value }))}
-                    emptyMessage="This template declares no variables"
-                  />
-                )}
-                <div className="button-row form-actions">
-                  <button
-                    className="primary-button"
-                    type="button"
+                  <div className="grid gap-4">
+                    <h2 className={headingClass}>Variables</h2>
+                    {variablesLoading ? (
+                      <p className="flex items-center gap-2 text-muted-foreground" data-testid="add-stack-template-variables-loading">
+                        <Loader2 aria-hidden="true" className="size-4 animate-spin" /> Loading variables…
+                      </p>
+                    ) : variablesFailed ? (
+                      // Distinct from the empty message on purpose: an unresolved
+                      // fetch must never read as "this template declares no
+                      // variables", which is a claim we cannot make when we could
+                      // not load them. Kept inline rather than replacing the
+                      // screen, so the picker stays usable and another revision
+                      // can be chosen.
+                      <Alert variant="destructive" data-testid="add-stack-template-variables-error">
+                        <CircleAlert aria-hidden="true" />
+                        <AlertTitle>Could not load this template&rsquo;s variables.</AlertTitle>
+                        <AlertAction>
+                          <Button variant="outline" size="sm" className="pointer-coarse:h-11" onClick={() => variablesQuery.refetch()}>
+                            <RefreshCw data-icon="inline-start" aria-hidden="true" />
+                            Retry
+                          </Button>
+                        </AlertAction>
+                      </Alert>
+                    ) : (
+                      <VariableFields
+                        variables={variables}
+                        variableValues={values}
+                        onVariableValueChange={(name, value) => setValues((current) => ({ ...current, [name]: value }))}
+                        emptyMessage="This template declares no variables"
+                      />
+                    )}
+                  </div>
+                  {/* Its own width, or the full width on a phone. */}
+                  <Button
+                    className="w-full pointer-coarse:h-11 md:w-auto md:justify-self-start"
                     disabled={variablesLoading || variablesFailed || addTemplateToStackMutation.isPending}
                     onClick={handleInstall}
                   >
-                    {addTemplateToStackMutation.isPending ? <Loader2 size={16} className="spin" /> : <ShieldCheck size={16} />}
+                    {addTemplateToStackMutation.isPending ? (
+                      <Loader2 data-icon="inline-start" aria-hidden="true" className="animate-spin" />
+                    ) : (
+                      <ShieldCheck data-icon="inline-start" aria-hidden="true" />
+                    )}
                     Install
-                  </button>
-                </div>
-              </section>
+                  </Button>
+                </CardContent>
+              </Card>
             ) : (
-              // Not a panel: a full card of chrome around one sentence
+              // Not a card: a full card of chrome around one sentence
               // outweighed the sentence.
-              <p className="muted" data-testid="add-stack-template-unchosen">
+              <p className="text-muted-foreground" data-testid="add-stack-template-unchosen">
                 Choose a template to configure and install it.
               </p>
             )}
