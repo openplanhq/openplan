@@ -232,7 +232,14 @@ export function useSearchUsersQuery(tenantID: string, query: string) {
   return useQuery({
     queryKey: queryKeys.userSearch(tenantID, query),
     queryFn: () => client.searchUsers(tenantID, query, 0, 20),
-    enabled: query.length >= 2
+    enabled: query.length >= 2,
+    // The last answer stays while the next query loads, so the stack-access
+    // search list doesn't close, and blink, on every keystroke. Only for a
+    // query that narrows it: an unrelated one would show the wrong people.
+    placeholderData: (previous, previousQuery) => {
+      const previousSearch = previousQuery?.queryKey[2];
+      return previousSearch !== undefined && query.startsWith(previousSearch) ? previous : undefined;
+    }
   });
 }
 

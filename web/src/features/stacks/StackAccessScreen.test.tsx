@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import StackAccessScreen from "./StackAccessScreen";
-import type { ListGrantsResponse, SearchUsersResponse } from "../../api/types";
+import type { GrantView, ListGrantsResponse, SearchUsersResponse, UserProfile } from "../../api/types";
 
 function wrapper(initialRoute = "/stacks/stack_123/access") {
   const queryClient = new QueryClient({
@@ -57,6 +57,80 @@ const searchResults: SearchUsersResponse = {
   first: 0,
   max: 20
 };
+
+const charlie = searchResults.users[0];
+const chad: UserProfile = { sub: "u4", displayName: "Chad", email: "chad@example.com" };
+const dave: UserProfile = { sub: "u6", displayName: "Dave Grohl", email: "dave@example.com" };
+// Matched by email: there is no "ch" in her name.
+const dorothy: UserProfile = { sub: "u5", displayName: "Dorothy Vaughan", email: "dvaughan@chem.example.com" };
+
+interface Sent {
+  method: string;
+  url: string;
+  body?: Record<string, string>;
+}
+
+// Answers each request by its URL, so a test can count and inspect what the
+// screen sent. A search gets `users`, after `searchDelay` ms; a POST gets
+// `assign` (or the grant it asked for); anything else gets the grants list.
+function serve({
+  grants = [],
+  users = [],
+  assign,
+  searchDelay = 0
+}: { grants?: GrantView[]; users?: UserProfile[]; assign?: () => Promise<Response>; searchDelay?: number } = {}) {
+  const sent: Sent[] = [];
+  const json = (value: unknown) =>
+    new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = init?.method ?? "GET";
+    const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, string>) : undefined;
+    sent.push({ method, url, body });
+    if (url.includes("/users/search")) {
+      await new Promise((resolve) => setTimeout(resolve, searchDelay));
+      return json({ users, first: 0, max: 20 });
+    }
+    if (method === "POST") {
+      return assign ? assign() : json({ userSub: body?.user_sub, role: body?.role, displayName: "", email: "" });
+    }
+    return json({ grants });
+  });
+  return sent;
+}
+
+/** The query of each user search the screen sent, in order. */
+const searches = (sent: Sent[]) =>
+  sent
+    .filter(({ url }) => url.includes("/users/search"))
+    .map(({ url }) => new URL(url, "http://localhost").searchParams.get("q"));
+
+/** Moves fake time on, running the timers and the renders they cause. */
+const elapse = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
+
+/** The search waits 300ms after the last keystroke. */
+const afterDebounce = () => elapse(400);
+
+// userEvent waits between keystrokes; under fake timers it must move them on.
+const setupUser = () =>
+  vi.isFakeTimers() ? userEvent.setup({ advanceTimers: vi.advanceTimersByTime }) : userEvent.setup();
+
+async function renderWithGrants(grants: GrantView[] = []) {
+  render(<StackAccessScreen />, { wrapper: wrapper() });
+  await screen.findByText(grants.length === 0 ? /No users have been assigned/ : grants[0].displayName);
+}
+
+async function typeInSearch(text: string) {
+  const user = setupUser();
+  const input = screen.getByRole("combobox", { name: "Search users" }) as HTMLInputElement;
+  await user.click(input);
+  await user.type(input, text);
+  return { user, input };
+}
+
+// Only while no popup is open: Base UI hides the rest of the page from
+// assistive technology while one is, and a role query can't name it then.
+const assignButton = () => screen.getByRole("button", { name: "Assign Role" }) as HTMLButtonElement;
 
 describe("StackAccessScreen", () => {
   beforeEach(() => {
@@ -218,6 +292,7 @@ describe("StackAccessScreen", () => {
         screen.getByText("cannot remove the last owner")
       ).toBeDefined();
     });
+    expect(screen.getByText("cannot remove the last owner").closest('[data-slot="alert"]')).not.toBeNull();
   });
 
   it("assigns role when selecting a user and clicking assign", async () => {
@@ -313,5 +388,415 @@ describe("StackAccessScreen", () => {
 
     const assignButton = screen.getByRole("button", { name: "Assign Role" });
     expect((assignButton as HTMLButtonElement).disabled).toBe(true);
+  });
+  describe("user search", () => {
+    // Fake time, so waiting out the debounce or a slow search costs nothing
+    // and can't race a loaded runner. shouldAdvanceTime keeps findBy's and
+    // waitFor's polling, and Base UI's animation frames, moving.
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("is a combobox that stays shut until two characters are typed", async () => {
+      const sent = serve({ users: [charlie] });
+      await renderWithGrants();
+
+      const { user, input } = await typeInSearch("c");
+      await afterDebounce();
+      expect(input.getAttribute("aria-expanded")).toBe("false");
+      expect(screen.queryByText("No users found")).toBeNull();
+      expect(searches(sent)).toEqual([]);
+
+      await user.type(input, "h");
+      await screen.findByRole("option", { name: /Charlie Brown/ });
+      expect(input.getAttribute("aria-expanded")).toBe("true");
+      expect(searches(sent)).toEqual(["ch"]);
+    });
+
+    // The server matches on name and email; the list must not filter again.
+    it("lists every user the server answers with, even one matched by email", async () => {
+      serve({ users: [charlie, dorothy] });
+      await renderWithGrants();
+
+      await typeInSearch("ch");
+      expect(await screen.findByRole("option", { name: /Dorothy Vaughan/ })).toBeDefined();
+      expect(screen.getAllByRole("option")).toHaveLength(2);
+    });
+
+    it("moves the highlight with ArrowDown and ArrowUp, and picks with Enter", async () => {
+      serve({ users: [charlie, chad] });
+      await renderWithGrants();
+
+      const { user, input } = await typeInSearch("ch");
+      const [first, second] = await screen.findAllByRole("option");
+      await user.keyboard("{ArrowDown}");
+      expect(input.getAttribute("aria-activedescendant")).toBe(first.id);
+      await user.keyboard("{ArrowDown}");
+      expect(input.getAttribute("aria-activedescendant")).toBe(second.id);
+      expect(second.hasAttribute("data-highlighted")).toBe(true);
+      await user.keyboard("{ArrowUp}");
+      expect(input.getAttribute("aria-activedescendant")).toBe(first.id);
+
+      await user.keyboard("{Enter}");
+      expect(input.value).toBe("Charlie Brown");
+      expect(input.getAttribute("aria-expanded")).toBe("false");
+      expect(assignButton().disabled).toBe(false);
+    });
+
+    it("closes and clears on Escape", async () => {
+      serve({ users: [charlie] });
+      await renderWithGrants();
+
+      const { user, input } = await typeInSearch("cha");
+      await screen.findByRole("option", { name: /Charlie Brown/ });
+      await user.keyboard("{Escape}");
+      expect(input.getAttribute("aria-expanded")).toBe("false");
+      expect(screen.queryByRole("option")).toBeNull();
+      expect(input.value).toBe("");
+    });
+
+    it("keeps the pick, and searches only what was typed, while the user looks again", async () => {
+      const sent = serve({ users: [charlie] });
+      await renderWithGrants();
+
+      const { user, input } = await typeInSearch("cha");
+      await user.click(await screen.findByRole("option", { name: /Charlie Brown/ }));
+      expect(input.value).toBe("Charlie Brown");
+      await afterDebounce();
+      expect(searches(sent)).toEqual(["cha"]);
+
+      // Typing searches again; leaving without a new pick puts the pick back.
+      await user.type(input, "x");
+      await user.tab();
+      expect(input.value).toBe("Charlie Brown");
+      expect(assignButton().disabled).toBe(false);
+    });
+
+    // Base UI resets its input to the pick, or empties it, whenever the list
+    // closes. Neither a search loading nor a query too short to search may
+    // cost the user what they typed.
+    it("keeps what was typed while a refined search loads", async () => {
+      serve({ users: [charlie, chad], searchDelay: 200 });
+      await renderWithGrants();
+
+      const { user, input } = await typeInSearch("ch");
+      await screen.findAllByRole("option");
+      await user.type(input, "a");
+      await afterDebounce();
+      expect(input.value).toBe("cha");
+      expect(screen.getAllByRole("option")).toHaveLength(2);
+    });
+
+    it("keeps a query shortened below two characters", async () => {
+      serve({ users: [charlie] });
+      await renderWithGrants();
+
+      const { user, input } = await typeInSearch("ch");
+      await screen.findAllByRole("option");
+      await user.keyboard("{Backspace}");
+      await afterDebounce();
+      expect(input.value).toBe("c");
+      expect(input.getAttribute("aria-expanded")).toBe("false");
+    });
+
+    it("keeps what was typed after a pick while that search runs", async () => {
+      serve({ users: [charlie] });
+      await renderWithGrants();
+
+      const { user, input } = await typeInSearch("cha");
+      await user.click(await screen.findByRole("option", { name: /Charlie Brown/ }));
+      await user.type(input, "x");
+      await afterDebounce();
+      expect(input.value).toBe("Charlie Brownx");
+    });
+
+    it("sends no search for what was typed once the user leaves", async () => {
+      const sent = serve({ users: [charlie] });
+      await renderWithGrants();
+
+      const { user, input } = await typeInSearch("cha");
+      await user.click(await screen.findByRole("option", { name: /Charlie Brown/ }));
+      await user.type(input, "x");
+      await user.tab();
+      await afterDebounce();
+      expect(input.value).toBe("Charlie Brown");
+      expect(searches(sent)).toEqual(["cha"]);
+    });
+
+    it("puts the pick back when the user leaves a query too short to search", async () => {
+      serve({ users: [charlie] });
+      await renderWithGrants();
+
+      const { user, input } = await typeInSearch("cha");
+      await user.click(await screen.findByRole("option", { name: /Charlie Brown/ }));
+      await user.type(input, "d", { initialSelectionStart: 0, initialSelectionEnd: input.value.length });
+      await afterDebounce();
+      expect(input.value).toBe("d");
+      await user.tab();
+      expect(input.value).toBe("Charlie Brown");
+      expect(assignButton().disabled).toBe(false);
+    });
+
+    // A previous answer may stand in only for a search that narrows it; an
+    // unrelated query says it is searching until its own answer.
+    it("says Searching... for a new, unrelated search, not the last one's users", async () => {
+      serve({ users: [charlie], searchDelay: 300 });
+      await renderWithGrants();
+
+      const { user, input } = await typeInSearch("cha");
+      await screen.findByRole("option", { name: /Charlie Brown/ });
+      await user.keyboard("{Escape}");
+      await user.type(input, "da");
+      await afterDebounce();
+      expect(input.getAttribute("aria-expanded")).toBe("true");
+      expect(screen.getByText("Searching...")).toBeDefined();
+      expect(screen.queryByRole("option")).toBeNull();
+      expect(screen.queryByText("No users found")).toBeNull();
+
+      await elapse(300);
+      expect(await screen.findByRole("option", { name: /Charlie Brown/ })).toBeDefined();
+      expect(input.value).toBe("da");
+    });
+
+    it("keeps the query when Enter is pressed with nothing highlighted", async () => {
+      serve({ users: [charlie] });
+      await renderWithGrants();
+
+      const { user, input } = await typeInSearch("cha");
+      await screen.findByRole("option", { name: /Charlie Brown/ });
+      await user.keyboard("{Enter}");
+      expect(input.value).toBe("cha");
+    });
+
+    // The search goes out 300ms after typing and answers 100ms later; the
+    // user leaves in between, and the answer must not open the list.
+    it("doesn't open the list once the user has left", async () => {
+      serve({ users: [charlie], searchDelay: 100 });
+      await renderWithGrants();
+
+      const { user, input } = await typeInSearch("ch");
+      await elapse(320);
+      await user.tab();
+      await elapse(150);
+      expect(input.getAttribute("aria-expanded")).toBe("false");
+      expect(screen.queryByRole("option")).toBeNull();
+    });
+
+    it("returns focus to the search after the pick is cleared from the keyboard", async () => {
+      serve({ users: [charlie] });
+      await renderWithGrants();
+
+      const { user, input } = await typeInSearch("cha");
+      await user.click(await screen.findByRole("option", { name: /Charlie Brown/ }));
+      await user.tab();
+      expect(document.activeElement?.getAttribute("aria-label")).toBe("Clear selected user");
+      await user.keyboard("{Enter}");
+      expect(document.activeElement).toBe(input);
+    });
+
+    it("clears the pick with the clear button", async () => {
+      serve({ users: [charlie] });
+      await renderWithGrants();
+
+      const { user, input } = await typeInSearch("cha");
+      await user.click(await screen.findByRole("option", { name: /Charlie Brown/ }));
+      await user.click(screen.getByRole("button", { name: "Clear selected user" }));
+      expect(input.value).toBe("");
+      expect(screen.queryByRole("button", { name: "Clear selected user" })).toBeNull();
+      expect(assignButton().disabled).toBe(true);
+    });
+
+    it("shows a user who already holds a role with it, and won't pick them", async () => {
+      const alice = twoGrants.grants[0];
+      serve({ grants: [alice], users: [{ sub: alice.userSub, displayName: alice.displayName, email: alice.email }] });
+      await renderWithGrants([alice]);
+
+      const { user, input } = await typeInSearch("ali");
+      const option = await screen.findByRole("option", { name: /Alice/ });
+      expect(option.getAttribute("aria-disabled")).toBe("true");
+      expect(option.textContent).toContain("alice@example.com — owner");
+
+      await user.keyboard("{ArrowDown}{Enter}");
+      expect(input.value).toBe("ali");
+      // jsdom has no CSS, so the click reaches the option that pointer-events-none
+      // shields in a browser. Either way nothing is picked.
+      await user.click(option);
+      await user.keyboard("{Escape}");
+      expect(input.value).toBe("");
+      expect(assignButton().disabled).toBe(true);
+    });
+
+    it("says No users found when the search finds nobody", async () => {
+      serve({ users: [] });
+      await renderWithGrants();
+
+      await typeInSearch("zz");
+      expect(await screen.findByText("No users found")).toBeDefined();
+    });
+  });
+
+  describe("role picker", () => {
+    it("opens from the keyboard, moves with the arrows, and commits with Enter", async () => {
+      const sent = serve({ users: [charlie] });
+      await renderWithGrants();
+      const { user } = await typeInSearch("cha");
+      await user.click(await screen.findByRole("option", { name: /Charlie Brown/ }));
+
+      const role = screen.getByRole("combobox", { name: "Role" });
+      const shown = () => role.querySelector('[data-slot="select-value"]')?.textContent;
+      expect(shown()).toBe("Viewer");
+
+      role.focus();
+      await user.keyboard("{Enter}");
+      const listbox = await screen.findByRole("listbox");
+      expect(within(listbox).getAllByRole("option").map((option) => option.textContent)).toEqual([
+        "Owner",
+        "Operator",
+        "Approver",
+        "Viewer"
+      ]);
+      expect(document.activeElement?.textContent).toBe("Viewer");
+      await user.keyboard("{ArrowUp}{ArrowUp}");
+      expect(document.activeElement?.textContent).toBe("Operator");
+      await user.keyboard("{ArrowDown}");
+      expect(document.activeElement?.textContent).toBe("Approver");
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
+      expect(shown()).toBe("Approver");
+      expect(document.activeElement).toBe(role);
+
+      await user.click(assignButton());
+      await waitFor(() =>
+        expect(sent.find(({ method }) => method === "POST")?.body).toEqual({ user_sub: "u3", role: "approver" })
+      );
+    });
+  });
+
+  // What the input shows is who gets the role.
+  it("won't assign while the input shows someone other than the pick", async () => {
+    serve({ users: [charlie] });
+    await renderWithGrants();
+    const { user, input } = await typeInSearch("cha");
+    await user.click(await screen.findByRole("option", { name: /Charlie Brown/ }));
+
+    await user.type(input, "dave", { initialSelectionStart: 0, initialSelectionEnd: input.value.length });
+    expect(input.value).toBe("dave");
+    expect((screen.getByText("Assign Role", { selector: "button" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("keeps a newer pick when an earlier assignment finishes", async () => {
+    let finish!: (response: Response) => void;
+    serve({ users: [charlie, dave], assign: () => new Promise<Response>((resolve) => (finish = resolve)) });
+    await renderWithGrants();
+    const { user, input } = await typeInSearch("cha");
+    await user.click(await screen.findByRole("option", { name: /Charlie Brown/ }));
+    await user.click(assignButton());
+
+    await user.type(input, "da", { initialSelectionStart: 0, initialSelectionEnd: input.value.length });
+    await user.click(await screen.findByRole("option", { name: /Dave Grohl/ }));
+    finish(new Response(JSON.stringify({ userSub: "u3", role: "viewer" }), { status: 200, headers: { "content-type": "application/json" } }));
+    await waitFor(() => expect(screen.getByText("Assign Role", { selector: "button" })).toBeDefined());
+    expect(input.value).toBe("Dave Grohl");
+  });
+
+  it("sends one assignment however often Assign is pressed while it is out", async () => {
+    const sent = serve({ users: [charlie], assign: () => new Promise<Response>(() => {}) });
+    await renderWithGrants();
+    const { user } = await typeInSearch("cha");
+    await user.click(await screen.findByRole("option", { name: /Charlie Brown/ }));
+
+    const assign = assignButton();
+    await user.click(assign);
+    expect(assign.textContent).toBe("Assigning...");
+    expect(assign.disabled).toBe(true);
+    await user.click(assign);
+    expect(sent.filter(({ method }) => method === "POST")).toHaveLength(1);
+  });
+  describe("current grants", () => {
+    it("shows each grant's role as a RoleBadge", async () => {
+      serve({ grants: twoGrants.grants });
+      await renderWithGrants(twoGrants.grants);
+
+      const owner = screen.getByText("owner");
+      expect(owner.getAttribute("data-slot")).toBe("badge");
+      expect(owner.getAttribute("data-role")).toBe("owner");
+    });
+
+    it("cuts a long name or email short and shows it whole on hover", async () => {
+      const name = "Bartholomew Montgomery-Fitzwilliam the Third, Platform Operations";
+      const email = "bartholomew.montgomery-fitzwilliam@platform-operations.example.com";
+      serve({ grants: [{ userSub: "u9", role: "viewer", displayName: name, email }] });
+      render(<StackAccessScreen />, { wrapper: wrapper() });
+
+      for (const text of [name, email]) {
+        const element = await screen.findByText(text);
+        expect(element.classList).toContain("truncate");
+        expect(element.getAttribute("title")).toBe(text);
+      }
+    });
+
+    it("puts a failed load in an Alert, with a Retry that loads again", async () => {
+      let calls = 0;
+      vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+        calls += 1;
+        return calls === 1
+          ? new Response(JSON.stringify({ error: "internal", message: "boom" }), {
+              status: 500,
+              headers: { "content-type": "application/json" }
+            })
+          : new Response(JSON.stringify(twoGrants), { status: 200, headers: { "content-type": "application/json" } });
+      });
+      render(<StackAccessScreen />, { wrapper: wrapper() });
+
+      expect((await screen.findByRole("alert")).textContent).toContain("Failed to load grants.");
+      await userEvent.setup().click(screen.getByRole("button", { name: "Retry" }));
+      expect(await screen.findByText("Alice")).toBeDefined();
+    });
+
+    // Screen readers announce a change to a live region that is already in
+    // the page; one mounted together with its text often goes unread.
+    it("keeps the undo status region in the page before it has anything to say", async () => {
+      serve({ grants: twoGrants.grants });
+      await renderWithGrants(twoGrants.grants);
+
+      const status = screen.getByRole("status");
+      expect(status.textContent).toBe("");
+      const user = userEvent.setup();
+      await user.click(screen.getByRole("button", { name: "Revoke Bob's viewer role" }));
+      await user.click(screen.getByRole("button", { name: "Confirm" }));
+      await waitFor(() => expect(status.textContent).toMatch(/Removed Bob.*viewer access/));
+    });
+
+    it("disables Undo while it restores the role, and leaves Assign alone", async () => {
+      serve({ grants: twoGrants.grants, assign: () => new Promise<Response>(() => {}) });
+      await renderWithGrants(twoGrants.grants);
+      const user = userEvent.setup();
+
+      await user.click(screen.getByRole("button", { name: "Revoke Bob's viewer role" }));
+      await user.click(screen.getByRole("button", { name: "Confirm" }));
+      const undo = await screen.findByRole("button", { name: "Undo" });
+      await user.click(undo);
+      expect((undo as HTMLButtonElement).disabled).toBe(true);
+      expect(assignButton().textContent).toBe("Assign Role");
+    });
+
+    it("offers Undo in a status banner after a revoke, and Undo restores the role", async () => {
+      const sent = serve({ grants: twoGrants.grants });
+      await renderWithGrants(twoGrants.grants);
+      const user = userEvent.setup();
+
+      await user.click(screen.getByRole("button", { name: "Revoke Bob's viewer role" }));
+      await user.click(screen.getByRole("button", { name: "Confirm" }));
+      const banner = (await screen.findByText(/Removed Bob.*viewer access/)).closest<HTMLElement>('[role="status"]');
+      expect(banner).not.toBeNull();
+
+      await user.click(within(banner as HTMLElement).getByRole("button", { name: "Undo" }));
+      await waitFor(() =>
+        expect(sent.find(({ method }) => method === "POST")?.body).toEqual({ user_sub: "u2", role: "viewer" })
+      );
+    });
   });
 });

@@ -111,7 +111,6 @@ const SIZED_PROPS = ["font-size", "border-radius", "gap", "padding", "margin",
 /** Deliberately off-scale sizes. Each carries its reason so that silencing a
     finding stays a decision rather than a habit. */
 const OFF_SCALE_ALLOWED = new Set([
-  ".role-badge|min-width",              // sized to the longest role label so the pills form a column
   "body|min-width"                      // minimum supported viewport width, not a spacing value
 ]);
 

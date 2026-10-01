@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-29
 **Status:** Approved. Guard and testing sections reviewed with PR 1. PRs 1 to
-4 settled the details recorded below.
+5 settled the details recorded below.
 
 ## Problem
 
@@ -200,8 +200,8 @@ migrated and unmigrated screens side by side.
 | 2 | App shell (`AppShell`) and `src/shared/` components; deletes the unused `StatBand` and `IdsPanel` | Breadcrumb; Badge (status tones, roles); Collapsible (`LogSteps`) |
 | 3 | Standalone screens: sign-in, access denied, not found, service unavailable, route placeholder, and the two session-error screens | Card, Button, Alert, Input, Label; Empty for the route messages |
 | 4 | Stacks: list, create, detail shell, environment, credentials | Table; Tabs for the stack's tab row (`RouteTabs`); reuses Card, Input, Label, Button, Alert and Empty |
-| 5 | Stack access | Combobox for the user search; Select for the role picker |
-| 6 | Stack templates: list, detail shell and its four tabs, config panel, variable fields, add, upgrade | `RouteTabs` from PR 4 for the template's tabs, so each tab keeps its URL; Select; Textarea |
+| 5 | Stack access | Combobox for the user search; Select for the role picker; reuses Card, Alert, Button, Label and `RoleBadge` |
+| 6 | Stack templates: list, detail shell and its four tabs, config panel, variable fields, add, upgrade | `RouteTabs` from PR 4 for the template's tabs, so each tab keeps its URL; Select; Textarea (vendored in PR 5) |
 | 7 | Template registry: registry, registration, detail | Table, Card, Input |
 | 8 | Runs: detail, logs, history, actions, destroy panel | AlertDialog for the destroy confirmation; ScrollArea for logs |
 | 9 | Cleanup: delete `tokens.css`, `base.css`, `primitives.css`, `features.css`, the `legacy` layer, the old guards and the dead-CSS guard | none |
@@ -278,6 +278,86 @@ migrated and unmigrated screens side by side.
   requests with 200 and that body, and `--stall <glob>` never answers.
   That is how PR 4 reached empty and loading states and long names. A
   usage example in the script's header comment can't contain `*/`.
+
+**What PR 5 settled.**
+
+- Combobox brought InputGroup and Textarea with it, so PR 6 starts with
+  Textarea vendored. `shadcn add` offers to overwrite `button.tsx`, which
+  carries PR 1's `/90` hover; answer no (`yes n | npx shadcn add …`).
+- The user search is a Combobox over the server's answer, with
+  `filter={null}`: the server matches email as well as name. The list
+  opens on the user's intent, a debounced query of two or more
+  characters, and its empty row reads "Searching..." until that query
+  answers, so "No users found" never shows before one has. Only typing
+  sets the query; a pick filling the input doesn't search for the picked
+  name.
+- The pick is the Combobox's value: the input shows the picked name, and
+  the selected-user card is gone. Base UI's `ComboboxClear` inside the
+  input, still named "Clear selected user", replaces the card's X and
+  returns focus to the input; its reason is `clear-press`. Base UI takes
+  it out of the tab order, so the screen passes `tabIndex={0}`.
+  `ComboboxInput` renders its own inline-end addon only when it shows the
+  trigger or the clear button, so the input carries no empty padding. Typing keeps the pick, but Assign holds while the input shows
+  anything other than the picked name: who gets the role is who the input
+  shows. Another pick, the clear button or Escape changes the pick, and
+  leaving the field puts its name back. Users who already hold a role are
+  disabled options that show it.
+- Base UI also resets its input after every close of the list: to the
+  pick, or to empty, including closes a controlled `open` makes on its
+  own, such as once the query is too short, and it wiped what the user
+  had typed. An `open` that waited for the answer made more of them. So the screen owns the input text
+  (`inputValue`), ignores Base UI's resets, and does its own in
+  `onOpenChange` when the reason is `focus-out`, `outside-press` or
+  `escape-key`: Enter with nothing highlighted closes the list with reason
+  `none` and keeps the query. Leaving a list that is already shut puts the
+  pick back on blur, and closes the search so a late answer can't open it.
+  The search query keeps its previous answer while the next one loads, but
+  only for a query that narrows it (`placeholderData` as a function), so
+  refining doesn't blink back to "Searching..." and an unrelated query
+  never shows the wrong people. PR 6's comboboxes over async data start from this pattern.
+  Tests reach it with a delayed search answer (`serve({ searchDelay })`).
+- The stack roles live in `src/shared/roles.ts` (`STACK_ROLES`,
+  `StackRole`). The role picker and the style guide list them from it, and
+  RoleBadge's tints are a `Record<StackRole, …>`, so a new role won't
+  type-check without one.
+- The user-search tests run on fake timers
+  (`vi.useFakeTimers({ shouldAdvanceTime: true })`, `elapse(ms)`), so the
+  debounce and slow answers cost no wall-clock time.
+- Undo restores a role through its own mutation, disabled while it is out,
+  so Assign never reads "Assigning..." during an undo. The undo banner's
+  `role="status"` region stays in the page, empty, so screen readers
+  announce the message when it arrives.
+- While a Combobox popup is open, Base UI hides the rest of the page from
+  assistive technology, so tests query outside the popup only once it has
+  closed. `ComboboxEmpty` is `role="status"`; tests find the undo banner,
+  also a status, by its text.
+- Select's trigger height is `data-[size=default]:h-8`, which a plain
+  `pointer-coarse:h-11` can't outrank; `pointer-coarse:data-[size=default]:h-11`
+  does. The search input fills its taller group on a coarse pointer
+  through `pointer-coarse:*:data-[slot=input-group-control]:h-full`.
+  Audits measure the InputGroup, not the input inside its border, and skip
+  Base UI's hidden form inputs: they have no `data-slot`, so the legacy
+  input `min-height` stretches them to 36px, but they are `aria-hidden` and
+  clipped to nothing.
+- The undo banner is a Tailwind toast (fixed, `role="status"`, the
+  popover look), not Sonner. `AppShell.test.tsx` now holds the header
+  (`z-5`) below Base UI's popups (`z-50`) and the banner (`z-20`), the
+  overlays that replaced `.search-dropdown` and `.undo-banner`.
+- `role-badge` CSS went with this screen, its last user.
+- A grant row's name has `grow basis-32`, not `flex-1`: a zero basis never
+  forces a wrap, so at 1,080 to 1,280px the confirm row squeezed the name
+  to 8 to 94px. With a 128px basis the actions wrap under it, and a
+  resting row still fits on one line on a 375px phone.
+- Neither Combobox nor Select needed a jsdom stand-in.
+- Rebasing onto the Dex change had dropped `scripts/drive-web.mjs`'s phone
+  emulation and its `--signed-out` check: `--width` emulated nothing and
+  `--signed-out` signed in anyway. PR 5 restored both. To type into a
+  Base UI input from `--eval`, use `document.execCommand("insertText", …)`;
+  setting `value` and dispatching `input` doesn't open the list. Phone
+  probes compare `scrollWidth` with `document.documentElement.clientWidth`:
+  on a mobile viewport `innerWidth` grows with any overflow, and hides it.
+  Screenshots of an open Base UI popup are taken viewport-only: the full-page
+  `--shot` (`captureBeyondViewport`) drew the Combobox popup 140px off.
 
 `HeroGraphic` (the decorative shapes on error and empty-state screens) has no
 counterpart in the stock look. Each migrating screen drops it for a plain empty
@@ -386,8 +466,9 @@ components respond to pointer events that `fireEvent.click` doesn't send.
   move focus without navigating; Enter follows the focused tab; on every stack
   route the selected tab is the one its link marks `aria-current`.
 - PR 5, Combobox: the input has `role="combobox"` and `aria-expanded`; typing
-  filters options with `role="option"`; ArrowDown and ArrowUp move the
-  highlight; Enter selects; Escape closes and clears.
+  searches, and the options (`role="option"`) are exactly the server's answer;
+  ArrowDown and ArrowUp move the highlight; Enter selects; Escape closes and
+  clears.
 - PR 5 and PR 6, Select: opens from the keyboard, arrows move, Enter commits.
 - PR 8, AlertDialog: focus moves into the dialog, Tab stays inside, Cancel
   returns focus to the destroy button, and confirm fires the destroy mutation
