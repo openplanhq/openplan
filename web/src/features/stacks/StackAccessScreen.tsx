@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { CircleAlert, Loader2, RefreshCw, Search, Shield, Trash2, X } from "lucide-react";
+import { CircleAlert, Loader2, RefreshCw, Search, Shield, Trash2 } from "lucide-react";
 import {
   useStackGrantsQuery,
   useSearchUsersQuery,
@@ -10,21 +10,22 @@ import {
 import type { GrantView, UserProfile } from "../../api/types";
 import { tenantID } from "../../config";
 import RoleBadge from "../../shared/RoleBadge";
+import { STACK_ROLES, type StackRole } from "../../shared/roles";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from "@/components/ui/combobox";
-import { InputGroupAddon, InputGroupButton } from "@/components/ui/input-group";
+import {
+  Combobox,
+  ComboboxClear,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList
+} from "@/components/ui/combobox";
+import { InputGroupAddon } from "@/components/ui/input-group";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-const ROLES = [
-  { value: "owner", label: "Owner" },
-  { value: "operator", label: "Operator" },
-  { value: "approver", label: "Approver" },
-  { value: "viewer", label: "Viewer" }
-] as const;
-type Role = (typeof ROLES)[number]["value"];
 
 interface UndoEntry {
   userSub: string;
@@ -46,44 +47,52 @@ export default function StackAccessScreen() {
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
-  const [selectedRole, setSelectedRole] = useState<Role>("viewer");
+  const [selectedRole, setSelectedRole] = useState<StackRole>("viewer");
   const [undoEntry, setUndoEntry] = useState<UndoEntry | null>(null);
   const [mutationError, setMutationError] = useState("");
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
   const debouncedSearch = useDebounce(search, 300);
   const searchResults = useSearchUsersQuery(tenantID, debouncedSearch);
   const assignMutation = useAssignStackRoleMutation(tenantID, stackId);
+  // Undo has its own, so restoring a role doesn't make Assign read
+  // "Assigning...".
+  const undoMutation = useAssignStackRoleMutation(tenantID, stackId);
   const revokeMutation = useRevokeStackRoleMutation(tenantID, stackId);
   const undoTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  // Set when the user closes the list. Base UI resets its input to the pick,
-  // or empties it, after every close, including the ones below that happen
-  // on their own; only a close the user made may replace what they typed.
-  const userClosedListRef = useRef(false);
 
   const grantsBySub = new Map((grants.data?.grants ?? []).map((g) => [g.userSub, g]));
   const replacing = selectedUser !== null && grantsBySub.has(selectedUser.sub);
-  // The list opens once a search has answered, as the old dropdown did: before
-  // that there is nothing to show, and "No users found" would be untrue.
-  // useSearchUsersQuery keeps the last answer while the next one loads, so
-  // refining a search doesn't close the list.
-  const results = debouncedSearch.length >= 2 ? searchResults.data?.users : undefined;
-  const listOpen = searchOpen && results !== undefined;
+  // The list opens on the user's intent, a search of two or more characters,
+  // and says "Searching..." until that search answers, so Base UI never opens
+  // or closes it on its own while one loads. useSearchUsersQuery keeps the
+  // last answer while a query that narrows it loads, so refining a search
+  // doesn't blink back to "Searching...".
+  const searching = debouncedSearch.length >= 2;
+  const results = searching ? searchResults.data?.users : undefined;
+  const listOpen = searchOpen && searching;
+  // Who gets the role is who the input shows: typing over a pick holds Assign
+  // until the user picks again or leaves, which puts the pick back.
+  const pickShown = selectedUser !== null && inputText === selectedUser.displayName;
 
   const handleAssign = useCallback(async () => {
     if (!selectedUser) return;
     setMutationError("");
+    const sentUser = selectedUser;
+    const sentSearch = search;
     try {
       await assignMutation.mutateAsync({
-        user_sub: selectedUser.sub,
+        user_sub: sentUser.sub,
         role: selectedRole
       });
-      setSelectedUser(null);
-      setInputText("");
-      setSearch("");
+      // The search stays usable while the request is out. Clear only what
+      // still holds what was sent, so a newer pick or query stays.
+      setSelectedUser((current) => (current?.sub === sentUser.sub ? null : current));
+      setInputText((current) => (current === sentUser.displayName ? "" : current));
+      setSearch((current) => (current === sentSearch ? "" : current));
     } catch (err) {
       setMutationError(err instanceof Error ? err.message : "Failed to assign role");
     }
-  }, [selectedUser, selectedRole, assignMutation]);
+  }, [selectedUser, selectedRole, search, assignMutation]);
 
   const handleRevoke = useCallback(
     async (grant: GrantView) => {
@@ -107,7 +116,7 @@ export default function StackAccessScreen() {
     if (!undoEntry) return;
     setMutationError("");
     try {
-      await assignMutation.mutateAsync({
+      await undoMutation.mutateAsync({
         user_sub: undoEntry.userSub,
         role: undoEntry.role
       });
@@ -115,7 +124,7 @@ export default function StackAccessScreen() {
       setMutationError("Failed to restore role");
     }
     setUndoEntry(null);
-  }, [undoEntry, assignMutation]);
+  }, [undoEntry, undoMutation]);
 
   useEffect(() => {
     if (!undoEntry) return;
@@ -124,10 +133,10 @@ export default function StackAccessScreen() {
   }, [undoEntry]);
 
   useEffect(() => {
-    if (revokeMutation.isSuccess || assignMutation.isSuccess) {
+    if (revokeMutation.isSuccess || assignMutation.isSuccess || undoMutation.isSuccess) {
       setMutationError("");
     }
-  }, [revokeMutation.isSuccess, assignMutation.isSuccess]);
+  }, [revokeMutation.isSuccess, assignMutation.isSuccess, undoMutation.isSuccess]);
 
   return (
     // Two columns on a wide screen, split 3:4 as the legacy grid's 0.85fr and
@@ -232,24 +241,31 @@ export default function StackAccessScreen() {
             items={results ?? []}
             filter={null}
             open={listOpen}
-            onOpenChange={(open) => {
+            onOpenChange={(open, { reason }) => {
               setSearchOpen(open);
-              userClosedListRef.current = !open;
+              // The user left or dismissed the list: put the pick back, or
+              // empty the input, and end the search. Other closes, such as
+              // Enter with nothing highlighted, keep what was typed.
+              if (!open && (reason === "focus-out" || reason === "outside-press" || reason === "escape-key")) {
+                setInputText(selectedUser?.displayName ?? "");
+                setSearch("");
+              }
             }}
             value={selectedUser}
             onValueChange={(user) => setSelectedUser(user)}
             inputValue={inputText}
             onInputValueChange={(value, { reason }) => {
               // Typing searches. A pick writes the user's name, which is not
-              // a query. Escape, and a close the user made, put back the
-              // pick or empty the input, and end the search.
+              // a query. Escape on a closed list, and the clear button, clear
+              // the pick. Base UI's other resets follow every close of the
+              // list, so they are left out: onOpenChange handles the user's
+              // closes, and ignores the rest.
               if (reason === "input-change") {
-                userClosedListRef.current = false;
                 setInputText(value);
                 setSearch(value);
               } else if (reason === "item-press") {
                 setInputText(value);
-              } else if (reason === "escape-key" || userClosedListRef.current) {
+              } else if (reason === "escape-key" || reason === "clear-press") {
                 setInputText(value);
                 setSearch("");
               }
@@ -267,30 +283,27 @@ export default function StackAccessScreen() {
               // could shut it under a click on one of its options.
               onBlur={() => {
                 if (!listOpen) {
+                  // Or a query still in its debounce would open the list
+                  // once it lands, on a field the user has left.
+                  setSearchOpen(false);
                   setInputText(selectedUser?.displayName ?? "");
                   setSearch("");
                 }
               }}
             >
+              {/* Base UI's clear button empties the pick and the input
+                  (reason "clear-press") and returns focus to the input. It
+                  leaves the tab order by default; tabIndex keeps it there,
+                  as the selected-user card's X was. The addon goes with the
+                  pick, so no empty one pads the input. */}
               {selectedUser && (
                 <InputGroupAddon align="inline-end">
-                  <InputGroupButton
-                    size="icon-xs"
-                    aria-label="Clear selected user"
-                    className="pointer-coarse:size-11"
-                    onClick={() => {
-                      setSelectedUser(null);
-                      setInputText("");
-                      setSearch("");
-                    }}
-                  >
-                    <X aria-hidden="true" />
-                  </InputGroupButton>
+                  <ComboboxClear aria-label="Clear selected user" tabIndex={0} className="pointer-coarse:size-11" />
                 </InputGroupAddon>
               )}
             </ComboboxInput>
             <ComboboxContent>
-              <ComboboxEmpty>No users found</ComboboxEmpty>
+              <ComboboxEmpty>{results === undefined ? "Searching..." : "No users found"}</ComboboxEmpty>
               <ComboboxList>
                 {(user: UserProfile) => {
                   const grant = grantsBySub.get(user.sub);
@@ -312,12 +325,15 @@ export default function StackAccessScreen() {
 
           <div className="grid gap-2">
             <Label htmlFor="role-select">Role</Label>
-            <Select items={ROLES} value={selectedRole} onValueChange={(role) => setSelectedRole(role as Role)}>
+            <Select items={STACK_ROLES} value={selectedRole} onValueChange={(role) => {
+                // Base UI types the value as nullable; a role is always chosen.
+                if (role !== null) setSelectedRole(role);
+              }}>
               <SelectTrigger id="role-select" className="w-full pointer-coarse:data-[size=default]:h-11">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {ROLES.map((role) => (
+                {STACK_ROLES.map((role) => (
                   <SelectItem key={role.value} value={role.value} className="pointer-coarse:min-h-11">
                     {role.label}
                   </SelectItem>
@@ -329,7 +345,7 @@ export default function StackAccessScreen() {
           <Button
             className="w-full pointer-coarse:h-11 md:w-auto md:justify-self-start"
             onClick={handleAssign}
-            disabled={!selectedUser || assignMutation.isPending}
+            disabled={!pickShown || assignMutation.isPending}
           >
             {assignMutation.isPending ? (
               <>
@@ -347,20 +363,21 @@ export default function StackAccessScreen() {
 
       {/* A toast: fixed above the page, centred, and inside the screen's
           edges on a phone. z-20 puts it over the sticky header (z-5) and
-          under Base UI's popups (z-50); AppShell.test.tsx checks the order. */}
-      {undoEntry && (
-        <div
-          role="status"
-          className="fixed inset-x-4 bottom-6 z-20 mx-auto flex w-fit items-center gap-4 rounded-lg border bg-popover py-2 pr-2 pl-4 text-sm text-popover-foreground shadow-lg"
-        >
-          <span>
-            Removed {undoEntry.displayName}&apos;s {undoEntry.role} access.
-          </span>
-          <Button className="pointer-coarse:h-11" onClick={handleUndo} aria-label="Undo">
-            {assignMutation.isPending ? <Loader2 aria-hidden="true" className="animate-spin" /> : "Undo"}
-          </Button>
-        </div>
-      )}
+          under Base UI's popups (z-50); AppShell.test.tsx checks the order.
+          The status region stays in the page, empty and sizeless, so screen
+          readers announce the message when it arrives. */}
+      <div role="status" className="fixed inset-x-4 bottom-6 z-20 mx-auto w-fit">
+        {undoEntry && (
+          <div className="flex items-center gap-4 rounded-lg border bg-popover py-2 pr-2 pl-4 text-sm text-popover-foreground shadow-lg">
+            <span>
+              Removed {undoEntry.displayName}&apos;s {undoEntry.role} access.
+            </span>
+            <Button className="pointer-coarse:h-11" disabled={undoMutation.isPending} onClick={handleUndo} aria-label="Undo">
+              {undoMutation.isPending ? <Loader2 aria-hidden="true" className="animate-spin" /> : "Undo"}
+            </Button>
+          </div>
+        )}
+      </div>
     </section>
   );
 }

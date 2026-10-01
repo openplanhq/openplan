@@ -41,7 +41,6 @@ TEXT_PX = {v: k for k, v in TEXT.items()}
 # a finding stays a decision rather than a habit.
 ALLOWED = {
     (".log-panel pre", "min-height"): "log viewport, an arbitrary scroll height with no token equivalent",
-    (".role-badge", "min-width"): "sized to the longest role label so the pills form a column",
     ("body", "min-width"): "minimum supported viewport width, not a spacing value",
 }
 

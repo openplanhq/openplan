@@ -286,25 +286,47 @@ migrated and unmigrated screens side by side.
   carries PR 1's `/90` hover; answer no (`yes n | npx shadcn add …`).
 - The user search is a Combobox over the server's answer, with
   `filter={null}`: the server matches email as well as name. The list
-  opens once a search of two or more characters has answered, so "No
-  users found" never shows before one has. Only typing sets the query; a
-  pick filling the input doesn't search for the picked name.
+  opens on the user's intent, a debounced query of two or more
+  characters, and its empty row reads "Searching..." until that query
+  answers, so "No users found" never shows before one has. Only typing
+  sets the query; a pick filling the input doesn't search for the picked
+  name.
 - The pick is the Combobox's value: the input shows the picked name, and
-  the selected-user card is gone. A clear button inside the input, still
-  named "Clear selected user", replaces the card's X. Typing keeps the
-  pick, because Base UI empties its input when the value goes to `null`;
-  Escape, the clear button or another pick changes it. Users who already
-  hold a role are disabled options that show it.
+  the selected-user card is gone. Base UI's `ComboboxClear` inside the
+  input, still named "Clear selected user", replaces the card's X and
+  returns focus to the input; its reason is `clear-press`. Base UI takes
+  it out of the tab order, so the screen passes `tabIndex={0}`.
+  `ComboboxInput` renders its own inline-end addon only when it shows the
+  trigger or the clear button, so the input carries no empty padding. Typing keeps the pick, but Assign holds while the input shows
+  anything other than the picked name: who gets the role is who the input
+  shows. Another pick, the clear button or Escape changes the pick, and
+  leaving the field puts its name back. Users who already hold a role are
+  disabled options that show it.
 - Base UI also resets its input after every close of the list: to the
-  pick, or to empty. That includes closes a controlled `open` makes on its
-  own, such as while the next search loads or once the query is too short,
-  and it wiped what the user had typed. So the screen owns the input text
-  (`inputValue`) and takes Base UI's reset only after a close the user
-  made, or Escape; leaving a closed list puts the pick back on blur. The
-  search query keeps its last answer while the next one loads
-  (`keepPreviousData`), so refining a search doesn't close the list. PR 6's
-  comboboxes over async data start from this pattern. Tests reach it with a
-  delayed search answer (`serve({ searchDelay })`).
+  pick, or to empty, including closes a controlled `open` makes on its
+  own, such as once the query is too short, and it wiped what the user
+  had typed. An `open` that waited for the answer made more of them. So the screen owns the input text
+  (`inputValue`), ignores Base UI's resets, and does its own in
+  `onOpenChange` when the reason is `focus-out`, `outside-press` or
+  `escape-key`: Enter with nothing highlighted closes the list with reason
+  `none` and keeps the query. Leaving a list that is already shut puts the
+  pick back on blur, and closes the search so a late answer can't open it.
+  The search query keeps its previous answer while the next one loads, but
+  only for a query that narrows it (`placeholderData` as a function), so
+  refining doesn't blink back to "Searching..." and an unrelated query
+  never shows the wrong people. PR 6's comboboxes over async data start from this pattern.
+  Tests reach it with a delayed search answer (`serve({ searchDelay })`).
+- The stack roles live in `src/shared/roles.ts` (`STACK_ROLES`,
+  `StackRole`). The role picker and the style guide list them from it, and
+  RoleBadge's tints are a `Record<StackRole, …>`, so a new role won't
+  type-check without one.
+- The user-search tests run on fake timers
+  (`vi.useFakeTimers({ shouldAdvanceTime: true })`, `elapse(ms)`), so the
+  debounce and slow answers cost no wall-clock time.
+- Undo restores a role through its own mutation, disabled while it is out,
+  so Assign never reads "Assigning..." during an undo. The undo banner's
+  `role="status"` region stays in the page, empty, so screen readers
+  announce the message when it arrives.
 - While a Combobox popup is open, Base UI hides the rest of the page from
   assistive technology, so tests query outside the popup only once it has
   closed. `ComboboxEmpty` is `role="status"`; tests find the undo banner,
