@@ -295,6 +295,16 @@ migrated and unmigrated screens side by side.
   pick, because Base UI empties its input when the value goes to `null`;
   Escape, the clear button or another pick changes it. Users who already
   hold a role are disabled options that show it.
+- Base UI also resets its input after every close of the list: to the
+  pick, or to empty. That includes closes a controlled `open` makes on its
+  own, such as while the next search loads or once the query is too short,
+  and it wiped what the user had typed. So the screen owns the input text
+  (`inputValue`) and takes Base UI's reset only after a close the user
+  made, or Escape; leaving a closed list puts the pick back on blur. The
+  search query keeps its last answer while the next one loads
+  (`keepPreviousData`), so refining a search doesn't close the list. PR 6's
+  comboboxes over async data start from this pattern. Tests reach it with a
+  delayed search answer (`serve({ searchDelay })`).
 - While a Combobox popup is open, Base UI hides the rest of the page from
   assistive technology, so tests query outside the popup only once it has
   closed. `ComboboxEmpty` is `role="status"`; tests find the undo banner,
@@ -312,6 +322,10 @@ migrated and unmigrated screens side by side.
   (`z-5`) below Base UI's popups (`z-50`) and the banner (`z-20`), the
   overlays that replaced `.search-dropdown` and `.undo-banner`.
 - `role-badge` CSS went with this screen, its last user.
+- A grant row's name has `grow basis-32`, not `flex-1`: a zero basis never
+  forces a wrap, so at 1,080 to 1,280px the confirm row squeezed the name
+  to 8 to 94px. With a 128px basis the actions wrap under it, and a
+  resting row still fits on one line on a 375px phone.
 - Neither Combobox nor Select needed a jsdom stand-in.
 - Rebasing onto the Dex change had dropped `scripts/drive-web.mjs`'s phone
   emulation and its `--signed-out` check: `--width` emulated nothing and
