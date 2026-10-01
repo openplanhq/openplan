@@ -423,91 +423,13 @@
   vertical-align: revert;
 }
 
-/* ---- User search ---- */
-.search-wrapper {
-  position: relative;
-}
-
-.search-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  /* Must stay ABOVE the app header (z-5 in AppShell.tsx): the sticky header is
-     opaque and would otherwise clip this dropdown once the page scrolls. */
-  z-index: 10;
-  max-height: 240px;
-  overflow-y: auto;
-  border: 1px solid var(--legacy-color-border);
-  border-radius: var(--legacy-radius-lg);
-  margin-top: var(--legacy-space-1);
-  background: var(--legacy-color-card);
-  box-shadow: var(--legacy-shadow-lg);
-}
-
-.search-result-item {
-  padding: var(--legacy-space-3) var(--legacy-space-4);
-  font-size: var(--legacy-text-sm);
-  cursor: pointer;
-  transition: background var(--legacy-duration-fast) var(--legacy-ease-out);
-}
-
-.search-result-item:hover {
-  background: var(--legacy-color-accent-soft);
-}
-
-.search-result-item.assigned {
-  color: var(--legacy-color-muted-fg);
-  background: var(--legacy-color-muted);
-  cursor: default;
-}
-
-.search-result-item small {
-  display: block;
-  color: var(--legacy-color-muted-fg);
-  font-family: var(--legacy-font-mono);
-  font-size: var(--legacy-text-xs);
-}
-
-.selected-user-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--legacy-space-3);
-  border: 1px solid var(--legacy-color-accent-border);
-  border-radius: var(--legacy-radius-lg);
-  margin-top: var(--legacy-space-3);
-  padding: var(--legacy-space-3) var(--legacy-space-4);
-  background: var(--legacy-color-accent-soft);
-}
-
-.selected-user-card span {
-  font-size: var(--legacy-text-sm);
-  font-weight: 400;
-}
-
-.selected-user-card button {
-  border: 0;
-  padding: var(--legacy-space-1);
-  color: var(--legacy-color-muted-fg);
-  background: none;
-  cursor: pointer;
-}
-
-/* Preflight audit: this button is not a flex container, so a block svg would
-   change its height. :where() keeps browser-default precedence. */
-:where(.selected-user-card button svg) {
-  display: revert;
-  vertical-align: revert;
-}
-
 /* ---- Undo banner ---- */
 .undo-banner {
   position: fixed;
   bottom: var(--legacy-space-6);
   left: 50%;
   transform: translateX(-50%);
-  /* Must stay ABOVE the app header (z-5 in AppShell.tsx) and .search-dropdown (10). */
+  /* Must stay ABOVE the app header (z-5 in AppShell.tsx). */
   z-index: 20;
   display: flex;
   align-items: center;
@@ -563,11 +485,6 @@
   grid-column: 1 / -1;
   justify-self: start;
   align-self: start;
-}
-
-.form-row {
-  display: grid;
-  gap: var(--legacy-space-4);
 }
 
 .form-actions {
@@ -748,13 +665,6 @@
   .templates-list-header .primary-button,
   .template-detail__sync .secondary-button {
     width: 100%;
-  }
-
-  /* 44px minimum touch targets where density and accessibility conflict. */
-  .selected-user-card button {
-    min-height: var(--legacy-touch-target);
-    display: inline-flex;
-    align-items: center;
   }
 
   .undo-banner {
