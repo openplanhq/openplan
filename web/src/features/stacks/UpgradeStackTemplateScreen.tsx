@@ -28,8 +28,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
-// base.css gives every h2 the legacy 32px display type until PR 8, so each
-// heading sets its own family, size, weight and tracking.
+// Preflight leaves a heading with the body's type, so each heading sets
+// CardTitle's look: family, size, weight and tracking.
 const headingClass = "font-heading text-base leading-snug font-medium tracking-normal";
 
 // /stacks/:stackId/templates/:stackTemplateId/upgrade — moving an installed
@@ -38,7 +38,6 @@ const headingClass = "font-heading text-base leading-snug font-medium tracking-n
 // depended on an invisible source-template match; here the candidates are
 // filtered to the valid ones and the variable changes are stated outright.
 //
-// Until PR 8, body keeps the legacy text colour, so each state sets its own.
 export default function UpgradeStackTemplateScreen() {
   const { stackId = "", stackTemplateId = "" } = useParams<{ stackId: string; stackTemplateId: string }>();
   const navigate = useNavigate();
@@ -142,7 +141,7 @@ export default function UpgradeStackTemplateScreen() {
     waitingOnTargetVariables
   ) {
     return (
-      <section className="text-foreground" data-testid="upgrade-loading">
+      <section data-testid="upgrade-loading">
         <p className="flex items-center gap-2 text-muted-foreground">
           <Loader2 aria-hidden="true" className="size-4 animate-spin" /> Loading revisions…
         </p>
@@ -160,7 +159,7 @@ export default function UpgradeStackTemplateScreen() {
       return <>{boundary}</>;
     }
     return (
-      <section className="grid justify-items-start gap-4 text-foreground" data-testid="upgrade-load-error">
+      <section className="grid justify-items-start gap-4" data-testid="upgrade-load-error">
         <p className="text-muted-foreground">Something went wrong while loading revisions.</p>
         <Button
           className="pointer-coarse:h-11"
@@ -181,7 +180,7 @@ export default function UpgradeStackTemplateScreen() {
 
   if (!stackTemplate) {
     return (
-      <section className="text-foreground" data-testid="upgrade-template-missing">
+      <section data-testid="upgrade-template-missing">
         <p className="text-muted-foreground">That template is not installed on this stack.</p>
       </section>
     );
@@ -195,7 +194,7 @@ export default function UpgradeStackTemplateScreen() {
   // cannot succeed.
   if (isDestroyingStackTemplate(stackTemplate)) {
     return (
-      <section className="text-foreground" data-testid="upgrade-destroying">
+      <section data-testid="upgrade-destroying">
         <p className="text-muted-foreground">Destroy in progress — this template cannot change revision right now.</p>
       </section>
     );
@@ -206,7 +205,7 @@ export default function UpgradeStackTemplateScreen() {
 
   return (
     <section
-      className="grid gap-6 text-foreground"
+      className="grid gap-6"
       data-testid="upgrade-stack-template-screen"
       data-unsaved={hasUnsavedValues ? "true" : undefined}
     >

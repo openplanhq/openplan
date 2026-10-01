@@ -21,8 +21,8 @@ interface StackTemplateConfigPanelProps {
  * action. Installing and upgrading live on their own screens, so this panel
  * never has to switch modes.
  *
- * base.css gives every h2 the legacy 32px display type until PR 8, so the
- * heading sets its own family, size, weight and tracking.
+ * Preflight leaves a heading with the body's type, so the heading sets
+ * CardTitle's look: family, size, weight and tracking.
  */
 export default function StackTemplateConfigPanel({
   variables,

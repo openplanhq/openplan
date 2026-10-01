@@ -13,17 +13,16 @@ describe("AuthCard", () => {
     expect(screen.getByRole("main").contains(card)).toBe(true);
   });
 
-  // body keeps the legacy colours until PR 8, so the frame paints its own.
-  it("sets its own background and text colour", () => {
+  // The frame paints its own background, so the threshold reads as one
+  // whatever page it is reached from.
+  it("sets its own background", () => {
     render(<AuthCard>body</AuthCard>);
-    const classes = screen.getByRole("main").classList;
-    expect(classes).toContain("bg-background");
-    expect(classes).toContain("text-foreground");
+    expect(screen.getByRole("main").classList).toContain("bg-background");
   });
 });
 
 describe("AuthCardTitle", () => {
-  // base.css gives every h1 the legacy 40px display type until PR 8.
+  // Preflight leaves a heading with the body's type.
   it("is a level-one heading that sets its own type", () => {
     render(<AuthCardTitle>Sign in</AuthCardTitle>);
     const heading = screen.getByRole("heading", { level: 1, name: "Sign in" });

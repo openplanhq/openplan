@@ -164,15 +164,25 @@ describe("styles.css entry", () => {
     .map((line) => line.trim())
     .filter(Boolean);
 
-  // A layer's position is fixed where it is first declared, so this statement
-  // must come before Tailwind's own. It puts legacy between Preflight (base)
-  // and the utilities.
-  it("fixes the layer order before anything else", () => {
-    expect(lines[0]).toBe("@layer theme, base, legacy, components, utilities;");
-    expect(lines.slice(1).every((line) => line.startsWith("@import "))).toBe(true);
+  // The entry is imports only: the app declares no cascade layer of its own,
+  // so Tailwind's own order (theme, base, components, utilities) stands.
+  it("is nothing but imports", () => {
+    expect(lines.every((line) => line.startsWith("@import "))).toBe(true);
   });
 
-  it.each(["tokens", "base", "primitives", "features"])("imports %s.css into the legacy layer", (sheet) => {
-    expect(lines).toContain(`@import "./styles/${sheet}.css" layer(legacy);`);
+  it("imports the theme last, so it wins over Tailwind's defaults", () => {
+    expect(lines).toContain('@import "./styles/theme.css";');
+    expect(lines[lines.length - 1]).toBe('@import "./styles/theme.css";');
+  });
+
+  it("imports no stylesheet that is not Tailwind, shadcn, or the theme", () => {
+    expect(lines).toEqual([
+      '@import "tailwindcss";',
+      '@import "tw-animate-css";',
+      '@import "shadcn/tailwind.css";',
+      '@import "@fontsource-variable/geist";',
+      '@import "@fontsource-variable/geist-mono";',
+      '@import "./styles/theme.css";'
+    ]);
   });
 });

@@ -78,7 +78,7 @@ export default function RunDetailScreen() {
   // lacks only means "no such run" once a refetch has confirmed it.
   if (runsQuery.status === "success" && !runsQuery.isFetching && runId === "") {
     return (
-      <section className="grid min-w-0 gap-6 text-foreground" data-testid="run-detail-missing">
+      <section className="grid min-w-0 gap-6" data-testid="run-detail-missing">
         <p className="text-sm text-muted-foreground">This template has no run #{runNumber}.</p>
       </section>
     );
@@ -89,7 +89,7 @@ export default function RunDetailScreen() {
       return <>{boundary}</>;
     }
     return (
-      <section className="grid min-w-0 gap-6 text-foreground" data-testid="run-detail-error">
+      <section className="grid min-w-0 gap-6" data-testid="run-detail-error">
         <Alert variant="destructive">
           <AlertDescription>Something went wrong while loading the run.</AlertDescription>
         </Alert>
@@ -108,7 +108,7 @@ export default function RunDetailScreen() {
 
   if (runQuery.status === "pending") {
     return (
-      <section className="grid min-w-0 gap-6 text-foreground" data-testid="run-detail-loading">
+      <section className="grid min-w-0 gap-6" data-testid="run-detail-loading">
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" /> Loading run…
         </p>
@@ -117,7 +117,7 @@ export default function RunDetailScreen() {
   }
 
   return (
-    <section className="grid min-w-0 gap-6 text-foreground" data-testid="run-detail-screen">
+    <section className="grid min-w-0 gap-6" data-testid="run-detail-screen">
       {run && (
         <>
           <header className="flex flex-wrap items-center justify-between gap-4">

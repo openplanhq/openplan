@@ -11,14 +11,10 @@ const navItems: { to: string; label: string }[] = [
 
 const isDebug = import.meta.env.DEV || import.meta.env.VITE_DEBUG === "true";
 
-// Until PR 8, base.css colours and underlines every bare <a> from the legacy
-// layer, and a rule on the element beats an inherited colour, so each link
-// sets its own. no-underline, not hover:no-underline: Tailwind applies hover:
-// only where the device can hover, but the legacy a:hover also matches a link
-// just tapped on a touch screen.
+// Preflight leaves a link with the body's colour, so each link sets its own.
 const navLinkClass = cn(
   buttonVariants({ variant: "ghost", size: "sm" }),
-  "text-muted-foreground no-underline pointer-coarse:h-11"
+  "text-muted-foreground pointer-coarse:h-11"
 );
 
 export default function AppShell() {
@@ -28,7 +24,7 @@ export default function AppShell() {
     <div className="min-h-screen">
       <a
         href="#main-content"
-        className="fixed top-2 left-2 z-50 -translate-y-16 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground no-underline transition-transform focus:translate-y-0"
+        className="fixed top-2 left-2 z-50 -translate-y-16 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-transform focus:translate-y-0"
       >
         Skip to content
       </a>

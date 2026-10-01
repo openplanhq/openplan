@@ -35,7 +35,7 @@ export default function TemplateRegistryScreen() {
 
   if (templateRevisionsQuery.status === "pending") {
     return (
-      <section className="grid min-w-0 gap-6 text-foreground" data-testid="template-registry-loading">
+      <section className="grid min-w-0 gap-6" data-testid="template-registry-loading">
         <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
           <Loader2 className="size-4 animate-spin" /> Loading templates…
         </p>
@@ -48,7 +48,7 @@ export default function TemplateRegistryScreen() {
       return <>{boundary}</>;
     }
     return (
-      <section className="grid min-w-0 gap-6 text-foreground" data-testid="template-registry-error">
+      <section className="grid min-w-0 gap-6" data-testid="template-registry-error">
         <Breadcrumb items={[{ label: "Templates" }]} />
         <Alert variant="destructive">
           <AlertDescription>Something went wrong while loading templates.</AlertDescription>
@@ -69,7 +69,7 @@ export default function TemplateRegistryScreen() {
   const templateRevisions = templateRevisionsQuery.data;
 
   return (
-    <section className="grid min-w-0 gap-6 text-foreground">
+    <section className="grid min-w-0 gap-6">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <Breadcrumb items={[{ label: "Templates" }]} className="mb-0" />
         <Link className={buttonVariants({ className: "pointer-coarse:h-11" })} to="/templates/new" data-testid="register-template-link">
@@ -115,7 +115,7 @@ export default function TemplateRegistryScreen() {
                       >
                         <div className="grid min-w-0 gap-1">
                           <Link
-                            className="block min-h-8 break-all font-medium text-foreground no-underline hover:text-primary hover:underline pointer-coarse:min-h-11 pointer-coarse:py-3"
+                            className="block min-h-8 break-all font-medium text-foreground hover:text-primary hover:underline pointer-coarse:min-h-11 pointer-coarse:py-3"
                             to={`/templates/${encodeURIComponent(sourceTemplate.sourceTemplateID)}`}
                           >
                             {sourceTemplate.name}

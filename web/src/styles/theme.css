@@ -1,7 +1,7 @@
-/* The shadcn theme. With tokens.css (legacy, until PR 8) this is one of only
-   two files permitted raw colour literals. Values are hex, converted from
-   shadcn's neutral oklch() defaults, so theme.guard.test.ts can compute
-   contrast. Light only: there is deliberately no .dark block. */
+/* The shadcn theme, and the only file permitted raw colour literals. Values
+   are hex, converted from shadcn's neutral oklch() defaults, so
+   theme.guard.test.ts can compute contrast. Light only: there is deliberately
+   no .dark block. */
 
 /* Test files hold deliberately bad class strings; keep them out of the build. */
 @source not "../**/*.test.{ts,tsx}";
@@ -83,10 +83,35 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* Interface text is 14px, the size every shadcn component sets for itself;
+     text that sets no size of its own (loading and error lines) matches it.
+     320px is the narrowest viewport the app supports: below it the page
+     scrolls rather than squeezing the grids. Both were base.css's. */
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-sm leading-normal text-foreground;
+    min-width: 320px;
   }
+  /* text-rendering was base.css's, and is a type decision rather than a
+     component one, so it survives the legacy sheets. */
   html {
-    @apply font-sans;
+    @apply font-sans antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  /* Elements that draw no focus style of their own (plain links, summary)
+     get a solid 2px ring, which theme.guard.test.ts holds at 3:1. The browser
+     default, an auto outline in ring/50, is too faint. shadcn components
+     replace it with their own ring: utilities outrank this layer. */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }

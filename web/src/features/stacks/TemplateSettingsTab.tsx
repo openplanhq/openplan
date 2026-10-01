@@ -42,7 +42,7 @@ export default function TemplateSettingsTab() {
             </div>
           ) : (
             <Link
-              className={cn(buttonVariants({ variant: "outline" }), "no-underline pointer-coarse:h-11")}
+              className={cn(buttonVariants({ variant: "outline" }), "pointer-coarse:h-11")}
               to={`/stacks/${stackId}/templates/${stackTemplate.id}/upgrade`}
               data-testid="change-stack-template-revision-link"
             >

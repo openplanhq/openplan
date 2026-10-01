@@ -8,21 +8,18 @@ import { cn } from "@/lib/utils";
  * centred on the viewport, which marks them as a threshold rather than a place
  * inside the product.
  *
- * Until PR 8, body keeps the legacy colours (see base.css), so the frame sets
- * its own background and text colour.
  */
 export default function AuthCard({ className, ...props }: ComponentProps<typeof Card>) {
   return (
-    <main className="grid min-h-svh place-items-center bg-background p-6 text-foreground">
+    <main className="grid min-h-svh place-items-center bg-background p-6">
       <Card className={cn("w-full max-w-sm", className)} {...props} />
     </main>
   );
 }
 
 /**
- * CardTitle's look on a real h1, since CardTitle renders a div. Until PR 8,
- * base.css gives every h1 the legacy 40px display type, and a rule on the
- * element beats anything it would inherit, so this sets its own family, size,
+ * CardTitle's look on a real h1, since CardTitle renders a div. Preflight
+ * leaves a heading with the body's type, so this sets its own family, size,
  * weight and tracking.
  */
 export function AuthCardTitle({ className, ...props }: ComponentProps<"h1">) {

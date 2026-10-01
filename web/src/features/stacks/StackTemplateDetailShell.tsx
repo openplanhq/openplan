@@ -39,8 +39,6 @@ export function useStackTemplateOutlet(): StackTemplateOutletContext {
 // hands it to the tab routes rendered into <Outlet />. Its state sits at the
 // far end of its tab row.
 //
-// Until PR 8, body keeps the legacy text colour, so each state sets its own.
-//
 // Runs is the first tab and the index redirects to it: operating the template
 // is what people come here for. Run detail nests under runs/, so the Runs tab
 // stays lit while reading one.
@@ -53,7 +51,7 @@ export default function StackTemplateDetailShell() {
 
   if (stackQuery.status === "pending") {
     return (
-      <section className="text-foreground" data-testid="stack-template-loading">
+      <section data-testid="stack-template-loading">
         <p className="flex items-center gap-2 text-muted-foreground">
           <Loader2 aria-hidden="true" className="size-4 animate-spin" /> Loading template…
         </p>
@@ -66,7 +64,7 @@ export default function StackTemplateDetailShell() {
       return <>{boundary}</>;
     }
     return (
-      <section className="grid justify-items-start gap-4 text-foreground" data-testid="stack-template-error">
+      <section className="grid justify-items-start gap-4" data-testid="stack-template-error">
         <p className="text-muted-foreground">Something went wrong while loading the stack template.</p>
         <Button className="pointer-coarse:h-11" data-testid="stack-template-retry" onClick={() => stackQuery.refetch()}>
           <RefreshCw data-icon="inline-start" aria-hidden="true" />
@@ -78,7 +76,7 @@ export default function StackTemplateDetailShell() {
 
   if (!stackTemplate) {
     return (
-      <section className="text-foreground" data-testid="stack-template-missing">
+      <section data-testid="stack-template-missing">
         <p className="text-muted-foreground">That template is not installed on this stack.</p>
       </section>
     );
@@ -92,7 +90,7 @@ export default function StackTemplateDetailShell() {
     // The tab row, then the tab's content. grid-cols-1 is minmax(0, 1fr), so
     // a wide child such as the run table scrolls in its own frame instead of
     // widening the page.
-    <section className="grid min-w-0 grid-cols-1 content-start gap-6 text-foreground" data-testid="stack-template-detail">
+    <section className="grid min-w-0 grid-cols-1 content-start gap-6" data-testid="stack-template-detail">
       {/* The template's tabs, with its state at the far end of the same
           row. On a phone the state wraps under the tabs. */}
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">

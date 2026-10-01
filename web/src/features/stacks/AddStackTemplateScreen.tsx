@@ -25,8 +25,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
-// base.css gives every h2 the legacy 32px display type until PR 8, so each
-// heading sets its own family, size, weight and tracking.
+// Preflight leaves a heading with the body's type, so each heading sets
+// CardTitle's look: family, size, weight and tracking.
 const headingClass = "font-heading text-base leading-snug font-medium tracking-normal";
 
 // /stacks/:stackId/templates/new — installing a template, extracted from the
@@ -41,7 +41,6 @@ const headingClass = "font-heading text-base leading-snug font-medium tracking-n
 // default: installing almost always wants the newest validated commit, and
 // moving between commits afterwards is UpgradeStackTemplateScreen's job.
 //
-// Until PR 8, body keeps the legacy text colour, so each state sets its own.
 export default function AddStackTemplateScreen() {
   const { stackId = "" } = useParams<{ stackId: string }>();
   const navigate = useNavigate();
@@ -110,7 +109,7 @@ export default function AddStackTemplateScreen() {
 
   if (templateRevisionsQuery.status === "pending") {
     return (
-      <section className="text-foreground" data-testid="add-stack-template-loading">
+      <section data-testid="add-stack-template-loading">
         <p className="flex items-center gap-2 text-muted-foreground">
           <Loader2 aria-hidden="true" className="size-4 animate-spin" /> Loading templates…
         </p>
@@ -123,7 +122,7 @@ export default function AddStackTemplateScreen() {
       return <>{boundary}</>;
     }
     return (
-      <section className="grid justify-items-start gap-4 text-foreground" data-testid="add-stack-template-load-error">
+      <section className="grid justify-items-start gap-4" data-testid="add-stack-template-load-error">
         <p className="text-muted-foreground">Something went wrong while loading templates.</p>
         <Button className="pointer-coarse:h-11" data-testid="add-stack-template-retry" onClick={() => templateRevisionsQuery.refetch()}>
           <RefreshCw data-icon="inline-start" aria-hidden="true" />
@@ -143,7 +142,7 @@ export default function AddStackTemplateScreen() {
 
   return (
     <section
-      className="grid gap-6 text-foreground"
+      className="grid gap-6"
       data-testid="add-stack-template-screen"
       data-unsaved={hasUnsavedValues ? "true" : undefined}
     >
@@ -164,7 +163,7 @@ export default function AddStackTemplateScreen() {
           </EmptyHeader>
           <EmptyContent>
             <Link
-              className={cn(buttonVariants(), "no-underline pointer-coarse:h-11")}
+              className={cn(buttonVariants(), "pointer-coarse:h-11")}
               to="/templates/new"
               data-testid="register-template-link"
             >

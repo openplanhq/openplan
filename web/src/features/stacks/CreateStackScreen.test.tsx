@@ -240,7 +240,7 @@ describe("CreateStackScreen", () => {
     expect(alerts[0].textContent).toContain("A stack with that slug already exists");
   });
 
-  // --legacy-touch-target gave every control 44px on a touch screen.
+  // Every control takes a 44px target on a coarse pointer.
   it("gives every control a 44px target on coarse pointers", () => {
     renderScreen();
 
@@ -248,12 +248,11 @@ describe("CreateStackScreen", () => {
     expect(screen.getByRole("button", { name: /create stack/i }).classList).toContain("pointer-coarse:h-11");
   });
 
-  it("sits in a shadcn Card and sets its own text colour", () => {
+  it("sits in a shadcn Card", () => {
     renderScreen();
 
     const form = screen.getByLabelText("Name").closest("form") as HTMLElement;
     expect(form.closest('[data-slot="card"]')).not.toBeNull();
-    expect(form.closest("[data-unsaved], section")?.classList).toContain("text-foreground");
   });
 
   it("shows an inline error message for a handled API error status", async () => {

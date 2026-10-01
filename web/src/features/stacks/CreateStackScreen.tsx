@@ -32,7 +32,7 @@ export default function CreateStackScreen() {
 
   if (mutation.isSuccess && mutation.data) {
     return (
-      <section className="text-foreground" data-testid="create-stack-success">
+      <section data-testid="create-stack-success">
         <p className="text-muted-foreground">Redirecting to your new stack…</p>
       </section>
     );
@@ -43,7 +43,7 @@ export default function CreateStackScreen() {
     // away while a `[data-unsaved='true']` element is mounted, so a
     // half-typed stack name is never wiped out by a background sign-in
     // redirect.
-    <section className="text-foreground" data-unsaved={trimmed !== "" ? "true" : undefined}>
+    <section data-unsaved={trimmed !== "" ? "true" : undefined}>
       <Breadcrumb items={[{ label: "Stacks", to: "/stacks" }, { label: "Create stack" }]} />
 
       <Card>

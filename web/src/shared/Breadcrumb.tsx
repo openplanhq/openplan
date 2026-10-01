@@ -21,10 +21,8 @@ export type Crumb = {
 // exactly one top-level heading even though nothing on screen looks like one.
 // The separators are aria-hidden, so assistive tech counts only real crumbs.
 //
-// Until PR 8, base.css styles bare a, a:hover and h1 from the legacy layer, and
-// a rule on the element beats a colour inherited from the list. So the links
-// and the h1 set their own colour, type and decoration (AppShell's navLinkClass
-// says why no-underline, not hover:no-underline).
+// The last crumb is the page's h1 and Preflight leaves it with the body's type,
+// so it sets its own family, size, weight and tracking.
 //
 // Any crumb can hold a long, user-chosen name. wrap-anywhere, unlike shadcn's
 // wrap-break-word, lets a crumb shrink below its longest word.
@@ -53,7 +51,7 @@ export default function Breadcrumb({
               {crumb.to ? (
                 <BreadcrumbLink
                   render={<Link to={crumb.to} />}
-                  className="text-muted-foreground no-underline"
+                  className="text-muted-foreground"
                   data-testid={crumb.testId}
                 >
                   {crumb.label}

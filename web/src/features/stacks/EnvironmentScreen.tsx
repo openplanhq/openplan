@@ -19,7 +19,7 @@ export default function EnvironmentScreen() {
 
   if (credentialsQuery.status === "pending") {
     return (
-      <section className="text-foreground" data-testid="environment-loading">
+      <section data-testid="environment-loading">
         <p className="text-muted-foreground">Loading environment…</p>
       </section>
     );
@@ -30,7 +30,7 @@ export default function EnvironmentScreen() {
       return <>{boundary}</>;
     }
     return (
-      <section className="grid justify-items-start gap-4 text-foreground" data-testid="environment-error">
+      <section className="grid justify-items-start gap-4" data-testid="environment-error">
         <p className="text-muted-foreground">Something went wrong while loading the environment.</p>
         <Button className="pointer-coarse:h-11" data-testid="environment-retry" onClick={() => credentialsQuery.refetch()}>
           <RefreshCw data-icon="inline-start" aria-hidden="true" />

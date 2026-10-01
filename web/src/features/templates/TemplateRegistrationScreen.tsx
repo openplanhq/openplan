@@ -77,7 +77,7 @@ export default function TemplateRegistrationScreen() {
   }
 
   return (
-    <section className="grid min-w-0 gap-6 text-foreground" data-unsaved={hasUnsavedRegistration ? "true" : undefined}>
+    <section className="grid min-w-0 gap-6" data-unsaved={hasUnsavedRegistration ? "true" : undefined}>
       <Breadcrumb
         items={[
           { label: "Templates", to: "/templates", testId: "template-registration-back" },
