@@ -89,9 +89,11 @@ export default function StackTemplateDetailShell() {
   const onRunPage = matchPath("/stacks/:stackId/templates/:stackTemplateId/runs/:runNumber", pathname) !== null;
 
   return (
-    // The tab row, then the tab's content. The run screens below Runs are
-    // still on the legacy layer until PR 8, and inherit this colour.
-    <section className="grid min-w-0 content-start gap-6 text-foreground" data-testid="stack-template-detail">
+    // The tab row, then the tab's content. grid-cols-1 is minmax(0, 1fr), so
+    // a wide child such as the run table scrolls in its own frame instead of
+    // widening the page. The run screens below Runs are still on the legacy
+    // layer until PR 8, and inherit this colour.
+    <section className="grid min-w-0 grid-cols-1 content-start gap-6 text-foreground" data-testid="stack-template-detail">
       {/* The template's tabs, with its state at the far end of the same
           row. On a phone the state wraps under the tabs. */}
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">

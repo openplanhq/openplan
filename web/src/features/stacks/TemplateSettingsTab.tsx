@@ -19,7 +19,7 @@ export default function TemplateSettingsTab() {
   const revisionLockedReason = destroying ? "Destroy in progress" : runInFlight ? runInFlightReason(runInFlight, "changing the revision") : "";
 
   return (
-    <div className="grid min-w-0 content-start gap-6" data-testid="template-settings-tab">
+    <div className="grid min-w-0 grid-cols-1 content-start gap-6" data-testid="template-settings-tab">
       {/* A secondary action, so a quiet band rather than a card: the label on
           one side, the control on the other, wrapping under it on a phone. */}
       <section

@@ -101,7 +101,7 @@ export default function TemplateVariablesTab() {
   };
 
   return (
-    <div className="grid min-w-0 content-start gap-6" data-testid="template-variables-tab" data-unsaved={hasUnsavedConfig ? "true" : undefined}>
+    <div className="grid min-w-0 grid-cols-1 content-start gap-6" data-testid="template-variables-tab" data-unsaved={hasUnsavedConfig ? "true" : undefined}>
       {errorMessage && (
         <Alert variant="destructive">
           <CircleAlert aria-hidden="true" />

@@ -7,7 +7,7 @@ import { useStackTemplateOutlet } from "./StackTemplateDetailShell";
 export default function TemplateRunsTab() {
   const { stackId, stackTemplate } = useStackTemplateOutlet();
   return (
-    <section className="grid min-w-0 content-start gap-6" data-testid="template-runs-tab">
+    <section className="grid min-w-0 grid-cols-1 content-start gap-6" data-testid="template-runs-tab">
       <TemplateRunActions stackId={stackId} stackTemplate={stackTemplate} />
       <TemplateRunHistory stackId={stackId} stackTemplateId={stackTemplate.id} />
     </section>
