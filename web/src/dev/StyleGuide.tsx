@@ -8,6 +8,7 @@ import { LogStep, LogSteps } from "../shared/LogSteps";
 import StatusRow from "../shared/StatusRow";
 import { statusTone } from "../shared/statusTone";
 import RoleBadge from "../shared/RoleBadge";
+import { STACK_ROLES } from "../shared/roles";
 import StatusBadge from "../shared/StatusBadge";
 import "./styleguide.css";
 import { CircleAlert, Info, Plus, Search, SearchX } from "lucide-react";
@@ -73,9 +74,7 @@ const BUTTON_SIZES = ["xs", "sm", "default", "lg"] as const;
 const BADGE_VARIANTS = ["default", "secondary", "outline", "destructive", "success", "progress", "warning", "muted"] as const;
 // One status per tone: settled, progress, waiting, failed, canceled.
 const STATUS_SAMPLES = ["completed", "running", "waiting_approval", "failed", "canceled"];
-const ROLES = ["owner", "operator", "approver", "viewer"];
 const titleCase = (word: string) => word[0].toUpperCase() + word.slice(1);
-const ROLE_ITEMS = ROLES.map((role) => ({ value: role, label: titleCase(role) }));
 const STACK_NAMES = ["payments-core", "payments-edge", "billing", "identity", "search"];
 
 const COLOUR_TOKENS = [
@@ -285,8 +284,8 @@ export default function StyleGuide() {
               </div>
             </Specimen>
             <Specimen label="RoleBadge" hint="real component">
-              {ROLES.map((role) => (
-                <RoleBadge key={role} stackRole={role} />
+              {STACK_ROLES.map(({ value }) => (
+                <RoleBadge key={value} stackRole={value} />
               ))}
             </Specimen>
             <Specimen label="Breadcrumb" hint="real component" stack>
@@ -421,12 +420,12 @@ export default function StyleGuide() {
             <Specimen label="Select" stack>
               <div className="grid w-full max-w-sm gap-2">
                 <Label htmlFor="sg-select">Default role</Label>
-                <Select items={ROLE_ITEMS} defaultValue="viewer">
+                <Select items={STACK_ROLES} defaultValue="viewer">
                   <SelectTrigger id="sg-select" className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {ROLE_ITEMS.map((role) => (
+                    {STACK_ROLES.map((role) => (
                       <SelectItem key={role.value} value={role.value}>
                         {role.label}
                       </SelectItem>

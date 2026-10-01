@@ -1,16 +1,19 @@
 import type { ComponentProps } from "react";
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import type { StackRole } from "./roles";
 
-// Roles share the status tints; owner takes progress's primary blue. This is a
-// Map, not an object, so a role named like an Object.prototype property
-// ("constructor") can't find one.
-const VARIANTS = new Map<string, BadgeVariant>([
-  ["owner", "progress"],
-  ["operator", "success"],
-  ["approver", "warning"],
-  ["viewer", "muted"]
-]);
+// Roles share the status tints; owner takes progress's primary blue. A Record
+// over StackRole, so a new role won't type-check without a tint. Looked up
+// through a Map, not the object, so a role named like an Object.prototype
+// property ("constructor") can't find one.
+const TINTS: Record<StackRole, BadgeVariant> = {
+  owner: "progress",
+  operator: "success",
+  approver: "warning",
+  viewer: "muted"
+};
+const VARIANTS = new Map<string, BadgeVariant>(Object.entries(TINTS));
 
 // stackRole, not role, which would shadow the ARIA attribute Badge passes on.
 type RoleBadgeProps = Omit<ComponentProps<typeof Badge>, "variant" | "children"> & { stackRole: string };
