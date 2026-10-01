@@ -353,14 +353,6 @@
   align-self: start;
 }
 
-.form-actions {
-  margin: var(--legacy-space-6) 0 0;
-}
-
-.selector-label {
-  margin-bottom: var(--legacy-space-4);
-}
-
 /* ---- Metadata grids ---- */
 .spin {
   animation: spin 0.9s linear infinite;
@@ -401,7 +393,6 @@
   }
 
   /* Primary CTAs go full width on mobile, per the design system. */
-  .form-actions .primary-button,
   .form-grid > .primary-button,
   .templates-list-header .primary-button,
   .template-detail__sync .secondary-button {
@@ -542,20 +533,4 @@
 
 .danger-zone h2 {
   color: var(--legacy-color-danger);
-}
-
-.upgrade-variable-notes {
-  color: var(--legacy-color-muted-fg);
-  font-size: var(--legacy-text-sm);
-  list-style: none;
-  margin: var(--legacy-space-3) 0 0;
-  padding: 0;
-}
-
-.upgrade-variable-notes li {
-  padding: var(--legacy-space-1) 0;
-}
-
-.upgrade-variable-notes--removed li {
-  color: var(--legacy-color-warning);
 }
