@@ -179,7 +179,8 @@ describe("StackDetailShell", () => {
     expect(markup).toContain('aria-label="Template sections"');
     expect(markup).not.toContain('aria-label="Stack sections"');
     expect(breadcrumbOf(markup).detail).toBe(false);
-    expect(markup).toMatch(/aria-label="Template sections".*<\/nav>.*data-testid="stack-template-state".*changed/);
+    // The template's state follows its tab list, at the end of the same row.
+    expect(markup).toMatch(/role="tablist"[^>]*aria-label="Template sections".*data-testid="stack-template-state"[^>]*>.*changed/);
     expect(markup).toContain("Plan, then apply");
   });
 

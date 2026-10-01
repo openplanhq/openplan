@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Loader2, RefreshCw } from "lucide-react";
+import { CircleAlert, Loader2, RefreshCw } from "lucide-react";
 import { useTemplateRevisionVariablesQuery, useUpdateStackTemplateConfigMutation } from "../../api/queries";
 import { tenantID } from "../../config";
 import RequireCapability from "../../auth/RequireCapability";
@@ -13,6 +13,8 @@ import {
   isDestroyingStackTemplate,
   variableValuesFromConfig
 } from "./stackWorkflow";
+import { Alert, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 
 // /stacks/:stackId/templates/:stackTemplateId/variables — the installed
 // template's configuration. Choosing another revision is a separate page
@@ -63,8 +65,8 @@ export default function TemplateVariablesTab() {
 
   if (variablesQuery.status === "pending") {
     return (
-      <p className="muted" data-testid="template-variables-loading">
-        <Loader2 size={16} className="spin" /> Loading variables…
+      <p className="flex items-center gap-2 text-muted-foreground" data-testid="template-variables-loading">
+        <Loader2 aria-hidden="true" className="size-4 animate-spin" /> Loading variables…
       </p>
     );
   }
@@ -74,12 +76,12 @@ export default function TemplateVariablesTab() {
       return <>{boundary}</>;
     }
     return (
-      <div data-testid="template-variables-error">
-        <p className="muted">Something went wrong while loading the template's variables.</p>
-        <button className="primary-button" type="button" data-testid="template-variables-retry" onClick={() => variablesQuery.refetch()}>
-          <RefreshCw size={16} />
+      <div className="grid justify-items-start gap-4" data-testid="template-variables-error">
+        <p className="text-muted-foreground">Something went wrong while loading the template's variables.</p>
+        <Button className="pointer-coarse:h-11" data-testid="template-variables-retry" onClick={() => variablesQuery.refetch()}>
+          <RefreshCw data-icon="inline-start" aria-hidden="true" />
           Retry
-        </button>
+        </Button>
       </div>
     );
   }
@@ -99,8 +101,13 @@ export default function TemplateVariablesTab() {
   };
 
   return (
-    <div className="stack-template-tab" data-testid="template-variables-tab" data-unsaved={hasUnsavedConfig ? "true" : undefined}>
-      {errorMessage && <div className="alert">{errorMessage}</div>}
+    <div className="grid min-w-0 grid-cols-1 content-start gap-6" data-testid="template-variables-tab" data-unsaved={hasUnsavedConfig ? "true" : undefined}>
+      {errorMessage && (
+        <Alert variant="destructive">
+          <CircleAlert aria-hidden="true" />
+          <AlertTitle>{errorMessage}</AlertTitle>
+        </Alert>
+      )}
       <RequireCapability
         capability="canOperate"
         fallback={<StackTemplateConfigPanel {...configPanelProps} canSave={false} saveBusy={false} disabledReason="Editing requires operator access" />}

@@ -1,15 +1,25 @@
-import { Loader2, Plus, RefreshCw } from "lucide-react";
+import { Layers, Loader2, Plus, RefreshCw } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { useStackQuery } from "../../api/queries";
 import { tenantID } from "../../config";
 import RequireCapability from "../../auth/RequireCapability";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
-import { statusGlyph } from "../../shared/statusTone";
+import { statusGlyph, toneTextClass } from "../../shared/statusTone";
 import { stackTemplateLabel, stackTemplateStatus } from "./stackWorkflow";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Empty, EmptyHeader, EmptyMedia } from "@/components/ui/empty";
+import { cn } from "@/lib/utils";
+
+// base.css gives every h2 the legacy 32px display type until PR 9, so each
+// heading sets its own family, size, weight and tracking.
+const headingClass = "font-heading text-base leading-snug font-medium tracking-normal";
 
 // /stacks/:stackId/templates — the templates installed on a stack, and nothing
 // else. Each row opens that template's own page at templates/:stackTemplateId,
 // where its runs, variables, credentials and settings live on tabs.
+//
+// Until PR 9, body keeps the legacy text colour and base.css styles bare a
+// and h2, so the screen sets its own colour and the links their decoration.
 export default function StackTemplateListScreen() {
   const { stackId = "" } = useParams<{ stackId: string }>();
   const stackQuery = useStackQuery(tenantID, stackId);
@@ -18,9 +28,9 @@ export default function StackTemplateListScreen() {
 
   if (stackQuery.status === "pending") {
     return (
-      <section className="stack-template-list-screen" data-testid="stack-template-loading">
-        <p className="muted">
-          <Loader2 size={16} className="spin" /> Loading templates…
+      <section className="text-foreground" data-testid="stack-template-loading">
+        <p className="flex items-center gap-2 text-muted-foreground">
+          <Loader2 aria-hidden="true" className="size-4 animate-spin" /> Loading templates…
         </p>
       </section>
     );
@@ -31,40 +41,68 @@ export default function StackTemplateListScreen() {
       return <>{boundary}</>;
     }
     return (
-      <section className="stack-template-list-screen" data-testid="stack-template-error">
-        <p className="muted">Something went wrong while loading the stack templates.</p>
-        <button className="primary-button" type="button" data-testid="stack-template-retry" onClick={() => stackQuery.refetch()}>
-          <RefreshCw size={16} />
+      <section className="grid justify-items-start gap-4 text-foreground" data-testid="stack-template-error">
+        <p className="text-muted-foreground">Something went wrong while loading the stack templates.</p>
+        <Button className="pointer-coarse:h-11" data-testid="stack-template-retry" onClick={() => stackQuery.refetch()}>
+          <RefreshCw data-icon="inline-start" aria-hidden="true" />
           Retry
-        </button>
+        </Button>
       </section>
     );
   }
 
   return (
-    <section className="stack-template-list-screen" data-testid="stack-template-list-screen">
-      <div className="stack-template-list-content" data-testid="stack-template-list-content">
-        <header className="panel-header" data-testid="stack-template-panel-header">
-          <h2 className="section-title">Stack templates</h2>
+    <section className="text-foreground" data-testid="stack-template-list-screen">
+      <div className="grid gap-5" data-testid="stack-template-list-content">
+        {/* The heading and the page's action; on a phone the link takes the
+            full width under the heading. */}
+        <header
+          className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
+          data-testid="stack-template-panel-header"
+        >
+          <h2 className={headingClass}>Stack templates</h2>
           <RequireCapability capability="canOperate">
-            <Link className="primary-button" to={`/stacks/${stackId}/templates/new`} data-testid="add-stack-template-link">
-              <Plus size={16} />
+            <Link
+              className={cn(buttonVariants(), "w-full no-underline pointer-coarse:h-11 md:w-auto")}
+              to={`/stacks/${stackId}/templates/new`}
+              data-testid="add-stack-template-link"
+            >
+              <Plus data-icon="inline-start" aria-hidden="true" />
               Add template
             </Link>
           </RequireCapability>
         </header>
         {stackTemplates.length === 0 ? (
-          <p className="muted" data-testid="stack-template-empty">
-            No stack templates installed
-          </p>
+          <Empty className="border" data-testid="stack-template-empty">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Layers aria-hidden="true" />
+              </EmptyMedia>
+              <h2 className="font-heading text-sm font-medium tracking-tight">No stack templates installed</h2>
+            </EmptyHeader>
+          </Empty>
         ) : (
-          <div className="stack-template-items" data-testid="stack-template-items">
+          // One bordered list with a rule between rows, like a template's
+          // runs. overflow-hidden clips the rows' hover fill to the corners.
+          <div className="grid divide-y overflow-hidden rounded-lg border" data-testid="stack-template-items">
             {stackTemplates.map((item) => {
               const status = stackTemplateStatus(item);
               return (
-                <Link key={item.id} to={`/stacks/${stackId}/templates/${item.id}`} data-testid={`stack-template-link-${item.id}`}>
+                // The whole row is the link, 44px tall on a coarse pointer.
+                // The name takes the slack and ends in an ellipsis, whole on
+                // hover; the state's words keep their place at the far edge.
+                // The focus outline is drawn inside, where the frame can't
+                // clip it.
+                <Link
+                  key={item.id}
+                  to={`/stacks/${stackId}/templates/${item.id}`}
+                  data-testid={`stack-template-link-${item.id}`}
+                  className="flex min-h-12 items-center gap-3 px-4 text-sm text-foreground no-underline hover:bg-muted focus-visible:-outline-offset-2"
+                >
+                  {/* The state icon, named for assistive technology; the
+                      template's own page explains what the state means. */}
                   <span
-                    className={`stack-template-item__dot status-tone--${status.tone}`}
+                    className={cn("flex-none leading-none", toneTextClass(status.tone))}
                     data-testid={`stack-template-status-${item.id}`}
                     role="img"
                     aria-label={status.label}
@@ -72,8 +110,10 @@ export default function StackTemplateListScreen() {
                   >
                     {statusGlyph(status.tone)}
                   </span>
-                  <span className="stack-template-item__name">{stackTemplateLabel(item)}</span>
-                  <small>{status.label}</small>
+                  <span className="min-w-0 flex-1 truncate" title={stackTemplateLabel(item)}>
+                    {stackTemplateLabel(item)}
+                  </span>
+                  <small className="flex-none font-mono text-xs text-muted-foreground">{status.label}</small>
                 </Link>
               );
             })}

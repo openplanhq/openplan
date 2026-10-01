@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-29
 **Status:** Approved. Guard and testing sections reviewed with PR 1. PRs 1 to
-5 settled the details recorded below.
+6 settled the details recorded below.
 
 ## Problem
 
@@ -359,6 +359,39 @@ migrated and unmigrated screens side by side.
   Screenshots of an open Base UI popup are taken viewport-only: the full-page
   `--shot` (`captureBeyondViewport`) drew the Combobox popup 140px off.
 
+**What PR 6 settled.**
+
+- A template's tabs are `RouteTabs` (`Template sections`). Runs stays
+  selected for everything under `runs/`, run detail included. The
+  template's state is a `StatusBadge` at the far end of the same row, and
+  on a phone it wraps under the tabs. Tab links have `role="tab"`, so tests
+  query `getByRole("tab")` and check `aria-current`, not a link's class.
+- The shell and tab grids that hold the legacy run components use
+  `grid-cols-1`, which is `minmax(0, 1fr)`. A bare `grid` has an `auto`
+  column, which grew to the run table's 824px minimum and widened the page
+  by 468px at 375px. With `minmax(0, 1fr)` the table scrolls inside its
+  `.data-table-frame`.
+- `toneTextClass(tone)` in `src/shared/statusTone.ts` gives a tone's text
+  colour outside a pill, as its Badge variant uses it. The template list's
+  state glyph and the "will be dropped" notes use it.
+- The install picker's rows are their own Tailwind-styled buttons: the
+  chosen row takes the primary border and ring, and a row with no active
+  revision is disabled with its `StatusBadge`. The registry still uses
+  `.templates-list*` and `.templates-group*`, so that CSS stays until
+  PR 7, which can share a row component with the picker.
+- Variable inputs take their ids from `useId`, two columns from `md`.
+- Revision Selects take `items` as `{ value, label }`, so `SelectValue`
+  shows the label. Tests read the options from the listbox and the shown
+  value from `[data-slot="select-value"]`.
+- Rules whose class names survive as test IDs (`stack-template-items`,
+  `stack-template-state`, `stack-template-detail`,
+  `stack-template-list-content`, `stack-template-revision-action`) were
+  deleted by hand, out of the dead-CSS guard's sight.
+- The run components on the Runs and Settings tabs (`TemplateRunActions`,
+  `TemplateRunHistory`, `TemplateDestroyPanel`) stay legacy until PR 8.
+  Until then their Plan, Apply and Destroy buttons are under 44px on a
+  phone.
+
 `HeroGraphic` (the decorative shapes on error and empty-state screens) has no
 counterpart in the stock look. Each migrating screen drops it for a plain empty
 state, and the component file goes when its last user migrates (PR 7:
@@ -375,9 +408,10 @@ state, and the component file goes when its last user migrates (PR 7:
    ID.
 4. Add each newly installed shadcn component to the `/styleguide` dev page.
 5. Include before/after screenshots in the PR description. The local stack
-   (`docker compose up` plus `npm run dev`) serves every screen, and
-   `scripts/drive-web.mjs` can take them through a real sign-in as the local
-   `root` account. Keycloak is only needed to test single sign-on.
+   (`docker compose up`) serves every screen; its `web` service is a built
+   image, so rebuild it (`docker compose build web`) before an audit.
+   `scripts/drive-web.mjs` takes screenshots through a real sign-in as Dex's
+   static user, `admin@openplan.local` (docs/authentication.md).
 6. Give each control a 44px target on coarse pointers, as
    `--legacy-touch-target` did: `pointer-coarse:h-11` on fixed-height
    controls, `pointer-coarse:min-h-11` on rows whose height comes from their

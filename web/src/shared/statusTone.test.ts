@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { statusGlyph, statusTone } from "./statusTone";
+import { statusGlyph, statusTone, toneTextClass } from "./statusTone";
 
 describe("statusTone", () => {
   it("classifies terminal success states as settled", () => {
@@ -49,5 +49,16 @@ describe("statusGlyph", () => {
     for (const glyph of glyphs) {
       expect(glyph.trim().length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("toneTextClass", () => {
+  // The text colour of each tone's Badge variant (StatusBadge.tsx).
+  it("gives each tone its badge's text colour", () => {
+    expect(toneTextClass("settled")).toBe("text-success");
+    expect(toneTextClass("progress")).toBe("text-primary");
+    expect(toneTextClass("waiting")).toBe("text-warning");
+    expect(toneTextClass("failed")).toBe("text-destructive");
+    expect(toneTextClass("canceled")).toBe("text-muted-foreground");
   });
 });

@@ -123,10 +123,9 @@
 .templates-groups {
   display: grid;
   gap: var(--legacy-space-6);
-  /* Groups size to their contents. As a stretched grid item — which is what it
-     becomes in the install picker's left pane — align-content resolves to
-     stretch and inflates these auto rows to fill the taller column, opening a
-     gap inside a group that reads as a missing row. */
+  /* Groups size to their contents. As a stretched grid item, align-content
+     resolves to stretch and inflates these auto rows to fill a taller column,
+     opening a gap inside a group that reads as a missing row. */
   align-content: start;
 }
 
@@ -179,8 +178,7 @@
   overflow-wrap: anywhere;
 }
 
-.templates-list li small,
-.template-choices small {
+.templates-list li small {
   color: var(--legacy-color-muted-fg);
   font-family: var(--legacy-font-mono);
   font-size: var(--legacy-text-xs);
@@ -338,150 +336,21 @@
 }
 
 /* ---- Layout grids ---- */
-.workflow-grid {
-  display: grid;
-  grid-template-columns: minmax(280px, 0.85fr) minmax(320px, 1.15fr);
-  gap: var(--legacy-space-6);
-}
-
-.form-grid,
-.variable-grid {
+.form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(160px, 1fr));
   gap: var(--legacy-space-5);
 }
 
-/* The submit button is the last child of these two-column forms, so without
+/* The submit button is the last child of this two-column form, so without
    this it lands in whatever column is next to a field and — being a grid item —
    stretches to that row's height. With an odd number of labels it ends up
    beside a field at label + gap + input tall (65px) and half the form wide.
    Give it its own row and let it size to its own content. */
-.form-grid > .primary-button,
-.variable-grid > .primary-button {
+.form-grid > .primary-button {
   grid-column: 1 / -1;
   justify-self: start;
   align-self: start;
-}
-
-.form-actions {
-  margin: var(--legacy-space-6) 0 0;
-}
-
-.selector-label {
-  margin-bottom: var(--legacy-space-4);
-}
-
-/* ---- Template lists ---- */
-/* The stack's installed templates: one bordered list with a rule between
-   rows, like a template's runs. Each row is a link to that template's page. */
-.stack-template-items {
-  border: 1px solid var(--legacy-color-border);
-  border-radius: var(--legacy-radius-lg);
-  display: grid;
-  /* Clips the hover fill of the first and last rows to the rounded corners. */
-  overflow: hidden;
-}
-
-.stack-template-items a {
-  display: flex;
-  align-items: center;
-  gap: var(--legacy-space-3);
-  /* A control-height button with 8px either side, whether or not the row
-     has one, so rows keep one height. */
-  min-height: calc(var(--legacy-control-height) + var(--legacy-space-4));
-  padding: 0 var(--legacy-space-4);
-  color: var(--legacy-color-fg);
-  text-decoration: none;
-  transition: background var(--legacy-duration-fast) var(--legacy-ease-out);
-}
-
-.stack-template-items a + a {
-  border-top: 1px solid var(--legacy-color-border);
-}
-
-.stack-template-items a:hover {
-  background: var(--legacy-color-muted);
-  text-decoration: none;
-}
-
-.stack-template-items span,
-.stack-template-items small {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.stack-template-items span {
-  font-size: var(--legacy-text-sm);
-  font-weight: 400;
-}
-
-.stack-template-items small {
-  color: var(--legacy-color-muted-fg);
-  font-family: var(--legacy-font-mono);
-  font-size: var(--legacy-text-xs);
-}
-
-/* The name takes the row's slack so the state label sits at the far edge. */
-.stack-template-items .stack-template-item__name {
-  flex: 1;
-}
-
-/* The state icon; the row also names the state at its far edge, and the
-   template's own page explains what it means. */
-.stack-template-items .stack-template-item__dot {
-  flex: none;
-  /* Takes its colour from the shared .status-tone--* modifier so tones stay
-     defined in one place, but drops the tint those carry for pills: behind a
-     bare glyph it reads as a stray swatch. */
-  background: none;
-  font-size: var(--legacy-text-sm);
-  line-height: 1;
-}
-
-/* ---- A template's state, at the top of its page ---- */
-.stack-template-state {
-  display: grid;
-  gap: var(--legacy-space-2);
-  justify-items: start;
-  border: 1px solid var(--legacy-color-border);
-  border-radius: var(--legacy-radius-lg);
-  padding: var(--legacy-space-4);
-  background: var(--legacy-color-card);
-}
-
-.stack-template-state p {
-  margin: 0;
-  font-size: var(--legacy-text-sm);
-}
-
-/* A template's own page: its state, its tabs, then the tab's content. Each tab
-   stacks its sections the same way. */
-.stack-template-detail,
-.stack-template-tab {
-  align-content: start;
-  display: grid;
-  gap: var(--legacy-space-6);
-  min-width: 0;
-}
-
-/* The template's tabs, with its state at the far end of the same row. The
-   grid gap already separates the row from what follows it. */
-.stack-template-tabbar {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--legacy-space-2) var(--legacy-space-4);
-  justify-content: space-between;
-}
-
-/* The rule runs under the whole row, state included, not just the tabs. */
-.stack-template-tabbar {
-  border-bottom: 1px solid var(--legacy-color-border);
-}
-
-.stack-template-tabbar .stack-detail-tabs {
-  border-bottom: 0;
-  margin-bottom: 0;
 }
 
 /* ---- Metadata grids ---- */
@@ -490,9 +359,7 @@
 }
 
 @media (max-width: 920px) {
-  .workflow-grid,
-  .form-grid,
-  .variable-grid {
+  .form-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -526,9 +393,7 @@
   }
 
   /* Primary CTAs go full width on mobile, per the design system. */
-  .form-actions .primary-button,
   .form-grid > .primary-button,
-  .variable-grid > .primary-button,
   .templates-list-header .primary-button,
   .template-detail__sync .secondary-button {
     width: 100%;
@@ -543,33 +408,6 @@
 }
 
 .panel-header h2 {
-  margin: 0;
-}
-
-.stack-template-list-content {
-  display: grid;
-  gap: var(--legacy-space-5);
-}
-
-.stack-template-revision-action {
-  align-items: center;
-  background: var(--legacy-color-muted);
-  border: 1px solid var(--legacy-color-border);
-  border-radius: var(--legacy-radius-lg);
-  display: flex;
-  gap: var(--legacy-space-3);
-  justify-content: space-between;
-  /* 12px of vertical padding made a 64px band around a 36px control. This is
-     as tight as the row goes without the button fouling it: the button is
-     --legacy-control-height plus its own 1px borders, so a zero-padding row would
-     have its corners clipped by this one's radius. */
-  padding: var(--legacy-space-1) var(--legacy-space-4);
-}
-
-.stack-template-revision-action p {
-  align-items: center;
-  display: flex;
-  gap: var(--legacy-space-2);
   margin: 0;
 }
 
@@ -695,90 +533,4 @@
 
 .danger-zone h2 {
   color: var(--legacy-color-danger);
-}
-
-/* The install picker's rows. Deliberately NOT .templates-list: that class
-   exists to paint a card on the li, and a bordered button inside it read as a
-   box inside a box. Here the button is the card, so the list contributes
-   nothing but layout. Its rows still borrow .templates-list__main and the meta
-   cluster, which are only ever about the row's contents. */
-.template-choices {
-  display: grid;
-  gap: var(--legacy-space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* The button's body is the same two-line block the registry list uses
-   (.templates-list__main plus a .templates-list__meta cluster), so it aligns to
-   the top rather than centring a name against a taller neighbour, and its text
-   reads left like a row instead of centring like a button label. */
-.template-choice {
-  align-items: flex-start;
-  text-align: left;
-  background: var(--legacy-color-card);
-  border: 1px solid var(--legacy-color-border);
-  border-radius: var(--legacy-radius-xl);
-  box-shadow: var(--legacy-shadow-sm);
-  color: var(--legacy-color-fg);
-  cursor: pointer;
-  display: flex;
-  gap: var(--legacy-space-4);
-  justify-content: space-between;
-  padding: var(--legacy-space-2) var(--legacy-space-4);
-  transition: all var(--legacy-duration-lift) var(--legacy-ease-out);
-  width: 100%;
-}
-
-.template-choice:hover:not(:disabled) {
-  transform: translateY(-2px);
-  border-color: var(--legacy-color-accent-border);
-  box-shadow: var(--legacy-shadow-lg);
-}
-
-.template-choice:disabled {
-  color: var(--legacy-color-muted-fg);
-  cursor: not-allowed;
-}
-
-.template-choice[data-selected="true"] {
-  border-color: var(--legacy-color-accent-border);
-  box-shadow: var(--legacy-shadow-ring);
-}
-
-/* ---- Install: browse on the left, configure on the right ---- */
-/* Sticky so the panel stays beside the row that opened it however far the
-   template list runs on. .workflow-grid collapses to one column at its own
-   breakpoint, where a sticky panel would pin the form over the list instead. */
-.template-configure {
-  position: sticky;
-  top: var(--legacy-space-6);
-  align-self: start;
-}
-
-.template-configure__name {
-  margin: 0;
-}
-
-@media (max-width: 900px) {
-  .template-configure {
-    position: static;
-  }
-}
-
-.upgrade-variable-notes {
-  color: var(--legacy-color-muted-fg);
-  font-size: var(--legacy-text-sm);
-  list-style: none;
-  margin: var(--legacy-space-3) 0 0;
-  padding: 0;
-}
-
-.upgrade-variable-notes li {
-  padding: var(--legacy-space-1) 0;
-}
-
-.upgrade-variable-notes--removed li {
-  color: var(--legacy-color-warning);
 }

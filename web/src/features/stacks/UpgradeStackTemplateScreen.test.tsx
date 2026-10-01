@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import UpgradeStackTemplateScreen from "./UpgradeStackTemplateScreen";
@@ -81,6 +82,18 @@ function variable(overrides: Partial<TemplateVariable> = {}): TemplateVariable {
   };
 }
 
+/** The target picker, and the label of the revision it shows. */
+const targetSelect = () => screen.getByRole("combobox", { name: "Revision to apply" });
+const shownTarget = () => targetSelect().querySelector('[data-slot="select-value"]')?.textContent ?? "";
+
+/** Opens the target picker and returns its options' labels. */
+async function targetOptions(): Promise<string[]> {
+  await userEvent.setup().click(targetSelect());
+  return within(await screen.findByRole("listbox"))
+    .getAllByRole("option")
+    .map((option) => option.textContent ?? "");
+}
+
 function testQueryClient(): QueryClient {
   return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
 }
@@ -151,10 +164,10 @@ describe("UpgradeStackTemplateScreen", () => {
 
     renderScreen(queryClient);
 
-    expect((screen.getByTestId("upgrade-target-select") as HTMLSelectElement).value).toBe("rev_next");
+    expect(shownTarget()).toContain("9f21abc");
   });
 
-  it("allows selecting an active same-source revision even when its commit is older", () => {
+  it("allows selecting an active same-source revision even when its commit is older", async () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([stackTemplate()]));
     queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [
@@ -170,11 +183,12 @@ describe("UpgradeStackTemplateScreen", () => {
 
     renderScreen(queryClient);
 
-    const options = Array.from((screen.getByTestId("upgrade-target-select") as HTMLSelectElement).options);
-    expect(options.map((option) => option.value)).toEqual(["rev_older"]);
+    const options = await targetOptions();
+    expect(options).toHaveLength(1);
+    expect(options[0]).toContain("0000000");
   });
 
-  it("excludes the installed revision and other source templates from the candidates", () => {
+  it("excludes the installed revision and other source templates from the candidates", async () => {
     const queryClient = testQueryClient();
     seedUpgradeable(queryClient);
     queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [
@@ -186,8 +200,9 @@ describe("UpgradeStackTemplateScreen", () => {
 
     renderScreen(queryClient);
 
-    const options = Array.from((screen.getByTestId("upgrade-target-select") as HTMLSelectElement).options);
-    expect(options.map((option) => option.value)).toEqual(["rev_next"]);
+    // Only rev_next: the installed revision, the other source template's and
+    // the unvalidated one are all left out.
+    expect(await targetOptions()).toHaveLength(1);
   });
 
   it("marks variables as added, carried, or removed against the target revision", () => {
@@ -252,7 +267,7 @@ describe("UpgradeStackTemplateScreen", () => {
     expect(screen.queryByRole("button", { name: /Change revision/ })).toBeNull();
   });
 
-  it("suppresses the previous target's fields and diff notes while switching to a target whose variables have not loaded", () => {
+  it("suppresses the previous target's fields and diff notes while switching to a target whose variables have not loaded", async () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([stackTemplate()]));
     queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [
@@ -282,13 +297,44 @@ describe("UpgradeStackTemplateScreen", () => {
     // never resolves. Only isFetching-gating stops that from being shown as
     // current.
     vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
-    fireEvent.change(screen.getByTestId("upgrade-target-select"), { target: { value: "rev_next_2" } });
+    const user = userEvent.setup();
+    await user.click(targetSelect());
+    await user.click(within(await screen.findByRole("listbox")).getByRole("option", { name: /aa00bb1/ }));
+    await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
 
     expect(screen.getByTestId("upgrade-target-variables-loading")).toBeTruthy();
     expect(screen.queryByLabelText(/new_var/)).toBeNull();
     expect(screen.queryByTestId("upgrade-added-new_var")).toBeNull();
     expect(screen.queryByTestId("upgrade-removed-legacy_flag")).toBeNull();
     expect((screen.getByRole("button", { name: /Change revision/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  // The spec's Select behaviour: opens from the keyboard, arrows move, Enter
+  // commits.
+  it("changes the target from the keyboard", async () => {
+    const queryClient = testQueryClient();
+    seedUpgradeable(queryClient);
+    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [
+      templateRevision({ id: "rev_next", resolved_commit_sha: "9f21abc0000000" }),
+      templateRevision({ id: "rev_next_2", resolved_commit_sha: "aa00bb1111111" }),
+      templateRevision({ id: "rev_current" })
+    ]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_next_2"), [
+      variable({ name: "region", template_revision_id: "rev_next_2" })
+    ]);
+
+    renderScreen(queryClient);
+    const user = userEvent.setup();
+    targetSelect().focus();
+    await user.keyboard("{Enter}");
+    await screen.findByRole("listbox");
+    expect(document.activeElement?.textContent).toContain("9f21abc");
+    await user.keyboard("{ArrowDown}");
+    expect(document.activeElement?.textContent).toContain("aa00bb1");
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
+    expect(shownTarget()).toContain("aa00bb1");
+    expect(document.activeElement).toBe(targetSelect());
   });
 
   it("guards the direct-URL path when the installed template is mid-destroy", () => {

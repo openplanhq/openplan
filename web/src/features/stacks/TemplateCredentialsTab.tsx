@@ -17,7 +17,7 @@ export default function TemplateCredentialsTab() {
   const deleteMutation = useDeleteStackTemplateCredentialMutation(tenantID, stackTemplate.id);
 
   return (
-    <div className="stack-template-tab" data-testid="template-credentials-tab">
+    <div className="grid min-w-0 grid-cols-1 content-start gap-6" data-testid="template-credentials-tab">
       <CredentialsPanel
         title="Template credentials"
         subtitle="Overrides the stack environment for this template only."

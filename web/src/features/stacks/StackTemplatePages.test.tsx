@@ -283,7 +283,7 @@ describe("StackTemplateDetailShell", () => {
     renderAt(queryClient, "/stacks/stack_1/templates/st_1");
 
     await waitFor(() => expect(screen.getByTestId("template-runs-tab")).toBeTruthy());
-    expect(screen.getByRole("link", { name: "Runs" }).className).toContain("active");
+    expect(screen.getByRole("tab", { name: "Runs" }).getAttribute("aria-current")).toBe("page");
   });
 
   it("says so when the template in the URL is not installed on the stack", () => {
@@ -302,8 +302,8 @@ describe("StackTemplateDetailShell", () => {
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/runs");
 
     await waitFor(() => expect(screen.getByTestId("template-runs-tab")).toBeTruthy());
-    expect(screen.queryByRole("link", { name: "Credentials" })).toBeNull();
-    expect(screen.getByRole("link", { name: "Settings" })).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: "Credentials" })).toBeNull();
+    expect(screen.getByRole("tab", { name: "Settings" })).toBeTruthy();
   });
 
   it("keeps the Runs tab lit while reading one run", async () => {
@@ -317,7 +317,7 @@ describe("StackTemplateDetailShell", () => {
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/runs/3");
 
     await waitFor(() => expect(screen.getByTestId("run-detail-status")).toBeTruthy());
-    expect(screen.getByRole("link", { name: "Runs" }).className).toContain("active");
+    expect(screen.getByRole("tab", { name: "Runs" }).getAttribute("aria-current")).toBe("page");
   });
 });
 

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import AddStackTemplateScreen from "./AddStackTemplateScreen";
@@ -117,11 +118,12 @@ describe("AddStackTemplateScreen", () => {
 
     const row = screen.getByTestId("add-template-choice-tmpl_src_1");
     // The name leads; the ref and commit are demoted to the trailing meta.
-    expect(row.querySelector(".templates-list__name")?.textContent).toBe("vpc");
+    expect(row.textContent?.startsWith("vpc")).toBe(true);
+    expect(within(row).getByText("vpc")).toBeTruthy();
     expect(row.textContent).toContain("main");
     expect(row.textContent).toContain("44b2e01");
     // Two revisions of one template are one row.
-    expect(document.querySelectorAll(".template-choices li")).toHaveLength(1);
+    expect(within(screen.getByTestId("template-group-hashicorp/vpc")).getAllByRole("listitem")).toHaveLength(1);
   });
 
   it("says nothing about a template whose latest revision is active", () => {
@@ -132,7 +134,8 @@ describe("AddStackTemplateScreen", () => {
 
     const row = screen.getByTestId("add-template-choice-tmpl_src_1");
     expect(row.textContent).not.toContain("active");
-    expect(row.querySelector(".status-tone")).toBeNull();
+    // No status pill: StatusBadge marks itself with its tone.
+    expect(row.querySelector("[data-tone]")).toBeNull();
   });
 
   it("names the chosen template in the panel that configures it", () => {
@@ -356,7 +359,7 @@ describe("AddStackTemplateScreen", () => {
     expect(screen.queryByTestId("add-template-revision-select")).toBeNull();
   });
 
-  it("lists a template's active revisions newest-registered first, defaulting to the latest", () => {
+  it("lists a template's active revisions newest-registered first, defaulting to the latest", async () => {
     const queryClient = testQueryClient();
     // The API returns created_at desc, id desc; the screen renders that order
     // as received and must not re-sort it.
@@ -370,13 +373,18 @@ describe("AddStackTemplateScreen", () => {
     renderScreen(queryClient);
     fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
 
-    const select = screen.getByTestId("add-template-revision-select") as HTMLSelectElement;
-    expect(Array.from(select.options).map((option) => option.value)).toEqual(["rev_new", "rev_mid", "rev_old"]);
-    expect(select.value).toBe("rev_new");
-    expect(select.options[0].textContent).toContain("f17f983");
-    expect(select.options[0].textContent).toContain("19 Aug 2026");
-    expect(select.options[0].textContent).toContain("latest");
-    expect(select.options[1].textContent).not.toContain("latest");
+    const select = screen.getByRole("combobox", { name: "Revision" });
+    expect(select.querySelector('[data-slot="select-value"]')?.textContent).toContain("f17f983");
+
+    await userEvent.setup().click(select);
+    const options = within(await screen.findByRole("listbox")).getAllByRole("option").map((option) => option.textContent ?? "");
+    expect(options).toHaveLength(3);
+    expect(options[0]).toContain("f17f983");
+    expect(options[0]).toContain("19 Aug 2026");
+    expect(options[0]).toContain("latest");
+    expect(options[1]).toContain("a91c204");
+    expect(options[1]).not.toContain("latest");
+    expect(options[2]).toContain("3c0e112");
   });
 
   it("installs the revision chosen in the picker rather than the default", async () => {
@@ -397,7 +405,10 @@ describe("AddStackTemplateScreen", () => {
     renderScreen(queryClient);
     fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
     fireEvent.change(screen.getByLabelText(/region/), { target: { value: "eu-west-1" } });
-    fireEvent.change(screen.getByTestId("add-template-revision-select"), { target: { value: "rev_old" } });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("combobox", { name: "Revision" }));
+    await user.click(within(await screen.findByRole("listbox")).getByRole("option", { name: /3c0e112/ }));
+    await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
 
     // Switching revision clears typed values, the same as choosing a template:
     // the new revision's variables are what the config must be built from.
