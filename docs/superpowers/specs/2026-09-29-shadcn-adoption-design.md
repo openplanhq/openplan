@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-29
 **Status:** Approved. Guard and testing sections reviewed with PR 1. PRs 1 to
-4 settled the details recorded below.
+5 settled the details recorded below.
 
 ## Problem
 
@@ -200,8 +200,8 @@ migrated and unmigrated screens side by side.
 | 2 | App shell (`AppShell`) and `src/shared/` components; deletes the unused `StatBand` and `IdsPanel` | Breadcrumb; Badge (status tones, roles); Collapsible (`LogSteps`) |
 | 3 | Standalone screens: sign-in, access denied, not found, service unavailable, route placeholder, and the two session-error screens | Card, Button, Alert, Input, Label; Empty for the route messages |
 | 4 | Stacks: list, create, detail shell, environment, credentials | Table; Tabs for the stack's tab row (`RouteTabs`); reuses Card, Input, Label, Button, Alert and Empty |
-| 5 | Stack access | Combobox for the user search; Select for the role picker |
-| 6 | Stack templates: list, detail shell and its four tabs, config panel, variable fields, add, upgrade | `RouteTabs` from PR 4 for the template's tabs, so each tab keeps its URL; Select; Textarea |
+| 5 | Stack access | Combobox for the user search; Select for the role picker; reuses Card, Alert, Button, Label and `RoleBadge` |
+| 6 | Stack templates: list, detail shell and its four tabs, config panel, variable fields, add, upgrade | `RouteTabs` from PR 4 for the template's tabs, so each tab keeps its URL; Select; Textarea (vendored in PR 5) |
 | 7 | Template registry: registry, registration, detail | Table, Card, Input |
 | 8 | Runs: detail, logs, history, actions, destroy panel | AlertDialog for the destroy confirmation; ScrollArea for logs |
 | 9 | Cleanup: delete `tokens.css`, `base.css`, `primitives.css`, `features.css`, the `legacy` layer, the old guards and the dead-CSS guard | none |
@@ -278,6 +278,50 @@ migrated and unmigrated screens side by side.
   requests with 200 and that body, and `--stall <glob>` never answers.
   That is how PR 4 reached empty and loading states and long names. A
   usage example in the script's header comment can't contain `*/`.
+
+**What PR 5 settled.**
+
+- Combobox brought InputGroup and Textarea with it, so PR 6 starts with
+  Textarea vendored. `shadcn add` offers to overwrite `button.tsx`, which
+  carries PR 1's `/90` hover; answer no (`yes n | npx shadcn add …`).
+- The user search is a Combobox over the server's answer, with
+  `filter={null}`: the server matches email as well as name. The list
+  opens once a search of two or more characters has answered, so "No
+  users found" never shows before one has. Only typing sets the query; a
+  pick filling the input doesn't search for the picked name.
+- The pick is the Combobox's value: the input shows the picked name, and
+  the selected-user card is gone. A clear button inside the input, still
+  named "Clear selected user", replaces the card's X. Typing keeps the
+  pick, because Base UI empties its input when the value goes to `null`;
+  Escape, the clear button or another pick changes it. Users who already
+  hold a role are disabled options that show it.
+- While a Combobox popup is open, Base UI hides the rest of the page from
+  assistive technology, so tests query outside the popup only once it has
+  closed. `ComboboxEmpty` is `role="status"`; tests find the undo banner,
+  also a status, by its text.
+- Select's trigger height is `data-[size=default]:h-8`, which a plain
+  `pointer-coarse:h-11` can't outrank; `pointer-coarse:data-[size=default]:h-11`
+  does. The search input fills its taller group on a coarse pointer
+  through `pointer-coarse:*:data-[slot=input-group-control]:h-full`.
+  Audits measure the InputGroup, not the input inside its border, and skip
+  Base UI's hidden form inputs: they have no `data-slot`, so the legacy
+  input `min-height` stretches them to 36px, but they are `aria-hidden` and
+  clipped to nothing.
+- The undo banner is a Tailwind toast (fixed, `role="status"`, the
+  popover look), not Sonner. `AppShell.test.tsx` now holds the header
+  (`z-5`) below Base UI's popups (`z-50`) and the banner (`z-20`), the
+  overlays that replaced `.search-dropdown` and `.undo-banner`.
+- `role-badge` CSS went with this screen, its last user.
+- Neither Combobox nor Select needed a jsdom stand-in.
+- Rebasing onto the Dex change had dropped `scripts/drive-web.mjs`'s phone
+  emulation and its `--signed-out` check: `--width` emulated nothing and
+  `--signed-out` signed in anyway. PR 5 restored both. To type into a
+  Base UI input from `--eval`, use `document.execCommand("insertText", …)`;
+  setting `value` and dispatching `input` doesn't open the list. Phone
+  probes compare `scrollWidth` with `document.documentElement.clientWidth`:
+  on a mobile viewport `innerWidth` grows with any overflow, and hides it.
+  Screenshots of an open Base UI popup are taken viewport-only: the full-page
+  `--shot` (`captureBeyondViewport`) drew the Combobox popup 140px off.
 
 `HeroGraphic` (the decorative shapes on error and empty-state screens) has no
 counterpart in the stock look. Each migrating screen drops it for a plain empty
@@ -386,8 +430,9 @@ components respond to pointer events that `fireEvent.click` doesn't send.
   move focus without navigating; Enter follows the focused tab; on every stack
   route the selected tab is the one its link marks `aria-current`.
 - PR 5, Combobox: the input has `role="combobox"` and `aria-expanded`; typing
-  filters options with `role="option"`; ArrowDown and ArrowUp move the
-  highlight; Enter selects; Escape closes and clears.
+  searches, and the options (`role="option"`) are exactly the server's answer;
+  ArrowDown and ArrowUp move the highlight; Enter selects; Escape closes and
+  clears.
 - PR 5 and PR 6, Select: opens from the keyboard, arrows move, Enter commits.
 - PR 8, AlertDialog: focus moves into the dialog, Tab stays inside, Cancel
   returns focus to the destroy button, and confirm fires the destroy mutation
