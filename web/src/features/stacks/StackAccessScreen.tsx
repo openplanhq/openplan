@@ -40,6 +40,9 @@ export default function StackAccessScreen() {
   const { stackId = "" } = useParams<{ stackId: string }>();
   const grants = useStackGrantsQuery(tenantID, stackId);
 
+  // What the input shows, and what was typed into it to search. They part
+  // when a pick fills the input with the user's name, which is not a query.
+  const [inputText, setInputText] = useState("");
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
@@ -52,12 +55,19 @@ export default function StackAccessScreen() {
   const assignMutation = useAssignStackRoleMutation(tenantID, stackId);
   const revokeMutation = useRevokeStackRoleMutation(tenantID, stackId);
   const undoTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // Set when the user closes the list. Base UI resets its input to the pick,
+  // or empties it, after every close, including the ones below that happen
+  // on their own; only a close the user made may replace what they typed.
+  const userClosedListRef = useRef(false);
 
   const grantsBySub = new Map((grants.data?.grants ?? []).map((g) => [g.userSub, g]));
   const replacing = selectedUser !== null && grantsBySub.has(selectedUser.sub);
   // The list opens once a search has answered, as the old dropdown did: before
   // that there is nothing to show, and "No users found" would be untrue.
+  // useSearchUsersQuery keeps the last answer while the next one loads, so
+  // refining a search doesn't close the list.
   const results = debouncedSearch.length >= 2 ? searchResults.data?.users : undefined;
+  const listOpen = searchOpen && results !== undefined;
 
   const handleAssign = useCallback(async () => {
     if (!selectedUser) return;
@@ -68,6 +78,7 @@ export default function StackAccessScreen() {
         role: selectedRole
       });
       setSelectedUser(null);
+      setInputText("");
       setSearch("");
     } catch (err) {
       setMutationError(err instanceof Error ? err.message : "Failed to assign role");
@@ -157,7 +168,7 @@ export default function StackAccessScreen() {
             <ul className="divide-y rounded-lg border">
               {grants.data.grants.map((grant) => (
                 <li key={grant.userSub} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
-                  <div className="grid min-w-0 flex-1 gap-0.5">
+                  <div className="grid min-w-0 grow basis-32 gap-0.5">
                     <span className="truncate" title={grant.displayName}>
                       {grant.displayName}
                     </span>
@@ -220,16 +231,26 @@ export default function StackAccessScreen() {
           <Combobox<UserProfile>
             items={results ?? []}
             filter={null}
-            open={searchOpen && results !== undefined}
-            onOpenChange={setSearchOpen}
+            open={listOpen}
+            onOpenChange={(open) => {
+              setSearchOpen(open);
+              userClosedListRef.current = !open;
+            }}
             value={selectedUser}
             onValueChange={(user) => setSelectedUser(user)}
+            inputValue={inputText}
             onInputValueChange={(value, { reason }) => {
-              // Typing searches. Picking a user writes their name into the
-              // input, which is not a query, so only typing sets one.
+              // Typing searches. A pick writes the user's name, which is not
+              // a query. Escape, and a close the user made, put back the
+              // pick or empty the input, and end the search.
               if (reason === "input-change") {
+                userClosedListRef.current = false;
+                setInputText(value);
                 setSearch(value);
-              } else if (value === "") {
+              } else if (reason === "item-press") {
+                setInputText(value);
+              } else if (reason === "escape-key" || userClosedListRef.current) {
+                setInputText(value);
                 setSearch("");
               }
             }}
@@ -241,6 +262,15 @@ export default function StackAccessScreen() {
               placeholder="Search users by name or email..."
               showTrigger={false}
               className="w-full pointer-coarse:h-11 pointer-coarse:*:data-[slot=input-group-control]:h-full"
+              // Leaving a closed list fires no close, so put the pick back
+              // here. An open list handles its own close, and acting here
+              // could shut it under a click on one of its options.
+              onBlur={() => {
+                if (!listOpen) {
+                  setInputText(selectedUser?.displayName ?? "");
+                  setSearch("");
+                }
+              }}
             >
               {selectedUser && (
                 <InputGroupAddon align="inline-end">
@@ -248,7 +278,11 @@ export default function StackAccessScreen() {
                     size="icon-xs"
                     aria-label="Clear selected user"
                     className="pointer-coarse:size-11"
-                    onClick={() => setSelectedUser(null)}
+                    onClick={() => {
+                      setSelectedUser(null);
+                      setInputText("");
+                      setSearch("");
+                    }}
                   >
                     <X aria-hidden="true" />
                   </InputGroupButton>

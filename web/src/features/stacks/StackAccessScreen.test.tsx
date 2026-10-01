@@ -70,13 +70,14 @@ interface Sent {
 }
 
 // Answers each request by its URL, so a test can count and inspect what the
-// screen sent. A search gets `users`, a POST gets `assign` (or the grant it
-// asked for), and anything else gets the grants list.
+// screen sent. A search gets `users`, after `searchDelay` ms; a POST gets
+// `assign` (or the grant it asked for); anything else gets the grants list.
 function serve({
   grants = [],
   users = [],
-  assign
-}: { grants?: GrantView[]; users?: UserProfile[]; assign?: () => Promise<Response> } = {}) {
+  assign,
+  searchDelay = 0
+}: { grants?: GrantView[]; users?: UserProfile[]; assign?: () => Promise<Response>; searchDelay?: number } = {}) {
   const sent: Sent[] = [];
   const json = (value: unknown) =>
     new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
@@ -85,7 +86,10 @@ function serve({
     const method = init?.method ?? "GET";
     const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, string>) : undefined;
     sent.push({ method, url, body });
-    if (url.includes("/users/search")) return json({ users, first: 0, max: 20 });
+    if (url.includes("/users/search")) {
+      await new Promise((resolve) => setTimeout(resolve, searchDelay));
+      return json({ users, first: 0, max: 20 });
+    }
     if (method === "POST") {
       return assign ? assign() : json({ userSub: body?.user_sub, role: body?.role, displayName: "", email: "" });
     }
@@ -448,6 +452,71 @@ describe("StackAccessScreen", () => {
 
       // Typing searches again; leaving without a new pick puts the pick back.
       await user.type(input, "x");
+      await user.tab();
+      expect(input.value).toBe("Charlie Brown");
+      expect(assignButton().disabled).toBe(false);
+    });
+
+    // Base UI resets its input to the pick, or empties it, whenever the list
+    // closes. The list closes on its own while a new search loads or once the
+    // query is too short, and neither may cost the user what they typed.
+    it("keeps what was typed while a refined search loads", async () => {
+      serve({ users: [charlie, chad], searchDelay: 200 });
+      await renderWithGrants();
+
+      const { user, input } = await typeInSearch("ch");
+      await screen.findAllByRole("option");
+      await user.type(input, "a");
+      await afterDebounce();
+      expect(input.value).toBe("cha");
+      expect(screen.getAllByRole("option")).toHaveLength(2);
+    });
+
+    it("keeps a query shortened below two characters", async () => {
+      serve({ users: [charlie] });
+      await renderWithGrants();
+
+      const { user, input } = await typeInSearch("ch");
+      await screen.findAllByRole("option");
+      await user.keyboard("{Backspace}");
+      await afterDebounce();
+      expect(input.value).toBe("c");
+      expect(input.getAttribute("aria-expanded")).toBe("false");
+    });
+
+    it("keeps what was typed after a pick while that search runs", async () => {
+      serve({ users: [charlie] });
+      await renderWithGrants();
+
+      const { user, input } = await typeInSearch("cha");
+      await user.click(await screen.findByRole("option", { name: /Charlie Brown/ }));
+      await user.type(input, "x");
+      await afterDebounce();
+      expect(input.value).toBe("Charlie Brownx");
+    });
+
+    it("sends no search for what was typed once the user leaves", async () => {
+      const sent = serve({ users: [charlie] });
+      await renderWithGrants();
+
+      const { user, input } = await typeInSearch("cha");
+      await user.click(await screen.findByRole("option", { name: /Charlie Brown/ }));
+      await user.type(input, "x");
+      await user.tab();
+      await afterDebounce();
+      expect(input.value).toBe("Charlie Brown");
+      expect(searches(sent)).toEqual(["cha"]);
+    });
+
+    it("puts the pick back when the user leaves a query too short to search", async () => {
+      serve({ users: [charlie] });
+      await renderWithGrants();
+
+      const { user, input } = await typeInSearch("cha");
+      await user.click(await screen.findByRole("option", { name: /Charlie Brown/ }));
+      await user.type(input, "d", { initialSelectionStart: 0, initialSelectionEnd: input.value.length });
+      await afterDebounce();
+      expect(input.value).toBe("d");
       await user.tab();
       expect(input.value).toBe("Charlie Brown");
       expect(assignButton().disabled).toBe(false);

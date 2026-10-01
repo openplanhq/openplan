@@ -232,7 +232,10 @@ export function useSearchUsersQuery(tenantID: string, query: string) {
   return useQuery({
     queryKey: queryKeys.userSearch(tenantID, query),
     queryFn: () => client.searchUsers(tenantID, query, 0, 20),
-    enabled: query.length >= 2
+    enabled: query.length >= 2,
+    // The last answer stays while the next query loads, so the stack-access
+    // search list doesn't close, and blink, on every keystroke.
+    placeholderData: keepPreviousData
   });
 }
 
