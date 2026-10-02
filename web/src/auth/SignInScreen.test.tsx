@@ -40,7 +40,7 @@ describe("safeReturnTo", () => {
   // Everything here would send a freshly signed-in browser somewhere it should
   // not go: the first group all leave the origin, and /v1/auth/login restarts
   // sign-in the instant it succeeds. The rows mirror the server's table in
-  // authn.TestSafeReturnTo -- the two are meant to be the same rule, and this
+  // authentication.TestSafeReturnTo -- the two are meant to be the same rule, and this
   // path never reaches the server to be caught there.
   it.each([
     ["absolute URL", "https://evil.test/steal"],

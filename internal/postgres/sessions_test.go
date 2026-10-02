@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/authentication"
 	"github.com/vishu42/openplan/internal/encryption"
 )
 
@@ -24,15 +24,15 @@ func newSessionTestStore(t *testing.T, ctx context.Context) *Store {
 	return NewStore(pool, WithSessionCipher(cipher))
 }
 
-func newTestSession(t *testing.T, now time.Time) (raw string, session authn.Session) {
+func newTestSession(t *testing.T, now time.Time) (raw string, session authentication.Session) {
 	t.Helper()
 
-	raw, err := authn.NewSessionID()
+	raw, err := authentication.NewSessionID()
 	if err != nil {
 		t.Fatalf("NewSessionID: %v", err)
 	}
-	return raw, authn.Session{
-		IDHash:            authn.HashSessionID(raw),
+	return raw, authentication.Session{
+		IDHash:            authentication.HashSessionID(raw),
 		Subject:           "user-sub-1",
 		Name:              "Ada Lovelace",
 		PreferredUsername: "ada",
@@ -85,8 +85,8 @@ func TestCreateSessionWithoutSessionCipherErrors(t *testing.T) {
 
 	_, session := newTestSession(t, now)
 	err := store.CreateSession(ctx, session)
-	if !errors.Is(err, authn.ErrSessionEncryptionUnavailable) {
-		t.Fatalf("CreateSession err = %v, want authn.ErrSessionEncryptionUnavailable", err)
+	if !errors.Is(err, authentication.ErrSessionEncryptionUnavailable) {
+		t.Fatalf("CreateSession err = %v, want authentication.ErrSessionEncryptionUnavailable", err)
 	}
 }
 
@@ -115,9 +115,9 @@ func TestSessionByHashUnknownIsNotFound(t *testing.T) {
 	ctx := context.Background()
 	store := newSessionTestStore(t, ctx)
 
-	_, err := store.SessionByHash(ctx, authn.HashSessionID("never-issued"))
-	if !errors.Is(err, authn.ErrSessionNotFound) {
-		t.Fatalf("err = %v, want authn.ErrSessionNotFound", err)
+	_, err := store.SessionByHash(ctx, authentication.HashSessionID("never-issued"))
+	if !errors.Is(err, authentication.ErrSessionNotFound) {
+		t.Fatalf("err = %v, want authentication.ErrSessionNotFound", err)
 	}
 }
 
@@ -180,10 +180,10 @@ func TestRevokeSessionsByIDPSessionIDAndSubject(t *testing.T) {
 
 	_, first := newTestSession(t, now)
 	_, second := newTestSession(t, now)
-	second.IDHash = authn.HashSessionID("second-session")
+	second.IDHash = authentication.HashSessionID("second-session")
 	second.IDPSessionID = "idp-sid-2"
 
-	for _, session := range []authn.Session{first, second} {
+	for _, session := range []authentication.Session{first, second} {
 		if err := store.CreateSession(ctx, session); err != nil {
 			t.Fatalf("CreateSession: %v", err)
 		}
@@ -218,16 +218,16 @@ func TestDeleteSessionsExpiredBefore(t *testing.T) {
 
 	_, live := newTestSession(t, now)
 	_, expired := newTestSession(t, now)
-	expired.IDHash = authn.HashSessionID("expired-session")
+	expired.IDHash = authentication.HashSessionID("expired-session")
 	expired.AbsoluteExpiresAt = now.Add(-time.Minute)
 	// Revoked but still inside its absolute bound: dead to IsLive, and
 	// deliberately still here, because one rule for when a row leaves the
 	// table is easier to reason about than two.
 	_, revoked := newTestSession(t, now)
-	revoked.IDHash = authn.HashSessionID("revoked-session")
+	revoked.IDHash = authentication.HashSessionID("revoked-session")
 	revoked.RevokedAt = now
 
-	for _, session := range []authn.Session{live, expired, revoked} {
+	for _, session := range []authentication.Session{live, expired, revoked} {
 		if err := store.CreateSession(ctx, session); err != nil {
 			t.Fatalf("CreateSession: %v", err)
 		}
@@ -243,10 +243,10 @@ func TestDeleteSessionsExpiredBefore(t *testing.T) {
 	if deleted != 1 {
 		t.Fatalf("deleted = %d, want 1 — only the row past its absolute bound", deleted)
 	}
-	if _, err := store.SessionByHash(ctx, expired.IDHash); !errors.Is(err, authn.ErrSessionNotFound) {
+	if _, err := store.SessionByHash(ctx, expired.IDHash); !errors.Is(err, authentication.ErrSessionNotFound) {
 		t.Fatalf("SessionByHash(expired) error = %v, want ErrSessionNotFound", err)
 	}
-	for _, session := range []authn.Session{live, revoked} {
+	for _, session := range []authentication.Session{live, revoked} {
 		if _, err := store.SessionByHash(ctx, session.IDHash); err != nil {
 			t.Fatalf("SessionByHash(%s): %v — a row inside its absolute bound must survive the sweep", session.IDHash, err)
 		}
@@ -264,10 +264,10 @@ func TestRevokeSessionsBySubjectWithoutIDPSession(t *testing.T) {
 
 	_, keyed := newTestSession(t, now)
 	_, unkeyed := newTestSession(t, now)
-	unkeyed.IDHash = authn.HashSessionID("unkeyed-session")
+	unkeyed.IDHash = authentication.HashSessionID("unkeyed-session")
 	unkeyed.IDPSessionID = ""
 
-	for _, session := range []authn.Session{keyed, unkeyed} {
+	for _, session := range []authentication.Session{keyed, unkeyed} {
 		if err := store.CreateSession(ctx, session); err != nil {
 			t.Fatalf("CreateSession: %v", err)
 		}

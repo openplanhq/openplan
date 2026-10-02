@@ -18,7 +18,7 @@ import (
 
 	"github.com/openfga/openfga/pkg/storage/memory"
 	"github.com/vishu42/openplan/internal/app"
-	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/authentication"
 
 	"github.com/vishu42/openplan/internal/activities"
 	"github.com/vishu42/openplan/internal/authorization"
@@ -299,7 +299,7 @@ func TestRunWiresConfiguredTenantBoundary(t *testing.T) {
 	}
 
 	request := httptest.NewRequest(http.MethodGet, "/v1/tenants/tenant_other/stacks", nil)
-	request.AddCookie(&http.Cookie{Name: authn.SessionCookieName, Value: recordingSessionRaw})
+	request.AddCookie(&http.Cookie{Name: authentication.SessionCookieName, Value: recordingSessionRaw})
 	response := httptest.NewRecorder()
 	deps.serverHandler.ServeHTTP(response, request)
 
@@ -355,12 +355,12 @@ func TestRunGatesSecureCookiesOnRuntimeMode(t *testing.T) {
 
 			var transactionCookie *http.Cookie
 			for _, cookie := range response.Result().Cookies() {
-				if cookie.Name == authn.TransactionCookieName {
+				if cookie.Name == authentication.TransactionCookieName {
 					transactionCookie = cookie
 				}
 			}
 			if transactionCookie == nil {
-				t.Fatalf("no %s cookie in response; headers = %v", authn.TransactionCookieName, response.Header())
+				t.Fatalf("no %s cookie in response; headers = %v", authentication.TransactionCookieName, response.Header())
 			}
 			if transactionCookie.Secure != test.production {
 				t.Fatalf("transaction cookie Secure = %v, want %v for production=%v", transactionCookie.Secure, test.production, test.production)
@@ -372,8 +372,8 @@ func TestRunGatesSecureCookiesOnRuntimeMode(t *testing.T) {
 func TestRunConstructsAndClosesOIDCVerifier(t *testing.T) {
 	deps := newRecordingAPIDependencies(t)
 	verifier := &recordingTokenVerifier{}
-	var got authn.OIDCVerifierConfig
-	deps.newVerifier = func(_ context.Context, cfg authn.OIDCVerifierConfig) (tokenVerifier, error) {
+	var got authentication.OIDCVerifierConfig
+	deps.newVerifier = func(_ context.Context, cfg authentication.OIDCVerifierConfig) (tokenVerifier, error) {
 		got = cfg
 		return verifier, nil
 	}
@@ -443,7 +443,7 @@ func TestRunMigratesRealPostgresWhenDSNIsSet(t *testing.T) {
 	// neither of which it asserts anything about. Everything it does assert,
 	// migrations and wiring, still runs against the real Postgres.
 	deps := defaultAPIDependencies()
-	deps.newVerifier = func(context.Context, authn.OIDCVerifierConfig) (tokenVerifier, error) {
+	deps.newVerifier = func(context.Context, authentication.OIDCVerifierConfig) (tokenVerifier, error) {
 		return testTokenVerifier{}, nil
 	}
 	deps.newAuthorization = func(ctx context.Context, _ postgresPool, storeName string) (*authorization.Authorization, error) {
@@ -647,7 +647,7 @@ func newRecordingAPIDependencies(t *testing.T) *recordingAPIDependencies {
 			}
 			return app.NewService(service), nil
 		},
-		newVerifier: func(context.Context, authn.OIDCVerifierConfig) (tokenVerifier, error) {
+		newVerifier: func(context.Context, authentication.OIDCVerifierConfig) (tokenVerifier, error) {
 			return testTokenVerifier{}, nil
 		},
 		newAuthorization: func(_ context.Context, _ postgresPool, storeName string) (*authorization.Authorization, error) {
@@ -698,26 +698,26 @@ func newRecordingAPIDependencies(t *testing.T) *recordingAPIDependencies {
 
 type testTokenVerifier struct{}
 
-func (testTokenVerifier) Verify(context.Context, string) (authn.VerifiedToken, error) {
-	return authn.VerifiedToken{Subject: "test-user"}, nil
+func (testTokenVerifier) Verify(context.Context, string) (authentication.VerifiedToken, error) {
+	return authentication.VerifiedToken{Subject: "test-user"}, nil
 }
 
 func (testTokenVerifier) Close(context.Context) error { return nil }
 
-func (testTokenVerifier) VerifyLogoutToken(context.Context, string) (authn.LogoutToken, error) {
-	return authn.LogoutToken{Subject: "test-user"}, nil
+func (testTokenVerifier) VerifyLogoutToken(context.Context, string) (authentication.LogoutToken, error) {
+	return authentication.LogoutToken{Subject: "test-user"}, nil
 }
 
-func (testTokenVerifier) Endpoints() authn.Endpoints {
-	return authn.Endpoints{Authorization: "https://idp.test/authorize", Token: "https://idp.test/token"}
+func (testTokenVerifier) Endpoints() authentication.Endpoints {
+	return authentication.Endpoints{Authorization: "https://idp.test/authorize", Token: "https://idp.test/token"}
 }
 
 type recordingTokenVerifier struct {
 	closed bool
 }
 
-func (verifier *recordingTokenVerifier) Verify(context.Context, string) (authn.VerifiedToken, error) {
-	return authn.VerifiedToken{Subject: "test-user"}, nil
+func (verifier *recordingTokenVerifier) Verify(context.Context, string) (authentication.VerifiedToken, error) {
+	return authentication.VerifiedToken{Subject: "test-user"}, nil
 }
 
 func (verifier *recordingTokenVerifier) Close(context.Context) error {
@@ -725,12 +725,12 @@ func (verifier *recordingTokenVerifier) Close(context.Context) error {
 	return nil
 }
 
-func (*recordingTokenVerifier) VerifyLogoutToken(context.Context, string) (authn.LogoutToken, error) {
-	return authn.LogoutToken{Subject: "test-user"}, nil
+func (*recordingTokenVerifier) VerifyLogoutToken(context.Context, string) (authentication.LogoutToken, error) {
+	return authentication.LogoutToken{Subject: "test-user"}, nil
 }
 
-func (*recordingTokenVerifier) Endpoints() authn.Endpoints {
-	return authn.Endpoints{Authorization: "https://idp.test/authorize", Token: "https://idp.test/token"}
+func (*recordingTokenVerifier) Endpoints() authentication.Endpoints {
+	return authentication.Endpoints{Authorization: "https://idp.test/authorize", Token: "https://idp.test/token"}
 }
 
 type recordingPostgresPool struct {
@@ -891,9 +891,9 @@ func (recordingStore) UsersBySubs(context.Context, []string) (map[string]app.Use
 	return nil, nil
 }
 
-// authn.SessionStore, wired so sessionStore's type assertion in main.go
+// authentication.SessionStore, wired so sessionStore's type assertion in main.go
 // succeeds against this fake the way it does against *postgres.Store.
-func (recordingStore) CreateSession(context.Context, authn.Session) error {
+func (recordingStore) CreateSession(context.Context, authentication.Session) error {
 	return nil
 }
 
@@ -903,12 +903,12 @@ func (recordingStore) CreateSession(context.Context, authn.Session) error {
 // present one.
 const recordingSessionRaw = "wired-api-session"
 
-func (recordingStore) SessionByHash(_ context.Context, idHash string) (authn.Session, error) {
-	if idHash != authn.HashSessionID(recordingSessionRaw) {
-		return authn.Session{}, authn.ErrSessionNotFound
+func (recordingStore) SessionByHash(_ context.Context, idHash string) (authentication.Session, error) {
+	if idHash != authentication.HashSessionID(recordingSessionRaw) {
+		return authentication.Session{}, authentication.ErrSessionNotFound
 	}
 	now := time.Now().UTC()
-	return authn.Session{
+	return authentication.Session{
 		IDHash:            idHash,
 		Subject:           "user-123",
 		LastSeenAt:        now,

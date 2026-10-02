@@ -19,7 +19,7 @@ import (
 	"github.com/vishu42/openplan/internal/api"
 	"github.com/vishu42/openplan/internal/app"
 	"github.com/vishu42/openplan/internal/artifacts"
-	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/authentication"
 	"github.com/vishu42/openplan/internal/authorization"
 	"github.com/vishu42/openplan/internal/bootstrap"
 	"github.com/vishu42/openplan/internal/config"
@@ -78,9 +78,9 @@ type queueController interface {
 }
 
 type tokenVerifier interface {
-	authn.Verifier
-	authn.EndpointSource
-	VerifyLogoutToken(context.Context, string) (authn.LogoutToken, error)
+	authentication.Verifier
+	authentication.EndpointSource
+	VerifyLogoutToken(context.Context, string) (authentication.LogoutToken, error)
 	Close(context.Context) error
 }
 
@@ -91,7 +91,7 @@ type apiDependencies struct {
 	newStore             func(postgresPool, *queue.SpecRegistry, *encryption.Cipher, *encryption.Cipher) (appRepositories, error)
 	newLogReader         func(config.ArtifactStoreConfig) (app.TemplateRunLogReader, error)
 	newService           func(app.Service) (*app.Service, error)
-	newVerifier          func(context.Context, authn.OIDCVerifierConfig) (tokenVerifier, error)
+	newVerifier          func(context.Context, authentication.OIDCVerifierConfig) (tokenVerifier, error)
 	newAuthorization     func(context.Context, postgresPool, string) (*authorization.Authorization, error)
 	listenAndServe       func(context.Context, string, http.Handler) error
 
@@ -125,14 +125,14 @@ func controlPlaneStore(store appRepositories) (controlStore, error) {
 	return control, nil
 }
 
-// sessionStore requires the wired store to also satisfy authn.SessionStore.
+// sessionStore requires the wired store to also satisfy authentication.SessionStore.
 // A silently swallowed assertion failure here would boot the API clean and
 // only surface at the first login callback, as a nil-pointer panic instead of
 // a startup error naming the actual defect.
-func sessionStore(store appRepositories) (authn.SessionStore, error) {
-	sessions, ok := store.(authn.SessionStore)
+func sessionStore(store appRepositories) (authentication.SessionStore, error) {
+	sessions, ok := store.(authentication.SessionStore)
 	if !ok {
-		return nil, fmt.Errorf("store %T does not implement authn.SessionStore", store)
+		return nil, fmt.Errorf("store %T does not implement authentication.SessionStore", store)
 	}
 	return sessions, nil
 }
@@ -201,8 +201,8 @@ func defaultAPIDependencies() apiDependencies {
 		newService: func(service app.Service) (*app.Service, error) {
 			return app.NewService(service), nil
 		},
-		newVerifier: func(ctx context.Context, cfg authn.OIDCVerifierConfig) (tokenVerifier, error) {
-			return authn.NewOIDCVerifier(ctx, cfg)
+		newVerifier: func(ctx context.Context, cfg authentication.OIDCVerifierConfig) (tokenVerifier, error) {
+			return authentication.NewOIDCVerifier(ctx, cfg)
 		},
 		newAuthorization: func(ctx context.Context, pool postgresPool, storeName string) (*authorization.Authorization, error) {
 			// The embedded server needs the concrete pool: its writes join the
@@ -303,7 +303,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 
 	// Constructing the verifier fetches the provider's discovery document, so
 	// an unreachable issuer is a boot failure rather than a first-login one.
-	verifier, err := deps.newVerifier(ctx, authn.OIDCVerifierConfig{
+	verifier, err := deps.newVerifier(ctx, authentication.OIDCVerifierConfig{
 		IssuerURL: cfg.Security.OIDC.IssuerURL,
 		Audience:  cfg.Security.OIDC.ClientID,
 	})
@@ -312,7 +312,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 	}
 	defer verifier.Close(context.WithoutCancel(ctx))
 
-	flow, err := authn.NewFlow(authn.FlowConfig{
+	flow, err := authentication.NewFlow(authentication.FlowConfig{
 		ClientID:     cfg.Security.OIDC.ClientID,
 		ClientSecret: cfg.Security.OIDC.ClientSecret.Value(),
 		RedirectURI:  publicURL + "/v1/auth/callback",
@@ -428,7 +428,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 	// and a sweep in flight when ctx is cancelled fails harmlessly.
 	reaperCtx, stopReaper := context.WithCancel(ctx)
 	defer stopReaper()
-	go authn.ReapSessions(reaperCtx, sessions, authn.DefaultSessionReapInterval, nil)
+	go authentication.ReapSessions(reaperCtx, sessions, authentication.DefaultSessionReapInterval, nil)
 
 	stopControlPlane, err := startControlPlane(ctx, cfg, deps, store)
 	if err != nil {

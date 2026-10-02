@@ -1,4 +1,4 @@
-package authn
+package authentication
 
 // Endpoints are the provider URLs the authorization-code flow needs, read from
 // the same discovery document the verifier validates tokens against. Serving

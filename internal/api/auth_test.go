@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/vishu42/openplan/internal/app"
-	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/authentication"
 	"github.com/vishu42/openplan/internal/encryption"
 )
 
@@ -46,18 +46,18 @@ func (f *stubFlow) EndSessionURL(idTokenHint, _ string) string {
 }
 
 type stubVerifier struct {
-	token authn.VerifiedToken
+	token authentication.VerifiedToken
 	err   error
 }
 
-func (v stubVerifier) Verify(context.Context, string) (authn.VerifiedToken, error) {
+func (v stubVerifier) Verify(context.Context, string) (authentication.VerifiedToken, error) {
 	return v.token, v.err
 }
 
 // authTestOption adjusts the AuthConfig a test server is built with.
 type authTestOption func(*AuthConfig)
 
-func withSessions(store authn.SessionStore) authTestOption {
+func withSessions(store authentication.SessionStore) authTestOption {
 	return func(cfg *AuthConfig) { cfg.Sessions = store }
 }
 
@@ -68,18 +68,18 @@ func withLogoutTokenVerifier(verifier LogoutTokenVerifier) authTestOption {
 // fakeLogoutVerifier returns a fixed LogoutToken or error, so handler tests
 // need no live IdP or real logout-token signing.
 type fakeLogoutVerifier struct {
-	token authn.LogoutToken
+	token authentication.LogoutToken
 	err   error
 }
 
-func (v fakeLogoutVerifier) VerifyLogoutToken(context.Context, string) (authn.LogoutToken, error) {
+func (v fakeLogoutVerifier) VerifyLogoutToken(context.Context, string) (authentication.LogoutToken, error) {
 	return v.token, v.err
 }
 
-// fakeSessionStore is an in-memory authn.SessionStore.
+// fakeSessionStore is an in-memory authentication.SessionStore.
 type fakeSessionStore struct {
-	created                    []authn.Session
-	byHash                     map[string]authn.Session
+	created                    []authentication.Session
+	byHash                     map[string]authentication.Session
 	touched                    int
 	revoked                    map[string]int
 	revokedBySID               map[string]int
@@ -89,7 +89,7 @@ type fakeSessionStore struct {
 
 func newFakeSessionStore() *fakeSessionStore {
 	return &fakeSessionStore{
-		byHash:                     map[string]authn.Session{},
+		byHash:                     map[string]authentication.Session{},
 		revoked:                    map[string]int{},
 		revokedBySID:               map[string]int{},
 		revokedBySubject:           map[string]int{},
@@ -97,16 +97,16 @@ func newFakeSessionStore() *fakeSessionStore {
 	}
 }
 
-func (f *fakeSessionStore) CreateSession(_ context.Context, session authn.Session) error {
+func (f *fakeSessionStore) CreateSession(_ context.Context, session authentication.Session) error {
 	f.created = append(f.created, session)
 	f.byHash[session.IDHash] = session
 	return nil
 }
 
-func (f *fakeSessionStore) SessionByHash(_ context.Context, idHash string) (authn.Session, error) {
+func (f *fakeSessionStore) SessionByHash(_ context.Context, idHash string) (authentication.Session, error) {
 	session, ok := f.byHash[idHash]
 	if !ok {
-		return authn.Session{}, authn.ErrSessionNotFound
+		return authentication.Session{}, authentication.ErrSessionNotFound
 	}
 	return session, nil
 }
@@ -179,7 +179,7 @@ func (f *fakeSessionStore) DeleteSessionsExpiredBefore(_ context.Context, cutoff
 	return count, nil
 }
 
-func newAuthTestServer(t *testing.T, flow *stubFlow, verifier authn.Verifier, options ...authTestOption) *Server {
+func newAuthTestServer(t *testing.T, flow *stubFlow, verifier authentication.Verifier, options ...authTestOption) *Server {
 	t.Helper()
 	sealer, err := encryption.NewCipher("01234567890123456789012345678901")
 	if err != nil {
@@ -196,8 +196,8 @@ func newAuthTestServer(t *testing.T, flow *stubFlow, verifier authn.Verifier, op
 		// exercises it; withSessions overrides this with a caller-owned store
 		// when a test needs to assert against it.
 		Sessions:           newFakeSessionStore(),
-		SessionAbsoluteTTL: authn.DefaultSessionAbsoluteTTL,
-		SessionIdleTTL:     authn.DefaultSessionIdleTTL,
+		SessionAbsoluteTTL: authentication.DefaultSessionAbsoluteTTL,
+		SessionIdleTTL:     authentication.DefaultSessionIdleTTL,
 	}
 	for _, option := range options {
 		option(&cfg)
@@ -214,7 +214,7 @@ func newAuthTestServer(t *testing.T, flow *stubFlow, verifier authn.Verifier, op
 func newAuthTestServerWithUsers(
 	t *testing.T,
 	flow *stubFlow,
-	verifier authn.Verifier,
+	verifier authentication.Verifier,
 	users app.UserRepository,
 	options ...authTestOption,
 ) *Server {
@@ -230,8 +230,8 @@ func newAuthTestServerWithUsers(
 		PublicURL:          "http://localhost:5173",
 		SecureCookies:      false,
 		Sessions:           newFakeSessionStore(),
-		SessionAbsoluteTTL: authn.DefaultSessionAbsoluteTTL,
-		SessionIdleTTL:     authn.DefaultSessionIdleTTL,
+		SessionAbsoluteTTL: authentication.DefaultSessionAbsoluteTTL,
+		SessionIdleTTL:     authentication.DefaultSessionIdleTTL,
 	}
 	for _, option := range options {
 		option(&cfg)
@@ -248,7 +248,7 @@ func runCallback(t *testing.T, server *Server, nonce string) *httptest.ResponseR
 	if err != nil {
 		t.Fatalf("NewCipher returned error: %v", err)
 	}
-	transaction := authn.Transaction{State: "state-1", Nonce: nonce, CodeVerifier: "verifier-1", ReturnTo: "/stacks/abc"}
+	transaction := authentication.Transaction{State: "state-1", Nonce: nonce, CodeVerifier: "verifier-1", ReturnTo: "/stacks/abc"}
 	request := callbackRequest(t, sealer, transaction, url.Values{"code": {"code-1"}, "state": {"state-1"}})
 	response := httptest.NewRecorder()
 	server.ServeHTTP(response, request)
@@ -282,7 +282,7 @@ func TestAuthLoginRedirectsAndSetsTransactionCookie(t *testing.T) {
 		t.Fatalf("Cache-Control = %q", response.Header().Get("Cache-Control"))
 	}
 
-	cookie := cookieByName(response, authn.TransactionCookieName)
+	cookie := cookieByName(response, authentication.TransactionCookieName)
 	if cookie == nil {
 		t.Fatal("transaction cookie is missing")
 	}
@@ -309,11 +309,11 @@ func TestAuthLoginRejectsOffOriginReturnTo(t *testing.T) {
 	response := httptest.NewRecorder()
 	server.ServeHTTP(response, request)
 
-	cookie := cookieByName(response, authn.TransactionCookieName)
+	cookie := cookieByName(response, authentication.TransactionCookieName)
 	if cookie == nil {
 		t.Fatal("transaction cookie is missing")
 	}
-	transaction, err := authn.OpenTransaction(sealer, cookie.Value)
+	transaction, err := authentication.OpenTransaction(sealer, cookie.Value)
 	if err != nil {
 		t.Fatalf("OpenTransaction returned error: %v", err)
 	}
@@ -322,21 +322,21 @@ func TestAuthLoginRejectsOffOriginReturnTo(t *testing.T) {
 	}
 }
 
-func callbackRequest(t *testing.T, sealer *encryption.Cipher, transaction authn.Transaction, query url.Values) *http.Request {
+func callbackRequest(t *testing.T, sealer *encryption.Cipher, transaction authentication.Transaction, query url.Values) *http.Request {
 	t.Helper()
-	sealed, err := authn.SealTransaction(sealer, transaction)
+	sealed, err := authentication.SealTransaction(sealer, transaction)
 	if err != nil {
 		t.Fatalf("SealTransaction returned error: %v", err)
 	}
 	request := httptest.NewRequest(http.MethodGet, "/v1/auth/callback?"+query.Encode(), nil)
-	request.AddCookie(&http.Cookie{Name: authn.TransactionCookieName, Value: sealed})
+	request.AddCookie(&http.Cookie{Name: authentication.TransactionCookieName, Value: sealed})
 	return request
 }
 
 func TestAuthCallbackSetsSessionCookieAndRedirects(t *testing.T) {
 	sessions := newFakeSessionStore()
 	flow := &stubFlow{idToken: "raw.id.token"}
-	verifier := stubVerifier{token: authn.VerifiedToken{Subject: "user-123", Nonce: "nonce-1"}}
+	verifier := stubVerifier{token: authentication.VerifiedToken{Subject: "user-123", Nonce: "nonce-1"}}
 	server := newAuthTestServer(t, flow, verifier, withSessions(sessions))
 
 	response := runCallback(t, server, "nonce-1")
@@ -349,11 +349,11 @@ func TestAuthCallbackSetsSessionCookieAndRedirects(t *testing.T) {
 	}
 	// The cookie is now an opaque reference to the session row, not the ID
 	// token itself.
-	session := cookieByName(response, authn.SessionCookieName)
+	session := cookieByName(response, authentication.SessionCookieName)
 	if session == nil || session.Value == "" || session.Value == "raw.id.token" || !session.HttpOnly {
 		t.Fatalf("session cookie = %#v", session)
 	}
-	cleared := cookieByName(response, authn.TransactionCookieName)
+	cleared := cookieByName(response, authentication.TransactionCookieName)
 	if cleared == nil || cleared.MaxAge != -1 {
 		t.Fatalf("transaction cookie = %#v, want cleared", cleared)
 	}
@@ -368,7 +368,7 @@ func TestAuthCallbackSetsSessionCookieAndRedirects(t *testing.T) {
 func TestCallbackCreatesSessionAndSetsOpaqueCookie(t *testing.T) {
 	sessions := newFakeSessionStore()
 	flow := &stubFlow{idToken: "header.payload.signature"}
-	verifier := stubVerifier{token: authn.VerifiedToken{
+	verifier := stubVerifier{token: authentication.VerifiedToken{
 		Subject: "user-1", Name: "Ada Lovelace", Email: "ada@example.test",
 		SessionID: "idp-sid-1", Nonce: "nonce-1",
 	}}
@@ -376,7 +376,7 @@ func TestCallbackCreatesSessionAndSetsOpaqueCookie(t *testing.T) {
 
 	response := runCallback(t, server, "nonce-1")
 
-	cookie := cookieByName(response, authn.SessionCookieName)
+	cookie := cookieByName(response, authentication.SessionCookieName)
 	if cookie == nil {
 		t.Fatal("no session cookie was set")
 	}
@@ -388,7 +388,7 @@ func TestCallbackCreatesSessionAndSetsOpaqueCookie(t *testing.T) {
 	}
 
 	created := sessions.created[0]
-	if created.IDHash != authn.HashSessionID(cookie.Value) {
+	if created.IDHash != authentication.HashSessionID(cookie.Value) {
 		t.Fatal("the stored hash does not match the cookie the browser was given")
 	}
 	if created.IDToken != "header.payload.signature" {
@@ -397,7 +397,7 @@ func TestCallbackCreatesSessionAndSetsOpaqueCookie(t *testing.T) {
 	if created.IDPSessionID != "idp-sid-1" {
 		t.Fatalf("IDPSessionID = %q, want idp-sid-1", created.IDPSessionID)
 	}
-	if created.AbsoluteExpiresAt.Sub(created.CreatedAt) != authn.DefaultSessionAbsoluteTTL {
+	if created.AbsoluteExpiresAt.Sub(created.CreatedAt) != authentication.DefaultSessionAbsoluteTTL {
 		t.Fatalf("absolute window = %v, want 8h", created.AbsoluteExpiresAt.Sub(created.CreatedAt))
 	}
 }
@@ -407,7 +407,7 @@ func TestCallbackSessionLifetimeIgnoresTokenExpiry(t *testing.T) {
 	// full-length session.
 	sessions := newFakeSessionStore()
 	flow := &stubFlow{idToken: "header.payload.signature"}
-	verifier := stubVerifier{token: authn.VerifiedToken{
+	verifier := stubVerifier{token: authentication.VerifiedToken{
 		Subject: "user-1", Nonce: "nonce-1",
 		ExpiresAt: time.Now().Add(time.Minute),
 	}}
@@ -416,14 +416,14 @@ func TestCallbackSessionLifetimeIgnoresTokenExpiry(t *testing.T) {
 	runCallback(t, server, "nonce-1")
 
 	created := sessions.created[0]
-	if created.AbsoluteExpiresAt.Sub(created.CreatedAt) != authn.DefaultSessionAbsoluteTTL {
+	if created.AbsoluteExpiresAt.Sub(created.CreatedAt) != authentication.DefaultSessionAbsoluteTTL {
 		t.Fatalf("absolute window = %v, want 8h regardless of the token's exp", created.AbsoluteExpiresAt.Sub(created.CreatedAt))
 	}
 }
 
 func TestAuthCallbackFailuresAreIndistinguishable(t *testing.T) {
 	sealer, _ := encryption.NewCipher("01234567890123456789012345678901")
-	good := authn.Transaction{State: "state-1", Nonce: "nonce-1", CodeVerifier: "verifier-1", ReturnTo: "/stacks"}
+	good := authentication.Transaction{State: "state-1", Nonce: "nonce-1", CodeVerifier: "verifier-1", ReturnTo: "/stacks"}
 
 	var bodies []string
 	var headers []string
@@ -463,7 +463,7 @@ func TestAuthCallbackFailuresAreIndistinguishable(t *testing.T) {
 		},
 		{
 			name: "verification fails",
-			flow: &stubFlow{idToken: "raw.id.token"}, verifier: stubVerifier{err: authn.ErrInvalidToken},
+			flow: &stubFlow{idToken: "raw.id.token"}, verifier: stubVerifier{err: authentication.ErrInvalidToken},
 			build: func(t *testing.T) *http.Request {
 				return callbackRequest(t, sealer, good, url.Values{"code": {"code-1"}, "state": {"state-1"}})
 			},
@@ -471,7 +471,7 @@ func TestAuthCallbackFailuresAreIndistinguishable(t *testing.T) {
 		{
 			name:     "nonce mismatch",
 			flow:     &stubFlow{idToken: "raw.id.token"},
-			verifier: stubVerifier{token: authn.VerifiedToken{Subject: "user-123", Nonce: "other-nonce"}},
+			verifier: stubVerifier{token: authentication.VerifiedToken{Subject: "user-123", Nonce: "other-nonce"}},
 			build: func(t *testing.T) *http.Request {
 				return callbackRequest(t, sealer, good, url.Values{"code": {"code-1"}, "state": {"state-1"}})
 			},
@@ -485,12 +485,12 @@ func TestAuthCallbackFailuresAreIndistinguishable(t *testing.T) {
 			if response.Code != http.StatusUnauthorized {
 				t.Fatalf("status = %d, want 401", response.Code)
 			}
-			if cookieByName(response, authn.SessionCookieName) != nil {
+			if cookieByName(response, authentication.SessionCookieName) != nil {
 				t.Fatal("a failed callback set a session cookie")
 			}
 			// A failure leaving the transaction cookie live allows replay
 			// within its 600-second Max-Age.
-			clearedTx := cookieByName(response, authn.TransactionCookieName)
+			clearedTx := cookieByName(response, authentication.TransactionCookieName)
 			if clearedTx == nil || clearedTx.MaxAge != -1 {
 				t.Fatalf("transaction cookie = %#v, want cleared on failure", clearedTx)
 			}
@@ -543,8 +543,8 @@ func normalizedHeaderDump(header http.Header) string {
 func TestAuthLogoutClearsCookieAndRedirectsToIdP(t *testing.T) {
 	raw := "session-token"
 	sessions := newFakeSessionStore()
-	sessions.byHash[authn.HashSessionID(raw)] = authn.Session{
-		IDHash:  authn.HashSessionID(raw),
+	sessions.byHash[authentication.HashSessionID(raw)] = authentication.Session{
+		IDHash:  authentication.HashSessionID(raw),
 		Subject: "user-1",
 		IDToken: "raw.id.token",
 	}
@@ -552,7 +552,7 @@ func TestAuthLogoutClearsCookieAndRedirectsToIdP(t *testing.T) {
 	server := newAuthTestServer(t, flow, stubVerifier{}, withSessions(sessions))
 
 	request := httptest.NewRequest(http.MethodPost, "/v1/auth/logout", nil)
-	request.AddCookie(&http.Cookie{Name: authn.SessionCookieName, Value: raw})
+	request.AddCookie(&http.Cookie{Name: authentication.SessionCookieName, Value: raw})
 	response := httptest.NewRecorder()
 	server.ServeHTTP(response, request)
 
@@ -562,7 +562,7 @@ func TestAuthLogoutClearsCookieAndRedirectsToIdP(t *testing.T) {
 	if location := response.Header().Get("Location"); location != flow.endSessionURL {
 		t.Fatalf("Location = %q", location)
 	}
-	cleared := cookieByName(response, authn.SessionCookieName)
+	cleared := cookieByName(response, authentication.SessionCookieName)
 	if cleared == nil || cleared.Value != "" || cleared.MaxAge != -1 {
 		t.Fatalf("session cookie = %#v, want cleared", cleared)
 	}
@@ -580,15 +580,15 @@ func TestAuthLogoutClearsCookieAndRedirectsToIdP(t *testing.T) {
 func TestAuthLogoutWithoutProviderSupportRedirectsHome(t *testing.T) {
 	raw := "session-token"
 	sessions := newFakeSessionStore()
-	sessions.byHash[authn.HashSessionID(raw)] = authn.Session{
-		IDHash:  authn.HashSessionID(raw),
+	sessions.byHash[authentication.HashSessionID(raw)] = authentication.Session{
+		IDHash:  authentication.HashSessionID(raw),
 		Subject: "user-1",
 		IDToken: "raw.id.token",
 	}
 	server := newAuthTestServer(t, &stubFlow{}, stubVerifier{}, withSessions(sessions))
 
 	request := httptest.NewRequest(http.MethodPost, "/v1/auth/logout", nil)
-	request.AddCookie(&http.Cookie{Name: authn.SessionCookieName, Value: raw})
+	request.AddCookie(&http.Cookie{Name: authentication.SessionCookieName, Value: raw})
 	response := httptest.NewRecorder()
 	server.ServeHTTP(response, request)
 
@@ -603,8 +603,8 @@ func TestAuthLogoutWithoutProviderSupportRedirectsHome(t *testing.T) {
 func TestLogoutRevokesTheSessionAndUsesTheStoredIDToken(t *testing.T) {
 	raw := "session-token"
 	sessions := newFakeSessionStore()
-	sessions.byHash[authn.HashSessionID(raw)] = authn.Session{
-		IDHash:  authn.HashSessionID(raw),
+	sessions.byHash[authentication.HashSessionID(raw)] = authentication.Session{
+		IDHash:  authentication.HashSessionID(raw),
 		Subject: "user-1",
 		IDToken: "stored.id.token",
 	}
@@ -612,14 +612,14 @@ func TestLogoutRevokesTheSessionAndUsesTheStoredIDToken(t *testing.T) {
 	server := newAuthTestServer(t, flow, stubVerifier{}, withSessions(sessions))
 
 	request := httptest.NewRequest(http.MethodPost, "/v1/auth/logout", nil)
-	request.AddCookie(&http.Cookie{Name: authn.SessionCookieName, Value: raw})
+	request.AddCookie(&http.Cookie{Name: authentication.SessionCookieName, Value: raw})
 	recorder := httptest.NewRecorder()
 	server.ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want 303", recorder.Code)
 	}
-	if sessions.revoked[authn.HashSessionID(raw)] != 1 {
+	if sessions.revoked[authentication.HashSessionID(raw)] != 1 {
 		t.Fatal("logout did not revoke the session row; a copied cookie would still work")
 	}
 	// stubFlow records what it was handed rather than building a URL.
@@ -653,8 +653,8 @@ func TestAuthRoutesArePublic(t *testing.T) {
 			Sealer:             sealer,
 			PublicURL:          "http://localhost:5173",
 			Sessions:           newFakeSessionStore(),
-			SessionAbsoluteTTL: authn.DefaultSessionAbsoluteTTL,
-			SessionIdleTTL:     authn.DefaultSessionIdleTTL,
+			SessionAbsoluteTTL: authentication.DefaultSessionAbsoluteTTL,
+			SessionIdleTTL:     authentication.DefaultSessionIdleTTL,
 		}))
 
 	request := httptest.NewRequest(http.MethodGet, "/v1/auth/login", nil)
@@ -687,7 +687,7 @@ func TestAuthRoutesArePublic(t *testing.T) {
 func TestAuthCallbackProjectsSignedInUser(t *testing.T) {
 	users := &apiFakeUserRepository{}
 	flow := &stubFlow{idToken: "raw.id.token"}
-	verifier := stubVerifier{token: authn.VerifiedToken{
+	verifier := stubVerifier{token: authentication.VerifiedToken{
 		Subject:           "user-123",
 		Name:              "Ada Lovelace",
 		PreferredUsername: "ada",
@@ -714,7 +714,7 @@ func TestAuthCallbackProjectsSignedInUser(t *testing.T) {
 func TestAuthCallbackProjectsFallbackDisplayName(t *testing.T) {
 	users := &apiFakeUserRepository{}
 	flow := &stubFlow{idToken: "raw.id.token"}
-	verifier := stubVerifier{token: authn.VerifiedToken{
+	verifier := stubVerifier{token: authentication.VerifiedToken{
 		Subject: "user-123",
 		Email:   "ada@example.com",
 		Nonce:   "nonce-1",
@@ -734,7 +734,7 @@ func TestAuthCallbackProjectsFallbackDisplayName(t *testing.T) {
 func TestAuthCallbackFailsWhenProjectionWriteFails(t *testing.T) {
 	sessions := newFakeSessionStore()
 	flow := &stubFlow{idToken: "raw.id.token"}
-	verifier := stubVerifier{token: authn.VerifiedToken{Subject: "user-123", Nonce: "nonce-1"}}
+	verifier := stubVerifier{token: authentication.VerifiedToken{Subject: "user-123", Nonce: "nonce-1"}}
 	users := &apiFakeUserRepository{upsertErr: errors.New("database is down")}
 	server := newAuthTestServerWithUsers(t, flow, verifier, users, withSessions(sessions))
 
@@ -765,8 +765,8 @@ func TestNewServerPanicsWithoutAUserRepository(t *testing.T) {
 		Sealer:             sealer,
 		PublicURL:          "http://localhost:5173",
 		Sessions:           newFakeSessionStore(),
-		SessionAbsoluteTTL: authn.DefaultSessionAbsoluteTTL,
-		SessionIdleTTL:     authn.DefaultSessionIdleTTL,
+		SessionAbsoluteTTL: authentication.DefaultSessionAbsoluteTTL,
+		SessionIdleTTL:     authentication.DefaultSessionIdleTTL,
 	}
 
 	defer func() {
@@ -794,8 +794,8 @@ func TestAuthServesNoLocalSignInOrMethodsRoute(t *testing.T) {
 			Sealer:             sealer,
 			PublicURL:          "http://localhost:5173",
 			Sessions:           newFakeSessionStore(),
-			SessionAbsoluteTTL: authn.DefaultSessionAbsoluteTTL,
-			SessionIdleTTL:     authn.DefaultSessionIdleTTL,
+			SessionAbsoluteTTL: authentication.DefaultSessionAbsoluteTTL,
+			SessionIdleTTL:     authentication.DefaultSessionIdleTTL,
 		}))
 
 	login := httptest.NewRequest(http.MethodPost, "/v1/auth/login", strings.NewReader(`{"username":"root","password":"x"}`))

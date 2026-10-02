@@ -13,8 +13,7 @@ import (
 	"time"
 
 	"github.com/vishu42/openplan/internal/app"
-	"github.com/vishu42/openplan/internal/auth"
-	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/authentication"
 	"github.com/vishu42/openplan/internal/domain"
 	"github.com/vishu42/openplan/internal/encryption"
 	"github.com/vishu42/openplan/internal/queue"
@@ -38,7 +37,7 @@ func WithQueueReader(reader queue.Reader) ServerOption {
 	return func(server *Server) { server.queue = reader }
 }
 
-// AuthFlow is the subset of the OIDC flow the handlers use. *authn.Flow
+// AuthFlow is the subset of the OIDC flow the handlers use. *authentication.Flow
 // satisfies it; the interface exists so handler tests need no live IdP.
 type AuthFlow interface {
 	AuthorizationURL(state, nonce, codeVerifier string) (string, error)
@@ -49,7 +48,7 @@ type AuthFlow interface {
 // AuthConfig carries what the browser login routes need.
 type AuthConfig struct {
 	Flow     AuthFlow
-	Verifier authn.Verifier
+	Verifier authentication.Verifier
 	Sealer   *encryption.Cipher
 	// PublicURL is the origin the browser reaches, with no trailing slash. It
 	// is configured rather than derived from Host or X-Forwarded-Proto, which
@@ -58,11 +57,11 @@ type AuthConfig struct {
 	SecureCookies bool
 	// Sessions persists the app-owned session the callback creates. The
 	// browser is handed a reference to it, never the ID token.
-	Sessions           authn.SessionStore
+	Sessions           authentication.SessionStore
 	SessionAbsoluteTTL time.Duration
 	SessionIdleTTL     time.Duration
 	// LogoutTokenVerifier authenticates back-channel logout notifications.
-	// *authn.OIDCVerifier satisfies it in production.
+	// *authentication.OIDCVerifier satisfies it in production.
 	LogoutTokenVerifier LogoutTokenVerifier
 	// Clock is time.Now when nil. Tests set it.
 	Clock func() time.Time
@@ -208,7 +207,7 @@ func NewAuthenticatedServer(service *app.Service, tenantID domain.TenantID, debu
 	// reaches its verifier through server.auth. This used to take a verifier of
 	// its own for the Bearer path, which had to be kept the same instance as
 	// server.auth.Verifier by hand because nothing in the type system said so.
-	server.handler = authn.RequireAuthentication(
+	server.handler = authentication.RequireAuthentication(
 		server.auth.Sessions,
 		server.auth.SessionIdleTTL,
 		server.auth.Clock,
@@ -221,7 +220,7 @@ func NewAuthenticatedServer(service *app.Service, tenantID domain.TenantID, debu
 // handleMe returns the authenticated principal's identity, global capabilities,
 // and the configured tenant ID.
 func (server *Server) handleMe(response http.ResponseWriter, request *http.Request) {
-	principal, ok := authn.PrincipalFromContext(request.Context())
+	principal, ok := authentication.PrincipalFromContext(request.Context())
 	if !ok || principal.Subject == "" {
 		writeError(response, http.StatusUnauthorized, "unauthorized", "authentication required")
 		return
@@ -231,7 +230,7 @@ func (server *Server) handleMe(response http.ResponseWriter, request *http.Reque
 		writeAppError(response, err)
 		return
 	}
-	writeJSON(response, http.StatusOK, auth.MeFromPrincipal(principal, server.tenantID, auth.GlobalCapabilities{
+	writeJSON(response, http.StatusOK, meFromPrincipal(principal, server.tenantID, globalCapabilities{
 		IsPlatformAdmin:    capabilities.IsPlatformAdmin,
 		CanCreateStack:     capabilities.CanCreateStack,
 		CanPublishTemplate: capabilities.CanPublishTemplate,
@@ -1116,7 +1115,7 @@ type queueItemResponse struct {
 // alone, so no new permission concept is introduced: a caller only ever sees
 // their own items.
 func (server *Server) handleListQueue(response http.ResponseWriter, request *http.Request) {
-	principal, ok := authn.PrincipalFromContext(request.Context())
+	principal, ok := authentication.PrincipalFromContext(request.Context())
 	if !ok || principal.Subject == "" {
 		writeError(response, http.StatusUnauthorized, "unauthorized", "authentication required")
 		return

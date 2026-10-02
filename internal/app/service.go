@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/authentication"
 	"github.com/vishu42/openplan/internal/authorization"
 	"github.com/vishu42/openplan/internal/domain"
 	"github.com/vishu42/openplan/internal/queue"
@@ -43,7 +43,7 @@ var (
 )
 
 func authenticatedActor(ctx context.Context) (domain.UserID, error) {
-	principal, ok := authn.PrincipalFromContext(ctx)
+	principal, ok := authentication.PrincipalFromContext(ctx)
 	if !ok || principal.Subject == "" {
 		return "", ErrUnauthenticated
 	}
@@ -551,7 +551,7 @@ func (service *Service) RegisterTemplate(ctx context.Context, command RegisterTe
 
 // CreateStack creates a tenant-owned infrastructure stack.
 func (service *Service) CreateStack(ctx context.Context, command CreateStackCommand) (domain.Stack, error) {
-	principal, ok := authn.PrincipalFromContext(ctx)
+	principal, ok := authentication.PrincipalFromContext(ctx)
 	if !ok || principal.Subject == "" {
 		return domain.Stack{}, ErrUnauthenticated
 	}
@@ -1175,7 +1175,7 @@ func (service *Service) RecordSignIn(ctx context.Context, profile UserProfile) e
 
 // SearchUsers matches projected users against the given criteria.
 func (service *Service) SearchUsers(ctx context.Context, command SearchUsersCommand) ([]UserProfile, error) {
-	principal, ok := authn.PrincipalFromContext(ctx)
+	principal, ok := authentication.PrincipalFromContext(ctx)
 	if !ok || principal.Subject == "" {
 		return nil, ErrUnauthenticated
 	}

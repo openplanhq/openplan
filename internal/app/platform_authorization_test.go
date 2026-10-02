@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/authentication"
 	"github.com/vishu42/openplan/internal/authorization"
 	"github.com/vishu42/openplan/internal/domain"
 )
@@ -74,12 +74,12 @@ func testPlatformAuthorizer(t *testing.T) *authorization.Authorization {
 }
 
 func platformContext(subject string) context.Context {
-	return authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: subject})
+	return authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: subject})
 }
 
 // The whole point of #141: the answer comes from OpenFGA. A principal with no
 // tuple is refused and one holding it is allowed, and there is no longer any
-// claim on the principal that could say otherwise -- authn.Principal carries
+// claim on the principal that could say otherwise -- authentication.Principal carries
 // identity only, which the compiler now enforces.
 func TestPlatformCapabilitiesComeFromOpenFGANotRealmRoles(t *testing.T) {
 	t.Parallel()
@@ -90,7 +90,7 @@ func TestPlatformCapabilitiesComeFromOpenFGANotRealmRoles(t *testing.T) {
 	})
 	command := SearchUsersCommand{TenantID: domain.TenantID("tenant_1"), Query: "a", Max: 20}
 
-	ungranted := authn.ContextWithPrincipal(context.Background(), authn.Principal{
+	ungranted := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{
 		Subject: "ungranted-subject",
 		Name:    "Ada",
 		Email:   "ada@example.test",
