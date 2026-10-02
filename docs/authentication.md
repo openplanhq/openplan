@@ -200,12 +200,12 @@ unknown, expired, or revoked cookie receives `401` with the stable JSON body
 `{"code":"unauthorized"}`; tokens, claims, and verifier details are never
 written to logs or responses.
 
-After authentication, the request context contains an `authn.Principal` with
+After authentication, the request context contains an `authentication.Principal` with
 the immutable subject and safe display claims — `Name`, `PreferredUsername`,
 `Email`, and `ExpiresAt` (openplan's own idle/absolute bound). It carries no role
 claim: OpenFGA is the sole authorization source, so nothing from the token
 feeds an access decision. Handlers and application services obtain it with
-`authn.PrincipalFromContext` rather than parsing HTTP headers or tokens.
+`authentication.PrincipalFromContext` rather than parsing HTTP headers or tokens.
 
 ## Browser Session
 
@@ -226,7 +226,7 @@ redirect so that a lost session lands on a page the user chooses to leave,
 instead of spending a trip to the provider on every bounce.
 
 `GET /v1/auth/login` takes a `return_to` query parameter, the one place the flow
-accepts untrusted input, and `authn.SafeReturnTo` reduces it to a same-origin
+accepts untrusted input, and `authentication.SafeReturnTo` reduces it to a same-origin
 path or `/`. Absolute, protocol-relative (`//host`, `/\host`),
 userinfo-bearing, control-character, and unnormalized paths are all refused. So
 is anything under `/v1`: no API path is a place for a browser to land, and one
@@ -283,7 +283,7 @@ it cannot be revoked. Dex v2.45.1 keeps no browser session of its own, so
 nothing on the provider side supplies either. The session cookie once held the
 raw ID token; why that changed is in the [app-owned session
 design](superpowers/specs/2026-08-29-app-owned-session-design.md).
-`internal/authn.Session` is the Go type; `internal/authn.SessionStore` is the
+`internal/authentication.Session` is the Go type; `internal/authentication.SessionStore` is the
 persistence interface the cookie path of `RequireAuthentication` depends on.
 
 `handleAuthCallback` copies the verified ID token's claims onto the row once,
@@ -338,7 +338,7 @@ uses stay independently testable.
 Expired rows are swept out of the table, not left in it. Revoking marks a row
 rather than deleting it and expiry is a comparison made at read time, so
 nothing else would ever remove one — and every row holds an encrypted ID
-token. `authn.ReapSessions` runs as a goroutine alongside the API server
+token. `authentication.ReapSessions` runs as a goroutine alongside the API server
 (`cmd/api/main.go`) and every 15 minutes deletes rows whose absolute bound has
 passed, the query the `sessions_absolute_expires_at_idx` index exists for. It
 sweeps on the absolute bound alone: a row past it is dead whatever its idle

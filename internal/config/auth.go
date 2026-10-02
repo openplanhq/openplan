@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/authentication"
 	"github.com/vishu42/openplan/internal/domain"
 	"github.com/vishu42/openplan/internal/encryption"
 	"github.com/vishu42/openplan/internal/strval"
@@ -153,11 +153,11 @@ func loadSecurityConfig(getenv func(string) string) (SecurityConfig, error) {
 		return SecurityConfig{}, authConfigError("SESSION_ENCRYPTION_KEY must be a 32-byte raw, base64, or hex key")
 	}
 
-	sessionAbsoluteTTL, err := optionalPositiveDuration(getenv, "OPENPLAN_SESSION_ABSOLUTE_TTL", authn.DefaultSessionAbsoluteTTL)
+	sessionAbsoluteTTL, err := optionalPositiveDuration(getenv, "OPENPLAN_SESSION_ABSOLUTE_TTL", authentication.DefaultSessionAbsoluteTTL)
 	if err != nil {
 		return SecurityConfig{}, err
 	}
-	sessionIdleTTL, err := optionalPositiveDuration(getenv, "OPENPLAN_SESSION_IDLE_TTL", authn.DefaultSessionIdleTTL)
+	sessionIdleTTL, err := optionalPositiveDuration(getenv, "OPENPLAN_SESSION_IDLE_TTL", authentication.DefaultSessionIdleTTL)
 	if err != nil {
 		return SecurityConfig{}, err
 	}
@@ -167,13 +167,13 @@ func loadSecurityConfig(getenv func(string) string) (SecurityConfig, error) {
 		return SecurityConfig{}, authConfigError("OPENPLAN_SESSION_IDLE_TTL must not exceed OPENPLAN_SESSION_ABSOLUTE_TTL")
 	}
 	// The cookie path only writes LastSeenAt back once every
-	// authn.SessionTouchInterval (authn/middleware.go), and IsLive is
+	// authentication.SessionTouchInterval (authentication/middleware.go), and IsLive is
 	// evaluated before that write on every request. An idle bound at or below
 	// the interval expires the session before it can ever be observed as
 	// touched, so it can never slide — a silent hard cap rather than the
 	// sliding window the setting promises.
-	if sessionIdleTTL <= authn.SessionTouchInterval {
-		return SecurityConfig{}, authConfigError("OPENPLAN_SESSION_IDLE_TTL must exceed the %s session touch interval, or an idle session expires before it can ever slide", authn.SessionTouchInterval)
+	if sessionIdleTTL <= authentication.SessionTouchInterval {
+		return SecurityConfig{}, authConfigError("OPENPLAN_SESSION_IDLE_TTL must exceed the %s session touch interval, or an idle session expires before it can ever slide", authentication.SessionTouchInterval)
 	}
 
 	openFGA, err := loadOpenFGAConfig(getenv)

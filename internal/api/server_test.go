@@ -16,7 +16,7 @@ import (
 	"github.com/openfga/openfga/pkg/storage"
 	"github.com/openfga/openfga/pkg/storage/memory"
 	"github.com/vishu42/openplan/internal/app"
-	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/authentication"
 
 	"github.com/vishu42/openplan/internal/authorization"
 	"github.com/vishu42/openplan/internal/domain"
@@ -28,13 +28,13 @@ const configuredTenantID = domain.TenantID("tenant_123")
 
 func authenticatedRequest(method, target string, body io.Reader) *http.Request {
 	request := httptest.NewRequest(method, target, body)
-	ctx := authn.ContextWithPrincipal(request.Context(), authn.Principal{Subject: apiOIDCSubject})
+	ctx := authentication.ContextWithPrincipal(request.Context(), authentication.Principal{Subject: apiOIDCSubject})
 	return request.WithContext(ctx)
 }
 
 func ordinaryAuthenticatedRequest(method, target string, body io.Reader) *http.Request {
 	request := httptest.NewRequest(method, target, body)
-	ctx := authn.ContextWithPrincipal(request.Context(), authn.Principal{Subject: apiOIDCSubject})
+	ctx := authentication.ContextWithPrincipal(request.Context(), authentication.Principal{Subject: apiOIDCSubject})
 	return request.WithContext(ctx)
 }
 
@@ -222,9 +222,9 @@ func sessionCookieServer(t *testing.T, service *app.Service) (*Server, *http.Coo
 
 	const raw = "server-test-session"
 	now := time.Now().UTC()
-	sessions := &serverTestSessionStore{byHash: map[string]authn.Session{
-		authn.HashSessionID(raw): {
-			IDHash:            authn.HashSessionID(raw),
+	sessions := &serverTestSessionStore{byHash: map[string]authentication.Session{
+		authentication.HashSessionID(raw): {
+			IDHash:            authentication.HashSessionID(raw),
 			Subject:           "user-123",
 			LastSeenAt:        now,
 			AbsoluteExpiresAt: now.Add(time.Hour),
@@ -234,21 +234,23 @@ func sessionCookieServer(t *testing.T, service *app.Service) (*Server, *http.Coo
 		Sessions:       sessions,
 		SessionIdleTTL: time.Hour,
 	}))
-	return server, &http.Cookie{Name: authn.SessionCookieName, Value: raw}
+	return server, &http.Cookie{Name: authentication.SessionCookieName, Value: raw}
 }
 
-// serverTestSessionStore satisfies authn.SessionStore with only the lookup the
+// serverTestSessionStore satisfies authentication.SessionStore with only the lookup the
 // middleware performs; the rest is unreachable from these tests.
 type serverTestSessionStore struct {
-	byHash map[string]authn.Session
+	byHash map[string]authentication.Session
 }
 
-func (store *serverTestSessionStore) CreateSession(context.Context, authn.Session) error { return nil }
+func (store *serverTestSessionStore) CreateSession(context.Context, authentication.Session) error {
+	return nil
+}
 
-func (store *serverTestSessionStore) SessionByHash(_ context.Context, idHash string) (authn.Session, error) {
+func (store *serverTestSessionStore) SessionByHash(_ context.Context, idHash string) (authentication.Session, error) {
 	session, ok := store.byHash[idHash]
 	if !ok {
-		return authn.Session{}, authn.ErrSessionNotFound
+		return authentication.Session{}, authentication.ErrSessionNotFound
 	}
 	return session, nil
 }
@@ -711,7 +713,7 @@ func TestCreateStackRejectsPrincipalWithoutCreatorRole(t *testing.T) {
 	deps := newBareAPITestDependencies(t)
 	server := NewServer(deps.service(), configuredTenantID)
 	request := httptest.NewRequest(http.MethodPost, "/v1/tenants/tenant_123/stacks", strings.NewReader(`{"name":"Acme"}`))
-	request = request.WithContext(authn.ContextWithPrincipal(request.Context(), authn.Principal{Subject: apiOIDCSubject}))
+	request = request.WithContext(authentication.ContextWithPrincipal(request.Context(), authentication.Principal{Subject: apiOIDCSubject}))
 	response := httptest.NewRecorder()
 
 	server.ServeHTTP(response, request)
@@ -3293,7 +3295,7 @@ func TestMeReturnsIdentityWithGlobalCapabilities(t *testing.T) {
 			server := NewServer(deps.service(), configuredTenantID)
 			response := httptest.NewRecorder()
 			request := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
-			ctx := authn.ContextWithPrincipal(request.Context(), authn.Principal{
+			ctx := authentication.ContextWithPrincipal(request.Context(), authentication.Principal{
 				Subject: apiOIDCSubject,
 				Name:    "Test User",
 				Email:   "test@example.com",

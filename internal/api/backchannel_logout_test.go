@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/authentication"
 )
 
 func postLogoutToken(t *testing.T, server *Server, body string) *httptest.ResponseRecorder {
@@ -24,7 +24,7 @@ func postLogoutToken(t *testing.T, server *Server, body string) *httptest.Respon
 // match. Without a row every revoke reports zero, and a test cannot tell the
 // narrow key working from the narrow key finding nothing.
 func seedSession(sessions *fakeSessionStore, idHash, subject, idpSessionID string) {
-	sessions.byHash[idHash] = authn.Session{
+	sessions.byHash[idHash] = authentication.Session{
 		IDHash:       idHash,
 		Subject:      subject,
 		IDPSessionID: idpSessionID,
@@ -36,7 +36,7 @@ func TestBackchannelLogoutRevokesBySessionID(t *testing.T) {
 	seedSession(sessions, "hash-1", "user-1", "idp-sid-1")
 	server := newAuthTestServer(t, &stubFlow{}, stubVerifier{},
 		withSessions(sessions),
-		withLogoutTokenVerifier(fakeLogoutVerifier{token: authn.LogoutToken{Subject: "user-1", SessionID: "idp-sid-1"}}),
+		withLogoutTokenVerifier(fakeLogoutVerifier{token: authentication.LogoutToken{Subject: "user-1", SessionID: "idp-sid-1"}}),
 	)
 
 	recorder := postLogoutToken(t, server, "logout_token=anything")
@@ -68,7 +68,7 @@ func TestBackchannelLogoutDoesNotSweepOtherDevicesWhenTheSidIsAlreadyRevoked(t *
 
 	server := newAuthTestServer(t, &stubFlow{}, stubVerifier{},
 		withSessions(sessions),
-		withLogoutTokenVerifier(fakeLogoutVerifier{token: authn.LogoutToken{Subject: "user-1", SessionID: "idp-sid-laptop"}}),
+		withLogoutTokenVerifier(fakeLogoutVerifier{token: authentication.LogoutToken{Subject: "user-1", SessionID: "idp-sid-laptop"}}),
 	)
 
 	recorder := postLogoutToken(t, server, "logout_token=anything")
@@ -95,7 +95,7 @@ func TestBackchannelLogoutFallsBackWhenTheSessionIDMatchesNothing(t *testing.T) 
 	seedSession(sessions, "keyed", "user-1", "idp-sid-other")
 	server := newAuthTestServer(t, &stubFlow{}, stubVerifier{},
 		withSessions(sessions),
-		withLogoutTokenVerifier(fakeLogoutVerifier{token: authn.LogoutToken{Subject: "user-1", SessionID: "idp-sid-1"}}),
+		withLogoutTokenVerifier(fakeLogoutVerifier{token: authentication.LogoutToken{Subject: "user-1", SessionID: "idp-sid-1"}}),
 	)
 
 	recorder := postLogoutToken(t, server, "logout_token=anything")
@@ -115,7 +115,7 @@ func TestBackchannelLogoutFallsBackToSubject(t *testing.T) {
 	sessions := newFakeSessionStore()
 	server := newAuthTestServer(t, &stubFlow{}, stubVerifier{},
 		withSessions(sessions),
-		withLogoutTokenVerifier(fakeLogoutVerifier{token: authn.LogoutToken{Subject: "user-1"}}),
+		withLogoutTokenVerifier(fakeLogoutVerifier{token: authentication.LogoutToken{Subject: "user-1"}}),
 	)
 
 	recorder := postLogoutToken(t, server, "logout_token=anything")
@@ -132,7 +132,7 @@ func TestBackchannelLogoutRejectsABadToken(t *testing.T) {
 	sessions := newFakeSessionStore()
 	server := newAuthTestServer(t, &stubFlow{}, stubVerifier{},
 		withSessions(sessions),
-		withLogoutTokenVerifier(fakeLogoutVerifier{err: authn.ErrInvalidLogoutToken}),
+		withLogoutTokenVerifier(fakeLogoutVerifier{err: authentication.ErrInvalidLogoutToken}),
 	)
 
 	recorder := postLogoutToken(t, server, "logout_token=forged")
@@ -149,7 +149,7 @@ func TestBackchannelLogoutIsUnauthenticatedAndUncached(t *testing.T) {
 	sessions := newFakeSessionStore()
 	server := newAuthTestServer(t, &stubFlow{}, stubVerifier{},
 		withSessions(sessions),
-		withLogoutTokenVerifier(fakeLogoutVerifier{token: authn.LogoutToken{SessionID: "idp-sid-1"}}),
+		withLogoutTokenVerifier(fakeLogoutVerifier{token: authentication.LogoutToken{SessionID: "idp-sid-1"}}),
 	)
 
 	// No cookie, no Authorization header: the IdP has neither.

@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/authentication"
 )
 
-func (store *Store) CreateSession(ctx context.Context, session authn.Session) error {
+func (store *Store) CreateSession(ctx context.Context, session authentication.Session) error {
 	ciphertext, err := store.encryptSession(session.IDToken)
 	if err != nil {
 		return fmt.Errorf("create session: encrypt id token: %w", err)
@@ -46,9 +46,9 @@ func (store *Store) CreateSession(ctx context.Context, session authn.Session) er
 	return nil
 }
 
-func (store *Store) SessionByHash(ctx context.Context, idHash string) (authn.Session, error) {
+func (store *Store) SessionByHash(ctx context.Context, idHash string) (authentication.Session, error) {
 	var (
-		session    authn.Session
+		session    authentication.Session
 		ciphertext string
 		revokedAt  *time.Time
 	)
@@ -81,17 +81,17 @@ func (store *Store) SessionByHash(ctx context.Context, idHash string) (authn.Ses
 		&revokedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return authn.Session{}, authn.ErrSessionNotFound
+		return authentication.Session{}, authentication.ErrSessionNotFound
 	}
 	if err != nil {
-		return authn.Session{}, fmt.Errorf("session by hash: %w", err)
+		return authentication.Session{}, fmt.Errorf("session by hash: %w", err)
 	}
 	if revokedAt != nil {
 		session.RevokedAt = *revokedAt
 	}
 	idToken, err := store.decryptSession(ciphertext)
 	if err != nil {
-		return authn.Session{}, fmt.Errorf("session by hash: decrypt id token: %w", err)
+		return authentication.Session{}, fmt.Errorf("session by hash: decrypt id token: %w", err)
 	}
 	session.IDToken = idToken
 	return session, nil

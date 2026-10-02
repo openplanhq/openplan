@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/authentication"
 	"github.com/vishu42/openplan/internal/authorization"
 	"github.com/vishu42/openplan/internal/domain"
 	"github.com/vishu42/openplan/internal/queue"
@@ -19,7 +19,7 @@ import (
 const oidcSubject = "6fdb4b4c-2a8f-4cf7-945f-38f67f6a0e91"
 
 func authenticatedContext() context.Context {
-	return authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: oidcSubject})
+	return authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: oidcSubject})
 }
 
 func TestActorMutationsRejectMissingPrincipal(t *testing.T) {
@@ -75,7 +75,7 @@ func TestActorMutationsRejectMissingPrincipal(t *testing.T) {
 func TestAuthenticatedActorRejectsEmptySubject(t *testing.T) {
 	t.Parallel()
 
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{})
+	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{})
 	if _, err := authenticatedActor(ctx); !errors.Is(err, ErrUnauthenticated) {
 		t.Fatalf("error = %v, want ErrUnauthenticated", err)
 	}
@@ -222,7 +222,7 @@ func TestGetStackPassesTenantAndIDAndNormalizesNilTemplates(t *testing.T) {
 		},
 	}
 	service := NewService(Service{Stacks: stacks, Authorization: testPlatformAuthorizer(t)})
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: oidcSubject})
+	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: oidcSubject})
 
 	view, err := service.GetStack(ctx, GetStackCommand{
 		TenantID: domain.TenantID("tenant_123"),
@@ -307,7 +307,7 @@ func TestGetStackResolvesTemplateDisplayName(t *testing.T) {
 		},
 	}
 	service := NewService(Service{Stacks: stacks, TemplateRevisions: revisions, Authorization: testPlatformAuthorizer(t)})
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: oidcSubject})
+	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: oidcSubject})
 
 	view, err := service.GetStack(ctx, GetStackCommand{
 		TenantID: domain.TenantID("tenant_123"),
@@ -348,7 +348,7 @@ func TestListStacksPassesTenantAndNormalizesNilStacks(t *testing.T) {
 
 	stacks := &recordingStackRepository{list: nil}
 	service := NewService(Service{Stacks: stacks, Authorization: newTestAuthorization(t)})
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: oidcSubject})
+	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: oidcSubject})
 
 	got, err := service.ListStacks(ctx, ListStacksCommand{
 		TenantID: domain.TenantID("tenant_123"),
@@ -1563,7 +1563,7 @@ func TestApproveRunAllowsSelfApproval(t *testing.T) {
 func TestApproveRunSelfApprovalWorksForPlatformAdmins(t *testing.T) {
 	t.Parallel()
 
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: oidcSubject})
+	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: oidcSubject})
 	runs := &recordingTemplateRunRepository{run: domain.TemplateRun{
 		ID:              "run_123",
 		TenantID:        "tenant_123",
@@ -1690,7 +1690,7 @@ func TestGetTemplateRunReturnsTenantScopedRun(t *testing.T) {
 		TemplateRuns:   runs,
 		StackTemplates: &recordingStackTemplateRepository{stackTemplate: domain.StackTemplate{ID: "stack_template_123", TenantID: "tenant_123", StackID: "stack_123"}},
 	})
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: oidcSubject})
+	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: oidcSubject})
 
 	run, err := service.GetTemplateRun(ctx, GetTemplateRunCommand{
 		TenantID: domain.TenantID("tenant_123"),
@@ -1728,7 +1728,7 @@ func TestListTemplateRunsReturnsRunsScopedToStackTemplate(t *testing.T) {
 		TemplateRuns:   runs,
 		StackTemplates: &recordingStackTemplateRepository{stackTemplate: domain.StackTemplate{ID: "stack_template_123", TenantID: "tenant_123", StackID: "stack_123"}},
 	})
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: oidcSubject})
+	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: oidcSubject})
 
 	got, err := service.ListTemplateRuns(ctx, ListTemplateRunsCommand{
 		TenantID:        domain.TenantID("tenant_123"),
@@ -1757,7 +1757,7 @@ func TestListTemplateRunsNormalizesNilAndRequiresStackTemplateID(t *testing.T) {
 		TemplateRuns:   &recordingTemplateRunRepository{},
 		StackTemplates: &recordingStackTemplateRepository{stackTemplate: domain.StackTemplate{ID: "stack_template_123", TenantID: "tenant_123", StackID: "stack_123"}},
 	})
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: oidcSubject})
+	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: oidcSubject})
 
 	got, err := service.ListTemplateRuns(ctx, ListTemplateRunsCommand{
 		TenantID:        domain.TenantID("tenant_123"),
@@ -1958,7 +1958,7 @@ func TestGetTemplateRunLogDoesNotReadObjectWhenMetadataIsMissing(t *testing.T) {
 		TemplateRunLogMetadata: metadata,
 	})
 
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: oidcSubject})
+	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: oidcSubject})
 	_, err := service.GetTemplateRunLog(ctx, GetTemplateRunLogCommand{
 		TenantID: domain.TenantID("tenant_123"),
 		RunID:    domain.TemplateRunID("run_123"),
@@ -2057,7 +2057,7 @@ func TestListTemplateRunLogsChecksRunOwnershipBeforeListingMetadata(t *testing.T
 		TemplateRunLogMetadata: metadata,
 	})
 
-	logs, err := service.ListTemplateRunLogs(authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: oidcSubject}), ListTemplateRunLogsCommand{
+	logs, err := service.ListTemplateRunLogs(authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: oidcSubject}), ListTemplateRunLogsCommand{
 		TenantID: domain.TenantID("tenant_123"),
 		RunID:    domain.TemplateRunID("run_123"),
 	})
@@ -2207,7 +2207,7 @@ func TestAddTemplateToStackAuditsAuthorizationDenial(t *testing.T) {
 		Audit:                  audit,
 	})
 
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{
+	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{
 		Subject: oidcSubject,
 	})
 
@@ -2826,7 +2826,7 @@ func TestApproveRunPairsApprovalAuditAndApplyIntentInTransaction(t *testing.T) {
 }
 
 func adminContext() context.Context {
-	return authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: "admin_123"})
+	return authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: "admin_123"})
 }
 
 // The inverse of what this asserted before: the role change was queued because

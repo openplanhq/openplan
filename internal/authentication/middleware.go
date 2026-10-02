@@ -1,4 +1,4 @@
-package authn
+package authentication
 
 import (
 	"errors"
@@ -83,7 +83,7 @@ func authenticate(
 	session, err := sessions.SessionByHash(request.Context(), idHash)
 	if err != nil {
 		if !errors.Is(err, ErrSessionNotFound) {
-			log.Printf("authn middleware: session lookup failed: %v", err)
+			log.Printf("authentication middleware: session lookup failed: %v", err)
 		}
 		return Principal{}, false
 	}
@@ -98,7 +98,7 @@ func authenticate(
 		if err := sessions.TouchSession(request.Context(), idHash, now); err != nil {
 			// A failed touch shortens this session, it does not break it, so
 			// the request proceeds.
-			log.Printf("authn middleware: failed to touch session: %v", err)
+			log.Printf("authentication middleware: failed to touch session: %v", err)
 		} else {
 			// Report the bound this request just wrote, not the one it read.
 			// /v1/me is how the browser learns when to re-authenticate, and a

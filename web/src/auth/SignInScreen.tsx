@@ -27,7 +27,7 @@ const relativeBase = "https://return-to.invalid";
 // parser location.assign() will use and asks where it landed — an origin that
 // survives that round trip cannot be talked out of the app.
 //
-// The server applies the same rule to the copy it receives (authn.SafeReturnTo).
+// The server applies the same rule to the copy it receives (authentication.SafeReturnTo).
 // Both check, so neither side has to trust the other to have done it.
 export function safeReturnTo(raw: string | null): string {
   if (!raw || !raw.startsWith("/")) return defaultReturnTo;

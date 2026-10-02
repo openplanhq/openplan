@@ -5,15 +5,15 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/authentication"
 	"github.com/vishu42/openplan/internal/authorization"
 	"github.com/vishu42/openplan/internal/domain"
 )
 
-func requirePrincipal(ctx context.Context) (authn.Principal, error) {
-	principal, ok := authn.PrincipalFromContext(ctx)
+func requirePrincipal(ctx context.Context) (authentication.Principal, error) {
+	principal, ok := authentication.PrincipalFromContext(ctx)
 	if !ok || principal.Subject == "" {
-		return authn.Principal{}, ErrUnauthenticated
+		return authentication.Principal{}, ErrUnauthenticated
 	}
 	return principal, nil
 }
@@ -30,13 +30,13 @@ func requirePrincipal(ctx context.Context) (authn.Principal, error) {
 //	authenticated, authorizer wired  → principal, nil
 //	no principal, or empty Subject   → ErrUnauthenticated       (even if unwired)
 //	authenticated, authorizer nil    → error (never a decision)
-func requirePrincipalAndAuthorizer(ctx context.Context, auth *authorization.Authorization) (authn.Principal, error) {
+func requirePrincipalAndAuthorizer(ctx context.Context, auth *authorization.Authorization) (authentication.Principal, error) {
 	principal, err := requirePrincipal(ctx)
 	if err != nil {
-		return authn.Principal{}, err
+		return authentication.Principal{}, err
 	}
 	if auth == nil {
-		return authn.Principal{}, fmt.Errorf("authorization not configured")
+		return authentication.Principal{}, fmt.Errorf("authorization not configured")
 	}
 	return principal, nil
 }

@@ -5,7 +5,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/vishu42/openplan/internal/app"
-	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/authentication"
 	"github.com/vishu42/openplan/internal/encryption"
 	"github.com/vishu42/openplan/internal/queue"
 )
@@ -48,7 +48,7 @@ func WithCredentialCipher(cipher *encryption.Cipher) Option {
 
 // WithSessionCipher supplies the process-wide session encryption cipher, used
 // only for session rows. Without it, encryptSession and decryptSession return
-// authn.ErrSessionEncryptionUnavailable.
+// authentication.ErrSessionEncryptionUnavailable.
 func WithSessionCipher(cipher *encryption.Cipher) Option {
 	return func(store *Store) { store.sessionCipher = cipher }
 }
@@ -77,7 +77,7 @@ func (store *Store) Decrypt(value string) (string, error) {
 // write because no one configured customer credential encryption.
 func (store *Store) encryptSession(value string) (string, error) {
 	if store.sessionCipher == nil {
-		return "", authn.ErrSessionEncryptionUnavailable
+		return "", authentication.ErrSessionEncryptionUnavailable
 	}
 	return store.sessionCipher.Encrypt(value)
 }
@@ -85,7 +85,7 @@ func (store *Store) encryptSession(value string) (string, error) {
 // decryptSession opens a stored session's ID token ciphertext.
 func (store *Store) decryptSession(value string) (string, error) {
 	if store.sessionCipher == nil {
-		return "", authn.ErrSessionEncryptionUnavailable
+		return "", authentication.ErrSessionEncryptionUnavailable
 	}
 	return store.sessionCipher.Decrypt(value)
 }

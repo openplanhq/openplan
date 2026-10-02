@@ -5,14 +5,14 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/authentication"
 )
 
 // LogoutTokenVerifier authenticates a back-channel logout notification.
-// *authn.OIDCVerifier satisfies it; the interface exists so handler tests need
+// *authentication.OIDCVerifier satisfies it; the interface exists so handler tests need
 // no live IdP.
 type LogoutTokenVerifier interface {
-	VerifyLogoutToken(ctx context.Context, raw string) (authn.LogoutToken, error)
+	VerifyLogoutToken(ctx context.Context, raw string) (authentication.LogoutToken, error)
 }
 
 // handleBackchannelLogout ends sessions on the IdP's instruction.

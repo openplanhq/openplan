@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/authentication"
 )
 
 func TestLoadSecurityConfigDevelopmentModes(t *testing.T) {
@@ -287,7 +287,7 @@ func TestSessionTTLRejectsNonPositiveAndInverted(t *testing.T) {
 		"idle longer than cap": {"OPENPLAN_SESSION_ABSOLUTE_TTL": "1h", "OPENPLAN_SESSION_IDLE_TTL": "2h"},
 		// At or below the touch interval, LastSeenAt is never written back
 		// before IsLive expires the session, so it can never slide.
-		"idle equal to touch interval": {"OPENPLAN_SESSION_ABSOLUTE_TTL": "1h", "OPENPLAN_SESSION_IDLE_TTL": authn.SessionTouchInterval.String()},
+		"idle equal to touch interval": {"OPENPLAN_SESSION_ABSOLUTE_TTL": "1h", "OPENPLAN_SESSION_IDLE_TTL": authentication.SessionTouchInterval.String()},
 		"idle below touch interval":    {"OPENPLAN_SESSION_ABSOLUTE_TTL": "1h", "OPENPLAN_SESSION_IDLE_TTL": "1m"},
 	}
 	for name, env := range tests {

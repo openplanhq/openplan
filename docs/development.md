@@ -119,7 +119,7 @@ internal/workflows/   deterministic workflows
 internal/activities/  side-effecting Temporal activities
 internal/runseal/     per-run sealing of secrets sent to the executor
 internal/runner/      OpenTofu execution
-internal/authn/       token verification
+internal/authentication/  OIDC sign-in, ID-token verification, sessions
 internal/authorization/  embedded OpenFGA: model, bootstrap, checks, transactional tuple writes
 web/                  Vite UI
 ```

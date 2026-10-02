@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/authentication"
 	"github.com/vishu42/openplan/internal/authorization"
 	"github.com/vishu42/openplan/internal/domain"
 )
@@ -22,7 +22,7 @@ func TestGetStackChecksViewPermission(t *testing.T) {
 	grantStack(t, auth, "user_123", "stack_123", authorization.RelationViewer)
 	stacks := &recordingStackRepository{view: StackView{Stack: domain.Stack{ID: "stack_123"}}}
 	service := NewService(Service{Authorization: auth, Stacks: stacks})
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: "user_123"})
+	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: "user_123"})
 
 	if _, err := service.GetStack(ctx, GetStackCommand{TenantID: "tenant_123", StackID: "stack_123"}); err != nil {
 		t.Fatalf("GetStack() error = %v", err)
@@ -36,7 +36,7 @@ func TestGetStackDenialReturnsNotFound(t *testing.T) {
 		Authorization: newTestAuthorization(t),
 		Stacks:        &recordingStackRepository{},
 	})
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: "user_123"})
+	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: "user_123"})
 
 	_, err := service.GetStack(ctx, GetStackCommand{TenantID: "tenant_123", StackID: "stack_123"})
 	if !errors.Is(err, ErrNotFound) {
@@ -59,7 +59,7 @@ func TestListStacksBatchesCompleteTenantScan(t *testing.T) {
 		grantStack(t, auth, "user_123", fmt.Sprintf("stack_%02d", i), authorization.RelationViewer)
 	}
 	service := NewService(Service{Authorization: auth, Stacks: repository})
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: "user_123"})
+	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: "user_123"})
 
 	stacks, err := service.ListStacks(ctx, ListStacksCommand{TenantID: "tenant_123"})
 	if err != nil {
@@ -87,7 +87,7 @@ func TestListStacksSkipsAuthorizationForEmptyTenant(t *testing.T) {
 
 	auth := newTestAuthorization(t)
 	service := NewService(Service{Authorization: auth, Stacks: &pagedStackRepository{}})
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: "user_123"})
+	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: "user_123"})
 
 	stacks, err := service.ListStacks(ctx, ListStacksCommand{TenantID: "tenant_123"})
 	if err != nil {
@@ -109,7 +109,7 @@ func TestListStacksRejectsNonAdvancingPage(t *testing.T) {
 		Authorization: newTestAuthorization(t),
 		Stacks:        &pagedStackRepository{stacks: all, repeatPage: true},
 	})
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: "user_123"})
+	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: "user_123"})
 
 	_, err := service.ListStacks(ctx, ListStacksCommand{TenantID: "tenant_123"})
 	if err == nil {
@@ -125,7 +125,7 @@ func TestListStacksRejectsOversizedPage(t *testing.T) {
 		all[i] = domain.Stack{ID: domain.StackID(fmt.Sprintf("stack_%02d", 51-i)), CreatedAt: time.Unix(100, 0)}
 	}
 	service := NewService(Service{Authorization: newTestAuthorization(t), Stacks: &pagedStackRepository{stacks: all, ignoreLimit: true}})
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: "user_123"})
+	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: "user_123"})
 
 	_, err := service.ListStacks(ctx, ListStacksCommand{TenantID: "tenant_123"})
 	if err == nil {
@@ -141,7 +141,7 @@ func TestListStacksRejectsOutOfOrderPage(t *testing.T) {
 		{ID: "stack_b", CreatedAt: time.Unix(100, 0)},
 	}
 	service := NewService(Service{Authorization: newTestAuthorization(t), Stacks: &pagedStackRepository{stacks: stacks}})
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: "user_123"})
+	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: "user_123"})
 
 	_, err := service.ListStacks(ctx, ListStacksCommand{TenantID: "tenant_123"})
 	if err == nil {
@@ -153,7 +153,7 @@ func TestListStacksRejectsMalformedCandidateIDAsDependencyFailure(t *testing.T) 
 	t.Parallel()
 
 	service := NewService(Service{Authorization: newTestAuthorization(t), Stacks: &pagedStackRepository{stacks: []domain.Stack{{ID: "bad:id"}}}})
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: "user_123"})
+	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: "user_123"})
 
 	_, err := service.ListStacks(ctx, ListStacksCommand{TenantID: "tenant_123"})
 	if err == nil {
@@ -188,7 +188,7 @@ func TestStartTemplateRunDenialReturnsForbiddenBeforeMutation(t *testing.T) {
 		Authorization:  newTestAuthorization(t),
 		StackTemplates: templates,
 	})
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: "user_123"})
+	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: "user_123"})
 
 	_, err := service.StartTemplateRun(ctx, StartTemplateRunCommand{
 		TenantID:        "tenant_123",
@@ -258,7 +258,7 @@ func TestResolveStackCapabilitiesMapsEachRelationPositionally(t *testing.T) {
 
 			auth := newTestAuthorization(t)
 			grantStack(t, auth, "user_123", "stack_123", role)
-			ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: "user_123"})
+			ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: "user_123"})
 
 			got, err := ResolveStackCapabilities(ctx, auth, "stack_123")
 			if err != nil {
@@ -286,7 +286,7 @@ func TestResolveStacksCapabilitiesMapsEachStackAndRelationPositionally(t *testin
 
 				auth := newTestAuthorization(t)
 				grantStack(t, auth, "user_123", string(stack.ID), role)
-				ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: "user_123"})
+				ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: "user_123"})
 
 				got, err := ResolveStacksCapabilities(ctx, auth, stacks)
 				if err != nil {
@@ -333,7 +333,7 @@ func TestResolvePlatformCapabilitiesMapsEachRelationPositionally(t *testing.T) {
 
 			auth := newTestAuthorization(t)
 			grantPlatform(t, auth, "user_123", testCase.role)
-			ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: "user_123"})
+			ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: "user_123"})
 
 			got, err := ResolvePlatformCapabilities(ctx, auth)
 			if err != nil {
@@ -352,7 +352,7 @@ func TestMissingAuthorizerIsUnavailable(t *testing.T) {
 	t.Parallel()
 
 	service := NewService(Service{Stacks: &recordingStackRepository{}})
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: "user_123"})
+	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: "user_123"})
 
 	_, err := service.GetStack(ctx, GetStackCommand{TenantID: "tenant_123", StackID: "stack_123"})
 	if err == nil {

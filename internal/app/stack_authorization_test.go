@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/authentication"
 	"github.com/vishu42/openplan/internal/authorization"
 	"github.com/vishu42/openplan/internal/domain"
 )
@@ -17,7 +17,7 @@ func TestCreateStackRequiresCreatorRole(t *testing.T) {
 	stacks := &authorizationStackRepository{}
 	auth := newTestAuthorization(t)
 	service := NewService(Service{Stacks: stacks, Authorization: auth, StackIDs: fixedStackIDGenerator{id: "stack_new"}, Clock: fixedClock{now: time.Now()}})
-	ctx := authn.ContextWithPrincipal(context.Background(), authn.Principal{Subject: "user_123"})
+	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: "user_123"})
 
 	_, err := service.CreateStack(ctx, CreateStackCommand{TenantID: "tenant_123", Name: "Acme"})
 	if !errors.Is(err, ErrForbidden) {

@@ -8,7 +8,7 @@ import (
 	"net/http"
 
 	"github.com/vishu42/openplan/internal/app"
-	"github.com/vishu42/openplan/internal/authn"
+	"github.com/vishu42/openplan/internal/authentication"
 )
 
 // authFailureBody is the single response every authentication failure renders.
@@ -22,21 +22,21 @@ const authFailureBody = `<!doctype html><meta charset="utf-8"><title>Sign-in fai
 func (server *Server) handleAuthLogin(response http.ResponseWriter, request *http.Request) {
 	response.Header().Set("Cache-Control", "no-store")
 
-	state, stateErr := authn.NewOpaqueToken()
-	nonce, nonceErr := authn.NewOpaqueToken()
+	state, stateErr := authentication.NewOpaqueToken()
+	nonce, nonceErr := authentication.NewOpaqueToken()
 	if stateErr != nil || nonceErr != nil {
 		log.Printf("auth login: failed to generate state/nonce token: state error = %v, nonce error = %v", stateErr, nonceErr)
 		server.writeAuthFailure(response)
 		return
 	}
-	transaction := authn.Transaction{
+	transaction := authentication.Transaction{
 		State:        state,
 		Nonce:        nonce,
-		CodeVerifier: authn.GenerateVerifier(),
-		ReturnTo:     authn.SafeReturnTo(request.URL.Query().Get("return_to")),
+		CodeVerifier: authentication.GenerateVerifier(),
+		ReturnTo:     authentication.SafeReturnTo(request.URL.Query().Get("return_to")),
 	}
 
-	sealed, err := authn.SealTransaction(server.auth.Sealer, transaction)
+	sealed, err := authentication.SealTransaction(server.auth.Sealer, transaction)
 	if err != nil {
 		log.Printf("auth login: failed to seal transaction cookie: %v", err)
 		server.writeAuthFailure(response)
@@ -49,7 +49,7 @@ func (server *Server) handleAuthLogin(response http.ResponseWriter, request *htt
 		return
 	}
 
-	http.SetCookie(response, authn.TransactionCookie(sealed, server.auth.SecureCookies))
+	http.SetCookie(response, authentication.TransactionCookie(sealed, server.auth.SecureCookies))
 	http.Redirect(response, request, authorizationURL, http.StatusFound)
 }
 
@@ -59,7 +59,7 @@ func (server *Server) handleAuthLogin(response http.ResponseWriter, request *htt
 // the browser history.
 func (server *Server) handleAuthCallback(response http.ResponseWriter, request *http.Request) {
 	response.Header().Set("Cache-Control", "no-store")
-	http.SetCookie(response, authn.ClearedTransactionCookie(server.auth.SecureCookies))
+	http.SetCookie(response, authentication.ClearedTransactionCookie(server.auth.SecureCookies))
 
 	query := request.URL.Query()
 	if query.Get("error") != "" {
@@ -67,13 +67,13 @@ func (server *Server) handleAuthCallback(response http.ResponseWriter, request *
 		server.writeAuthFailure(response)
 		return
 	}
-	cookie, err := request.Cookie(authn.TransactionCookieName)
+	cookie, err := request.Cookie(authentication.TransactionCookieName)
 	if err != nil || cookie.Value == "" {
 		log.Printf("auth callback: missing or unreadable transaction cookie: %v", err)
 		server.writeAuthFailure(response)
 		return
 	}
-	transaction, err := authn.OpenTransaction(server.auth.Sealer, cookie.Value)
+	transaction, err := authentication.OpenTransaction(server.auth.Sealer, cookie.Value)
 	if err != nil {
 		log.Printf("auth callback: failed to open transaction cookie: %v", err)
 		server.writeAuthFailure(response)
@@ -109,7 +109,7 @@ func (server *Server) handleAuthCallback(response http.ResponseWriter, request *
 		return
 	}
 
-	if err := server.establishSession(request.Context(), response, authn.Session{
+	if err := server.establishSession(request.Context(), response, authentication.Session{
 		Subject:           verified.Subject,
 		Name:              verified.Name,
 		PreferredUsername: verified.PreferredUsername,
@@ -122,7 +122,7 @@ func (server *Server) handleAuthCallback(response http.ResponseWriter, request *
 		return
 	}
 
-	http.Redirect(response, request, authn.SafeReturnTo(transaction.ReturnTo), http.StatusFound)
+	http.Redirect(response, request, authentication.SafeReturnTo(transaction.ReturnTo), http.StatusFound)
 }
 
 // establishSession is the tail of a sign-in once the callback has verified the
@@ -149,7 +149,7 @@ func (server *Server) handleAuthCallback(response http.ResponseWriter, request *
 func (server *Server) establishSession(
 	ctx context.Context,
 	response http.ResponseWriter,
-	identity authn.Session,
+	identity authentication.Session,
 	displayName string,
 ) error {
 	if err := server.service.RecordSignIn(ctx, app.UserProfile{
@@ -160,13 +160,13 @@ func (server *Server) establishSession(
 		return fmt.Errorf("failed to project signed-in user: %w", err)
 	}
 
-	sessionID, err := authn.NewSessionID()
+	sessionID, err := authentication.NewSessionID()
 	if err != nil {
 		return fmt.Errorf("failed to generate session id: %w", err)
 	}
 	now := server.now()
 	session := identity
-	session.IDHash = authn.HashSessionID(sessionID)
+	session.IDHash = authentication.HashSessionID(sessionID)
 	session.CreatedAt = now
 	session.LastSeenAt = now
 	// The IdP's token lifetime deliberately does not appear here. How long a
@@ -178,7 +178,7 @@ func (server *Server) establishSession(
 		return fmt.Errorf("failed to persist session: %w", err)
 	}
 
-	http.SetCookie(response, authn.SessionCookie(sessionID, server.auth.SecureCookies))
+	http.SetCookie(response, authentication.SessionCookie(sessionID, server.auth.SecureCookies))
 	return nil
 }
 
@@ -203,8 +203,8 @@ func (server *Server) handleAuthLogout(response http.ResponseWriter, request *ht
 	response.Header().Set("Cache-Control", "no-store")
 
 	var idTokenHint string
-	if cookie, err := request.Cookie(authn.SessionCookieName); err == nil && cookie.Value != "" {
-		idHash := authn.HashSessionID(cookie.Value)
+	if cookie, err := request.Cookie(authentication.SessionCookieName); err == nil && cookie.Value != "" {
+		idHash := authentication.HashSessionID(cookie.Value)
 		if session, err := server.auth.Sessions.SessionByHash(request.Context(), idHash); err == nil {
 			idTokenHint = session.IDToken
 		}
@@ -214,7 +214,7 @@ func (server *Server) handleAuthLogout(response http.ResponseWriter, request *ht
 			log.Printf("auth logout: failed to revoke session: %v", err)
 		}
 	}
-	http.SetCookie(response, authn.ClearedSessionCookie(server.auth.SecureCookies))
+	http.SetCookie(response, authentication.ClearedSessionCookie(server.auth.SecureCookies))
 
 	destination := server.auth.PublicURL + "/"
 	if idTokenHint != "" {

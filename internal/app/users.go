@@ -19,7 +19,7 @@ var ErrUserNotProvisioned = errors.New("user has not signed in to openplan yet")
 // data with one key: Sub is the OIDC sub claim and the only stable identifier,
 // while DisplayName and Email are mutable and never an authorization input.
 //
-// The JSON names match MeResponse (internal/auth/me.go), which describes the
+// The JSON names match meResponse (internal/api/me.go), which describes the
 // same three things about the caller.
 type UserProfile struct {
 	Sub         string `json:"sub"`
