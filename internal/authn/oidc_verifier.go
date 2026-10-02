@@ -140,11 +140,10 @@ func (v *OIDCVerifier) validatedToken(payload []byte) (VerifiedToken, error) {
 	// must equal our client ID, and it is additionally *required* once aud
 	// carries more than one value. jwt.WithAudience above only asserts aud
 	// *contains* the client ID, which is not sufficient on its own once a
-	// mapper (ours or a stale one left behind by another IdP client) can push
-	// our audience into a token minted for a different client. That is the
-	// substitution azp exists to catch, and it happens with a single-entry
-	// aud, so the claim is checked on every token rather than only on
-	// multi-audience ones.
+	// token minted for a different client can name ours in aud too. That is
+	// the substitution azp exists to catch, and it can happen with a
+	// single-entry aud, so the claim is checked on every token rather than
+	// only on multi-audience ones.
 	azp, ok := optionalStringClaim(token, "azp")
 	if !ok {
 		return VerifiedToken{}, ErrInvalidToken

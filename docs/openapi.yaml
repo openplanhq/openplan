@@ -220,16 +220,15 @@ paths:
       tags: [Authentication]
       summary: Accept an OIDC back-channel logout token
       description: |
-        A server-to-server POST from the identity provider, not a redirect the
-        browser follows. The address is registered on the provider, not
-        configured in openplan, and must be one **it** can reach — often not
-        `OPENPLAN_PUBLIC_URL`, because the two differ whenever the provider
-        runs on an internal network or behind split-horizon DNS.
+        A server-to-server POST from Dex, not a redirect the browser follows.
+        Dex v2.45.1 never calls it; a Dex release with browser sessions does,
+        once the client registers it as `backchannelLogoutURI`. The address
+        must be one Dex can reach — on the Compose stack
+        `http://api:8081/v1/auth/backchannel-logout`, not `OPENPLAN_PUBLIC_URL`.
 
-        Without this endpoint, disabling a user at the provider would not reach
-        openplan until their session hit its own expiry — openplan stops consulting
-        the provider once a session exists. Enable session-required logout so
-        the token carries `sid`.
+        It ends openplan sessions as soon as the Dex session behind them ends,
+        instead of at their own expiry — openplan stops consulting Dex once a
+        session exists.
 
         The body is capped at 64 KiB.
       operationId: backchannelLogout

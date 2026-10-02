@@ -178,7 +178,7 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{phase}", server.handleGetTemplateRunLog)
 
 	// User search routes.
-	// Searches realm users by display name or username.
+	// Searches signed-in users by display name or email.
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/users/search", server.handleSearchUsers)
 
 	// Stack grant routes.
