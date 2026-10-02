@@ -177,7 +177,7 @@ export default function RunDetailScreen() {
               )}
               <div className="min-w-0">
                 <dt className="mb-1 text-xs text-muted-foreground">Started by</dt>
-                <dd className="break-words font-mono text-sm">{run.trigger_actor}</dd>
+                <dd className="break-words text-sm">{run.trigger_actor_display_name}</dd>
               </div>
               <div className="min-w-0">
                 <dt className="mb-1 text-xs text-muted-foreground">Source</dt>

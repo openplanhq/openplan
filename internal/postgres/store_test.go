@@ -1957,10 +1957,12 @@ func TestGetTemplateRunReturnsTenantScopedRecord(t *testing.T) {
 		BackendConfigHash: "backend_hash_123",
 		Status:            domain.TemplateRunCompleted,
 		TriggerActor:      domain.UserID("user_123"),
-		CreatedAt:         startedAt,
-		CompletedAt:       completedAt,
-		ConfigJSON:        json.RawMessage(`{}`),
-		RunNumber:         1,
+		// user_123 has no users row, so the subject labels itself.
+		TriggerActorDisplayName: "user_123",
+		CreatedAt:               startedAt,
+		CompletedAt:             completedAt,
+		ConfigJSON:              json.RawMessage(`{}`),
+		RunNumber:               1,
 	}
 	run.CreatedAt = run.CreatedAt.UTC()
 	run.CompletedAt = run.CompletedAt.UTC()
@@ -1989,6 +1991,69 @@ func TestGetTemplateRunReturnsNotFoundForOtherTenant(t *testing.T) {
 	_, err := store.GetTemplateRun(ctx, domain.TenantID("tenant_456"), domain.TemplateRunID("run_123"))
 	if !errors.Is(err, app.ErrNotFound) {
 		t.Fatalf("error = %v, want app.ErrNotFound", err)
+	}
+}
+
+func TestTemplateRunReadsResolveTriggerActorDisplayName(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := NewStore(pool)
+	if err := store.UpsertUser(ctx, app.UserProfile{
+		Sub:         "user_signed_in",
+		DisplayName: "Ada Lovelace",
+		Email:       "ada@example.com",
+	}, time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	seedTemplateRun(t, ctx, pool, domain.TemplateRun{
+		ID:              domain.TemplateRunID("run_known_actor"),
+		TenantID:        domain.TenantID("tenant_123"),
+		StackTemplateID: domain.StackTemplateID("stack_template_123"),
+		Operation:       domain.OperationPlan,
+		SelectedRef:     "main",
+		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
+		Status:          domain.TemplateRunCompleted,
+		TriggerActor:    domain.UserID("user_signed_in"),
+		CreatedAt:       time.Date(2026, 7, 20, 10, 0, 0, 0, time.UTC),
+	})
+	// No users row: the subject never signed in, or its row predates a reset.
+	// The run still has to name someone.
+	seedTemplateRun(t, ctx, pool, domain.TemplateRun{
+		ID:              domain.TemplateRunID("run_unknown_actor"),
+		TenantID:        domain.TenantID("tenant_123"),
+		StackTemplateID: domain.StackTemplateID("stack_template_123"),
+		Operation:       domain.OperationPlan,
+		SelectedRef:     "main",
+		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
+		Status:          domain.TemplateRunCompleted,
+		TriggerActor:    domain.UserID("user_never_seen"),
+		CreatedAt:       time.Date(2026, 7, 20, 9, 0, 0, 0, time.UTC),
+	})
+
+	runs, err := store.ListTemplateRuns(ctx, domain.TenantID("tenant_123"), domain.StackTemplateID("stack_template_123"))
+	if err != nil {
+		t.Fatalf("ListTemplateRuns returned error: %v", err)
+	}
+	got := map[domain.TemplateRunID]string{}
+	for _, run := range runs {
+		got[run.ID] = run.TriggerActorDisplayName
+	}
+	want := map[domain.TemplateRunID]string{
+		"run_known_actor":   "Ada Lovelace",
+		"run_unknown_actor": "user_never_seen",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("display names = %v, want %v", got, want)
+	}
+
+	run, err := store.GetTemplateRun(ctx, domain.TenantID("tenant_123"), domain.TemplateRunID("run_known_actor"))
+	if err != nil {
+		t.Fatalf("GetTemplateRun returned error: %v", err)
+	}
+	if run.TriggerActorDisplayName != "Ada Lovelace" {
+		t.Fatalf("GetTemplateRun display name = %q, want %q", run.TriggerActorDisplayName, "Ada Lovelace")
 	}
 }
 

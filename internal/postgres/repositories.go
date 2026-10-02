@@ -987,10 +987,12 @@ func createTemplateRun(ctx context.Context, exec pgxExecutor, run domain.Templat
 //     first step reads no step, not the plan's last;
 //   - the error is the latest failed execution's;
 //   - the counts are the plan execution's if the run has one, and otherwise
-//     the apply's, which an auto-approved run has instead.
+//     the apply's, which an auto-approved run has instead;
+//   - the trigger actor's display name is the users projection's, or the
+//     subject itself for one with no row, as a grants list labels it.
 //
-// Each is a lateral lookup on an indexed key, so a list of runs is still one
-// query. Callers append the where clause, and the order for a list.
+// Each is a lookup on an indexed key, so a list of runs is still one query.
+// Callers append the where clause, and the order for a list.
 const templateRunSelect = `
 	select
 		r.id,
@@ -1008,6 +1010,7 @@ const templateRunSelect = `
 		r.status,
 		coalesce(latest_step.step, ''),
 		r.trigger_actor,
+		coalesce(actor.display_name, r.trigger_actor),
 		r.created_at,
 		r.completed_at,
 		coalesce(failed.error_summary, ''),
@@ -1039,6 +1042,7 @@ const templateRunSelect = `
 		order by e.phase = 'plan' desc, e.id
 		limit 1
 	) counts on true
+	left join users actor on actor.sub = r.trigger_actor
 `
 
 // scanTemplateRun scans one row of templateRunSelect.
@@ -1063,6 +1067,7 @@ func scanTemplateRun(row pgx.Row) (domain.TemplateRun, error) {
 		&run.Status,
 		&run.Step,
 		&run.TriggerActor,
+		&run.TriggerActorDisplayName,
 		&createdAt,
 		&completedAt,
 		&run.ErrorSummary,

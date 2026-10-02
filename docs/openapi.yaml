@@ -1803,6 +1803,13 @@ components:
           type: string
           description: |
             Who started the run. This is the subject that may not approve it.
+        trigger_actor_display_name:
+          type: string
+          description: |
+            Who started the run, for people to read: the name openplan
+            recorded for `trigger_actor` when they last signed in, or
+            `trigger_actor` itself if it has none. Display only;
+            `trigger_actor` is the identity.
         created_at:
           type: string
           format: date-time
@@ -1853,8 +1860,8 @@ components:
         [id, tenant_id, stack_template_id, template_revision_id,
          source_template_id, operation, selected_ref, resolved_commit_sha,
          workspace_name, backend_type, backend_config_hash, status, step,
-         trigger_actor, created_at, error_summary, run_number, auto_approve,
-         plan_summary]
+         trigger_actor, trigger_actor_display_name, created_at, error_summary,
+         run_number, auto_approve, plan_summary]
 
     TemplateRunStatus:
       type: string

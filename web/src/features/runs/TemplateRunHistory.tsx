@@ -159,8 +159,8 @@ function RunRow({ run, to, hasActions, stackId, approvingRunID, discardingRunID,
       >
         {summary}
       </TableCell>
-      <TableCell className="max-w-48 truncate font-mono text-sm text-muted-foreground" title={run.trigger_actor}>
-        {run.trigger_actor}
+      <TableCell className="max-w-48 truncate text-sm text-muted-foreground" title={run.trigger_actor_display_name}>
+        {run.trigger_actor_display_name}
       </TableCell>
       <TableCell className="font-mono text-sm text-muted-foreground">
         <time dateTime={run.created_at} title={run.created_at}>

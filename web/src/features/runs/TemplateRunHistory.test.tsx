@@ -25,6 +25,7 @@ function run(overrides: Partial<TemplateRun> = {}): TemplateRun {
     status: "queued",
     step: "",
     trigger_actor: "user_123",
+    trigger_actor_display_name: "user_123",
     created_at: "2026-07-20T00:00:00Z",
     error_summary: "",
     run_number: 1,
@@ -84,7 +85,15 @@ describe("TemplateRunHistory", () => {
   it("lays each run out in run, type, status, changes, actor, and time columns", () => {
     const queryClient = testQueryClient();
     seedRuns(queryClient, [
-      run({ id: "run_plan_1", run_number: 12, operation: "apply", status: "completed", trigger_actor: "vishu", plan_summary: { add: 3, change: 1, destroy: 0 } })
+      run({
+        id: "run_plan_1",
+        run_number: 12,
+        operation: "apply",
+        status: "completed",
+        trigger_actor: "CiQ3YzRiMmYwZS0zZDFhLTRlOGItOWY2Yy0yYTVkOGUxYjBjNDcSBWxvY2Fs",
+        trigger_actor_display_name: "Ada Lovelace",
+        plan_summary: { add: 3, change: 1, destroy: 0 }
+      })
     ]);
 
     renderHistory(queryClient);
@@ -96,7 +105,7 @@ describe("TemplateRunHistory", () => {
     expect(cells[0].textContent).toBe("#12");
     expect(cells[1].textContent).toContain("Applied");
     expect(cells[2].textContent).toBe("+3 ~1 -0");
-    expect(cells[3].textContent).toBe("vishu");
+    expect(cells[3].textContent).toBe("Ada Lovelace");
     expect(cells[4].querySelector("time")?.getAttribute("datetime")).toBe("2026-07-20T00:00:00Z");
 
     const columns = screen.getByTestId("template-run-history").querySelectorAll("colgroup > col");
