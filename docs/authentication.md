@@ -1,16 +1,19 @@
 # Authentication and Authorization
 
-This document defines how openplan authenticates against an OIDC identity
-provider and the OpenFGA model used for per-stack authorization. The broader
+This document defines how openplan authenticates through Dex and the OpenFGA
+model used for per-stack authorization. The broader
 trust model and authorization invariants remain in the
 [authentication and authorization security architecture](superpowers/specs/2026-07-14-authn-authz-security-architecture-design.md).
 
 ## Identity Provider
 
-openplan works with any compliant OIDC provider named by `OIDC_ISSUER_URL`, and
-the provider is the only way in: openplan holds no passwords and checks no
-credential of its own. It provisions nothing on the provider either; a
-deployment registers one confidential client itself.
+[Dex](https://dexidp.io) is openplan's identity provider in every deployment,
+and the only way in: openplan holds no passwords and checks no credential of
+its own. Every other way to sign in — a corporate OIDC or SAML provider,
+GitHub, LDAP — is a Dex connector, so openplan integrates with exactly one
+provider. The API speaks standard OIDC to the issuer named by
+`OIDC_ISSUER_URL`, as one confidential client registered in Dex's
+`staticClients`.
 
 The client's one redirect URI is derived, never configured separately:
 
@@ -38,14 +41,11 @@ API compares the discovery document's issuer to `OIDC_ISSUER_URL` byte for
 byte. `curl` resolves `*.localhost` to its own loopback and ignores the alias,
 so test from inside a container with `wget` instead.
 
-Dex v2.45.1 advertises no `end_session_endpoint` and sends no back-channel
-logout, so logout ends the openplan session and returns home. That is a
-complete logout on this stack: v2.45.1 keeps no browser session of its own
-(browser sessions exist only on Dex's master branch, behind
-`DEX_SESSIONS_ENABLED`), so the next sign-in asks for the password again. An
-upstream connector such as GitHub keeps its own session, and sign-in through
-one can be silent. Dex's `sub` is `base64url(protobuf{user_id, connector_id})`,
-stable for a given user and connector.
+Dex v2.45.1 keeps no browser session, advertises no `end_session_endpoint`,
+and sends no back-channel logout; see "Logout" below for what that means today
+and what changes once a Dex release ships sessions. Dex's `sub` is
+`base64url(protobuf{user_id, connector_id})`, stable for a given user and
+connector.
 
 ## OIDC Client and Claims
 
@@ -56,9 +56,8 @@ server-side with PKCE S256, holding the client secret, and the browser receives
 nothing but an httpOnly session cookie (see "Browser Session" below).
 
 The API verifies **ID tokens**, not access tokens, and checks `aud` against
-`OIDC_CLIENT_ID`. An ID token's `aud` is the client ID by construction, so the
-audience is already correct and no provider-side mapper or custom
-authorization server is needed to mint it.
+`OIDC_CLIENT_ID`. An ID token's `aud` is the client ID by construction, so
+nothing on Dex needs configuring to mint the right audience.
 
 ## Global Roles
 
@@ -106,7 +105,7 @@ connects to Postgres or Temporal or starts its HTTP listener.
 | `OPENPLAN_ENVIRONMENT` | No | Optional runtime mode; empty defaults to `development`; valid values are `development` and `production` |
 | `OPENPLAN_TENANT_ID` | No | Required single configured tenant identifier |
 | `VITE_OPENPLAN_TENANT_ID` | No | Frontend build-time tenant context; must exactly match `OPENPLAN_TENANT_ID`; local development falls back to `tenant_123` |
-| `OIDC_ISSUER_URL` | No | Required exact OIDC issuer URL; any compliant provider |
+| `OIDC_ISSUER_URL` | No | Required exact issuer URL of Dex |
 | `OIDC_CLIENT_ID` | No | Required OAuth client ID; also the ID token audience the verifier checks against |
 | `OIDC_CLIENT_SECRET` | Yes | Required; the API is a confidential client and authenticates as one when it exchanges a code |
 | `OPENPLAN_PUBLIC_URL` | No | Required; the origin the browser reaches. The API derives its own OIDC redirect URI (`<OPENPLAN_PUBLIC_URL>/v1/auth/callback`) and post-logout redirect URI from it — never from `Host` or `X-Forwarded-Proto`, which an attacker can set |
@@ -182,9 +181,8 @@ caller," and that was removed because:
   only Temporal and the artifact store and never calls the API; and the web
   client sends no `Authorization` header — it relies on the cookie.
 - **A CLI could not have used it.** The flow is server-side, so no endpoint
-  hands a token to a caller, and the token lives 300 seconds with no refresh
-  token stored. A CLI would have had to re-run the whole browser flow every
-  five minutes.
+  hands a token to a caller, and no refresh token is stored. A CLI would have
+  had to re-run the whole browser flow every time the token expired.
 - **It made the ID token a key.** RP-initiated logout necessarily puts that
   token in a URL, where it reaches browser history and every access log in
   between. While the Bearer path existed, a copy read out of one of those
@@ -219,7 +217,7 @@ authorization-code flow on its behalf, plus one more the IdP calls directly:
 | `GET /v1/auth/login` | Starts the OIDC flow: generates `state`, `nonce`, and a PKCE verifier, seals them into the transaction cookie, and redirects to the IdP |
 | `GET /v1/auth/callback` | Redeems the code on the back channel, verifies the resulting ID token, creates a session row, and hands the browser the session cookie |
 | `POST /v1/auth/logout` | Revokes the session row, clears the session cookie, and redirects to the IdP's RP-initiated logout where there is one |
-| `POST /v1/auth/backchannel-logout` | Unauthenticated; ends sessions on the IdP's own instruction — see "Back-Channel Logout" below |
+| `POST /v1/auth/backchannel-logout` | Unauthenticated; ends sessions on Dex's own instruction — see "Logout" below |
 
 The sign-in screen itself is a client route, `/signin`, not a server-rendered
 page. It is one "Sign in" button that navigates to `GET /v1/auth/login`; every
@@ -277,23 +275,23 @@ in.
 
 ### Session Lifetime
 
-A session is openplan's own record, not the IdP's. Before this design the
-session cookie held the raw ID token, so how long a sign-in lasted was decided
-by the provider's token lifespan and whether silent renewal was governed by
-its SSO idle timeout. openplan is BYO-IdP and configures neither on a
-deployment's provider, so a row in the `sessions` table
+A session is openplan's own record, not Dex's. A row in the `sessions` table
 (`internal/postgres/migrations/0018_sessions.sql`) is a session openplan issues,
-expires, and revokes on its own terms. `internal/authn.Session` is the Go
-type; `internal/authn.SessionStore` is the persistence interface the cookie
-path of `RequireAuthentication` depends on.
+expires, and revokes on its own terms, which an ID token cannot offer: its
+`exp` is fixed when it is minted, so it cannot slide on activity, and a copy of
+it cannot be revoked. Dex v2.45.1 keeps no browser session of its own, so
+nothing on the provider side supplies either. The session cookie once held the
+raw ID token; why that changed is in the [app-owned session
+design](superpowers/specs/2026-08-29-app-owned-session-design.md).
+`internal/authn.Session` is the Go type; `internal/authn.SessionStore` is the
+persistence interface the cookie path of `RequireAuthentication` depends on.
 
 `handleAuthCallback` copies the verified ID token's claims onto the row once,
 at sign-in — subject, name, preferred username, email, and the `sid` claim
-when the provider sends one. Every later request authenticates against that
-row; the ID token is never re-verified or re-read after the callback. That is
-the whole point: session length becomes openplan's to choose instead of a
-consequence of whatever access-token lifespan or SSO idle timeout a customer's
-IdP happens to run.
+when Dex sends one (only with Dex sessions enabled; see "Logout" below). Every
+later request authenticates against that row; the ID token is never
+re-verified or re-read after the callback. Session length is therefore set in
+openplan's config, not by Dex's `expiry.idTokens`.
 
 Two independent bounds decide whether a session is live (`Session.IsLive`):
 
@@ -318,19 +316,20 @@ checked first in `IsLive` and is unconditional: a revoked session is dead
 regardless of either bound, which is what lets back-channel logout end a
 session immediately instead of waiting on a TTL.
 
-Because claims are copied once, an IdP-side change — a renamed user, a
-disabled account, a role change — is not observed by openplan until the session
-ends. Without back-channel logout that staleness window is bounded by the 8h
-absolute cap; with it, the window closes as soon as the notification arrives
-(see below). That trade is deliberate: session length a BYO-IdP deployment
-never has to negotiate with its provider, at the cost of display claims that
-are a snapshot rather than live.
+Because claims are copied once, a change at Dex — a renamed user, a deleted
+password entry, a removed connector — is not observed by openplan until the
+session ends. Dex v2.45.1 sends no back-channel logout, so today that staleness
+window is bounded only by the idle and absolute bounds; once Dex sends one, the
+window closes as soon as the notification arrives (see "Logout" below). That
+trade is deliberate: session bounds openplan controls, at the cost of display
+claims that are a snapshot rather than live.
 
 The row also keeps the raw ID token, encrypted at rest, solely so
-`handleAuthLogout` can pass it to the IdP as `id_token_hint` during
-RP-initiated logout — without it, a provider may show a logout confirmation page
-instead of signing out silently. Despite that parameter's name it is the whole
-token, not a reference to one. It is encrypted with
+`handleAuthLogout` can pass it to Dex as `id_token_hint` during RP-initiated
+logout. Dex v2.45.1 advertises no `end_session_endpoint`, so today the token is
+stored and never sent; it is kept for a Dex release with browser sessions,
+which makes RP-initiated logout necessary. Despite that parameter's name it is
+the whole token, not a reference to one. It is encrypted with
 `SESSION_ENCRYPTION_KEY` — the same required key that seals the transaction
 cookie above, through a separate cipher instance
 (`encryptSession`/`decryptSession` in `internal/postgres/store.go`) so the two
@@ -355,9 +354,8 @@ is treated as unauthenticated, the same as if it had been revoked.
 There is still no refresh token — that part of the design is unchanged.
 Storing and rotating one was evaluated and rejected: correct handling needs a
 transactional store with row locking to survive concurrent requests racing a
-single-use refresh token, the new cookie has nowhere reliable to ride out on a
-streaming log response, and `offline_access` means three different things
-across providers such as Okta and Google. The full reasoning, including the ArgoCD
+single-use refresh token, and the new cookie has nowhere reliable to ride out
+on a streaming log response. The full reasoning, including the ArgoCD
 comparison that shaped it, is in the [design
 doc](superpowers/specs/2026-08-25-oidc-server-side-flow-design.md). What has
 changed is what "expired" means: it is no longer the IdP's ID token `exp` but
@@ -365,32 +363,77 @@ openplan's own idle and absolute bounds.
 
 ### What ends a session, and what does not
 
-An expiring IdP session does **not** end a openplan session. Providers
-typically expire their own sessions without notifying anyone, so back-channel
-logout fires only on explicit events — a logout, or an admin disabling a
-user. This is the independence the app-owned session was built for.
+openplan never contacts Dex after the callback — no refresh, no userinfo call
+— so nothing that happens at Dex ends an openplan session early unless Dex
+sends a back-channel logout, which v2.45.1 does not. This is the independence
+the app-owned session was built for.
 
-Re-authentication is **not** silent, though. openplan never contacts the IdP
-after the callback — no refresh, no userinfo call — so the IdP's SSO idle
-timer starts at sign-in and is never refreshed. With a typical 30-minute SSO
-idle timeout it is dead long before openplan's own session ends. When a openplan session does expire, the trip
-through `/v1/auth/login` therefore finds no SSO session to pick up and the user
-gets a full credential prompt.
+Re-authentication is **not** silent for Dex's own password users. Dex v2.45.1
+keeps no browser session, so when an openplan session expires the trip through
+`/v1/auth/login` ends at Dex's password prompt. That is the safer of the two
+possible behaviours, and it is worth being deliberate about: silent
+re-authentication is the provider renewing someone without asking, which is
+exactly what would nullify `OPENPLAN_SESSION_IDLE_TTL`. An abandoned browser
+whose openplan session idled out would simply be resumed.
 
-That is the safer of the two possible behaviours, and it is worth being
-deliberate about: silent re-authentication is the IdP renewing someone without
-asking, which is exactly what would nullify `OPENPLAN_SESSION_IDLE_TTL`. An
-abandoned browser whose openplan session idled out would simply be resumed.
+An upstream connector is the exception. GitHub, or a corporate provider behind
+a Dex connector, keeps its own session, and a sign-in through it can be
+silent, so for those users **openplan's idle bound is only as strong as the
+upstream provider's own idle timeout.** The same will hold for Dex itself once
+it has browser sessions: its `sessions.validIfNotUsedFor` must then be no
+longer than `OPENPLAN_SESSION_IDLE_TTL`. Because openplan never returns to Dex
+after sign-in, Dex's idle timer starts at sign-in, so a Dex idle bound no
+longer than openplan's has always run out by the time openplan's does.
 
-The BYO-IdP consequence follows: **openplan's idle bound is only enforceable if
-the deployment's IdP idles out at least as fast.** A provider configured with a
-long SSO idle timeout makes `OPENPLAN_SESSION_IDLE_TTL` advisory, because the
-redirect that follows it will be answered silently.
+### Logout
+
+`POST /v1/auth/logout` revokes the session row and clears the cookie. Revoking
+the row rather than only clearing the cookie is what makes logout real: a copy
+of the cookie taken beforehand stops working too. Dex v2.45.1 advertises no
+`end_session_endpoint`, so `EndSessionURL` returns nothing and the browser goes
+to the site root. With no Dex session to end, that is a complete logout: the
+next sign-in asks for the password again.
+
+Two pieces of code exist for a Dex release that ships browser sessions (Dex
+#4945, merged to master behind `DEX_SESSIONS_ENABLED` and not in v2.45.1).
+Checked against Dex master, both work as written and need only Dex
+configuration:
+
+- **RP-initiated logout.** With a Dex session standing, revoking openplan's row
+  is not enough: the next "Sign in" would be answered silently from Dex's own
+  cookie, returning the same user. Logout therefore redirects on to Dex's
+  `end_session_endpoint` with the stored ID token as `id_token_hint`. Dex skips
+  its confirmation page only when the hint matches its current session, and it
+  checks the hint's signature and issuer but not its expiry, so a hint from a
+  sign-in hours ago still works. The client must list `<OPENPLAN_PUBLIC_URL>/`
+  in `postLogoutRedirectURIs`.
+- **Back-channel logout.** `POST /v1/auth/backchannel-logout` lets Dex end
+  openplan sessions when a Dex session ends — at Dex's logout endpoint, or when
+  an operator deletes the session through Dex's API — instead of waiting on
+  openplan's bounds. The client registers it as `backchannelLogoutURI`; see
+  "Back-Channel Logout" below.
+
+Dex's MFA also requires browser sessions, so turning MFA on means turning both
+of these on.
+
+Logout redirects rather than returning Dex's logout URL in a JSON body. That
+URL carries the raw ID token as `id_token_hint`, and there is no reason to hand
+that to script on the origin. A `Location` header on a `303` is not
+script-readable. The route is `POST`, not `GET`, so a cross-site image tag
+cannot trigger it — though `SameSite=Lax` would already make such a request
+arrive without the session cookie regardless.
+
+The token does still travel in a URL the browser navigates to, so it reaches
+browser history, Dex's access log, and any proxy in between. That is normal
+and is what the spec assumes: an ID token is an identity assertion issued to
+one client, not a credential. It is only true here because `/v1` no longer
+accepts bearer tokens — while it did, a copy read out of any of those logs was
+a working API credential that survived the very logout that wrote it there.
 
 ### Back-Channel Logout
 
 `POST /v1/auth/backchannel-logout` is unauthenticated by necessity: it is
-called by the IdP's own server, which holds no openplan cookie and no bearer
+called by Dex's own server, which holds no openplan cookie and no bearer
 token. The credential is the logout token itself (OIDC Back-Channel Logout
 1.0), verified against the same JWKS and issuer that verify ID tokens
 (`OIDCVerifier.VerifyLogoutToken`). openplan checks signature, issuer, audience,
@@ -401,82 +444,40 @@ as a logout token, which would let anyone holding one revoke another user's
 sessions.
 
 A logout token identifies what to revoke by `sid` or `sub`, and openplan prefers
-the narrower one: a `sid` match revokes one browser session
-(`RevokeSessionsByIDPSessionID`); a `sub`-only match revokes every session for
-that user (`RevokeSessionsBySubject`). The endpoint returns `200` whether or
-not anything matched — whether openplan holds a session for a given `sid` is not
-something an unauthenticated caller gets to learn.
+the narrower one, so signing one device out does not sign the user out
+everywhere. Dex puts the same `sid` in the ID token and the logout token, so
+with Dex a `sid` match (`RevokeSessionsByIDPSessionID`) revokes exactly one
+browser session. The handler also falls back to `sub` for a provider that
+leaves `sid` out of one token or the other: a `sub`-only token revokes every
+session for that user (`RevokeSessionsBySubject`), and a `sid` that matches
+nothing revokes that user's sessions that carry no `sid` of their own. The
+endpoint returns `200` whether or not anything matched — whether openplan holds
+a session for a given `sid` is not something an unauthenticated caller gets to
+learn.
 
-A BYO-IdP deployment needs **no** session or timeout configuration on its
-provider; the 8h/1h bounds above are entirely openplan's own. To get immediate
-revocation instead of waiting on those bounds, point the provider's
-back-channel logout at the API's `/v1/auth/backchannel-logout` endpoint —
-**reachable from the identity provider**, not from the browser. Those are
-frequently different addresses: the callback and post-logout redirect URIs
-are resolved by the browser, so `OPENPLAN_PUBLIC_URL` (e.g.
-`http://localhost:5173` on the reference stack) is correct for them, but a
-back-channel logout is a server-to-server POST from the IdP's own process —
-if the IdP runs in its own container or network, `OPENPLAN_PUBLIC_URL` names
-nothing it can reach, and the notification silently never arrives.
+The URI must be **reachable from Dex**, not from the browser. The callback and
+post-logout redirect URIs are resolved by the browser, so `OPENPLAN_PUBLIC_URL`
+(e.g. `http://localhost:5173` on the reference stack) is correct for them, but
+a back-channel logout is a server-to-server POST from Dex's own process. On the
+Compose network that is `http://api:8081/v1/auth/backchannel-logout`;
+`http://localhost:5173` inside Dex's container is its own loopback, and the
+notification would silently never arrive. The reference stack registers
+nothing yet, since v2.45.1 would never call it.
 
-`OPENPLAN_PUBLIC_URL` is not that address. The back-channel logout URL is
-registered on the identity provider, not read by openplan: the API accepts
-the POST wherever it arrives. An IdP on the local Compose network would
-register `http://api:8081/v1/auth/backchannel-logout` — the API's address
-there — rather than `http://localhost:5173`, which inside the IdP's own
-container means its own loopback. Dex v2.45.1 sends no back-channel logout,
-so the reference stack registers nothing.
-
-Also enable session-required logout so the provider includes `sid` in both the
-ID token and the logout token — without it, openplan can only match on `sub`,
-so signing one device out signs out every session the user has.
-
-Matching prefers `sid` over `sub`, so a provider that signs one device out does
-not sign the user out everywhere. When the `sid` matches no row the handler
-falls back to `sub` in the same token: a provider may put `sid` in the logout
-token but not in the ID token the session was built from, leaving
-`idp_session_id` empty on every row, and the narrow key would then silently
-revoke nothing at all. Either way the endpoint answers `200` — whether openplan
-holds a session for a given `sid` is not something an unauthenticated caller
-gets to learn.
-
-A provider that never calls this endpoint is not a broken deployment: sessions
-still end at their own absolute and idle bounds, exactly as if back-channel
-logout did not exist. The endpoint only closes the gap between "the IdP
-considers this session over" and "openplan does too."
-
-Logout redirects rather than returning the IdP's logout URL in a JSON body.
-That URL carries the raw ID token as `id_token_hint`, and there is no reason to
-hand that to script on the origin. A `Location` header on a `303` is not
-script-readable. The route is `POST`, not `GET`, so a cross-site image tag
-cannot trigger it — though `SameSite=Lax` would already make such a request
-arrive without the session cookie regardless.
-
-The token does still travel in a URL the browser navigates to, so it reaches
-browser history, the IdP's access log, and any proxy in between. That is normal
-and is what the spec assumes: an ID token is an identity assertion issued to
-one client, not a credential. It is only true here because `/v1` no longer
-accepts bearer tokens — while it did, a copy read out of any of those logs was
-a working API credential that survived the very logout that wrote it there.
-
-The ID token's lifespan is the provider's and is hygiene rather than a control
-now. RP-Initiated Logout 1.0 says the OP **SHOULD** honour an expired
-`id_token_hint` (conditioned on the RP having a current or recent session at
-the OP, and a `sid` matching neither MAY be declined as suspect), and a session
-running up to eight hours means ours is normally expired at logout anyway.
+Until Dex calls this endpoint, sessions end at their own absolute and idle
+bounds, exactly as if it did not exist. The endpoint only closes the gap
+between "Dex considers this session over" and "openplan does too."
 
 ## Identity Projection
 
-Grant display names and the user-search box read a local `users` table, not the
-IdP.
+Grant display names and the user-search box read a local `users` table, not
+Dex.
 
-There is nothing standard to read from an OIDC provider here. `/userinfo` only
-ever describes the bearer of the token presented, so it cannot look up a third
-user, and cross-user lookup is vendor-specific admin API territory — Okta's
-Users API, Microsoft Graph, Google's Admin SDK. Each needs elevated permissions
-a customer's security team must approve, and each would put that provider on
-the critical path for rendering a grants list. openplan previously did exactly
-this against one provider's admin API. That is gone.
+There is nothing to read from Dex here. `/userinfo` only ever describes the
+bearer of the token presented, so it cannot look up a third user, and Dex's
+gRPC API (v2.45.1) lists only its own password-DB entries, never someone who
+signs in through a connector. openplan previously read a directory from one
+provider's admin API. That is gone.
 
 Instead, every ID token openplan verifies already carries what the UI needs, and
 the callback writes it down:

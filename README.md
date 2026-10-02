@@ -60,26 +60,15 @@ explicit, guarded action.
   to it as an explicit, reviewable step instead of drifting silently.
 - **Control access per stack.** Grant people access to the stacks they need,
   rather than to everything.
-- **Sign in with SSO.** Authentication is standard OIDC. The local stack ships
-  Dex as its identity provider, so there is nothing to wire up to try it.
+- **Sign in with SSO.** openplan signs in through [Dex](https://dexidp.io), its
+  identity provider in every deployment. A corporate IdP, GitHub, or LDAP
+  plugs in as a Dex connector, and the local stack ships Dex preconfigured, so
+  there is nothing to wire up to try it.
 
-openplan requires no session or timeout configuration on your identity provider:
-signed-in sessions are openplan's own record, bounded by its own absolute and
-idle timeouts, independent of whatever token lifespan or SSO idle timeout the
-provider runs. To get immediate revocation when a user signs out or is
-disabled at the IdP, instead of waiting for those bounds, point the provider's
-back-channel logout at the API's `/v1/auth/backchannel-logout` endpoint and
-enable session-required logout so it includes `sid`. Without that, sessions
-still end at their own bounds — nothing breaks.
-
-That URL must be **reachable from the identity provider**, not from the
-browser — a back-channel logout is a server-to-server POST, not a redirect
-the browser follows. It is registered on the provider, not configured in
-openplan, and the two addresses differ whenever the IdP runs on an internal
-network or behind split-horizon DNS: an IdP running in a container resolves
-`http://localhost:5173` (`OPENPLAN_PUBLIC_URL`) to its own loopback, not the
-host's browser-facing port, so it would need
-`http://api:8081/v1/auth/backchannel-logout` instead.
+Signed-in sessions are openplan's own record, bounded by its own absolute and
+idle timeouts rather than by Dex's token lifetime. See
+[Authentication and Authorization](docs/authentication.md) for the session
+model and logout.
 
 ## Running it locally
 
