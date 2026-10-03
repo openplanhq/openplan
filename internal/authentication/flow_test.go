@@ -13,14 +13,18 @@ type staticEndpoints struct{ endpoints Endpoints }
 
 func (s staticEndpoints) Endpoints() Endpoints { return s.endpoints }
 
-func newTestFlow(t *testing.T, endpoints Endpoints) *Flow {
-	t.Helper()
-	flow, err := NewFlow(FlowConfig{
+func testFlowConfig(endpoints Endpoints) FlowConfig {
+	return FlowConfig{
 		ClientID:     "openplan-api",
 		ClientSecret: "client-secret",
 		RedirectURI:  "http://localhost:5173/v1/auth/callback",
 		Endpoints:    staticEndpoints{endpoints: endpoints},
-	})
+	}
+}
+
+func newTestFlow(t *testing.T, endpoints Endpoints) *Flow {
+	t.Helper()
+	flow, err := NewFlow(testFlowConfig(endpoints))
 	if err != nil {
 		t.Fatalf("NewFlow returned error: %v", err)
 	}
@@ -106,19 +110,17 @@ func TestExchangeSendsClientCredentialsAndReturnsIDToken(t *testing.T) {
 	if !gotBasic || gotUser != "openplan-api" || gotPassword != "client-secret" {
 		t.Fatalf("client authentication = %q/%q basic=%t", gotUser, gotPassword, gotBasic)
 	}
-	if gotForm.Get("grant_type") != "authorization_code" {
-		t.Fatalf("grant_type = %q", gotForm.Get("grant_type"))
-	}
-	if gotForm.Get("code") != "code-1" {
-		t.Fatalf("code = %q", gotForm.Get("code"))
-	}
-	if gotForm.Get("code_verifier") != "verifier-1-verifier-1-verifier-1-verifier" {
-		t.Fatalf("code_verifier = %q", gotForm.Get("code_verifier"))
-	}
-	// RFC 6749 4.1.3: the redirect URI is repeated and must match, binding the
-	// code to the URI it was issued for.
-	if gotForm.Get("redirect_uri") != "http://localhost:5173/v1/auth/callback" {
-		t.Fatalf("redirect_uri = %q", gotForm.Get("redirect_uri"))
+	for name, want := range map[string]string{
+		"grant_type":    "authorization_code",
+		"code":          "code-1",
+		"code_verifier": "verifier-1-verifier-1-verifier-1-verifier",
+		// RFC 6749 4.1.3: the redirect URI is repeated and must match, binding
+		// the code to the URI it was issued for.
+		"redirect_uri": "http://localhost:5173/v1/auth/callback",
+	} {
+		if got := gotForm.Get(name); got != want {
+			t.Fatalf("%s = %q, want %q", name, got, want)
+		}
 	}
 }
 
@@ -174,12 +176,7 @@ func TestNewFlowRejectsIncompleteConfig(t *testing.T) {
 		{name: "no endpoints", mutate: func(c *FlowConfig) { c.Endpoints = nil }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			cfg := FlowConfig{
-				ClientID:     "openplan-api",
-				ClientSecret: "client-secret",
-				RedirectURI:  "http://localhost:5173/v1/auth/callback",
-				Endpoints:    staticEndpoints{},
-			}
+			cfg := testFlowConfig(Endpoints{})
 			test.mutate(&cfg)
 			if _, err := NewFlow(cfg); err == nil {
 				t.Fatal("NewFlow accepted an incomplete config")

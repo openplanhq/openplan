@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"time"
-
-	"github.com/lestrrat-go/jwx/v3/jwt"
 )
 
 // backchannelLogoutEvent is the event identifier OIDC Back-Channel Logout 1.0
@@ -25,32 +23,16 @@ type LogoutToken struct {
 // IdP. It reuses the JWKS and issuer the ID-token verifier already maintains,
 // so there is one place a provider's signing keys are trusted.
 func (v *OIDCVerifier) VerifyLogoutToken(ctx context.Context, raw string) (LogoutToken, error) {
-	// verifiedPayload is the shared signature check extracted in Step 3a. It
-	// must NOT be v.Verify: that also enforces ID-token claims (exp, name,
-	// preferred_username, azp), none of which a logout token carries, so every
-	// valid logout token would be rejected — and swallowing that rejection to
-	// work around it would swallow signature failures too, since both return
-	// ErrInvalidToken.
+	// verifiedPayload is the shared signature check. It must NOT be v.Verify:
+	// that also enforces ID-token claims (exp, name, preferred_username, azp),
+	// none of which a logout token carries, so every valid logout token would
+	// be rejected — and swallowing that rejection to work around it would
+	// swallow signature failures too, since both return ErrInvalidToken.
 	payload, err := v.verifiedPayload(ctx, raw)
 	if err != nil {
 		return LogoutToken{}, err
 	}
-
-	v.mu.RLock()
-	issuer := v.discovery.Issuer
-	v.mu.RUnlock()
-
-	token, err := jwt.Parse(payload,
-		// The signature is already verified above; this parses claims from the
-		// verified payload.
-		jwt.WithVerify(false),
-		jwt.WithIssuer(issuer),
-		jwt.WithAudience(v.cfg.Audience),
-		jwt.WithRequiredClaim("events"),
-		jwt.WithRequiredClaim("iat"),
-		jwt.WithClock(jwt.ClockFunc(v.cfg.Clock)),
-		jwt.WithAcceptableSkew(clockSkew),
-	)
+	token, err := v.parseClaims(payload, "events", "iat")
 	if err != nil {
 		return LogoutToken{}, ErrInvalidLogoutToken
 	}
@@ -74,24 +56,18 @@ func (v *OIDCVerifier) VerifyLogoutToken(ctx context.Context, raw string) (Logou
 	}
 
 	var events map[string]any
-	if err := token.Get("events", &events); err != nil {
-		return LogoutToken{}, ErrInvalidLogoutToken
-	}
-	if _, ok := events[backchannelLogoutEvent]; !ok {
+	err = token.Get("events", &events)
+	if _, isLogout := events[backchannelLogoutEvent]; err != nil || !isLogout {
 		return LogoutToken{}, ErrInvalidLogoutToken
 	}
 
-	subject, _ := token.Subject()
-	sessionID, ok := optionalStringClaim(token, "sid")
-	if !ok {
-		return LogoutToken{}, ErrInvalidLogoutToken
-	}
 	// §2.4: at least one of sub and sid must be present, or there is nothing
 	// to revoke.
-	if subject == "" && sessionID == "" {
+	subject, _ := token.Subject()
+	sessionID, ok := optionalStringClaim(token, "sid")
+	if !ok || (subject == "" && sessionID == "") {
 		return LogoutToken{}, ErrInvalidLogoutToken
 	}
-
 	return LogoutToken{Subject: subject, SessionID: sessionID}, nil
 }
 

@@ -1,20 +1,23 @@
 package authentication
 
 import (
+	"encoding/hex"
 	"strings"
 	"testing"
 	"time"
 )
 
-func TestNewSessionIDIsUnpredictableAndURLSafe(t *testing.T) {
-	first, err := NewSessionID()
+func newTestOpaqueToken(t *testing.T) string {
+	t.Helper()
+	token, err := NewOpaqueToken()
 	if err != nil {
-		t.Fatalf("NewSessionID: %v", err)
+		t.Fatalf("NewOpaqueToken: %v", err)
 	}
-	second, err := NewSessionID()
-	if err != nil {
-		t.Fatalf("NewSessionID: %v", err)
-	}
+	return token
+}
+
+func TestNewOpaqueTokenIsUnpredictableAndURLSafe(t *testing.T) {
+	first, second := newTestOpaqueToken(t), newTestOpaqueToken(t)
 	if first == second {
 		t.Fatal("two session IDs are identical, so they are not random")
 	}
@@ -28,10 +31,7 @@ func TestNewSessionIDIsUnpredictableAndURLSafe(t *testing.T) {
 }
 
 func TestHashSessionIDIsStableAndNotTheInput(t *testing.T) {
-	raw, err := NewSessionID()
-	if err != nil {
-		t.Fatalf("NewSessionID: %v", err)
-	}
+	raw, other := newTestOpaqueToken(t), newTestOpaqueToken(t)
 	hash := HashSessionID(raw)
 	if hash == raw {
 		t.Fatal("hash equals the raw ID, so the database would hold a usable cookie")
@@ -39,30 +39,13 @@ func TestHashSessionIDIsStableAndNotTheInput(t *testing.T) {
 	if hash != HashSessionID(raw) {
 		t.Fatal("hash is not stable, so a session could never be looked up twice")
 	}
-
 	// Different inputs must hash to different outputs, else collisions break lookup.
-	rawA, err := NewSessionID()
-	if err != nil {
-		t.Fatalf("NewSessionID: %v", err)
-	}
-	rawB, err := NewSessionID()
-	if err != nil {
-		t.Fatalf("NewSessionID: %v", err)
-	}
-	hashA := HashSessionID(rawA)
-	hashB := HashSessionID(rawB)
-	if hashA == hashB {
+	if hash == HashSessionID(other) {
 		t.Fatal("different session IDs produced the same hash, collisions would break lookup")
 	}
-
 	// Output must be 64 lowercase hex chars (SHA-256).
-	if len(hashA) != 64 {
-		t.Fatalf("hash length = %d, want 64 (SHA-256)", len(hashA))
-	}
-	for _, c := range hashA {
-		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
-			t.Fatalf("hash %q contains non-hex character %q", hashA, c)
-		}
+	if _, err := hex.DecodeString(hash); err != nil || len(hash) != 64 || strings.ToLower(hash) != hash {
+		t.Fatalf("hash %q is not 64 lowercase hex characters (SHA-256)", hash)
 	}
 }
 
@@ -70,25 +53,17 @@ func TestExpiresAtIsTheEarlierBound(t *testing.T) {
 	now := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
 	idleTTL := time.Hour
 
-	t.Run("idle bound is earlier", func(t *testing.T) {
-		session := Session{
-			LastSeenAt:        now,
-			AbsoluteExpiresAt: now.Add(8 * time.Hour),
-		}
-		if got, want := session.ExpiresAt(idleTTL), now.Add(time.Hour); !got.Equal(want) {
-			t.Fatalf("ExpiresAt = %v, want %v", got, want)
-		}
-	})
-
-	t.Run("absolute bound is earlier", func(t *testing.T) {
-		session := Session{
-			LastSeenAt:        now,
-			AbsoluteExpiresAt: now.Add(10 * time.Minute),
-		}
-		if got, want := session.ExpiresAt(idleTTL), now.Add(10*time.Minute); !got.Equal(want) {
-			t.Fatalf("ExpiresAt = %v, want %v", got, want)
-		}
-	})
+	for name, absoluteTTL := range map[string]time.Duration{
+		"idle bound is earlier":     8 * time.Hour,
+		"absolute bound is earlier": 10 * time.Minute,
+	} {
+		t.Run(name, func(t *testing.T) {
+			session := Session{LastSeenAt: now, AbsoluteExpiresAt: now.Add(absoluteTTL)}
+			if got, want := session.ExpiresAt(idleTTL), now.Add(min(idleTTL, absoluteTTL)); !got.Equal(want) {
+				t.Fatalf("ExpiresAt = %v, want %v", got, want)
+			}
+		})
+	}
 }
 
 func TestIsLive(t *testing.T) {

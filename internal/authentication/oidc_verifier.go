@@ -26,11 +26,7 @@ func (v *OIDCVerifier) verifiedPayload(ctx context.Context, raw string) ([]byte,
 	if raw == "" || len(raw) > maxTokenBytes || strings.Count(raw, ".") != 2 {
 		return nil, ErrInvalidToken
 	}
-	header, err := protectedHeader(raw)
-	if err != nil {
-		return nil, ErrInvalidToken
-	}
-	algorithm, keyID, ok := allowedHeader(header)
+	algorithm, keyID, ok := signingParameters(raw)
 	if !ok {
 		return nil, ErrInvalidToken
 	}
@@ -46,94 +42,99 @@ func (v *OIDCVerifier) verifiedPayload(ctx context.Context, raw string) ([]byte,
 }
 
 func (v *OIDCVerifier) payloadAfterSignatureFailure(ctx context.Context, raw, keyID string, algorithm jwa.SignatureAlgorithm) ([]byte, error) {
-	refreshErr := v.refreshKeys(ctx, true)
-	key, found, keyErr := v.cachedKeyFor(keyID, algorithm)
-	if keyErr != nil {
-		if errors.Is(keyErr, errJWKSCacheExpired) {
-			return nil, ErrVerifierUnavailable
-		}
-		return nil, keyErr
+	key, refreshErr, err := v.refreshedKeyFor(ctx, keyID, algorithm)
+	cooledDown := errors.Is(refreshErr, errRefreshCooldown)
+	if err != nil {
+		return nil, err
 	}
-	if !found {
-		if errors.Is(refreshErr, errRefreshCooldown) {
-			return nil, ErrVerifierUnavailable
-		}
-		if refreshErr != nil {
-			return nil, ErrVerifierUnavailable
-		}
-		return nil, ErrInvalidToken
-	}
-	if refreshErr != nil && !errors.Is(refreshErr, errRefreshCooldown) {
+	if refreshErr != nil && !cooledDown {
 		return nil, ErrVerifierUnavailable
 	}
 
 	payload, err := jws.Verify([]byte(raw), jws.WithKey(algorithm, key), jws.WithCompact())
+	if err != nil && cooledDown {
+		return nil, ErrVerifierUnavailable
+	}
 	if err != nil {
-		if errors.Is(refreshErr, errRefreshCooldown) {
-			return nil, ErrVerifierUnavailable
-		}
 		return nil, ErrInvalidToken
 	}
 	return payload, nil
 }
 
-func protectedHeader(raw string) (jws.Headers, error) {
+// signingParameters reads the algorithm and key ID from the one protected
+// header of a compact JWS, refusing a token that names no key or an algorithm
+// outside the asymmetric set a provider signs with.
+func signingParameters(raw string) (jwa.SignatureAlgorithm, string, bool) {
+	refused := jwa.EmptySignatureAlgorithm()
 	message, err := jws.Parse([]byte(raw), jws.WithCompact())
 	if err != nil {
-		return nil, err
+		return refused, "", false
 	}
 	signatures := message.Signatures()
-	if len(signatures) != 1 || signatures[0] == nil {
-		return nil, errors.New("invalid compact JWS signature")
+	if len(signatures) != 1 || signatures[0] == nil || signatures[0].ProtectedHeaders() == nil {
+		return refused, "", false
 	}
-	protected := signatures[0].ProtectedHeaders()
-	if protected == nil {
-		return nil, errors.New("ambiguous JWS headers")
-	}
-	return protected, nil
-}
-
-func allowedHeader(header jws.Headers) (jwa.SignatureAlgorithm, string, bool) {
-	if header == nil {
-		return jwa.EmptySignatureAlgorithm(), "", false
-	}
-	provided, ok := header.Algorithm()
-	if !ok {
-		return jwa.EmptySignatureAlgorithm(), "", false
-	}
-	keyID, ok := header.KeyID()
-	if !ok || keyID == "" {
-		return jwa.EmptySignatureAlgorithm(), "", false
+	header := signatures[0].ProtectedHeaders()
+	provided, hasAlgorithm := header.Algorithm()
+	keyID, hasKeyID := header.KeyID()
+	if !hasAlgorithm || !hasKeyID || keyID == "" {
+		return refused, "", false
 	}
 
-	algorithmName := provided.String()
-	switch algorithmName {
+	switch provided.String() {
 	case "RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512", "EdDSA":
 	default:
-		return jwa.EmptySignatureAlgorithm(), "", false
+		return refused, "", false
 	}
-	algorithm, ok := jwa.LookupSignatureAlgorithm(algorithmName)
-	if !ok {
-		return jwa.EmptySignatureAlgorithm(), "", false
-	}
-	return algorithm, keyID, true
+	algorithm, ok := jwa.LookupSignatureAlgorithm(provided.String())
+	return algorithm, keyID, ok
 }
 
-func (v *OIDCVerifier) validatedToken(payload []byte) (VerifiedToken, error) {
+// parseClaims reads the claims out of a payload verifiedPayload has already
+// authenticated, holding them to what any token from this provider must
+// satisfy -- issuer, audience, and the time claims -- plus the claims the
+// caller requires.
+func (v *OIDCVerifier) parseClaims(payload []byte, required ...string) (jwt.Token, error) {
 	v.mu.RLock()
 	issuer := v.discovery.Issuer
 	v.mu.RUnlock()
-	token, err := jwt.Parse(
-		payload,
+
+	options := []jwt.ParseOption{
+		// The signature is already verified; this parses claims from the
+		// verified payload.
 		jwt.WithVerify(false),
 		jwt.WithIssuer(issuer),
 		jwt.WithAudience(v.cfg.Audience),
-		jwt.WithRequiredClaim(jwt.ExpirationKey),
 		jwt.WithClock(jwt.ClockFunc(v.cfg.Clock)),
 		jwt.WithAcceptableSkew(clockSkew),
-	)
+	}
+	for _, claim := range required {
+		options = append(options, jwt.WithRequiredClaim(claim))
+	}
+	return jwt.Parse(payload, options...)
+}
+
+func (v *OIDCVerifier) validatedToken(payload []byte) (VerifiedToken, error) {
+	token, err := v.parseClaims(payload, jwt.ExpirationKey)
 	if err != nil {
 		return VerifiedToken{}, ErrInvalidToken
+	}
+
+	var verified VerifiedToken
+	var azp string
+	for name, target := range map[string]*string{
+		"azp":                &azp,
+		"name":               &verified.Name,
+		"preferred_username": &verified.PreferredUsername,
+		"email":              &verified.Email,
+		"nonce":              &verified.Nonce,
+		"sid":                &verified.SessionID,
+	} {
+		value, ok := optionalStringClaim(token, name)
+		if !ok {
+			return VerifiedToken{}, ErrInvalidToken
+		}
+		*target = value
 	}
 
 	// OIDC Core 1.0 §3.1.3.7 steps 4-5: azp, whenever the token carries it,
@@ -144,56 +145,18 @@ func (v *OIDCVerifier) validatedToken(payload []byte) (VerifiedToken, error) {
 	// the substitution azp exists to catch, and it can happen with a
 	// single-entry aud, so the claim is checked on every token rather than
 	// only on multi-audience ones.
-	azp, ok := optionalStringClaim(token, "azp")
-	if !ok {
+	audiences, _ := token.Audience()
+	if (azp != "" && azp != v.cfg.Audience) || (azp == "" && len(audiences) > 1) {
 		return VerifiedToken{}, ErrInvalidToken
-	}
-	if azp != "" && azp != v.cfg.Audience {
-		return VerifiedToken{}, ErrInvalidToken
-	}
-	if azp == "" {
-		if audiences, ok := token.Audience(); ok && len(audiences) > 1 {
-			return VerifiedToken{}, ErrInvalidToken
-		}
 	}
 
-	subject, ok := token.Subject()
-	if !ok || subject == "" {
+	var hasSubject, hasExpiry bool
+	verified.Subject, hasSubject = token.Subject()
+	verified.ExpiresAt, hasExpiry = token.Expiration()
+	if !hasSubject || verified.Subject == "" || !hasExpiry {
 		return VerifiedToken{}, ErrInvalidToken
 	}
-	name, ok := optionalStringClaim(token, "name")
-	if !ok {
-		return VerifiedToken{}, ErrInvalidToken
-	}
-	preferredUsername, ok := optionalStringClaim(token, "preferred_username")
-	if !ok {
-		return VerifiedToken{}, ErrInvalidToken
-	}
-	email, ok := optionalStringClaim(token, "email")
-	if !ok {
-		return VerifiedToken{}, ErrInvalidToken
-	}
-	nonce, ok := optionalStringClaim(token, "nonce")
-	if !ok {
-		return VerifiedToken{}, ErrInvalidToken
-	}
-	sessionID, ok := optionalStringClaim(token, "sid")
-	if !ok {
-		return VerifiedToken{}, ErrInvalidToken
-	}
-	expiresAt, ok := token.Expiration()
-	if !ok {
-		return VerifiedToken{}, ErrInvalidToken
-	}
-	return VerifiedToken{
-		Subject:           subject,
-		Name:              name,
-		PreferredUsername: preferredUsername,
-		Email:             email,
-		Nonce:             nonce,
-		ExpiresAt:         expiresAt,
-		SessionID:         sessionID,
-	}, nil
+	return verified, nil
 }
 
 // optionalStringClaim reads a claim the token is not required to carry. An

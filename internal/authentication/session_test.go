@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,14 +30,14 @@ func TestTransactionSealRoundTrip(t *testing.T) {
 		t.Fatalf("SealTransaction returned error: %v", err)
 	}
 	for _, secret := range []string{want.State, want.Nonce, want.CodeVerifier, want.ReturnTo} {
-		if contains(sealed, secret) {
+		if strings.Contains(sealed, secret) {
 			t.Fatalf("sealed transaction leaked %q: %s", secret, sealed)
 		}
 	}
 
 	got, err := OpenTransaction(cipher, sealed)
 	if err != nil {
-		t.Fatalf("OpenTransaction returned error: %v", err)
+		t.Fatalf("OpenTransaction returned error: %v, want a fresh transaction to be accepted", err)
 	}
 	want.IssuedAt = got.IssuedAt // stamped by SealTransaction, not caller-supplied
 	if got != want {
@@ -77,26 +78,6 @@ func sealTransactionAt(t *testing.T, cipher *encryption.Cipher, transaction Tran
 		t.Fatalf("Encrypt returned error: %v", err)
 	}
 	return sealed
-}
-
-func TestOpenTransactionAcceptsFreshTransaction(t *testing.T) {
-	cipher := testCipher(t)
-	sealed, err := SealTransaction(cipher, Transaction{State: "state-1"})
-	if err != nil {
-		t.Fatalf("SealTransaction returned error: %v", err)
-	}
-	if _, err := OpenTransaction(cipher, sealed); err != nil {
-		t.Fatalf("OpenTransaction returned error: %v, want a fresh transaction to be accepted", err)
-	}
-}
-
-func contains(haystack, needle string) bool {
-	for i := 0; i+len(needle) <= len(haystack); i++ {
-		if haystack[i:i+len(needle)] == needle {
-			return true
-		}
-	}
-	return false
 }
 
 func TestOpenTransactionRejectsTampering(t *testing.T) {

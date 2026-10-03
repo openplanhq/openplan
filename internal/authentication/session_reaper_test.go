@@ -32,6 +32,27 @@ func (store *reapingStore) sweeps() []time.Time {
 	return append([]time.Time(nil), store.cutoffs...)
 }
 
+// startReaper runs ReapSessions in the background and returns a channel closed
+// once it returns.
+func startReaper(ctx context.Context, sessions SessionStore, interval time.Duration, now time.Time) <-chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		ReapSessions(ctx, sessions, interval, func() time.Time { return now })
+		close(done)
+	}()
+	return done
+}
+
+// within waits for ready to deliver, failing with message after a second.
+func within(t *testing.T, ready <-chan struct{}, message string) {
+	t.Helper()
+	select {
+	case <-ready:
+	case <-time.After(time.Second):
+		t.Fatal(message)
+	}
+}
+
 // TestReapSessionsSweepsBeforeWaiting pins the sweep-then-wait order. A process
 // restarted more often than the interval would otherwise never sweep at all,
 // and the rows it should have deleted each hold an encrypted ID token.
@@ -41,23 +62,11 @@ func TestReapSessionsSweepsBeforeWaiting(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	done := make(chan struct{})
-	go func() {
-		ReapSessions(ctx, store, time.Hour, func() time.Time { return now })
-		close(done)
-	}()
+	done := startReaper(ctx, store, time.Hour, now)
 
-	select {
-	case <-store.swept:
-	case <-time.After(time.Second):
-		t.Fatal("no sweep before the first tick — a short-lived process would never reap")
-	}
+	within(t, store.swept, "no sweep before the first tick — a short-lived process would never reap")
 	cancel()
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("ReapSessions did not return when its context was cancelled")
-	}
+	within(t, done, "ReapSessions did not return when its context was cancelled")
 
 	sweeps := store.sweeps()
 	if len(sweeps) == 0 || !sweeps[0].Equal(now) {
@@ -73,39 +82,18 @@ func TestReapSessionsSurvivesAFailedSweep(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	done := make(chan struct{})
-	go func() {
-		ReapSessions(ctx, store, time.Millisecond, func() time.Time { return now })
-		close(done)
-	}()
+	done := startReaper(ctx, store, time.Millisecond, now)
 
 	for range 2 {
-		select {
-		case <-store.swept:
-		case <-time.After(time.Second):
-			t.Fatal("the loop stopped after a failed sweep")
-		}
+		within(t, store.swept, "the loop stopped after a failed sweep")
 	}
 	cancel()
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("ReapSessions did not return when its context was cancelled")
-	}
+	within(t, done, "ReapSessions did not return when its context was cancelled")
 }
 
 // TestReapSessionsIgnoresAMissingStore covers the server built without
 // WithAuth: there is nothing to reap, and a nil interface would panic in a
 // goroutine, which takes the whole process down rather than one request.
 func TestReapSessionsIgnoresAMissingStore(t *testing.T) {
-	done := make(chan struct{})
-	go func() {
-		ReapSessions(context.Background(), nil, time.Hour, nil)
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("ReapSessions blocked on a nil store")
-	}
+	within(t, startReaper(context.Background(), nil, time.Hour, time.Time{}), "ReapSessions blocked on a nil store")
 }

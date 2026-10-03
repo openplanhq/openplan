@@ -8,8 +8,6 @@ import (
 	"time"
 )
 
-const invalidCredentialsCode = "unauthorized"
-
 // RequireAuthentication protects every request except paths named in
 // publicPaths.
 //
@@ -42,11 +40,7 @@ func RequireAuthentication(
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-			if _, ok := public[request.URL.Path]; ok {
-				next.ServeHTTP(response, request)
-				return
-			}
-			if !strings.HasPrefix(request.URL.Path, "/v1/") {
+			if _, ok := public[request.URL.Path]; ok || !strings.HasPrefix(request.URL.Path, "/v1/") {
 				next.ServeHTTP(response, request)
 				return
 			}
@@ -67,15 +61,11 @@ func authenticate(
 	idleTTL time.Duration,
 	clock func() time.Time,
 ) (Principal, bool) {
-	cookie, err := request.Cookie(SessionCookieName)
-	if err != nil || cookie.Value == "" {
-		return Principal{}, false
-	}
-
 	// A server built without WithAuth has no session store. Cookies cannot
 	// authenticate against nothing, and a nil interface would panic rather
 	// than 401, so treat it as no credential.
-	if sessions == nil {
+	cookie, err := request.Cookie(SessionCookieName)
+	if err != nil || cookie.Value == "" || sessions == nil {
 		return Principal{}, false
 	}
 
@@ -122,5 +112,5 @@ func authenticate(
 func writeUnauthorized(response http.ResponseWriter) {
 	response.Header().Set("Content-Type", "application/json")
 	response.WriteHeader(http.StatusUnauthorized)
-	_, _ = response.Write([]byte(`{"code":"` + invalidCredentialsCode + `"}`))
+	_, _ = response.Write([]byte(`{"code":"unauthorized"}`))
 }

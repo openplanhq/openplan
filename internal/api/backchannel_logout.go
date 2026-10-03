@@ -40,17 +40,12 @@ func (server *Server) handleBackchannelLogout(response http.ResponseWriter, requ
 	// anyone on the internet; cap it well under the smallest real logout
 	// token has any business needing.
 	request.Body = http.MaxBytesReader(response, request.Body, 64*1024)
-	if err := request.ParseForm(); err != nil {
-		http.Error(response, "invalid request", http.StatusBadRequest)
-		return
-	}
-	raw := request.PostFormValue("logout_token")
-	if raw == "" {
+	if err := request.ParseForm(); err != nil || request.PostFormValue("logout_token") == "" {
 		http.Error(response, "invalid request", http.StatusBadRequest)
 		return
 	}
 
-	token, err := server.auth.LogoutTokenVerifier.VerifyLogoutToken(request.Context(), raw)
+	token, err := server.auth.LogoutTokenVerifier.VerifyLogoutToken(request.Context(), request.PostFormValue("logout_token"))
 	if err != nil {
 		log.Printf("backchannel logout: token rejected: %v", err)
 		http.Error(response, "invalid request", http.StatusBadRequest)
