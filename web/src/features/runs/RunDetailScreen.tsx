@@ -19,7 +19,7 @@ import { planSummaryLabel } from "../stacks/stackWorkflow";
 import RunLogsPanel from "./RunLogsPanel";
 import { runProgressTag } from "./runIndicator";
 import RunStatusLabel from "./RunStatusLabel";
-import { WaitingRunActions } from "./TemplateRunHistory";
+import WaitingRunActions from "./WaitingRunActions";
 
 // /stacks/:stackId/templates/:stackTemplateId/runs/:runNumber — plan/apply
 // detail with per-phase logs, reached from the Runs tab. The URL carries the
