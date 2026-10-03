@@ -668,6 +668,80 @@ func (store *Store) GetStackWithTemplates(ctx context.Context, tenantID domain.T
 	return app.StackView{Stack: stack, Templates: templates}, nil
 }
 
+// ListTenantStackTemplates returns every installed template in the tenant that
+// is not destroyed, across all of its stacks.
+func (store *Store) ListTenantStackTemplates(ctx context.Context, tenantID domain.TenantID) ([]domain.StackTemplate, error) {
+	rows, err := store.pool.Query(ctx, `
+		select
+			id,
+			tenant_id,
+			stack_id,
+			component_key,
+			source_template_id,
+			desired_template_revision_id,
+			last_applied_template_revision_id,
+			workspace_name,
+			installed_config_json,
+			desired_config_json,
+			last_applied_run_id,
+			last_applied_config_json,
+			last_applied_at,
+			pending_plan_run_id,
+			pending_plan_template_revision_id,
+			pending_plan_config_json,
+			pending_plan_at,
+			created_by,
+			lifecycle
+		from stack_templates
+		where tenant_id = $1
+			and lifecycle != $2
+		order by stack_id, id
+	`, tenantID, domain.StackTemplateDestroyed)
+	if err != nil {
+		return nil, fmt.Errorf("list tenant stack templates: %w", err)
+	}
+	defer rows.Close()
+
+	templates := []domain.StackTemplate{}
+	for rows.Next() {
+		stackTemplate, err := scanStackTemplate(rows)
+		if err != nil {
+			return nil, err
+		}
+		templates = append(templates, stackTemplate)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate tenant stack templates: %w", err)
+	}
+	return templates, nil
+}
+
+// ListTemplateRunsByStatus returns the tenant's runs in one status, across all
+// of its stack templates, most recent first.
+func (store *Store) ListTemplateRunsByStatus(ctx context.Context, tenantID domain.TenantID, status domain.TemplateRunStatus) ([]domain.TemplateRun, error) {
+	rows, err := store.pool.Query(ctx, templateRunSelect+`
+		where r.tenant_id = $1 and r.status = $2
+		order by r.created_at desc nulls last, r.id desc
+	`, tenantID, status)
+	if err != nil {
+		return nil, fmt.Errorf("list template runs by status: %w", err)
+	}
+	defer rows.Close()
+
+	runs := []domain.TemplateRun{}
+	for rows.Next() {
+		run, err := scanTemplateRun(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan template run: %w", err)
+		}
+		runs = append(runs, run)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list template runs by status: %w", err)
+	}
+	return runs, nil
+}
+
 func (store *Store) CreateStackTemplate(ctx context.Context, stackTemplate domain.StackTemplate) error {
 	configJSON := stackTemplate.InstalledConfigJSON
 	if len(configJSON) == 0 {

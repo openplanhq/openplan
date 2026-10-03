@@ -762,6 +762,14 @@ func (recordingStore) ListStacks(context.Context, domain.TenantID) ([]domain.Sta
 	return nil, nil
 }
 
+func (recordingStore) ListTenantStackTemplates(context.Context, domain.TenantID) ([]domain.StackTemplate, error) {
+	return nil, nil
+}
+
+func (recordingStore) ListTemplateRunsByStatus(context.Context, domain.TenantID, domain.TemplateRunStatus) ([]domain.TemplateRun, error) {
+	return nil, nil
+}
+
 func (recordingStore) ListStacksPage(context.Context, domain.TenantID, *app.StackPageCursor, int) ([]domain.Stack, error) {
 	return nil, nil
 }

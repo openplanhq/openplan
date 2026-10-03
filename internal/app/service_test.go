@@ -258,10 +258,13 @@ func TestTemplateDisplayName(t *testing.T) {
 	}{
 		{name: "root path dot", repoName: "infra-templates", rootPath: ".", want: "infra-templates"},
 		{name: "empty root path", repoName: "infra-templates", rootPath: "", want: "infra-templates"},
-		{name: "subdirectory", repoName: "infra-templates", rootPath: "modules/vpc", want: "infra-templates/modules/vpc"},
-		{name: "nested subdirectory", repoName: "my-repo", rootPath: "modules/network/vpc", want: "my-repo/modules/network/vpc"},
+		{name: "subdirectory", repoName: "infra-templates", rootPath: "modules/vpc", want: "vpc"},
+		{name: "nested subdirectory", repoName: "my-repo", rootPath: "modules/network/vpc", want: "vpc"},
+		{name: "trailing slash", repoName: "my-repo", rootPath: "modules/vpc/", want: "vpc"},
 		{name: "trims whitespace", repoName: "  my-repo  ", rootPath: ".", want: "my-repo"},
-		{name: "cleans path", repoName: "my-repo", rootPath: "modules/../modules/vpc", want: "my-repo/modules/vpc"},
+		{name: "trims root path whitespace", repoName: "my-repo", rootPath: "  modules/vpc  ", want: "vpc"},
+		{name: "cleans path", repoName: "my-repo", rootPath: "modules/../modules/vpc", want: "vpc"},
+		{name: "dot slash is the root", repoName: "my-repo", rootPath: "./", want: "my-repo"},
 	}
 
 	for _, tt := range tests {
@@ -321,8 +324,8 @@ func TestGetStackResolvesTemplateDisplayName(t *testing.T) {
 	if len(view.Templates) != 3 {
 		t.Fatalf("len(templates) = %d, want 3", len(view.Templates))
 	}
-	if got := view.Templates[0].DisplayName; got != "infra-templates/modules/vpc" {
-		t.Errorf("template[0].DisplayName = %q, want infra-templates/modules/vpc", got)
+	if got := view.Templates[0].DisplayName; got != "vpc" {
+		t.Errorf("template[0].DisplayName = %q, want vpc", got)
 	}
 	// The ref is resolved from the desired revision on every read rather than
 	// stored on the component, so it cannot drift from the revision in use.

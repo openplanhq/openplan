@@ -108,6 +108,7 @@ func TestTenantScopedRoutesRejectOtherTenantBeforeHandler(t *testing.T) {
 		{name: "get template variables", method: http.MethodGet, path: "/v1/tenants/tenant_other/template-revisions/revision_123/variables"},
 		{name: "create stack", method: http.MethodPost, path: "/v1/tenants/tenant_other/stacks"},
 		{name: "list stacks", method: http.MethodGet, path: "/v1/tenants/tenant_other/stacks"},
+		{name: "list attention", method: http.MethodGet, path: "/v1/tenants/tenant_other/attention"},
 		{name: "get stack", method: http.MethodGet, path: "/v1/tenants/tenant_other/stacks/stack_123"},
 		{name: "install template", method: http.MethodPost, path: "/v1/tenants/tenant_other/stacks/stack_123/templates"},
 		{name: "update template config", method: http.MethodPatch, path: "/v1/tenants/tenant_other/stack-templates/stack_template_123/config"},
@@ -807,6 +808,11 @@ func TestListStacksReturnsTenantStacks(t *testing.T) {
 			CreatedAt: createdAt,
 		},
 	}
+	deps.stackOverview.templates = []domain.StackTemplate{
+		{ID: "stack_template_1", StackID: "stack_123"},
+		{ID: "stack_template_2", StackID: "stack_123"},
+		{ID: "stack_template_other", StackID: "stack_hidden"},
+	}
 	server := NewServer(deps.service(), configuredTenantID)
 	response := httptest.NewRecorder()
 	request := authenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/stacks", nil)
@@ -820,7 +826,7 @@ func TestListStacksReturnsTenantStacks(t *testing.T) {
 		t.Fatalf("tenant list lookup = %q, want tenant_123", deps.stacks.gotListTenantID)
 	}
 
-	var body []stackResponse
+	var body []stackListItemResponse
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
@@ -829,6 +835,98 @@ func TestListStacksReturnsTenantStacks(t *testing.T) {
 	}
 	if body[0].ID != "stack_123" || body[0].Slug != "acme-prod" {
 		t.Fatalf("stack response = %#v", body[0])
+	}
+	if body[0].TemplateCount != 2 {
+		t.Fatalf("template_count = %d, want 2", body[0].TemplateCount)
+	}
+}
+
+func TestListAttentionReturnsWaitingPlans(t *testing.T) {
+	t.Parallel()
+
+	plannedAt := time.Date(2026, 10, 3, 9, 30, 0, 0, time.UTC)
+	deps := newAPITestDependencies(t)
+	deps.stacks.list = []domain.Stack{{ID: "stack_123", TenantID: "tenant_123", Name: "Acme Prod", Slug: "acme-prod"}}
+	deps.stackOverview.templates = []domain.StackTemplate{{
+		ID:                        "stack_template_123",
+		StackID:                   "stack_123",
+		DesiredTemplateRevisionID: "template_123",
+		Lifecycle:                 domain.StackTemplateActive,
+		PendingPlanRunID:          "run_123",
+		PendingPlanAt:             plannedAt,
+	}}
+	deps.stackOverview.waiting = []domain.TemplateRun{{
+		ID:              "run_123",
+		TenantID:        "tenant_123",
+		StackTemplateID: "stack_template_123",
+		Operation:       domain.OperationPlan,
+		Status:          domain.TemplateRunWaitingApproval,
+		TriggerActor:    "user_123",
+		RunNumber:       7,
+		PlanSummary:     &domain.PlanSummary{Add: 2, Change: 1},
+	}}
+	deps.templates.templates = []domain.TemplateRevision{{ID: "template_123", RepoName: "infra-modules", RootPath: "modules/eks-cluster"}}
+	server := NewServer(deps.service(), configuredTenantID)
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/attention", nil))
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	var body []struct {
+		Kind  string `json:"kind"`
+		At    string `json:"at"`
+		Stack struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+			Slug string `json:"slug"`
+		} `json:"stack"`
+		StackTemplate struct {
+			ID          string `json:"id"`
+			DisplayName string `json:"display_name"`
+		} `json:"stack_template"`
+		Run *struct {
+			ID          string             `json:"id"`
+			RunNumber   int                `json:"run_number"`
+			PlanSummary domain.PlanSummary `json:"plan_summary"`
+		} `json:"run"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(body) != 1 {
+		t.Fatalf("len(body) = %d, want 1", len(body))
+	}
+	item := body[0]
+	if item.Kind != "waiting_approval" || item.At != "2026-10-03T09:30:00Z" {
+		t.Errorf("kind, at = %q, %q", item.Kind, item.At)
+	}
+	if item.Stack.ID != "stack_123" || item.Stack.Name != "Acme Prod" || item.Stack.Slug != "acme-prod" {
+		t.Errorf("stack = %+v", item.Stack)
+	}
+	if item.StackTemplate.ID != "stack_template_123" || item.StackTemplate.DisplayName != "eks-cluster" {
+		t.Errorf("stack template = %+v", item.StackTemplate)
+	}
+	if item.Run == nil || item.Run.ID != "run_123" || item.Run.RunNumber != 7 || item.Run.PlanSummary.Add != 2 {
+		t.Errorf("run = %+v", item.Run)
+	}
+}
+
+func TestListAttentionReturnsAnEmptyList(t *testing.T) {
+	t.Parallel()
+
+	deps := newAPITestDependencies(t)
+	server := NewServer(deps.service(), configuredTenantID)
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/attention", nil))
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if got := strings.TrimSpace(response.Body.String()); got != "[]" {
+		t.Fatalf("body = %s, want []", got)
 	}
 }
 
@@ -2591,6 +2689,7 @@ type apiTestDependencies struct {
 	authorizer             *authorization.Authorization
 	t                      *testing.T
 	stacks                 recordingStackRepository
+	stackOverview          apiStackOverviewRepository
 	stackTemplates         recordingStackTemplateRepository
 	stackTemplateInstaller recordingStackTemplateInstaller
 	templateRuns           recordingTemplateRunRepository
@@ -2761,6 +2860,7 @@ func (deps *apiTestDependencies) service() *app.Service {
 		Authorization:            deps.authorizer,
 		Work:                     work,
 		Stacks:                   &deps.stacks,
+		StackOverview:            &deps.stackOverview,
 		StackTemplates:           &deps.stackTemplates,
 		StackTemplateInstaller:   &deps.stackTemplateInstaller,
 		TemplateRuns:             &deps.templateRuns,
@@ -2777,6 +2877,24 @@ func (deps *apiTestDependencies) service() *app.Service {
 		RegistrationIDs:          fixedTemplateRegistrationIDGenerator{id: deps.registrationID},
 		Clock:                    fixedClock{now: deps.now},
 	})
+}
+
+// apiStackOverviewRepository holds a tenant's templates and waiting runs in
+// memory.
+type apiStackOverviewRepository struct {
+	templates []domain.StackTemplate
+	waiting   []domain.TemplateRun
+}
+
+func (repository *apiStackOverviewRepository) ListTenantStackTemplates(context.Context, domain.TenantID) ([]domain.StackTemplate, error) {
+	return repository.templates, nil
+}
+
+func (repository *apiStackOverviewRepository) ListTemplateRunsByStatus(_ context.Context, _ domain.TenantID, status domain.TemplateRunStatus) ([]domain.TemplateRun, error) {
+	if status != domain.TemplateRunWaitingApproval {
+		return nil, nil
+	}
+	return repository.waiting, nil
 }
 
 // apiUnitOfWork applies writes immediately; transactional behaviour is proven

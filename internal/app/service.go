@@ -229,6 +229,7 @@ type Service struct {
 	Authorization            *authorization.Authorization
 	Work                     UnitOfWork
 	Stacks                   StackRepository
+	StackOverview            StackOverviewRepository
 	StackTemplates           StackTemplateRepository
 	Credentials              CredentialRepository
 	CredentialEncryptor      CredentialEncryptor
@@ -1078,23 +1079,12 @@ func (service *Service) GetStack(ctx context.Context, command GetStackCommand) (
 		view.Templates = []StackTemplateView{}
 	}
 
-	if len(view.Templates) > 0 {
-		revisions, err := service.TemplateRevisions.ListTemplateRevisions(ctx, command.TenantID)
-		if err != nil {
-			return StackView{}, fmt.Errorf("list template revisions: %w", err)
-		}
-		byID := make(map[domain.TemplateRevisionID]domain.TemplateRevision, len(revisions))
-		for _, rev := range revisions {
-			byID[rev.ID] = rev
-		}
-		for i := range view.Templates {
-			rev, ok := byID[view.Templates[i].DesiredTemplateRevisionID]
-			if !ok {
-				continue
-			}
-			view.Templates[i].DisplayName = templateDisplayName(rev.RepoName, rev.RootPath)
-			view.Templates[i].SourceRef = rev.SourceRef
-		}
+	views := make([]*StackTemplateView, len(view.Templates))
+	for i := range view.Templates {
+		views[i] = &view.Templates[i]
+	}
+	if err := service.labelStackTemplates(ctx, command.TenantID, views...); err != nil {
+		return StackView{}, err
 	}
 
 	caps, err := ResolveStackCapabilities(ctx, service.Authorization, command.StackID)
@@ -1103,6 +1093,32 @@ func (service *Service) GetStack(ctx context.Context, command GetStackCommand) (
 	}
 	view.Capabilities = caps
 	return view, nil
+}
+
+// labelStackTemplates fills each view's DisplayName and SourceRef from its
+// desired revision. A view whose revision is not found keeps both empty
+// rather than guessing. One lookup covers every view.
+func (service *Service) labelStackTemplates(ctx context.Context, tenantID domain.TenantID, views ...*StackTemplateView) error {
+	if len(views) == 0 {
+		return nil
+	}
+	revisions, err := service.TemplateRevisions.ListTemplateRevisions(ctx, tenantID)
+	if err != nil {
+		return fmt.Errorf("list template revisions: %w", err)
+	}
+	byID := make(map[domain.TemplateRevisionID]domain.TemplateRevision, len(revisions))
+	for _, rev := range revisions {
+		byID[rev.ID] = rev
+	}
+	for _, view := range views {
+		rev, ok := byID[view.DesiredTemplateRevisionID]
+		if !ok {
+			continue
+		}
+		view.DisplayName = templateDisplayName(rev.RepoName, rev.RootPath)
+		view.SourceRef = rev.SourceRef
+	}
+	return nil
 }
 
 // ListStacks returns tenant-owned stacks ordered for UI selection.
@@ -2109,11 +2125,17 @@ func componentKey(value string, stackTemplateID domain.StackTemplateID) string {
 	return string(stackTemplateID)
 }
 
+// templateDisplayName names an installed template by the last segment of its
+// root path: modules/network/vpc is "vpc". The repository is left out because
+// every template from one repository shares it, so it separated nothing. A
+// template at the repository root has no path to name it, so it takes the
+// repository's name.
 func templateDisplayName(repoName, rootPath string) string {
-	if rootPath == "" || rootPath == "." {
+	cleaned := filepath.Clean(strings.TrimSpace(rootPath))
+	if cleaned == "." {
 		return strings.TrimSpace(repoName)
 	}
-	return strings.TrimSpace(repoName) + "/" + filepath.Clean(rootPath)
+	return filepath.Base(cleaned)
 }
 
 func workspaceName(stackSlug string, stackTemplateID domain.StackTemplateID) string {

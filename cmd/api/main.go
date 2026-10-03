@@ -43,6 +43,7 @@ type postgresPool interface {
 
 type appRepositories interface {
 	app.StackRepository
+	app.StackOverviewRepository
 	app.StackTemplateRepository
 	app.StackTemplateInstaller
 	app.TemplateRunRepository
@@ -378,6 +379,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 		Authorization:            auth,
 		Work:                     store,
 		Stacks:                   store,
+		StackOverview:            store,
 		StackTemplates:           store,
 		Credentials:              credentialRepository(store),
 		CredentialEncryptor:      credentialEncryptor(store),
