@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import {
   useApproveRunMutation,
   useDiscardRunMutation,
@@ -17,6 +17,8 @@ import ErrorLine from "../../shared/ErrorLine";
 import PlanDiff from "../../shared/PlanDiff";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import { cn } from "@/lib/utils";
+import PanelTrail from "../stacks/PanelTrail";
+import { stackTemplatePath } from "../stacks/templateSelection";
 import RunLogsPanel from "./RunLogsPanel";
 import { runProgressTag } from "./runIndicator";
 import RunStatusLabel from "./RunStatusLabel";
@@ -75,7 +77,9 @@ export default function RunDetailScreen() {
     });
   }
 
-  const trail = <RunTrail stackId={stackId} stackTemplateId={stackTemplateId} runNumber={runNumber} />;
+  const trail = (
+    <PanelTrail name="Run" parent={{ label: "Runs", to: stackTemplatePath(stackId, stackTemplateId, "runs") }} current={`Run #${runNumber}`} />
+  );
 
   // A cached list can predate a run that was just started, so a number it
   // lacks only means "no such run" once a refetch has confirmed it.
@@ -184,22 +188,6 @@ export default function RunDetailScreen() {
 }
 
 // The trail above a run: back to its template's runs, then the run itself.
-function RunTrail({ stackId, stackTemplateId, runNumber }: { stackId: string; stackTemplateId: string; runNumber: string }) {
-  return (
-    <nav aria-label="Run" className="flex items-center gap-1.5 text-sm text-muted-foreground">
-      <Link to={`/stacks/${stackId}/templates/${stackTemplateId}/runs`} className="hover:text-foreground hover:underline">
-        Runs
-      </Link>
-      <span aria-hidden="true" className="text-separator">
-        /
-      </span>
-      <span aria-current="page" className="text-foreground">
-        Run #{runNumber}
-      </span>
-    </nav>
-  );
-}
-
 // One fact about a run: what it is, above its value.
 function Fact({ term, mono = false, children }: { term: string; mono?: boolean; children: ReactNode }) {
   return (

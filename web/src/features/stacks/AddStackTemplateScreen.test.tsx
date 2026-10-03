@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
+import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import AddStackTemplateScreen from "./AddStackTemplateScreen";
+import TemplatePanel from "./TemplatePanel";
 import { queryKeys } from "../../api/queryKeys";
-import type { TemplateRevision, TemplateVariable } from "../../api/types";
+import type { StackTemplate, TemplateRevision, TemplateVariable } from "../../api/types";
 import { AuthContext } from "../../auth/AuthContext";
 import type { AuthContextValue } from "../../auth/AuthContext";
 
@@ -69,14 +71,63 @@ function LocationProbe() {
   return <span data-testid="location">{`${location.pathname}${location.search}`}</span>;
 }
 
-function renderScreen(queryClient: QueryClient) {
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+}
+
+function installedTemplate(id: string): StackTemplate {
+  return {
+    id,
+    stack_id: "stack_1",
+    component_key: "vpc",
+    source_template_id: "tmpl_src_1",
+    desired_template_revision_id: "rev_1",
+    last_applied_template_revision_id: "",
+    source_ref: "main",
+    workspace_name: "ws-vpc",
+    display_name: "",
+    config: { region: "eu-west-1" },
+    last_applied_run_id: "",
+    pending_plan_run_id: "",
+    plan_state: "none",
+    live_state: "never",
+    created_by: "user_123",
+    lifecycle: "active"
+  };
+}
+
+function stackView(templates: StackTemplate[]) {
+  return {
+    stack: {
+      id: "stack_1",
+      tenant_id: "tenant_123",
+      name: "Payments",
+      slug: "payments",
+      tags: {},
+      default_credential_ids: [],
+      created_by: "user_123",
+      created_at: "2026-07-19T00:00:00Z",
+      effectiveCapabilities: { canView: true, canOperate: true, canApprove: true, canManageAccess: true }
+    },
+    templates
+  };
+}
+
+// The header names the stack being added to, so the stack is always seeded.
+function seedStack(queryClient: QueryClient) {
+  queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([]));
+}
+
+function renderScreen(queryClient: QueryClient, routes: ReactNode = <Route path="/stacks/:stackId/templates/:stackTemplateId/*" element={<LocationProbe />} />) {
+  seedStack(queryClient);
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthContext.Provider value={authValue()}>
         <MemoryRouter initialEntries={["/stacks/stack_1/templates/new"]}>
           <Routes>
             <Route path="/stacks/:stackId/templates/new" element={<AddStackTemplateScreen />} />
-            <Route path="/stacks/:stackId/templates/:stackTemplateId" element={<LocationProbe />} />
+            <Route path="/stacks/:stackId" element={<LocationProbe />} />
+            {routes}
           </Routes>
         </MemoryRouter>
       </AuthContext.Provider>
@@ -120,8 +171,11 @@ describe("AddStackTemplateScreen", () => {
     // The name leads; the ref and commit are demoted to the trailing meta.
     expect(row.textContent?.startsWith("vpc")).toBe(true);
     expect(within(row).getByText("vpc")).toBeTruthy();
+    // The root path and the ref under the name; the count at the right. The
+    // commit is the Revision select's to show.
     expect(row.textContent).toContain("main");
-    expect(row.textContent).toContain("44b2e01");
+    expect(row.textContent).toContain("2 revisions");
+    expect(row.textContent).not.toContain("44b2e01");
     // Two revisions of one template are one row.
     expect(within(screen.getByTestId("template-group-hashicorp/vpc")).getAllByRole("listitem")).toHaveLength(1);
   });
@@ -134,7 +188,7 @@ describe("AddStackTemplateScreen", () => {
 
     const row = screen.getByTestId("add-template-choice-tmpl_src_1");
     expect(row.textContent).not.toContain("active");
-    // No status pill: StatusBadge marks itself with its tone.
+    // No state: a StatusLabel marks itself with its tone.
     expect(row.querySelector("[data-tone]")).toBeNull();
   });
 
@@ -148,15 +202,15 @@ describe("AddStackTemplateScreen", () => {
 
     renderScreen(queryClient);
 
-    // Before choosing, the pane invites a choice rather than sitting empty.
-    expect(screen.getByTestId("add-stack-template-unchosen")).toBeTruthy();
+    expect(screen.queryByTestId("add-stack-template-variables")).toBeNull();
 
     fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
 
     // Named, because position alone said nothing: stacked under the list, this
     // panel read as belonging to whichever template rendered last.
-    expect(screen.getByTestId("add-stack-template-variables").textContent).toContain("vpc");
-    expect(screen.queryByTestId("add-stack-template-unchosen")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Configure vpc" })).toBeTruthy();
+    expect(screen.getByTestId("add-template-choice-tmpl_src_1").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("add-template-choice-tmpl_src_2").getAttribute("aria-pressed")).toBe("false");
   });
 
   it("hides the variables form until a revision is chosen", () => {
@@ -197,8 +251,9 @@ describe("AddStackTemplateScreen", () => {
 
     const row = screen.getByTestId("add-template-choice-tmpl_src_1");
     expect((row as HTMLButtonElement).disabled).toBe(true);
-    // A dead button with no reason on it is what the status pill is for.
-    expect(row.textContent).toContain("pending_validation");
+    // A disabled row says why, as an icon and a word.
+    expect(row.textContent).toContain("waiting for validation");
+    expect(row.querySelector("[data-tone]")).not.toBeNull();
   });
 
   it("installs the newest active revision when a newer one failed validation", () => {
@@ -215,19 +270,20 @@ describe("AddStackTemplateScreen", () => {
     // Selectable, because a validated revision is still available to install —
     // and the commit shown is that one, not the newer broken one.
     expect((row as HTMLButtonElement).disabled).toBe(false);
-    expect(row.textContent).toContain("abcdef1");
-    expect(row.textContent).not.toContain("44b2e01");
-    // The pill still reports the latest revision's state, so a failed
-    // validation is not hidden behind an older success.
-    expect(row.textContent).toContain("invalid");
+    // The newest revision's failure is not hidden behind an older success.
+    expect(row.textContent).toContain("failed validation");
+    expect(row.textContent).toContain("1 revision");
 
     fireEvent.click(row);
 
-    expect(screen.getByTestId("add-stack-template-variables")).toBeTruthy();
+    // What gets installed is the active revision, not the newer broken one.
+    const shown = screen.getByRole("combobox", { name: "Revision" }).querySelector('[data-slot="select-value"]')?.textContent ?? "";
+    expect(shown).toContain("abcdef1");
+    expect(shown).not.toContain("44b2e01");
     expect(screen.getByLabelText(/region/)).toBeTruthy();
   });
 
-  it("installs the chosen revision and opens the installed template's page", async () => {
+  it("adds the chosen revision and opens the new template's Runs", async () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [templateRevision()]);
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [variable()]);
@@ -242,10 +298,10 @@ describe("AddStackTemplateScreen", () => {
 
     fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
     fireEvent.change(screen.getByLabelText(/region/), { target: { value: "eu-west-1" } });
-    fireEvent.click(screen.getByRole("button", { name: /Install/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Add template" }));
 
     await waitFor(() => expect(screen.getByTestId("location")).toBeTruthy());
-    expect(screen.getByTestId("location").textContent).toBe("/stacks/stack_1/templates/st_new");
+    expect(screen.getByTestId("location").textContent).toBe("/stacks/stack_1/templates/st_new/runs");
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("/v1/tenants/tenant_123/stacks/stack_1/templates");
@@ -272,12 +328,12 @@ describe("AddStackTemplateScreen", () => {
     renderScreen(queryClient);
 
     fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
-    fireEvent.click(screen.getByRole("button", { name: /Install/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Add template" }));
 
     await waitFor(() => expect(screen.getByTestId("add-stack-template-error")).toBeTruthy());
   });
 
-  it("disables Install and hides the empty-variables message while the chosen revision's variables are loading", () => {
+  it("disables Add template and hides the empty-variables message while the chosen revision's variables are loading", () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [templateRevision()]);
     // Variables for rev_1 are deliberately left unseeded, and fetch never
@@ -289,8 +345,8 @@ describe("AddStackTemplateScreen", () => {
     fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
 
     expect(screen.getByTestId("add-stack-template-variables-loading")).toBeTruthy();
-    expect(screen.queryByText("This template declares no variables")).toBeNull();
-    expect((screen.getByRole("button", { name: /Install/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByText("This template declares no variables.")).toBeNull();
+    expect((screen.getByRole("button", { name: "Add template" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("does not render the previous revision's variable names after switching to a revision whose variables have not loaded", () => {
@@ -340,15 +396,15 @@ describe("AddStackTemplateScreen", () => {
     fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
 
     await waitFor(() => expect(screen.getByTestId("add-stack-template-variables-error")).toBeTruthy());
-    expect(screen.queryByText("This template declares no variables")).toBeNull();
-    expect((screen.getByRole("button", { name: /Install/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByText("This template declares no variables.")).toBeNull();
+    expect((screen.getByRole("button", { name: "Add template" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("offers no revision picker when the template has only one active revision", () => {
+  it("shows the one active revision in the picker, so what will be installed is on screen", async () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [
       templateRevision(),
-      // Not active, so not an alternative to choose between.
+      // Not active, so not offered.
       templateRevision({ id: "rev_old", status: "invalid", resolved_commit_sha: "44b2e0199999" })
     ]);
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [variable()]);
@@ -356,7 +412,10 @@ describe("AddStackTemplateScreen", () => {
     renderScreen(queryClient);
     fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
 
-    expect(screen.queryByTestId("add-template-revision-select")).toBeNull();
+    await userEvent.setup().click(screen.getByRole("combobox", { name: "Revision" }));
+    const options = within(await screen.findByRole("listbox")).getAllByRole("option").map((option) => option.textContent ?? "");
+    expect(options).toHaveLength(1);
+    expect(options[0]).toContain("abcdef1");
   });
 
   it("lists a template's active revisions newest-registered first, defaulting to the latest", async () => {
@@ -415,7 +474,7 @@ describe("AddStackTemplateScreen", () => {
     expect((screen.getByLabelText(/region/) as HTMLInputElement).value).toBe("");
 
     fireEvent.change(screen.getByLabelText(/region/), { target: { value: "us-east-1" } });
-    fireEvent.click(screen.getByRole("button", { name: /Install/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Add template" }));
 
     await waitFor(() => expect(screen.getByTestId("location")).toBeTruthy());
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -433,5 +492,62 @@ describe("AddStackTemplateScreen", () => {
 
     expect(screen.getByTestId("add-stack-template-none")).toBeTruthy();
     expect(screen.getByTestId("register-template-link").getAttribute("href")).toBe("/templates/new");
+  });
+
+  it("replaces the template header with its own: what it is, which stack, and Cancel", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [templateRevision()]);
+
+    renderScreen(queryClient);
+
+    expect(screen.getByRole("heading", { level: 2, name: "Add template" })).toBeTruthy();
+    expect(screen.getByText("to Payments")).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 3, name: "Choose a template" })).toBeTruthy();
+    await userEvent.setup().click(screen.getByRole("link", { name: "Cancel" }));
+    expect(screen.getByTestId("location").textContent).toBe("/stacks/stack_1");
+  });
+
+  // The add's response is not labelled: it has no display name and no ref.
+  // So the panel opens once the stack has reloaded with the new template,
+  // labelled: it never shows the workspace name, or calls the template missing.
+  it("opens the new template's panel once the stack has reloaded with it, labelled", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [templateRevision()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [variable()]);
+    queryClient.setQueryData(queryKeys.attention("tenant_123"), []);
+    let answerStack: (response: Response) => void = () => {};
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      if (init?.method === "POST") {
+        return Promise.resolve(jsonResponse({ ...installedTemplate("st_new"), source_ref: "" }, 201));
+      }
+      if (String(input).endsWith("/stacks/stack_1")) {
+        return new Promise<Response>((resolve) => {
+          answerStack = resolve;
+        });
+      }
+      return new Promise<Response>(() => {});
+    });
+
+    renderScreen(
+      queryClient,
+      <Route path="/stacks/:stackId/templates/:stackTemplateId" element={<TemplatePanel />}>
+        <Route path="runs" element={<LocationProbe />} />
+      </Route>
+    );
+    fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
+    fireEvent.change(screen.getByLabelText(/region/), { target: { value: "eu-west-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add template" }));
+
+    // While the stack reloads, the screen stays, with Add template busy.
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/stacks/stack_1"))).toBe(true));
+    expect(screen.queryByTestId("template-panel")).toBeNull();
+    expect((screen.getByRole("button", { name: "Add template" }) as HTMLButtonElement).disabled).toBe(true);
+
+    answerStack(jsonResponse(stackView([{ ...installedTemplate("st_new"), display_name: "vpc" }])));
+
+    expect(await screen.findByRole("heading", { level: 2, name: "vpc" })).toBeTruthy();
+    expect(screen.queryByText("ws-vpc")).toBeNull();
+    expect(screen.queryByTestId("stack-template-missing")).toBeNull();
+    expect(screen.getByTestId("location").textContent).toBe("/stacks/stack_1/templates/st_new/runs");
   });
 });

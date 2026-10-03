@@ -148,7 +148,7 @@ describe("TemplateRunActions", () => {
     expect(button(/Approve|Cancel|Discard/)).toBeNull();
   });
 
-  it("keeps Plan disabled until run history has loaded", () => {
+  it("keeps Plan disabled until run history has loaded, and says so", () => {
     vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
     const queryClient = testQueryClient();
     seedCapabilities(queryClient, allAllowed);
@@ -156,6 +156,7 @@ describe("TemplateRunActions", () => {
     renderActions(queryClient);
 
     expect(isDisabled(screen.getByRole("button", { name: /Plan/ }))).toBe(true);
+    expect(screen.getByTestId("template-run-actions-note").textContent).toBe("Loading runs…");
   });
 
   // A run in flight cannot be stopped, so nothing offers to; the toolbar
@@ -219,6 +220,21 @@ describe("TemplateRunActions", () => {
     expect(screen.getByTestId("template-run-actions-note").textContent).toBe("A template whose destroy failed cannot start runs.");
     expect(screen.getByTestId("template-failed-destroy").textContent).toContain("The destroy run stopped before it finished. Some resources may still exist.");
     expect(screen.getByTestId("template-view-failed-run").getAttribute("href")).toBe("/stacks/stack_1/templates/stpl_1/runs/7");
+  });
+
+  it.each([
+    ["destroying", "Destroy in progress."],
+    ["orphaned", "Only an active template can start runs."]
+  ])("says why Plan and Apply are locked while the template is %s", (lifecycle, note) => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    seedRuns(queryClient, []);
+
+    renderActions(queryClient, { lifecycle });
+
+    expect(isDisabled(screen.getByRole("button", { name: /Plan/ }))).toBe(true);
+    expect(isDisabled(screen.getByRole("button", { name: /^Apply$/ }))).toBe(true);
+    expect(screen.getByTestId("template-run-actions-note").textContent).toBe(note);
   });
 
   // Auto apply is an approval given in advance, so it is offered only to

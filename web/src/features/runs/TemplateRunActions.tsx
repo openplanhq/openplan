@@ -1,44 +1,20 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { FileSearch, Loader2, Play } from "lucide-react";
-import { isTerminalRunStatus } from "../../api/polling";
 import { queryKeys } from "../../api/queryKeys";
-import { useStartTemplateRunMutation, useTemplateRunsQuery } from "../../api/queries";
-import type { StackTemplate, TemplateRun } from "../../api/types";
+import { useStartTemplateRunMutation } from "../../api/queries";
+import type { StackTemplate } from "../../api/types";
 import RequireCapability from "../../auth/RequireCapability";
-import { useStackCapabilities } from "../../auth/useStackCapabilities";
 import { tenantID } from "../../config";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
 import { cn } from "@/lib/utils";
+import { runActionsNote, startRunLockReason, useLockState } from "./lockReasons";
 import { isRunInFlightError } from "./runErrors";
-import { runInFlightReason } from "./useRunInFlight";
 
 interface TemplateRunActionsProps {
   stackId: string;
   stackTemplate: StackTemplate;
-}
-
-/** The sentence beside Plan and Apply: what they do, or why they cannot be used now. */
-export function runActionsNote({
-  canOperate,
-  lifecycle,
-  activeRun
-}: {
-  canOperate: boolean;
-  lifecycle: string;
-  activeRun: TemplateRun | null;
-}): string {
-  if (!canOperate) {
-    return "Starting a run requires operator access.";
-  }
-  if (lifecycle === "failed") {
-    return "A template whose destroy failed cannot start runs.";
-  }
-  if (activeRun) {
-    return `${runInFlightReason(activeRun, "starting another run")}.`;
-  }
-  return "Plan shows what would change. Apply saves a plan that waits for approval.";
 }
 
 // The toolbar of a template's Runs tab: a line that explains the buttons,
@@ -54,15 +30,11 @@ export default function TemplateRunActions({ stackId, stackTemplate }: TemplateR
   const [errorMessage, setErrorMessage] = useState("");
   const [autoApprove, setAutoApprove] = useState(false);
   const queryClient = useQueryClient();
-  const canOperate = useStackCapabilities(stackId)?.canOperate === true;
-
-  const runsQuery = useTemplateRunsQuery(tenantID, stackTemplate.id);
-  const runsReady = runsQuery.status === "success";
-  const activeRun = runsReady ? runsQuery.data.find((candidate) => !isTerminalRunStatus(candidate.status)) ?? null : null;
+  const lock = useLockState(stackId, stackTemplate);
 
   const startRunMutation = useStartTemplateRunMutation(tenantID);
   const startingOperation = startRunMutation.isPending ? startRunMutation.variables?.body.operation : undefined;
-  const disabled = !canOperate || !runsReady || activeRun !== null || stackTemplate.lifecycle !== "active" || startingOperation !== undefined;
+  const disabled = startRunLockReason(lock) !== "" || startingOperation !== undefined;
 
   async function startRun(operation: "plan" | "apply") {
     setErrorMessage("");
@@ -82,7 +54,7 @@ export default function TemplateRunActions({ stackId, stackTemplate }: TemplateR
     <div className="flex flex-col gap-3" data-testid="template-run-actions">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <p className="text-meta text-muted-foreground" data-testid="template-run-actions-note">
-          {runActionsNote({ canOperate, lifecycle: stackTemplate.lifecycle, activeRun })}
+          {runActionsNote(lock)}
         </p>
         <div className="flex flex-wrap items-center gap-2">
           {/* Auto apply is an approval given in advance, so it is offered

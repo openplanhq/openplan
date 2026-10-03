@@ -12,7 +12,7 @@ describe("buttonClass", () => {
   });
 
   it("draws focus as a 2px solid ring outline instead of shadcn's soft ring", () => {
-    for (const variant of ["primary", "outline", "section"] as const) {
+    for (const variant of ["primary", "outline", "section", "icon"] as const) {
       const button = classes(buttonClass(variant));
       expect(button).toEqual(expect.arrayContaining(["focus-visible:ring-0", "focus-visible:outline-solid", "focus-visible:outline-2", "focus-visible:outline-ring"]));
       expect(button).not.toContain("focus-visible:ring-3");
@@ -31,5 +31,11 @@ describe("buttonClass", () => {
     expect(section).toEqual(expect.arrayContaining(["px-2.5", "text-meta", "has-data-[icon=inline-start]:pl-2.5"]));
     expect(section).not.toContain("px-3");
     expect(section).not.toContain("text-sm");
+  });
+
+  it("draws an icon button 32px square in muted text, with no side padding", () => {
+    const icon = classes(buttonClass("icon"));
+    expect(icon).toEqual(expect.arrayContaining(["size-8", "text-muted-foreground"]));
+    expect(icon).not.toContain("px-3");
   });
 });

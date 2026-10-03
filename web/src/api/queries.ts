@@ -173,10 +173,15 @@ export function useAddTemplateToStackMutation(tenantID: string, stackID: string)
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: Parameters<typeof client.addTemplateToStack>[2]) => client.addTemplateToStack(tenantID, stackID, body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.stack(tenantID, stackID) });
+    onSuccess: async () => {
       // The stacks index counts each stack's templates.
-      queryClient.invalidateQueries({ queryKey: queryKeys.stacks(tenantID) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.stacks(tenantID) });
+      // The new template's panel opens as soon as this resolves, so wait for
+      // the stack to reload with the template in it. Without it the panel
+      // would say the template is not installed. The add's own response
+      // cannot stand in: it has no display name or ref, so the panel would
+      // show the workspace name until the reload landed.
+      await queryClient.invalidateQueries({ queryKey: queryKeys.stack(tenantID, stackID) });
     }
   });
 }

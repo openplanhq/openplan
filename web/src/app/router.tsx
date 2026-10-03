@@ -10,7 +10,7 @@ import StacksListScreen from "../features/stacks/StacksListScreen";
 import StackAttentionScreen from "../features/stacks/StackAttentionScreen";
 import StackPage from "../features/stacks/StackPage";
 import StackIndexPanel from "../features/stacks/StackIndexPanel";
-import AddTemplatePanel from "../features/stacks/AddTemplatePanel";
+import AddStackTemplateScreen from "../features/stacks/AddStackTemplateScreen";
 import StackSectionLayout from "../features/stacks/StackSectionLayout";
 import TemplatePanel from "../features/stacks/TemplatePanel";
 import TemplateRunsTab from "../features/stacks/TemplateRunsTab";
@@ -95,7 +95,7 @@ export const routeConfig: RouteObject[] = [
                   {
                     path: "templates/new",
                     element: <RequireCapability capability="canOperate" mode="route" />,
-                    children: [{ index: true, element: <AddTemplatePanel /> }]
+                    children: [{ index: true, element: <AddStackTemplateScreen /> }]
                   },
                   // A run nests under runs/ so Runs stays lit while reading
                   // one, and Change revision under the template so Settings

@@ -43,7 +43,9 @@ export default function EnvironmentScreen() {
   return (
     <section data-testid="environment-screen">
       <CredentialsPanel
-        title="Environment credentials"
+        note="Values are write-only and injected only when Terraform runs. Use TF_VAR_NAME for Terraform variables; provider credentials keep their provider-specific names."
+        emptyTitle="No credentials in this environment"
+        emptyDescription="Credentials added here are available to every template in this stack."
         credentials={credentialsQuery.data ?? []}
         loading={credentialsQuery.isPending}
         busy={createMutation.isPending || deleteMutation.isPending}

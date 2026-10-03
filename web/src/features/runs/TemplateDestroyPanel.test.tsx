@@ -159,8 +159,7 @@ describe("TemplateDestroyPanel", () => {
 
     renderPanel(queryClient);
 
-    expect(screen.getByTestId("template-destroy-panel").getAttribute("data-slot")).toBe("card");
-    expect(screen.getByRole("button", { name: /^Destroy$/ }).getAttribute("data-slot")).toBe("button");
+    expect(screen.getByRole("region", { name: "Destroy" })).toBeTruthy();
     expect(screen.queryByRole("checkbox", { name: /Auto Apply/ })).toBeNull();
     expect(isDisabled(screen.getByRole("button", { name: /^Destroy$/ }))).toBe(false);
   });
@@ -173,6 +172,7 @@ describe("TemplateDestroyPanel", () => {
     renderPanel(queryClient);
 
     expect(isDisabled(screen.getByRole("button", { name: /^Destroy$/ }))).toBe(true);
+    expect(screen.getByTestId("template-destroy-disabled-reason").textContent).toBe("Loading runs…");
   });
 
   // The panel re-reads the runs cache at submit time, which closes the window
@@ -233,7 +233,7 @@ describe("TemplateDestroyPanel", () => {
     renderPanel(queryClient);
 
     expect(isDisabled(screen.getByRole("button", { name: /^Destroy$/ }))).toBe(true);
-    expect(screen.getByTestId("template-destroy-disabled-reason")).toBeTruthy();
+    expect(screen.getByTestId("template-destroy-disabled-reason").textContent).toBe("Destroying requires operator access.");
   });
 
   it("reports a failed destroy in place instead of leaving the panel silent", async () => {
@@ -247,5 +247,20 @@ describe("TemplateDestroyPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Destroy$/ }));
 
     await waitFor(() => expect(screen.getByTestId("template-destroy-error")).toBeTruthy());
+  });
+
+  it.each([
+    [{ lifecycle: "destroying" }, [], "Destroy in progress."],
+    [{ lifecycle: "failed" }, [], "A template whose destroy failed cannot start runs."],
+    [{}, [run({ status: "waiting_approval", run_number: 7 })], "Apply or discard run #7 before destroying."]
+  ] as const)("disables destroy and says why (%o)", (overrides, runs, reason) => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    seedRuns(queryClient, [...runs]);
+
+    renderPanel(queryClient, overrides);
+
+    expect(isDisabled(screen.getByRole("button", { name: /^Destroy$/ }))).toBe(true);
+    expect(screen.getByTestId("template-destroy-disabled-reason").textContent).toBe(reason);
   });
 });
