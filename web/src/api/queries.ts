@@ -2,7 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import * as client from "./client";
 import { queryKeys } from "./queryKeys";
 import { isTerminalRegistrationStatus, isTerminalRunStatus } from "./polling";
-import type { StackView, TemplateRegistration, TemplateRegistrationStatus, TemplateRun, TemplateRunStatus } from "./types";
+import type { TemplateRegistration, TemplateRegistrationStatus, TemplateRun, TemplateRunStatus } from "./types";
 
 export function useStacksQuery(tenantID: string) {
   return useQuery({
@@ -173,16 +173,15 @@ export function useAddTemplateToStackMutation(tenantID: string, stackID: string)
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: Parameters<typeof client.addTemplateToStack>[2]) => client.addTemplateToStack(tenantID, stackID, body),
-    onSuccess: (installed) => {
-      // The new template's panel opens as soon as this resolves, before the
-      // refetch below lands. Without the template in the cached stack, the
-      // panel would say it is not installed until then.
-      queryClient.setQueryData<StackView>(queryKeys.stack(tenantID, stackID), (view) =>
-        view && !view.templates.some((template) => template.id === installed.id) ? { ...view, templates: [...view.templates, installed] } : view
-      );
-      queryClient.invalidateQueries({ queryKey: queryKeys.stack(tenantID, stackID) });
+    onSuccess: async () => {
       // The stacks index counts each stack's templates.
-      queryClient.invalidateQueries({ queryKey: queryKeys.stacks(tenantID) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.stacks(tenantID) });
+      // The new template's panel opens as soon as this resolves, so wait for
+      // the stack to reload with the template in it. Without it the panel
+      // would say the template is not installed. The add's own response
+      // cannot stand in: it has no display name or ref, so the panel would
+      // show the workspace name until the reload landed.
+      await queryClient.invalidateQueries({ queryKey: queryKeys.stack(tenantID, stackID) });
     }
   });
 }

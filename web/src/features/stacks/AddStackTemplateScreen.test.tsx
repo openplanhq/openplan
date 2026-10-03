@@ -96,9 +96,8 @@ function installedTemplate(id: string): StackTemplate {
   };
 }
 
-// The header names the stack being added to, so the stack is always seeded.
-function seedStack(queryClient: QueryClient) {
-  queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), {
+function stackView(templates: StackTemplate[]) {
+  return {
     stack: {
       id: "stack_1",
       tenant_id: "tenant_123",
@@ -110,8 +109,13 @@ function seedStack(queryClient: QueryClient) {
       created_at: "2026-07-19T00:00:00Z",
       effectiveCapabilities: { canView: true, canOperate: true, canApprove: true, canManageAccess: true }
     },
-    templates: []
-  });
+    templates
+  };
+}
+
+// The header names the stack being added to, so the stack is always seeded.
+function seedStack(queryClient: QueryClient) {
+  queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([]));
 }
 
 function renderScreen(queryClient: QueryClient, routes: ReactNode = <Route path="/stacks/:stackId/templates/:stackTemplateId/*" element={<LocationProbe />} />) {
@@ -503,17 +507,26 @@ describe("AddStackTemplateScreen", () => {
     expect(screen.getByTestId("location").textContent).toBe("/stacks/stack_1");
   });
 
-  // The stack refetch after adding is still out when the new panel opens. The
-  // panel must find the template anyway, not call it missing.
-  it("opens the new template's panel at once, while the stack reloads", async () => {
+  // The add's response is not labelled: it has no display name and no ref.
+  // So the panel opens once the stack has reloaded with the new template,
+  // labelled: it never shows the workspace name, or calls the template missing.
+  it("opens the new template's panel once the stack has reloaded with it, labelled", async () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [templateRevision()]);
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [variable()]);
     queryClient.setQueryData(queryKeys.attention("tenant_123"), []);
-    // The add answers; every read after it, the stack's refetch among them, hangs.
-    vi.spyOn(globalThis, "fetch").mockImplementation((_input, init) =>
-      init?.method === "POST" ? Promise.resolve(jsonResponse(installedTemplate("st_new"), 201)) : new Promise<Response>(() => {})
-    );
+    let answerStack: (response: Response) => void = () => {};
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      if (init?.method === "POST") {
+        return Promise.resolve(jsonResponse({ ...installedTemplate("st_new"), source_ref: "" }, 201));
+      }
+      if (String(input).endsWith("/stacks/stack_1")) {
+        return new Promise<Response>((resolve) => {
+          answerStack = resolve;
+        });
+      }
+      return new Promise<Response>(() => {});
+    });
 
     renderScreen(
       queryClient,
@@ -525,7 +538,15 @@ describe("AddStackTemplateScreen", () => {
     fireEvent.change(screen.getByLabelText(/region/), { target: { value: "eu-west-1" } });
     fireEvent.click(screen.getByRole("button", { name: "Add template" }));
 
-    expect(await screen.findByTestId("template-panel")).toBeTruthy();
+    // While the stack reloads, the screen stays, with Add template busy.
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/stacks/stack_1"))).toBe(true));
+    expect(screen.queryByTestId("template-panel")).toBeNull();
+    expect((screen.getByRole("button", { name: "Add template" }) as HTMLButtonElement).disabled).toBe(true);
+
+    answerStack(jsonResponse(stackView([{ ...installedTemplate("st_new"), display_name: "vpc" }])));
+
+    expect(await screen.findByRole("heading", { level: 2, name: "vpc" })).toBeTruthy();
+    expect(screen.queryByText("ws-vpc")).toBeNull();
     expect(screen.queryByTestId("stack-template-missing")).toBeNull();
     expect(screen.getByTestId("location").textContent).toBe("/stacks/stack_1/templates/st_new/runs");
   });
