@@ -1,9 +1,8 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { SquareTerminal } from "lucide-react";
 import { useTemplateRunLogQuery } from "../../api/queries";
 import type { TemplateRunLog } from "../../api/types";
 import { tenantID } from "../../config";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { LogStep, LogSteps } from "../../shared/LogSteps";
 
 interface RunLogsPanelProps {
@@ -21,6 +20,7 @@ interface RunLogsPanelProps {
 // is until someone toggles it, so a newer phase never closes a log being read.
 // Only open rows fetch their log.
 export default function RunLogsPanel({ runId, logs, failed, finished }: RunLogsPanelProps) {
+  const headingId = useId();
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const latestPhase = logs?.[logs.length - 1]?.phase ?? "";
   if (latestPhase !== "" && !(latestPhase in open)) {
@@ -29,9 +29,9 @@ export default function RunLogsPanel({ runId, logs, failed, finished }: RunLogsP
 
   let content;
   if (logs === undefined) {
-    content = <p className="text-sm text-muted-foreground">{failed ? "Could not load this run's logs." : "Loading logs…"}</p>;
+    content = <p className="px-4 py-3 text-meta text-muted-foreground">{failed ? "Could not load this run's logs." : "Loading logs…"}</p>;
   } else if (logs.length === 0) {
-    content = <p className="text-sm text-muted-foreground">{finished ? "No logs." : "No logs yet."}</p>;
+    content = <p className="px-4 py-3 text-meta text-muted-foreground">{finished ? "No logs." : "No logs yet."}</p>;
   } else {
     content = (
       <LogSteps>
@@ -50,13 +50,13 @@ export default function RunLogsPanel({ runId, logs, failed, finished }: RunLogsP
   }
 
   return (
-    <Card className="gap-0" data-testid="run-logs-panel">
-      <CardHeader className="flex flex-row items-center gap-2 py-3">
-        <SquareTerminal className="size-4 text-muted-foreground" aria-hidden="true" />
-        <h2 className="font-heading text-base leading-snug font-medium tracking-normal">Logs</h2>
-      </CardHeader>
-      <CardContent className="min-w-0">{content}</CardContent>
-    </Card>
+    <section aria-labelledby={headingId} className="overflow-hidden rounded-lg border" data-testid="run-logs-panel">
+      <h4 id={headingId} className="flex items-center gap-2 border-b border-divider px-4 py-3 text-sm font-semibold">
+        <SquareTerminal className="size-4 text-subtle-foreground" aria-hidden="true" />
+        Logs
+      </h4>
+      {content}
+    </section>
   );
 }
 

@@ -243,7 +243,7 @@ describe("RunDetailScreen", () => {
     expect(screen.getByTestId("run-detail-screen")).toBeTruthy();
     expect(screen.getByTestId("run-detail-status").textContent).toBe("no changes");
     expect(screen.getByTestId("run-detail-status").getAttribute("data-tone")).toBe("settled");
-    expect(screen.getByTestId("run-logs-panel").getAttribute("data-slot")).toBe("card");
+    expect(within(screen.getByTestId("run-logs-panel")).getByRole("heading", { name: "Logs" })).toBeTruthy();
     expect(screen.getByText("main @ abcdef1")).toBeTruthy();
     await waitFor(() => expect(screen.getByText("plan log body")).toBeTruthy());
     expect(screen.getByTestId("log-scroll-area-plan").getAttribute("data-slot")).toBe("scroll-area");
@@ -389,6 +389,34 @@ describe("RunDetailScreen", () => {
 
   // A subject from the identity provider is opaque (Dex's is base64 of a
   // protobuf), so it is never what a person reads.
+  it("leads with a trail back to the template's runs and titles the run", () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), run({ run_number: 1 }));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([]));
+
+    renderScreen(queryClient);
+
+    const trail = screen.getByRole("navigation", { name: "Run" });
+    expect(within(trail).getByRole("link", { name: "Runs" }).getAttribute("href")).toBe("/stacks/stack_1/templates/stpl_1/runs");
+    expect(within(trail).getByText("Run #1").getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("heading", { level: 3, name: "Run #1" })).toBeTruthy();
+  });
+
+  it("says an unfinished run has not finished", () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(
+      queryKeys.templateRun("tenant_123", "run_1"),
+      run({ status: "waiting_approval", completed_at: "0001-01-01T00:00:00Z", plan_summary: { add: 1, change: 0, destroy: 0 } })
+    );
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([]));
+
+    renderScreen(queryClient);
+
+    expect(screen.getByText("Finished").nextElementSibling?.textContent).toBe("Not finished");
+  });
+
   it("names who started the run rather than showing their subject", () => {
     const queryClient = testQueryClient();
     seedCapabilities(queryClient, allAllowed);
@@ -436,7 +464,7 @@ describe("RunDetailScreen", () => {
 
     expect(isDisabled(screen.getByRole("button", { name: /^Approve$/ }))).toBe(false);
     expect(screen.getByRole("button", { name: /Discard/ })).toBeTruthy();
-    expect(screen.getByText("+2 ~0 -1")).toBeTruthy();
+    expect(screen.getByRole("img", { name: "2 to add, 0 to change, 1 to destroy" })).toBeTruthy();
   });
 
   // Approving a destroy plan is what destroys, so it opens an accessible modal
