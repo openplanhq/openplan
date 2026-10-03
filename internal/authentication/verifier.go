@@ -88,15 +88,10 @@ func (c OIDCVerifierConfig) withDefaults() OIDCVerifierConfig {
 	if c.RefreshCooldown == 0 {
 		c.RefreshCooldown = defaultRefreshCooldown
 	}
+	// The verifier only ever uses a hardened copy of this client, which is
+	// also where its timeout is defaulted, so the caller's is never mutated.
 	if c.HTTPClient == nil {
-		c.HTTPClient = &http.Client{Timeout: defaultHTTPTimeout}
-	} else {
-		client := *c.HTTPClient
-		c.HTTPClient = &client
-		if c.HTTPClient.Timeout == 0 {
-			c.HTTPClient.Timeout = defaultHTTPTimeout
-		}
+		c.HTTPClient = &http.Client{}
 	}
-
 	return c
 }

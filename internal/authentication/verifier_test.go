@@ -23,16 +23,20 @@ func TestVerifierContractUsesSafeStableErrorsAndDefaults(t *testing.T) {
 	}
 }
 
-func TestOIDCVerifierConfigWithDefaultsClonesSuppliedHTTPClient(t *testing.T) {
+// The verifier only ever talks to the provider through a hardened copy of the
+// configured client, so hardening must leave the caller's client as it was.
+func TestHardenedProviderClientCopiesTheSuppliedClient(t *testing.T) {
 	t.Parallel()
 
 	client := &http.Client{Timeout: 3 * time.Second}
-	cfg := OIDCVerifierConfig{HTTPClient: client}.withDefaults()
-
-	if cfg.HTTPClient == client {
-		t.Fatal("HTTPClient was not cloned")
+	hardened := hardenedProviderClient(client, nil)
+	if hardened == client || client.Transport != nil || client.CheckRedirect != nil {
+		t.Fatalf("hardening mutated the supplied client: %#v", client)
 	}
-	if cfg.HTTPClient.Timeout != client.Timeout {
-		t.Fatalf("HTTPClient timeout = %s, want %s", cfg.HTTPClient.Timeout, client.Timeout)
+	if hardened.Timeout != client.Timeout {
+		t.Fatalf("hardened timeout = %s, want the supplied %s", hardened.Timeout, client.Timeout)
+	}
+	if got := hardenedProviderClient(&http.Client{}, nil).Timeout; got != defaultHTTPTimeout {
+		t.Fatalf("hardened timeout = %s, want the default %s", got, defaultHTTPTimeout)
 	}
 }

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -25,8 +26,7 @@ func (server *Server) handleAuthLogin(response http.ResponseWriter, request *htt
 	state, stateErr := authentication.NewOpaqueToken()
 	nonce, nonceErr := authentication.NewOpaqueToken()
 	if stateErr != nil || nonceErr != nil {
-		log.Printf("auth login: failed to generate state/nonce token: state error = %v, nonce error = %v", stateErr, nonceErr)
-		server.writeAuthFailure(response)
+		server.failAuth(response, "auth login: failed to generate state/nonce token: state error = %v, nonce error = %v", stateErr, nonceErr)
 		return
 	}
 	transaction := authentication.Transaction{
@@ -38,14 +38,12 @@ func (server *Server) handleAuthLogin(response http.ResponseWriter, request *htt
 
 	sealed, err := authentication.SealTransaction(server.auth.Sealer, transaction)
 	if err != nil {
-		log.Printf("auth login: failed to seal transaction cookie: %v", err)
-		server.writeAuthFailure(response)
+		server.failAuth(response, "auth login: failed to seal transaction cookie: %v", err)
 		return
 	}
 	authorizationURL, err := server.auth.Flow.AuthorizationURL(transaction.State, transaction.Nonce, transaction.CodeVerifier)
 	if err != nil {
-		log.Printf("auth login: failed to build authorization URL: %v", err)
-		server.writeAuthFailure(response)
+		server.failAuth(response, "auth login: failed to build authorization URL: %v", err)
 		return
 	}
 
@@ -61,52 +59,50 @@ func (server *Server) handleAuthCallback(response http.ResponseWriter, request *
 	response.Header().Set("Cache-Control", "no-store")
 	http.SetCookie(response, authentication.ClearedTransactionCookie(server.auth.SecureCookies))
 
+	returnTo, err := server.completeSignIn(response, request)
+	if err != nil {
+		server.failAuth(response, "auth callback: %v", err)
+		return
+	}
+	http.Redirect(response, request, authentication.SafeReturnTo(returnTo), http.StatusFound) //nolint:gosec // SafeReturnTo reduces return_to to a same-origin path
+}
+
+// completeSignIn checks the callback against the login it answers, redeems the
+// code, verifies the ID token, and establishes the session, returning the
+// login's return_to. Its error is for the log alone: the caller renders every
+// failure as the same page, so no check can be told apart from another.
+func (server *Server) completeSignIn(response http.ResponseWriter, request *http.Request) (string, error) {
 	query := request.URL.Query()
 	if query.Get("error") != "" {
-		log.Printf("auth callback: idp returned error=%q error_description=%q", query.Get("error"), query.Get("error_description")) //nolint:gosec // %q escapes control characters
-		server.writeAuthFailure(response)
-		return
+		// %q escapes control characters, so the IdP's text cannot forge log lines.
+		return "", fmt.Errorf("idp returned error=%q error_description=%q", query.Get("error"), query.Get("error_description"))
 	}
 	cookie, err := request.Cookie(authentication.TransactionCookieName)
 	if err != nil || cookie.Value == "" {
-		log.Printf("auth callback: missing or unreadable transaction cookie: %v", err)
-		server.writeAuthFailure(response)
-		return
+		return "", errors.New("missing or unreadable transaction cookie")
 	}
 	transaction, err := authentication.OpenTransaction(server.auth.Sealer, cookie.Value)
 	if err != nil {
-		log.Printf("auth callback: failed to open transaction cookie: %v", err)
-		server.writeAuthFailure(response)
-		return
+		return "", fmt.Errorf("failed to open transaction cookie: %w", err)
 	}
 	if subtle.ConstantTimeCompare([]byte(transaction.State), []byte(query.Get("state"))) != 1 {
-		log.Printf("auth callback: state mismatch")
-		server.writeAuthFailure(response)
-		return
+		return "", errors.New("state mismatch")
 	}
 	code := query.Get("code")
 	if code == "" {
-		log.Printf("auth callback: no authorization code in callback")
-		server.writeAuthFailure(response)
-		return
+		return "", errors.New("no authorization code in callback")
 	}
 
 	rawIDToken, err := server.auth.Flow.Exchange(request.Context(), code, transaction.CodeVerifier)
 	if err != nil {
-		log.Printf("auth callback: token exchange failed: %v", err)
-		server.writeAuthFailure(response)
-		return
+		return "", fmt.Errorf("token exchange failed: %w", err)
 	}
 	verified, err := server.auth.Verifier.Verify(request.Context(), rawIDToken)
 	if err != nil {
-		log.Printf("auth callback: id token verification failed: %v", err)
-		server.writeAuthFailure(response)
-		return
+		return "", fmt.Errorf("id token verification failed: %w", err)
 	}
 	if subtle.ConstantTimeCompare([]byte(verified.Nonce), []byte(transaction.Nonce)) != 1 {
-		log.Printf("auth callback: nonce mismatch")
-		server.writeAuthFailure(response)
-		return
+		return "", errors.New("nonce mismatch")
 	}
 
 	if err := server.establishSession(request.Context(), response, authentication.Session{
@@ -117,12 +113,9 @@ func (server *Server) handleAuthCallback(response http.ResponseWriter, request *
 		IDPSessionID:      verified.SessionID,
 		IDToken:           rawIDToken,
 	}, verified.DisplayName()); err != nil {
-		log.Printf("auth callback: %v", err)
-		server.writeAuthFailure(response)
-		return
+		return "", err
 	}
-
-	http.Redirect(response, request, authentication.SafeReturnTo(transaction.ReturnTo), http.StatusFound)
+	return transaction.ReturnTo, nil
 }
 
 // establishSession is the tail of a sign-in once the callback has verified the
@@ -160,7 +153,7 @@ func (server *Server) establishSession(
 		return fmt.Errorf("failed to project signed-in user: %w", err)
 	}
 
-	sessionID, err := authentication.NewSessionID()
+	sessionID, err := authentication.NewOpaqueToken()
 	if err != nil {
 		return fmt.Errorf("failed to generate session id: %w", err)
 	}
@@ -225,7 +218,10 @@ func (server *Server) handleAuthLogout(response http.ResponseWriter, request *ht
 	http.Redirect(response, request, destination, http.StatusSeeOther)
 }
 
-func (server *Server) writeAuthFailure(response http.ResponseWriter) {
+// failAuth logs why a sign-in step failed, then renders the one response every
+// such failure gets.
+func (server *Server) failAuth(response http.ResponseWriter, format string, arguments ...any) {
+	log.Printf(format, arguments...)
 	response.Header().Set("Content-Type", "text/html; charset=utf-8")
 	response.WriteHeader(http.StatusUnauthorized)
 	_, _ = response.Write([]byte(authFailureBody))

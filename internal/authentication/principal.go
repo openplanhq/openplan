@@ -38,8 +38,5 @@ func ContextWithPrincipal(ctx context.Context, principal Principal) context.Cont
 
 func PrincipalFromContext(ctx context.Context) (Principal, bool) {
 	principal, ok := ctx.Value(principalContextKey{}).(Principal)
-	if !ok {
-		return Principal{}, false
-	}
-	return principal, true
+	return principal, ok
 }

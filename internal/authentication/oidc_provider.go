@@ -20,6 +20,7 @@ var (
 	errProviderResponseTooLarge = errors.New("provider response exceeds size limit")
 	errRefreshCooldown          = errors.New("oidc refresh cooldown")
 	errJWKSCacheExpired         = errors.New("oidc JWKS cache expired")
+	errKeyCacheUnavailable      = errors.New("OIDC key cache is unavailable")
 )
 
 // manualJWKSRefreshInterval prevents jwk.Cache from refreshing outside the
@@ -33,23 +34,6 @@ type discoveryDocument struct {
 	AuthorizationEndpoint string `json:"authorization_endpoint"`
 	TokenEndpoint         string `json:"token_endpoint"`
 	EndSessionEndpoint    string `json:"end_session_endpoint"`
-}
-
-// validFlowEndpoints reports whether discovery advertises the endpoints the
-// authorization-code flow needs. end_session_endpoint is optional: a provider
-// without one degrades to local logout.
-func validFlowEndpoints(discovery discoveryDocument) bool {
-	for _, raw := range []string{discovery.AuthorizationEndpoint, discovery.TokenEndpoint} {
-		parsed, err := url.Parse(raw)
-		if err != nil || !validProviderURL(parsed) || parsed.User != nil {
-			return false
-		}
-	}
-	if discovery.EndSessionEndpoint == "" {
-		return true
-	}
-	parsed, err := url.Parse(discovery.EndSessionEndpoint)
-	return err == nil && validProviderURL(parsed) && parsed.User == nil
 }
 
 type keyCache struct {
@@ -76,28 +60,16 @@ func NewOIDCVerifier(ctx context.Context, cfg OIDCVerifierConfig) (*OIDCVerifier
 	}
 
 	providerClient := cfg.HTTPClient
-	hardenedClient := hardenedProviderClient(providerClient, nil)
-	cfg.HTTPClient = hardenedClient
-	discovery, err := fetchDiscovery(ctx, cfg.IssuerURL, hardenedClient)
-	if err != nil {
-		return nil, ErrVerifierUnavailable
-	}
-	if discovery.Issuer != cfg.IssuerURL.String() {
-		return nil, ErrVerifierUnavailable
-	}
-	if !validFlowEndpoints(discovery) {
-		return nil, ErrVerifierUnavailable
-	}
-
-	jwksURL, err := validJWKSURL(discovery.JWKSURI)
+	cfg.HTTPClient = hardenedProviderClient(providerClient, nil)
+	discovery, err := fetchDiscovery(ctx, cfg.IssuerURL, cfg.HTTPClient)
 	if err != nil {
 		return nil, ErrVerifierUnavailable
 	}
 
 	// providerClient, not cfg.HTTPClient: the raw configured client is hardened
 	// once inside newKeyCache. cfg.HTTPClient is already the hardened one by
-	// this point, and a refresh later re-hardens that -- see replaceKeyCache.
-	keys, err := newKeyCache(ctx, cfg, jwksURL, providerClient)
+	// this point, and a key cache replaced on a later discovery re-hardens that.
+	keys, err := newKeyCache(ctx, cfg, discovery.JWKSURI, providerClient)
 	if err != nil {
 		return nil, ErrVerifierUnavailable
 	}
@@ -122,8 +94,8 @@ var errDuplicateJWKSKeyIDs = errors.New("OIDC JWKS contains duplicate key IDs")
 //
 // client is a parameter rather than read from cfg because the two callers pass
 // different things, and always have: construction passes the raw configured
-// client, while replaceKeyCache passes the already-hardened one off the
-// verifier.
+// client, while a discovery that moves jwks_uri passes the already-hardened one
+// off the verifier.
 //
 // Every failure shuts down the cache it created, so a caller never has to clean
 // up something it was never handed. On success the caller owns the cache and
@@ -164,16 +136,8 @@ func newKeyCache(ctx context.Context, cfg OIDCVerifierConfig, jwksURI string, cl
 	if err != nil {
 		return nil, err
 	}
-	if hasDuplicateKeyIDs(set) {
-		return nil, errDuplicateJWKSKeyIDs
-	}
-	freshUntil, err := jwksFreshUntil(
-		ctx, cfg.Clock(), cache, jwksURI, cfg.JWKSMinRefreshInterval, cfg.JWKSMaxRefreshInterval,
-	)
+	freshUntil, err := pinJWKS(ctx, cfg, cache, jwksURI, set)
 	if err != nil {
-		return nil, err
-	}
-	if err := deferAutomaticJWKSRefresh(ctx, cache, jwksURI); err != nil {
 		return nil, err
 	}
 
@@ -184,16 +148,21 @@ func newKeyCache(ctx context.Context, cfg OIDCVerifierConfig, jwksURI string, cl
 func (v *OIDCVerifier) Close(ctx context.Context) error {
 	v.refreshMu.Lock()
 	defer v.refreshMu.Unlock()
+	return v.swapKeys(ctx, nil)
+}
 
+// swapKeys installs next as the verifier's key cache and shuts down the one it
+// replaces.
+func (v *OIDCVerifier) swapKeys(ctx context.Context, next *keyCache) error {
 	v.mu.Lock()
-	keys := v.keys
-	v.keys = nil
+	previous := v.keys
+	v.keys = next
 	v.mu.Unlock()
 
-	if keys == nil || keys.cache == nil {
+	if previous == nil || previous.cache == nil {
 		return nil
 	}
-	return keys.cache.Shutdown(ctx)
+	return previous.cache.Shutdown(ctx)
 }
 
 func (v *OIDCVerifier) keyFor(ctx context.Context, kid string, algorithm jwa.SignatureAlgorithm) (any, error) {
@@ -204,25 +173,27 @@ func (v *OIDCVerifier) keyFor(ctx context.Context, kid string, algorithm jwa.Sig
 	if found {
 		return publicKey, nil
 	}
+	publicKey, _, err = v.refreshedKeyFor(ctx, kid, algorithm)
+	return publicKey, err
+}
 
+// refreshedKeyFor forces a JWKS refresh and looks kid up again. The refresh's
+// own error comes back alongside the key, because a caller that does find the
+// key may still need to know whether the set it came from is current.
+func (v *OIDCVerifier) refreshedKeyFor(ctx context.Context, kid string, algorithm jwa.SignatureAlgorithm) (any, error, error) {
 	refreshErr := v.refreshKeys(ctx, true)
-	publicKey, found, err = v.cachedKeyFor(kid, algorithm)
-	if err != nil {
-		if errors.Is(err, errJWKSCacheExpired) {
-			return nil, ErrVerifierUnavailable
-		}
-		return nil, err
+	publicKey, found, err := v.cachedKeyFor(kid, algorithm)
+	switch {
+	case errors.Is(err, errJWKSCacheExpired):
+		return nil, refreshErr, ErrVerifierUnavailable
+	case err != nil:
+		return nil, refreshErr, err
+	case !found && refreshErr != nil:
+		return nil, refreshErr, ErrVerifierUnavailable
+	case !found:
+		return nil, refreshErr, ErrInvalidToken
 	}
-	if found {
-		return publicKey, nil
-	}
-	if errors.Is(refreshErr, errRefreshCooldown) {
-		return nil, ErrVerifierUnavailable
-	}
-	if refreshErr != nil {
-		return nil, ErrVerifierUnavailable
-	}
-	return nil, ErrInvalidToken
+	return publicKey, refreshErr, nil
 }
 
 func (v *OIDCVerifier) cachedKeyFor(kid string, algorithm jwa.SignatureAlgorithm) (any, bool, error) {
@@ -239,36 +210,16 @@ func (v *OIDCVerifier) cachedKeyFor(kid string, algorithm jwa.SignatureAlgorithm
 		return nil, false, ErrInvalidToken
 	}
 
-	setLength := keys.set.Len()
-	if setLength < 0 {
-		return nil, false, ErrVerifierUnavailable
-	}
-	keyIDs := make(map[string]struct{}, setLength)
-	var selected jwk.Key
-	for index := range setLength {
-		key, ok := keys.set.Key(index)
-		if !ok {
-			return nil, false, ErrVerifierUnavailable
-		}
-		keyID, ok := key.KeyID()
-		if !ok || keyID == "" {
-			continue
-		}
-		if _, duplicate := keyIDs[keyID]; duplicate {
-			return nil, false, ErrInvalidToken
-		}
-		keyIDs[keyID] = struct{}{}
-		if keyID == kid {
-			selected = key
-		}
-	}
-	if selected == nil {
-		return nil, false, nil
-	}
-	if usage, present := selected.KeyUsage(); present && usage != "sig" {
+	selected, err := findKey(keys.set, kid)
+	if errors.Is(err, errDuplicateJWKSKeyIDs) {
 		return nil, false, ErrInvalidToken
 	}
-	if configuredAlgorithm, present := selected.Algorithm(); present && configuredAlgorithm.String() != algorithm.String() {
+	if err != nil || selected == nil {
+		return nil, false, err
+	}
+	usage, hasUsage := selected.KeyUsage()
+	configuredAlgorithm, hasAlgorithm := selected.Algorithm()
+	if (hasUsage && usage != "sig") || (hasAlgorithm && configuredAlgorithm.String() != algorithm.String()) {
 		return nil, false, ErrInvalidToken
 	}
 
@@ -277,6 +228,36 @@ func (v *OIDCVerifier) cachedKeyFor(kid string, algorithm jwa.SignatureAlgorithm
 		return nil, false, ErrInvalidToken
 	}
 	return publicKey, true, nil
+}
+
+// findKey returns the key in set whose ID is kid, or nil when there is none.
+// Keys without an ID are skipped, and a set naming any ID twice is refused
+// with errDuplicateJWKSKeyIDs whether or not that ID is kid.
+func findKey(set jwk.Set, kid string) (jwk.Key, error) {
+	length := set.Len()
+	if length < 0 {
+		return nil, ErrVerifierUnavailable
+	}
+	keyIDs := make(map[string]struct{}, length)
+	var selected jwk.Key
+	for index := range length {
+		key, ok := set.Key(index)
+		if !ok {
+			return nil, ErrVerifierUnavailable
+		}
+		keyID, ok := key.KeyID()
+		if !ok || keyID == "" {
+			continue
+		}
+		if _, duplicate := keyIDs[keyID]; duplicate {
+			return nil, errDuplicateJWKSKeyIDs
+		}
+		keyIDs[keyID] = struct{}{}
+		if keyID == kid {
+			selected = key
+		}
+	}
+	return selected, nil
 }
 
 func (v *OIDCVerifier) refreshKeys(ctx context.Context, force bool) error {
@@ -299,23 +280,15 @@ func (v *OIDCVerifier) refreshKeys(ctx context.Context, force bool) error {
 	keys := v.keys
 	v.mu.RUnlock()
 	if keys == nil || keys.cache == nil || keys.set == nil {
-		return errors.New("OIDC key cache is unavailable")
+		return errKeyCacheUnavailable
 	}
 
 	set, err := keys.cache.Refresh(ctx, keys.url)
 	if err != nil {
 		return err
 	}
-	if hasDuplicateKeyIDs(set) {
-		return errors.New("OIDC JWKS contains duplicate key IDs")
-	}
-	freshUntil, err := jwksFreshUntil(
-		ctx, v.cfg.Clock(), keys.cache, keys.url, v.cfg.JWKSMinRefreshInterval, v.cfg.JWKSMaxRefreshInterval,
-	)
+	freshUntil, err := pinJWKS(ctx, v.cfg, keys.cache, keys.url, set)
 	if err != nil {
-		return err
-	}
-	if err := deferAutomaticJWKSRefresh(ctx, keys.cache, keys.url); err != nil {
 		return err
 	}
 	v.mu.Lock()
@@ -329,7 +302,7 @@ func (v *OIDCVerifier) refreshKeys(ctx context.Context, force bool) error {
 func (v *OIDCVerifier) refreshDiscoveryIfDue(ctx context.Context) error {
 	now := v.cfg.Clock()
 	v.mu.RLock()
-	discovered := v.discovered
+	discovered, current := v.discovered, v.keys
 	v.mu.RUnlock()
 	if now.Sub(discovered) < v.cfg.DiscoveryTTL {
 		return nil
@@ -339,25 +312,15 @@ func (v *OIDCVerifier) refreshDiscoveryIfDue(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if discovery.Issuer != v.cfg.IssuerURL.String() {
-		return errors.New("OIDC discovery issuer mismatch")
-	}
-	if !validFlowEndpoints(discovery) {
-		return errors.New("OIDC discovery is missing flow endpoints")
-	}
-	jwksURL, err := validJWKSURL(discovery.JWKSURI)
-	if err != nil {
-		return err
-	}
-
-	v.mu.RLock()
-	current := v.keys
-	v.mu.RUnlock()
 	if current == nil {
-		return errors.New("OIDC key cache is unavailable")
+		return errKeyCacheUnavailable
 	}
-	if current.url != jwksURL {
-		if err := v.replaceKeyCache(ctx, jwksURL); err != nil {
+	if current.url != discovery.JWKSURI {
+		next, err := newKeyCache(ctx, v.cfg, discovery.JWKSURI, v.cfg.HTTPClient)
+		if err != nil {
+			return err
+		}
+		if err := v.swapKeys(context.WithoutCancel(ctx), next); err != nil {
 			return err
 		}
 	}
@@ -369,39 +332,21 @@ func (v *OIDCVerifier) refreshDiscoveryIfDue(ctx context.Context) error {
 	return nil
 }
 
-func (v *OIDCVerifier) replaceKeyCache(ctx context.Context, jwksURI string) error {
-	newKeys, err := newKeyCache(ctx, v.cfg, jwksURI, v.cfg.HTTPClient)
-	if err != nil {
-		return err
+// pinJWKS vets a freshly fetched key set and returns how long it may be
+// trusted, then pushes jwk.Cache's own next refresh out of reach so only the
+// verifier's coordinated refresh path can extend that bound.
+func pinJWKS(ctx context.Context, cfg OIDCVerifierConfig, cache *jwk.Cache, jwksURI string, set jwk.Set) (time.Time, error) {
+	// An empty kid matches no key, so this only vets the set.
+	if _, err := findKey(set, ""); err != nil {
+		return time.Time{}, err
 	}
-
-	v.mu.Lock()
-	oldKeys := v.keys
-	v.keys = newKeys
-	v.mu.Unlock()
-
-	if oldKeys != nil && oldKeys.cache != nil {
-		return oldKeys.cache.Shutdown(context.WithoutCancel(ctx))
-	}
-	return nil
-}
-
-func jwksFreshUntil(ctx context.Context, now time.Time, cache *jwk.Cache, jwksURI string, minimum, maximum time.Duration) (time.Time, error) {
 	resource, err := cache.LookupResource(ctx, jwksURI)
 	if err != nil {
 		return time.Time{}, err
 	}
-	lifetime := min(max(time.Until(resource.Next()), minimum), maximum)
-	return now.Add(lifetime), nil
-}
-
-func deferAutomaticJWKSRefresh(ctx context.Context, cache *jwk.Cache, jwksURI string) error {
-	resource, err := cache.LookupResource(ctx, jwksURI)
-	if err != nil {
-		return err
-	}
+	lifetime := min(max(time.Until(resource.Next()), cfg.JWKSMinRefreshInterval), cfg.JWKSMaxRefreshInterval)
 	resource.SetNext(time.Now().Add(manualJWKSRefreshInterval))
-	return nil
+	return cfg.Clock().Add(lifetime), nil
 }
 
 func validOIDCVerifierConfig(cfg OIDCVerifierConfig) bool {
@@ -414,6 +359,10 @@ func validOIDCVerifierConfig(cfg OIDCVerifierConfig) bool {
 	return validProviderURL(cfg.IssuerURL)
 }
 
+// fetchDiscovery reads the provider's discovery document and refuses one that
+// names another issuer or advertises an unusable endpoint. Construction and
+// every later re-read go through it, so neither can accept a document the
+// other would refuse.
 func fetchDiscovery(ctx context.Context, issuerURL *url.URL, client *http.Client) (discoveryDocument, error) {
 	request, err := http.NewRequestWithContext(
 		ctx,
@@ -441,15 +390,28 @@ func fetchDiscovery(ctx context.Context, issuerURL *url.URL, client *http.Client
 	if _, err := io.Copy(io.Discard, response.Body); err != nil {
 		return discoveryDocument{}, err
 	}
+	if discovery.Issuer != issuerURL.String() {
+		return discoveryDocument{}, errors.New("OIDC discovery issuer mismatch")
+	}
+
+	// end_session_endpoint is optional: a provider without one degrades to
+	// local logout. The flow cannot run without the other two.
+	jwksURL, jwksOK := providerEndpoint(discovery.JWKSURI)
+	_, authorizationOK := providerEndpoint(discovery.AuthorizationEndpoint)
+	_, tokenOK := providerEndpoint(discovery.TokenEndpoint)
+	_, endSessionOK := providerEndpoint(discovery.EndSessionEndpoint)
+	if !jwksOK || !authorizationOK || !tokenOK || (!endSessionOK && discovery.EndSessionEndpoint != "") {
+		return discoveryDocument{}, errors.New("OIDC discovery advertises an unusable endpoint")
+	}
+	discovery.JWKSURI = jwksURL.String()
 	return discovery, nil
 }
 
-func validJWKSURL(raw string) (string, error) {
+// providerEndpoint parses a URL the provider advertises, accepting only an
+// absolute HTTP(S) URL that carries no user information.
+func providerEndpoint(raw string) (*url.URL, bool) {
 	parsed, err := url.Parse(raw)
-	if err != nil || !validProviderURL(parsed) || parsed.User != nil {
-		return "", errors.New("invalid JWKS URL")
-	}
-	return parsed.String(), nil
+	return parsed, err == nil && validProviderURL(parsed) && parsed.User == nil
 }
 
 func validProviderURL(value *url.URL) bool {
@@ -457,26 +419,10 @@ func validProviderURL(value *url.URL) bool {
 		(value.Scheme == "http" || value.Scheme == "https")
 }
 
-func hasDuplicateKeyIDs(set jwk.Set) bool {
-	keyIDs := make(map[string]struct{}, set.Len())
-	for index := range set.Len() {
-		key, ok := set.Key(index)
-		if !ok {
-			return true
-		}
-		keyID, ok := key.KeyID()
-		if !ok || keyID == "" {
-			continue
-		}
-		if _, exists := keyIDs[keyID]; exists {
-			return true
-		}
-		keyIDs[keyID] = struct{}{}
-	}
-	return false
-}
-
 func hardenedProviderClient(client *http.Client, onFailure func()) *http.Client {
+	if onFailure == nil {
+		onFailure = func() {}
+	}
 	hardened := *client
 	if hardened.Timeout == 0 {
 		hardened.Timeout = defaultHTTPTimeout
@@ -500,11 +446,11 @@ type providerResponseLimitTransport struct {
 func (t providerResponseLimitTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	response, err := t.base.RoundTrip(request)
 	if err != nil || response == nil || response.Body == nil {
-		t.fail()
+		t.onFailure()
 		return response, err
 	}
 	if response.StatusCode != http.StatusOK {
-		t.fail()
+		t.onFailure()
 	}
 	response.Body = &providerResponseBody{
 		ReadCloser: response.Body,
@@ -512,12 +458,6 @@ func (t providerResponseLimitTransport) RoundTrip(request *http.Request) (*http.
 		onFailure:  t.onFailure,
 	}
 	return response, nil
-}
-
-func (t providerResponseLimitTransport) fail() {
-	if t.onFailure != nil {
-		t.onFailure()
-	}
 }
 
 type providerResponseBody struct {
@@ -540,9 +480,7 @@ func (b *providerResponseBody) Read(buffer []byte) (int, error) {
 			return 0, err
 		}
 		b.exceeded = true
-		if b.onFailure != nil {
-			b.onFailure()
-		}
+		b.onFailure()
 		return 0, errProviderResponseTooLarge
 	}
 	if int64(len(buffer)) > b.remaining {

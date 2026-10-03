@@ -74,11 +74,6 @@ func NewOpaqueToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(buffer), nil
 }
 
-// NewSessionID returns the opaque value handed to the browser.
-func NewSessionID() (string, error) {
-	return NewOpaqueToken()
-}
-
 // HashSessionID reduces a session ID to what the database stores. The input is
 // 32 bytes of CSPRNG output, so a plain SHA-256 is enough: there is no
 // guessable keyspace for a password-style KDF to defend.

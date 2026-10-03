@@ -83,29 +83,19 @@ func OpenTransaction(cipher *encryption.Cipher, sealed string) (Transaction, err
 // path, falling back to "/". It is the open-redirect guard on /v1/auth/login,
 // which is the one place the flow accepts untrusted input.
 func SafeReturnTo(raw string) string {
-	if raw == "" || !strings.HasPrefix(raw, "/") {
-		return "/"
-	}
-	// "//host" and "/\host" are both read as protocol-relative URLs by browsers.
-	if strings.HasPrefix(raw, "//") || strings.HasPrefix(raw, `/\`) {
-		return "/"
-	}
-	if strings.ContainsFunc(raw, unicode.IsControl) {
-		return "/"
-	}
 	parsed, err := url.Parse(raw)
-	if err != nil || parsed.IsAbs() || parsed.Host != "" || parsed.User != nil {
-		return "/"
-	}
-	if parsed.Path != path.Clean(parsed.Path) {
-		return "/"
-	}
-	// No API path is a place for a browser to land, and one of them is a trap:
-	// return_to=/v1/auth/login makes the callback restart the login it has
-	// just finished, and with an SSO session standing the browser loops until
-	// it gives up. The client's loop guard cannot see that — these are
-	// server-side redirects, so no page ever loads to count them.
-	if raw == "/v1" || strings.HasPrefix(raw, "/v1/") {
+	if err != nil || !strings.HasPrefix(raw, "/") ||
+		// "//host" and "/\host" are both read as protocol-relative URLs by browsers.
+		strings.HasPrefix(raw, "//") || strings.HasPrefix(raw, `/\`) ||
+		strings.ContainsFunc(raw, unicode.IsControl) ||
+		parsed.IsAbs() || parsed.Host != "" || parsed.User != nil ||
+		parsed.Path != path.Clean(parsed.Path) ||
+		// No API path is a place for a browser to land, and one of them is a
+		// trap: return_to=/v1/auth/login makes the callback restart the login it
+		// has just finished, and with an SSO session standing the browser loops
+		// until it gives up. The client's loop guard cannot see that — these are
+		// server-side redirects, so no page ever loads to count them.
+		raw == "/v1" || strings.HasPrefix(raw, "/v1/") {
 		return "/"
 	}
 	return raw
@@ -114,41 +104,36 @@ func SafeReturnTo(raw string) string {
 // SessionCookie carries the opaque session reference for the life of the
 // browser session.
 func SessionCookie(value string, secure bool) *http.Cookie {
+	return authCookie(SessionCookieName, value, "/", 0, secure)
+}
+
+// TransactionCookie carries one in-flight login.
+func TransactionCookie(value string, secure bool) *http.Cookie {
+	return authCookie(TransactionCookieName, value, transactionCookiePath, transactionMaxAge, secure)
+}
+
+// ClearedSessionCookie expires the session cookie.
+func ClearedSessionCookie(secure bool) *http.Cookie {
+	return authCookie(SessionCookieName, "", "/", -1, secure)
+}
+
+// ClearedTransactionCookie expires the transaction cookie.
+func ClearedTransactionCookie(secure bool) *http.Cookie {
+	return authCookie(TransactionCookieName, "", transactionCookiePath, -1, secure)
+}
+
+// authCookie is the one shape every cookie the flow sets takes: script cannot
+// read it, and it travels on a top-level navigation back from the IdP.
+func authCookie(name, value, cookiePath string, maxAge int, secure bool) *http.Cookie {
 	return &http.Cookie{ //nolint:gosec // Secure is config-driven; HttpOnly and SameSite are set
-		Name:     SessionCookieName,
+		Name:     name,
 		Value:    value,
-		Path:     "/",
+		Path:     cookiePath,
+		MaxAge:   maxAge,
 		HttpOnly: true,
 		Secure:   secure,
 		// Lax, never Strict: the IdP's callback is a cross-site top-level GET,
 		// and Strict would withhold the cookie and break every login.
 		SameSite: http.SameSiteLaxMode,
 	}
-}
-
-// TransactionCookie carries one in-flight login.
-func TransactionCookie(value string, secure bool) *http.Cookie {
-	return &http.Cookie{ //nolint:gosec // Secure is config-driven; HttpOnly and SameSite are set
-		Name:     TransactionCookieName,
-		Value:    value,
-		Path:     transactionCookiePath,
-		MaxAge:   transactionMaxAge,
-		HttpOnly: true,
-		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
-	}
-}
-
-// ClearedSessionCookie expires the session cookie.
-func ClearedSessionCookie(secure bool) *http.Cookie {
-	cookie := SessionCookie("", secure) //nolint:gosec // Secure is config-driven; HttpOnly and SameSite are set
-	cookie.MaxAge = -1
-	return cookie
-}
-
-// ClearedTransactionCookie expires the transaction cookie.
-func ClearedTransactionCookie(secure bool) *http.Cookie {
-	cookie := TransactionCookie("", secure) //nolint:gosec // Secure is config-driven; HttpOnly and SameSite are set
-	cookie.MaxAge = -1
-	return cookie
 }
