@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { Navigate, MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../../auth/AuthContext";
@@ -233,7 +233,9 @@ describe("TemplatePanel", () => {
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/runs/3");
 
     await waitFor(() => expect(screen.getByTestId("run-detail-status")).toBeTruthy());
-    expect(screen.getByRole("link", { name: "Runs" }).getAttribute("aria-current")).toBe("page");
+    // The run's trail links to Runs too; the tab is the one in the tab row.
+    const tabs = screen.getByRole("navigation", { name: "Template sections" });
+    expect(within(tabs).getByRole("link", { name: "Runs" }).getAttribute("aria-current")).toBe("page");
   });
 
   it("names the template with its state, its ref and what last happened", async () => {
