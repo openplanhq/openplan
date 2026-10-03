@@ -276,7 +276,7 @@ describe("mutation hooks", () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.stacks("tenant_123") });
   });
 
-  it("installs a template on a stack and invalidates that stack's detail", async () => {
+  it("installs a template on a stack and invalidates that stack's detail and the stacks list", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: "stack_template_1" }));
     const queryClient = testQueryClient();
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
@@ -289,6 +289,7 @@ describe("mutation hooks", () => {
     });
 
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.stack("tenant_123", "stack_1") });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.stacks("tenant_123") });
   });
 
   it("saves stack template config and invalidates that stack's detail", async () => {

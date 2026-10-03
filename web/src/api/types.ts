@@ -107,6 +107,12 @@ export interface Stack {
   effectiveCapabilities: StackCapabilities;
 }
 
+// A stack as the stacks index lists it.
+export interface StackListItem extends Stack {
+  // Installed templates that are not destroyed.
+  template_count: number;
+}
+
 export interface StackTemplate {
   id: string;
   stack_id: string;
@@ -190,6 +196,22 @@ export interface TemplateRun {
   // What the plan would change, or, for an auto-approved apply, what it
   // changed. Null until a plan with changes, or the apply, finishes.
   plan_summary: PlanSummary | null;
+}
+
+// Why an installed template needs a person: a plan waiting to be approved or
+// discarded, or a destroy that stopped before it finished.
+export type AttentionKind = "waiting_approval" | "destroy_failed";
+
+export interface AttentionItem {
+  kind: AttentionKind;
+  // When it began to need a person: when the plan finished, or when the
+  // destroy stopped. Empty when unknown.
+  at: string;
+  stack: { id: string; name: string; slug: string };
+  stack_template: { id: string; workspace_name: string; display_name: string };
+  // The plan waiting for approval, or the destroy that failed. Null for a
+  // failed template with no destroy run on record.
+  run: TemplateRun | null;
 }
 
 export interface TemplateRunLog {

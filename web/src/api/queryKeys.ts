@@ -1,6 +1,7 @@
 export const queryKeys = {
   me: ["me"] as const,
   stacks: (tenantID: string) => ["stacks", tenantID] as const,
+  attention: (tenantID: string) => ["attention", tenantID] as const,
   templateRevisions: (tenantID: string) => ["templateRevisions", tenantID] as const,
   stack: (tenantID: string, stackID: string) => ["stack", tenantID, stackID] as const,
   stackCredentials: (tenantID: string, stackID: string) => ["stackCredentials", tenantID, stackID] as const,

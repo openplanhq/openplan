@@ -2,12 +2,14 @@ import { loginLoopDetected } from "../auth/loginAttempts";
 import type { Me } from "../auth/types";
 import type {
   ApiErrorBody,
+  AttentionItem,
   CredentialMetadata,
   GrantView,
   ListGrantsResponse,
   Operation,
   SearchUsersResponse,
   Stack,
+  StackListItem,
   StackTemplate,
   StackView,
   TemplateRegistration,
@@ -103,8 +105,13 @@ export function createStack(tenantID: string, body: CreateStackRequest): Promise
   });
 }
 
-export function listStacks(tenantID: string): Promise<Stack[]> {
+export function listStacks(tenantID: string): Promise<StackListItem[]> {
   return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/stacks`);
+}
+
+/** Lists plans waiting for approval and failed destroys on every visible stack. */
+export function listAttention(tenantID: string): Promise<AttentionItem[]> {
+  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/attention`);
 }
 
 export function getStack(tenantID: string, stackID: string): Promise<StackView> {

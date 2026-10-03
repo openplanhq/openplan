@@ -1,4 +1,4 @@
-import { Link, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useMatches } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { tenantID } from "../config";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -11,6 +11,11 @@ const navItems: { to: string; label: string }[] = [
 
 const isDebug = import.meta.env.DEV || import.meta.env.VITE_DEBUG === "true";
 
+// What a route tells the shell about its page. canvas marks a page redesigned
+// on openplan UI, whose white panels sit on the grey canvas; the rest keep the
+// white page until they are redesigned too.
+export type RouteHandle = { canvas?: boolean };
+
 // Preflight leaves a link with the body's colour, so each link sets its own.
 const navLinkClass = cn(
   buttonVariants({ variant: "ghost", size: "sm" }),
@@ -19,9 +24,10 @@ const navLinkClass = cn(
 
 export default function AppShell() {
   const { me, logout, status } = useAuth();
+  const canvas = useMatches().some((match) => (match.handle as RouteHandle | undefined)?.canvas === true);
 
   return (
-    <div className="min-h-screen">
+    <div className={cn("min-h-screen", canvas && "bg-canvas")} data-canvas={canvas || undefined}>
       <a
         href="#main-content"
         className="fixed top-2 left-2 z-50 -translate-y-16 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-transform focus:translate-y-0"
@@ -33,12 +39,18 @@ export default function AppShell() {
           AppShell.test.tsx checks the order. */}
       <header className="sticky top-0 z-5 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b bg-background px-4 py-3 md:px-6">
         <div className="flex items-center gap-4 md:gap-8">
-          <span className="text-lg leading-none font-semibold tracking-tight">openplan</span>
+          <span className="text-lg leading-none font-semibold tracking-title">openplan</span>
           <nav className="flex items-center gap-1" aria-label="Primary">
+            {/* The section you are in is marked, with the muted fill its
+                hover shows; NavLink sets aria-current="page" on it. */}
             {navItems.map((item) => (
-              <Link key={item.to} to={item.to} className={navLinkClass}>
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) => cn(navLinkClass, isActive && "bg-muted text-foreground")}
+              >
                 {item.label}
-              </Link>
+              </NavLink>
             ))}
           </nav>
         </div>
@@ -73,7 +85,7 @@ export default function AppShell() {
           </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-7xl px-4 py-6" id="main-content" tabIndex={-1}>
+      <main className={cn("mx-auto w-full max-w-7xl px-4 py-6", canvas && "md:p-8")} id="main-content" tabIndex={-1}>
         <Outlet />
       </main>
       {isDebug && <DebugPanel />}

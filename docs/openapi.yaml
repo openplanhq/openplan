@@ -444,7 +444,33 @@ paths:
             application/json:
               schema:
                 type: array
-                items: { $ref: "#/components/schemas/Stack" }
+                items: { $ref: "#/components/schemas/StackListItem" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
+
+  /v1/tenants/{tenant_id}/attention:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+    get:
+      tags: [Stacks]
+      summary: List what needs a person
+      description: |
+        Plans waiting for approval and destroys that failed, on every stack
+        the caller may view: waiting plans first, then failed destroys, each
+        newest first. Viewing a stack is enough to see its items; approving
+        is checked when someone approves.
+      operationId: listAttention
+      responses:
+        "200":
+          description: The items, possibly none.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AttentionItem" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -1545,6 +1571,57 @@ components:
         [id, tenant_id, name, slug, status, tags, default_credential_ids,
          created_by, created_at, effectiveCapabilities]
 
+    StackListItem:
+      description: A stack as the stacks index lists it.
+      allOf:
+        - $ref: "#/components/schemas/Stack"
+        - type: object
+          properties:
+            template_count:
+              type: integer
+              minimum: 0
+              description: The stack's installed templates that are not destroyed.
+          required: [template_count]
+
+    AttentionItem:
+      type: object
+      description: One installed template that needs a person.
+      properties:
+        kind:
+          type: string
+          enum: [waiting_approval, destroy_failed]
+          description: |
+            `waiting_approval` is a plan with changes waiting to be approved
+            or discarded. `destroy_failed` is a destroy that stopped before it
+            finished, so some resources may still exist.
+        at:
+          type: string
+          description: |
+            When the item began to need a person: when the plan finished, or
+            when the destroy stopped. An RFC 3339 timestamp, or empty when
+            unknown.
+        stack:
+          type: object
+          properties:
+            id: { type: string }
+            name: { type: string }
+            slug: { type: string }
+          required: [id, name, slug]
+        stack_template:
+          type: object
+          properties:
+            id: { type: string }
+            display_name: { type: string }
+          required: [id, display_name]
+        run:
+          description: |
+            The plan waiting for approval, or the destroy that failed. Null
+            for a failed template with no destroy run on record.
+          oneOf:
+            - $ref: "#/components/schemas/TemplateRun"
+            - type: "null"
+      required: [kind, at, stack, stack_template, run]
+
     StackStatus:
       type: string
       enum: [ready]
@@ -1649,7 +1726,10 @@ components:
         workspace_name: { type: string }
         display_name:
           type: string
-          description: Resolved per read from the desired revision's metadata.
+          description: |
+            Resolved per read from the desired revision's metadata: the last
+            segment of its root path (`modules/network/vpc` is `vpc`), or the
+            repository name for a template at the repository root.
         config:
           type: object
           additionalProperties: true

@@ -149,6 +149,9 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/stacks", server.handleCreateStack)
 	// Lists tenant-owned stacks.
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/stacks", server.handleListStacks)
+	// Lists the plans waiting for approval and the failed destroys across
+	// every stack the caller can view.
+	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/attention", server.handleListAttention)
 	// Reads one stack with installed templates.
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/stacks/{stack_id}", server.handleGetStack)
 	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/stacks/{stack_id}/credentials", server.handleCreateStackCredential)
@@ -445,7 +448,7 @@ func (server *Server) handleCreateStack(response http.ResponseWriter, request *h
 }
 
 func (server *Server) handleListStacks(response http.ResponseWriter, request *http.Request) {
-	stacks, err := server.service.ListStacks(request.Context(), app.ListStacksCommand{
+	summaries, err := server.service.ListStackSummaries(request.Context(), app.ListStacksCommand{
 		TenantID: domain.TenantID(request.PathValue("tenant_id")),
 	})
 	if err != nil {
@@ -453,15 +456,38 @@ func (server *Server) handleListStacks(response http.ResponseWriter, request *ht
 		return
 	}
 
+	stacks := make([]domain.Stack, 0, len(summaries))
+	for _, summary := range summaries {
+		stacks = append(stacks, summary.Stack)
+	}
 	capsByID, err := app.ResolveStacksCapabilities(request.Context(), server.service.Authorization, stacks)
 	if err != nil {
 		writeAppError(response, err)
 		return
 	}
 
-	body := make([]stackResponse, 0, len(stacks))
-	for _, stack := range stacks {
-		body = append(body, newStackResponse(stack, capsByID[stack.ID]))
+	body := make([]stackListItemResponse, 0, len(summaries))
+	for _, summary := range summaries {
+		body = append(body, stackListItemResponse{
+			stackResponse: newStackResponse(summary.Stack, capsByID[summary.Stack.ID]),
+			TemplateCount: summary.TemplateCount,
+		})
+	}
+	writeJSON(response, http.StatusOK, body)
+}
+
+func (server *Server) handleListAttention(response http.ResponseWriter, request *http.Request) {
+	items, err := server.service.ListAttention(request.Context(), app.ListAttentionCommand{
+		TenantID: domain.TenantID(request.PathValue("tenant_id")),
+	})
+	if err != nil {
+		writeAppError(response, err)
+		return
+	}
+
+	body := make([]attentionItemResponse, 0, len(items))
+	for _, item := range items {
+		body = append(body, newAttentionItemResponse(item))
 	}
 	writeJSON(response, http.StatusOK, body)
 }
@@ -855,6 +881,61 @@ type stackResponse struct {
 	CreatedBy             string                    `json:"created_by"`
 	CreatedAt             string                    `json:"created_at"`
 	EffectiveCapabilities stackCapabilitiesResponse `json:"effectiveCapabilities"`
+}
+
+// stackListItemResponse is a stack as the stacks index lists it: the stack,
+// and how many templates it has installed.
+type stackListItemResponse struct {
+	stackResponse
+	TemplateCount int `json:"template_count"`
+}
+
+// attentionItemResponse is one installed template that needs a person.
+type attentionItemResponse struct {
+	// Kind is waiting_approval or destroy_failed.
+	Kind string `json:"kind"`
+	// At is when the item began to need a person; empty when unknown.
+	At            string                         `json:"at"`
+	Stack         attentionStackResponse         `json:"stack"`
+	StackTemplate attentionStackTemplateResponse `json:"stack_template"`
+	// Run is the plan waiting for approval or the destroy that failed; null
+	// for a failed template with no destroy run on record.
+	Run *domain.TemplateRun `json:"run"`
+}
+
+type attentionStackResponse struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+}
+
+type attentionStackTemplateResponse struct {
+	ID string `json:"id"`
+	// WorkspaceName names the template when DisplayName is empty, as it does
+	// on the stack's own pages.
+	WorkspaceName string `json:"workspace_name"`
+	DisplayName   string `json:"display_name"`
+}
+
+func newAttentionItemResponse(item app.AttentionItem) attentionItemResponse {
+	response := attentionItemResponse{
+		Kind: string(item.Kind),
+		Stack: attentionStackResponse{
+			ID:   string(item.Stack.ID),
+			Name: item.Stack.Name,
+			Slug: item.Stack.Slug,
+		},
+		StackTemplate: attentionStackTemplateResponse{
+			ID:            string(item.StackTemplate.ID),
+			WorkspaceName: item.StackTemplate.WorkspaceName,
+			DisplayName:   item.StackTemplate.DisplayName,
+		},
+		Run: item.Run,
+	}
+	if !item.At.IsZero() {
+		response.At = item.At.Format(time.RFC3339Nano)
+	}
+	return response
 }
 
 type stackCapabilitiesResponse struct {

@@ -11,6 +11,19 @@ export function useStacksQuery(tenantID: string) {
   });
 }
 
+// A plan reaches waiting_approval, or a destroy fails or resumes, in the
+// executor, with nothing here to invalidate the list, so it is polled; slowly,
+// since it looks across every stack.
+export const ATTENTION_POLL_INTERVAL_MS = 30_000;
+
+export function useAttentionQuery(tenantID: string) {
+  return useQuery({
+    queryKey: queryKeys.attention(tenantID),
+    queryFn: () => client.listAttention(tenantID),
+    refetchInterval: ATTENTION_POLL_INTERVAL_MS
+  });
+}
+
 export function useTemplateRevisionsQuery(tenantID: string) {
   return useQuery({
     queryKey: queryKeys.templateRevisions(tenantID),
@@ -162,6 +175,8 @@ export function useAddTemplateToStackMutation(tenantID: string, stackID: string)
     mutationFn: (body: Parameters<typeof client.addTemplateToStack>[2]) => client.addTemplateToStack(tenantID, stackID, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.stack(tenantID, stackID) });
+      // The stacks index counts each stack's templates.
+      queryClient.invalidateQueries({ queryKey: queryKeys.stacks(tenantID) });
     }
   });
 }
@@ -205,6 +220,7 @@ export function useApproveRunMutation(tenantID: string) {
     mutationFn: (runID: string) => client.approveRun(tenantID, runID),
     onSuccess: (_data, runID) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.templateRun(tenantID, runID) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.attention(tenantID) });
     }
   });
 }
@@ -216,6 +232,7 @@ export function useDiscardRunMutation(tenantID: string) {
       client.discardRun(tenantID, variables.runID, variables.body),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.templateRun(tenantID, variables.runID) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.attention(tenantID) });
     }
   });
 }
