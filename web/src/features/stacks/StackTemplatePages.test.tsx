@@ -468,12 +468,12 @@ describe("editing while a run is in flight", () => {
     queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_1"), [runFor("st_1", { status: "waiting_approval", run_number: 7 })]);
 
     const variables = renderAt(queryClient, "/stacks/stack_1/templates/st_1/variables");
-    await waitFor(() => expect(screen.getByTestId("variables-disabled-reason").textContent).toBe("Apply or discard run #7 before changing the config"));
+    await waitFor(() => expect(screen.getByTestId("variables-disabled-reason").textContent).toBe("Apply or discard run #7 before changing the config."));
     expect(actionButton(/Save config/).disabled).toBe(true);
     variables.unmount();
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/settings");
-    expect(screen.getByTestId("upgrade-disabled-reason").textContent).toBe("Apply or discard run #7 before changing the revision");
+    expect(screen.getByTestId("upgrade-disabled-reason").textContent).toBe("Apply or discard run #7 before changing the revision.");
     expect((screen.getByTestId("change-stack-template-revision-link") as HTMLButtonElement).disabled).toBe(true);
   });
 });
@@ -550,6 +550,6 @@ describe("TemplateSettingsTab", () => {
     const changeRevisionControl = screen.getByTestId("change-stack-template-revision-link") as HTMLButtonElement;
     expect(changeRevisionControl.tagName).toBe("BUTTON");
     expect(changeRevisionControl.disabled).toBe(true);
-    expect(screen.getByTestId("upgrade-disabled-reason").textContent).toBe("Destroy in progress");
+    expect(screen.getByTestId("upgrade-disabled-reason").textContent).toBe("Destroy in progress.");
   });
 });

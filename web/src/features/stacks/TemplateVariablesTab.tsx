@@ -2,15 +2,13 @@ import { useState } from "react";
 import { CircleAlert, Loader2, RefreshCw } from "lucide-react";
 import { useTemplateRevisionVariablesQuery, useUpdateStackTemplateConfigMutation } from "../../api/queries";
 import { tenantID } from "../../config";
-import RequireCapability from "../../auth/RequireCapability";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
-import { runInFlightReason, useRunInFlight } from "../runs/useRunInFlight";
+import { useLockState, variablesLockReason } from "../runs/lockReasons";
 import StackTemplateConfigPanel from "./StackTemplateConfigPanel";
 import { useStackTemplate } from "./stackTemplateContext";
 import {
   canSaveInstalledTemplateConfig,
   configFromVariableValues,
-  isDestroyingStackTemplate,
   variableValuesFromConfig
 } from "./stackWorkflow";
 import { Alert, AlertTitle } from "@/components/ui/alert";
@@ -28,7 +26,7 @@ export default function TemplateVariablesTab() {
   const variables = variablesQuery.data ?? [];
   const boundary = useQueryErrorBoundary(variablesQuery.error);
   const updateStackTemplateConfigMutation = useUpdateStackTemplateConfigMutation(tenantID, stackId);
-  const runInFlight = useRunInFlight(stackTemplate.id);
+  const lockReason = variablesLockReason(useLockState(stackId, stackTemplate));
 
   // Displayed values are the installed config overlaid with unsaved edits.
   const baseValues = variableValuesFromConfig(stackTemplate.config, variables);
@@ -93,11 +91,7 @@ export default function TemplateVariablesTab() {
     canSave: canSaveConfig,
     onSave: handleSave,
     saveBusy: updateStackTemplateConfigMutation.isPending,
-    disabledReason: isDestroyingStackTemplate(stackTemplate)
-      ? "Destroy in progress"
-      : runInFlight
-        ? runInFlightReason(runInFlight, "changing the config")
-        : undefined
+    disabledReason: lockReason || undefined
   };
 
   return (
@@ -108,12 +102,7 @@ export default function TemplateVariablesTab() {
           <AlertTitle>{errorMessage}</AlertTitle>
         </Alert>
       )}
-      <RequireCapability
-        capability="canOperate"
-        fallback={<StackTemplateConfigPanel {...configPanelProps} canSave={false} saveBusy={false} disabledReason="Editing requires operator access" />}
-      >
-        <StackTemplateConfigPanel {...configPanelProps} />
-      </RequireCapability>
+      <StackTemplateConfigPanel {...configPanelProps} />
     </div>
   );
 }

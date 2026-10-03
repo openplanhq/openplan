@@ -3,8 +3,7 @@ import { Link } from "react-router-dom";
 import RequireCapability from "../../auth/RequireCapability";
 import TemplateDestroyPanel from "../runs/TemplateDestroyPanel";
 import { useStackTemplate } from "./stackTemplateContext";
-import { runInFlightReason, useRunInFlight } from "../runs/useRunInFlight";
-import { isDestroyingStackTemplate } from "./stackWorkflow";
+import { revisionLockReason, useLockState } from "../runs/lockReasons";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -14,9 +13,7 @@ import { cn } from "@/lib/utils";
 // irreversible one is never under the cursor of routine work.
 export default function TemplateSettingsTab() {
   const { stackId, stackTemplate } = useStackTemplate();
-  const destroying = isDestroyingStackTemplate(stackTemplate);
-  const runInFlight = useRunInFlight(stackTemplate.id);
-  const revisionLockedReason = destroying ? "Destroy in progress" : runInFlight ? runInFlightReason(runInFlight, "changing the revision") : "";
+  const revisionLockedReason = revisionLockReason(useLockState(stackId, stackTemplate));
 
   return (
     <div className="grid min-w-0 grid-cols-1 content-start gap-6" data-testid="template-settings-tab">
