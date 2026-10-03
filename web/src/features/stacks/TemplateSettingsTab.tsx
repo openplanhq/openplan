@@ -2,7 +2,7 @@ import { RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 import RequireCapability from "../../auth/RequireCapability";
 import TemplateDestroyPanel from "../runs/TemplateDestroyPanel";
-import { useStackTemplateOutlet } from "./StackTemplateDetailShell";
+import { useStackTemplate } from "./stackTemplateContext";
 import { runInFlightReason, useRunInFlight } from "../runs/useRunInFlight";
 import { isDestroyingStackTemplate } from "./stackWorkflow";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 // and destroying it. They live here, a tab away from the Plan button, so the
 // irreversible one is never under the cursor of routine work.
 export default function TemplateSettingsTab() {
-  const { stackId, stackTemplate } = useStackTemplateOutlet();
+  const { stackId, stackTemplate } = useStackTemplate();
   const destroying = isDestroyingStackTemplate(stackTemplate);
   const runInFlight = useRunInFlight(stackTemplate.id);
   const revisionLockedReason = destroying ? "Destroy in progress" : runInFlight ? runInFlightReason(runInFlight, "changing the revision") : "";

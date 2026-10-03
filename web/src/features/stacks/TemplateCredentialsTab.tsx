@@ -5,13 +5,13 @@ import {
 } from "../../api/queries";
 import { tenantID } from "../../config";
 import CredentialsPanel from "./CredentialsPanel";
-import { useStackTemplateOutlet } from "./StackTemplateDetailShell";
+import { useStackTemplate } from "./stackTemplateContext";
 
 // /stacks/:stackId/templates/:stackTemplateId/credentials — credentials that
 // override the stack's environment for this template only. The route itself is
 // gated on canManageAccess, the same capability the stack Environment tab needs.
 export default function TemplateCredentialsTab() {
-  const { stackTemplate } = useStackTemplateOutlet();
+  const { stackTemplate } = useStackTemplate();
   const credentialsQuery = useStackTemplateCredentialsQuery(tenantID, stackTemplate.id);
   const createMutation = useCreateStackTemplateCredentialMutation(tenantID, stackTemplate.id);
   const deleteMutation = useDeleteStackTemplateCredentialMutation(tenantID, stackTemplate.id);

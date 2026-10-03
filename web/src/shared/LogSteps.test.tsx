@@ -26,6 +26,16 @@ function Steps({ initiallyOpen = {} }: { initiallyOpen?: Record<string, boolean>
 }
 
 describe("LogSteps", () => {
+  // Nothing shows that a clipped line goes on, so long lines wrap: a run's
+  // log is where a failure is read, end to end.
+  it("wraps long log lines rather than clipping them", () => {
+    render(<Steps initiallyOpen={{ plan: true }} />);
+
+    const body = screen.getByText("plan log body");
+    expect(body.tagName).toBe("PRE");
+    expect(body.className).toContain("whitespace-pre-wrap");
+  });
+
   it("lists one row per step, each a button that says whether its log is open", () => {
     render(<Steps initiallyOpen={{ plan: true }} />);
 

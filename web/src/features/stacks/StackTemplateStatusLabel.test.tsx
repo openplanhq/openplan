@@ -36,7 +36,8 @@ describe("stackTemplateIndicator", () => {
     ["not applied", template(), undefined, Minus, "idle", false],
     ["destroy failed", template({ lifecycle: "failed" }), undefined, TriangleAlert, "failed", true],
     ["destroying", template({ lifecycle: "destroying" }), undefined, LoaderCircle, "settled", false],
-    ["waiting for approval", template({ live_state: "differs" }), waiting, Hourglass, "attention", true]
+    ["waiting for approval", template({ live_state: "differs" }), waiting, Hourglass, "attention", true],
+    ["waiting for approval", template({ live_state: "differs", pending_plan_run_id: "run_14" }), undefined, Hourglass, "attention", true]
   ] as const)("shows %s", (label, stackTemplate, attention, icon, tone, strong) => {
     expect(stackTemplateIndicator(stackTemplate, attention)).toEqual({ label, icon, tone, strong });
   });
@@ -49,6 +50,12 @@ describe("stackTemplateActivity", () => {
 
   it("says nothing of a destroy in progress", () => {
     expect(stackTemplateActivity(template({ lifecycle: "destroying", last_applied_at: "2026-09-22T10:00:00Z" }), undefined)).toBe("");
+  });
+
+  it("dates a waiting plan from the template's own pending plan when there is no attention item", () => {
+    expect(stackTemplateActivity(template({ pending_plan_run_id: "run_14", pending_plan_at: "2026-10-03T09:30:00Z" }), undefined)).toMatch(
+      /^Planned 3 Oct, \d\d:\d\d$/
+    );
   });
 
   it("dates a waiting plan from when it finished", () => {

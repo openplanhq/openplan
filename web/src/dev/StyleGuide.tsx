@@ -402,7 +402,7 @@ export default function StyleGuide() {
                 </ScrollAreaScrollbar>
               </ScrollArea>
             </Specimen>
-            <Specimen label="Tabs" hint="line variant; RouteTabs renders each tab as a link" stack>
+            <Specimen label="Tabs" hint="line variant" stack>
               <Tabs defaultValue="templates">
                 <TabsList variant="line" aria-label="Tabs specimen">
                   <TabsTrigger value="overview">Overview</TabsTrigger>

@@ -6,7 +6,7 @@ import RequireCapability from "../../auth/RequireCapability";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import { runInFlightReason, useRunInFlight } from "../runs/useRunInFlight";
 import StackTemplateConfigPanel from "./StackTemplateConfigPanel";
-import { useStackTemplateOutlet } from "./StackTemplateDetailShell";
+import { useStackTemplate } from "./stackTemplateContext";
 import {
   canSaveInstalledTemplateConfig,
   configFromVariableValues,
@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 // template's configuration. Choosing another revision is a separate page
 // (upgrade), reached from Settings, so this form has exactly one action.
 export default function TemplateVariablesTab() {
-  const { stackId, stackTemplate } = useStackTemplateOutlet();
+  const { stackId, stackTemplate } = useStackTemplate();
   const [editedValues, setEditedValues] = useState<Record<string, string>>({});
   const [errorMessage, setErrorMessage] = useState("");
 

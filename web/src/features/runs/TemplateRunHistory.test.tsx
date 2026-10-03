@@ -82,7 +82,7 @@ describe("TemplateRunHistory", () => {
     expect(screen.getByTestId("template-run-history-run_plan_1").getAttribute("href")).toBe("/stacks/stack_1/templates/stpl_1/runs/1");
   });
 
-  it("lays each run out in run, type, status, changes, actor, and time columns", () => {
+  it("lays each run out in run, status, changes, started by and time columns", () => {
     const queryClient = testQueryClient();
     seedRuns(queryClient, [
       run({
@@ -98,50 +98,50 @@ describe("TemplateRunHistory", () => {
 
     renderHistory(queryClient);
 
-    expect(screen.getByRole("table").getAttribute("data-slot")).toBe("table");
-    expect(screen.getAllByRole("columnheader").map((header) => header.textContent)).toEqual(["Run", "Status", "Changes", "Actor", "Time"]);
+    expect(screen.getAllByRole("columnheader").map((header) => header.textContent)).toEqual(["Run", "Status", "Changes", "Started by", "Time"]);
     const cells = within(screen.getByTestId("template-run-row-run_plan_1")).getAllByRole("cell");
     expect(cells).toHaveLength(5);
     expect(cells[0].textContent).toBe("#12");
-    expect(cells[1].textContent).toContain("Applied");
-    expect(cells[2].textContent).toBe("+3 ~1 -0");
+    expect(cells[1].textContent).toBe("applied");
+    expect(within(cells[2]).getByRole("img", { name: "3 to add, 1 to change, 0 to destroy" })).toBeTruthy();
     expect(cells[3].textContent).toBe("Ada Lovelace");
     expect(cells[4].querySelector("time")?.getAttribute("datetime")).toBe("2026-07-20T00:00:00Z");
-
-    const columns = screen.getByTestId("template-run-history").querySelectorAll("colgroup > col");
-    expect(columns[4]?.classList).toContain("w-32");
   });
 
-  // Only a plan waiting for approval can be acted on; a run in flight cannot
-  // be stopped, so it adds no column.
-  it("adds an actions column only while some plan waits for approval", () => {
+  // Approving and discarding happen on the run, after reading its plan.
+  it("offers no actions on any row, even a plan waiting for approval", () => {
     const queryClient = testQueryClient();
-    seedRuns(queryClient, [
-      run({ id: "run_apply_1", run_number: 2, operation: "apply", status: "waiting_approval" }),
-      run({ id: "run_plan_1", run_number: 1, operation: "plan", status: "completed" })
-    ]);
+    seedRuns(queryClient, [run({ id: "run_apply_1", run_number: 2, operation: "apply", status: "waiting_approval" })]);
 
     renderHistory(queryClient);
 
-    expect(screen.getAllByRole("columnheader").map((header) => header.textContent)).toEqual(["Run", "Status", "Changes", "Actor", "Time", "Actions"]);
-    expect(within(screen.getByTestId("template-run-row-run_plan_1")).getAllByRole("cell")).toHaveLength(6);
+    expect(screen.getAllByRole("columnheader")).toHaveLength(5);
+    expect(screen.getByTestId("template-run-row-run_apply_1").querySelector("button")).toBeNull();
   });
 
-  it("adds no actions column for a run in flight", () => {
+  // A status names its step too ("applying · preparing workspace"), which
+  // can be wider than its column; it wraps there rather than running into
+  // the changes beside it.
+  it("lets a long status wrap inside its column", () => {
     const queryClient = testQueryClient();
-    seedRuns(queryClient, [run({ id: "run_apply_1", run_number: 1, operation: "apply", status: "running" })]);
+    seedRuns(queryClient, [run({ id: "run_1", operation: "apply", status: "running", step: "preparing_workspace", plan_summary: { add: 1, change: 0, destroy: 0 } })]);
 
     renderHistory(queryClient);
 
-    expect(screen.getAllByRole("columnheader").map((header) => header.textContent)).toEqual(["Run", "Status", "Changes", "Actor", "Time"]);
+    const status = screen.getByTestId("template-run-status-run_1");
+    expect(status.textContent).toBe("applying · preparing workspace");
+    expect(status.className).toContain("whitespace-normal");
+    expect(status.className).not.toContain("whitespace-nowrap");
   });
 
-  it("shows an empty state rather than a bare heading when no run has started", () => {
+  it("shows an empty state that says how to start", () => {
     const queryClient = testQueryClient();
     seedRuns(queryClient, []);
 
     renderHistory(queryClient);
 
-    expect(screen.getByTestId("template-run-history-empty")).toBeTruthy();
+    expect(screen.getByTestId("template-run-history-empty").textContent).toContain("No runs yet");
+    expect(screen.getByTestId("template-run-history-empty").textContent).toContain("Plan to see what this template would create.");
   });
+
 });

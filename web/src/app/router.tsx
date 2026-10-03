@@ -3,20 +3,20 @@ import type { RouteObject } from "react-router-dom";
 import AppShell from "./AppShell";
 import type { RouteHandle } from "./AppShell";
 import NotFound from "./NotFound";
-import RoutePlaceholder from "./RoutePlaceholder";
 import RequireCapability from "../auth/RequireCapability";
 import SessionProvider from "../auth/SessionProvider";
 import SignInScreen from "../auth/SignInScreen";
 import StacksListScreen from "../features/stacks/StacksListScreen";
 import StackAttentionScreen from "../features/stacks/StackAttentionScreen";
-import StackDetailShell from "../features/stacks/StackDetailShell";
-import StackTemplateListScreen from "../features/stacks/StackTemplateListScreen";
-import StackTemplateDetailShell from "../features/stacks/StackTemplateDetailShell";
+import StackPage from "../features/stacks/StackPage";
+import StackIndexPanel from "../features/stacks/StackIndexPanel";
+import AddTemplatePanel from "../features/stacks/AddTemplatePanel";
+import StackSectionLayout from "../features/stacks/StackSectionLayout";
+import TemplatePanel from "../features/stacks/TemplatePanel";
 import TemplateRunsTab from "../features/stacks/TemplateRunsTab";
 import TemplateVariablesTab from "../features/stacks/TemplateVariablesTab";
 import TemplateCredentialsTab from "../features/stacks/TemplateCredentialsTab";
 import TemplateSettingsTab from "../features/stacks/TemplateSettingsTab";
-import AddStackTemplateScreen from "../features/stacks/AddStackTemplateScreen";
 import UpgradeStackTemplateScreen from "../features/stacks/UpgradeStackTemplateScreen";
 import EnvironmentScreen from "../features/stacks/EnvironmentScreen";
 import TemplateRegistryScreen from "../features/templates/TemplateRegistryScreen";
@@ -51,9 +51,7 @@ const devRoutes: RouteObject[] = import.meta.env.DEV
 // <Navigate> element so react-router resolves it before rendering anything:
 // the shell never flashes an empty index.
 //
-// Routes still rendering RoutePlaceholder are reserved
-// slots for upcoming tickets. Routes with a capability in the parent spec's
-// route map are wrapped in a <RequireCapability mode="route"> layout route —
+// Routes with a capability in the parent spec's route map are wrapped in a <RequireCapability mode="route"> layout route —
 // see docs/superpowers/specs/2026-07-19-capability-gating-primitives-design.md.
 // The pages redesigned on openplan UI, which the shell puts on the grey canvas.
 const canvas: RouteHandle = { canvas: true };
@@ -85,27 +83,26 @@ export const routeConfig: RouteObject[] = [
             path: "stacks/:stackId",
             element: <RequireCapability capability="canView" mode="route" />,
             children: [
+              // The stack's one page: its templates, and the selected one's
+              // panel, which every route below draws into.
               {
-                element: <StackDetailShell />,
+                element: <StackPage />,
+                handle: canvas,
                 children: [
-                  { index: true, element: <RoutePlaceholder title="Stack overview" /> },
-                  { path: "templates", element: <StackTemplateListScreen /> },
+                  { index: true, element: <StackIndexPanel /> },
+                  // The old template list is the stack's page now.
+                  { path: "templates", loader: ({ params }) => redirect(`/stacks/${params.stackId}`) },
                   {
                     path: "templates/new",
                     element: <RequireCapability capability="canOperate" mode="route" />,
-                    children: [{ index: true, element: <AddStackTemplateScreen /> }]
+                    children: [{ index: true, element: <AddTemplatePanel /> }]
                   },
-                  {
-                    path: "templates/:stackTemplateId/upgrade",
-                    element: <RequireCapability capability="canOperate" mode="route" />,
-                    children: [{ index: true, element: <UpgradeStackTemplateScreen /> }]
-                  },
-                  // One page per installed template, its sections on tabs.
-                  // Run detail nests under runs/ so the Runs tab stays lit
-                  // while reading one; the index sends you to Runs.
+                  // A run nests under runs/ so Runs stays lit while reading
+                  // one, and Change revision under the template so Settings
+                  // does; the index sends you to Runs.
                   {
                     path: "templates/:stackTemplateId",
-                    element: <StackTemplateDetailShell />,
+                    element: <TemplatePanel />,
                     children: [
                       { index: true, element: <Navigate to="runs" replace /> },
                       { path: "runs", element: <TemplateRunsTab /> },
@@ -116,9 +113,20 @@ export const routeConfig: RouteObject[] = [
                         element: <RequireCapability capability="canManageAccess" mode="route" />,
                         children: [{ index: true, element: <TemplateCredentialsTab /> }]
                       },
-                      { path: "settings", element: <TemplateSettingsTab /> }
+                      { path: "settings", element: <TemplateSettingsTab /> },
+                      {
+                        path: "upgrade",
+                        element: <RequireCapability capability="canOperate" mode="route" />,
+                        children: [{ index: true, element: <UpgradeStackTemplateScreen /> }]
+                      }
                     ]
-                  },
+                  }
+                ]
+              },
+              // Environment and Access keep their pages, under a breadcrumb.
+              {
+                element: <StackSectionLayout />,
+                children: [
                   {
                     path: "environment",
                     element: <RequireCapability capability="canManageAccess" mode="route" />,
