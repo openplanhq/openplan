@@ -14,13 +14,20 @@ const BY_TONE: Record<StatusTone, Omit<StatusIndicator, "label">> = {
   progress: { icon: LoaderCircle, tone: "settled", strong: false }
 };
 
+// A plan waits while the template has one pending. The attention list says
+// so too, but it polls slowly; the template moves with the stack query, which
+// the stack's page refreshes as its runs settle.
+function isWaiting(stackTemplate: StackTemplate, attention: AttentionItem | undefined): boolean {
+  return attention?.kind === "waiting_approval" || stackTemplate.pending_plan_run_id !== "";
+}
+
 /**
  * openplan UI's status for one installed template. A plan waiting for
  * approval outranks the live state: it is the one thing a person can act on.
  * Everything else is stackTemplateStatus, drawn with an icon instead of a dot.
  */
 export function stackTemplateIndicator(stackTemplate: StackTemplate, attention: AttentionItem | undefined): StatusIndicator {
-  if (attention?.kind === "waiting_approval") {
+  if (isWaiting(stackTemplate, attention)) {
     return { label: "waiting for approval", icon: Hourglass, tone: "attention", strong: true };
   }
   const status = stackTemplateStatus(stackTemplate);
@@ -29,8 +36,8 @@ export function stackTemplateIndicator(stackTemplate: StackTemplate, attention: 
 
 /** What last happened to the template, for the row's time column. */
 export function stackTemplateActivity(stackTemplate: StackTemplate, attention: AttentionItem | undefined): string {
-  if (attention?.kind === "waiting_approval") {
-    const at = attention.at || stackTemplate.pending_plan_at;
+  if (isWaiting(stackTemplate, attention)) {
+    const at = (attention?.kind === "waiting_approval" ? attention.at : "") || stackTemplate.pending_plan_at;
     return at ? `Planned ${formatDateTime(at)}` : "Planned";
   }
   if (stackTemplate.lifecycle === "failed") {
