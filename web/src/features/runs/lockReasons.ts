@@ -56,10 +56,24 @@ export function runActionsNote(state: LockState): string {
   return startRunLockReason(state) || "Plan shows what would change. Apply saves a plan that waits for approval.";
 }
 
+/**
+ * Why a template in this lifecycle cannot change its config or its revision,
+ * or "" when it can. The server refuses both for any template that is not
+ * active.
+ */
+export function lifecycleLockReason(lifecycle: string, change: "config" | "revision"): string {
+  const what = change === "config" ? "its config" : "revision";
+  if (lifecycle === "active") return "";
+  if (lifecycle === "destroying") return DESTROYING;
+  if (lifecycle === "failed") return `A template whose destroy failed cannot change ${what}.`;
+  return `Only an active template can change ${what}.`;
+}
+
 /** Save variables, and the fields above it. */
 export function variablesLockReason(state: LockState): string {
   if (!state.canOperate) return "Editing requires operator access.";
-  if (state.lifecycle === "destroying") return DESTROYING;
+  const lifecycleReason = lifecycleLockReason(state.lifecycle, "config");
+  if (lifecycleReason) return lifecycleReason;
   if (state.activeRun) return runInFlightReason(state.activeRun, "changing the config");
   return "";
 }
@@ -67,7 +81,8 @@ export function variablesLockReason(state: LockState): string {
 /** Change revision. */
 export function revisionLockReason(state: LockState): string {
   if (!state.canOperate) return "Changing the revision requires operator access.";
-  if (state.lifecycle === "destroying") return DESTROYING;
+  const lifecycleReason = lifecycleLockReason(state.lifecycle, "revision");
+  if (lifecycleReason) return lifecycleReason;
   if (state.activeRun) return runInFlightReason(state.activeRun, "changing the revision");
   return "";
 }

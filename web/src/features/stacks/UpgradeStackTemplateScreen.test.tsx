@@ -353,8 +353,21 @@ describe("UpgradeStackTemplateScreen", () => {
 
     renderScreen(queryClient, stackTemplate({ lifecycle: "destroying" }));
 
-    expect(screen.getByTestId("upgrade-destroying")).toBeTruthy();
+    expect(screen.getByTestId("upgrade-locked").textContent).toContain("Destroy in progress.");
     expect(screen.queryByRole("button", { name: /Change revision/ })).toBeNull();
+  });
+
+  // The server refuses a revision change for any template that is not
+  // active, so the direct URL says why instead of offering a form.
+  it("says why a template whose destroy failed cannot change revision", () => {
+    const queryClient = testQueryClient();
+    seedUpgradeable(queryClient);
+
+    renderScreen(queryClient, stackTemplate({ lifecycle: "failed" }));
+
+    expect(screen.getByTestId("upgrade-locked").textContent).toContain("A template whose destroy failed cannot change revision.");
+    expect(screen.queryByRole("button", { name: /Change revision/ })).toBeNull();
+    expect(screen.getByRole("link", { name: "Settings" })).toBeTruthy();
   });
 
   it("reports when no other active revisions are available", () => {

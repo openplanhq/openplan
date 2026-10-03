@@ -7,12 +7,12 @@ import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
 import { fieldLabelClass, selectTriggerClass } from "../../shared/fieldClass";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
+import { lifecycleLockReason } from "../runs/lockReasons";
 import { templateRevisionLabel } from "../templates/templateWorkflow";
 import PanelTrail from "./PanelTrail";
 import { useStackTemplate } from "./stackTemplateContext";
 import {
   configFromVariableValues,
-  isDestroyingStackTemplate,
   partitionUpgradeVariables,
   upgradeCandidateRevisions,
   variableValuesFromConfig
@@ -136,14 +136,15 @@ export default function UpgradeStackTemplateScreen() {
     );
   }
 
-  // Settings disables the link while a destroy runs, but the URL still
-  // reaches here. The server refuses the change regardless; this says so
-  // instead of drawing a form for an action that cannot succeed.
-  if (isDestroyingStackTemplate(stackTemplate)) {
+  // Settings disables the link for a template that is not active, but the
+  // URL still reaches here. The server refuses the change regardless; this
+  // says why instead of drawing a form for an action that cannot succeed.
+  const lifecycleReason = lifecycleLockReason(stackTemplate.lifecycle, "revision");
+  if (lifecycleReason) {
     return (
-      <section className="flex min-w-0 flex-col gap-5" data-testid="upgrade-destroying">
+      <section className="flex min-w-0 flex-col gap-5" data-testid="upgrade-locked">
         {trail}
-        <p className="text-meta text-muted-foreground">Destroy in progress. A template being destroyed cannot change revision.</p>
+        <p className="text-meta text-muted-foreground">{lifecycleReason}</p>
       </section>
     );
   }

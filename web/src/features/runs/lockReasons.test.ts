@@ -54,7 +54,8 @@ describe("lock reasons", () => {
   });
 
   // Columns: what locks, then the reason for Plan and Apply, Save variables,
-  // Change revision and Destroy. "" means that control stays free.
+  // Change revision and Destroy. "" means that control stays free. The
+  // server refuses every one of them for a template that is not active.
   it.each([
     [
       "missing operator access",
@@ -76,11 +77,18 @@ describe("lock reasons", () => {
       "a failed destroy",
       { lifecycle: "failed" },
       "A template whose destroy failed cannot start runs.",
-      "",
-      "",
+      "A template whose destroy failed cannot change its config.",
+      "A template whose destroy failed cannot change revision.",
       "A template whose destroy failed cannot start runs."
     ],
-    ["an orphaned template", { lifecycle: "orphaned" }, "Only an active template can start runs.", "", "", "Only an active template can be destroyed."],
+    [
+      "an orphaned template",
+      { lifecycle: "orphaned" },
+      "Only an active template can start runs.",
+      "Only an active template can change its config.",
+      "Only an active template can change revision.",
+      "Only an active template can be destroyed."
+    ],
     ["runs still loading", { runs: "pending" }, "Loading runs…", "", "", "Loading runs…"],
     [
       "runs that failed to load",
