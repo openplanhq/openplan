@@ -6,6 +6,15 @@ import { cn } from "@/lib/utils";
 // stays grey so the ones that need someone are what draws the eye.
 export type StatusLabelTone = "settled" | "idle" | "attention" | "failed";
 
+/** A state as a StatusLabel draws it: its word, its icon, its tone, and
+    whether it needs a person now. */
+export interface StatusIndicator {
+  label: string;
+  icon: LucideIcon;
+  tone: StatusLabelTone;
+  strong: boolean;
+}
+
 const TONE_CLASSES: Record<StatusLabelTone, string> = {
   settled: "text-muted-foreground",
   idle: "text-subtle-foreground",

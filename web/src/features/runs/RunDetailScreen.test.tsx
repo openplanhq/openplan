@@ -137,7 +137,7 @@ describe("RunDetailScreen", () => {
     renderScreen(queryClient, undefined, "1");
 
     // The breadcrumb names the run; the screen shows the run it resolved.
-    expect(screen.getByTestId("run-detail-status").textContent).toContain("Plan failed");
+    expect(screen.getByTestId("run-detail-status").textContent).toContain("plan failed");
     expect(screen.getByText("the older one")).toBeTruthy();
   });
 
@@ -241,7 +241,7 @@ describe("RunDetailScreen", () => {
     renderScreen(queryClient);
 
     expect(screen.getByTestId("run-detail-screen")).toBeTruthy();
-    expect(screen.getByTestId("run-detail-status").textContent).toContain("No changes");
+    expect(screen.getByTestId("run-detail-status").textContent).toBe("no changes");
     expect(screen.getByTestId("run-detail-status").getAttribute("data-tone")).toBe("settled");
     expect(screen.getByTestId("run-logs-panel").getAttribute("data-slot")).toBe("card");
     expect(screen.getByText("main @ abcdef1")).toBeTruthy();

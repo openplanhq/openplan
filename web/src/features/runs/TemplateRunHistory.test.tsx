@@ -103,7 +103,7 @@ describe("TemplateRunHistory", () => {
     const cells = within(screen.getByTestId("template-run-row-run_plan_1")).getAllByRole("cell");
     expect(cells).toHaveLength(5);
     expect(cells[0].textContent).toBe("#12");
-    expect(cells[1].textContent).toContain("Applied");
+    expect(cells[1].textContent).toBe("applied");
     expect(cells[2].textContent).toBe("+3 ~1 -0");
     expect(cells[3].textContent).toBe("Ada Lovelace");
     expect(cells[4].querySelector("time")?.getAttribute("datetime")).toBe("2026-07-20T00:00:00Z");

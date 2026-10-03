@@ -11,15 +11,14 @@ import {
 import { isTerminalRunStatus } from "../../api/polling";
 import { tenantID } from "../../config";
 import { formatDateTime } from "../../shared/formatTimestamp";
-import StatusBadge from "../../shared/StatusBadge";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
-import { statusTone } from "../../shared/statusTone";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { planSummaryLabel } from "../stacks/stackWorkflow";
 import RunLogsPanel from "./RunLogsPanel";
-import { runProgressTag, runStatusLabel } from "./runStatusLabel";
+import { runProgressTag } from "./runIndicator";
+import RunStatusLabel from "./RunStatusLabel";
 import { WaitingRunActions } from "./TemplateRunHistory";
 
 // /stacks/:stackId/templates/:stackTemplateId/runs/:runNumber — plan/apply
@@ -123,9 +122,7 @@ export default function RunDetailScreen() {
           <header className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex min-w-0 flex-wrap items-center gap-3">
               <span className="font-heading text-xl font-semibold tracking-tight">Run #{run.run_number}</span>
-              <StatusBadge tone={statusTone(run.status)} title={run.status} data-testid="run-detail-status">
-                {runStatusLabel(run)}
-              </StatusBadge>
+              <RunStatusLabel run={run} data-testid="run-detail-status" />
             </div>
             {canApprove && (
               <div className="flex flex-wrap gap-2">

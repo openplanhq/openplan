@@ -1,20 +1,12 @@
 import { Check, Diff, Hourglass, LoaderCircle, Minus, TriangleAlert } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import type { AttentionItem, StackTemplate } from "../../api/types";
 import { formatDateTime, formatTimestamp } from "../../shared/formatTimestamp";
 import StatusLabel from "../../shared/StatusLabel";
-import type { StatusLabelTone } from "../../shared/StatusLabel";
+import type { StatusIndicator } from "../../shared/StatusLabel";
 import type { StatusTone } from "../../shared/statusTone";
 import { stackTemplateStatus } from "./stackWorkflow";
 
-interface Indicator {
-  label: string;
-  icon: LucideIcon;
-  tone: StatusLabelTone;
-  strong: boolean;
-}
-
-const BY_TONE: Record<StatusTone, Omit<Indicator, "label">> = {
+const BY_TONE: Record<StatusTone, Omit<StatusIndicator, "label">> = {
   settled: { icon: Check, tone: "settled", strong: false },
   waiting: { icon: Diff, tone: "attention", strong: false },
   canceled: { icon: Minus, tone: "idle", strong: false },
@@ -27,7 +19,7 @@ const BY_TONE: Record<StatusTone, Omit<Indicator, "label">> = {
  * approval outranks the live state: it is the one thing a person can act on.
  * Everything else is stackTemplateStatus, drawn with an icon instead of a dot.
  */
-export function stackTemplateIndicator(stackTemplate: StackTemplate, attention: AttentionItem | undefined): Indicator {
+export function stackTemplateIndicator(stackTemplate: StackTemplate, attention: AttentionItem | undefined): StatusIndicator {
   if (attention?.kind === "waiting_approval") {
     return { label: "waiting for approval", icon: Hourglass, tone: "attention", strong: true };
   }

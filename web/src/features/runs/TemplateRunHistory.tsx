@@ -8,8 +8,6 @@ import type { TemplateRun } from "../../api/types";
 import RequireCapability from "../../auth/RequireCapability";
 import { tenantID } from "../../config";
 import { formatDateTime } from "../../shared/formatTimestamp";
-import StatusBadge from "../../shared/StatusBadge";
-import { statusTone } from "../../shared/statusTone";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -23,7 +21,7 @@ import {
   AlertDialogTrigger
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { runStatusLabel } from "./runStatusLabel";
+import RunStatusLabel from "./RunStatusLabel";
 
 interface TemplateRunHistoryProps {
   stackId: string;
@@ -136,7 +134,6 @@ interface RunRowProps {
 }
 
 function RunRow({ run, to, hasActions, stackId, approvingRunID, discardingRunID, onApprove, onDiscard }: RunRowProps) {
-  const tone = statusTone(run.status);
   const showApprove = run.status === "waiting_approval";
   const summary = planSummaryLabel(run.plan_summary);
 
@@ -148,9 +145,7 @@ function RunRow({ run, to, hasActions, stackId, approvingRunID, discardingRunID,
         </Link>
       </TableCell>
       <TableCell>
-        <StatusBadge tone={tone} title={run.status} data-testid={`template-run-status-${run.id}`}>
-          {runStatusLabel(run)}
-        </StatusBadge>
+        <RunStatusLabel run={run} data-testid={`template-run-status-${run.id}`} />
       </TableCell>
       <TableCell
         className="font-mono text-muted-foreground"
