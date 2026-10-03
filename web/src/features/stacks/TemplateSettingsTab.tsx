@@ -1,53 +1,62 @@
-import { RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
-import RequireCapability from "../../auth/RequireCapability";
+import { useTemplateRevisionsQuery } from "../../api/queries";
+import { tenantID } from "../../config";
+import { buttonClass } from "../../shared/buttonClass";
 import TemplateDestroyPanel from "../runs/TemplateDestroyPanel";
-import { useStackTemplate } from "./stackTemplateContext";
 import { revisionLockReason, useLockState } from "../runs/lockReasons";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { revisionSourceLabel } from "../templates/templateWorkflow";
+import SettingsSection from "./SettingsSection";
+import { useStackTemplate } from "./stackTemplateContext";
 import { cn } from "@/lib/utils";
 
 // /stacks/:stackId/templates/:stackTemplateId/settings — the actions that
 // change what the template is rather than run it: choosing another revision,
-// and destroying it. They live here, a tab away from the Plan button, so the
+// and destroying it. They live here, a tab away from Plan, so the
 // irreversible one is never under the cursor of routine work.
 export default function TemplateSettingsTab() {
   const { stackId, stackTemplate } = useStackTemplate();
-  const revisionLockedReason = revisionLockReason(useLockState(stackId, stackTemplate));
+  const reason = revisionLockReason(useLockState(stackId, stackTemplate));
+  // Read only to name where the revision comes from. The sentence stands
+  // without it while the tenant's revisions load.
+  const revision =
+    useTemplateRevisionsQuery(tenantID).data?.find((candidate) => candidate.id === stackTemplate.desired_template_revision_id) ?? null;
+  const actionClass = cn(buttonClass("outline"), "pointer-coarse:h-11");
 
   return (
-    <div className="grid min-w-0 grid-cols-1 content-start gap-6" data-testid="template-settings-tab">
-      {/* A secondary action, so a quiet band rather than a card: the label on
-          one side, the control on the other, wrapping under it on a phone. */}
-      <section
-        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted px-4 py-2"
-        data-testid="stack-template-revision-action"
-      >
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <RefreshCw aria-hidden="true" className="size-4" />
-          Choose a template revision
-        </p>
-        <RequireCapability capability="canOperate">
-          {revisionLockedReason ? (
-            <div className="flex flex-wrap items-center gap-3">
-              <Button variant="outline" className="pointer-coarse:h-11" disabled data-testid="change-stack-template-revision-link">
-                Change revision
-              </Button>
-              <p className="text-sm text-muted-foreground" data-testid="upgrade-disabled-reason">
-                {revisionLockedReason}
-              </p>
-            </div>
+    <div className="flex min-w-0 flex-col gap-5" data-testid="template-settings-tab">
+      <SettingsSection
+        title="Revision"
+        testId="stack-template-revision-action"
+        description={
+          <>
+            This template runs revision <span className="font-mono text-code-foreground">{stackTemplate.source_ref}</span>
+            {revision && (
+              <>
+                {" "}
+                of <span className="font-mono text-code-foreground">{revisionSourceLabel(revision)}</span>
+              </>
+            )}
+            .
+          </>
+        }
+        reason={reason}
+        reasonTestId="upgrade-disabled-reason"
+        action={
+          reason ? (
+            <button type="button" disabled className={actionClass} data-testid="change-stack-template-revision-link">
+              Change revision
+            </button>
           ) : (
             <Link
-              className={cn(buttonVariants({ variant: "outline" }), "pointer-coarse:h-11")}
               to={`/stacks/${stackId}/templates/${stackTemplate.id}/upgrade`}
+              className={actionClass}
               data-testid="change-stack-template-revision-link"
             >
               Change revision
             </Link>
-          )}
-        </RequireCapability>
-      </section>
+          )
+        }
+      />
       <TemplateDestroyPanel stackId={stackId} stackTemplate={stackTemplate} />
     </div>
   );

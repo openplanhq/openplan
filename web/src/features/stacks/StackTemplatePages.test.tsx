@@ -551,36 +551,65 @@ describe("TemplateCredentialsTab", () => {
 });
 
 describe("TemplateSettingsTab", () => {
-  it("offers changing the revision, as a secondary action above destroy", () => {
+  it("offers changing the revision above destroy", () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/settings");
 
-    const revisionAction = screen.getByTestId("stack-template-revision-action");
-    expect(revisionAction.className).not.toContain("panel");
+    const revisionAction = screen.getByRole("region", { name: "Revision" });
     expect(screen.getByTestId("change-stack-template-revision-link").getAttribute("href")).toBe("/stacks/stack_1/templates/st_1/upgrade");
-    expect(precedes(revisionAction, screen.getByTestId("template-destroy-panel"))).toBe(true);
+    expect(precedes(revisionAction, screen.getByRole("region", { name: "Destroy" }))).toBe(true);
+  });
+
+  it("names the revision it runs and where that comes from", () => {
+    const queryClient = testQueryClient();
+    seedDefaultData(queryClient);
+    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [templateRevision({ root_path: "aws/eks" })]);
+    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, [stackTemplate({ source_ref: "v1.4.0" })]));
+
+    renderAt(queryClient, "/stacks/stack_1/templates/st_1/settings");
+
+    expect(screen.getByText(/^This template runs revision/).textContent).toBe("This template runs revision v1.4.0 of aws/eks.");
+  });
+
+  it("names the repository for a template at its root", () => {
+    const queryClient = testQueryClient();
+    seedDefaultData(queryClient);
+
+    renderAt(queryClient, "/stacks/stack_1/templates/st_1/settings");
+
+    expect(screen.getByText(/^This template runs revision/).textContent).toBe("This template runs revision main of hashicorp/vpc.");
   });
 
   it("does not wait for the tenant revision list before offering a revision change", () => {
+    vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);
     queryClient.removeQueries({ queryKey: queryKeys.templateRevisions("tenant_123") });
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/settings");
 
-    expect(screen.getByTestId("change-stack-template-revision-link")).toBeTruthy();
+    expect(screen.getByTestId("change-stack-template-revision-link").getAttribute("href")).toBe("/stacks/stack_1/templates/st_1/upgrade");
+    expect(screen.getByText(/^This template runs revision/).textContent).toBe("This template runs revision main.");
   });
 
-  it("hides the revision change when canOperate is denied", async () => {
+  // Both settings show to every viewer. One that cannot be used is disabled,
+  // and its section says why.
+  it("shows both settings to a viewer without operator access, each disabled with why", async () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient, { ...allAllowed, canOperate: false });
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/settings");
 
-    await waitFor(() => expect(screen.getByTestId("template-settings-tab")).toBeTruthy());
-    expect(screen.queryByTestId("change-stack-template-revision-link")).toBeNull();
+    await waitFor(() =>
+      expect(screen.getByTestId("upgrade-disabled-reason").textContent).toBe("Changing the revision requires operator access.")
+    );
+    const changeRevision = screen.getByTestId("change-stack-template-revision-link") as HTMLButtonElement;
+    expect(changeRevision.tagName).toBe("BUTTON");
+    expect(changeRevision.disabled).toBe(true);
+    expect(screen.getByTestId("template-destroy-disabled-reason").textContent).toBe("Destroying requires operator access.");
+    expect(actionButton(/^Destroy$/).disabled).toBe(true);
   });
 
   it("disables revision selection while the template is destroying", () => {
