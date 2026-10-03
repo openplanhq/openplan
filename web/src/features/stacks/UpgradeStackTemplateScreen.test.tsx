@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import UpgradeStackTemplateScreen from "./UpgradeStackTemplateScreen";
+import { StackTemplateContext } from "./stackTemplateContext";
 import { queryKeys } from "../../api/queryKeys";
 import type { StackTemplate, StackView, TemplateRevision, TemplateVariable } from "../../api/types";
 import { AuthContext } from "../../auth/AuthContext";
@@ -83,7 +84,7 @@ function variable(overrides: Partial<TemplateVariable> = {}): TemplateVariable {
 }
 
 /** The target picker, and the label of the revision it shows. */
-const targetSelect = () => screen.getByRole("combobox", { name: "Revision to apply" });
+const targetSelect = () => screen.getByRole("combobox", { name: "Revision" });
 const shownTarget = () => targetSelect().querySelector('[data-slot="select-value"]')?.textContent ?? "";
 
 /** Opens the target picker and returns its options' labels. */
@@ -136,14 +137,23 @@ function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue 
   };
 }
 
-function renderScreen(queryClient: QueryClient) {
+// The screen renders inside the template's panel, which provides the template
+// through context; the panel's own tests cover a template the stack lacks.
+function renderScreen(queryClient: QueryClient, template: StackTemplate = stackTemplate()) {
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthContext.Provider value={authValue()}>
         <MemoryRouter initialEntries={["/stacks/stack_1/templates/st_1/upgrade"]}>
           <Routes>
-            <Route path="/stacks/:stackId/templates/:stackTemplateId/upgrade" element={<UpgradeStackTemplateScreen />} />
-            <Route path="/stacks/:stackId/templates/:stackTemplateId" element={<LocationProbe />} />
+            <Route
+              path="/stacks/:stackId/templates/:stackTemplateId/upgrade"
+              element={
+                <StackTemplateContext.Provider value={{ stackId: "stack_1", stackTemplate: template }}>
+                  <UpgradeStackTemplateScreen />
+                </StackTemplateContext.Provider>
+              }
+            />
+            <Route path="/stacks/:stackId/templates/:stackTemplateId/:tab" element={<LocationProbe />} />
           </Routes>
         </MemoryRouter>
       </AuthContext.Provider>
@@ -232,7 +242,7 @@ describe("UpgradeStackTemplateScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: /Change revision/ }));
 
     await waitFor(() => expect(screen.getByTestId("location")).toBeTruthy());
-    expect(screen.getByTestId("location").textContent).toBe("/stacks/stack_1/templates/st_1");
+    expect(screen.getByTestId("location").textContent).toBe("/stacks/stack_1/templates/st_1/runs");
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("/v1/tenants/tenant_123/stack-templates/st_1/upgrade");
@@ -340,12 +350,8 @@ describe("UpgradeStackTemplateScreen", () => {
   it("guards the direct-URL path when the installed template is mid-destroy", () => {
     const queryClient = testQueryClient();
     seedUpgradeable(queryClient);
-    queryClient.setQueryData(
-      queryKeys.stack("tenant_123", "stack_1"),
-      stackView([stackTemplate({ lifecycle: "destroying" })])
-    );
 
-    renderScreen(queryClient);
+    renderScreen(queryClient, stackTemplate({ lifecycle: "destroying" }));
 
     expect(screen.getByTestId("upgrade-destroying")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Change revision/ })).toBeNull();
@@ -443,13 +449,38 @@ describe("UpgradeStackTemplateScreen", () => {
     expect(document.querySelector("[data-unsaved='true']")).not.toBeNull();
   });
 
-  it("renders not found when the stack template id is not installed", () => {
+  it("leads with a crumb back to Settings", () => {
     const queryClient = testQueryClient();
     seedUpgradeable(queryClient);
-    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([]));
 
     renderScreen(queryClient);
 
-    expect(screen.getByTestId("upgrade-template-missing")).toBeTruthy();
+    const trail = screen.getByRole("navigation", { name: "Change revision" });
+    expect(within(trail).getByRole("link", { name: "Settings" }).getAttribute("href")).toBe("/stacks/stack_1/templates/st_1/settings");
+    expect(within(trail).getByText("Change revision").getAttribute("aria-current")).toBe("page");
+    // The panel's header already names the template.
+    expect(screen.queryByRole("heading", { name: "vpc" })).toBeNull();
+  });
+
+  it("goes back to Settings on Cancel", async () => {
+    const queryClient = testQueryClient();
+    seedUpgradeable(queryClient);
+
+    renderScreen(queryClient);
+    await userEvent.setup().click(screen.getByRole("link", { name: "Cancel" }));
+
+    expect(screen.getByTestId("location").textContent).toBe("/stacks/stack_1/templates/st_1/settings");
+  });
+
+  it("states what the change does to the config before the fields", () => {
+    const queryClient = testQueryClient();
+    seedUpgradeable(queryClient);
+
+    renderScreen(queryClient);
+
+    const added = screen.getByTestId("upgrade-added-new_var");
+    expect(added.textContent).toBe("new_var is new in this revision.");
+    expect(screen.getByTestId("upgrade-removed-legacy_flag").textContent).toBe("legacy_flag is no longer used and will be dropped.");
+    expect(Boolean(added.compareDocumentPosition(screen.getByLabelText(/region/)) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
   });
 });
