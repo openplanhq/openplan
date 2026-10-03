@@ -11,15 +11,14 @@ import type { StackTemplate, StackView, TemplateRevision, TemplateRun, TemplateV
 import type { StackCapabilities } from "../../auth/types";
 import RunDetailScreen from "../runs/RunDetailScreen";
 import TemplatePanel from "./TemplatePanel";
-import StackTemplateListScreen from "./StackTemplateListScreen";
 import TemplateCredentialsTab from "./TemplateCredentialsTab";
 import TemplateRunsTab from "./TemplateRunsTab";
 import TemplateSettingsTab from "./TemplateSettingsTab";
 import TemplateVariablesTab from "./TemplateVariablesTab";
 
-// The template list page and the tabbed page for one template, rendered
-// through the same route shape as router.tsx so tab links, the index redirect
-// and the outlet context are exercised the way the app uses them.
+// The panel for one template and its tabs, rendered through the same route
+// shape as router.tsx so tab links and the index redirect are exercised the
+// way the app uses them. The stack's page around it has its own tests.
 
 const allAllowed: StackCapabilities = { canView: true, canOperate: true, canApprove: true, canManageAccess: true };
 
@@ -164,7 +163,6 @@ function renderAt(queryClient: QueryClient, initialEntry: string, auth?: AuthCon
       <AuthContext.Provider value={auth ?? authValue()}>
         <MemoryRouter initialEntries={[initialEntry]}>
           <Routes>
-            <Route path="/stacks/:stackId/templates" element={<StackTemplateListScreen />} />
             <Route path="/stacks/:stackId/templates/:stackTemplateId" element={<TemplatePanel />}>
               <Route index element={<Navigate to="runs" replace />} />
               <Route path="runs" element={<TemplateRunsTab />} />
@@ -191,90 +189,6 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
-});
-
-describe("StackTemplateListScreen", () => {
-  it("links every installed template to its own page", () => {
-    const queryClient = testQueryClient();
-    seedDefaultData(queryClient);
-    queryClient.setQueryData(
-      queryKeys.stack("tenant_123", "stack_1"),
-      stackView(allAllowed, [stackTemplate(), stackTemplate({ id: "st_2" })])
-    );
-
-    renderAt(queryClient, "/stacks/stack_1/templates");
-
-    expect(screen.getByTestId("stack-template-link-st_1").getAttribute("href")).toBe("/stacks/stack_1/templates/st_1");
-    expect(screen.getByTestId("stack-template-link-st_2").getAttribute("href")).toBe("/stacks/stack_1/templates/st_2");
-    // The list is only a list: nothing about any one template is open here.
-    expect(screen.queryByTestId("stack-template-config")).toBeNull();
-    expect(screen.queryByTestId("template-run-actions")).toBeNull();
-  });
-
-  it("links to the add template screen", () => {
-    const queryClient = testQueryClient();
-    seedDefaultData(queryClient);
-
-    renderAt(queryClient, "/stacks/stack_1/templates");
-
-    expect(screen.getByTestId("add-stack-template-link").getAttribute("href")).toBe("/stacks/stack_1/templates/new");
-  });
-
-  it("keeps a visible gap between the template list header and its choices", () => {
-    const queryClient = testQueryClient();
-    seedDefaultData(queryClient);
-
-    renderAt(queryClient, "/stacks/stack_1/templates");
-
-    const listContent = screen.getByTestId("stack-template-list-content");
-    expect(listContent.contains(screen.getByTestId("stack-template-panel-header"))).toBe(true);
-    expect(listContent.contains(screen.getByTestId("stack-template-items"))).toBe(true);
-  });
-
-  it("prompts to add a template when the stack has none installed", () => {
-    const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, []));
-
-    renderAt(queryClient, "/stacks/stack_1/templates");
-
-    expect(screen.getByTestId("stack-template-empty")).toBeTruthy();
-    expect(screen.getByTestId("add-stack-template-link")).toBeTruthy();
-  });
-
-  it("hides the add link when canOperate is denied", async () => {
-    const queryClient = testQueryClient();
-    seedDefaultData(queryClient, { ...allAllowed, canOperate: false });
-
-    renderAt(queryClient, "/stacks/stack_1/templates");
-
-    await waitFor(() => expect(screen.getByTestId("stack-template-items")).toBeTruthy());
-    expect(screen.queryByTestId("add-stack-template-link")).toBeNull();
-  });
-
-  // Each row names its state in words as well as the icon, now that the list
-  // has the page to itself; the icon keeps the label as its accessible name.
-  it("reports applied state on each row from live_state", () => {
-    const queryClient = testQueryClient();
-    seedDefaultData(queryClient);
-    queryClient.setQueryData(
-      queryKeys.stack("tenant_123", "stack_1"),
-      stackView(allAllowed, [
-        stackTemplate({ id: "st_1", live_state: "matches" }),
-        stackTemplate({ id: "st_2", live_state: "differs" }),
-        stackTemplate({ id: "st_3", live_state: "never" }),
-        stackTemplate({ id: "st_4", lifecycle: "destroying" })
-      ])
-    );
-
-    renderAt(queryClient, "/stacks/stack_1/templates");
-
-    expect(screen.getByTestId("stack-template-status-st_1").getAttribute("aria-label")).toBe("applied");
-    expect(screen.getByTestId("stack-template-status-st_2").getAttribute("aria-label")).toBe("changed");
-    expect(screen.getByTestId("stack-template-status-st_3").getAttribute("aria-label")).toBe("not applied");
-    expect(screen.getByTestId("stack-template-status-st_4").getAttribute("aria-label")).toBe("destroying");
-    expect(screen.getByTestId("stack-template-link-st_2").textContent).toContain("changed");
-    expect(screen.queryByText("rev_1")).toBeNull();
-  });
 });
 
 describe("TemplatePanel", () => {

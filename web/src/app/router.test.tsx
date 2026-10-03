@@ -17,6 +17,52 @@ function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue 
   };
 }
 
+// The stack every stack-route test below seeds: canView-gated routes resolve
+// once the stack query cache has effectiveCapabilities. retry: false +
+// staleTime: Infinity, so seeded data never triggers a real fetch().
+function stackQueryClient(
+  queryKeys: typeof import("../api/queryKeys").queryKeys,
+  options: { capabilities?: { canView: boolean; canOperate: boolean; canApprove: boolean; canManageAccess: boolean }; templates?: unknown[] } = {}
+): QueryClient {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), {
+    stack: {
+      id: "stack_1",
+      tenant_id: "tenant_123",
+      name: "Stack",
+      slug: "stack",
+      tags: {},
+      default_credential_ids: [],
+      created_by: "user_123",
+      created_at: "2026-07-19T00:00:00Z",
+      effectiveCapabilities: options.capabilities ?? { canView: true, canOperate: true, canApprove: true, canManageAccess: true }
+    },
+    templates: options.templates ?? []
+  });
+  queryClient.setQueryData(queryKeys.attention("tenant_123"), []);
+  return queryClient;
+}
+
+// The panel draws its outlet only for a template the stack has.
+const installedTemplate = {
+  id: "st_1",
+  stack_id: "stack_1",
+  component_key: "vpc",
+  source_template_id: "tmpl_src_1",
+  desired_template_revision_id: "rev_1",
+  last_applied_template_revision_id: "",
+  source_ref: "main",
+  workspace_name: "ws",
+  display_name: "",
+  config: {},
+  last_applied_run_id: "",
+  pending_plan_run_id: "",
+  plan_state: "none",
+  live_state: "never",
+  created_by: "user_123",
+  lifecycle: "active"
+};
+
 describe("routeConfig", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -37,16 +83,10 @@ describe("routeConfig", () => {
     expect(testRouter.state.location.pathname).toBe("/stacks");
   });
 
-  it("renders a placeholder for every reserved screen a signed-in operator can reach", async () => {
+  it("renders the create stack screen at /stacks/new", async () => {
     vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
 
-    const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
-    const { queryKeys } = await import("../api/queryKeys");
-
-    // /stacks/new now renders the real CreateStackScreen (Task 2 of
-    // create-stack-ui). No reserved screens remain that are reachable purely
-    // via global capabilities — the rest require a stack scoped query.
     {
       const testRouter = createMemoryRouter(routeConfig, { initialEntries: ["/stacks/new"] });
       const markup = renderToStaticMarkup(
@@ -59,68 +99,15 @@ describe("routeConfig", () => {
       expect(markup).toContain("Create stack");
       expect(markup).not.toContain('data-testid="route-placeholder"');
     }
-
-    // canView-gated stack routes resolve once the stack query cache has effectiveCapabilities.
-    // retry: false + staleTime: Infinity: this test seeds the cache directly and
-    // must never let TanStack Query's default refetch-on-mount fire a real,
-    // unmocked fetch() for stale data — see the identical rationale in
-    // useStackCapabilities.test.tsx (Task 2) and RequireCapability.test.tsx (Task 3).
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), {
-      stack: {
-        id: "stack_1",
-        tenant_id: "tenant_123",
-        name: "Stack",
-        slug: "stack",
-        tags: {},
-        default_credential_ids: [],
-        created_by: "user_123",
-        created_at: "2026-07-19T00:00:00Z",
-        effectiveCapabilities: { canView: true, canOperate: true, canApprove: true, canManageAccess: true }
-      },
-      templates: []
-    });
-    const stackScopedPaths = ["/stacks/stack_1"];
-    for (const path of stackScopedPaths) {
-      const testRouter = createMemoryRouter(routeConfig, { initialEntries: [path] });
-      const markup = renderToStaticMarkup(
-        <QueryClientProvider client={queryClient}>
-          <AuthContext.Provider value={authValue({ me: { ...authValue().me!, globalCapabilities: { isPlatformAdmin: false, canCreateStack: true, canPublishTemplate: true } } })}>
-            <RouterProvider router={testRouter} />
-          </AuthContext.Provider>
-        </QueryClientProvider>
-      );
-      expect(markup, `expected a placeholder at ${path}`).toContain('data-testid="route-placeholder"');
-    }
-
-    // Run detail is a real screen, reached under a template's page; it is
-    // covered with the other template routes in StackDetailShell.test.tsx.
   });
 
-  it("renders the stack template list at /stacks/:stackId/templates", async () => {
+  it("renders the stack's page at /stacks/:stackId", async () => {
     vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
-    const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
     const { queryKeys } = await import("../api/queryKeys");
+    const queryClient = stackQueryClient(queryKeys);
 
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), {
-      stack: {
-        id: "stack_1",
-        tenant_id: "tenant_123",
-        name: "Stack",
-        slug: "stack",
-        tags: {},
-        default_credential_ids: [],
-        created_by: "user_123",
-        created_at: "2026-07-19T00:00:00Z",
-        effectiveCapabilities: { canView: true, canOperate: true, canApprove: true, canManageAccess: true }
-      },
-      templates: []
-    });
-    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), []);
-
-    const testRouter = createMemoryRouter(routeConfig, { initialEntries: ["/stacks/stack_1/templates"] });
+    const testRouter = createMemoryRouter(routeConfig, { initialEntries: ["/stacks/stack_1"] });
     const markup = renderToStaticMarkup(
       <QueryClientProvider client={queryClient}>
         <AuthContext.Provider value={authValue()}>
@@ -129,9 +116,39 @@ describe("routeConfig", () => {
       </QueryClientProvider>
     );
 
-    expect(markup).toContain('data-testid="stack-template-list-screen"');
-    expect(markup).toContain('data-testid="stack-template-empty"');
-    expect(markup).not.toContain('data-testid="route-placeholder"');
+    expect(markup).toContain('data-testid="stack-page"');
+    expect(markup).toContain('data-testid="stack-empty"');
+  });
+
+  it("sends the old template list at /stacks/:stackId/templates to the stack's page", async () => {
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
+    const { routeConfig } = await import("./router");
+
+    const testRouter = createMemoryRouter(routeConfig, { initialEntries: ["/stacks/stack_1/templates"] });
+    await vi.waitFor(() => expect(testRouter.state.initialized).toBe(true));
+
+    expect(testRouter.state.location.pathname).toBe("/stacks/stack_1");
+  });
+
+  it("renders Environment under a Stacks / stack / Environment breadcrumb", async () => {
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
+    const { routeConfig } = await import("./router");
+    const { queryKeys } = await import("../api/queryKeys");
+    const queryClient = stackQueryClient(queryKeys);
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+
+    const testRouter = createMemoryRouter(routeConfig, { initialEntries: ["/stacks/stack_1/environment"] });
+    const markup = renderToStaticMarkup(
+      <QueryClientProvider client={queryClient}>
+        <AuthContext.Provider value={authValue()}>
+          <RouterProvider router={testRouter} />
+        </AuthContext.Provider>
+      </QueryClientProvider>
+    );
+
+    expect(markup).toContain('data-testid="stack-section-layout"');
+    expect(markup).toContain('href="/stacks/stack_1"');
+    expect(markup).toMatch(/<h1[^>]*aria-current="page"[^>]*>Environment<\/h1>/);
   });
 
   it("renders the stacks list screen at /stacks", async () => {
@@ -437,25 +454,8 @@ describe("routeConfig", () => {
   it("renders the upgrade screen at /stacks/:stackId/templates/:stackTemplateId/upgrade", async () => {
     vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
-    const { createMemoryRouter, RouterProvider } = await import("react-router-dom");
-    const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
     const { queryKeys } = await import("../api/queryKeys");
-
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), {
-      stack: {
-        id: "stack_1",
-        tenant_id: "tenant_123",
-        name: "Payments",
-        slug: "payments",
-        tags: {},
-        default_credential_ids: [],
-        created_by: "user_123",
-        created_at: "2026-07-19T00:00:00Z",
-        effectiveCapabilities: { canView: true, canOperate: true, canApprove: true, canManageAccess: true }
-      },
-      templates: []
-    });
+    const queryClient = stackQueryClient(queryKeys, { templates: [installedTemplate] });
     queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), []);
 
     const testRouter = createMemoryRouter(routeConfig, {
@@ -469,9 +469,9 @@ describe("routeConfig", () => {
       </QueryClientProvider>
     );
 
-    // The seeded stack has no installed templates, so the route resolves to
-    // the screen's own missing-template state rather than a 404.
-    expect(markup).toContain('data-testid="upgrade-template-missing"');
+    // The panel draws the template's header, then the screen in its outlet.
+    expect(markup).toContain('data-testid="template-panel"');
+    expect(markup).toMatch(/data-testid="upgrade-[a-z-]+"/);
   });
 
   it("renders AccessDenied for /stacks/:stackId/templates/new when canOperate is denied but canView is allowed", async () => {
@@ -512,24 +512,10 @@ describe("routeConfig", () => {
   it("renders AccessDenied for /stacks/:stackId/templates/:stackTemplateId/upgrade when canOperate is denied but canView is allowed", async () => {
     vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
-    const { createMemoryRouter, RouterProvider } = await import("react-router-dom");
-    const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
     const { queryKeys } = await import("../api/queryKeys");
-
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), {
-      stack: {
-        id: "stack_1",
-        tenant_id: "tenant_123",
-        name: "Payments",
-        slug: "payments",
-        tags: {},
-        default_credential_ids: [],
-        created_by: "user_123",
-        created_at: "2026-07-19T00:00:00Z",
-        effectiveCapabilities: { canView: true, canOperate: false, canApprove: false, canManageAccess: false }
-      },
-      templates: []
+    const queryClient = stackQueryClient(queryKeys, {
+      capabilities: { canView: true, canOperate: false, canApprove: false, canManageAccess: false },
+      templates: [installedTemplate]
     });
 
     const testRouter = createMemoryRouter(routeConfig, {

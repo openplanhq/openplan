@@ -55,7 +55,7 @@ export default function StackPreview({
       </div>
 
       <nav aria-label="Stack sections" className="flex flex-wrap items-center gap-2 px-7 pt-4">
-        <Link to={`${base}/templates`} className={sectionLinkClass}>
+        <Link to={base} className={sectionLinkClass}>
           <Layers data-icon="inline-start" aria-hidden="true" className="size-3.5" />
           Templates
         </Link>
