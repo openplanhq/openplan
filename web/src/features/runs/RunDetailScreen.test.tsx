@@ -42,6 +42,7 @@ function run(overrides: Partial<TemplateRun> = {}): TemplateRun {
     status: "completed",
     step: "",
     trigger_actor: "user_123",
+    trigger_actor_display_name: "user_123",
     created_at: "2026-07-20T00:00:00Z",
     error_summary: "",
     run_number: 1,
@@ -384,6 +385,26 @@ describe("RunDetailScreen", () => {
     await waitFor(() => expect(screen.getByText("Loading…")).toBeTruthy());
     resolveLog?.(jsonResponse({ error: "internal", message: "boom" }, 500));
     await waitFor(() => expect(screen.getByText("Could not load this log.")).toBeTruthy());
+  });
+
+  // A subject from the identity provider is opaque (Dex's is base64 of a
+  // protobuf), so it is never what a person reads.
+  it("names who started the run rather than showing their subject", () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(
+      queryKeys.templateRun("tenant_123", "run_1"),
+      run({
+        trigger_actor: "CiQ3YzRiMmYwZS0zZDFhLTRlOGItOWY2Yy0yYTVkOGUxYjBjNDcSBWxvY2Fs",
+        trigger_actor_display_name: "Ada Lovelace"
+      })
+    );
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([]));
+
+    renderScreen(queryClient);
+
+    expect(screen.getByText("Started by").nextElementSibling?.textContent).toBe("Ada Lovelace");
+    expect(screen.queryByText("CiQ3YzRiMmYwZS0zZDFhLTRlOGItOWY2Yy0yYTVkOGUxYjBjNDcSBWxvY2Fs")).toBeNull();
   });
 
   it("renders the activity failure summary for a failed run", () => {

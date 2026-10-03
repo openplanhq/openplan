@@ -234,6 +234,11 @@ type TemplateRun struct {
 	// Empty until that execution starts a step.
 	Step         TemplateRunStep `json:"step"`
 	TriggerActor UserID          `json:"trigger_actor"`
+	// TriggerActorDisplayName labels TriggerActor for people: the name the
+	// users projection holds for that subject, or the subject itself when it
+	// has no row. The app fills it on every run it hands out; the store
+	// neither reads nor writes it. TriggerActor stays the identity.
+	TriggerActorDisplayName string `json:"trigger_actor_display_name"`
 	// CreatedAt is when the run was requested. When work started is its
 	// executions' StartedAt.
 	CreatedAt   time.Time `json:"created_at"`

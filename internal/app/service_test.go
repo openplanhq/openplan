@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"maps"
 	"os"
 	"strings"
 	"testing"
@@ -606,6 +607,7 @@ func TestStartTemplateRunCreatesQueuedRunWithoutDispatchingWorkflow(t *testing.T
 	work := &recordingUnitOfWork{templateRuns: runs}
 
 	service := NewService(Service{
+		Users:                    &fakeUserRepository{},
 		Authorization:            testPlatformAuthorizer(t),
 		Work:                     work,
 		StackTemplates:           stackTemplates,
@@ -1016,6 +1018,7 @@ func TestStartTemplateRunAutoApproveRequiresApproveAccess(t *testing.T) {
 		work := &recordingUnitOfWork{templateRuns: runs}
 		authorizer := seedGrants(t, newPlatformAuthorizer(t), mustGrant(t, oidcSubject, "stack_123", grant))
 		return NewService(Service{
+			Users:                    &fakeUserRepository{},
 			Authorization:            authorizer,
 			Work:                     work,
 			StackTemplates:           &recordingStackTemplateRepository{stackTemplate: stackTemplate},
@@ -1136,6 +1139,7 @@ func TestStartTemplateRunSurfacesTheStoresInFlightRejection(t *testing.T) {
 	runs := &recordingTemplateRunRepository{createErr: ErrTemplateRunInFlight}
 	work := &recordingUnitOfWork{templateRuns: runs}
 	service := NewService(Service{
+		Users:         &fakeUserRepository{},
 		Work:          work,
 		Authorization: testPlatformAuthorizer(t),
 		TemplateRuns:  runs,
@@ -1171,6 +1175,86 @@ func TestStartTemplateRunSurfacesTheStoresInFlightRejection(t *testing.T) {
 	}
 }
 
+// The run a start hands back is the one the UI caches as the run's detail, so
+// it is labelled like any run read back.
+func TestStartTemplateRunLabelsTheTriggerActor(t *testing.T) {
+	t.Parallel()
+
+	runs := &recordingTemplateRunRepository{}
+	service := NewService(Service{
+		Work:          &recordingUnitOfWork{templateRuns: runs},
+		Authorization: testPlatformAuthorizer(t),
+		TemplateRuns:  runs,
+		StackTemplates: &recordingStackTemplateRepository{stackTemplate: domain.StackTemplate{
+			ID:                        domain.StackTemplateID("stack_template_123"),
+			DesiredTemplateRevisionID: domain.TemplateRevisionID("template_123"),
+			WorkspaceName:             "mtp_acme_prod_vpc_a13f9c",
+			Lifecycle:                 domain.StackTemplateActive,
+		}},
+		TemplateRevisionMetadata: &recordingTemplateRepository{
+			template: domain.TemplateRevision{ID: domain.TemplateRevisionID("template_123"), Status: domain.TemplateRevisionActive},
+		},
+		Users:  &fakeUserRepository{users: []UserProfile{{Sub: oidcSubject, DisplayName: "Ada Lovelace"}}},
+		RunIDs: fixedTemplateRunIDGenerator{runID: domain.TemplateRunID("run_123")},
+		Clock:  fixedClock{now: time.Now()},
+	})
+
+	run, err := service.StartTemplateRun(authenticatedContext(), StartTemplateRunCommand{
+		TenantID:        domain.TenantID("tenant_123"),
+		StackTemplateID: domain.StackTemplateID("stack_template_123"),
+		Operation:       domain.OperationPlan,
+	})
+	if err != nil {
+		t.Fatalf("StartTemplateRun returned error: %v", err)
+	}
+	if run.TriggerActorDisplayName != "Ada Lovelace" {
+		t.Fatalf("display name = %q, want %q", run.TriggerActorDisplayName, "Ada Lovelace")
+	}
+}
+
+// The label is looked up before the run is created. Looked up after, a failed
+// lookup would report an error for a run that had in fact started, and a
+// retry would then be refused as a run already in flight.
+func TestStartTemplateRunStartsNothingWhenTheActorLookupFails(t *testing.T) {
+	t.Parallel()
+
+	runs := &recordingTemplateRunRepository{}
+	work := &recordingUnitOfWork{templateRuns: runs}
+	lookupErr := errors.New("users unavailable")
+	service := NewService(Service{
+		Work:          work,
+		Authorization: testPlatformAuthorizer(t),
+		TemplateRuns:  runs,
+		StackTemplates: &recordingStackTemplateRepository{stackTemplate: domain.StackTemplate{
+			ID:                        domain.StackTemplateID("stack_template_123"),
+			DesiredTemplateRevisionID: domain.TemplateRevisionID("template_123"),
+			WorkspaceName:             "mtp_acme_prod_vpc_a13f9c",
+			Lifecycle:                 domain.StackTemplateActive,
+		}},
+		TemplateRevisionMetadata: &recordingTemplateRepository{
+			template: domain.TemplateRevision{ID: domain.TemplateRevisionID("template_123"), Status: domain.TemplateRevisionActive},
+		},
+		Users:  &fakeUserRepository{lookupErr: lookupErr},
+		RunIDs: fixedTemplateRunIDGenerator{runID: domain.TemplateRunID("run_123")},
+		Clock:  fixedClock{now: time.Now()},
+	})
+
+	_, err := service.StartTemplateRun(authenticatedContext(), StartTemplateRunCommand{
+		TenantID:        domain.TenantID("tenant_123"),
+		StackTemplateID: domain.StackTemplateID("stack_template_123"),
+		Operation:       domain.OperationPlan,
+	})
+	if !errors.Is(err, lookupErr) {
+		t.Fatalf("error = %v, want %v", err, lookupErr)
+	}
+	if runs.created.ID != "" {
+		t.Fatalf("created run ID = %q, want no persisted run", runs.created.ID)
+	}
+	if len(work.requests) != 0 {
+		t.Fatalf("queued requests = %#v, want none", work.requests)
+	}
+}
+
 // The component does not own a ref. It used to keep the one chosen at install
 // and stamp it onto every run, which stayed stale after a revision change: a
 // component installed from main and moved to a v2.0.0 revision kept reporting
@@ -1181,6 +1265,7 @@ func TestStartTemplateRunStampsTheRefOfTheRevisionBeingRun(t *testing.T) {
 	runs := &recordingTemplateRunRepository{}
 	work := &recordingUnitOfWork{templateRuns: runs}
 	service := NewService(Service{
+		Users:         &fakeUserRepository{},
 		Work:          work,
 		Authorization: testPlatformAuthorizer(t),
 		TemplateRuns:  runs,
@@ -1228,6 +1313,7 @@ func TestStartTemplateRunAllowsPlanWhenThePlanIsStale(t *testing.T) {
 	runs := &recordingTemplateRunRepository{}
 	work := &recordingUnitOfWork{templateRuns: runs}
 	service := NewService(Service{
+		Users:         &fakeUserRepository{},
 		Work:          work,
 		Authorization: testPlatformAuthorizer(t),
 		TemplateRuns:  runs,
@@ -1312,6 +1398,7 @@ func TestStartTemplateRunUsesDefaultRunIDGenerator(t *testing.T) {
 	}
 	runs := &recordingTemplateRunRepository{}
 	service := NewService(Service{
+		Users:          &fakeUserRepository{},
 		Authorization:  testPlatformAuthorizer(t),
 		Work:           &recordingUnitOfWork{templateRuns: runs},
 		StackTemplates: stackTemplates,
@@ -1686,6 +1773,7 @@ func TestGetTemplateRunReturnsTenantScopedRun(t *testing.T) {
 		executions: []domain.TemplateRunWorkflowExecution{{Phase: domain.RunPhasePlan, Status: domain.TemplateRunExecutionSucceeded}},
 	}
 	service := NewService(Service{
+		Users:          &fakeUserRepository{},
 		Authorization:  testPlatformAuthorizer(t),
 		TemplateRuns:   runs,
 		StackTemplates: &recordingStackTemplateRepository{stackTemplate: domain.StackTemplate{ID: "stack_template_123", TenantID: "tenant_123", StackID: "stack_123"}},
@@ -1724,6 +1812,7 @@ func TestListTemplateRunsReturnsRunsScopedToStackTemplate(t *testing.T) {
 		},
 	}
 	service := NewService(Service{
+		Users:          &fakeUserRepository{},
 		Authorization:  testPlatformAuthorizer(t),
 		TemplateRuns:   runs,
 		StackTemplates: &recordingStackTemplateRepository{stackTemplate: domain.StackTemplate{ID: "stack_template_123", TenantID: "tenant_123", StackID: "stack_123"}},
@@ -1746,6 +1835,62 @@ func TestListTemplateRunsReturnsRunsScopedToStackTemplate(t *testing.T) {
 	}
 	if len(got) != 2 || got[0].ID != domain.TemplateRunID("run_newer") {
 		t.Fatalf("runs = %#v, want run_newer first", got)
+	}
+}
+
+// A subject is opaque — Dex's is base64 of a protobuf — so every run the app
+// hands out names its trigger actor from the users projection, and a subject
+// with no row there labels itself, as a grants list does.
+func TestListTemplateRunsLabelsEachTriggerActor(t *testing.T) {
+	t.Parallel()
+
+	runs := &recordingTemplateRunRepository{
+		list: []domain.TemplateRun{
+			{ID: "run_known", TenantID: "tenant_123", StackTemplateID: "stack_template_123", TriggerActor: "sub_ada"},
+			{ID: "run_unknown", TenantID: "tenant_123", StackTemplateID: "stack_template_123", TriggerActor: "sub_never_signed_in"},
+		},
+	}
+	service := NewService(Service{
+		Authorization:  testPlatformAuthorizer(t),
+		TemplateRuns:   runs,
+		StackTemplates: &recordingStackTemplateRepository{stackTemplate: domain.StackTemplate{ID: "stack_template_123", TenantID: "tenant_123", StackID: "stack_123"}},
+		Users:          &fakeUserRepository{users: []UserProfile{{Sub: "sub_ada", DisplayName: "Ada Lovelace"}}},
+	})
+
+	got, err := service.ListTemplateRuns(authenticatedContext(), ListTemplateRunsCommand{
+		TenantID:        "tenant_123",
+		StackTemplateID: "stack_template_123",
+	})
+	if err != nil {
+		t.Fatalf("ListTemplateRuns returned error: %v", err)
+	}
+
+	names := map[domain.TemplateRunID]string{}
+	for _, run := range got {
+		names[run.ID] = run.TriggerActorDisplayName
+	}
+	want := map[domain.TemplateRunID]string{"run_known": "Ada Lovelace", "run_unknown": "sub_never_signed_in"}
+	if !maps.Equal(names, want) {
+		t.Fatalf("display names = %v, want %v", names, want)
+	}
+}
+
+func TestGetTemplateRunLabelsTheTriggerActor(t *testing.T) {
+	t.Parallel()
+
+	service := NewService(Service{
+		Authorization:  testPlatformAuthorizer(t),
+		TemplateRuns:   &recordingTemplateRunRepository{run: domain.TemplateRun{ID: "run_123", TenantID: "tenant_123", StackTemplateID: "stack_template_123", TriggerActor: "sub_ada"}},
+		StackTemplates: &recordingStackTemplateRepository{stackTemplate: domain.StackTemplate{ID: "stack_template_123", TenantID: "tenant_123", StackID: "stack_123"}},
+		Users:          &fakeUserRepository{users: []UserProfile{{Sub: "sub_ada", DisplayName: "Ada Lovelace"}}},
+	})
+
+	run, err := service.GetTemplateRun(authenticatedContext(), GetTemplateRunCommand{TenantID: "tenant_123", RunID: "run_123"})
+	if err != nil {
+		t.Fatalf("GetTemplateRun returned error: %v", err)
+	}
+	if run.TriggerActorDisplayName != "Ada Lovelace" {
+		t.Fatalf("display name = %q, want %q", run.TriggerActorDisplayName, "Ada Lovelace")
 	}
 }
 
@@ -2754,6 +2899,7 @@ func TestStartTemplateRunPairsRunWithStartIntentInTransaction(t *testing.T) {
 	runs := &recordingTemplateRunRepository{}
 	work := &recordingUnitOfWork{templateRuns: runs}
 	service := NewService(Service{
+		Users:         &fakeUserRepository{},
 		Work:          work,
 		Authorization: testPlatformAuthorizer(t),
 		TemplateRuns:  runs,

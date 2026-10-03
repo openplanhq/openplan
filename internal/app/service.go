@@ -770,6 +770,12 @@ func (service *Service) StartTemplateRun(ctx context.Context, command StartTempl
 		AutoApprove:       command.AutoApprove,
 	}
 
+	// Labelled before the run is created, so a failed lookup starts nothing
+	// rather than reporting an error for a run that did start.
+	if err := service.labelTriggerActors(ctx, &run); err != nil {
+		return domain.TemplateRun{}, fmt.Errorf("start template run: %w", err)
+	}
+
 	input := templateRunWorkflowInput(run, templateRevision)
 	kind := KindStartTemplateRun
 	payload, err := json.Marshal(StartTemplateRunPayload(input))
@@ -1674,6 +1680,9 @@ func (service *Service) GetTemplateRun(ctx context.Context, command GetTemplateR
 		return domain.TemplateRun{}, fmt.Errorf("get template run executions: %w", err)
 	}
 	run.Executions = executions
+	if err := service.labelTriggerActors(ctx, &run); err != nil {
+		return domain.TemplateRun{}, fmt.Errorf("get template run: %w", err)
+	}
 
 	return run, nil
 }
@@ -1696,8 +1705,37 @@ func (service *Service) ListTemplateRuns(ctx context.Context, command ListTempla
 	if runs == nil {
 		return []domain.TemplateRun{}, nil
 	}
+	labelled := make([]*domain.TemplateRun, len(runs))
+	for i := range runs {
+		labelled[i] = &runs[i]
+	}
+	if err := service.labelTriggerActors(ctx, labelled...); err != nil {
+		return nil, fmt.Errorf("list template runs: %w", err)
+	}
 
 	return runs, nil
+}
+
+// labelTriggerActors fills each run's TriggerActorDisplayName: the users
+// projection's name for its trigger actor, or the subject itself when it has
+// no row, as a grants list labels one. One lookup covers every run.
+func (service *Service) labelTriggerActors(ctx context.Context, runs ...*domain.TemplateRun) error {
+	if err := service.requireUserRepository(); err != nil {
+		return err
+	}
+	subs := make([]string, 0, len(runs))
+	for _, run := range runs {
+		subs = append(subs, string(run.TriggerActor))
+	}
+	profiles, err := service.Users.UsersBySubs(ctx, subs)
+	if err != nil {
+		return fmt.Errorf("look up trigger actors: %w", err)
+	}
+	for _, run := range runs {
+		sub := string(run.TriggerActor)
+		run.TriggerActorDisplayName = strval.FirstNonEmpty(profiles[sub].DisplayName, sub)
+	}
+	return nil
 }
 
 // GetTemplateRunLog returns one phase log after checking that the run belongs to the tenant.

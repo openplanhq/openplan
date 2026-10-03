@@ -176,6 +176,9 @@ export interface TemplateRun {
   // step, and for an apply that failed before its claim.
   step: TemplateRunStep | "";
   trigger_actor: string;
+  // Who started the run, for people to read: their name, or trigger_actor
+  // itself when openplan has no name for that subject.
+  trigger_actor_display_name: string;
   created_at: string;
   completed_at?: string;
   error_summary: string;
