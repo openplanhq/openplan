@@ -275,7 +275,7 @@ export default function UpgradeStackTemplateScreen() {
                     variables={targetVariables}
                     variableValues={variableValues}
                     onVariableValueChange={(name, value) => setEditedValues((current) => ({ ...current, [name]: value }))}
-                    emptyMessage="This revision declares no variables"
+                    emptyMessage="This revision declares no variables."
                   />
 
                   {/* What the change does to the config, stated outright: new

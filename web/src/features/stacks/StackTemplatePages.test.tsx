@@ -398,9 +398,9 @@ describe("TemplateVariablesTab", () => {
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/variables");
 
-    expect(actionButton(/Save config/).disabled).toBe(true);
+    expect(actionButton(/Save variables/).disabled).toBe(true);
     fireEvent.change(screen.getByLabelText(/region/), { target: { value: "eu-west-1" } });
-    expect(actionButton(/Save config/).disabled).toBe(false);
+    expect(actionButton(/Save variables/).disabled).toBe(false);
   });
 
   it("locks configuration when canOperate is denied", async () => {
@@ -409,8 +409,8 @@ describe("TemplateVariablesTab", () => {
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/variables");
 
-    await waitFor(() => expect(screen.getByTestId("variables-disabled-reason")).toBeTruthy());
-    expect(actionButton(/Save config/).disabled).toBe(true);
+    await waitFor(() => expect(screen.getByTestId("variables-disabled-reason").textContent).toBe("Editing requires operator access."));
+    expect(actionButton(/Save variables/).disabled).toBe(true);
     expect((screen.getByLabelText(/region/) as HTMLInputElement).disabled).toBe(true);
   });
 
@@ -457,6 +457,37 @@ describe("TemplateVariablesTab", () => {
     mockVariablesFailure(404, "not_found");
     await waitFor(() => expect(screen.getByTestId("route-not-found")).toBeTruthy());
   });
+
+  // A run that starts underneath unsaved edits locks them but keeps them:
+  // whoever typed them can still read them, and SessionProvider still sees
+  // the tab as unsaved.
+  it("keeps unsaved edits, locked, when a run starts underneath them", async () => {
+    const queryClient = testQueryClient();
+    seedDefaultData(queryClient);
+    // The waiting run makes the panel refetch the stack: answer that with the
+    // seeded stack, and leave every other request pending.
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) =>
+      String(input).endsWith("/stacks/stack_1")
+        ? Promise.resolve(
+            new Response(JSON.stringify(stackView(allAllowed, [stackTemplate()])), { status: 200, headers: { "content-type": "application/json" } })
+          )
+        : new Promise<Response>(() => {})
+    );
+
+    renderAt(queryClient, "/stacks/stack_1/templates/st_1/variables");
+    fireEvent.change(screen.getByLabelText(/region/), { target: { value: "eu-west-1" } });
+
+    act(() => {
+      queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_1"), [runFor("st_1", { status: "waiting_approval", run_number: 7 })]);
+    });
+
+    await waitFor(() => expect(screen.getByTestId("variables-disabled-reason").textContent).toBe("Apply or discard run #7 before changing the config."));
+    const input = screen.getByLabelText(/region/) as HTMLInputElement;
+    expect(input.value).toBe("eu-west-1");
+    expect(input.disabled).toBe(true);
+    expect(actionButton(/Save variables/).disabled).toBe(true);
+    expect(document.querySelector("[data-unsaved='true']")).not.toBeNull();
+  });
 });
 
 describe("editing while a run is in flight", () => {
@@ -469,7 +500,7 @@ describe("editing while a run is in flight", () => {
 
     const variables = renderAt(queryClient, "/stacks/stack_1/templates/st_1/variables");
     await waitFor(() => expect(screen.getByTestId("variables-disabled-reason").textContent).toBe("Apply or discard run #7 before changing the config."));
-    expect(actionButton(/Save config/).disabled).toBe(true);
+    expect(actionButton(/Save variables/).disabled).toBe(true);
     variables.unmount();
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/settings");

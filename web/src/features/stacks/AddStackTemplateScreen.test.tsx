@@ -289,7 +289,7 @@ describe("AddStackTemplateScreen", () => {
     fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
 
     expect(screen.getByTestId("add-stack-template-variables-loading")).toBeTruthy();
-    expect(screen.queryByText("This template declares no variables")).toBeNull();
+    expect(screen.queryByText("This template declares no variables.")).toBeNull();
     expect((screen.getByRole("button", { name: /Install/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -340,7 +340,7 @@ describe("AddStackTemplateScreen", () => {
     fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
 
     await waitFor(() => expect(screen.getByTestId("add-stack-template-variables-error")).toBeTruthy());
-    expect(screen.queryByText("This template declares no variables")).toBeNull();
+    expect(screen.queryByText("This template declares no variables.")).toBeNull();
     expect((screen.getByRole("button", { name: /Install/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 

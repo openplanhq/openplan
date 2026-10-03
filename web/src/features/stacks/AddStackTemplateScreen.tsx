@@ -313,7 +313,7 @@ export default function AddStackTemplateScreen() {
                         variables={variables}
                         variableValues={values}
                         onVariableValueChange={(name, value) => setValues((current) => ({ ...current, [name]: value }))}
-                        emptyMessage="This template declares no variables"
+                        emptyMessage="This template declares no variables."
                       />
                     )}
                   </div>
