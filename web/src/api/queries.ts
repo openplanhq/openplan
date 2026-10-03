@@ -2,7 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import * as client from "./client";
 import { queryKeys } from "./queryKeys";
 import { isTerminalRegistrationStatus, isTerminalRunStatus } from "./polling";
-import type { TemplateRegistration, TemplateRegistrationStatus, TemplateRun, TemplateRunStatus } from "./types";
+import type { StackView, TemplateRegistration, TemplateRegistrationStatus, TemplateRun, TemplateRunStatus } from "./types";
 
 export function useStacksQuery(tenantID: string) {
   return useQuery({
@@ -173,7 +173,13 @@ export function useAddTemplateToStackMutation(tenantID: string, stackID: string)
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: Parameters<typeof client.addTemplateToStack>[2]) => client.addTemplateToStack(tenantID, stackID, body),
-    onSuccess: () => {
+    onSuccess: (installed) => {
+      // The new template's panel opens as soon as this resolves, before the
+      // refetch below lands. Without the template in the cached stack, the
+      // panel would say it is not installed until then.
+      queryClient.setQueryData<StackView>(queryKeys.stack(tenantID, stackID), (view) =>
+        view && !view.templates.some((template) => template.id === installed.id) ? { ...view, templates: [...view.templates, installed] } : view
+      );
       queryClient.invalidateQueries({ queryKey: queryKeys.stack(tenantID, stackID) });
       // The stacks index counts each stack's templates.
       queryClient.invalidateQueries({ queryKey: queryKeys.stacks(tenantID) });
