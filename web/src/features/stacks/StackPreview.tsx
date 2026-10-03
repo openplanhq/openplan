@@ -1,14 +1,15 @@
-import { ArrowRight, KeyRound, Layers, Loader2, Plus, Users } from "lucide-react";
+import { ArrowRight, KeyRound, Layers, Loader2, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useStackQuery } from "../../api/queries";
 import type { AttentionItem, StackListItem } from "../../api/types";
 import RequireCapability from "../../auth/RequireCapability";
 import { tenantID } from "../../config";
 import { attentionRunPath } from "./attention";
+import NoTemplatesState from "./NoTemplatesState";
+import StackMeta from "./StackMeta";
 import StackTemplateStatusLabel, { stackTemplateActivity } from "./StackTemplateStatusLabel";
 import { stackTemplateLabel } from "./stackWorkflow";
 import { buttonClass } from "../../shared/buttonClass";
-import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
@@ -35,21 +36,13 @@ export default function StackPreview({
   const stackQuery = useStackQuery(tenantID, stack.id);
   const templates = stackQuery.data?.templates ?? [];
   const base = `/stacks/${stack.id}`;
-  const tags = Object.entries(stack.tags);
 
   return (
     <div className="flex min-w-0 flex-col" data-testid="stack-preview">
       <div className="flex flex-col gap-4 border-b border-divider px-7 py-6 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 flex-col gap-2">
           <h2 className="font-heading text-panel-title font-semibold tracking-title wrap-anywhere">{stack.name}</h2>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-xs text-muted-foreground">{stack.slug}</span>
-            {tags.map(([key, value]) => (
-              <span key={key} className="rounded-sm border bg-canvas px-1.75 py-px font-mono text-xs text-tag-foreground">
-                {key}: {value}
-              </span>
-            ))}
-          </div>
+          <StackMeta stack={stack} />
         </div>
         <Link
           to={base}
@@ -98,18 +91,7 @@ export default function StackPreview({
             Something went wrong while loading this stack's templates.
           </p>
         ) : templates.length === 0 ? (
-          <Empty className="gap-3 rounded-lg border border-dashed border-dashed-border px-5 py-10" data-testid="stack-preview-empty">
-            <EmptyHeader className="gap-3">
-              <h4 className="text-sm font-medium">No templates in this stack yet</h4>
-              <EmptyDescription className="text-meta">Add a template to plan and apply its infrastructure here.</EmptyDescription>
-            </EmptyHeader>
-            <RequireCapability capability="canOperate" stackId={stack.id}>
-              <Link to={`${base}/templates/new`} className={cn(buttonClass("primary"), "pointer-coarse:h-11")}>
-                <Plus data-icon="inline-start" aria-hidden="true" />
-                Add template
-              </Link>
-            </RequireCapability>
-          </Empty>
+          <NoTemplatesState stackId={stack.id} heading="h4" testId="stack-preview-empty" />
         ) : (
           // A table nested in the panel: fixed columns, so a status that
           // changes length never moves the ones after it.

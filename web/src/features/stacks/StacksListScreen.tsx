@@ -1,4 +1,4 @@
-import { ArrowRight, Hourglass, Layers, Loader2, Plus, RefreshCw, Search, TriangleAlert } from "lucide-react";
+import { ArrowRight, Hourglass, Layers, Loader2, Plus, RefreshCw, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAttentionQuery, useStacksQuery } from "../../api/queries";
@@ -18,11 +18,12 @@ import {
 } from "./attention";
 import type { StackAttention } from "./attention";
 import StackPreview from "./StackPreview";
-import { Badge } from "@/components/ui/badge";
 import { buttonClass } from "../../shared/buttonClass";
+import Chip from "../../shared/Chip";
+import { listItemClass } from "../../shared/listItemClass";
+import SearchField from "../../shared/SearchField";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from "@/components/ui/empty";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { cn } from "@/lib/utils";
 
 // /stacks: every stack the person can view, with the one selected shown beside
@@ -34,18 +35,8 @@ import { cn } from "@/lib/utils";
 // The selection lives in the URL (?stack=<id>), so a refresh or a shared link
 // keeps it; without one, the first stack is selected.
 //
-// Built to openplan UI: PageHeader, AttentionSummary, SplitView, SearchField,
-// ListItem and Chip below; PreviewPanel in StackPreview.
-
-// openplan UI's SearchField on shadcn's InputGroup: the glass 11px from the
-// edge, the text 35px in, and focus drawn as the 2px ring outline every other
-// control has rather than the group's translucent ring.
-const searchFieldClass = cn(
-  "h-9 bg-canvas has-[>[data-align=inline-start]]:[&>input]:pl-2",
-  "has-[[data-slot=input-group-control]:focus-visible]:border-input has-[[data-slot=input-group-control]:focus-visible]:ring-0",
-  "has-[[data-slot=input-group-control]:focus-visible]:outline-solid has-[[data-slot=input-group-control]:focus-visible]:outline-2",
-  "has-[[data-slot=input-group-control]:focus-visible]:outline-offset-2 has-[[data-slot=input-group-control]:focus-visible]:outline-ring"
-);
+// Built to openplan UI: PageHeader, AttentionSummary and SplitView below, with
+// the shared SearchField, ListItem and Chip; PreviewPanel in StackPreview.
 
 export default function StacksListScreen() {
   const { data: stacks, status, error, refetch } = useStacksQuery(tenantID);
@@ -130,20 +121,7 @@ export default function StacksListScreen() {
         <div className="flex flex-col overflow-clip rounded-panel border bg-card md:flex-row" data-testid="stacks-list">
           <div className="flex min-w-0 flex-col border-b md:w-90 md:shrink-0 md:border-r md:border-b-0">
             <div className="border-b border-divider p-3">
-              <InputGroup className={searchFieldClass}>
-                <InputGroupAddon className="pl-2.5">
-                  <Search aria-hidden="true" className="text-subtle-foreground" />
-                </InputGroupAddon>
-                <InputGroupInput
-                  type="search"
-                  aria-label="Filter stacks"
-                  placeholder="Filter stacks"
-                  value={filter}
-                  onChange={(event) => setFilter(event.target.value)}
-                  className="placeholder:text-subtle-foreground"
-                  data-testid="stacks-filter"
-                />
-              </InputGroup>
+              <SearchField label="Filter stacks" value={filter} onChange={setFilter} testId="stacks-filter" />
             </div>
             {visible.length === 0 ? (
               <p className="px-5 py-4 text-meta text-muted-foreground" data-testid="stacks-filter-empty">
@@ -203,10 +181,7 @@ function StackRow({ stack, selected, attention }: { stack: StackListItem; select
       to={`?stack=${encodeURIComponent(stack.id)}`}
       replace
       aria-current={selected ? "true" : undefined}
-      className={cn(
-        "flex min-h-14 items-center justify-between gap-3 rounded-lg border border-transparent px-3 py-2 text-foreground transition-colors focus-visible:-outline-offset-2",
-        selected ? "border-primary/35 bg-primary-soft" : "hover:bg-primary-tint"
-      )}
+      className={listItemClass(selected)}
       data-testid={`stack-row-${stack.id}`}
     >
       <span className="flex min-w-0 flex-col gap-0.5">
@@ -224,16 +199,14 @@ function StackRow({ stack, selected, attention }: { stack: StackListItem; select
       {attention && (
         <span className="flex shrink-0 flex-col items-end gap-1">
           {attention.waiting > 0 && (
-            <Badge variant="warning" className="gap-1.25 rounded-sm bg-warning-soft">
-              <Hourglass aria-hidden="true" strokeWidth={2.25} />
+            <Chip tone="warning" icon={Hourglass}>
               {waitingChipLabel(attention.waiting)}
-            </Badge>
+            </Chip>
           )}
           {attention.failed > 0 && (
-            <Badge variant="destructive" className="gap-1.25 rounded-sm bg-destructive-soft">
-              <TriangleAlert aria-hidden="true" strokeWidth={2.25} />
+            <Chip tone="destructive" icon={TriangleAlert}>
               {failedChipLabel(attention.failed)}
-            </Badge>
+            </Chip>
           )}
         </span>
       )}
