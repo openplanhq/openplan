@@ -10,7 +10,7 @@ import { queryKeys } from "../../api/queryKeys";
 import type { StackTemplate, StackView, TemplateRevision, TemplateRun, TemplateVariable } from "../../api/types";
 import type { StackCapabilities } from "../../auth/types";
 import RunDetailScreen from "../runs/RunDetailScreen";
-import StackTemplateDetailShell from "./StackTemplateDetailShell";
+import TemplatePanel from "./TemplatePanel";
 import StackTemplateListScreen from "./StackTemplateListScreen";
 import TemplateCredentialsTab from "./TemplateCredentialsTab";
 import TemplateRunsTab from "./TemplateRunsTab";
@@ -103,6 +103,7 @@ function testQueryClient(): QueryClient {
 
 function seedDefaultData(queryClient: QueryClient, capabilities: StackCapabilities = allAllowed) {
   queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(capabilities, [stackTemplate()]));
+  queryClient.setQueryData(queryKeys.attention("tenant_123"), []);
   queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [
     templateRevision(),
     templateRevision({ id: "rev_2", source_ref: "v2", resolved_commit_sha: "1234567abcdef" })
@@ -164,7 +165,7 @@ function renderAt(queryClient: QueryClient, initialEntry: string, auth?: AuthCon
         <MemoryRouter initialEntries={[initialEntry]}>
           <Routes>
             <Route path="/stacks/:stackId/templates" element={<StackTemplateListScreen />} />
-            <Route path="/stacks/:stackId/templates/:stackTemplateId" element={<StackTemplateDetailShell />}>
+            <Route path="/stacks/:stackId/templates/:stackTemplateId" element={<TemplatePanel />}>
               <Route index element={<Navigate to="runs" replace />} />
               <Route path="runs" element={<TemplateRunsTab />} />
               <Route path="runs/:runNumber" element={<RunDetailScreen />} />
@@ -276,7 +277,7 @@ describe("StackTemplateListScreen", () => {
   });
 });
 
-describe("StackTemplateDetailShell", () => {
+describe("TemplatePanel", () => {
   it("opens on the Runs tab", async () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);
@@ -284,7 +285,7 @@ describe("StackTemplateDetailShell", () => {
     renderAt(queryClient, "/stacks/stack_1/templates/st_1");
 
     await waitFor(() => expect(screen.getByTestId("template-runs-tab")).toBeTruthy());
-    expect(screen.getByRole("tab", { name: "Runs" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: "Runs" }).getAttribute("aria-current")).toBe("page");
   });
 
   it("says so when the template in the URL is not installed on the stack", () => {
@@ -303,8 +304,8 @@ describe("StackTemplateDetailShell", () => {
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/runs");
 
     await waitFor(() => expect(screen.getByTestId("template-runs-tab")).toBeTruthy());
-    expect(screen.queryByRole("tab", { name: "Credentials" })).toBeNull();
-    expect(screen.getByRole("tab", { name: "Settings" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Credentials" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Settings" })).toBeTruthy();
   });
 
   it("keeps the Runs tab lit while reading one run", async () => {
@@ -318,7 +319,66 @@ describe("StackTemplateDetailShell", () => {
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/runs/3");
 
     await waitFor(() => expect(screen.getByTestId("run-detail-status")).toBeTruthy());
-    expect(screen.getByRole("tab", { name: "Runs" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: "Runs" }).getAttribute("aria-current")).toBe("page");
+  });
+
+  it("names the template with its state, its ref and what last happened", async () => {
+    const queryClient = testQueryClient();
+    seedDefaultData(queryClient);
+    queryClient.setQueryData(
+      queryKeys.stack("tenant_123", "stack_1"),
+      stackView(allAllowed, [
+        stackTemplate({ display_name: "eks-cluster", source_ref: "v1.4.0", pending_plan_run_id: "run_14", pending_plan_at: "2026-10-03T09:30:00Z" })
+      ])
+    );
+
+    renderAt(queryClient, "/stacks/stack_1/templates/st_1/runs");
+
+    expect(screen.getByRole("heading", { level: 2, name: "eks-cluster" })).toBeTruthy();
+    expect(screen.getByTestId("stack-template-status-st_1").textContent).toBe("waiting for approval");
+    expect(screen.getByText("v1.4.0")).toBeTruthy();
+    expect(screen.getByText(/^Planned 3 Oct, \d\d:\d\d$/)).toBeTruthy();
+  });
+
+  it("marks Settings as the current tab while changing the revision", async () => {
+    const queryClient = testQueryClient();
+    seedDefaultData(queryClient);
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthContext.Provider value={authValue()}>
+          <MemoryRouter initialEntries={["/stacks/stack_1/templates/st_1/upgrade"]}>
+            <Routes>
+              <Route path="/stacks/:stackId/templates/:stackTemplateId" element={<TemplatePanel />}>
+                <Route path="upgrade" element={<p>change revision</p>} />
+              </Route>
+            </Routes>
+          </MemoryRouter>
+        </AuthContext.Provider>
+      </QueryClientProvider>
+    );
+
+    expect(screen.getByRole("link", { name: "Settings" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: "Runs" }).getAttribute("aria-current")).toBeNull();
+  });
+
+  // The stack's states change when a run settles, and only the runs query
+  // polls. The panel refreshes the stack itself, so the header and the list
+  // stay current on every tab, not just Runs.
+  it("refreshes the stack when the template's latest run settles, on any tab", async () => {
+    const queryClient = testQueryClient();
+    seedDefaultData(queryClient);
+    queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_1"), [runFor("st_1", { status: "completed" })]);
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(
+        async () =>
+          new Response(JSON.stringify(stackView(allAllowed, [stackTemplate()])), { status: 200, headers: { "content-type": "application/json" } })
+      );
+
+    renderAt(queryClient, "/stacks/stack_1/templates/st_1/variables");
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/stacks/stack_1"))).toBe(true));
   });
 });
 
@@ -346,6 +406,7 @@ describe("TemplateVariablesTab", () => {
     vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, [stackTemplate()]));
+    queryClient.setQueryData(queryKeys.attention("tenant_123"), []);
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/variables");
 
@@ -430,6 +491,7 @@ describe("TemplateVariablesTab", () => {
     );
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, [stackTemplate()]));
+    queryClient.setQueryData(queryKeys.attention("tenant_123"), []);
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/variables");
   }
 

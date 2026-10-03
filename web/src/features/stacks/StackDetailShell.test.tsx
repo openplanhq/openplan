@@ -152,13 +152,13 @@ describe("StackDetailShell", () => {
     // A template's page nests inside the stack shell, with its own tabs.
     const detailMarkup = await renderStackRoute("/stacks/stack_1/templates/st_1/settings", allAllowed, [vpc]);
     expect(detailMarkup).toContain('data-testid="stack-detail-shell"');
-    expect(detailMarkup).toContain('data-testid="stack-template-detail"');
+    expect(detailMarkup).toContain('data-testid="template-panel"');
     expect(detailMarkup).toContain('data-testid="template-settings-tab"');
 
     // Run detail's runs query is unseeded here, so the shell renders its
     // loading state as the nested content.
     const runDetailMarkup = await renderStackRoute("/stacks/stack_1/templates/st_1/runs/1", allAllowed, [vpc]);
-    expect(runDetailMarkup).toContain('data-testid="stack-template-detail"');
+    expect(runDetailMarkup).toContain('data-testid="template-panel"');
     expect(runDetailMarkup).toContain('data-testid="run-detail-loading"');
   });
 
@@ -179,9 +179,8 @@ describe("StackDetailShell", () => {
     expect(markup).toContain('aria-label="Template sections"');
     expect(markup).not.toContain('aria-label="Stack sections"');
     expect(breadcrumbOf(markup).detail).toBe(false);
-    // The template's state follows its tab list, at the end of the same row.
-    expect(markup).toMatch(/role="tablist"[^>]*aria-label="Template sections".*data-testid="stack-template-state"[^>]*>.*changed/);
-    expect(markup).toContain("Plan, then apply");
+    // The template's state sits in the panel's header, above its tabs.
+    expect(markup).toMatch(/data-testid="stack-template-status-st_1"[^>]*>.*changed.*aria-label="Template sections"/);
   });
 
   it("keeps the template's state off a run's page, where it would read as the run's", async () => {

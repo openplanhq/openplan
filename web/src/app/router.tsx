@@ -11,7 +11,7 @@ import StacksListScreen from "../features/stacks/StacksListScreen";
 import StackAttentionScreen from "../features/stacks/StackAttentionScreen";
 import StackDetailShell from "../features/stacks/StackDetailShell";
 import StackTemplateListScreen from "../features/stacks/StackTemplateListScreen";
-import StackTemplateDetailShell from "../features/stacks/StackTemplateDetailShell";
+import TemplatePanel from "../features/stacks/TemplatePanel";
 import TemplateRunsTab from "../features/stacks/TemplateRunsTab";
 import TemplateVariablesTab from "../features/stacks/TemplateVariablesTab";
 import TemplateCredentialsTab from "../features/stacks/TemplateCredentialsTab";
@@ -105,7 +105,7 @@ export const routeConfig: RouteObject[] = [
                   // while reading one; the index sends you to Runs.
                   {
                     path: "templates/:stackTemplateId",
-                    element: <StackTemplateDetailShell />,
+                    element: <TemplatePanel />,
                     children: [
                       { index: true, element: <Navigate to="runs" replace /> },
                       { path: "runs", element: <TemplateRunsTab /> },

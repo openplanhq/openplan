@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { FileSearch, Loader2, Play } from "lucide-react";
 import { isTerminalRunStatus } from "../../api/polling";
@@ -29,7 +29,8 @@ interface TemplateRunActionsProps {
 // Run state is derived entirely from the server's run history
 // (useTemplateRunsQuery), not from local component state, so it is visible to
 // every user who can view the stack — not just the browser tab that started a
-// run.
+// run. Refreshing the stack when a run settles is the panel's job:
+// useRefreshStackOnRunChange.
 export default function TemplateRunActions({ stackId, stackTemplate }: TemplateRunActionsProps) {
   const [errorMessage, setErrorMessage] = useState("");
   const [autoApprove, setAutoApprove] = useState(false);
@@ -38,27 +39,10 @@ export default function TemplateRunActions({ stackId, stackTemplate }: TemplateR
   const runsQuery = useTemplateRunsQuery(tenantID, stackTemplate.id);
   const runs = runsQuery.data ?? [];
   const runsReady = runsQuery.status === "success";
-  const latestRun = runsReady ? runs[0] ?? null : null;
   const activeRun = runsReady ? runs.find((candidate) => !isTerminalRunStatus(candidate.status)) ?? null : null;
 
   const startRunMutation = useStartTemplateRunMutation(tenantID);
   const canStart = runsReady && !activeRun && stackTemplate.lifecycle === "active";
-
-  // plan_state and live_state live on the stack template, but the thing that
-  // changes them is a run finishing — and only the runs query polls. Without
-  // this the page would keep rendering the state the template had when it
-  // loaded.
-  //
-  // This effect owns the invalidation for the whole template page: the other
-  // tabs read the same two queries, and this header is on the default tab.
-  const settledRun = latestRun && isTerminalRunStatus(latestRun.status) ? `${latestRun.id}:${latestRun.status}` : "";
-  const waitingRun = latestRun?.status === "waiting_approval" ? latestRun.id : "";
-  useEffect(() => {
-    if (settledRun === "" && waitingRun === "") {
-      return;
-    }
-    void queryClient.invalidateQueries({ queryKey: queryKeys.stack(tenantID, stackId) });
-  }, [settledRun, waitingRun, stackId, queryClient]);
 
   async function startRun(operation: "plan" | "apply") {
     setErrorMessage("");
