@@ -7,6 +7,7 @@ import RequireCapability from "../auth/RequireCapability";
 import SessionProvider from "../auth/SessionProvider";
 import SignInScreen from "../auth/SignInScreen";
 import StacksListScreen from "../features/stacks/StacksListScreen";
+import StackAttentionScreen from "../features/stacks/StackAttentionScreen";
 import StackDetailShell from "../features/stacks/StackDetailShell";
 import StackTemplateListScreen from "../features/stacks/StackTemplateListScreen";
 import StackTemplateDetailShell from "../features/stacks/StackTemplateDetailShell";
@@ -69,6 +70,8 @@ export const routeConfig: RouteObject[] = [
         children: [
           { index: true, loader: () => redirect("/stacks") },
           { path: "stacks", element: <StacksListScreen /> },
+          // A static segment, so it outranks stacks/:stackId below.
+          { path: "stacks/attention", element: <StackAttentionScreen /> },
           {
             path: "stacks/new",
             element: <RequireCapability capability="canCreateStack" mode="route" />,

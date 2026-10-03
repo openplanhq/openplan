@@ -171,6 +171,33 @@ describe("routeConfig", () => {
     expect(markup).toContain('data-testid="stacks-list"');
     expect(markup).toContain("Payments");
     expect(markup).not.toContain('data-testid="route-placeholder"');
+    // A redesigned page: its panels sit on the grey canvas.
+    expect(markup).toContain('data-canvas="true"');
+  });
+
+  // "attention" is a static segment, so it is the attention page, never a
+  // stack whose id is "attention".
+  it("renders the attention screen at /stacks/attention", async () => {
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
+    const { routeConfig } = await import("./router");
+    const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+    const { queryKeys } = await import("../api/queryKeys");
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    queryClient.setQueryData(queryKeys.attention("tenant_123"), []);
+
+    const testRouter = createMemoryRouter(routeConfig, { initialEntries: ["/stacks/attention"] });
+    const markup = renderToStaticMarkup(
+      <QueryClientProvider client={queryClient}>
+        <AuthContext.Provider value={authValue()}>
+          <RouterProvider router={testRouter} />
+        </AuthContext.Provider>
+      </QueryClientProvider>
+    );
+
+    expect(markup).toContain('data-testid="attention-empty"');
+    expect(markup).toContain('data-canvas="true"');
+    expect(markup).not.toContain('data-testid="stack-detail-shell"');
   });
 
   it("renders the template registry screen at /templates", async () => {
@@ -213,6 +240,8 @@ describe("routeConfig", () => {
     expect(markup).toContain('data-testid="templates-list"');
     expect(markup).toContain("VPC");
     expect(markup).not.toContain('data-testid="route-placeholder"');
+    // Not redesigned yet, so still the white page.
+    expect(markup).not.toContain("data-canvas");
   });
 
   it("renders the template registration screen at /templates/new", async () => {

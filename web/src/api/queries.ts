@@ -11,6 +11,13 @@ export function useStacksQuery(tenantID: string) {
   });
 }
 
+export function useAttentionQuery(tenantID: string) {
+  return useQuery({
+    queryKey: queryKeys.attention(tenantID),
+    queryFn: () => client.listAttention(tenantID)
+  });
+}
+
 export function useTemplateRevisionsQuery(tenantID: string) {
   return useQuery({
     queryKey: queryKeys.templateRevisions(tenantID),
@@ -205,6 +212,7 @@ export function useApproveRunMutation(tenantID: string) {
     mutationFn: (runID: string) => client.approveRun(tenantID, runID),
     onSuccess: (_data, runID) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.templateRun(tenantID, runID) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.attention(tenantID) });
     }
   });
 }
@@ -216,6 +224,7 @@ export function useDiscardRunMutation(tenantID: string) {
       client.discardRun(tenantID, variables.runID, variables.body),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.templateRun(tenantID, variables.runID) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.attention(tenantID) });
     }
   });
 }

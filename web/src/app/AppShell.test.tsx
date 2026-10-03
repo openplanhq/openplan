@@ -69,6 +69,29 @@ describe("AppShell", () => {
     vi.unstubAllEnvs();
   });
 
+  // openplan UI's TopBar marks the section you are in, below it too.
+  it("marks the current section in the nav", async () => {
+    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
+    const { default: AppShell } = await import("./AppShell");
+    const router = createMemoryRouter([{ path: "/", element: <AppShell />, children: [{ path: "stacks/*", element: <div /> }] }], {
+      initialEntries: ["/stacks/stack_1/templates"]
+    });
+    render(
+      <TestAuthWrapper>
+        <RouterProvider router={router} />
+      </TestAuthWrapper>
+    );
+
+    const nav = within(screen.getByRole("navigation", { name: "Primary" }));
+    const stacks = nav.getByRole("link", { name: "Stacks" });
+    expect(stacks.getAttribute("aria-current")).toBe("page");
+    expect(stacks.classList).toContain("bg-muted");
+    expect(stacks.classList).toContain("text-foreground");
+    const templates = nav.getByRole("link", { name: "Templates" });
+    expect(templates.getAttribute("aria-current")).toBeNull();
+    expect(templates.classList).toContain("text-muted-foreground");
+  });
+
   it("renders nav, an identity slot, a static tenant indicator, and routed content", async () => {
     const markup = await shellMarkup();
 

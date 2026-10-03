@@ -42,7 +42,10 @@ function tint(colour: Rgb, alpha: number, over: Rgb): Rgb {
 const COLOURS = [
   "background", "foreground", "card", "card-foreground", "popover", "popover-foreground",
   "primary", "primary-foreground", "secondary", "secondary-foreground", "muted", "muted-foreground",
-  "accent", "accent-foreground", "destructive", "success", "warning", "border", "input", "ring"
+  "accent", "accent-foreground", "destructive", "success", "warning", "border", "input", "ring",
+  "canvas", "primary-strong", "subtle-foreground", "separator", "divider", "dashed-border",
+  "muted-strong", "primary-soft", "primary-tint", "warning-soft", "destructive-soft",
+  "code-foreground", "tag-foreground"
 ];
 
 // Text on its surface must meet WCAG AA for normal text.
@@ -58,7 +61,23 @@ const TEXT_PAIRS: [string, string][] = [
   ["primary", "background"],
   ["destructive", "background"],
   ["success", "background"],
-  ["warning", "background"]
+  ["warning", "background"],
+  // openplan UI's canvas pages set the same text on the grey ground.
+  ["foreground", "canvas"],
+  ["muted-foreground", "canvas"],
+  ["primary", "canvas"],
+  ["warning", "canvas"],
+  ["subtle-foreground", "background"],
+  ["subtle-foreground", "canvas"],
+  ["code-foreground", "background"],
+  ["tag-foreground", "canvas"],
+  ["muted-foreground", "muted-strong"],
+  ["primary-strong", "primary-soft"],
+  ["foreground", "primary-soft"],
+  ["foreground", "primary-tint"],
+  ["muted-foreground", "primary-soft"],
+  ["warning", "warning-soft"],
+  ["destructive", "destructive-soft"]
 ];
 
 describe("theme.css", () => {
