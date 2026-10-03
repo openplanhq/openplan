@@ -81,7 +81,9 @@ function RunRow({ run, to }: { run: TemplateRun; to: string }) {
         </Link>
       </TableCell>
       <TableCell className={cellClass}>
-        <RunStatusLabel run={run} data-testid={`template-run-status-${run.id}`} />
+        {/* A status that names its step can be wider than the column, so it
+            wraps here rather than running into the changes beside it. */}
+        <RunStatusLabel run={run} className="whitespace-normal" data-testid={`template-run-status-${run.id}`} />
       </TableCell>
       <TableCell className={cellClass} data-testid={`template-run-summary-${run.id}`}>
         {run.plan_summary && <PlanDiff summary={run.plan_summary} />}

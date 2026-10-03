@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createMemoryRouter, redirect, RouterProvider } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../../auth/AuthContext";
@@ -203,6 +203,28 @@ describe("StackPage selection", () => {
 
     expect(screen.getByTestId("stack-template-missing").textContent).toBe("That template is not installed on this stack.");
     expect(screen.getByTestId("stack-template-link-network")).toBeTruthy();
+  });
+
+  // The index picks its template once. A plan approved underneath it must not
+  // swap the panel to another template while someone is reading it.
+  it("keeps the stack's own path on the template it opened on while the stack changes", async () => {
+    const queryClient = seed([network, eks]);
+    renderPage(queryClient, "/stacks/stack_1");
+    expect(screen.getByRole("heading", { level: 2, name: "eks-cluster" })).toBeTruthy();
+
+    act(() => {
+      queryClient.setQueryData(queryKeys.stack(TENANT, "stack_1"), view([network, { ...eks, pending_plan_run_id: "", pending_plan_at: undefined }]));
+    });
+    // The list has caught up: the plan is gone from eks-cluster's row.
+    await waitFor(() => expect(within(screen.getByTestId("stack-template-link-eks-cluster")).queryByText("plan to approve")).toBeNull());
+    expect(screen.getByRole("heading", { level: 2, name: "eks-cluster" })).toBeTruthy();
+    expect(screen.getByTestId("stack-template-link-eks-cluster").getAttribute("aria-current")).toBe("true");
+
+    // Gone from the stack, it gives way to the default.
+    act(() => {
+      queryClient.setQueryData(queryKeys.stack(TENANT, "stack_1"), view([network]));
+    });
+    await waitFor(() => expect(screen.getByRole("heading", { level: 2, name: "network" })).toBeTruthy());
   });
 
   it("sends the old template list to the stack's page", async () => {

@@ -119,6 +119,21 @@ describe("TemplateRunHistory", () => {
     expect(screen.getByTestId("template-run-row-run_apply_1").querySelector("button")).toBeNull();
   });
 
+  // A status names its step too ("applying · preparing workspace"), which
+  // can be wider than its column; it wraps there rather than running into
+  // the changes beside it.
+  it("lets a long status wrap inside its column", () => {
+    const queryClient = testQueryClient();
+    seedRuns(queryClient, [run({ id: "run_1", operation: "apply", status: "running", step: "preparing_workspace", plan_summary: { add: 1, change: 0, destroy: 0 } })]);
+
+    renderHistory(queryClient);
+
+    const status = screen.getByTestId("template-run-status-run_1");
+    expect(status.textContent).toBe("applying · preparing workspace");
+    expect(status.className).toContain("whitespace-normal");
+    expect(status.className).not.toContain("whitespace-nowrap");
+  });
+
   it("shows an empty state that says how to start", () => {
     const queryClient = testQueryClient();
     seedRuns(queryClient, []);

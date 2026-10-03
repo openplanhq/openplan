@@ -1,13 +1,18 @@
+import { useState } from "react";
 import type { ReactNode } from "react";
+import { Check } from "lucide-react";
 import { Outlet, useParams } from "react-router-dom";
 import { useAttentionQuery, useStackQuery } from "../../api/queries";
+import type { StackTemplate } from "../../api/types";
 import { tenantID } from "../../config";
+import StatusLabel from "../../shared/StatusLabel";
 import { useRefreshStackOnRunChange } from "../runs/useRefreshStackOnRunChange";
 import { attentionByStackTemplate } from "./attention";
 import { StackTemplateContext } from "./stackTemplateContext";
 import StackTemplateStatusLabel, { stackTemplateActivity } from "./StackTemplateStatusLabel";
 import { findSelectedStackTemplate, stackTemplateLabel } from "./stackWorkflow";
 import TemplateTabs from "./TemplateTabs";
+import { cn } from "@/lib/utils";
 
 // The right side of the stack's page: one template, its state and its tabs.
 // It is the template's own page, inside the stack's. The route below it draws
@@ -22,7 +27,17 @@ export default function TemplatePanel({ stackTemplateId, children }: { stackTemp
   const stackId = params.stackId ?? "";
   const id = stackTemplateId ?? params.stackTemplateId ?? "";
   const templates = useStackQuery(tenantID, stackId).data?.templates ?? [];
-  const stackTemplate = findSelectedStackTemplate(templates, id);
+  const found = findSelectedStackTemplate(templates, id);
+  // A destroy that finishes takes its template out of the stack, while
+  // whoever approved it may still be reading its run. A template this panel
+  // has shown and then lost was destroyed: the panel keeps it, says so, and
+  // drops the tabs, whose sections are gone with it.
+  const [lastSeen, setLastSeen] = useState<StackTemplate | null>(null);
+  if (found && found !== lastSeen) {
+    setLastSeen(found);
+  }
+  const destroyed = !found && lastSeen?.id === id;
+  const stackTemplate = found ?? (destroyed ? lastSeen : null);
   // The attention list dates a failed destroy, which the template cannot.
   const attention = attentionByStackTemplate(useAttentionQuery(tenantID).data ?? []).get(id);
   useRefreshStackOnRunChange(stackId, stackTemplate?.id ?? "");
@@ -39,16 +54,22 @@ export default function TemplatePanel({ stackTemplateId, children }: { stackTemp
   return (
     <StackTemplateContext.Provider value={{ stackId, stackTemplate }}>
       <div className="flex min-w-0 flex-col" data-testid="template-panel">
-        <div className="flex flex-col gap-5 border-b border-divider px-7 pt-6">
+        <div className={cn("flex flex-col gap-5 border-b border-divider px-7 pt-6", destroyed && "pb-6")}>
           <div className="flex min-w-0 flex-col gap-2">
             <h2 className="font-heading text-panel-title font-semibold tracking-title wrap-anywhere">{stackTemplateLabel(stackTemplate)}</h2>
             <div className="flex flex-wrap items-center gap-2 text-meta text-muted-foreground">
-              <StackTemplateStatusLabel stackTemplate={stackTemplate} attention={attention} />
+              {destroyed ? (
+                <StatusLabel icon={Check} tone="settled">
+                  destroyed
+                </StatusLabel>
+              ) : (
+                <StackTemplateStatusLabel stackTemplate={stackTemplate} attention={attention} />
+              )}
               <span aria-hidden="true" className="text-separator">
                 ·
               </span>
               <span className="font-mono text-xs">{stackTemplate.source_ref}</span>
-              {activity && (
+              {activity && !destroyed && (
                 <>
                   <span aria-hidden="true" className="text-separator">
                     ·
@@ -58,7 +79,7 @@ export default function TemplatePanel({ stackTemplateId, children }: { stackTemp
               )}
             </div>
           </div>
-          <TemplateTabs stackId={stackId} stackTemplateId={stackTemplate.id} />
+          {!destroyed && <TemplateTabs stackId={stackId} stackTemplateId={stackTemplate.id} />}
         </div>
         <div key={stackTemplate.id} className="flex min-w-0 flex-col gap-5 px-7 pt-5 pb-7">
           {children ?? <Outlet />}

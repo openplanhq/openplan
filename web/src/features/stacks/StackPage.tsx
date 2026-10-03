@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ArrowLeft, KeyRound, Users } from "lucide-react";
 import { Link, Outlet, useMatch, useParams } from "react-router-dom";
 import { useAttentionQuery, useStackQuery } from "../../api/queries";
@@ -8,6 +9,7 @@ import PageHeader from "../../shared/PageHeader";
 import { cn } from "@/lib/utils";
 import { attentionByStackTemplate } from "./attention";
 import StackMeta from "./StackMeta";
+import type { StackPageOutletContext } from "./stackPageOutlet";
 import StackTemplateList from "./StackTemplateList";
 import { defaultStackTemplate } from "./templateSelection";
 
@@ -23,21 +25,35 @@ const sectionLinkClass = cn(buttonClass("outline", "lg"), "pointer-coarse:h-11")
 // column hides below md on the paths where it gives way; nothing measures
 // the screen.
 //
+// The default is picked once, when the stack's own path opens, and kept while
+// the person stays on it: a plan approved underneath must not swap the panel
+// to another template mid-read. It gives way only if its template goes, and
+// is picked afresh on coming back to the path.
+//
 // The canView guard above this route has loaded the stack.
 export default function StackPage() {
   const { stackId = "" } = useParams<{ stackId: string }>();
   const stackView = useStackQuery(tenantID, stackId).data;
   const attention = attentionByStackTemplate((useAttentionQuery(tenantID).data ?? []).filter((item) => item.stack.id === stackId));
   const templateMatch = useMatch("/stacks/:stackId/templates/:stackTemplateId/*");
+  const onPanel = templateMatch !== null;
+  const templates = stackView?.templates ?? [];
+
+  const [pinnedId, setPinnedId] = useState<string | null>(null);
+  const pinnedStays = pinnedId !== null && templates.some((stackTemplate) => stackTemplate.id === pinnedId);
+  const indexTemplateId = onPanel ? null : pinnedStays ? pinnedId : defaultStackTemplate(templates)?.id ?? null;
+  if (indexTemplateId !== pinnedId) {
+    setPinnedId(indexTemplateId);
+  }
 
   if (!stackView) {
     return null;
   }
 
-  const { stack, templates } = stackView;
-  const onPanel = templateMatch !== null;
+  const { stack } = stackView;
   const adding = templateMatch?.params.stackTemplateId === "new";
-  const selectedId = onPanel ? (adding ? null : templateMatch.params.stackTemplateId ?? null) : defaultStackTemplate(templates)?.id ?? null;
+  const selectedId = onPanel ? (adding ? null : templateMatch.params.stackTemplateId ?? null) : indexTemplateId;
+  const outletContext: StackPageOutletContext = { indexTemplateId };
 
   return (
     <section data-testid="stack-page">
@@ -78,7 +94,7 @@ export default function StackPage() {
               Templates
             </Link>
           )}
-          <Outlet />
+          <Outlet context={outletContext} />
         </div>
       </div>
     </section>

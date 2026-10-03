@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { Navigate, MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../../auth/AuthContext";
@@ -281,6 +281,29 @@ describe("TemplatePanel", () => {
   // The stack's states change when a run settles, and only the runs query
   // polls. The panel refreshes the stack itself, so the header and the list
   // stay current on every tab, not just Runs.
+  // A destroy that finishes takes its template out of the stack. Whoever
+  // approved it on the run is still reading that run, so the panel keeps it,
+  // says the template was destroyed, and does not call the link stale.
+  it("keeps a run readable when its template is destroyed while it is open", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise(() => {}));
+    const queryClient = testQueryClient();
+    seedDefaultData(queryClient);
+    const run = runFor("st_1", { operation: "destroy", status: "running", run_number: 4, plan_summary: { add: 0, change: 0, destroy: 2 } });
+    queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_1"), [run]);
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", run.id), run);
+
+    renderAt(queryClient, "/stacks/stack_1/templates/st_1/runs/4");
+    await waitFor(() => expect(screen.getByTestId("run-detail-screen")).toBeTruthy());
+
+    act(() => {
+      queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, []));
+    });
+
+    await waitFor(() => expect(screen.getByText("destroyed")).toBeTruthy());
+    expect(screen.queryByTestId("stack-template-missing")).toBeNull();
+    expect(screen.getByTestId("run-detail-screen")).toBeTruthy();
+  });
+
   it("refreshes the stack when the template's latest run settles, on any tab", async () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);

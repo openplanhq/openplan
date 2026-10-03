@@ -6,7 +6,8 @@ import { ScrollArea, ScrollAreaContent, ScrollAreaScrollbar, ScrollAreaThumb, Sc
 // Logs laid out as CI systems lay out a job's steps: stacked in the order they
 // ran, each a row that opens onto its log. The caller decides which rows are
 // open and supplies each log, and draws the frame around them. Logs read on
-// the canvas, in the code colour, rather than inverted.
+// the canvas, in the code colour, rather than inverted, and long lines wrap:
+// nothing would show that a clipped line goes on.
 export function LogSteps({ children }: { children: ReactNode }) {
   return <ol className="divide-y divide-divider">{children}</ol>;
 }
@@ -37,7 +38,7 @@ export function LogStep({ name, open, onOpenChange, children }: LogStepProps) {
         <ScrollArea data-testid={`log-scroll-area-${name}`} className="max-h-115">
           <ScrollAreaViewport className="max-h-115 overflow-auto">
             <ScrollAreaContent>
-              <pre className="m-0 py-3 pr-4 pl-9.5 font-mono text-xs leading-relaxed whitespace-pre text-code-foreground">{children}</pre>
+              <pre className="m-0 py-3 pr-4 pl-9.5 font-mono text-xs leading-relaxed whitespace-pre-wrap wrap-anywhere text-code-foreground">{children}</pre>
             </ScrollAreaContent>
           </ScrollAreaViewport>
           <ScrollAreaScrollbar>
