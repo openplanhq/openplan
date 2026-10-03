@@ -15,7 +15,7 @@ function item(overrides: Partial<AttentionItem> & { stackID?: string; templateID
     kind: "waiting_approval",
     at: "2026-10-03T09:00:00Z",
     stack: { id: stackID, name: stackID, slug: stackID },
-    stack_template: { id: templateID, display_name: "eks-cluster" },
+    stack_template: { id: templateID, workspace_name: "ws_1", display_name: "eks-cluster" },
     run: null,
     ...rest
   };

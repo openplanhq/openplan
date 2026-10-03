@@ -851,6 +851,7 @@ func TestListAttentionReturnsWaitingPlans(t *testing.T) {
 		ID:                        "stack_template_123",
 		StackID:                   "stack_123",
 		DesiredTemplateRevisionID: "template_123",
+		WorkspaceName:             "acme-prod-template_123",
 		Lifecycle:                 domain.StackTemplateActive,
 		PendingPlanRunID:          "run_123",
 		PendingPlanAt:             plannedAt,
@@ -883,8 +884,9 @@ func TestListAttentionReturnsWaitingPlans(t *testing.T) {
 			Slug string `json:"slug"`
 		} `json:"stack"`
 		StackTemplate struct {
-			ID          string `json:"id"`
-			DisplayName string `json:"display_name"`
+			ID            string `json:"id"`
+			WorkspaceName string `json:"workspace_name"`
+			DisplayName   string `json:"display_name"`
 		} `json:"stack_template"`
 		Run *struct {
 			ID          string             `json:"id"`
@@ -905,7 +907,7 @@ func TestListAttentionReturnsWaitingPlans(t *testing.T) {
 	if item.Stack.ID != "stack_123" || item.Stack.Name != "Acme Prod" || item.Stack.Slug != "acme-prod" {
 		t.Errorf("stack = %+v", item.Stack)
 	}
-	if item.StackTemplate.ID != "stack_template_123" || item.StackTemplate.DisplayName != "eks-cluster" {
+	if item.StackTemplate.ID != "stack_template_123" || item.StackTemplate.WorkspaceName != "acme-prod-template_123" || item.StackTemplate.DisplayName != "eks-cluster" {
 		t.Errorf("stack template = %+v", item.StackTemplate)
 	}
 	if item.Run == nil || item.Run.ID != "run_123" || item.Run.RunNumber != 7 || item.Run.PlanSummary.Add != 2 {

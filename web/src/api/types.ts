@@ -208,7 +208,7 @@ export interface AttentionItem {
   // destroy stopped. Empty when unknown.
   at: string;
   stack: { id: string; name: string; slug: string };
-  stack_template: { id: string; display_name: string };
+  stack_template: { id: string; workspace_name: string; display_name: string };
   // The plan waiting for approval, or the destroy that failed. Null for a
   // failed template with no destroy run on record.
   run: TemplateRun | null;

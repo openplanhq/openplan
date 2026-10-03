@@ -910,8 +910,11 @@ type attentionStackResponse struct {
 }
 
 type attentionStackTemplateResponse struct {
-	ID          string `json:"id"`
-	DisplayName string `json:"display_name"`
+	ID string `json:"id"`
+	// WorkspaceName names the template when DisplayName is empty, as it does
+	// on the stack's own pages.
+	WorkspaceName string `json:"workspace_name"`
+	DisplayName   string `json:"display_name"`
 }
 
 func newAttentionItemResponse(item app.AttentionItem) attentionItemResponse {
@@ -923,8 +926,9 @@ func newAttentionItemResponse(item app.AttentionItem) attentionItemResponse {
 			Slug: item.Stack.Slug,
 		},
 		StackTemplate: attentionStackTemplateResponse{
-			ID:          string(item.StackTemplate.ID),
-			DisplayName: item.StackTemplate.DisplayName,
+			ID:            string(item.StackTemplate.ID),
+			WorkspaceName: item.StackTemplate.WorkspaceName,
+			DisplayName:   item.StackTemplate.DisplayName,
 		},
 		Run: item.Run,
 	}

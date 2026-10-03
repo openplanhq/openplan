@@ -20,4 +20,16 @@ describe("cn", () => {
   it("keeps a theme text size apart from a text colour", () => {
     expect(cn("text-meta", "text-muted-foreground")).toBe("text-meta text-muted-foreground");
   });
+
+  // A vendored component that merges with the stock cn package reads
+  // text-meta as a colour and drops its own, and keeps rounded-xl beside
+  // rounded-panel, so a className passed to it is merged wrongly.
+  it("is the cn every vendored component merges with", () => {
+    const sources = import.meta.glob<string>("../components/ui/*.tsx", { query: "?raw", import: "default", eager: true });
+    const stock = Object.entries(sources)
+      .filter(([, source]) => /from ["']cn["']/.test(source))
+      .map(([path]) => path);
+    expect(Object.keys(sources).length).toBeGreaterThan(0);
+    expect(stock).toEqual([]);
+  });
 });

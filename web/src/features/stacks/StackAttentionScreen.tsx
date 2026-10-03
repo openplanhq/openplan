@@ -10,6 +10,7 @@ import PageHeader from "../../shared/PageHeader";
 import PlanDiff from "../../shared/PlanDiff";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import { attentionRunPath } from "./attention";
+import { stackTemplateLabel } from "./stackWorkflow";
 import { buttonClass } from "../../shared/buttonClass";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from "@/components/ui/empty";
@@ -127,7 +128,7 @@ function AttentionRow({ item }: { item: AttentionItem }) {
   const waiting = item.kind === "waiting_approval";
   const runPath = attentionRunPath(item);
   const templatePath = `/stacks/${item.stack.id}/templates/${item.stack_template.id}`;
-  const templateName = item.stack_template.display_name || item.stack_template.id;
+  const templateName = stackTemplateLabel(item.stack_template);
 
   return (
     <li className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-center md:gap-5" data-testid={`attention-row-${item.stack_template.id}`}>

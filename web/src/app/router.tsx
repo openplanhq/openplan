@@ -1,6 +1,7 @@
 import { createBrowserRouter, createMemoryRouter, Navigate, redirect } from "react-router-dom";
 import type { RouteObject } from "react-router-dom";
 import AppShell from "./AppShell";
+import type { RouteHandle } from "./AppShell";
 import NotFound from "./NotFound";
 import RoutePlaceholder from "./RoutePlaceholder";
 import RequireCapability from "../auth/RequireCapability";
@@ -54,6 +55,9 @@ const devRoutes: RouteObject[] = import.meta.env.DEV
 // slots for upcoming tickets. Routes with a capability in the parent spec's
 // route map are wrapped in a <RequireCapability mode="route"> layout route —
 // see docs/superpowers/specs/2026-07-19-capability-gating-primitives-design.md.
+// The pages redesigned on openplan UI, which the shell puts on the grey canvas.
+const canvas: RouteHandle = { canvas: true };
+
 export const routeConfig: RouteObject[] = [
   ...devRoutes,
   // A sibling of "/", not a child, for the same reason /styleguide is one:
@@ -69,9 +73,9 @@ export const routeConfig: RouteObject[] = [
         element: <AppShell />,
         children: [
           { index: true, loader: () => redirect("/stacks") },
-          { path: "stacks", element: <StacksListScreen /> },
+          { path: "stacks", element: <StacksListScreen />, handle: canvas },
           // A static segment, so it outranks stacks/:stackId below.
-          { path: "stacks/attention", element: <StackAttentionScreen /> },
+          { path: "stacks/attention", element: <StackAttentionScreen />, handle: canvas },
           {
             path: "stacks/new",
             element: <RequireCapability capability="canCreateStack" mode="route" />,

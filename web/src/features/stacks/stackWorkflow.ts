@@ -9,7 +9,7 @@ export function findSelectedStackTemplate(stackTemplates: StackTemplate[], selec
 // No ref suffix: source_ref is part of a source template's identity, so it read
 // the same on every install of that template and separated nothing. The ref
 // still shows in the revision panel, where it is about a specific commit.
-export function stackTemplateLabel(stackTemplate: StackTemplate): string {
+export function stackTemplateLabel(stackTemplate: Pick<StackTemplate, "display_name" | "workspace_name">): string {
   return stackTemplate.display_name || stackTemplate.workspace_name;
 }
 

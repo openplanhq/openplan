@@ -1,4 +1,4 @@
-import { matchPath, NavLink, Outlet, useLocation } from "react-router-dom";
+import { NavLink, Outlet, useMatches } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { tenantID } from "../config";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -11,9 +11,10 @@ const navItems: { to: string; label: string }[] = [
 
 const isDebug = import.meta.env.DEV || import.meta.env.VITE_DEBUG === "true";
 
-// Pages redesigned on openplan UI, whose white panels sit on the grey canvas.
-// The rest keep the white page until they are redesigned too.
-const CANVAS_PATHS = ["/stacks", "/stacks/attention"];
+// What a route tells the shell about its page. canvas marks a page redesigned
+// on openplan UI, whose white panels sit on the grey canvas; the rest keep the
+// white page until they are redesigned too.
+export type RouteHandle = { canvas?: boolean };
 
 // Preflight leaves a link with the body's colour, so each link sets its own.
 const navLinkClass = cn(
@@ -23,8 +24,7 @@ const navLinkClass = cn(
 
 export default function AppShell() {
   const { me, logout, status } = useAuth();
-  const { pathname } = useLocation();
-  const canvas = CANVAS_PATHS.some((path) => matchPath(path, pathname));
+  const canvas = useMatches().some((match) => (match.handle as RouteHandle | undefined)?.canvas === true);
 
   return (
     <div className={cn("min-h-screen", canvas && "bg-canvas")} data-canvas={canvas || undefined}>

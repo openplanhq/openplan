@@ -151,15 +151,12 @@ func (service *Service) ListAttention(ctx context.Context, command ListAttention
 	return items, nil
 }
 
-// ListStackSummaries lists the stacks the caller can view, as ListStacks
-// does, each with how many templates it has installed.
+// ListStackSummaries lists the stacks ListStacks lists, each with how many
+// templates it has installed.
 func (service *Service) ListStackSummaries(ctx context.Context, command ListStacksCommand) ([]StackSummary, error) {
-	if err := validateListStacksCommand(command); err != nil {
-		return nil, err
-	}
-	stacks, err := listAccessibleStacks(ctx, service.Authorization, service.Stacks, command.TenantID)
+	stacks, err := service.ListStacks(ctx, command)
 	if err != nil {
-		return nil, fmt.Errorf("list stacks: %w", err)
+		return nil, err
 	}
 	summaries := make([]StackSummary, 0, len(stacks))
 	if len(stacks) == 0 {

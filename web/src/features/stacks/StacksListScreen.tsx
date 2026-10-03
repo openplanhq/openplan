@@ -82,9 +82,11 @@ export default function StacksListScreen() {
     );
   }
 
-  const selected = stacks.find((stack) => stack.id === searchParams.get("stack")) ?? stacks[0];
   const query = filter.trim().toLowerCase();
   const visible = query === "" ? stacks : stacks.filter((stack) => stack.name.toLowerCase().includes(query) || stack.slug.toLowerCase().includes(query));
+  // Chosen from the filtered list, so the preview never shows a stack the
+  // list has hidden; with nothing left to show, there is no preview.
+  const selected: StackListItem | undefined = visible.find((stack) => stack.id === searchParams.get("stack")) ?? visible[0];
   const byStack = attentionByStack(attention);
 
   return (
@@ -151,14 +153,14 @@ export default function StacksListScreen() {
               <ul className="flex flex-col gap-0.5 p-2" aria-label="Stacks">
                 {visible.map((stack) => (
                   <li key={stack.id}>
-                    <StackRow stack={stack} selected={stack.id === selected.id} attention={byStack.get(stack.id)} />
+                    <StackRow stack={stack} selected={stack.id === selected?.id} attention={byStack.get(stack.id)} />
                   </li>
                 ))}
               </ul>
             )}
           </div>
           <div className="min-w-0 flex-1 md:sticky md:top-16 md:self-start">
-            <StackPreview stack={selected} attention={attentionByStackTemplate(attention)} />
+            {selected && <StackPreview stack={selected} attention={attentionByStackTemplate(attention)} />}
           </div>
         </div>
       )}

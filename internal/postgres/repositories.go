@@ -620,26 +620,7 @@ func (store *Store) GetStackWithTemplates(ctx context.Context, tenantID domain.T
 	}
 
 	rows, err := store.pool.Query(ctx, `
-		select
-			id,
-			tenant_id,
-			stack_id,
-			component_key,
-			source_template_id,
-			desired_template_revision_id,
-			last_applied_template_revision_id,
-			workspace_name,
-			installed_config_json,
-			desired_config_json,
-			last_applied_run_id,
-			last_applied_config_json,
-			last_applied_at,
-			pending_plan_run_id,
-			pending_plan_template_revision_id,
-			pending_plan_config_json,
-			pending_plan_at,
-			created_by,
-			lifecycle
+		select`+stackTemplateColumns+`
 		from stack_templates
 		where tenant_id = $1
 			and stack_id = $2
@@ -672,26 +653,7 @@ func (store *Store) GetStackWithTemplates(ctx context.Context, tenantID domain.T
 // is not destroyed, across all of its stacks.
 func (store *Store) ListTenantStackTemplates(ctx context.Context, tenantID domain.TenantID) ([]domain.StackTemplate, error) {
 	rows, err := store.pool.Query(ctx, `
-		select
-			id,
-			tenant_id,
-			stack_id,
-			component_key,
-			source_template_id,
-			desired_template_revision_id,
-			last_applied_template_revision_id,
-			workspace_name,
-			installed_config_json,
-			desired_config_json,
-			last_applied_run_id,
-			last_applied_config_json,
-			last_applied_at,
-			pending_plan_run_id,
-			pending_plan_template_revision_id,
-			pending_plan_config_json,
-			pending_plan_at,
-			created_by,
-			lifecycle
+		select`+stackTemplateColumns+`
 		from stack_templates
 		where tenant_id = $1
 			and lifecycle != $2
@@ -851,26 +813,7 @@ func (store *Store) GetTemplateRevision(ctx context.Context, tenantID domain.Ten
 
 func (store *Store) GetStackTemplate(ctx context.Context, tenantID domain.TenantID, id domain.StackTemplateID) (domain.StackTemplate, error) {
 	row := store.pool.QueryRow(ctx, `
-		select
-			id,
-			tenant_id,
-			stack_id,
-			component_key,
-			source_template_id,
-			desired_template_revision_id,
-			last_applied_template_revision_id,
-			workspace_name,
-			installed_config_json,
-			desired_config_json,
-			last_applied_run_id,
-			last_applied_config_json,
-			last_applied_at,
-			pending_plan_run_id,
-			pending_plan_template_revision_id,
-			pending_plan_config_json,
-			pending_plan_at,
-			created_by,
-			lifecycle
+		select`+stackTemplateColumns+`
 		from stack_templates
 		where tenant_id = $1
 			and id = $2
@@ -891,27 +834,7 @@ func (store *Store) UpdateStackTemplateConfig(ctx context.Context, tenantID doma
 		set desired_config_json = $1::jsonb
 		where tenant_id = $2
 			and id = $3
-		returning
-			id,
-			tenant_id,
-			stack_id,
-			component_key,
-			source_template_id,
-			desired_template_revision_id,
-			last_applied_template_revision_id,
-			workspace_name,
-			installed_config_json,
-			desired_config_json,
-			last_applied_run_id,
-			last_applied_config_json,
-			last_applied_at,
-			pending_plan_run_id,
-			pending_plan_template_revision_id,
-			pending_plan_config_json,
-			pending_plan_at,
-			created_by,
-			lifecycle
-	`, defaultJSON(configJSON), tenantID, id)
+		returning`+stackTemplateColumns, defaultJSON(configJSON), tenantID, id)
 	stackTemplate, err := scanStackTemplate(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.StackTemplate{}, app.ErrNotFound
@@ -930,27 +853,7 @@ func (store *Store) UpdateStackTemplateDesiredRevision(ctx context.Context, tena
 			desired_config_json = $2::jsonb
 		where tenant_id = $3
 			and id = $4
-		returning
-			id,
-			tenant_id,
-			stack_id,
-			component_key,
-			source_template_id,
-			desired_template_revision_id,
-			last_applied_template_revision_id,
-			workspace_name,
-			installed_config_json,
-			desired_config_json,
-			last_applied_run_id,
-			last_applied_config_json,
-			last_applied_at,
-			pending_plan_run_id,
-			pending_plan_template_revision_id,
-			pending_plan_config_json,
-			pending_plan_at,
-			created_by,
-			lifecycle
-	`, templateRevisionID, defaultJSON(configJSON), tenantID, id)
+		returning`+stackTemplateColumns, templateRevisionID, defaultJSON(configJSON), tenantID, id)
 	stackTemplate, err := scanStackTemplate(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.StackTemplate{}, app.ErrNotFound
@@ -1613,6 +1516,30 @@ func recordInterruptedDestroyLifecycle(ctx context.Context, writer stackTemplate
 	}
 	return recordStackTemplateLifecycle(ctx, writer, tenantID, stackTemplateID, domain.StackTemplateFailed)
 }
+
+// stackTemplateColumns are a stack_templates row's columns in the order
+// scanStackTemplate scans them, for a select list or a returning clause.
+const stackTemplateColumns = `
+	id,
+	tenant_id,
+	stack_id,
+	component_key,
+	source_template_id,
+	desired_template_revision_id,
+	last_applied_template_revision_id,
+	workspace_name,
+	installed_config_json,
+	desired_config_json,
+	last_applied_run_id,
+	last_applied_config_json,
+	last_applied_at,
+	pending_plan_run_id,
+	pending_plan_template_revision_id,
+	pending_plan_config_json,
+	pending_plan_at,
+	created_by,
+	lifecycle
+`
 
 type stackTemplateScanner interface {
 	Scan(dest ...any) error

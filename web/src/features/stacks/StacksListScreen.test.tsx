@@ -55,7 +55,7 @@ function waitingItem(overrides: Partial<AttentionItem> = {}): AttentionItem {
     kind: "waiting_approval",
     at: "2026-10-03T09:30:00Z",
     stack: { id: "stack_1", name: "Payments", slug: "payments" },
-    stack_template: { id: "tpl_1", display_name: "eks-cluster" },
+    stack_template: { id: "tpl_1", workspace_name: "ws_1", display_name: "eks-cluster" },
     run: { id: "run_1", run_number: 7, plan_summary: { add: 2, change: 1, destroy: 0 } } as TemplateRun,
     ...overrides
   };
@@ -211,13 +211,30 @@ describe("StacksListScreen", () => {
     expect(screen.getByTestId("stacks-filter-empty").textContent).toBe("No stacks match this filter.");
   });
 
+  it("previews a stack the filter shows, never one it hides", () => {
+    const queryClient = testQueryClient();
+    seed(queryClient, { stacks: [stack(), stack({ id: "stack_2", name: "Edge CDN", slug: "edge" })] });
+
+    renderScreen(queryClient, { path: "/stacks?stack=stack_1" });
+    fireEvent.change(screen.getByRole("searchbox", { name: "Filter stacks" }), { target: { value: "edge" } });
+
+    expect(screen.getByTestId("stack-row-stack_2").getAttribute("aria-current")).toBe("true");
+    expect(within(screen.getByTestId("stack-preview")).getByRole("heading", { level: 2, name: "Edge CDN" })).toBeTruthy();
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Filter stacks" }), { target: { value: "nothing" } });
+    expect(screen.queryByTestId("stack-preview")).toBeNull();
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Filter stacks" }), { target: { value: "" } });
+    expect(screen.getByTestId("stack-row-stack_1").getAttribute("aria-current")).toBe("true");
+  });
+
   it("says what needs attention in one line that links to the attention page", () => {
     const queryClient = testQueryClient();
     seed(queryClient, {
       stacks: [stack(), stack({ id: "stack_2", name: "Edge", slug: "edge" })],
       attention: [
         waitingItem(),
-        waitingItem({ kind: "destroy_failed", stack: { id: "stack_2", name: "Edge", slug: "edge" }, stack_template: { id: "tpl_9", display_name: "cdn" } })
+        waitingItem({ kind: "destroy_failed", stack: { id: "stack_2", name: "Edge", slug: "edge" }, stack_template: { id: "tpl_9", workspace_name: "ws_9", display_name: "cdn" } })
       ]
     });
 
@@ -243,7 +260,7 @@ describe("StacksListScreen", () => {
       stacks: [stack(), stack({ id: "stack_2", name: "Edge", slug: "edge" }), stack({ id: "stack_3", name: "Quiet", slug: "quiet" })],
       attention: [
         waitingItem(),
-        waitingItem({ kind: "destroy_failed", stack: { id: "stack_2", name: "Edge", slug: "edge" }, stack_template: { id: "tpl_9", display_name: "cdn" } })
+        waitingItem({ kind: "destroy_failed", stack: { id: "stack_2", name: "Edge", slug: "edge" }, stack_template: { id: "tpl_9", workspace_name: "ws_9", display_name: "cdn" } })
       ]
     });
 
@@ -305,7 +322,7 @@ describe("StacksListScreen", () => {
       stacks: [stack(), stack({ id: "stack_2", name: "Edge", slug: "edge" })],
       attention: [
         waitingItem(),
-        waitingItem({ kind: "destroy_failed", stack: { id: "stack_2", name: "Edge", slug: "edge" }, stack_template: { id: "tpl_9", display_name: "cdn" } })
+        waitingItem({ kind: "destroy_failed", stack: { id: "stack_2", name: "Edge", slug: "edge" }, stack_template: { id: "tpl_9", workspace_name: "ws_9", display_name: "cdn" } })
       ]
     });
 

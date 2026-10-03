@@ -17,7 +17,7 @@ function waiting(overrides: Partial<AttentionItem> = {}): AttentionItem {
     kind: "waiting_approval",
     at: "2026-10-03T09:30:00Z",
     stack: { id: "stack_prod", name: "prod", slug: "prod" },
-    stack_template: { id: "tpl_eks", display_name: "eks-cluster" },
+    stack_template: { id: "tpl_eks", workspace_name: "ws_eks", display_name: "eks-cluster" },
     run: {
       id: "run_7",
       run_number: 7,
@@ -34,7 +34,7 @@ function failed(overrides: Partial<AttentionItem> = {}): AttentionItem {
     kind: "destroy_failed",
     at: "2026-09-29T08:00:00Z",
     stack: { id: "stack_edge", name: "Edge CDN", slug: "edge-cdn" },
-    stack_template: { id: "tpl_cdn", display_name: "cloudfront" },
+    stack_template: { id: "tpl_cdn", workspace_name: "ws_cdn", display_name: "cloudfront" },
     run: { id: "run_3", run_number: 3 } as TemplateRun,
     ...overrides
   };
@@ -126,6 +126,13 @@ describe("StackAttentionScreen", () => {
     renderScreen(testQueryClient([failed({ run: null })]));
 
     expect(within(screen.getByTestId("attention-row-tpl_cdn")).queryByRole("link", { name: "View run" })).toBeNull();
+  });
+
+  // As the stack's own pages name it, so the two never disagree.
+  it("names a template with no display name by its workspace", () => {
+    renderScreen(testQueryClient([failed({ stack_template: { id: "tpl_cdn", workspace_name: "ws_cdn", display_name: "" } })]));
+
+    expect(within(screen.getByTestId("attention-row-tpl_cdn")).getByRole("link", { name: "Edge CDN / ws_cdn" })).toBeTruthy();
   });
 
   it("says nothing needs attention, with a way back, when the list is empty", () => {
