@@ -510,7 +510,7 @@ describe("editing while a run is in flight", () => {
 });
 
 describe("TemplateCredentialsTab", () => {
-  it("shows only this template's credentials and titles the panel by scope", () => {
+  it("shows only this template's credentials, under the note on what they override", () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);
     queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), [
@@ -524,8 +524,20 @@ describe("TemplateCredentialsTab", () => {
 
     expect(screen.getByText("TEMPLATE_ONLY")).toBeTruthy();
     expect(screen.queryByText("STACK_ONLY")).toBeNull();
-    expect(screen.getByText("Template credentials")).toBeTruthy();
     expect(screen.getByText("Overrides the stack environment for this template only.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Delete TEMPLATE_ONLY" })).toBeTruthy();
+  });
+
+  it("says its runs use the stack environment when it has no credentials of its own", () => {
+    const queryClient = testQueryClient();
+    seedDefaultData(queryClient);
+    queryClient.setQueryData(queryKeys.stackTemplateCredentials("tenant_123", "st_1"), []);
+
+    renderAt(queryClient, "/stacks/stack_1/templates/st_1/credentials");
+
+    expect(screen.getByText("No credentials for this template")).toBeTruthy();
+    expect(screen.getByText("Its runs use the stack environment.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add credential" })).toBeTruthy();
   });
 
   it("denies the tab itself without canManageAccess", async () => {

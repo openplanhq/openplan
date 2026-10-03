@@ -69,7 +69,7 @@ describe("EnvironmentScreen", () => {
     renderScreen(queryClient);
 
     expect(document.querySelector("[data-unsaved='true']")).toBeNull();
-    fireEvent.change(screen.getByLabelText(/Environment credential value/), { target: { value: "secret-value" } });
+    fireEvent.change(screen.getByLabelText("Value"), { target: { value: "secret-value" } });
     expect(document.querySelector("[data-unsaved='true']")).not.toBeNull();
   });
 
@@ -84,9 +84,9 @@ describe("EnvironmentScreen", () => {
     );
 
     renderScreen(queryClient);
-    fireEvent.change(screen.getByLabelText(/Environment credential name/), { target: { value: "TF_VAR_TEST" } });
-    fireEvent.change(screen.getByLabelText(/Environment credential value/), { target: { value: "secret-value" } });
-    fireEvent.click(screen.getByRole("button", { name: /Add/ }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "TF_VAR_TEST" } });
+    fireEvent.change(screen.getByLabelText("Value"), { target: { value: "secret-value" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
 
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
       expect.stringContaining("/stacks/stack_1/credentials"),
@@ -94,47 +94,43 @@ describe("EnvironmentScreen", () => {
     ));
   });
 
-  it("lists the credentials in a table, one row each, with a delete button", () => {
+  // Midday times: the date is drawn in the runner's time zone, which the
+  // test config does not pin, and midnight UTC is the day before in America.
+  it("lists the credentials, one row each, with when each was added and a delete button", () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), [
-      credential,
-      { ...credential, id: "credential_2", name: "AWS_ACCESS_KEY_ID" }
+      { ...credential, created_at: "2026-07-19T12:00:00Z" },
+      { ...credential, id: "credential_2", name: "AWS_ACCESS_KEY_ID", created_at: "2026-08-12T12:00:00Z" }
     ]);
 
     renderScreen(queryClient);
 
-    const table = screen.getByRole("table");
-    expect(table.classList).toContain("table-fixed");
-    expect(within(table).getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual(["Name", "Value", "Actions"]);
-    const rows = within(table).getAllByRole("row").slice(1);
-    expect(rows.map((row) => within(row).getAllByRole("cell").slice(0, 2).map((cell) => cell.textContent))).toEqual([
-      ["TF_VAR_TEST", "configured"],
-      ["AWS_ACCESS_KEY_ID", "configured"]
-    ]);
+    const rows = within(screen.getByRole("list")).getAllByRole("listitem");
+    expect(rows.map((row) => row.textContent)).toEqual(["TF_VAR_TESTAdded 19 Jul 2026", "AWS_ACCESS_KEY_IDAdded 12 Aug 2026"]);
     expect(within(rows[1]).getByRole("button", { name: "Delete AWS_ACCESS_KEY_ID" })).toBeTruthy();
   });
 
-  it("says so when no credentials are configured", () => {
+  // A name longer than the row truncates, and its title keeps the whole name
+  // readable on hover.
+  it("keeps a long credential name whole in its title", () => {
+    const longName = "TF_VAR_A_VERY_LONG_CREDENTIAL_NAME_THAT_WILL_NOT_FIT_ON_A_PHONE_ROW";
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), [{ ...credential, name: longName }]);
 
     renderScreen(queryClient);
 
-    expect(screen.getByText("No credentials configured")).toBeTruthy();
-    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.getByText(longName).getAttribute("title")).toBe(longName);
   });
 
-  // Preflight leaves a heading with the body's type.
-  it("titles the panel with an h2 that sets its own type", () => {
+  it("says so when no credentials are configured, in place of the list", () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
 
     renderScreen(queryClient);
 
-    const heading = screen.getByRole("heading", { level: 2, name: "Environment credentials" });
-    for (const name of ["font-heading", "text-base", "font-medium", "tracking-normal"]) {
-      expect(heading.classList).toContain(name);
-    }
+    expect(screen.getByText("No credentials in this environment")).toBeTruthy();
+    expect(screen.getByText("Credentials added here are available to every template in this stack.")).toBeTruthy();
+    expect(screen.queryByRole("list")).toBeNull();
   });
 
   // The value is a secret: masked while typed, and gone from the page once
@@ -150,18 +146,18 @@ describe("EnvironmentScreen", () => {
     renderScreen(queryClient);
     const user = userEvent.setup();
 
-    const name = screen.getByLabelText<HTMLInputElement>("Environment credential name");
-    const value = screen.getByLabelText<HTMLInputElement>("Environment credential value");
+    const name = screen.getByLabelText<HTMLInputElement>("Name");
+    const value = screen.getByLabelText<HTMLInputElement>("Value");
     expect(value.type).toBe("password");
     await user.type(name, "TF_VAR_TEST");
     await user.type(value, "secret-value");
-    await user.click(screen.getByRole("button", { name: "Add" }));
+    await user.click(screen.getByRole("button", { name: "Add credential" }));
 
     await waitFor(() => expect(value.value).toBe(""));
     expect(name.value).toBe("");
     // Still the panel, now listing the new credential: the checks above mean
     // nothing if the screen has swapped the panel for an error.
-    expect(await screen.findByRole("cell", { name: "TF_VAR_TEST" })).toBeTruthy();
+    expect(await screen.findByText("TF_VAR_TEST")).toBeTruthy();
     expect(value.isConnected).toBe(true);
     expect(document.querySelector("[data-unsaved='true']")).toBeNull();
   });
@@ -175,14 +171,14 @@ describe("EnvironmentScreen", () => {
     renderScreen(queryClient);
     const user = userEvent.setup();
 
-    await user.type(screen.getByLabelText("Environment credential name"), "TF_VAR_TEST");
-    await user.type(screen.getByLabelText("Environment credential value"), "secret-value");
-    await user.click(screen.getByRole("button", { name: "Add" }));
+    await user.type(screen.getByLabelText("Name"), "TF_VAR_TEST");
+    await user.type(screen.getByLabelText("Value"), "secret-value");
+    await user.click(screen.getByRole("button", { name: "Add credential" }));
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("A credential with that name already exists");
     expect(screen.getAllByRole("alert")).toHaveLength(1);
-    expect(screen.getByLabelText<HTMLInputElement>("Environment credential value").value).toBe("secret-value");
+    expect(screen.getByLabelText<HTMLInputElement>("Value").value).toBe("secret-value");
   });
 
   // The fields stay editable while an add is out. Clearing them when it lands
@@ -200,19 +196,19 @@ describe("EnvironmentScreen", () => {
     );
     renderScreen(queryClient);
     const user = userEvent.setup();
-    const name = screen.getByLabelText<HTMLInputElement>("Environment credential name");
-    const value = screen.getByLabelText<HTMLInputElement>("Environment credential value");
+    const name = screen.getByLabelText<HTMLInputElement>("Name");
+    const value = screen.getByLabelText<HTMLInputElement>("Value");
 
     await user.type(name, "TF_VAR_TEST");
     await user.type(value, "secret-value");
-    await user.click(screen.getByRole("button", { name: "Add" }));
+    await user.click(screen.getByRole("button", { name: "Add credential" }));
     await user.clear(name);
     await user.type(name, "TF_VAR_NEXT");
     await user.clear(value);
     await user.type(value, "next-secret");
     answerPost(jsonResponse(credential, 201));
 
-    expect(await screen.findByRole("cell", { name: "TF_VAR_TEST" })).toBeTruthy();
+    expect(await screen.findByText("TF_VAR_TEST")).toBeTruthy();
     expect(name.value).toBe("TF_VAR_NEXT");
     expect(value.value).toBe("next-secret");
     expect(document.querySelector("[data-unsaved='true']")).not.toBeNull();
@@ -229,7 +225,7 @@ describe("EnvironmentScreen", () => {
     await userEvent.setup().click(screen.getByRole("button", { name: "Delete TF_VAR_TEST" }));
 
     expect((await screen.findByRole("alert")).textContent).toContain("The credential is still in use");
-    expect(screen.getByRole("cell", { name: "TF_VAR_TEST" })).toBeTruthy();
+    expect(screen.getByText("TF_VAR_TEST")).toBeTruthy();
   });
 
   it("asks for both fields before sending anything", async () => {
@@ -239,8 +235,8 @@ describe("EnvironmentScreen", () => {
     renderScreen(queryClient);
     const user = userEvent.setup();
 
-    await user.type(screen.getByLabelText("Environment credential name"), "TF_VAR_TEST");
-    await user.click(screen.getByRole("button", { name: "Add" }));
+    await user.type(screen.getByLabelText("Name"), "TF_VAR_TEST");
+    await user.click(screen.getByRole("button", { name: "Add credential" }));
 
     expect((await screen.findByRole("alert")).textContent).toContain("Name and value are required");
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -252,7 +248,7 @@ describe("EnvironmentScreen", () => {
 
     renderScreen(queryClient);
 
-    for (const label of ["Environment credential name", "Environment credential value"]) {
+    for (const label of ["Name", "Value"]) {
       expect(screen.getByLabelText(label).getAttribute("data-slot")).toBe("input");
     }
   });
@@ -264,9 +260,9 @@ describe("EnvironmentScreen", () => {
 
     renderScreen(queryClient);
 
-    expect(screen.getByLabelText("Environment credential name").classList).toContain("pointer-coarse:h-11");
-    expect(screen.getByLabelText("Environment credential value").classList).toContain("pointer-coarse:h-11");
-    expect(screen.getByRole("button", { name: "Add" }).classList).toContain("pointer-coarse:h-11");
+    expect(screen.getByLabelText("Name").classList).toContain("pointer-coarse:h-11");
+    expect(screen.getByLabelText("Value").classList).toContain("pointer-coarse:h-11");
+    expect(screen.getByRole("button", { name: "Add credential" }).classList).toContain("pointer-coarse:h-11");
     expect(screen.getByRole("button", { name: "Delete TF_VAR_TEST" }).classList).toContain("pointer-coarse:size-11");
   });
 
