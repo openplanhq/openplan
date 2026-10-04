@@ -1,0 +1,79 @@
+# The authorization differential test, against a real Postgres.
+#
+# `make differential-test` runs internal/authorization/differential_test.go,
+# which compares our transactional tuple writes to OpenFGA's own write path.
+# internal/authorization/write.go is a transcription of that path with the
+# BeginTx/Commit removed, and a transcription diverges silently: bump
+# github.com/openfga/openfga, add a column upstream, and it still compiles here
+# while writing rows that are subtly wrong.
+#
+# That test skips when OPENPLAN_POSTGRES_TEST_DSN is unset, so `go test ./...`
+# never runs it. Without this workflow nothing runs it on a push. It is its own
+# workflow rather than a step in ci.yml for the same reason the Makefile keeps
+# it as its own target: a skipped guard is no guard, and it should fail on its
+# own terms rather than behind a red test in another package.
+name: differential
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: differential-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  differential:
+    name: differential (authorization vs upstream OpenFGA)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # Same image and major version as docker-compose.yaml.
+        image: postgres:16-alpine
+        env:
+          # The Compose defaults from docker-compose.yaml / .env.example
+          # (APP_DB_USER, APP_DB_PASSWORD, APP_DB_NAME). These are throwaway
+          # local-only credentials; a CI service database is never anything but.
+          POSTGRES_USER: openplan
+          POSTGRES_PASSWORD: openplan
+          POSTGRES_DB: openplan_test
+        ports:
+          # A GitHub Actions service publishes on the runner's localhost, so
+          # this is 5432, not the 55432 the Makefile's TEST_DSN uses -- that one
+          # is the host-side port of the Compose container.
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U openplan -d openplan_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: cache go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      # Same shape as the Makefile's TEST_DSN, minus the port remap.
+      - name: run differential test
+        env:
+          OPENPLAN_POSTGRES_TEST_DSN: postgres://openplan:openplan@localhost:5432/openplan_test?sslmode=disable
+        run: go test ./internal/authorization/ -count=1 -v

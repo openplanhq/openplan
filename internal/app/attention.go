@@ -80,47 +80,13 @@ func (service *Service) ListAttention(ctx context.Context, command ListAttention
 	if err != nil {
 		return nil, fmt.Errorf("list attention: list waiting runs: %w", err)
 	}
-	for i := range waiting {
-		run := waiting[i]
-		stackTemplate, ok := templates[run.StackTemplateID]
-		if !ok {
-			continue
-		}
-		at := run.CreatedAt
-		if stackTemplate.PendingPlanRunID == run.ID && !stackTemplate.PendingPlanAt.IsZero() {
-			at = stackTemplate.PendingPlanAt
-		}
-		items = append(items, AttentionItem{
-			Kind:          AttentionWaitingApproval,
-			Stack:         stacks[stackTemplate.StackID],
-			StackTemplate: StackTemplateView{StackTemplate: stackTemplate},
-			Run:           &run,
-			At:            at,
-		})
-	}
+	items = append(items, waitingItems(stacks, templates, waiting)...)
 
-	for _, stackTemplate := range templates {
-		if stackTemplate.Lifecycle != domain.StackTemplateFailed {
-			continue
-		}
-		item := AttentionItem{
-			Kind:          AttentionDestroyFailed,
-			Stack:         stacks[stackTemplate.StackID],
-			StackTemplate: StackTemplateView{StackTemplate: stackTemplate},
-		}
-		destroy, err := service.latestDestroyRun(ctx, command.TenantID, stackTemplate.ID)
-		if err != nil {
-			return nil, fmt.Errorf("list attention: %w", err)
-		}
-		if destroy != nil {
-			item.Run = destroy
-			item.At = destroy.CompletedAt
-			if item.At.IsZero() {
-				item.At = destroy.CreatedAt
-			}
-		}
-		items = append(items, item)
+	failed, err := service.failedDestroyItems(ctx, command.TenantID, stacks, templates)
+	if err != nil {
+		return nil, fmt.Errorf("list attention: %w", err)
 	}
+	items = append(items, failed...)
 
 	views := make([]*StackTemplateView, len(items))
 	var runs []*domain.TemplateRun
@@ -148,6 +114,74 @@ func (service *Service) ListAttention(ctx context.Context, command ListAttention
 		}
 		return items[i].StackTemplate.ID < items[j].StackTemplate.ID
 	})
+	return items, nil
+}
+
+// waitingItems turns the tenant's waiting-approval runs into attention items,
+// skipping any run whose stack template is not among the visible ones.
+func waitingItems(
+	stacks map[domain.StackID]domain.Stack,
+	templates map[domain.StackTemplateID]domain.StackTemplate,
+	runs []domain.TemplateRun,
+) []AttentionItem {
+	items := []AttentionItem{}
+	for i := range runs {
+		run := runs[i]
+		stackTemplate, ok := templates[run.StackTemplateID]
+		if !ok {
+			continue
+		}
+		// The component records when the plan was parked, which is when the
+		// person started waiting; the run's own creation is earlier.
+		at := run.CreatedAt
+		if stackTemplate.PendingPlanRunID == run.ID && !stackTemplate.PendingPlanAt.IsZero() {
+			at = stackTemplate.PendingPlanAt
+		}
+		items = append(items, AttentionItem{
+			Kind:          AttentionWaitingApproval,
+			Stack:         stacks[stackTemplate.StackID],
+			StackTemplate: StackTemplateView{StackTemplate: stackTemplate},
+			Run:           &run,
+			At:            at,
+		})
+	}
+	return items
+}
+
+// failedDestroyItems returns one item per visible template whose destroy
+// failed, each carrying that template's most recent destroy run when it has
+// one.
+func (service *Service) failedDestroyItems(
+	ctx context.Context,
+	tenantID domain.TenantID,
+	stacks map[domain.StackID]domain.Stack,
+	templates map[domain.StackTemplateID]domain.StackTemplate,
+) ([]AttentionItem, error) {
+	items := []AttentionItem{}
+	for _, stackTemplate := range templates {
+		if stackTemplate.Lifecycle != domain.StackTemplateFailed {
+			continue
+		}
+		item := AttentionItem{
+			Kind:          AttentionDestroyFailed,
+			Stack:         stacks[stackTemplate.StackID],
+			StackTemplate: StackTemplateView{StackTemplate: stackTemplate},
+		}
+		destroy, err := service.latestDestroyRun(ctx, tenantID, stackTemplate.ID)
+		if err != nil {
+			return nil, err
+		}
+		if destroy != nil {
+			item.Run = destroy
+			// A destroy that never completed has no completion time; the
+			// run's creation is the closest thing to when it needs attention.
+			item.At = destroy.CompletedAt
+			if item.At.IsZero() {
+				item.At = destroy.CreatedAt
+			}
+		}
+		items = append(items, item)
+	}
 	return items, nil
 }
 
