@@ -15,21 +15,31 @@ cp .env.example .env
 docker compose up -d --wait
 ```
 
-That builds every image from source, which takes a few minutes. It creates the
-application database, runs OpenFGA inside the API, starts Temporal, and brings
-up the UI on http://localhost:5173. Sign in through Dex as
-`admin@openplan.local` / `admin-local-only`.
+That pulls prebuilt images and starts the application database, runs OpenFGA
+inside the API, starts Temporal, and brings up the UI on http://localhost:5173.
+Sign in through Dex as `admin@openplan.local` / `admin-local-only`.
 
 **Use `localhost`, not `127.0.0.1`.** The redirect URI is derived from a single
 `OPENPLAN_PUBLIC_URL`, and only that exact origin is registered with the
 identity provider.
 
+> [!IMPORTANT]
+> `docker compose up` pulls the published image when it can, and only builds
+> from source when the pull fails. That means an edit to the Go or the frontend
+> can be silently shadowed by a published image. When you are changing
+> openplan, build from source explicitly:
+>
+> ```bash
+> OPENPLAN_PULL_POLICY=build docker compose up -d --build
+> ```
+
 For a faster edit loop, run the dependencies in Docker and the Go and Node
-processes on the host:
+processes on the host. The API and executor images have to exist before this
+works, so build them once with `OPENPLAN_PULL_POLICY=build` as above:
 
 ```bash
-# dependencies only
-docker compose up -d --wait
+# dependencies and the built images
+OPENPLAN_PULL_POLICY=build docker compose up -d --wait
 
 # then, in separate shells from the repository root
 set -a && source .env && set +a && go run ./cmd/api

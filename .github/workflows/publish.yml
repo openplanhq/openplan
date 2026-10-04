@@ -1,0 +1,249 @@
+# Publish the openplan images to GHCR.
+#
+# Without this, `docker compose up` builds every image from source on a
+# stranger's machine, which takes minutes and is the first thing that makes
+# someone give up before they see the product. With it, the default path is a
+# pull of a few tens of megabytes.
+#
+# Tags are release-driven, deliberately:
+#
+#   release published -> 0.1.0, v0.1.0, v0.1, v0, latest
+#   main push         -> main and the commit SHA, never latest
+#
+# A `main` build is not something to pin to. It exists so a clone of main has
+# something to pull, and so a bug on main is reproducible against an exact
+# commit. Anything worth depending on gets a semver tag from a release, and
+# `latest` follows releases, so the unpinned path means "latest release" rather
+# than "whatever main did this morning".
+#
+# One workflow per image rather than a matrix: the tag list is already six
+# entries per image, and a matrix over an unknown tag list needs the tag step
+# to reach across jobs through an output, which is a failure mode worth not
+# having. Three near-identical steps read better than one clever one.
+name: publish
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  # Lets a release be re-published after a packaging fix, without a new commit.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Version to publish, without the leading v (e.g. 0.1.0)"
+        required: true
+        type: string
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  # GHCR is flat: the image path is the repository lowercased, with a slash
+  # between namespace and image. `ghcr.io/openplanhq/openplan-api`, not a
+  # nested path and not uppercase.
+  OWNER: openplanhq
+  API_IMAGE: ghcr.io/openplanhq/openplan-api
+  EXECUTOR_IMAGE: ghcr.io/openplanhq/openplan-executor
+  WEB_IMAGE: ghcr.io/openplanhq/openplan-web
+
+permissions:
+  contents: read
+  # The token every step authenticates with. GITHUB_TOKEN is scoped to this
+  # repository and this run, which is why there is nothing to configure: no PAT,
+  # no stored secret, and nothing to revoke later.
+  packages: write
+
+jobs:
+  publish:
+    name: build and push images
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The executor image bakes in a specific OpenTofu release and the api and
+      # web images build with the Go and Node versions their Dockerfiles pin, so
+      # nothing here depends on the runner's own toolchain.
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: log in to ghcr
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: derive tags
+        id: tags
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          API_IMAGE: ${{ env.API_IMAGE }}
+          EXECUTOR_IMAGE: ${{ env.EXECUTOR_IMAGE }}
+          WEB_IMAGE: ${{ env.WEB_IMAGE }}
+        run: |
+          set -euo pipefail
+          version=""
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            version="$INPUT_TAG"
+          elif [ "$REF_TYPE" = "tag" ]; then
+            version="${REF_NAME#v}"
+          fi
+
+          # A manual run is typed by a human, who may write `v0.3.0` or
+          # `0.3.0`. Normalise once, here, rather than emitting both forms and
+          # a `vv0.3.0` for the second.
+          version="${version#v}"
+
+          # The tag list is written in the runner's heredoc form, because a
+          # multi-line output cannot be written any other way. Repeating
+          # `tags=` per line does not work: it builds an object rather than a
+          # string, and filtering one with `.*` is a type error.
+          #
+          # It has to be multi-line. A single comma-joined line parses as ONE
+          # tag: buildx read `ghcr.io/...-api:0.1.0` and then treated `v0.1.0`
+          # as the repository name, which sent the push to Docker Hub's
+          # `library/` namespace and failed with a 401 about insufficient
+          # scopes. The symptom pointed at credentials; the cause was the
+          # separator.
+          # The output key must be a plain identifier. A GITHUB_OUTPUT key
+          # cannot contain `/` or `.`, so keying the heredoc on the image name
+          # (`ghcr.io/.../openplan-api<<EOF`) registers no output at all, and
+          # every reference to it comes back empty.
+          #
+          # So: one scalar output per image, comma-separated, holding BARE tag
+          # names. Each push step turns that into its own newline-separated
+          # `name:tag` list, which is where multi-line construction belongs.
+          #
+          # The list is comma-separated here precisely because it is a single
+          # scalar that never gets spliced into another string. The `tags:`
+          # input it eventually feeds is newline-separated, and the conversion
+          # happens in the step that consumes it.
+          if [ -z "$version" ]; then
+            # A main build: commit-identified, and never latest. See the header.
+            echo "api_tags=main,sha-$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            echo "executor_tags=main,sha-$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            echo "web_tags=main,sha-$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            echo "Publishing main build $GITHUB_SHA as main and sha-$GITHUB_SHA"
+            exit 0
+          fi
+
+          # A release: the exact version both bare and v-prefixed (Compose
+          # accepts either, and people paste both), the moving minor and major
+          # tags, and latest.
+          major="$(echo "$version" | cut -d. -f1)"
+          minor="$(echo "$version" | cut -d. -f1,2)"
+          tags="$version,v$version,v$minor,v$major,latest"
+          echo "api_tags=$tags" >> "$GITHUB_OUTPUT"
+          echo "executor_tags=$tags" >> "$GITHUB_OUTPUT"
+          echo "web_tags=$tags" >> "$GITHUB_OUTPUT"
+          echo "Publishing release $version as $tags"
+
+      - name: push api tags
+        id: api_tags
+        env:
+          IMAGE: ${{ env.API_IMAGE }}
+          TAG_LIST: ${{ steps.tags.outputs.api_tags }}
+        run: |
+          # Expand the comma-separated tag list into the newline-separated
+          # `name:tag` lines that the build action's `tags:` input parses.
+          # Building it here rather than in an expression is the whole point:
+          # a multi-line value cannot be interpolated into another string, and
+          # a single-line one is read as a single tag.
+          {
+            echo "tags<<EOF"
+            echo "${TAG_LIST}" | tr ',' '\n' | while read -r t; do
+              [ -n "$t" ] && echo "$IMAGE:$t"
+            done
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: push api
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.api
+          # Both architectures in one manifest, so an arm64 laptop and an x86
+          # runner both work from the same tag. provenance is off because it
+          # adds an attestation manifest per image, which GHCR shows as a
+          # separate artifact to anyone listing the package; the build is
+          # reproducible from the commit either way.
+          platforms: linux/amd64,linux/arm64
+          provenance: false
+          push: true
+          tags: |
+            ${{ steps.api_tags.outputs.tags }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+
+      - name: push executor tags
+        id: executor_tags
+        env:
+          IMAGE: ${{ env.EXECUTOR_IMAGE }}
+          TAG_LIST: ${{ steps.tags.outputs.executor_tags }}
+        run: |
+          # Expand the comma-separated tag list into the newline-separated
+          # `name:tag` lines that the build action's `tags:` input parses.
+          # Building it here rather than in an expression is the whole point:
+          # a multi-line value cannot be interpolated into another string, and
+          # a single-line one is read as a single tag.
+          {
+            echo "tags<<EOF"
+            echo "${TAG_LIST}" | tr ',' '\n' | while read -r t; do
+              [ -n "$t" ] && echo "$IMAGE:$t"
+            done
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: push executor
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.executor
+          platforms: linux/amd64,linux/arm64
+          provenance: false
+          push: true
+          tags: |
+            ${{ steps.executor_tags.outputs.tags }}
+          cache-from: type=gha,scope=executor
+          cache-to: type=gha,scope=executor,mode=max
+
+      - name: push web tags
+        id: web_tags
+        env:
+          IMAGE: ${{ env.WEB_IMAGE }}
+          TAG_LIST: ${{ steps.tags.outputs.web_tags }}
+        run: |
+          # Expand the comma-separated tag list into the newline-separated
+          # `name:tag` lines that the build action's `tags:` input parses.
+          # Building it here rather than in an expression is the whole point:
+          # a multi-line value cannot be interpolated into another string, and
+          # a single-line one is read as a single tag.
+          {
+            echo "tags<<EOF"
+            echo "${TAG_LIST}" | tr ',' '\n' | while read -r t; do
+              [ -n "$t" ] && echo "$IMAGE:$t"
+            done
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: push web
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.web
+          platforms: linux/amd64,linux/arm64
+          provenance: false
+          push: true
+          tags: |
+            ${{ steps.web_tags.outputs.tags }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max

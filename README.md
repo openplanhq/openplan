@@ -151,7 +151,9 @@ cp .env.example .env
 docker compose up -d --wait
 ```
 
-First run builds from source, so it takes a few minutes. Later runs are cached.
+That pulls prebuilt images from GHCR, so it takes a minute or two rather than
+building the Go and Node toolchains. If a pull is unavailable, Compose falls
+back to building from source on its own, which works but takes longer.
 
 There is no second step. OpenFGA runs inside the API, which creates its tables
 in the application database and resolves the store and authorization model from
@@ -168,6 +170,22 @@ boot.
 > `OPENPLAN_PUBLIC_URL`, so only that exact origin is registered with an
 > identity provider — `127.0.0.1` fails OIDC sign-in with an invalid
 > `redirect_uri`.
+
+### Pinning a version, and building from source
+
+`docker compose up` runs `latest`, which is the latest release. To pin a
+specific version, set it in `.env`:
+
+```bash
+OPENPLAN_IMAGE_TAG=0.1.0
+```
+
+If you are changing openplan itself rather than running it, build from source so
+a published image cannot shadow your edit:
+
+```bash
+OPENPLAN_PULL_POLICY=build docker compose up -d --build
+```
 
 ### Try it with the demo templates
 
