@@ -5,22 +5,23 @@ import {
 } from "../../api/queries";
 import { tenantID } from "../../config";
 import CredentialsPanel from "./CredentialsPanel";
-import { useStackTemplateOutlet } from "./StackTemplateDetailShell";
+import { useStackTemplate } from "./stackTemplateContext";
 
 // /stacks/:stackId/templates/:stackTemplateId/credentials — credentials that
 // override the stack's environment for this template only. The route itself is
 // gated on canManageAccess, the same capability the stack Environment tab needs.
 export default function TemplateCredentialsTab() {
-  const { stackTemplate } = useStackTemplateOutlet();
+  const { stackTemplate } = useStackTemplate();
   const credentialsQuery = useStackTemplateCredentialsQuery(tenantID, stackTemplate.id);
   const createMutation = useCreateStackTemplateCredentialMutation(tenantID, stackTemplate.id);
   const deleteMutation = useDeleteStackTemplateCredentialMutation(tenantID, stackTemplate.id);
 
   return (
-    <div className="grid min-w-0 grid-cols-1 content-start gap-6" data-testid="template-credentials-tab">
+    <div className="flex min-w-0 flex-col" data-testid="template-credentials-tab">
       <CredentialsPanel
-        title="Template credentials"
-        subtitle="Overrides the stack environment for this template only."
+        note="Overrides the stack environment for this template only."
+        emptyTitle="No credentials for this template"
+        emptyDescription="Its runs use the stack environment."
         credentials={credentialsQuery.data ?? []}
         loading={credentialsQuery.isPending}
         busy={createMutation.isPending || deleteMutation.isPending}

@@ -35,11 +35,11 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof StackTemplat
 describe("StackTemplateConfigPanel", () => {
   afterEach(cleanup);
 
-  it("offers exactly one action", () => {
+  it("offers exactly one action, Save variables", () => {
     renderPanel();
 
     expect(screen.getAllByRole("button")).toHaveLength(1);
-    expect(screen.getByRole("button", { name: /Save config/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save variables" })).toBeTruthy();
   });
 
   it("reports edits to a variable value", () => {
@@ -53,20 +53,37 @@ describe("StackTemplateConfigPanel", () => {
   it("disables save when canSave is false", () => {
     renderPanel({ canSave: false });
 
-    expect((screen.getByRole("button", { name: /Save config/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Save variables" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("locks every input and the action when a disabled reason is given", () => {
-    renderPanel({ disabledReason: "Editing requires operator access" });
+  it("puts the reason above the fields, and locks every input and the action", () => {
+    renderPanel({ disabledReason: "Editing requires operator access." });
 
-    expect(screen.getByTestId("variables-disabled-reason").textContent).toContain("Editing requires operator access");
-    expect((screen.getByRole("button", { name: /Save config/ }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByLabelText(/region/) as HTMLInputElement).disabled).toBe(true);
+    const reason = screen.getByTestId("variables-disabled-reason");
+    expect(reason.textContent).toBe("Editing requires operator access.");
+    const input = screen.getByLabelText(/region/) as HTMLInputElement;
+    expect(Boolean(reason.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(input.disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Save variables" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("renders a message instead of a grid when the revision has no variables", () => {
+  it("names a required variable with an asterisk and describes it under its input", () => {
+    renderPanel({ variables: [variable({ description: "Region to deploy into." })] });
+
+    const input = screen.getByLabelText("region *");
+    const describedBy = input.getAttribute("aria-describedby") ?? "";
+    expect(document.getElementById(describedBy)?.textContent).toBe("Region to deploy into.");
+  });
+
+  it("describes nothing for a variable without a description", () => {
+    renderPanel();
+
+    expect(screen.getByLabelText("region *").getAttribute("aria-describedby")).toBeNull();
+  });
+
+  it("says so when the template declares no variables", () => {
     renderPanel({ variables: [], variableValues: {} });
 
-    expect(screen.getByText("No variables loaded")).toBeTruthy();
+    expect(screen.getByText("This template declares no variables.")).toBeTruthy();
   });
 });

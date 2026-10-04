@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../../auth/AuthContext";
@@ -10,6 +10,7 @@ import { queryKeys } from "../../api/queryKeys";
 import type { StackTemplate, TemplateRun } from "../../api/types";
 import TemplateRunActions from "./TemplateRunActions";
 import TemplateRunHistory from "./TemplateRunHistory";
+import TemplateRunNotices from "./TemplateRunNotices";
 
 function stackTemplate(overrides: Partial<StackTemplate> = {}): StackTemplate {
   return {
@@ -101,9 +102,10 @@ function actionsElement(queryClient: QueryClient, overrides: Partial<StackTempla
     <QueryClientProvider client={queryClient}>
       <AuthContext.Provider value={authValue()}>
         <MemoryRouter initialEntries={["/stacks/stack_1/templates/stpl_1/runs"]}>
-          {/* The Runs tab as TemplateRunsTab composes it: starting a run in
-              the header, acting on one from its row below. */}
+          {/* The Runs tab as TemplateRunsTab composes it: the toolbar, what
+              waits on a person, then the runs. */}
           <TemplateRunActions stackId="stack_1" stackTemplate={stackTemplate(overrides)} />
+          <TemplateRunNotices stackId="stack_1" stackTemplate={stackTemplate(overrides)} />
           <TemplateRunHistory stackId="stack_1" stackTemplateId="stpl_1" />
         </MemoryRouter>
       </AuthContext.Provider>
@@ -140,14 +142,13 @@ describe("TemplateRunActions", () => {
 
     renderActions(queryClient);
 
-    expect(screen.getByRole("button", { name: /Plan/ }).getAttribute("data-slot")).toBe("button");
-    expect(screen.getByRole("button", { name: /^Apply$/ }).getAttribute("data-slot")).toBe("button");
+    expect(screen.getByTestId("template-run-actions-note").textContent).toBe("Plan shows what would change. Apply saves a plan that waits for approval.");
     expect(isDisabled(screen.getByRole("button", { name: /Plan/ }))).toBe(false);
     expect(isDisabled(screen.getByRole("button", { name: /^Apply$/ }))).toBe(false);
     expect(button(/Approve|Cancel|Discard/)).toBeNull();
   });
 
-  it("keeps Plan disabled until run history has loaded", () => {
+  it("keeps Plan disabled until run history has loaded, and says so", () => {
     vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
     const queryClient = testQueryClient();
     seedCapabilities(queryClient, allAllowed);
@@ -155,23 +156,43 @@ describe("TemplateRunActions", () => {
     renderActions(queryClient);
 
     expect(isDisabled(screen.getByRole("button", { name: /Plan/ }))).toBe(true);
+    expect(screen.getByTestId("template-run-actions-note").textContent).toBe("Loading runs…");
   });
 
-  // A run in flight cannot be stopped, so its row offers nothing; the header
-  // waits for it.
-  it("blocks a new plan while an older run is still active, and offers no action on that run's row", () => {
+  // A run in flight cannot be stopped, so nothing offers to; the toolbar
+  // waits for it and says so.
+  it("blocks a new plan while an older run is still active, and says why", () => {
     const queryClient = testQueryClient();
     seedCapabilities(queryClient, allAllowed);
     seedRuns(queryClient, [
       run({ id: "newer_completed", operation: "plan", status: "completed", created_at: "2026-07-20T01:00:00Z" }),
-      run({ id: "older_active", operation: "plan", status: "queued", created_at: "2026-07-20T00:00:00Z" })
+      run({ id: "older_active", run_number: 1, operation: "plan", status: "queued", created_at: "2026-07-20T00:00:00Z" })
     ]);
 
     renderActions(queryClient);
 
     expect(isDisabled(screen.getByRole("button", { name: /Plan/ }))).toBe(true);
+    expect(screen.getByTestId("template-run-actions-note").textContent).toBe("Wait for run #1 before starting another run.");
     expect(screen.getByTestId("template-run-row-older_active").querySelector("button")).toBeNull();
-    expect(screen.getByTestId("template-run-row-newer_completed").querySelector("button")).toBeNull();
+  });
+
+  // A failed refetch keeps the runs it had. The run it knows of still locks
+  // Plan, and the note names that run rather than calling the runs unknown.
+  it("keeps a known run's lock when a refetch of the runs fails", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    seedRuns(queryClient, [run({ run_number: 7, status: "waiting_approval" })]);
+    await queryClient.prefetchQuery({
+      queryKey: queryKeys.templateRuns("tenant_123", "stpl_1"),
+      queryFn: () => Promise.reject(new Error("unavailable")),
+      staleTime: 0
+    });
+    expect(queryClient.getQueryState(queryKeys.templateRuns("tenant_123", "stpl_1"))?.status).toBe("error");
+
+    renderActions(queryClient);
+
+    expect(isDisabled(screen.getByRole("button", { name: /Plan/ }))).toBe(true);
+    expect(screen.getByTestId("template-run-actions-note").textContent).toBe("Apply or discard run #7 before starting another run.");
   });
 
   it("omits the Destroy action, which lives on the Settings tab", () => {
@@ -195,49 +216,96 @@ describe("TemplateRunActions", () => {
     expect(button(/Cancel/)).toBeNull();
   });
 
-  it("disables Plan with a reason, and hides Cancel, when canOperate is denied", () => {
+  it("disables Plan with a reason when canOperate is denied", () => {
     const queryClient = testQueryClient();
     seedCapabilities(queryClient, { ...allAllowed, canOperate: false });
-    seedRuns(queryClient, [run({ id: "run_active", operation: "plan", status: "running" })]);
+    seedRuns(queryClient, []);
 
     renderActions(queryClient);
 
     expect(isDisabled(screen.getByRole("button", { name: /Plan/ }))).toBe(true);
-    expect(screen.getByTestId("template-run-actions-disabled-reason")).toBeTruthy();
-    expect(button(/Cancel/)).toBeNull();
+    expect(isDisabled(screen.getByRole("button", { name: /^Apply$/ }))).toBe(true);
+    expect(screen.getByTestId("template-run-actions-note").textContent).toBe("Starting a run requires operator access.");
   });
 
-  // Auto-approve is an approval given in advance, and so is Approve on a
-  // waiting plan: neither is offered without approve access. Discarding the
-  // plan is an operator action, so it stays, and so does starting an Apply,
-  // which only saves a plan for someone else to approve.
-  it("hides Approve and auto-approve when canApprove is denied", () => {
+  it("says a template whose destroy failed cannot start runs, and links the failed run", () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    seedRuns(queryClient, [run({ id: "run_destroy", run_number: 7, operation: "destroy", status: "failed", plan_summary: { add: 0, change: 0, destroy: 14 } })]);
+
+    renderActions(queryClient, { lifecycle: "failed" });
+
+    expect(isDisabled(screen.getByRole("button", { name: /Plan/ }))).toBe(true);
+    expect(screen.getByTestId("template-run-actions-note").textContent).toBe("A template whose destroy failed cannot start runs.");
+    expect(screen.getByTestId("template-failed-destroy").textContent).toContain("The destroy run stopped before it finished. Some resources may still exist.");
+    expect(screen.getByTestId("template-view-failed-run").getAttribute("href")).toBe("/stacks/stack_1/templates/stpl_1/runs/7");
+  });
+
+  it.each([
+    ["destroying", "Destroy in progress."],
+    ["orphaned", "Only an active template can start runs."]
+  ])("says why Plan and Apply are locked while the template is %s", (lifecycle, note) => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    seedRuns(queryClient, []);
+
+    renderActions(queryClient, { lifecycle });
+
+    expect(isDisabled(screen.getByRole("button", { name: /Plan/ }))).toBe(true);
+    expect(isDisabled(screen.getByRole("button", { name: /^Apply$/ }))).toBe(true);
+    expect(screen.getByTestId("template-run-actions-note").textContent).toBe(note);
+  });
+
+  // Auto apply is an approval given in advance, so it is offered only to
+  // someone who could approve. Starting an Apply, which only saves a plan
+  // for someone else to approve, stays.
+  it("hides auto apply when canApprove is denied", () => {
     const queryClient = testQueryClient();
     seedCapabilities(queryClient, { ...allAllowed, canApprove: false });
-    seedRuns(queryClient, [run({ id: "run_waiting", operation: "apply", status: "waiting_approval" })]);
+    seedRuns(queryClient, []);
 
     renderActions(queryClient);
 
-    expect(button(/^Approve$/)).toBeNull();
     expect(screen.queryByTestId("template-run-auto-approve")).toBeNull();
-    expect(button(/Discard/)).toBeTruthy();
     expect(button(/^Apply$/)).toBeTruthy();
   });
 
-  it("offers Approve and Discard on the row of a plan waiting for approval that a different user started", () => {
+  // Approving happens on the run, after reading its plan; the Runs tab says a
+  // plan waits and links to it.
+  it("shows a plan waiting for approval above the runs, linking to it, and offers no approval in the table", () => {
     const queryClient = testQueryClient();
     seedCapabilities(queryClient, allAllowed);
     seedRuns(queryClient, [
-      run({ id: "run_waiting", run_number: 2, operation: "apply", status: "waiting_approval", trigger_actor: "someone_else", plan_summary: { add: 1, change: 0, destroy: 0 } }),
-      run({ id: "run_done", operation: "apply", status: "completed", trigger_actor: "someone_else" })
+      run({
+        id: "run_waiting",
+        run_number: 2,
+        operation: "apply",
+        status: "waiting_approval",
+        trigger_actor_display_name: "Priya Shah",
+        plan_summary: { add: 2, change: 1, destroy: 0 }
+      }),
+      run({ id: "run_done", operation: "apply", status: "completed" })
     ]);
+
+    renderActions(queryClient, { pending_plan_run_id: "run_waiting", pending_plan_at: "2026-10-03T09:30:00Z" });
+
+    const card = screen.getByTestId("template-waiting-plan");
+    expect(card.textContent).toContain("Plan waiting for approval");
+    expect(card.textContent).toMatch(/Run #2.*Planned by Priya Shah.*3 Oct, \d\d:\d\d/);
+    expect(within(card).getByRole("img", { name: "2 to add, 1 to change, 0 to destroy" })).toBeTruthy();
+    expect(screen.getByTestId("template-review-plan").getAttribute("href")).toBe("/stacks/stack_1/templates/stpl_1/runs/2");
+    expect(button(/^Approve$/)).toBeNull();
+    expect(button(/Discard/)).toBeNull();
+  });
+
+  it("names a waiting destroy plan as one", () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    seedRuns(queryClient, [run({ id: "run_destroy", operation: "destroy", status: "waiting_approval", plan_summary: { add: 0, change: 0, destroy: 3 } })]);
 
     renderActions(queryClient);
 
-    const row = screen.getByTestId("template-run-row-run_waiting");
-    const labels = Array.from(row.querySelectorAll("button")).map((candidate) => candidate.textContent);
-    expect(labels).toEqual(["Discard", "Approve"]);
-    expect(screen.getByTestId("template-run-summary-run_waiting").textContent).toBe("+1 ~0 -0");
+    expect(screen.getByTestId("template-waiting-plan").textContent).toContain("Destroy plan waiting for approval");
   });
 
   // Plan only plans, so it never carries auto-approve; Apply carries it when
@@ -264,7 +332,7 @@ describe("TemplateRunActions", () => {
     await waitFor(() => expect(posted()).toEqual([{ operation: "plan" }, { operation: "apply" }]));
     await waitFor(() => expect(isDisabled(screen.getByRole("button", { name: /Plan/ }))).toBe(false));
 
-    fireEvent.click(screen.getByRole("checkbox", { name: /Auto Apply/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Auto apply/ }));
     fireEvent.click(screen.getByRole("button", { name: /Plan/ }));
     await waitFor(() => expect(posted()).toHaveLength(3));
     await waitFor(() => expect(isDisabled(screen.getByRole("button", { name: /^Apply$/ }))).toBe(false));
@@ -310,54 +378,32 @@ describe("TemplateRunActions", () => {
     expect(screen.getByTestId("template-run-row-run_elsewhere")).toBeTruthy();
   });
 
-  it("walks apply → approve from persisted history, and reflects each step without a page reload", async () => {
+  it("walks apply to a plan waiting for approval from persisted history, without a page reload", async () => {
     const queryClient = testQueryClient();
     seedCapabilities(queryClient, allAllowed);
     let runsState: TemplateRun[] = [];
 
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
       const method = init?.method ?? "GET";
       if (url.endsWith("/stack-templates/stpl_1/runs") && method === "GET") {
         return jsonResponse(runsState);
       }
       if (url.endsWith("/stack-templates/stpl_1/runs") && method === "POST") {
-        // The apply's plan runs and waits for approval with what it would change.
         const created = run({ id: "run_plan_1", run_number: 1, operation: "apply", status: "waiting_approval", plan_summary: { add: 2, change: 0, destroy: 0 } });
         runsState = [created];
         return jsonResponse(created, 201);
-      }
-      if (url.endsWith("/template-runs/run_plan_1/approval") && method === "POST") {
-        runsState = runsState.map((existing) => ({ ...existing, status: "approved" }));
-        return new Response(null, { status: 204 });
-      }
-      if (url.endsWith("/stacks/stack_1")) {
-        return jsonResponse(queryClient.getQueryData(queryKeys.stack("tenant_123", "stack_1")));
       }
       throw new Error(`unexpected fetch: ${url} ${method}`);
     });
 
     renderActions(queryClient);
-    // Wait for the run history to actually load (Plan enabled), not just for
-    // the request to have been issued: the request settling and the button's
-    // disabled state flipping are separate ticks.
     await waitFor(() => expect(isDisabled(screen.getByRole("button", { name: /Plan/ }))).toBe(false));
 
     fireEvent.click(screen.getByRole("button", { name: /^Apply$/ }));
-    await waitFor(() => expect(screen.getByTestId("template-run-history-run_plan_1")).toBeTruthy());
-    expect(screen.getByTestId("template-run-history-run_plan_1").getAttribute("href")).toBe("/stacks/stack_1/templates/stpl_1/runs/1");
-    await waitFor(() => expect(button(/^Approve$/)).toBeTruthy());
 
-    fireEvent.click(screen.getByRole("button", { name: /^Approve$/ }));
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining("/template-runs/run_plan_1/approval"),
-        expect.objectContaining({ method: "POST" })
-      )
-    );
-    // Approved, the run no longer waits: its row drops Approve and Discard,
-    // and offers nothing while it applies.
-    await waitFor(() => expect(button(/^Approve$/)).toBeNull());
-    expect(button(/Discard/)).toBeNull();
+    await waitFor(() => expect(screen.getByTestId("template-review-plan").getAttribute("href")).toBe("/stacks/stack_1/templates/stpl_1/runs/1"));
+    expect(screen.getByTestId("template-run-status-run_plan_1").textContent).toBe("waiting for approval");
+    expect(isDisabled(screen.getByRole("button", { name: /Plan/ }))).toBe(true);
   });
 });

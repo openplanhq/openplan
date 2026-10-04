@@ -176,6 +176,15 @@ export function templateRootPathLabel(rootPath: string, name: string): string {
   return trimmed;
 }
 
+/**
+ * Where a revision's code lives, as a person would name it: its root path,
+ * or the repository for a template that sits at the repository's root.
+ */
+export function revisionSourceLabel(revision: Pick<TemplateRevision, "root_path" | "repo_owner" | "repo_name">): string {
+  const rootPath = revision.root_path.trim();
+  return rootPath === "" || rootPath === "." ? `${revision.repo_owner}/${revision.repo_name}` : rootPath;
+}
+
 export function revisionCountLabel(count: number): string {
   return count === 1 ? "1 revision" : `${count} revisions`;
 }

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { Navigate, MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../../auth/AuthContext";
@@ -10,16 +10,15 @@ import { queryKeys } from "../../api/queryKeys";
 import type { StackTemplate, StackView, TemplateRevision, TemplateRun, TemplateVariable } from "../../api/types";
 import type { StackCapabilities } from "../../auth/types";
 import RunDetailScreen from "../runs/RunDetailScreen";
-import StackTemplateDetailShell from "./StackTemplateDetailShell";
-import StackTemplateListScreen from "./StackTemplateListScreen";
+import TemplatePanel from "./TemplatePanel";
 import TemplateCredentialsTab from "./TemplateCredentialsTab";
 import TemplateRunsTab from "./TemplateRunsTab";
 import TemplateSettingsTab from "./TemplateSettingsTab";
 import TemplateVariablesTab from "./TemplateVariablesTab";
 
-// The template list page and the tabbed page for one template, rendered
-// through the same route shape as router.tsx so tab links, the index redirect
-// and the outlet context are exercised the way the app uses them.
+// The panel for one template and its tabs, rendered through the same route
+// shape as router.tsx so tab links and the index redirect are exercised the
+// way the app uses them. The stack's page around it has its own tests.
 
 const allAllowed: StackCapabilities = { canView: true, canOperate: true, canApprove: true, canManageAccess: true };
 
@@ -103,6 +102,7 @@ function testQueryClient(): QueryClient {
 
 function seedDefaultData(queryClient: QueryClient, capabilities: StackCapabilities = allAllowed) {
   queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(capabilities, [stackTemplate()]));
+  queryClient.setQueryData(queryKeys.attention("tenant_123"), []);
   queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [
     templateRevision(),
     templateRevision({ id: "rev_2", source_ref: "v2", resolved_commit_sha: "1234567abcdef" })
@@ -163,8 +163,7 @@ function renderAt(queryClient: QueryClient, initialEntry: string, auth?: AuthCon
       <AuthContext.Provider value={auth ?? authValue()}>
         <MemoryRouter initialEntries={[initialEntry]}>
           <Routes>
-            <Route path="/stacks/:stackId/templates" element={<StackTemplateListScreen />} />
-            <Route path="/stacks/:stackId/templates/:stackTemplateId" element={<StackTemplateDetailShell />}>
+            <Route path="/stacks/:stackId/templates/:stackTemplateId" element={<TemplatePanel />}>
               <Route index element={<Navigate to="runs" replace />} />
               <Route path="runs" element={<TemplateRunsTab />} />
               <Route path="runs/:runNumber" element={<RunDetailScreen />} />
@@ -192,91 +191,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("StackTemplateListScreen", () => {
-  it("links every installed template to its own page", () => {
-    const queryClient = testQueryClient();
-    seedDefaultData(queryClient);
-    queryClient.setQueryData(
-      queryKeys.stack("tenant_123", "stack_1"),
-      stackView(allAllowed, [stackTemplate(), stackTemplate({ id: "st_2" })])
-    );
-
-    renderAt(queryClient, "/stacks/stack_1/templates");
-
-    expect(screen.getByTestId("stack-template-link-st_1").getAttribute("href")).toBe("/stacks/stack_1/templates/st_1");
-    expect(screen.getByTestId("stack-template-link-st_2").getAttribute("href")).toBe("/stacks/stack_1/templates/st_2");
-    // The list is only a list: nothing about any one template is open here.
-    expect(screen.queryByTestId("stack-template-config")).toBeNull();
-    expect(screen.queryByTestId("template-run-actions")).toBeNull();
-  });
-
-  it("links to the add template screen", () => {
-    const queryClient = testQueryClient();
-    seedDefaultData(queryClient);
-
-    renderAt(queryClient, "/stacks/stack_1/templates");
-
-    expect(screen.getByTestId("add-stack-template-link").getAttribute("href")).toBe("/stacks/stack_1/templates/new");
-  });
-
-  it("keeps a visible gap between the template list header and its choices", () => {
-    const queryClient = testQueryClient();
-    seedDefaultData(queryClient);
-
-    renderAt(queryClient, "/stacks/stack_1/templates");
-
-    const listContent = screen.getByTestId("stack-template-list-content");
-    expect(listContent.contains(screen.getByTestId("stack-template-panel-header"))).toBe(true);
-    expect(listContent.contains(screen.getByTestId("stack-template-items"))).toBe(true);
-  });
-
-  it("prompts to add a template when the stack has none installed", () => {
-    const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, []));
-
-    renderAt(queryClient, "/stacks/stack_1/templates");
-
-    expect(screen.getByTestId("stack-template-empty")).toBeTruthy();
-    expect(screen.getByTestId("add-stack-template-link")).toBeTruthy();
-  });
-
-  it("hides the add link when canOperate is denied", async () => {
-    const queryClient = testQueryClient();
-    seedDefaultData(queryClient, { ...allAllowed, canOperate: false });
-
-    renderAt(queryClient, "/stacks/stack_1/templates");
-
-    await waitFor(() => expect(screen.getByTestId("stack-template-items")).toBeTruthy());
-    expect(screen.queryByTestId("add-stack-template-link")).toBeNull();
-  });
-
-  // Each row names its state in words as well as the icon, now that the list
-  // has the page to itself; the icon keeps the label as its accessible name.
-  it("reports applied state on each row from live_state", () => {
-    const queryClient = testQueryClient();
-    seedDefaultData(queryClient);
-    queryClient.setQueryData(
-      queryKeys.stack("tenant_123", "stack_1"),
-      stackView(allAllowed, [
-        stackTemplate({ id: "st_1", live_state: "matches" }),
-        stackTemplate({ id: "st_2", live_state: "differs" }),
-        stackTemplate({ id: "st_3", live_state: "never" }),
-        stackTemplate({ id: "st_4", lifecycle: "destroying" })
-      ])
-    );
-
-    renderAt(queryClient, "/stacks/stack_1/templates");
-
-    expect(screen.getByTestId("stack-template-status-st_1").getAttribute("aria-label")).toBe("applied");
-    expect(screen.getByTestId("stack-template-status-st_2").getAttribute("aria-label")).toBe("changed");
-    expect(screen.getByTestId("stack-template-status-st_3").getAttribute("aria-label")).toBe("not applied");
-    expect(screen.getByTestId("stack-template-status-st_4").getAttribute("aria-label")).toBe("destroying");
-    expect(screen.getByTestId("stack-template-link-st_2").textContent).toContain("changed");
-    expect(screen.queryByText("rev_1")).toBeNull();
-  });
-});
-
-describe("StackTemplateDetailShell", () => {
+describe("TemplatePanel", () => {
   it("opens on the Runs tab", async () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);
@@ -284,7 +199,7 @@ describe("StackTemplateDetailShell", () => {
     renderAt(queryClient, "/stacks/stack_1/templates/st_1");
 
     await waitFor(() => expect(screen.getByTestId("template-runs-tab")).toBeTruthy());
-    expect(screen.getByRole("tab", { name: "Runs" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: "Runs" }).getAttribute("aria-current")).toBe("page");
   });
 
   it("says so when the template in the URL is not installed on the stack", () => {
@@ -303,8 +218,8 @@ describe("StackTemplateDetailShell", () => {
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/runs");
 
     await waitFor(() => expect(screen.getByTestId("template-runs-tab")).toBeTruthy());
-    expect(screen.queryByRole("tab", { name: "Credentials" })).toBeNull();
-    expect(screen.getByRole("tab", { name: "Settings" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Credentials" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Settings" })).toBeTruthy();
   });
 
   it("keeps the Runs tab lit while reading one run", async () => {
@@ -318,7 +233,91 @@ describe("StackTemplateDetailShell", () => {
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/runs/3");
 
     await waitFor(() => expect(screen.getByTestId("run-detail-status")).toBeTruthy());
-    expect(screen.getByRole("tab", { name: "Runs" }).getAttribute("aria-current")).toBe("page");
+    // The run's trail links to Runs too; the tab is the one in the tab row.
+    const tabs = screen.getByRole("navigation", { name: "Template sections" });
+    expect(within(tabs).getByRole("link", { name: "Runs" }).getAttribute("aria-current")).toBe("page");
+  });
+
+  it("names the template with its state, its ref and what last happened", async () => {
+    const queryClient = testQueryClient();
+    seedDefaultData(queryClient);
+    queryClient.setQueryData(
+      queryKeys.stack("tenant_123", "stack_1"),
+      stackView(allAllowed, [
+        stackTemplate({ display_name: "eks-cluster", source_ref: "v1.4.0", pending_plan_run_id: "run_14", pending_plan_at: "2026-10-03T09:30:00Z" })
+      ])
+    );
+
+    renderAt(queryClient, "/stacks/stack_1/templates/st_1/runs");
+
+    expect(screen.getByRole("heading", { level: 2, name: "eks-cluster" })).toBeTruthy();
+    expect(screen.getByTestId("stack-template-status-st_1").textContent).toBe("waiting for approval");
+    expect(screen.getByText("v1.4.0")).toBeTruthy();
+    expect(screen.getByText(/^Planned 3 Oct, \d\d:\d\d$/)).toBeTruthy();
+  });
+
+  it("marks Settings as the current tab while changing the revision", async () => {
+    const queryClient = testQueryClient();
+    seedDefaultData(queryClient);
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthContext.Provider value={authValue()}>
+          <MemoryRouter initialEntries={["/stacks/stack_1/templates/st_1/upgrade"]}>
+            <Routes>
+              <Route path="/stacks/:stackId/templates/:stackTemplateId" element={<TemplatePanel />}>
+                <Route path="upgrade" element={<p>change revision</p>} />
+              </Route>
+            </Routes>
+          </MemoryRouter>
+        </AuthContext.Provider>
+      </QueryClientProvider>
+    );
+
+    expect(screen.getByRole("link", { name: "Settings" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: "Runs" }).getAttribute("aria-current")).toBeNull();
+  });
+
+  // The stack's states change when a run settles, and only the runs query
+  // polls. The panel refreshes the stack itself, so the header and the list
+  // stay current on every tab, not just Runs.
+  // A destroy that finishes takes its template out of the stack. Whoever
+  // approved it on the run is still reading that run, so the panel keeps it,
+  // says the template was destroyed, and does not call the link stale.
+  it("keeps a run readable when its template is destroyed while it is open", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise(() => {}));
+    const queryClient = testQueryClient();
+    seedDefaultData(queryClient);
+    const run = runFor("st_1", { operation: "destroy", status: "running", run_number: 4, plan_summary: { add: 0, change: 0, destroy: 2 } });
+    queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_1"), [run]);
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", run.id), run);
+
+    renderAt(queryClient, "/stacks/stack_1/templates/st_1/runs/4");
+    await waitFor(() => expect(screen.getByTestId("run-detail-screen")).toBeTruthy());
+
+    act(() => {
+      queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, []));
+    });
+
+    await waitFor(() => expect(screen.getByText("destroyed")).toBeTruthy());
+    expect(screen.queryByTestId("stack-template-missing")).toBeNull();
+    expect(screen.getByTestId("run-detail-screen")).toBeTruthy();
+  });
+
+  it("refreshes the stack when the template's latest run settles, on any tab", async () => {
+    const queryClient = testQueryClient();
+    seedDefaultData(queryClient);
+    queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_1"), [runFor("st_1", { status: "completed" })]);
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(
+        async () =>
+          new Response(JSON.stringify(stackView(allAllowed, [stackTemplate()])), { status: 200, headers: { "content-type": "application/json" } })
+      );
+
+    renderAt(queryClient, "/stacks/stack_1/templates/st_1/variables");
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/stacks/stack_1"))).toBe(true));
   });
 });
 
@@ -346,6 +345,7 @@ describe("TemplateVariablesTab", () => {
     vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, [stackTemplate()]));
+    queryClient.setQueryData(queryKeys.attention("tenant_123"), []);
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/variables");
 
@@ -398,9 +398,9 @@ describe("TemplateVariablesTab", () => {
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/variables");
 
-    expect(actionButton(/Save config/).disabled).toBe(true);
+    expect(actionButton(/Save variables/).disabled).toBe(true);
     fireEvent.change(screen.getByLabelText(/region/), { target: { value: "eu-west-1" } });
-    expect(actionButton(/Save config/).disabled).toBe(false);
+    expect(actionButton(/Save variables/).disabled).toBe(false);
   });
 
   it("locks configuration when canOperate is denied", async () => {
@@ -409,8 +409,8 @@ describe("TemplateVariablesTab", () => {
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/variables");
 
-    await waitFor(() => expect(screen.getByTestId("variables-disabled-reason")).toBeTruthy());
-    expect(actionButton(/Save config/).disabled).toBe(true);
+    await waitFor(() => expect(screen.getByTestId("variables-disabled-reason").textContent).toBe("Editing requires operator access."));
+    expect(actionButton(/Save variables/).disabled).toBe(true);
     expect((screen.getByLabelText(/region/) as HTMLInputElement).disabled).toBe(true);
   });
 
@@ -430,6 +430,7 @@ describe("TemplateVariablesTab", () => {
     );
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, [stackTemplate()]));
+    queryClient.setQueryData(queryKeys.attention("tenant_123"), []);
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/variables");
   }
 
@@ -456,6 +457,37 @@ describe("TemplateVariablesTab", () => {
     mockVariablesFailure(404, "not_found");
     await waitFor(() => expect(screen.getByTestId("route-not-found")).toBeTruthy());
   });
+
+  // A run that starts underneath unsaved edits locks them but keeps them:
+  // whoever typed them can still read them, and SessionProvider still sees
+  // the tab as unsaved.
+  it("keeps unsaved edits, locked, when a run starts underneath them", async () => {
+    const queryClient = testQueryClient();
+    seedDefaultData(queryClient);
+    // The waiting run makes the panel refetch the stack: answer that with the
+    // seeded stack, and leave every other request pending.
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) =>
+      String(input).endsWith("/stacks/stack_1")
+        ? Promise.resolve(
+            new Response(JSON.stringify(stackView(allAllowed, [stackTemplate()])), { status: 200, headers: { "content-type": "application/json" } })
+          )
+        : new Promise<Response>(() => {})
+    );
+
+    renderAt(queryClient, "/stacks/stack_1/templates/st_1/variables");
+    fireEvent.change(screen.getByLabelText(/region/), { target: { value: "eu-west-1" } });
+
+    act(() => {
+      queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_1"), [runFor("st_1", { status: "waiting_approval", run_number: 7 })]);
+    });
+
+    await waitFor(() => expect(screen.getByTestId("variables-disabled-reason").textContent).toBe("Apply or discard run #7 before changing the config."));
+    const input = screen.getByLabelText(/region/) as HTMLInputElement;
+    expect(input.value).toBe("eu-west-1");
+    expect(input.disabled).toBe(true);
+    expect(actionButton(/Save variables/).disabled).toBe(true);
+    expect(document.querySelector("[data-unsaved='true']")).not.toBeNull();
+  });
 });
 
 describe("editing while a run is in flight", () => {
@@ -467,18 +499,18 @@ describe("editing while a run is in flight", () => {
     queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_1"), [runFor("st_1", { status: "waiting_approval", run_number: 7 })]);
 
     const variables = renderAt(queryClient, "/stacks/stack_1/templates/st_1/variables");
-    await waitFor(() => expect(screen.getByTestId("variables-disabled-reason").textContent).toBe("Apply or discard run #7 before changing the config"));
-    expect(actionButton(/Save config/).disabled).toBe(true);
+    await waitFor(() => expect(screen.getByTestId("variables-disabled-reason").textContent).toBe("Apply or discard run #7 before changing the config."));
+    expect(actionButton(/Save variables/).disabled).toBe(true);
     variables.unmount();
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/settings");
-    expect(screen.getByTestId("upgrade-disabled-reason").textContent).toBe("Apply or discard run #7 before changing the revision");
+    expect(screen.getByTestId("upgrade-disabled-reason").textContent).toBe("Apply or discard run #7 before changing the revision.");
     expect((screen.getByTestId("change-stack-template-revision-link") as HTMLButtonElement).disabled).toBe(true);
   });
 });
 
 describe("TemplateCredentialsTab", () => {
-  it("shows only this template's credentials and titles the panel by scope", () => {
+  it("shows only this template's credentials, under the note on what they override", () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);
     queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), [
@@ -492,8 +524,20 @@ describe("TemplateCredentialsTab", () => {
 
     expect(screen.getByText("TEMPLATE_ONLY")).toBeTruthy();
     expect(screen.queryByText("STACK_ONLY")).toBeNull();
-    expect(screen.getByText("Template credentials")).toBeTruthy();
     expect(screen.getByText("Overrides the stack environment for this template only.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Delete TEMPLATE_ONLY" })).toBeTruthy();
+  });
+
+  it("says its runs use the stack environment when it has no credentials of its own", () => {
+    const queryClient = testQueryClient();
+    seedDefaultData(queryClient);
+    queryClient.setQueryData(queryKeys.stackTemplateCredentials("tenant_123", "st_1"), []);
+
+    renderAt(queryClient, "/stacks/stack_1/templates/st_1/credentials");
+
+    expect(screen.getByText("No credentials for this template")).toBeTruthy();
+    expect(screen.getByText("Its runs use the stack environment.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add credential" })).toBeTruthy();
   });
 
   it("denies the tab itself without canManageAccess", async () => {
@@ -507,36 +551,65 @@ describe("TemplateCredentialsTab", () => {
 });
 
 describe("TemplateSettingsTab", () => {
-  it("offers changing the revision, as a secondary action above destroy", () => {
+  it("offers changing the revision above destroy", () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/settings");
 
-    const revisionAction = screen.getByTestId("stack-template-revision-action");
-    expect(revisionAction.className).not.toContain("panel");
+    const revisionAction = screen.getByRole("region", { name: "Revision" });
     expect(screen.getByTestId("change-stack-template-revision-link").getAttribute("href")).toBe("/stacks/stack_1/templates/st_1/upgrade");
-    expect(precedes(revisionAction, screen.getByTestId("template-destroy-panel"))).toBe(true);
+    expect(precedes(revisionAction, screen.getByRole("region", { name: "Destroy" }))).toBe(true);
+  });
+
+  it("names the revision it runs, its commit, and where that comes from", () => {
+    const queryClient = testQueryClient();
+    seedDefaultData(queryClient);
+    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [templateRevision({ root_path: "aws/eks" })]);
+    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, [stackTemplate({ source_ref: "v1.4.0" })]));
+
+    renderAt(queryClient, "/stacks/stack_1/templates/st_1/settings");
+
+    expect(screen.getByText(/^This template runs revision/).textContent).toBe("This template runs revision v1.4.0 · abcdef1 of aws/eks.");
+  });
+
+  it("names the repository for a template at its root", () => {
+    const queryClient = testQueryClient();
+    seedDefaultData(queryClient);
+
+    renderAt(queryClient, "/stacks/stack_1/templates/st_1/settings");
+
+    expect(screen.getByText(/^This template runs revision/).textContent).toBe("This template runs revision main · abcdef1 of hashicorp/vpc.");
   });
 
   it("does not wait for the tenant revision list before offering a revision change", () => {
+    vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);
     queryClient.removeQueries({ queryKey: queryKeys.templateRevisions("tenant_123") });
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/settings");
 
-    expect(screen.getByTestId("change-stack-template-revision-link")).toBeTruthy();
+    expect(screen.getByTestId("change-stack-template-revision-link").getAttribute("href")).toBe("/stacks/stack_1/templates/st_1/upgrade");
+    expect(screen.getByText(/^This template runs revision/).textContent).toBe("This template runs revision main.");
   });
 
-  it("hides the revision change when canOperate is denied", async () => {
+  // Both settings show to every viewer. One that cannot be used is disabled,
+  // and its section says why.
+  it("shows both settings to a viewer without operator access, each disabled with why", async () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient, { ...allAllowed, canOperate: false });
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/settings");
 
-    await waitFor(() => expect(screen.getByTestId("template-settings-tab")).toBeTruthy());
-    expect(screen.queryByTestId("change-stack-template-revision-link")).toBeNull();
+    await waitFor(() =>
+      expect(screen.getByTestId("upgrade-disabled-reason").textContent).toBe("Changing the revision requires operator access.")
+    );
+    const changeRevision = screen.getByTestId("change-stack-template-revision-link") as HTMLButtonElement;
+    expect(changeRevision.tagName).toBe("BUTTON");
+    expect(changeRevision.disabled).toBe(true);
+    expect(screen.getByTestId("template-destroy-disabled-reason").textContent).toBe("Destroying requires operator access.");
+    expect(actionButton(/^Destroy$/).disabled).toBe(true);
   });
 
   it("disables revision selection while the template is destroying", () => {
@@ -549,6 +622,6 @@ describe("TemplateSettingsTab", () => {
     const changeRevisionControl = screen.getByTestId("change-stack-template-revision-link") as HTMLButtonElement;
     expect(changeRevisionControl.tagName).toBe("BUTTON");
     expect(changeRevisionControl.disabled).toBe(true);
-    expect(screen.getByTestId("upgrade-disabled-reason").textContent).toBe("Destroy in progress");
+    expect(screen.getByTestId("upgrade-disabled-reason").textContent).toBe("Destroy in progress.");
   });
 });

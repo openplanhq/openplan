@@ -11,20 +11,23 @@ import { cn } from "@/lib/utils";
 //     needed because the base class's outline-none sets the style to none.
 //
 // The section variant is the outline button in a preview panel's section nav:
-// 10px at both sides and 13px text.
-const SHARED = cn(
-  "px-3 has-data-[icon=inline-start]:pl-2.5 has-data-[icon=inline-end]:pr-2.5",
-  "focus-visible:ring-0 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-);
+// 10px at both sides and 13px text. The icon variant is described below.
+const PADDING = "px-3 has-data-[icon=inline-start]:pl-2.5 has-data-[icon=inline-end]:pr-2.5";
+const FOCUS = "focus-visible:ring-0 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 
+// The icon variant is a lone icon in a row, such as a credential's delete: a
+// 32px square with no fill until hovered, its icon in muted text. It takes
+// an aria-label, since it has no words.
 const VARIANTS = {
-  primary: cn(buttonVariants({ variant: "default" }), SHARED, "focus-visible:border-transparent"),
-  outline: cn(buttonVariants({ variant: "outline" }), SHARED, "focus-visible:border-border"),
+  primary: cn(buttonVariants({ variant: "default" }), PADDING, FOCUS, "focus-visible:border-transparent"),
+  outline: cn(buttonVariants({ variant: "outline" }), PADDING, FOCUS, "focus-visible:border-border"),
   section: cn(
     buttonVariants({ variant: "outline" }),
-    SHARED,
+    PADDING,
+    FOCUS,
     "focus-visible:border-border px-2.5 text-meta has-data-[icon=inline-start]:pl-2.5"
-  )
+  ),
+  icon: cn(buttonVariants({ variant: "ghost", size: "icon" }), FOCUS, "focus-visible:border-transparent text-muted-foreground")
 };
 
 /** The classes of an openplan UI button: 36px tall at "lg", 32px otherwise. */

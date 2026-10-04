@@ -107,14 +107,6 @@ export function upsertStackTemplate(stackTemplates: StackTemplate[], stackTempla
   return [stackTemplate, ...stackTemplates];
 }
 
-export function canDestroyStackTemplate(stackTemplate: StackTemplate | null): boolean {
-  return stackTemplate?.lifecycle === "active";
-}
-
-export function isDestroyingStackTemplate(stackTemplate: StackTemplate | null): boolean {
-  return stackTemplate?.lifecycle === "destroying";
-}
-
 // planSummaryLabel reads a saved plan's counts the way tofu's summary line
 // does, compressed: "+3 ~1 -0" is three to add, one to change, none to destroy.
 export function planSummaryLabel(summary: PlanSummary | null): string {

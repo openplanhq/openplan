@@ -5,6 +5,7 @@ import {
   groupTemplatesByRepository,
   latestActiveRevision,
   revisionCountLabel,
+  revisionSourceLabel,
   revisionsForSourceTemplate,
   templateDisplayName,
   templateRevisionLabel,
@@ -214,3 +215,15 @@ function templateRevision(overrides: Partial<TemplateRevision>): TemplateRevisio
     ...overrides
   };
 }
+
+describe("revisionSourceLabel", () => {
+  it("names a revision by its root path", () => {
+    expect(revisionSourceLabel(templateRevision({ root_path: "aws/eks", repo_owner: "acme", repo_name: "infra-modules" }))).toBe("aws/eks");
+  });
+
+  it("names the repository for a template at its root", () => {
+    for (const rootPath of [".", "", "  "]) {
+      expect(revisionSourceLabel(templateRevision({ root_path: rootPath, repo_owner: "acme", repo_name: "infra-modules" }))).toBe("acme/infra-modules");
+    }
+  });
+});

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ReactNode } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import { useParams } from "react-router-dom";
 import {
@@ -11,19 +12,21 @@ import {
 import { isTerminalRunStatus } from "../../api/polling";
 import { tenantID } from "../../config";
 import { formatDateTime } from "../../shared/formatTimestamp";
-import StatusBadge from "../../shared/StatusBadge";
+import { buttonClass } from "../../shared/buttonClass";
+import ErrorLine from "../../shared/ErrorLine";
+import PlanDiff from "../../shared/PlanDiff";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
-import { statusTone } from "../../shared/statusTone";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { planSummaryLabel } from "../stacks/stackWorkflow";
+import { cn } from "@/lib/utils";
+import PanelTrail from "../stacks/PanelTrail";
+import { stackTemplatePath } from "../stacks/templateSelection";
 import RunLogsPanel from "./RunLogsPanel";
-import { runProgressTag, runStatusLabel } from "./runStatusLabel";
-import { WaitingRunActions } from "./TemplateRunHistory";
+import { runProgressTag } from "./runIndicator";
+import RunStatusLabel from "./RunStatusLabel";
+import WaitingRunActions from "./WaitingRunActions";
 
 // /stacks/:stackId/templates/:stackTemplateId/runs/:runNumber — plan/apply
-// detail with per-phase logs, reached from the Runs tab. The URL carries the
+// detail with per-phase logs, inside the template's panel under a trail back
+// to its Runs tab. The URL carries the
 // run's number within its template, which is what people see; the run's id,
 // which every run endpoint takes, comes from the template's runs list. That
 // list is the one the Runs tab already loaded, so arriving from there costs no
@@ -74,12 +77,17 @@ export default function RunDetailScreen() {
     });
   }
 
+  const trail = (
+    <PanelTrail name="Run" parent={{ label: "Runs", to: stackTemplatePath(stackId, stackTemplateId, "runs") }} current={`Run #${runNumber}`} />
+  );
+
   // A cached list can predate a run that was just started, so a number it
   // lacks only means "no such run" once a refetch has confirmed it.
   if (runsQuery.status === "success" && !runsQuery.isFetching && runId === "") {
     return (
-      <section className="grid min-w-0 gap-6" data-testid="run-detail-missing">
-        <p className="text-sm text-muted-foreground">This template has no run #{runNumber}.</p>
+      <section className="flex min-w-0 flex-col gap-5" data-testid="run-detail-missing">
+        {trail}
+        <p className="text-meta text-muted-foreground">This template has no run #{runNumber}.</p>
       </section>
     );
   }
@@ -89,43 +97,42 @@ export default function RunDetailScreen() {
       return <>{boundary}</>;
     }
     return (
-      <section className="grid min-w-0 gap-6" data-testid="run-detail-error">
-        <Alert variant="destructive">
-          <AlertDescription>Something went wrong while loading the run.</AlertDescription>
-        </Alert>
-        <Button
-          className="pointer-coarse:h-11"
+      <section className="flex min-w-0 flex-col gap-5" data-testid="run-detail-error">
+        {trail}
+        <ErrorLine live={false}>Something went wrong while loading the run.</ErrorLine>
+        <button
           type="button"
+          className={cn(buttonClass("outline"), "self-start pointer-coarse:h-11")}
           data-testid="run-detail-retry"
           onClick={() => (runsQuery.status === "error" ? runsQuery.refetch() : runQuery.refetch())}
         >
-          <RefreshCw className="size-4" />
+          <RefreshCw data-icon="inline-start" aria-hidden="true" />
           Retry
-        </Button>
+        </button>
       </section>
     );
   }
 
   if (runQuery.status === "pending") {
     return (
-      <section className="grid min-w-0 gap-6" data-testid="run-detail-loading">
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" /> Loading run…
+      <section className="flex min-w-0 flex-col gap-5" data-testid="run-detail-loading">
+        {trail}
+        <p className="flex items-center gap-2 text-meta text-muted-foreground">
+          <Loader2 aria-hidden="true" className="size-4 animate-spin" /> Loading run…
         </p>
       </section>
     );
   }
 
   return (
-    <section className="grid min-w-0 gap-6" data-testid="run-detail-screen">
+    <section className="flex min-w-0 flex-col gap-5" data-testid="run-detail-screen">
+      {trail}
       {run && (
         <>
           <header className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex min-w-0 flex-wrap items-center gap-3">
-              <span className="font-heading text-xl font-semibold tracking-tight">Run #{run.run_number}</span>
-              <StatusBadge tone={statusTone(run.status)} title={run.status} data-testid="run-detail-status">
-                {runStatusLabel(run)}
-              </StatusBadge>
+              <h3 className="font-heading text-lg leading-title font-semibold tracking-title">Run #{run.run_number}</h3>
+              <RunStatusLabel run={run} data-testid="run-detail-status" />
             </div>
             {canApprove && (
               <div className="flex flex-wrap gap-2">
@@ -140,58 +147,33 @@ export default function RunDetailScreen() {
               </div>
             )}
           </header>
-          {errorMessage && (
-            <Alert variant="destructive">
-              <AlertDescription>{errorMessage}</AlertDescription>
-            </Alert>
-          )}
-          <Card className="gap-0">
-            <dl className="grid min-w-0 gap-x-6 gap-y-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
-              <div className="min-w-0">
-                <dt className="mb-1 text-xs text-muted-foreground">Started</dt>
-                <dd className="break-words font-mono text-sm">
-                  <time dateTime={run.created_at} title={run.created_at}>
-                    {formatDateTime(run.created_at)}
-                  </time>
-                </dd>
-              </div>
-              <div className="min-w-0">
-                <dt className="mb-1 text-xs text-muted-foreground">Completed</dt>
-                <dd className="break-words font-mono text-sm">
-                  {hasCompleted(run.completed_at) ? (
-                    <time dateTime={run.completed_at} title={run.completed_at}>
-                      {formatDateTime(run.completed_at ?? "")}
-                    </time>
-                  ) : (
-                    "—"
-                  )}
-                </dd>
-              </div>
-              {run.plan_summary && (
-                <div className="min-w-0">
-                  <dt className="mb-1 text-xs text-muted-foreground">Changes</dt>
-                  <dd className="break-words font-mono text-sm" title="To add, to change, to destroy">
-                    {planSummaryLabel(run.plan_summary)}
-                  </dd>
-                </div>
+          {errorMessage && <ErrorLine>{errorMessage}</ErrorLine>}
+          <dl className="grid min-w-0 gap-x-6 gap-y-4 rounded-lg border px-5 py-4 sm:grid-cols-3">
+            <Fact term="Started">
+              <time dateTime={run.created_at} title={run.created_at}>
+                {formatDateTime(run.created_at)}
+              </time>
+            </Fact>
+            <Fact term="Finished">
+              {hasCompleted(run.completed_at) ? (
+                <time dateTime={run.completed_at} title={run.completed_at}>
+                  {formatDateTime(run.completed_at ?? "")}
+                </time>
+              ) : (
+                "Not finished"
               )}
-              <div className="min-w-0">
-                <dt className="mb-1 text-xs text-muted-foreground">Started by</dt>
-                <dd className="break-words text-sm">{run.trigger_actor_display_name}</dd>
-              </div>
-              <div className="min-w-0">
-                <dt className="mb-1 text-xs text-muted-foreground">Source</dt>
-                <dd className="break-words font-mono text-sm">
-                  {run.selected_ref} @ {run.resolved_commit_sha.slice(0, 7)}
-                </dd>
-              </div>
-            </dl>
-          </Card>
-          {run.error_summary && (
-            <Alert variant="destructive">
-              <AlertDescription>{run.error_summary}</AlertDescription>
-            </Alert>
-          )}
+            </Fact>
+            {run.plan_summary && (
+              <Fact term="Changes">
+                <PlanDiff summary={run.plan_summary} />
+              </Fact>
+            )}
+            <Fact term="Started by">{run.trigger_actor_display_name}</Fact>
+            <Fact term="Source" mono>
+              {run.selected_ref} @ {run.resolved_commit_sha.slice(0, 7)}
+            </Fact>
+          </dl>
+          {run.error_summary && <ErrorLine live={false}>{run.error_summary}</ErrorLine>}
         </>
       )}
       <RunLogsPanel
@@ -202,6 +184,16 @@ export default function RunDetailScreen() {
         finished={Boolean(run && isTerminalRunStatus(run.status))}
       />
     </section>
+  );
+}
+
+// One fact about a run: what it is, above its value.
+function Fact({ term, mono = false, children }: { term: string; mono?: boolean; children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <dt className="text-xs text-muted-foreground">{term}</dt>
+      <dd className={cn("text-meta wrap-anywhere", mono && "font-mono")}>{children}</dd>
+    </div>
   );
 }
 
