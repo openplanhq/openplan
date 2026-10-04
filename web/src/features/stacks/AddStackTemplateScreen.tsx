@@ -292,7 +292,8 @@ function TemplateChoice({
       )}
       aria-pressed={picked}
       disabled={installable === null}
-      onClick={() => installable && onPick(installable.id)}
+      // Picking the row already picked would reset its revision and values.
+      onClick={() => installable && !picked && onPick(installable.id)}
       data-testid={`add-template-choice-${sourceTemplate.sourceTemplateID}`}
     >
       <span className="flex min-w-0 flex-col gap-0.5">

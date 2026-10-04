@@ -562,7 +562,7 @@ describe("TemplateSettingsTab", () => {
     expect(precedes(revisionAction, screen.getByRole("region", { name: "Destroy" }))).toBe(true);
   });
 
-  it("names the revision it runs and where that comes from", () => {
+  it("names the revision it runs, its commit, and where that comes from", () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);
     queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [templateRevision({ root_path: "aws/eks" })]);
@@ -570,7 +570,7 @@ describe("TemplateSettingsTab", () => {
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/settings");
 
-    expect(screen.getByText(/^This template runs revision/).textContent).toBe("This template runs revision v1.4.0 of aws/eks.");
+    expect(screen.getByText(/^This template runs revision/).textContent).toBe("This template runs revision v1.4.0 · abcdef1 of aws/eks.");
   });
 
   it("names the repository for a template at its root", () => {
@@ -579,7 +579,7 @@ describe("TemplateSettingsTab", () => {
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/settings");
 
-    expect(screen.getByText(/^This template runs revision/).textContent).toBe("This template runs revision main of hashicorp/vpc.");
+    expect(screen.getByText(/^This template runs revision/).textContent).toBe("This template runs revision main · abcdef1 of hashicorp/vpc.");
   });
 
   it("does not wait for the tenant revision list before offering a revision change", () => {

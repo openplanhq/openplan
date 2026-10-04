@@ -4,9 +4,10 @@ import { tenantID } from "../../config";
 import { buttonClass } from "../../shared/buttonClass";
 import TemplateDestroyPanel from "../runs/TemplateDestroyPanel";
 import { revisionLockReason, useLockState } from "../runs/lockReasons";
-import { revisionSourceLabel } from "../templates/templateWorkflow";
+import { revisionSourceLabel, shortCommitSHA } from "../templates/templateWorkflow";
 import SettingsSection from "./SettingsSection";
 import { useStackTemplate } from "./stackTemplateContext";
+import { stackTemplatePath } from "./templateSelection";
 import { cn } from "@/lib/utils";
 
 // /stacks/:stackId/templates/:stackTemplateId/settings — the actions that
@@ -16,10 +17,12 @@ import { cn } from "@/lib/utils";
 export default function TemplateSettingsTab() {
   const { stackId, stackTemplate } = useStackTemplate();
   const reason = revisionLockReason(useLockState(stackId, stackTemplate));
-  // Read only to name where the revision comes from. The sentence stands
-  // without it while the tenant's revisions load.
+  // Read only to name the commit and where it comes from. Every revision of a
+  // template shares its ref, so the commit is what tells them apart. The
+  // sentence stands without it while the tenant's revisions load.
   const revision =
     useTemplateRevisionsQuery(tenantID).data?.find((candidate) => candidate.id === stackTemplate.desired_template_revision_id) ?? null;
+  const commit = revision ? shortCommitSHA(revision.resolved_commit_sha) : "";
   const actionClass = cn(buttonClass("outline"), "pointer-coarse:h-11");
 
   return (
@@ -29,7 +32,11 @@ export default function TemplateSettingsTab() {
         testId="stack-template-revision-action"
         description={
           <>
-            This template runs revision <span className="font-mono text-code-foreground">{stackTemplate.source_ref}</span>
+            This template runs revision{" "}
+            <span className="font-mono text-code-foreground">
+              {stackTemplate.source_ref}
+              {commit && ` · ${commit}`}
+            </span>
             {revision && (
               <>
                 {" "}
@@ -48,7 +55,7 @@ export default function TemplateSettingsTab() {
             </button>
           ) : (
             <Link
-              to={`/stacks/${stackId}/templates/${stackTemplate.id}/upgrade`}
+              to={stackTemplatePath(stackId, stackTemplate.id, "upgrade")}
               className={actionClass}
               data-testid="change-stack-template-revision-link"
             >

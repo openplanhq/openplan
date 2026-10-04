@@ -115,7 +115,14 @@ export default function CredentialsPanel({ note, emptyTitle, emptyDescription, c
           <Label htmlFor={nameId} className={fieldLabelClass}>
             Name
           </Label>
-          <Input id={nameId} placeholder="AWS_ACCESS_KEY_ID" value={name} onChange={(event) => setName(event.target.value)} className={inputClass} />
+          <Input
+            id={nameId}
+            placeholder="AWS_ACCESS_KEY_ID"
+            autoComplete="off"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            className={inputClass}
+          />
         </div>
         <div className="flex min-w-0 flex-1 basis-50 flex-col gap-1.5">
           <Label htmlFor={valueId} className={fieldLabelClass}>
@@ -124,6 +131,9 @@ export default function CredentialsPanel({ note, emptyTitle, emptyDescription, c
           <Input
             id={valueId}
             type="password"
+            // Not a login: keeps password managers from filling a saved
+            // password in, or offering to save the secret as one.
+            autoComplete="new-password"
             placeholder="Secret value"
             value={value}
             onChange={(event) => setValue(event.target.value)}

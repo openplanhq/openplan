@@ -241,6 +241,31 @@ describe("AddStackTemplateScreen", () => {
     expect(document.querySelector("[data-unsaved='true']")).not.toBeNull();
   });
 
+  // Picking a template resets its revision and values, so picking it again,
+  // a stray click or a screen reader user expecting a toggle, must not.
+  it("keeps the chosen revision and typed values when the picked row is clicked again", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [
+      templateRevision({ id: "rev_new", resolved_commit_sha: "f17f9834444" }),
+      templateRevision({ id: "rev_old", resolved_commit_sha: "3c0e1126666" })
+    ]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_new"), [variable()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_old"), [variable()]);
+
+    renderScreen(queryClient);
+    fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("combobox", { name: "Revision" }));
+    await user.click(within(await screen.findByRole("listbox")).getByRole("option", { name: /3c0e112/ }));
+    await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
+    fireEvent.change(screen.getByLabelText(/region/), { target: { value: "eu-west-1" } });
+
+    fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
+
+    expect(screen.getByRole("combobox", { name: "Revision" }).querySelector('[data-slot="select-value"]')?.textContent).toContain("3c0e112");
+    expect((screen.getByLabelText(/region/) as HTMLInputElement).value).toBe("eu-west-1");
+  });
+
   it("does not allow choosing a template with no active revision, and says why", () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [

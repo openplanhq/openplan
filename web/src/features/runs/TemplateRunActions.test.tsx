@@ -176,6 +176,25 @@ describe("TemplateRunActions", () => {
     expect(screen.getByTestId("template-run-row-older_active").querySelector("button")).toBeNull();
   });
 
+  // A failed refetch keeps the runs it had. The run it knows of still locks
+  // Plan, and the note names that run rather than calling the runs unknown.
+  it("keeps a known run's lock when a refetch of the runs fails", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    seedRuns(queryClient, [run({ run_number: 7, status: "waiting_approval" })]);
+    await queryClient.prefetchQuery({
+      queryKey: queryKeys.templateRuns("tenant_123", "stpl_1"),
+      queryFn: () => Promise.reject(new Error("unavailable")),
+      staleTime: 0
+    });
+    expect(queryClient.getQueryState(queryKeys.templateRuns("tenant_123", "stpl_1"))?.status).toBe("error");
+
+    renderActions(queryClient);
+
+    expect(isDisabled(screen.getByRole("button", { name: /Plan/ }))).toBe(true);
+    expect(screen.getByTestId("template-run-actions-note").textContent).toBe("Apply or discard run #7 before starting another run.");
+  });
+
   it("omits the Destroy action, which lives on the Settings tab", () => {
     const queryClient = testQueryClient();
     seedCapabilities(queryClient, allAllowed);

@@ -37,7 +37,7 @@ export function templateTabOf(pathname: string): TemplateTab {
   }
 }
 
-/** Where a template's tab lives. */
-export function stackTemplatePath(stackId: string, stackTemplateId: string, tab: TemplateTab = "runs"): string {
-  return `/stacks/${stackId}/templates/${stackTemplateId}/${tab}`;
+/** Where a template's tab lives, or Change revision, which sits under Settings. */
+export function stackTemplatePath(stackId: string, stackTemplateId: string, section: TemplateTab | "upgrade" = "runs"): string {
+  return `/stacks/${stackId}/templates/${stackTemplateId}/${section}`;
 }

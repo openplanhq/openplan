@@ -61,7 +61,7 @@ export default function TemplateDestroyPanel({ stackId, stackTemplate }: Templat
     <SettingsSection
       title="Destroy"
       testId="template-destroy-panel"
-      description="Plans the removal of everything this template manages. Nothing is removed until that plan is approved."
+      description="Plans the removal of everything this template manages. Nothing is removed until that plan is approved, and once it is, it cannot be undone."
       reason={reason}
       reasonTestId="template-destroy-disabled-reason"
       error={errorMessage ? <ErrorLine testId="template-destroy-error">{errorMessage}</ErrorLine> : null}

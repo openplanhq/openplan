@@ -187,7 +187,6 @@ export default function RunDetailScreen() {
   );
 }
 
-// The trail above a run: back to its template's runs, then the run itself.
 // One fact about a run: what it is, above its value.
 function Fact({ term, mono = false, children }: { term: string; mono?: boolean; children: ReactNode }) {
   return (

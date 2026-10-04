@@ -8,7 +8,7 @@ import { tenantID } from "../../config";
 export interface LockState {
   canOperate: boolean;
   lifecycle: string;
-  /** Where the template's runs query is. */
+  /** Whether the template's runs are known. */
   runs: "pending" | "error" | "success";
   /** The template's unfinished run, once its runs have loaded. */
   activeRun: TemplateRun | null;
@@ -20,12 +20,12 @@ export interface LockState {
 export function useLockState(stackId: string, stackTemplate: Pick<StackTemplate, "id" | "lifecycle">): LockState {
   const canOperate = useStackCapabilities(stackId)?.canOperate === true;
   const runsQuery = useTemplateRunsQuery(tenantID, stackTemplate.id);
-  const activeRun = runsQuery.status === "success" ? runsQuery.data.find((run) => !isTerminalRunStatus(run.status)) ?? null : null;
-  return { canOperate, lifecycle: stackTemplate.lifecycle, runs: runsQuery.status, activeRun };
+  // A failed refetch keeps the runs it had, so a run known to be in flight
+  // still locks, and the runs still count as known.
+  const activeRun = runsQuery.data?.find((run) => !isTerminalRunStatus(run.status)) ?? null;
+  return { canOperate, lifecycle: stackTemplate.lifecycle, runs: runsQuery.data ? "success" : runsQuery.status, activeRun };
 }
 
-const DESTROYING = "Destroy in progress.";
-const DESTROY_FAILED = "A template whose destroy failed cannot start runs.";
 const RUNS_LOADING = "Loading runs…";
 const RUNS_FAILED = "This template's runs could not be loaded.";
 
@@ -42,9 +42,8 @@ export function runInFlightReason(run: TemplateRun, change: string): string {
 /** Plan and Apply. */
 export function startRunLockReason(state: LockState): string {
   if (!state.canOperate) return "Starting a run requires operator access.";
-  if (state.lifecycle === "destroying") return DESTROYING;
-  if (state.lifecycle === "failed") return DESTROY_FAILED;
-  if (state.lifecycle !== "active") return "Only an active template can start runs.";
+  const lifecycleReason = lifecycleLockReason(state.lifecycle, "run");
+  if (lifecycleReason) return lifecycleReason;
   if (state.runs === "pending") return RUNS_LOADING;
   if (state.runs === "error") return RUNS_FAILED;
   if (state.activeRun) return runInFlightReason(state.activeRun, "starting another run");
@@ -57,16 +56,16 @@ export function runActionsNote(state: LockState): string {
 }
 
 /**
- * Why a template in this lifecycle cannot change its config or its revision,
- * or "" when it can. The server refuses both for any template that is not
- * active.
+ * Why a template in this lifecycle cannot make this change, or "" when it
+ * can. The server refuses every one for any template that is not active.
  */
-export function lifecycleLockReason(lifecycle: string, change: "config" | "revision"): string {
-  const what = change === "config" ? "its config" : "revision";
+export function lifecycleLockReason(lifecycle: string, change: "run" | "destroy" | "config" | "revision"): string {
+  // A destroy is a run, so a failed destroy refuses it as it refuses any run.
+  const what = { run: "start runs", destroy: "start runs", config: "change its config", revision: "change revision" }[change];
   if (lifecycle === "active") return "";
-  if (lifecycle === "destroying") return DESTROYING;
-  if (lifecycle === "failed") return `A template whose destroy failed cannot change ${what}.`;
-  return `Only an active template can change ${what}.`;
+  if (lifecycle === "destroying") return "Destroy in progress.";
+  if (lifecycle === "failed") return `A template whose destroy failed cannot ${what}.`;
+  return `Only an active template can ${change === "destroy" ? "be destroyed" : what}.`;
 }
 
 /** Save variables, and the fields above it. */
@@ -90,9 +89,8 @@ export function revisionLockReason(state: LockState): string {
 /** Destroy, which starts a run, so it waits for the runs like Plan does. */
 export function destroyLockReason(state: LockState): string {
   if (!state.canOperate) return "Destroying requires operator access.";
-  if (state.lifecycle === "destroying") return DESTROYING;
-  if (state.lifecycle === "failed") return DESTROY_FAILED;
-  if (state.lifecycle !== "active") return "Only an active template can be destroyed.";
+  const lifecycleReason = lifecycleLockReason(state.lifecycle, "destroy");
+  if (lifecycleReason) return lifecycleReason;
   if (state.runs === "pending") return RUNS_LOADING;
   if (state.runs === "error") return RUNS_FAILED;
   if (state.activeRun) return runInFlightReason(state.activeRun, "destroying");
