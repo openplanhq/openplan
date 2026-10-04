@@ -1,7 +1,7 @@
 # Contributing to openplan
 
 openplan is an MVP with one contributor so far, so contributions are genuinely
-welcome — including your first PR to someone else's project.
+welcome, including your first PR to someone else's project.
 
 ## Getting set up
 
@@ -65,8 +65,8 @@ transcription diverges silently: an upstream change that adds a column still
 compiles here and starts writing subtly wrong rows.
 
 `make differential-test` is the only thing that catches that, and it needs a real
-Postgres. **If your change touches authorization at all — especially after any
-`go get github.com/openfga/openfga@...` — run it:**
+Postgres. **If your change touches authorization at all, especially after any
+`go get github.com/openfga/openfga@...`, run it:**
 
 ```bash
 docker compose up -d postgres
@@ -91,7 +91,7 @@ docs: describe dex as the only identity provider
 
 Explain the behavior change, not the diff. Call out configuration or migration
 impact, link the issue it closes, and list the commands you ran to validate it.
-Include screenshots when you change UI — there is a script for this:
+Include screenshots when you change UI. There is a script for this:
 
 ```bash
 scripts/drive-web.mjs signs in through Dex and screenshots screens headlessly.
@@ -101,7 +101,7 @@ See the script's header for flags.
 ## Reporting bugs
 
 Use the bug report template. The most useful thing you can include is what you
-expected, what happened, and the run's output — every run keeps its full
+expected, what happened, and the run's output. Every run keeps its full
 `init`/`plan`/`workspace` logs, and they are the fastest route to a cause.
 
 ## Security
