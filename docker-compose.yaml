@@ -8,6 +8,20 @@
 # .env before the application would start. OpenFGA is embedded now and resolves
 # both in process, so there is no phase boundary and nothing to record.
 #
+# The api, executor and web services pull published images by default and build
+# from source only when the pull fails, so a first run is a pull of a few tens
+# of megabytes rather than a multi-minute build. Pin a version by setting
+# OPENPLAN_IMAGE_TAG in .env (see .env.example); unset means `latest`, which is
+# the latest release.
+#
+# To work on openplan itself, build locally instead:
+#
+#   OPENPLAN_PULL_POLICY=build docker compose up -d --build
+#
+# `build` forces a source build and skips the registry entirely, so an edit to
+# the Go or the frontend is never shadowed by a published image. Leave it unset
+# when you are running the project rather than changing it.
+#
 # Local development only. Every credential and key defaulted here is a
 # throwaway matching .env.example, including CREDENTIAL_ENCRYPTION_KEY, which is
 # duplicated there. Never point a real deployment at these values.
@@ -126,6 +140,13 @@ services:
       "
 
   api:
+    # image plus build: Compose pulls the published image and falls back to
+    # building from source only when the pull fails, which is what makes the
+    # default path a pull. OPENPLAN_PULL_POLICY=build skips the registry
+    # entirely, so a contributor's source build is never shadowed by a
+    # published image.
+    image: ghcr.io/openplanhq/openplan-api:${OPENPLAN_IMAGE_TAG:-latest}
+    pull_policy: ${OPENPLAN_PULL_POLICY:-missing}
     build:
       context: .
       dockerfile: Dockerfile.api
@@ -179,6 +200,8 @@ services:
   # activities and sealing key stay on one executor through a Temporal session;
   # EXECUTOR_RUN_ROOT is container-local for the same reason.
   executor:
+    image: ghcr.io/openplanhq/openplan-executor:${OPENPLAN_IMAGE_TAG:-latest}
+    pull_policy: ${OPENPLAN_PULL_POLICY:-missing}
     build:
       context: .
       dockerfile: Dockerfile.executor
@@ -200,6 +223,8 @@ services:
       - plugin-cache:/var/lib/openplan/plugin-cache
 
   web:
+    image: ghcr.io/openplanhq/openplan-web:${OPENPLAN_IMAGE_TAG:-latest}
+    pull_policy: ${OPENPLAN_PULL_POLICY:-missing}
     build:
       context: .
       dockerfile: Dockerfile.web

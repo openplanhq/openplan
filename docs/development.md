@@ -21,14 +21,26 @@ no provider reachable behind it is a boot failure: the API discovers the
 provider while it starts. For a host-run API, `dex.localhost` resolves to
 loopback, where Compose publishes Dex's port.
 
+Those services publish prebuilt images. The api and executor services do too,
+and a published image can shadow a local edit, so when you are changing
+openplan start the dependencies and force a source build together:
+
+```bash
+OPENPLAN_PULL_POLICY=build docker compose up -d --wait
+```
+
 Nothing to copy afterwards. OpenFGA runs inside the API and resolves its store
 and authorization model from the model in this repository at startup.
 
-Compose does not inject `.env` into containers or host processes, so the API
-and executor read those values from your shell. Load them and start each process
-in its own terminal:
+To run the API and executor on the host instead, build their images once with
+the command above, then bring the stack down to the dependencies alone and
+start each process in its own terminal. Compose does not inject `.env` into
+containers or host processes, so a host process reads those values from your
+shell:
 
 ```bash
+docker compose up -d postgres temporal dex
+
 set -a
 source .env
 set +a
