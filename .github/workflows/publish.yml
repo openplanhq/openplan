@@ -16,10 +16,28 @@
 # `latest` follows releases, so the unpinned path means "latest release" rather
 # than "whatever main did this morning".
 #
-# One workflow per image rather than a matrix: the tag list is already six
-# entries per image, and a matrix over an unknown tag list needs the tag step
-# to reach across jobs through an output, which is a failure mode worth not
-# having. Three near-identical steps read better than one clever one.
+# Each architecture is built on a runner that runs it natively, and the two
+# results are merged into one multi-arch tag.
+#
+# Building both architectures in one `platforms:` list on a single x86 runner
+# looks simpler and cost 33 minutes. The api image's Go compile alone took 154s
+# for amd64 and 1542s for arm64 in the same run: QEMU translates every arm64
+# instruction, and Go compilation is close to the worst case for that. One
+# native arm64 build replaces a 25-minute emulated one.
+#
+# It has to be split this way rather than until x86 catches up, because
+# `ubuntu-latest` is arm64 on newer runner images. Whichever leg ends up on the
+# "wrong" architecture pays the emulation tax, so each architecture gets a
+# runner that matches it.
+#
+# The merge is the part that is easy to get wrong, and the reason the real tags
+# are written by a separate job rather than by the builds. Each build pushes its
+# architecture under a per-architecture staging tag; had they pushed to the real
+# tag in parallel, whichever finished last would overwrite the other's manifest
+# and leave the tag single-architecture. An arm64 host would then pull the amd64
+# image and run it under emulation, or fail outright, which is the slow path
+# this workflow exists to remove. So the builds only ever write staging tags,
+# and the merge job publishes the real ones and then verifies them.
 name: publish
 
 on:
@@ -56,28 +74,16 @@ permissions:
   packages: write
 
 jobs:
-  publish:
-    name: build and push images
+  # The tag list is derived once so the build and merge jobs cannot disagree
+  # about it. Recomputing it per job would mean two implementations of one rule,
+  # and a silent skew between the halves of a manifest when they differ.
+  plan:
+    name: derive tags
     runs-on: ubuntu-latest
-    timeout-minutes: 40
-
+    timeout-minutes: 5
+    outputs:
+      tags: ${{ steps.tags.outputs.tags }}
     steps:
-      - uses: actions/checkout@v4
-
-      # The executor image bakes in a specific OpenTofu release and the api and
-      # web images build with the Go and Node versions their Dockerfiles pin, so
-      # nothing here depends on the runner's own toolchain.
-      - uses: docker/setup-qemu-action@v3
-
-      - uses: docker/setup-buildx-action@v3
-
-      - name: log in to ghcr
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: derive tags
         id: tags
         env:
@@ -85,9 +91,6 @@ jobs:
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
           INPUT_TAG: ${{ inputs.tag }}
-          API_IMAGE: ${{ env.API_IMAGE }}
-          EXECUTOR_IMAGE: ${{ env.EXECUTOR_IMAGE }}
-          WEB_IMAGE: ${{ env.WEB_IMAGE }}
         run: |
           set -euo pipefail
           version=""
@@ -103,67 +106,101 @@ jobs:
           # a `vv0.3.0` for the second.
           version="${version#v}"
 
-          # The tag list is written in the runner's heredoc form, because a
-          # multi-line output cannot be written any other way. Repeating
-          # `tags=` per line does not work: it builds an object rather than a
-          # string, and filtering one with `.*` is a type error.
-          #
-          # It has to be multi-line. A single comma-joined line parses as ONE
-          # tag: buildx read `ghcr.io/...-api:0.1.0` and then treated `v0.1.0`
-          # as the repository name, which sent the push to Docker Hub's
-          # `library/` namespace and failed with a 401 about insufficient
-          # scopes. The symptom pointed at credentials; the cause was the
-          # separator.
-          # The output key must be a plain identifier. A GITHUB_OUTPUT key
-          # cannot contain `/` or `.`, so keying the heredoc on the image name
-          # (`ghcr.io/.../openplan-api<<EOF`) registers no output at all, and
-          # every reference to it comes back empty.
-          #
-          # So: one scalar output per image, comma-separated, holding BARE tag
-          # names. Each push step turns that into its own newline-separated
-          # `name:tag` list, which is where multi-line construction belongs.
-          #
-          # The list is comma-separated here precisely because it is a single
-          # scalar that never gets spliced into another string. The `tags:`
-          # input it eventually feeds is newline-separated, and the conversion
-          # happens in the step that consumes it.
-          if [ -z "$version" ]; then
-            # A main build: commit-identified, and never latest. See the header.
-            echo "api_tags=main,sha-$GITHUB_SHA" >> "$GITHUB_OUTPUT"
-            echo "executor_tags=main,sha-$GITHUB_SHA" >> "$GITHUB_OUTPUT"
-            echo "web_tags=main,sha-$GITHUB_SHA" >> "$GITHUB_OUTPUT"
-            echo "Publishing main build $GITHUB_SHA as main and sha-$GITHUB_SHA"
-            exit 0
+          # Validate the shape before anything is published. An unvalidated
+          # version reaches the registry as a real tag name, and `v0.2` or
+          # `release-2` publishes something nobody can reason about afterwards.
+          if [ -n "$version" ] && ! echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::version '$version' is not MAJOR.MINOR.PATCH"
+            exit 1
           fi
 
-          # A release: the exact version both bare and v-prefixed (Compose
-          # accepts either, and people paste both), the moving minor and major
-          # tags, and latest.
-          major="$(echo "$version" | cut -d. -f1)"
-          minor="$(echo "$version" | cut -d. -f1,2)"
-          tags="$version,v$version,v$minor,v$major,latest"
-          echo "api_tags=$tags" >> "$GITHUB_OUTPUT"
-          echo "executor_tags=$tags" >> "$GITHUB_OUTPUT"
-          echo "web_tags=$tags" >> "$GITHUB_OUTPUT"
-          echo "Publishing release $version as $tags"
+          if [ -z "$version" ]; then
+            # A main build: commit-identified, and never latest. See the header.
+            tags="main,sha-$GITHUB_SHA"
+            echo "Publishing main build $GITHUB_SHA as $tags"
+          else
+            # A release: the exact version both bare and v-prefixed (Compose
+            # accepts either, and people paste both), the moving minor and major
+            # tags, and latest.
+            major="$(echo "$version" | cut -d. -f1)"
+            minor="$(echo "$version" | cut -d. -f1,2)"
+            tags="$version,v$version,v$minor,v$major,latest"
+            echo "Publishing release $version as $tags"
+          fi
 
-      - name: push api tags
-        id: api_tags
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+
+  # Builds one architecture and pushes it under staging tags that record the
+  # architecture: `0.1.0-amd64`, `0.1.0-arm64`. The real tags are only ever
+  # written by the merge job, so an interrupted run cannot leave a published tag
+  # pointing at a single architecture.
+  build:
+    name: build ${{ matrix.arch }}
+    needs: plan
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+          - arch: arm64
+            # A native ARM64 runner: 4 vCPU, free on public repositories. This
+            # label is the whole reason the arm64 build takes minutes rather than
+            # half an hour.
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      # The executor image bakes in a specific OpenTofu release and the api and
+      # web images build with the Go and Node versions their Dockerfiles pin, so
+      # nothing here depends on the runner's own toolchain. No QEMU: each runner
+      # builds only its own architecture, natively.
+      - uses: docker/setup-buildx-action@v3
+
+      - name: log in to ghcr
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Expand the comma-separated tag list into the newline-separated
+      # `name:tag` lines the build action parses, each carrying the staging
+      # suffix.
+      #
+      # This has to happen in a shell step. A multi-line step output cannot be
+      # interpolated into another string, and a single-line one is read as a
+      # single tag: buildx took `ghcr.io/...-api:0.1.0` and read `v0.1.0` as the
+      # repository name, pushing to Docker Hub's `library/` namespace for a 401
+      # about insufficient scopes. The symptom pointed at credentials and the
+      # cause was a separator.
+      - name: build staging tag lists
+        id: taglists
         env:
-          IMAGE: ${{ env.API_IMAGE }}
-          TAG_LIST: ${{ steps.tags.outputs.api_tags }}
+          TAG_LIST: ${{ needs.plan.outputs.tags }}
+          ARCH: ${{ matrix.arch }}
+          API_IMAGE: ${{ env.API_IMAGE }}
+          EXECUTOR_IMAGE: ${{ env.EXECUTOR_IMAGE }}
+          WEB_IMAGE: ${{ env.WEB_IMAGE }}
         run: |
-          # Expand the comma-separated tag list into the newline-separated
-          # `name:tag` lines that the build action's `tags:` input parses.
-          # Building it here rather than in an expression is the whole point:
-          # a multi-line value cannot be interpolated into another string, and
-          # a single-line one is read as a single tag.
-          {
-            echo "tags<<EOF"
-            echo "${TAG_LIST}" | tr ',' '\n' | while read -r t; do
-              [ -n "$t" ] && echo "$IMAGE:$t"
+          set -euo pipefail
+          # Emits only the tag lines. The caller writes the heredoc key and its
+          # terminator; a `<<EOF` line emitted from in here is read as a tag, and
+          # buildx rejects it as `invalid tag "<<EOF"`.
+          expand() {
+            image=$1
+            echo "$TAG_LIST" | tr ',' '\n' | while read -r t; do
+              [ -n "$t" ] && echo "$image:$t-$ARCH"
             done
-            echo "EOF"
+          }
+          {
+            echo "api<<EOF"; expand "$API_IMAGE"; echo "EOF"
+            echo "executor<<EOF"; expand "$EXECUTOR_IMAGE"; echo "EOF"
+            echo "web<<EOF"; expand "$WEB_IMAGE"; echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
       - name: push api
@@ -171,79 +208,111 @@ jobs:
         with:
           context: .
           file: ./Dockerfile.api
-          # Both architectures in one manifest, so an arm64 laptop and an x86
-          # runner both work from the same tag. provenance is off because it
-          # adds an attestation manifest per image, which GHCR shows as a
-          # separate artifact to anyone listing the package; the build is
-          # reproducible from the commit either way.
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           provenance: false
           push: true
-          tags: |
-            ${{ steps.api_tags.outputs.tags }}
-          cache-from: type=gha,scope=api
-          cache-to: type=gha,scope=api,mode=max
-
-      - name: push executor tags
-        id: executor_tags
-        env:
-          IMAGE: ${{ env.EXECUTOR_IMAGE }}
-          TAG_LIST: ${{ steps.tags.outputs.executor_tags }}
-        run: |
-          # Expand the comma-separated tag list into the newline-separated
-          # `name:tag` lines that the build action's `tags:` input parses.
-          # Building it here rather than in an expression is the whole point:
-          # a multi-line value cannot be interpolated into another string, and
-          # a single-line one is read as a single tag.
-          {
-            echo "tags<<EOF"
-            echo "${TAG_LIST}" | tr ',' '\n' | while read -r t; do
-              [ -n "$t" ] && echo "$IMAGE:$t"
-            done
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          tags: ${{ steps.taglists.outputs.api }}
+          cache-from: type=gha,scope=api-${{ matrix.arch }}
+          cache-to: type=gha,scope=api-${{ matrix.arch }},mode=max
 
       - name: push executor
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile.executor
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           provenance: false
           push: true
-          tags: |
-            ${{ steps.executor_tags.outputs.tags }}
-          cache-from: type=gha,scope=executor
-          cache-to: type=gha,scope=executor,mode=max
-
-      - name: push web tags
-        id: web_tags
-        env:
-          IMAGE: ${{ env.WEB_IMAGE }}
-          TAG_LIST: ${{ steps.tags.outputs.web_tags }}
-        run: |
-          # Expand the comma-separated tag list into the newline-separated
-          # `name:tag` lines that the build action's `tags:` input parses.
-          # Building it here rather than in an expression is the whole point:
-          # a multi-line value cannot be interpolated into another string, and
-          # a single-line one is read as a single tag.
-          {
-            echo "tags<<EOF"
-            echo "${TAG_LIST}" | tr ',' '\n' | while read -r t; do
-              [ -n "$t" ] && echo "$IMAGE:$t"
-            done
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          tags: ${{ steps.taglists.outputs.executor }}
+          cache-from: type=gha,scope=executor-${{ matrix.arch }}
+          cache-to: type=gha,scope=executor-${{ matrix.arch }},mode=max
 
       - name: push web
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile.web
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           provenance: false
           push: true
-          tags: |
-            ${{ steps.web_tags.outputs.tags }}
-          cache-from: type=gha,scope=web
-          cache-to: type=gha,scope=web,mode=max
+          tags: ${{ steps.taglists.outputs.web }}
+          cache-from: type=gha,scope=web-${{ matrix.arch }}
+          cache-to: type=gha,scope=web-${{ matrix.arch }},mode=max
+
+  # Combines the staging manifests into the real tags. Separate from the builds
+  # because the merge has to happen after both of them, and because a merge that
+  # half-succeeded should not be reported as a green build.
+  merge:
+    name: merge architectures
+    needs: [plan, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: docker/setup-buildx-action@v3
+
+      - name: log in to ghcr
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Each source is the staging tag, never the destination, so a concurrent
+      # republish of the same version cannot make this read the wrong bytes and
+      # the real tag is written exactly once per image.
+      - name: merge staging tags into the real tags
+        env:
+          TAG_LIST: ${{ needs.plan.outputs.tags }}
+          API_IMAGE: ${{ env.API_IMAGE }}
+          EXECUTOR_IMAGE: ${{ env.EXECUTOR_IMAGE }}
+          WEB_IMAGE: ${{ env.WEB_IMAGE }}
+        run: |
+          set -euo pipefail
+          for image in "$API_IMAGE" "$EXECUTOR_IMAGE" "$WEB_IMAGE"; do
+            while read -r t; do
+              [ -n "$t" ] || continue
+              echo "Merging $image:$t-amd64 and $image:$t-arm64 into $image:$t"
+              # Runs in this shell, so `set -e` sees a failure directly.
+              docker buildx imagetools create \
+                --tag "$image:$t" \
+                "$image:$t-amd64" \
+                "$image:$t-arm64"
+            done < <(echo "$TAG_LIST" | tr ',' '\n')
+          done
+
+      # A tag missing an architecture still pulls. It just hands the wrong one
+      # to the host, which then emulates it: the exact slowness this workflow
+      # exists to remove, and on an arm64 host a hard failure. So the run fails
+      # rather than passing on a tag that only works for whoever happens to match
+      # whichever architecture finished last.
+      - name: verify every published tag is multi-architecture
+        env:
+          TAG_LIST: ${{ needs.plan.outputs.tags }}
+          API_IMAGE: ${{ env.API_IMAGE }}
+          EXECUTOR_IMAGE: ${{ env.EXECUTOR_IMAGE }}
+          WEB_IMAGE: ${{ env.WEB_IMAGE }}
+        run: |
+          set -euo pipefail
+          # A here-string rather than `echo | tr | while`. Both forms propagate
+          # a failure -- `exit 1` in a pipeline subshell becomes the pipeline's
+          # status, which `set -e` acts on -- so this is readability, not a fix.
+          for image in "$API_IMAGE" "$EXECUTOR_IMAGE" "$WEB_IMAGE"; do
+            while read -r t; do
+              [ -n "$t" ] || continue
+              # The human-readable output, not --raw. In the raw JSON a platform
+              # is {"architecture":"amd64","os":"linux"}, so the literal string
+              # `linux/amd64` never appears and grepping for it fails on a
+              # perfectly good multi-arch manifest. The rendered form prints a
+              # `Platform: linux/amd64` line per manifest, which is what this
+              # check needs to match on.
+              out="$(docker buildx imagetools inspect "$image:$t")"
+              for arch in linux/amd64 linux/arm64; do
+                if ! echo "$out" | grep -q "$arch"; then
+                  echo "::error::$image:$t has no $arch manifest"
+                  echo "$out"
+                  exit 1
+                fi
+              done
+              echo "$image:$t is multi-arch"
+            done < <(echo "$TAG_LIST" | tr ',' '\n')
+          done
