@@ -188,9 +188,11 @@ jobs:
           WEB_IMAGE: ${{ env.WEB_IMAGE }}
         run: |
           set -euo pipefail
+          # Emits only the tag lines. The caller writes the heredoc key and its
+          # terminator; a `<<EOF` line emitted from in here is read as a tag, and
+          # buildx rejects it as `invalid tag "<<EOF"`.
           expand() {
             image=$1
-            echo "<<EOF"
             echo "$TAG_LIST" | tr ',' '\n' | while read -r t; do
               [ -n "$t" ] && echo "$image:$t-$ARCH"
             done
