@@ -1,0 +1,130 @@
+# CI for openplan. Three jobs, one per thing AGENTS.md tells a contributor to
+# run: the Go build from the repository root, the frontend checks from web/, and
+# the lint the Makefile pins.
+#
+# The authorization differential test is deliberately NOT here. It needs a real
+# Postgres and is the only guard on internal/authorization/write.go, so it gets
+# its own workflow where it cannot be crowded out by an unrelated failure --
+# see differential.yml.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# One run per branch. A new push to a PR supersedes the run still testing the
+# commit it replaced, so nobody waits on an answer to a question they already
+# changed. main is never cancelled: its result is the record of what shipped.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: backend (go build, vet, test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          # go.mod is the source of truth: it pins `go 1.25.7` and a toolchain
+          # line, so the workflow tracks the bump instead of drifting from it.
+          go-version-file: go.mod
+          cache: false
+
+      # setup-go's own module cache lives under a fixed runner path that it
+      # keys on go.sum; this one is keyed the same way but is shared with the
+      # lint job, which builds golangci-lint against the same module graph.
+      - name: cache go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: build
+        run: go build ./...
+
+      - name: vet
+        run: go vet ./...
+
+      # The suite is pure unit tests plus skips; the ones that need Postgres are
+      # gated on OPENPLAN_POSTGRES_TEST_DSN and are covered by differential.yml.
+      - name: test
+        run: go test ./...
+
+  web:
+    name: web (test, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Node 22, matching Dockerfile.web's `node:22-alpine3.21` build stage.
+          # web/package.json declares no engines field, so the Dockerfile is the
+          # only place the version is written down.
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: install
+        run: npm ci
+
+      - name: test
+        run: npm test
+
+      # `tsc -b` runs inside this, so a type error fails the build rather than
+      # shipping.
+      - name: build
+        run: npm run build
+
+  lint:
+    name: lint (golangci-lint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: cache go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      # Runs through `go run` rather than golangci/golangci-lint-action, which
+      # is the one place this workflow departs from the usual setup.
+      #
+      # The action resolves the latest *patch* release for whatever minor
+      # version you name, so it cannot express this pin exactly: `version: v2.14`
+      # would silently track the newest v2.14.x while the Makefile runs v2.14.0.
+      # CI and `make lint` must not be able to disagree about whether a change
+      # lints, so the workflow runs the Makefile's exact command and nothing
+      # else. Config is .golangci.yml (version "2"), hence the /v2 path.
+      #
+      # Note that golangci-lint v2.14.0 requires Go >= 1.26.0 while go.mod
+      # declares 1.25.7. That is fine: GOTOOLCHAIN defaults to auto, so `go run`
+      # downloads a newer toolchain to build the linter and the repository's own
+      # packages are still compiled by the go.mod version.
+      - name: golangci-lint
+        run: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0 run ./...
