@@ -165,6 +165,21 @@ describe("TemplatesPage list", () => {
     fireEvent.click(row);
     expect(screen.getByTestId(`template-link-${id}`).getAttribute("aria-current")).toBe("true");
   });
+
+  // A slash in the tuple is encoded too, so the id stays one path segment.
+  it("links and selects a template whose identity tuple has a slash in its root path", () => {
+    const legacy = revision({ id: "rev_old", source_template_id: "", repo_name: "legacy", root_path: "modules/eks" });
+    const id = JSON.stringify(["acme", "legacy", "modules/eks", "main"]);
+    renderPage(seed([eks, legacy]), "/templates");
+
+    const row = screen.getByTestId(`template-link-${id}`);
+    expect(row.getAttribute("href")).toBe(`/templates/${encodeURIComponent(id)}/variables`);
+    expect(row.getAttribute("href")).toContain("modules%2Feks");
+    fireEvent.click(row);
+    expect(screen.getByTestId(`template-link-${id}`).getAttribute("aria-current")).toBe("true");
+    expect(screen.getByTestId("template-link-tpl_eks").getAttribute("aria-current")).toBeNull();
+    expect(screen.getByTestId("variables-content")).toBeTruthy();
+  });
 });
 
 // On a phone the page shows the list or the panel, never both. It is CSS, so
