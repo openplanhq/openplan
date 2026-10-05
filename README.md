@@ -20,15 +20,15 @@ and a full history of every change.
 
 ## Why not Terraform Cloud
 
-HCP Terraform (formerly Terraform Cloud) bills on **resources under
-management**, which means every managed resource in your state costs money every
-month whether or not you change it, metered hourly against your peak count. As
-of 2026 that runs from $0.10 per resource per month on Essentials to $0.99 on
-Premium, and the legacy always-free tier reached end of life in March 2026.
+HCP Terraform (formerly Terraform Cloud) bills on **resources under management**:
+every managed resource in your state costs money every month whether or not you
+change it, metered hourly against your peak count. As of 2026 that is $0.10 to
+$0.99 per resource per month by tier, and the free tier reached end of life in
+March 2026.
 
-openplan runs on your own Postgres and Temporal. There is no per-resource
-meter, and OpenTofu and Terraform are on equal footing with no licence questions
-in between.
+openplan runs on your own Postgres and Temporal, so there is no per-resource
+meter. OpenTofu and Terraform are on equal footing, with no licence questions in
+between.
 
 |                                              | **openplan**        | HCP Terraform  | Atlantis        | Terragrunt  |
 | -------------------------------------------- | ------------------- | -------------- | --------------- | ----------- |
@@ -146,25 +146,28 @@ it differs.
 
 Requires Docker. No Go or Node toolchain.
 
-### The quick way
+### Without a checkout
 
-One file, no checkout:
+Download three files and run one command:
 
 ```bash
-curl -O https://raw.githubusercontent.com/openplanhq/openplan/v0.2.0/docker-compose.release.yaml
-curl -O https://raw.githubusercontent.com/openplanhq/openplan/v0.2.0/deploy/release/dex.yaml
-curl -O https://raw.githubusercontent.com/openplanhq/openplan/v0.2.0/deploy/release/init-databases.sh
+curl -LO https://github.com/openplanhq/openplan/releases/download/v0.2.0/docker-compose.release.yaml
+curl -LO https://github.com/openplanhq/openplan/releases/download/v0.2.0/dex.yaml
+curl -LO https://github.com/openplanhq/openplan/releases/download/v0.2.0/init-databases.sh
 docker compose -f docker-compose.release.yaml up -d
 ```
 
-That pulls published images pinned to a release, so nothing is built. It needs
-the two small files beside it because Dex's configuration and the database
-init step cannot live inside a Compose file; there is no `127.0.0.1` trap in
-this path, the issuer is already configured.
+Keep the three files in the same directory. It takes a minute or two.
+
+Every release carries its own copy of these three files, pinned to that release.
+Swap `v0.2.0` in the URLs for the version you want.
+
+**Then open http://localhost:5173** and sign in as
+`admin@openplan.local` / `admin-local-only`.
 
 ### From a checkout
 
-For working on openplan rather than running it:
+To run the latest development version, or to work on openplan itself:
 
 ```bash
 git clone https://github.com/openplanhq/openplan.git
@@ -173,25 +176,13 @@ cp .env.example .env
 docker compose up -d --wait
 ```
 
-That pulls prebuilt images from GHCR, so it takes a minute or two rather than
-building the Go and Node toolchains. If a pull is unavailable, Compose falls
-back to building from source on its own, which works but takes longer.
-
-There is no second step. OpenFGA runs inside the API, which creates its tables
-in the application database and resolves the store and authorization model from
-the model in this repository at startup. Nothing has to be recorded between
-phases, and nothing has to be pasted into `.env`.
-
-**Then open http://localhost:5173** and sign in through Dex as
-`admin@openplan.local` / `admin-local-only`. That user is root: the API grants
-the platform `root` relationship to its `sub` (`OPENPLAN_ROOT_SUBJECT`) at every
-boot.
+**Then open http://localhost:5173** and sign in as
+`admin@openplan.local` / `admin-local-only`.
 
 > [!IMPORTANT]
-> Use `localhost`, not `127.0.0.1`. The redirect URI is derived from a single
-> `OPENPLAN_PUBLIC_URL`, so only that exact origin is registered with an
-> identity provider — `127.0.0.1` fails OIDC sign-in with an invalid
-> `redirect_uri`.
+> Use `localhost`, not `127.0.0.1` when you open the UI or sign in. Only
+> `localhost` is registered as a valid sign-in origin, so `127.0.0.1` fails with
+> an invalid `redirect_uri`.
 
 ### Pinning a version, and building from source
 
@@ -199,7 +190,7 @@ boot.
 specific version, set it in `.env`:
 
 ```bash
-OPENPLAN_IMAGE_TAG=0.1.0
+OPENPLAN_IMAGE_TAG=0.2.0
 ```
 
 If you are changing openplan itself rather than running it, build from source so
@@ -241,12 +232,8 @@ docker compose --profile debug up -d   # Temporal UI on http://localhost:8080
 
 > [!NOTE]
 > **Upgrading an existing local stack?** Run `docker compose down -v` before
-> starting it back up. OpenFGA's tables moved out of their own database and
-> into the application database, so tuples written before the move are not
-> carried over. Dex's database is created only when Postgres initializes an
-> empty volume, so on an old volume Dex cannot start, and the API waits on it.
-> Grants held by the old `root` local account do not carry over either: root
-> is now a Dex user.
+> starting it back up. There is no upgrade path between releases yet, so a
+> preserved volume can hold state the current code cannot read.
 
 ## Maturity
 
