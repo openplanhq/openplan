@@ -137,21 +137,32 @@ export default function RegisterTemplatePanel() {
           onChange={setRootPath}
           disabled={busy}
         />
-        <button type="submit" className={cn(buttonClass("primary"), "self-start pointer-coarse:h-11")} disabled={busy} data-testid="register-template-submit">
-          {busy ? <Loader2 data-icon="inline-start" aria-hidden="true" className="animate-spin" /> : <Plus data-icon="inline-start" aria-hidden="true" />}
-          Register template
-        </button>
-        {busy && (
-          <div role="status" className="flex items-start gap-3 rounded-lg border px-5 py-4" data-testid="register-template-progress">
-            <Loader2 aria-hidden="true" className="mt-0.5 size-4 shrink-0 animate-spin text-muted-foreground" />
-            <span className="flex min-w-0 flex-col gap-1">
-              <span className="text-sm leading-label font-medium">
-                Registering <span className="font-mono text-meta wrap-anywhere">{target}</span>
-              </span>
-              <span className="text-meta text-muted-foreground">Cloning the repository and reading the module. The template opens here when it is registered.</span>
-            </span>
+        {/* The status region is always mounted, empty while idle, so the
+            progress row is announced when it arrives, as a region inserted
+            with its words already in it may not be. It shares a column with
+            the button, and the row's top margin stands in for the form's gap,
+            so the empty region adds no space. */}
+        <div className="flex flex-col">
+          <button type="submit" className={cn(buttonClass("primary"), "self-start pointer-coarse:h-11")} disabled={busy} data-testid="register-template-submit">
+            {busy ? <Loader2 data-icon="inline-start" aria-hidden="true" className="animate-spin" /> : <Plus data-icon="inline-start" aria-hidden="true" />}
+            Register template
+          </button>
+          <div role="status">
+            {busy && (
+              <div className="mt-5 flex items-start gap-3 rounded-lg border px-5 py-4" data-testid="register-template-progress">
+                <Loader2 aria-hidden="true" className="mt-0.5 size-4 shrink-0 animate-spin text-muted-foreground" />
+                <span className="flex min-w-0 flex-col gap-1">
+                  <span className="text-sm leading-label font-medium">
+                    Registering <span className="font-mono text-meta wrap-anywhere">{target}</span>
+                  </span>
+                  <span className="text-meta text-muted-foreground">
+                    Cloning the repository and reading the module. The template opens here when it is registered.
+                  </span>
+                </span>
+              </div>
+            )}
           </div>
-        )}
+        </div>
         {failure !== "" && !busy && (
           <div className="flex flex-col gap-2" data-testid="register-template-error">
             <ErrorLine>

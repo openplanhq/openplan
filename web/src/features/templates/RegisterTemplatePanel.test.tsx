@@ -98,6 +98,25 @@ describe("RegisterTemplatePanel", () => {
     expect(JSON.parse(String(post?.[1]?.body))).toEqual({ repo_owner: "acme", repo_name: "edge", source_ref: "main", root_path: "." });
   });
 
+  // A live region inserted with its words already in it may go unannounced,
+  // so the region is there, empty, before registering starts.
+  it("says it is registering in a status region that was there before", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (init?.method === "POST") return jsonResponse(registration({ status: "running", template_revision_id: "" }));
+      if (String(input).includes("/template-registrations/")) return jsonResponse(registration({ status: "running", template_revision_id: "" }));
+      return jsonResponse([revision()]);
+    });
+    renderPanel(seed());
+    fireEvent.change(screen.getByLabelText("Repository"), { target: { value: "edge" } });
+
+    const status = screen.getByRole("status");
+    expect(status.textContent).toBe("");
+    submit();
+
+    await waitFor(() => expect(status.textContent).toContain("Registering hashicorp/edge at main"));
+    expect(status.contains(screen.getByTestId("register-template-progress"))).toBe(true);
+  });
+
   // The registration has completed but the refetched list does not hold its
   // revision yet, so the template cannot open: the form stays busy, with
   // nothing to press twice and nothing to retype.
