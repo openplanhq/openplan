@@ -60,6 +60,9 @@ export default function RegisterTemplatePanel() {
   // A registration that completes without a revision registered nothing.
   const failed = settled && (status !== "completed" || registeredRevisionID === "");
   const failure = requestError || pollError || (failed ? registration?.error_summary || "Registration failed" : "");
+  // A poll that fails says nothing about the registration itself, which may
+  // still finish; registering again now could race it.
+  const unchecked = requestError === "" && pollError !== "";
 
   useEffect(() => {
     if (registeredRevisionID === "") {
@@ -151,7 +154,11 @@ export default function RegisterTemplatePanel() {
         )}
         {failure !== "" && !busy && (
           <div className="flex flex-col gap-2" data-testid="register-template-error">
-            <ErrorLine>This template could not be registered. Check the fields and register it again.</ErrorLine>
+            <ErrorLine>
+              {unchecked
+                ? "openplan could not check on this registration, so it may still finish. Reload the page before registering it again."
+                : "This template could not be registered. Check the fields and register it again."}
+            </ErrorLine>
             <pre className="m-0 rounded-lg border bg-canvas px-3 py-2.5 font-mono text-xs leading-relaxed whitespace-pre-wrap text-code-foreground wrap-anywhere">
               {failure}
             </pre>
