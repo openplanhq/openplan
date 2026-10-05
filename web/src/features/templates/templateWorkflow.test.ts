@@ -11,8 +11,7 @@ import {
   sourceTemplateKey,
   templateDisplayName,
   templateRevisionLabel,
-  templateRootPathLabel,
-  unsettledStatusTone
+  templateRootPathLabel
 } from "./templateWorkflow";
 import { revision } from "./testSupport";
 
@@ -64,18 +63,6 @@ describe("revisionCountLabel", () => {
   it("singularises one revision", () => {
     expect(revisionCountLabel(1)).toBe("1 revision");
     expect(revisionCountLabel(4)).toBe("4 revisions");
-  });
-});
-
-describe("unsettledStatusTone", () => {
-  it("gives active no indicator at all", () => {
-    expect(unsettledStatusTone("active")).toBeNull();
-  });
-
-  it("tones every status a user might have to act on", () => {
-    expect(unsettledStatusTone("invalid")).toBe("failed");
-    expect(unsettledStatusTone("validating")).toBe("progress");
-    expect(unsettledStatusTone("pending_validation")).toBe("waiting");
   });
 });
 

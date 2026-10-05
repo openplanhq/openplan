@@ -1,24 +1,4 @@
 import type { TemplateRevision } from "../../api/types";
-import { statusTone } from "../../shared/statusTone";
-import type { StatusTone } from "../../shared/statusTone";
-
-/**
- * The tone to render a revision's status in, or null when it deserves no
- * indicator at all.
- *
- * `active` is the ordinary outcome of registering a template — validation
- * passed — so spelling it out on every row spends the right edge saying
- * "normal". Showing nothing makes its absence the signal and leaves `invalid`,
- * the one status a user has to act on, as the only thing that interrupts a
- * scan.
- *
- * The gate is on the literal status rather than its tone because `active` maps
- * to `settled`, which is where a future settled-but-not-active value would land
- * and silently vanish along with it.
- */
-export function unsettledStatusTone(status: string): StatusTone | null {
-  return status === "active" ? null : statusTone(status);
-}
 
 /**
  * One source template: the stable identity that revisions accumulate under.

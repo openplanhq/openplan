@@ -217,69 +217,99 @@ describe("routeConfig", () => {
     expect(markup).not.toContain('data-testid="stack-detail-shell"');
   });
 
-  it("renders the template registry screen at /templates", async () => {
+  const registeredRevision = {
+    id: "rev_1",
+    tenant_id: "tenant_123",
+    source_template_id: "tpl_1",
+    repo_owner: "hashicorp",
+    repo_name: "terraform-aws-vpc",
+    source_ref: "main",
+    resolved_commit_sha: "abcdef1234567890",
+    root_path: ".",
+    name: "VPC",
+    description: "",
+    tags: [],
+    status: "active",
+    created_at: "2026-07-19T00:00:00Z"
+  };
+
+  async function renderTemplatesRoute(path: string, canPublishTemplate = false) {
     vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { routeConfig } = await import("./router");
-
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
     const { queryKeys } = await import("../api/queryKeys");
 
-    // retry: false + staleTime: Infinity: this test seeds the cache directly and
-    // must never let TanStack Query's default refetch-on-mount fire a real,
-    // unmocked fetch() for stale data — see useStackCapabilities.test.tsx.
+    // retry: false + staleTime: Infinity: seeded data never triggers a real fetch().
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [
-      {
-        id: "rev_1",
-        tenant_id: "tenant_123",
-        source_template_id: "tpl_1",
-        repo_owner: "hashicorp",
-        repo_name: "terraform-aws-vpc",
-        source_ref: "main",
-        resolved_commit_sha: "abcdef1234567890",
-        root_path: ".",
-        name: "VPC",
-        description: "",
-        tags: [],
-        status: "active"
-      }
-    ]);
+    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [registeredRevision]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), []);
 
-    const testRouter = createMemoryRouter(routeConfig, { initialEntries: ["/templates"] });
+    const testRouter = createMemoryRouter(routeConfig, { initialEntries: [path] });
     const markup = renderToStaticMarkup(
       <QueryClientProvider client={queryClient}>
-        <AuthContext.Provider value={authValue()}>
+        <AuthContext.Provider
+          value={authValue({
+            me: { sub: "user_1", tenantID: "tenant_123", displayName: "Test User", globalCapabilities: { isPlatformAdmin: false, canCreateStack: false, canPublishTemplate } }
+          })}
+        >
           <RouterProvider router={testRouter} />
         </AuthContext.Provider>
       </QueryClientProvider>
     );
+    return { markup, testRouter };
+  }
 
-    expect(markup).toContain('data-testid="templates-list"');
+  it("renders the templates page at /templates, on the canvas, on the first template", async () => {
+    const { markup } = await renderTemplatesRoute("/templates");
+
+    expect(markup).toContain('data-testid="templates-page"');
+    expect(markup).toContain('data-testid="template-panel"');
     expect(markup).toContain("VPC");
-    expect(markup).not.toContain('data-testid="route-placeholder"');
-    // Not redesigned yet, so still the white page.
-    expect(markup).not.toContain("data-canvas");
+    expect(markup).toContain('data-canvas="true"');
   });
 
-  it("renders the template registration screen at /templates/new", async () => {
-    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
-    const { routeConfig } = await import("./router");
+  it("opens a template's address on its Variables tab", async () => {
+    const { testRouter } = await renderTemplatesRoute("/templates/tpl_1");
+    await vi.waitFor(() => expect(testRouter.state.location.pathname).toBe("/templates/tpl_1/variables"));
+  });
 
-    const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  it("renders a template's Revisions tab", async () => {
+    const { markup } = await renderTemplatesRoute("/templates/tpl_1/revisions");
+    expect(markup).toContain('data-testid="template-revisions"');
+  });
 
-    const testRouter = createMemoryRouter(routeConfig, { initialEntries: ["/templates/new"] });
-    const markup = renderToStaticMarkup(
-      <QueryClientProvider client={queryClient}>
-        <AuthContext.Provider value={authValue()}>
-          <RouterProvider router={testRouter} />
-        </AuthContext.Provider>
-      </QueryClientProvider>
-    );
+  it("renders Register template at /templates/new for people who can publish templates", async () => {
+    const { markup } = await renderTemplatesRoute("/templates/new", true);
 
-    expect(markup).toContain("Register template");
+    expect(markup).toContain('data-testid="register-template-panel"');
     expect(markup).toContain("Root path");
-    expect(markup).not.toContain('data-testid="route-not-found"');
+    expect(markup).toContain('data-canvas="true"');
+  });
+
+  it("refuses /templates/new to people who cannot publish templates", async () => {
+    // The mocked SessionProvider signs in someone who may publish, inside the
+    // router, so this test swaps in one that signs in someone who may not.
+    // It provides the AuthContext the router will import: after
+    // resetModules, that is a fresh module, not the one imported above. The
+    // shared mock is restored after.
+    vi.doMock("../auth/SessionProvider", async () => {
+      const { AuthContext: RouterAuthContext } = await import("../auth/AuthContext");
+      return {
+        default: () => (
+          <RouterAuthContext.Provider value={authValue()}>
+            <Outlet />
+          </RouterAuthContext.Provider>
+        )
+      };
+    });
+    try {
+      const { markup } = await renderTemplatesRoute("/templates/new");
+
+      expect(markup).toContain('data-testid="route-access-denied"');
+      expect(markup).not.toContain('data-testid="register-template-panel"');
+    } finally {
+      vi.doMock("../auth/SessionProvider");
+    }
   });
 
   it("renders a 404, not a permission leak, when canView is denied for a stack route", async () => {
