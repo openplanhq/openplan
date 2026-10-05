@@ -54,6 +54,17 @@ export default function RegisterTemplatePanel() {
   const registeredKey = registered ? sourceTemplateKey(registered) : "";
   // Completed, but the refetched list does not hold the revision yet, so the
   // template cannot open: still registering, as far as anyone can tell.
+  //
+  // Known gap, left as is: the revisions query has no error branch, so if that
+  // refetch fails and exhausts its retries its data stays undefined, registered
+  // stays null and opening stays true for good. The fields and the button stay
+  // disabled behind the progress spinner, with no error and no way to retry,
+  // and the invalidation in the effect below fires only once because
+  // registeredRevisionID does not change again. Nothing bounds opening either,
+  // so a refetch that runs before the revision is visible in the list leaves
+  // the same permanent spinner on a healthy server. The fix belongs to this
+  // commit's own goal of keeping the panel busy until the template can open:
+  // read the query's error as terminal, or poll the list while opening.
   const opening = registeredRevisionID !== "" && registered === null;
 
   const busy = registerTemplateMutation.isPending || (registrationID !== "" && !settled && pollError === "") || opening;
