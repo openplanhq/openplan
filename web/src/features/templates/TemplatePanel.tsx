@@ -1,5 +1,8 @@
+import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Outlet, useLocation, useParams } from "react-router-dom";
+import { queryKeys } from "../../api/queryKeys";
 import { useTemplateRevisionsQuery, useTemplateRevisionVariablesQuery } from "../../api/queries";
 import RequireCapability from "../../auth/RequireCapability";
 import { tenantID } from "../../config";
@@ -21,9 +24,24 @@ import { revisionsForSourceTemplate, shortCommitSHA, templateDisplayName } from 
 // TemplatesPage has loaded the revisions before any panel renders, so the
 // template is read from cache. The content is keyed on the template, so a
 // tab's local state never carries over to another.
+//
+// The list is refetched each time the panel moves to another template. A Sync
+// or a registration only refreshes it while it is on screen, so one the
+// person walked away from can finish unseen; coming back must show its commit.
 export default function TemplatePanel({ sourceTemplateId, children }: { sourceTemplateId?: string; children?: ReactNode }) {
   const params = useParams<{ sourceTemplateId: string }>();
   const id = sourceTemplateId ?? params.sourceTemplateId ?? "";
+  const queryClient = useQueryClient();
+  // The template the panel last showed; the first one needs no refetch, as
+  // the page has just loaded the list.
+  const shownId = useRef(id);
+  useEffect(() => {
+    if (shownId.current === id) {
+      return;
+    }
+    shownId.current = id;
+    void queryClient.invalidateQueries({ queryKey: queryKeys.templateRevisions(tenantID) });
+  }, [id, queryClient]);
   const revisions = revisionsForSourceTemplate(useTemplateRevisionsQuery(tenantID).data ?? [], id);
   const latest = revisions[0];
   const variableCount = useTemplateRevisionVariablesQuery(tenantID, latest?.id ?? "").data?.length;

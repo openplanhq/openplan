@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../../auth/AuthContext";
@@ -168,5 +168,33 @@ describe("TemplateSync", () => {
     expect(screen.getByRole("heading", { level: 2, name: "network" })).toBeTruthy();
     expect(syncButton().disabled).toBe(false);
     expect(screen.getByTestId("template-sync-result").textContent).toBe("");
+  });
+  // A sync the person walked away from can finish while they read another
+  // template. The panel refetches the list on coming back, so the new commit
+  // shows even though this Sync is long gone.
+  it("shows a commit a sync registered while the person was on another template", async () => {
+    const fresh = revision({ id: "rev_2", resolved_commit_sha: "f17f983444455556666" });
+    let listed = [current, other];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (init?.method === "POST") return jsonResponse(registration({ status: "pending" }));
+      if (String(input).includes("/template-registrations/")) return jsonResponse(registration({ status: "running" }));
+      if (String(input).includes("/variables")) return jsonResponse([]);
+      return jsonResponse(listed);
+    });
+    const router = renderPanel(seed());
+    fireEvent.click(syncButton());
+    await waitFor(() => expect(syncButton().disabled).toBe(true));
+
+    await act(async () => {
+      await router.navigate("/templates/tpl_net/revisions");
+    });
+    // The sync completes server-side while the person is on network.
+    listed = [fresh, current, other];
+    await act(async () => {
+      await router.navigate("/templates/tpl_1/revisions");
+    });
+
+    await waitFor(() => expect(screen.getAllByTestId(/^revision-row-/)[0].getAttribute("data-testid")).toBe("revision-row-rev_2"));
+    expect(within(screen.getByTestId("template-details")).getByRole("link", { name: /^f17f983,/ })).toBeTruthy();
   });
 });
