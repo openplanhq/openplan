@@ -233,9 +233,33 @@ describe("routeConfig", () => {
     created_at: "2026-07-19T00:00:00Z"
   };
 
+  // Signs in a publisher or not. The mocked SessionProvider always signs in a
+  // publisher, inside the router, where no AuthContext around RouterProvider
+  // can reach; so the router is imported with one that signs in whoever the
+  // test asks for. It provides the AuthContext the router imports: after
+  // resetModules, a fresh module, not the one this file imported. The shared
+  // mock is restored once the router holds its own.
   async function renderTemplatesRoute(path: string, canPublishTemplate = false) {
     vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
-    const { routeConfig } = await import("./router");
+    vi.doMock("../auth/SessionProvider", async () => {
+      const { AuthContext: RouterAuthContext } = await import("../auth/AuthContext");
+      const signedIn = authValue({
+        me: { sub: "user_1", tenantID: "tenant_123", displayName: "Test User", globalCapabilities: { isPlatformAdmin: false, canCreateStack: false, canPublishTemplate } }
+      });
+      return {
+        default: () => (
+          <RouterAuthContext.Provider value={signedIn}>
+            <Outlet />
+          </RouterAuthContext.Provider>
+        )
+      };
+    });
+    let routeConfig: typeof import("./router").routeConfig;
+    try {
+      ({ routeConfig } = await import("./router"));
+    } finally {
+      vi.doMock("../auth/SessionProvider");
+    }
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
     const { queryKeys } = await import("../api/queryKeys");
 
@@ -247,13 +271,7 @@ describe("routeConfig", () => {
     const testRouter = createMemoryRouter(routeConfig, { initialEntries: [path] });
     const markup = renderToStaticMarkup(
       <QueryClientProvider client={queryClient}>
-        <AuthContext.Provider
-          value={authValue({
-            me: { sub: "user_1", tenantID: "tenant_123", displayName: "Test User", globalCapabilities: { isPlatformAdmin: false, canCreateStack: false, canPublishTemplate } }
-          })}
-        >
-          <RouterProvider router={testRouter} />
-        </AuthContext.Provider>
+        <RouterProvider router={testRouter} />
       </QueryClientProvider>
     );
     return { markup, testRouter };
@@ -282,34 +300,17 @@ describe("routeConfig", () => {
     const { markup } = await renderTemplatesRoute("/templates/new", true);
 
     expect(markup).toContain('data-testid="register-template-panel"');
+    expect(markup).toContain('data-testid="register-template-link"');
     expect(markup).toContain("Root path");
     expect(markup).toContain('data-canvas="true"');
   });
 
   it("refuses /templates/new to people who cannot publish templates", async () => {
-    // The mocked SessionProvider signs in someone who may publish, inside the
-    // router, so this test swaps in one that signs in someone who may not.
-    // It provides the AuthContext the router will import: after
-    // resetModules, that is a fresh module, not the one imported above. The
-    // shared mock is restored after.
-    vi.doMock("../auth/SessionProvider", async () => {
-      const { AuthContext: RouterAuthContext } = await import("../auth/AuthContext");
-      return {
-        default: () => (
-          <RouterAuthContext.Provider value={authValue()}>
-            <Outlet />
-          </RouterAuthContext.Provider>
-        )
-      };
-    });
-    try {
-      const { markup } = await renderTemplatesRoute("/templates/new");
+    const { markup } = await renderTemplatesRoute("/templates/new");
 
-      expect(markup).toContain('data-testid="route-access-denied"');
-      expect(markup).not.toContain('data-testid="register-template-panel"');
-    } finally {
-      vi.doMock("../auth/SessionProvider");
-    }
+    expect(markup).toContain('data-testid="route-access-denied"');
+    expect(markup).not.toContain('data-testid="register-template-panel"');
+    expect(markup).not.toContain('data-testid="register-template-link"');
   });
 
   it("renders a 404, not a permission leak, when canView is denied for a stack route", async () => {
