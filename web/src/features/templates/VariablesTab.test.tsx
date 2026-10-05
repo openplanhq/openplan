@@ -88,8 +88,18 @@ describe("VariablesTab", () => {
   });
 
   it("follows the newest revision when a sync registers one", async () => {
+    // rev_2's variables are not cached, so they load. Until they do, the tab
+    // says so, rather than show rev_1's variables under rev_2's commit.
+    let resolveVariables: (response: Response) => void = () => {};
+    vi.mocked(globalThis.fetch).mockImplementation(
+      (input) =>
+        new Promise((resolve) => {
+          if (String(input).includes("/template-revisions/rev_2/variables")) {
+            resolveVariables = resolve;
+          }
+        })
+    );
     const queryClient = seed([variable()]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables(TENANT, "rev_2"), [variable({ template_revision_id: "rev_2", name: "cluster_version" })]);
     renderTab(queryClient);
     expect(screen.getByTestId("template-variable-cluster_name")).toBeTruthy();
 
@@ -99,7 +109,17 @@ describe("VariablesTab", () => {
         revision()
       ]);
     });
+    await waitFor(() => expect(screen.getByTestId("template-variables-loading").textContent).toContain("Loading variables…"));
+    expect(within(screen.getByTestId("template-details")).getByRole("link", { name: /^9e7d3b2,/ })).toBeTruthy();
+    expect(screen.queryByTestId("template-variable-cluster_name")).toBeNull();
+    // Nor does the tab count rev_1's variables.
+    expect(within(screen.getByRole("navigation", { name: "Template sections" })).getByRole("link", { name: "Variables" })).toBeTruthy();
+
+    await act(async () => {
+      resolveVariables(jsonResponse([variable({ template_revision_id: "rev_2", name: "cluster_version" })]));
+    });
     await waitFor(() => expect(screen.getByTestId("template-variable-cluster_version")).toBeTruthy());
     expect(screen.getByTestId("template-variables").textContent).toContain("From the latest revision, 9e7d3b2.");
+    expect(within(screen.getByRole("navigation", { name: "Template sections" })).getByRole("link", { name: "Variables 1" })).toBeTruthy();
   });
 });

@@ -21,7 +21,9 @@ export default function VariablesTab() {
   const variablesQuery = useTemplateRevisionVariablesQuery(tenantID, latest.id);
   const boundary = useQueryErrorBoundary(variablesQuery.error);
 
-  if (variablesQuery.status === "pending") {
+  // The query keeps the previous revision's variables while the newest load;
+  // shown here, they would read as the newest revision's.
+  if (variablesQuery.status === "pending" || variablesQuery.isPlaceholderData) {
     return (
       <p className="flex items-center gap-2 text-meta text-muted-foreground" data-testid="template-variables-loading">
         <Loader2 aria-hidden="true" className="size-3.5 animate-spin" /> Loading variables…

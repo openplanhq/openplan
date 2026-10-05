@@ -44,7 +44,9 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
   }, [id, queryClient]);
   const revisions = revisionsForSourceTemplate(useTemplateRevisionsQuery(tenantID).data ?? [], id);
   const latest = revisions[0];
-  const variableCount = useTemplateRevisionVariablesQuery(tenantID, latest?.id ?? "").data?.length;
+  // No count while the previous revision's variables stand in for the newest.
+  const variablesQuery = useTemplateRevisionVariablesQuery(tenantID, latest?.id ?? "");
+  const variableCount = variablesQuery.isPlaceholderData ? undefined : variablesQuery.data?.length;
   const tab = templateTabOf(useLocation().pathname);
 
   if (!latest) {
