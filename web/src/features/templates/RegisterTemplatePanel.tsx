@@ -49,13 +49,17 @@ export default function RegisterTemplatePanel() {
         ? registrationQuery.error.message
         : "Request failed"
       : "";
-  const busy = registerTemplateMutation.isPending || (registrationID !== "" && !settled && pollError === "");
-  const failed = settled && status !== "completed";
-  const failure = requestError || pollError || (failed ? registration?.error_summary || "Registration failed" : "");
-
   const registeredRevisionID = status === "completed" ? registration?.template_revision_id ?? "" : "";
   const registered = registeredRevisionID === "" ? null : revisions.find((templateRevision) => templateRevision.id === registeredRevisionID) ?? null;
   const registeredKey = registered ? sourceTemplateKey(registered) : "";
+  // Completed, but the refetched list does not hold the revision yet, so the
+  // template cannot open: still registering, as far as anyone can tell.
+  const opening = registeredRevisionID !== "" && registered === null;
+
+  const busy = registerTemplateMutation.isPending || (registrationID !== "" && !settled && pollError === "") || opening;
+  // A registration that completes without a revision registered nothing.
+  const failed = settled && (status !== "completed" || registeredRevisionID === "");
+  const failure = requestError || pollError || (failed ? registration?.error_summary || "Registration failed" : "");
 
   useEffect(() => {
     if (registeredRevisionID === "") {

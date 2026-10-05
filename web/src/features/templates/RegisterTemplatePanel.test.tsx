@@ -98,6 +98,37 @@ describe("RegisterTemplatePanel", () => {
     expect(JSON.parse(String(post?.[1]?.body))).toEqual({ repo_owner: "acme", repo_name: "edge", source_ref: "main", root_path: "." });
   });
 
+  // The registration has completed but the refetched list does not hold its
+  // revision yet, so the template cannot open: the form stays busy, with
+  // nothing to press twice and nothing to retype.
+  it("stays busy until the refreshed list holds the new revision", async () => {
+    const added = revision({ id: "rev_9", source_template_id: "tpl_9", repo_name: "edge", root_path: "." });
+    let releaseList: () => void = () => {};
+    const listReleased = new Promise<void>((resolve) => {
+      releaseList = resolve;
+    });
+    let listRequests = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (init?.method === "POST") return jsonResponse(registration({ status: "running", template_revision_id: "" }));
+      if (String(input).includes("/template-registrations/")) return jsonResponse(registration({ template_revision_id: "rev_9" }));
+      listRequests += 1;
+      await listReleased;
+      return jsonResponse([added, revision()]);
+    });
+    renderPanel(seed());
+    submit();
+
+    // The poll has reported completed: that is what refetches the list.
+    await waitFor(() => expect(listRequests).toBeGreaterThan(0), { timeout: 3000 });
+    expect(screen.getByTestId("register-template-progress")).toBeTruthy();
+    expect((screen.getByTestId("register-template-submit") as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByLabelText("Owner") as HTMLInputElement).disabled).toBe(true);
+    expect(screen.queryByTestId("register-template-error")).toBeNull();
+
+    releaseList();
+    await waitFor(() => expect(screen.getByTestId("opened").textContent).toBe("tpl_9"));
+  });
+
   // Review focus 4: the identity was registered already. The registration
   // completes with that template's revision, which is on screen.
   it("opens the existing template when its identity was registered already", async () => {
@@ -114,7 +145,9 @@ describe("RegisterTemplatePanel", () => {
 
   it.each([
     [registration({ status: "invalid", template_revision_id: "", error_summary: 'root path "aws/sqs-queues": directory does not exist' }), 'root path "aws/sqs-queues": directory does not exist'],
-    [registration({ status: "failed", template_revision_id: "", error_summary: "" }), "Registration failed"]
+    [registration({ status: "failed", template_revision_id: "", error_summary: "" }), "Registration failed"],
+    // Completed without a revision: nothing was registered, so nothing can open.
+    [registration({ status: "completed", template_revision_id: "", error_summary: "" }), "Registration failed"]
   ])("says why a registration failed and keeps the fields", async (failed, reason) => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => jsonResponse(failed));
     renderPanel(seed());
