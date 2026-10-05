@@ -144,10 +144,16 @@ jobs:
           INIT_SOURCE: ${{ env.INIT_SOURCE }}
         run: |
           set -euo pipefail
-          # Named for the tag, so a release page lists one coherent set rather
-          # than an undated file that could belong to any version.
+          # The uploaded name is the final name, not an internal one. A `#label`
+          # suffix on the argument does not rename a release asset: the first
+          # attempt uploaded `docker-compose.pinned.yaml`, which leaks a
+          # build-time name and invites the reader to run
+          # `docker compose -f docker-compose.pinned.yaml up`.
+          cp docker-compose.pinned.yaml docker-compose.release.yaml
+          rm docker-compose.pinned.yaml
+
           gh release upload "$TAG" \
-            docker-compose.pinned.yaml#docker-compose.release.yaml \
+            docker-compose.release.yaml \
             "$DEX_SOURCE" \
             "$INIT_SOURCE" \
             --clobber
