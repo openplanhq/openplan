@@ -148,6 +148,22 @@ export function revisionsForSourceTemplate(
 }
 
 /**
+ * Whether a template matches what someone typed in the list's filter: its
+ * name, repository, root path, description or tags, ignoring case and the
+ * spaces around the query. An empty query matches everything.
+ */
+export function matchesTemplateFilter(sourceTemplate: SourceTemplateGroup, query: string): boolean {
+  const needle = query.trim().toLowerCase();
+  if (needle === "") {
+    return true;
+  }
+  const latest = sourceTemplate.latestRevision;
+  return [sourceTemplate.name, `${latest.repo_owner}/${latest.repo_name}`, latest.root_path, latest.description, ...latest.tags].some(
+    (text) => text.toLowerCase().includes(needle)
+  );
+}
+
+/**
  * What to call a template. `name` is inferred per revision and can be blank, so
  * fall through to the root path and finally the repository. A root path of "."
  * names nothing and is skipped.
@@ -206,7 +222,7 @@ export function shortCommitSHA(commitSHA: string): string {
  * in the tenant into one. JSON encoding the tuple keeps the parts unambiguous
  * without picking a separator a repository name or path might contain.
  */
-function sourceTemplateKey(templateRevision: TemplateRevision): string {
+export function sourceTemplateKey(templateRevision: TemplateRevision): string {
   if (templateRevision.source_template_id !== "") {
     return templateRevision.source_template_id;
   }
