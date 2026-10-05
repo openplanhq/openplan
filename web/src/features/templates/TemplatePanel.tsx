@@ -9,6 +9,7 @@ import UnderlineTabs from "../../shared/UnderlineTabs";
 import { TemplateContext } from "./templateContext";
 import { githubLinks, rootPathOf } from "./templateLinks";
 import { templatePath, templateTabOf } from "./templateRoutes";
+import TemplateSync from "./TemplateSync";
 import { revisionsForSourceTemplate, shortCommitSHA, templateDisplayName } from "./templateWorkflow";
 
 // The right side of /templates: one template, read from its newest revision.
@@ -69,7 +70,12 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
                 </div>
               )}
             </div>
-            <div data-testid="template-sync-slot" />
+            {/* Hidden rather than disabled without the capability: the POST
+                would be refused, so there is nothing anyone could do to make
+                it work. Keyed on the template, so a sync stays with it. */}
+            <RequireCapability capability="canPublishTemplate">
+              <TemplateSync key={id} />
+            </RequireCapability>
           </div>
           <dl className="grid grid-cols-2 gap-x-6 gap-y-4 rounded-lg border px-5 py-4 lg:grid-cols-4" data-testid="template-details">
             <Detail term="Repository">
