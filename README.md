@@ -146,7 +146,29 @@ it differs.
 
 Requires Docker. No Go or Node toolchain.
 
+### The quick way
+
+One file, no checkout:
+
 ```bash
+curl -O https://raw.githubusercontent.com/openplanhq/openplan/v0.2.0/docker-compose.release.yaml
+curl -O https://raw.githubusercontent.com/openplanhq/openplan/v0.2.0/deploy/release/dex.yaml
+curl -O https://raw.githubusercontent.com/openplanhq/openplan/v0.2.0/deploy/release/init-databases.sh
+docker compose -f docker-compose.release.yaml up -d
+```
+
+That pulls published images pinned to a release, so nothing is built. It needs
+the two small files beside it because Dex's configuration and the database
+init step cannot live inside a Compose file; there is no `127.0.0.1` trap in
+this path, the issuer is already configured.
+
+### From a checkout
+
+For working on openplan rather than running it:
+
+```bash
+git clone https://github.com/openplanhq/openplan.git
+cd openplan
 cp .env.example .env
 docker compose up -d --wait
 ```
