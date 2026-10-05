@@ -18,9 +18,11 @@ const cdn = revision({ id: "rev_cdn", source_template_id: "tpl_cdn", repo_name: 
 function seed(revisions: TemplateRevision[] = [latest, older, rds, cdn]): QueryClient {
   const queryClient = testQueryClient();
   queryClient.setQueryData(queryKeys.templateRevisions(TENANT), revisions);
+  // Three variables against two revisions, so swapped counts would show.
   queryClient.setQueryData(queryKeys.templateRevisionVariables(TENANT, "rev_2"), [
     variable({ template_revision_id: "rev_2" }),
-    variable({ template_revision_id: "rev_2", name: "node_desired_size", type_expression: "number", required: false, has_default: true })
+    variable({ template_revision_id: "rev_2", name: "node_desired_size", type_expression: "number", required: false, has_default: true }),
+    variable({ template_revision_id: "rev_2", name: "subnet_ids", type_expression: "list(string)" })
   ]);
   return queryClient;
 }
@@ -110,7 +112,7 @@ describe("TemplatePanel tabs", () => {
     renderPanel(seed(), "/templates/tpl_1/revisions");
     const nav = within(screen.getByRole("navigation", { name: "Template sections" }));
 
-    const variables = nav.getByRole("link", { name: "Variables 2" });
+    const variables = nav.getByRole("link", { name: "Variables 3" });
     expect(variables.getAttribute("href")).toBe("/templates/tpl_1/variables");
     expect(variables.getAttribute("aria-current")).toBeNull();
 
