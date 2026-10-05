@@ -1,0 +1,157 @@
+# Attach a release-pinned compose file to the release, once its images exist.
+#
+# The point: someone who downloads a release gets a compose file whose image
+# tags are the release they downloaded, with nothing to edit and no second step.
+# `docker compose up` in the repository pins v0.2.0 until someone remembers to
+# bump it, and the published images are what they actually want to run.
+#
+# It runs on `release: published` rather than on the tag push, because the file
+# is only true once the images for that tag are in the registry. The publish
+# workflow pushes them within minutes of the tag appearing; this runs after.
+#
+# Why substitution is safe here, and is not a blanket find-and-replace: the
+# pattern is anchored on the three openplan image names. A looser `:v[0-9.]+`
+# also matches `ghcr.io/dexidp/dex:v2.45.1`, and rewriting that would point the
+# stack at a Dex release that does not exist. Dex's tag is pinned deliberately
+# and is left alone.
+name: release-compose
+
+on:
+  release:
+    types: [published]
+  # Lets a release be re-stamped after the compose file itself changes, without
+  # cutting a new version.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to attach the compose file to (e.g. v0.2.0)"
+        required: true
+        type: string
+
+# One per release. Two runs for the same tag would race to upload the same three
+# asset names, and the second would fail on the duplicate.
+concurrency:
+  group: release-compose-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write # to upload release assets
+  packages: read
+
+env:
+  # Kept beside the compose file so the two relative bind-mounts inside it
+  # resolve after a download. Compose resolves a relative host path against the
+  # directory of the compose file, so all three files must land together.
+  COMPOSE_SOURCE: docker-compose.release.yaml
+  DEX_SOURCE: deploy/release/dex.yaml
+  INIT_SOURCE: deploy/release/init-databases.sh
+
+jobs:
+  attach:
+    name: attach a pinned compose file
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: resolve the tag
+        id: target
+        env:
+          EVENT: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          tag="${RELEASE_TAG:-$INPUT_TAG}"
+          if [ -z "$tag" ]; then
+            echo "::error::no release tag to attach to"
+            exit 1
+          fi
+          version="${tag#v}"
+          if ! echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::tag '$tag' is not a MAJOR.MINOR.PATCH release"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # Runs `docker compose config` on the rewritten file before uploading it.
+      # An asset that does not parse is worse than no asset: someone downloads
+      # it and the first command they run fails.
+      # Three patterns, each anchored on something only openplan owns. The
+      # header prose needs rewriting too: the compose file carries the release
+      # tag in its download instructions and its "Written against" line, and an
+      # asset whose own instructions point at the previous release is worse than
+      # no asset.
+      - name: stamp the tag into the compose file
+        id: stamp
+        env:
+          VERSION: ${{ steps.target.outputs.version }}
+          COMPOSE_SOURCE: ${{ env.COMPOSE_SOURCE }}
+        run: |
+          set -euo pipefail
+          sed -E \
+            -e "s#(ghcr\.io/openplanhq/openplan-(api|executor|web)):v[0-9]+\.[0-9]+\.[0-9]+#\1:v${VERSION}#g" \
+            -e "s#openplanhq/openplan/v[0-9]+\.[0-9]+\.[0-9]+/#openplanhq/openplan/v${VERSION}/#g" \
+            -e "s|^# Written against v[0-9]+\.[0-9]+\.[0-9]+\.|# Written against v${VERSION}.|" \
+            "$COMPOSE_SOURCE" > docker-compose.pinned.yaml
+
+          # No version other than this one may survive anywhere in the file,
+          # including the header prose. An asset whose own instructions point at
+          # the previous release is worse than no asset at all.
+          # Scoped to the places openplan's own version appears, not every
+          # version-shaped string in the file: Dex is pinned at v2.45.1 and the
+          # substitution must leave it alone, so banning all of them would fail
+          # on a correct result.
+          stale=$(grep -oE 'openplan-(api|executor|web):v[0-9]+\.[0-9]+\.[0-9]+' \
+            docker-compose.pinned.yaml | grep -v ":v${VERSION}$" || true)
+          stale_url=$(grep -oE 'openplanhq/openplan/v[0-9]+\.[0-9]+\.[0-9]+' \
+            docker-compose.pinned.yaml | grep -v "/v${VERSION}$" || true)
+          stale_prose=$(grep -oE '^# Written against v[0-9]+\.[0-9]+\.[0-9]+' \
+            docker-compose.pinned.yaml | grep -v "v${VERSION}$" || true)
+          if [ -n "$stale$stale_url$stale_prose" ]; then
+            echo "::error::a version other than v${VERSION} survived:"
+            echo "$stale$stale_url$stale_prose" | sed 's/^/  /'
+            exit 1
+          fi
+
+          # The substitution has to have hit all three images. Silently matching
+          # none would upload a file still pointing at an older release, which
+          # looks fine and runs the wrong thing.
+          count=$(grep -c "ghcr.io/openplanhq/openplan-[a-z]*:v${VERSION}$" \
+            docker-compose.pinned.yaml || true)
+          if [ "$count" -ne 3 ]; then
+            echo "::error::expected 3 images stamped to v${VERSION}, found ${count}"
+            grep -n "openplanhq/openplan-" docker-compose.pinned.yaml || true
+            exit 1
+          fi
+
+          # Dex is pinned and must survive the substitution untouched.
+          grep -q 'ghcr.io/dexidp/dex:v2.45.1' docker-compose.pinned.yaml || {
+            echo "::error::dex tag was altered by the substitution"
+            exit 1
+          }
+
+          docker compose -f docker-compose.pinned.yaml config --quiet
+          echo "Stamped $count images to v${VERSION}; compose config validates"
+
+      - name: upload the three files as release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.target.outputs.tag }}
+          COMPOSE_SOURCE: ${{ env.COMPOSE_SOURCE }}
+          DEX_SOURCE: ${{ env.DEX_SOURCE }}
+          INIT_SOURCE: ${{ env.INIT_SOURCE }}
+        run: |
+          set -euo pipefail
+          # Named for the tag, so a release page lists one coherent set rather
+          # than an undated file that could belong to any version.
+          gh release upload "$TAG" \
+            docker-compose.pinned.yaml#docker-compose.release.yaml \
+            "$DEX_SOURCE" \
+            "$INIT_SOURCE" \
+            --clobber
+
+          echo "Attached to $TAG:"
+          gh release view "$TAG" --json assets \
+            --jq '.assets[] | "  \(.name)  \(.size) bytes"'
