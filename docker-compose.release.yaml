@@ -1,0 +1,192 @@
+# openplan, self-contained. One file, no .env, no build, no source checkout:
+#
+#   curl -O https://raw.githubusercontent.com/openplanhq/openplan/v0.2.0/docker-compose.release.yaml
+#   docker compose -f docker-compose.release.yaml up -d
+#   open http://localhost:5173 and sign in as
+#   admin@openplan.local / admin-local-only
+#
+# This is the release-pinned form of the project's docker-compose.yaml. Same
+# stack, same defaults, but every image tag is written out and the two files it
+# used to bind-mount from the repository are inlined, so nothing beside this
+# file is needed. It exists because "clone a repo and read the setup section" is
+# a worse first impression than "run this one command".
+#
+# Every credential and key here is a throwaway that matches the project's
+# .env.example, including the encryption keys. That is fine for a local
+# evaluation stack and is not a deployment. To keep an openplan install of your
+# own, replace CREDENTIAL_ENCRYPTION_KEY and SESSION_ENCRYPTION_KEY with fresh
+# values before the first run: `openssl rand -hex 32`, and keep them, because
+# losing the credential key makes every stored Terraform credential unreadable.
+#
+# Written against v0.2.0. `latest` moves as releases land, so pin the tag to keep
+# a stack reproducible.
+name: openplan
+
+services:
+  # One Postgres for the lot: the application database, Dex's, and Temporal's
+  # two. The api-init service below creates the databases, so this file needs no
+  # host-side script.
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: openplan
+      POSTGRES_PASSWORD: openplan
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openplan -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Creates the per-component database and role. Inlined because the repository
+  # version of this file is a bind-mount from ./deploy/postgres/init.sh, and a
+  # standalone file has no repository to mount from.
+  postgres-init:
+    image: postgres:16-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: openplan
+    # Runs once per volume, not on every `up`: the empty data directory is what
+    # triggers it, which is Postgres's own entrypoint behaviour.
+    volumes:
+      - postgres-data:/var/lib/postgresql/data:ro
+      - ./init-databases.sh:/init-databases.sh:ro
+    entrypoint: ["/bin/sh", "/init-databases.sh"]
+    restart: "no"
+
+  # The identity provider, and the only sign-in path. Config inlined for the
+  # same reason as the init script.
+  dex:
+    image: ghcr.io/dexidp/dex:v2.45.1
+    command: ["dex", "serve", "/etc/dex/config.yaml"]
+    depends_on:
+      postgres-init:
+        condition: service_completed_successfully
+    environment:
+      DEX_DB_USER: dex
+      DEX_DB_PASSWORD: dex-local-only
+      OIDC_CLIENT_SECRET: openplan-api-local-only
+    volumes:
+      - ./dex.yaml:/etc/dex/config.yaml:ro
+    ports:
+      - "5556:5556"
+    networks:
+      default:
+        aliases:
+          # dex.localhost resolves to loopback in the browser and to this
+          # container on the Compose network. The API compares the discovery
+          # document's issuer to OIDC_ISSUER_URL byte for byte, so the two
+          # cannot differ.
+          - dex.localhost
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:5558/healthz/ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: on-failure
+
+  temporal:
+    image: temporalio/auto-setup:1.28.1
+    depends_on:
+      postgres-init:
+        condition: service_completed_successfully
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_SEEDS: postgres
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: temporal
+      # temporal and temporal_visibility are created by postgres-init above with
+      # the temporal role as owner. That role deliberately has no CREATEDB
+      # privilege, so auto-setup must not attempt its own CREATE DATABASE.
+      SKIP_DB_CREATE: "true"
+    healthcheck:
+      test: ["CMD", "temporal", "operator", "cluster", "health", "--address", "temporal:7233"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  api:
+    image: ghcr.io/openplanhq/openplan-api:v0.2.0
+    pull_policy: missing
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+      # The API discovers the provider while it starts, and an unreachable
+      # issuer is a boot failure.
+      dex:
+        condition: service_healthy
+    environment:
+      HTTP_ADDRESS: ":8081"
+      DATABASE_URL: postgres://openplan:openplan@postgres:5432/openplan?sslmode=disable
+      TEMPORAL_ADDRESS: temporal:7233
+      OPENPLAN_ENVIRONMENT: development
+      OPENPLAN_TENANT_ID: tenant_123
+      # Local evaluation defaults, duplicated from .env.example. Replace before
+      # keeping anything here.
+      CREDENTIAL_ENCRYPTION_KEY: 717cb4d0fd1db07a30442806c2987599580f6d7c6e63b9bddf509bc183a086d3
+      SESSION_ENCRYPTION_KEY: b6f1d2c4a8e0937516243b8c5d7e9f0a1b2c3d4e5f60718293a4b5c6d7e8f9a0
+      OIDC_ISSUER_URL: http://dex.localhost:5556/dex
+      OIDC_CLIENT_ID: openplan-api
+      OIDC_CLIENT_SECRET: openplan-api-local-only
+      OPENPLAN_PUBLIC_URL: http://localhost:5173
+      ARTIFACT_STORE_KIND: filesystem
+      ARTIFACT_STORE_FILESYSTEM_ROOT: /var/lib/openplan/artifacts
+      OPENPLAN_TERRAFORM_TIMEOUT: 45m
+      # The sub Dex issues for the static password user below. Required: without
+      # it the API exits at startup and restart-loops. Changing the userID in
+      # dex.yaml strands every grant.
+      OPENPLAN_ROOT_SUBJECT: CiQ3YzRiMmYwZS0zZDFhLTRlOGItOWY2Yy0yYTVkOGUxYjBjNDcSBWxvY2Fs
+    restart: on-failure
+    ports:
+      - "8081:8081"
+    volumes:
+      - artifacts:/var/lib/openplan/artifacts
+
+  # The data plane. It runs tenant Terraform, so it gets no database URL and no
+  # key: secrets arrive sealed to a per-run key, and results go back to the API
+  # through Temporal.
+  #
+  # Two replicas, so runs land on different hosts. A run's workspace activities
+  # and sealing key stay on one executor through a Temporal session;
+  # EXECUTOR_RUN_ROOT is container-local for the same reason.
+  executor:
+    image: ghcr.io/openplanhq/openplan-executor:v0.2.0
+    pull_policy: missing
+    deploy:
+      replicas: 2
+    depends_on:
+      temporal:
+        condition: service_healthy
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      ARTIFACT_STORE_KIND: filesystem
+      ARTIFACT_STORE_FILESYSTEM_ROOT: /var/lib/openplan/artifacts
+      EXECUTOR_RUN_ROOT: /var/lib/openplan/runs
+    restart: on-failure
+    volumes:
+      - artifacts:/var/lib/openplan/artifacts
+      # Shared by both replicas so a provider downloads once per host rather
+      # than once per replica. Provider binaries only, never credentials.
+      - plugin-cache:/var/lib/openplan/plugin-cache
+
+  web:
+    image: ghcr.io/openplanhq/openplan-web:v0.2.0
+    pull_policy: missing
+    depends_on:
+      - api
+    restart: on-failure
+    ports:
+      - "5173:5173"
+
+volumes:
+  postgres-data:
+  artifacts:
+  plugin-cache:
