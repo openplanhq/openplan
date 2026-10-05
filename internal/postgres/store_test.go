@@ -898,6 +898,46 @@ func TestCreateAndGetStack(t *testing.T) {
 	}
 }
 
+// A stack created without tags has a nil map, which json.Marshal writes as
+// null. It is stored as {}, and a row stored as null is read as no tags.
+func TestStackWithoutTagsIsStoredAndReadAsNoTags(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := NewStore(pool)
+	stack := domain.Stack{
+		ID:        domain.StackID("stack_untagged"),
+		TenantID:  domain.TenantID("tenant_123"),
+		Name:      "Untagged",
+		Slug:      "untagged",
+		CreatedBy: domain.UserID("user_123"),
+		CreatedAt: time.Now().UTC(),
+	}
+	if err := store.CreateStack(ctx, stack); err != nil {
+		t.Fatalf("CreateStack returned error: %v", err)
+	}
+
+	var stored string
+	if err := pool.QueryRow(ctx, `select tags_json::text from stacks where id = $1`, stack.ID).Scan(&stored); err != nil {
+		t.Fatalf("read stored tags: %v", err)
+	}
+	if stored != "{}" {
+		t.Fatalf("stored tags = %s, want {}", stored)
+	}
+
+	if _, err := pool.Exec(ctx, `update stacks set tags_json = 'null'::jsonb where id = $1`, stack.ID); err != nil {
+		t.Fatalf("store null tags: %v", err)
+	}
+	got, err := store.GetStack(ctx, stack.TenantID, stack.ID)
+	if err != nil {
+		t.Fatalf("GetStack returned error: %v", err)
+	}
+	if got.Tags == nil || len(got.Tags) != 0 {
+		t.Fatalf("tags = %#v, want an empty non-nil map", got.Tags)
+	}
+}
+
 func TestCreateStackReturnsDuplicateSlugConflict(t *testing.T) {
 	t.Parallel()
 
@@ -1146,6 +1186,104 @@ func TestListTemplateRevisionsReturnsTenantScopedRevisionsNewestFirst(t *testing
 	}
 	if templates[0].ID != domain.TemplateRevisionID("template_newer") || templates[1].ID != domain.TemplateRevisionID("template_older") {
 		t.Fatalf("template order = %#v", templates)
+	}
+}
+
+// A template registered without tags, or without template.yaml, has nil
+// tags. Stored as JSON null they were served as "tags": null, which the web
+// reads as a list.
+func TestTemplateRevisionWithoutTagsIsStoredAndReadAsNoTags(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := NewStore(pool)
+	revision := domain.TemplateRevision{
+		ID:                domain.TemplateRevisionID("template_untagged"),
+		TenantID:          domain.TenantID("tenant_123"),
+		RepoOwner:         "acme",
+		RepoName:          "infra-templates",
+		SourceRef:         "main",
+		ResolvedCommitSHA: "abc123",
+		RootPath:          "modules/vpc",
+		SourceTemplateID:  domain.SourceTemplateID("source_template_untagged"),
+		Name:              "vpc",
+		Status:            domain.TemplateRevisionActive,
+	}
+
+	created, err := store.UpsertTemplateRevisionWithVariables(ctx, revision, nil)
+	if err != nil {
+		t.Fatalf("UpsertTemplateRevisionWithVariables returned error: %v", err)
+	}
+	if created.Tags == nil || len(created.Tags) != 0 {
+		t.Fatalf("created tags = %#v, want an empty non-nil slice", created.Tags)
+	}
+	var stored string
+	if err := pool.QueryRow(ctx, `select tags_json::text from template_revisions where id = $1`, created.ID).Scan(&stored); err != nil {
+		t.Fatalf("read stored tags: %v", err)
+	}
+	if stored != "[]" {
+		t.Fatalf("stored tags = %s, want []", stored)
+	}
+
+	// A row stored before the fix holds JSON null. Every read gives no tags.
+	if _, err := pool.Exec(ctx, `update template_revisions set tags_json = 'null'::jsonb where id = $1`, created.ID); err != nil {
+		t.Fatalf("store null tags: %v", err)
+	}
+	listed, err := store.ListTemplateRevisions(ctx, domain.TenantID("tenant_123"))
+	if err != nil {
+		t.Fatalf("ListTemplateRevisions returned error: %v", err)
+	}
+	if len(listed) != 1 || listed[0].Tags == nil || len(listed[0].Tags) != 0 {
+		t.Fatalf("listed = %#v, want one revision with an empty non-nil tags slice", listed)
+	}
+	got, err := store.GetTemplateRevision(ctx, domain.TenantID("tenant_123"), created.ID)
+	if err != nil {
+		t.Fatalf("GetTemplateRevision returned error: %v", err)
+	}
+	if got.Tags == nil || len(got.Tags) != 0 {
+		t.Fatalf("got tags = %#v, want an empty non-nil slice", got.Tags)
+	}
+	// Registering the same identity again reads the existing row back.
+	revision.ID = domain.TemplateRevisionID("template_untagged_again")
+	reused, err := store.UpsertTemplateRevisionWithVariables(ctx, revision, nil)
+	if err != nil {
+		t.Fatalf("second UpsertTemplateRevisionWithVariables returned error: %v", err)
+	}
+	if reused.ID != created.ID || reused.Tags == nil || len(reused.Tags) != 0 {
+		t.Fatalf("reused = %#v, want %s with an empty non-nil tags slice", reused, created.ID)
+	}
+}
+
+// A revision without variables is served as [], not null.
+func TestGetTemplateRevisionVariablesReturnsAnEmptySliceForNoVariables(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := NewStore(pool)
+	created, err := store.UpsertTemplateRevisionWithVariables(ctx, domain.TemplateRevision{
+		ID:                domain.TemplateRevisionID("template_123"),
+		TenantID:          domain.TenantID("tenant_123"),
+		RepoOwner:         "acme",
+		RepoName:          "infra-templates",
+		SourceRef:         "main",
+		ResolvedCommitSHA: "abc123",
+		RootPath:          ".",
+		SourceTemplateID:  domain.SourceTemplateID("source_template_123"),
+		Name:              "root",
+		Status:            domain.TemplateRevisionActive,
+	}, nil)
+	if err != nil {
+		t.Fatalf("UpsertTemplateRevisionWithVariables returned error: %v", err)
+	}
+
+	variables, err := store.GetTemplateRevisionVariables(ctx, domain.TenantID("tenant_123"), created.ID)
+	if err != nil {
+		t.Fatalf("GetTemplateRevisionVariables returned error: %v", err)
+	}
+	if variables == nil || len(variables) != 0 {
+		t.Fatalf("variables = %#v, want an empty non-nil slice", variables)
 	}
 }
 
