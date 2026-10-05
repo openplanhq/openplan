@@ -6,6 +6,7 @@ import {
   approveRun,
   discardRun,
   createStack,
+  getTemplateRevisionVariables,
   getTemplateRunLog,
   listStacks,
   listTemplateRevisions,
@@ -81,7 +82,7 @@ describe("api client", () => {
     const templateRevisions = await listTemplateRevisions("tenant_123");
 
     expect(stacks).toEqual([{ id: "stack_123" }]);
-    expect(templateRevisions).toEqual([{ id: "template_123" }]);
+    expect(templateRevisions).toEqual([{ id: "template_123", tags: [] }]);
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       "/v1/tenants/tenant_123/stacks",
@@ -92,6 +93,35 @@ describe("api client", () => {
       "/v1/tenants/tenant_123/template-revisions",
       expect.objectContaining({ method: "GET" })
     );
+  });
+
+  // A template registered without tags has been stored, and served, with
+  // "tags": null; every screen reads tags as a list.
+  it("reads a template revision's null or missing tags as no tags", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse([
+        { id: "rev_1", tags: null },
+        { id: "rev_2" },
+        { id: "rev_3", tags: ["aws"] }
+      ])
+    );
+
+    const templateRevisions = await listTemplateRevisions("tenant_123");
+
+    expect(templateRevisions.map((templateRevision) => templateRevision.tags)).toEqual([[], [], ["aws"]]);
+  });
+
+  it("reads a null template revision list as no revisions", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(null));
+
+    expect(await listTemplateRevisions("tenant_123")).toEqual([]);
+  });
+
+  it("reads a null variables body as no variables", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(null));
+
+    expect(await getTemplateRevisionVariables("tenant_123", "rev_1")).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledWith("/v1/tenants/tenant_123/template-revisions/rev_1/variables", expect.objectContaining({ method: "GET" }));
   });
 
   it("lists runs for a stack template", async () => {
