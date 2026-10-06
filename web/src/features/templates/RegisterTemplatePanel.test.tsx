@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../../auth/AuthContext";
 import { queryKeys } from "../../api/queryKeys";
 import RegisterTemplatePanel from "./RegisterTemplatePanel";
+import TemplatesPage from "./TemplatesPage";
 import { authValue, jsonResponse, registration, revision, TENANT, testQueryClient } from "./testSupport";
 
 function Opened() {
@@ -26,6 +27,32 @@ function renderPanel(queryClient: QueryClient) {
       { path: "/templates", element: <p data-testid="templates-stub">templates</p> },
       { path: "/templates/new", element: <RegisterTemplatePanel /> },
       { path: "/templates/:sourceTemplateId/variables", element: <Opened /> }
+    ],
+    { initialEntries: ["/templates/new"] }
+  );
+  render(
+    <QueryClientProvider client={queryClient}>
+      <AuthContext.Provider value={authValue()}>
+        <RouterProvider router={router} />
+      </AuthContext.Provider>
+    </QueryClientProvider>
+  );
+  return router;
+}
+
+// The panel inside the page, as router.tsx nests it: the page owns the list
+// query's error, and draws it in place of the panel.
+function renderInPage(queryClient: QueryClient) {
+  const router = createMemoryRouter(
+    [
+      {
+        path: "/templates",
+        element: <TemplatesPage />,
+        children: [
+          { path: "new", element: <RegisterTemplatePanel /> },
+          { path: ":sourceTemplateId/variables", element: <Opened /> }
+        ]
+      }
     ],
     { initialEntries: ["/templates/new"] }
   );
@@ -146,6 +173,29 @@ describe("RegisterTemplatePanel", () => {
 
     releaseList();
     await waitFor(() => expect(screen.getByTestId("opened").textContent).toBe("tpl_9"));
+  });
+
+  // Completed, but the list that would open the template cannot be read. The
+  // list query is in error, which the page draws in place of this panel, so
+  // the form is not left busy with nothing to press.
+  it("gives way to the page's retry when the refreshed list cannot be read", async () => {
+    const added = revision({ id: "rev_9", source_template_id: "tpl_9", repo_name: "edge", root_path: "." });
+    let listFails = true;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (init?.method === "POST") return jsonResponse(registration({ status: "running", template_revision_id: "" }));
+      if (String(input).includes("/template-registrations/")) return jsonResponse(registration({ template_revision_id: "rev_9" }));
+      return listFails ? jsonResponse({ error: "boom", message: "boom" }, 500) : jsonResponse([added, revision()]);
+    });
+    renderInPage(seed());
+    submit();
+
+    await waitFor(() => expect(screen.getByTestId("templates-error")).toBeTruthy(), { timeout: 3000 });
+    expect(screen.queryByTestId("register-template-progress")).toBeNull();
+
+    listFails = false;
+    fireEvent.click(screen.getByTestId("templates-retry"));
+    await waitFor(() => expect(screen.getByTestId("page-count").textContent).toBe("2"));
+    expect((screen.getByTestId("register-template-submit") as HTMLButtonElement).disabled).toBe(false);
   });
 
   // Review focus 4: the identity was registered already. The registration
