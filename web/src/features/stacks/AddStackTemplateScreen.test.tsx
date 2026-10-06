@@ -135,6 +135,16 @@ function renderScreen(queryClient: QueryClient, routes: ReactNode = <Route path=
   );
 }
 
+// Only while no popup is open: Base UI hides the rest of the page from
+// assistive technology while one is.
+const searchBox = () => screen.getByRole("combobox", { name: "Search templates" }) as HTMLInputElement;
+
+async function chooseTemplate(user: ReturnType<typeof userEvent.setup>, name: string) {
+  await user.click(searchBox());
+  await user.type(searchBox(), name);
+  await user.click(await screen.findByRole("option", { name: new RegExp(`^${name}`) }));
+}
+
 describe("AddStackTemplateScreen", () => {
   afterEach(() => {
     cleanup();
@@ -142,23 +152,52 @@ describe("AddStackTemplateScreen", () => {
     vi.unstubAllGlobals();
   });
 
-  it("groups selectable templates by repository", () => {
+  it("searches the registry instead of listing it", async () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [
-      templateRevision(),
-      templateRevision({ id: "rev_2", source_template_id: "tmpl_src_2", repo_owner: "my-org", repo_name: "rds" })
-    ]);
+    queryClient.setQueryData(
+      queryKeys.templateRevisions("tenant_123"),
+      ["acm", "alb", "eks", "iam", "kms", "rds", "sqs", "waf"].map((name, index) =>
+        templateRevision({ id: `rev_${index}`, source_template_id: `tmpl_${index}`, name, root_path: `aws/${name}` })
+      )
+    );
 
     renderScreen(queryClient);
 
-    expect(screen.getByTestId("template-group-hashicorp/vpc")).toBeTruthy();
-    expect(screen.getByTestId("template-group-my-org/rds")).toBeTruthy();
-    // No count pill here: it would count templates while the rows count
-    // installable revisions, two adjacent numbers meaning different things.
-    expect(screen.queryByTestId("template-group-count-hashicorp/vpc")).toBeNull();
+    // Nothing is listed until the search is used.
+    expect(screen.queryByRole("option")).toBeNull();
+    expect(screen.getByText("8 templates in 1 repository.")).toBeTruthy();
+
+    await userEvent.setup().click(searchBox());
+
+    // At most six at a time, by name, and the count says how many there are.
+    const options = await screen.findAllByRole("option");
+    expect(options.map((option) => option.textContent?.slice(0, 3))).toEqual(["acm", "alb", "eks", "iam", "kms", "rds"]);
+    expect(screen.getByText("Showing 6 of 8 templates · type to narrow")).toBeTruthy();
   });
 
-  it("shows one row per template, named after the template", () => {
+  it("narrows to what is typed, best match first, and counts the matches", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [
+      templateRevision({ id: "rev_1", source_template_id: "tmpl_1", name: "redis-operator" }),
+      templateRevision({ id: "rev_2", source_template_id: "tmpl_2", name: "network" }),
+      templateRevision({ id: "rev_3", source_template_id: "tmpl_3", name: "redis" })
+    ]);
+
+    renderScreen(queryClient);
+    const user = userEvent.setup();
+    await user.click(searchBox());
+    await user.type(searchBox(), "redis");
+
+    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+    const [first, second] = screen.getAllByRole("option");
+    expect(first.textContent?.startsWith("redis")).toBe(true);
+    expect(second.textContent?.startsWith("redis-operator")).toBe(true);
+    // The letters that matched are marked.
+    expect(within(first).getByText("redis", { selector: "mark" })).toBeTruthy();
+    expect(screen.getByText("2 matches")).toBeTruthy();
+  });
+
+  it("names each template's repository and ref under it, with how many revisions it has", async () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [
       templateRevision({ id: "rev_2", resolved_commit_sha: "44b2e0199999" }),
@@ -166,33 +205,36 @@ describe("AddStackTemplateScreen", () => {
     ]);
 
     renderScreen(queryClient);
+    await userEvent.setup().click(searchBox());
 
-    const row = screen.getByTestId("add-template-choice-tmpl_src_1");
-    // The name leads; the ref and commit are demoted to the trailing meta.
-    expect(row.textContent?.startsWith("vpc")).toBe(true);
-    expect(within(row).getByText("vpc")).toBeTruthy();
-    // The root path and the ref under the name; the count at the right. The
-    // commit is the Revision select's to show.
-    expect(row.textContent).toContain("main");
-    expect(row.textContent).toContain("2 revisions");
-    expect(row.textContent).not.toContain("44b2e01");
-    // Two revisions of one template are one row.
-    expect(within(screen.getByTestId("template-group-hashicorp/vpc")).getAllByRole("listitem")).toHaveLength(1);
+    // Two revisions of one template are one choice.
+    const [option] = await screen.findAllByRole("option");
+    expect(screen.getAllByRole("option")).toHaveLength(1);
+    expect(option.textContent?.startsWith("vpc")).toBe(true);
+    expect(option.textContent).toContain("hashicorp/vpc");
+    expect(option.textContent).toContain("main");
+    expect(option.textContent).toContain("2 revisions");
+    // The commit is the Revision select's to show.
+    expect(option.textContent).not.toContain("44b2e01");
+    // An active latest revision says nothing: a StatusLabel marks itself with its tone.
+    expect(option.querySelector("[data-tone]")).toBeNull();
   });
 
-  it("says nothing about a template whose latest revision is active", () => {
+  it("says when nothing matches, and points at registering a template", async () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [templateRevision()]);
 
     renderScreen(queryClient);
+    const user = userEvent.setup();
+    await user.click(searchBox());
+    await user.type(searchBox(), "kafka");
 
-    const row = screen.getByTestId("add-template-choice-tmpl_src_1");
-    expect(row.textContent).not.toContain("active");
-    // No state: a StatusLabel marks itself with its tone.
-    expect(row.querySelector("[data-tone]")).toBeNull();
+    expect(await screen.findByText("No templates match this search.")).toBeTruthy();
+    expect(screen.queryByRole("option")).toBeNull();
+    expect(screen.getByTestId("add-template-search-register").getAttribute("href")).toBe("/templates/new");
   });
 
-  it("names the chosen template in the panel that configures it", () => {
+  it("closes the search on a pick, shows the template it picked, and configures it", async () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [
       templateRevision(),
@@ -201,49 +243,68 @@ describe("AddStackTemplateScreen", () => {
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [variable()]);
 
     renderScreen(queryClient);
-
     expect(screen.queryByTestId("add-stack-template-variables")).toBeNull();
 
-    fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
+    await chooseTemplate(userEvent.setup(), "vpc");
 
-    // Named, because position alone said nothing: stacked under the list, this
-    // panel read as belonging to whichever template rendered last.
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Search templates" })).toBeNull();
+    const picked = screen.getByTestId("add-template-picked");
+    expect(picked.textContent).toContain("vpc");
+    expect(picked.textContent).toContain("hashicorp/vpc");
+    expect(within(picked).getByRole("button", { name: "Change" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Configure vpc" })).toBeTruthy();
-    expect(screen.getByTestId("add-template-choice-tmpl_src_1").getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByTestId("add-template-choice-tmpl_src_2").getAttribute("aria-pressed")).toBe("false");
-  });
-
-  it("hides the variables form until a revision is chosen", () => {
-    const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [templateRevision()]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [variable()]);
-
-    renderScreen(queryClient);
-
-    expect(screen.queryByTestId("add-stack-template-variables")).toBeNull();
-
-    fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
-
-    expect(screen.getByTestId("add-stack-template-variables")).toBeTruthy();
     expect((screen.getByLabelText(/region/) as HTMLInputElement).value).toBe("");
   });
 
-  it("marks itself unsaved once a variable value is typed, so SessionProvider's proactive re-auth defers", () => {
+  it("moves focus to the first variable once a template is chosen", async () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [templateRevision()]);
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [variable()]);
 
     renderScreen(queryClient);
-    fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
+    await chooseTemplate(userEvent.setup(), "vpc");
+
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(/region/)));
+  });
+
+  it("goes back to the chosen template when Change is left with Escape", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [templateRevision()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [variable()]);
+
+    renderScreen(queryClient);
+    const user = userEvent.setup();
+    await chooseTemplate(user, "vpc");
+    await user.click(screen.getByRole("button", { name: "Change" }));
+
+    // Change opens the search, focused, over the form it keeps.
+    await waitFor(() => expect(document.activeElement).toBe(searchBox()));
+    expect(await screen.findAllByRole("option")).toHaveLength(1);
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.getByTestId("add-template-picked")).toBeTruthy());
+    expect(screen.getByRole("heading", { name: "Configure vpc" })).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Change" }));
+  });
+
+  it("marks itself unsaved once a variable value is typed, so SessionProvider's proactive re-auth defers", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [templateRevision()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [variable()]);
+
+    renderScreen(queryClient);
+    await chooseTemplate(userEvent.setup(), "vpc");
 
     expect(document.querySelector("[data-unsaved='true']")).toBeNull();
     fireEvent.change(screen.getByLabelText(/region/), { target: { value: "eu-west-1" } });
     expect(document.querySelector("[data-unsaved='true']")).not.toBeNull();
   });
 
-  // Picking a template resets its revision and values, so picking it again,
-  // a stray click or a screen reader user expecting a toggle, must not.
-  it("keeps the chosen revision and typed values when the picked row is clicked again", async () => {
+  // Picking a template resets its revision and values, so picking it again
+  // after Change, a second look rather than a new choice, must not.
+  it("keeps the chosen revision and typed values when the same template is picked again", async () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [
       templateRevision({ id: "rev_new", resolved_commit_sha: "f17f9834444" }),
@@ -253,35 +314,41 @@ describe("AddStackTemplateScreen", () => {
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_old"), [variable()]);
 
     renderScreen(queryClient);
-    fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
     const user = userEvent.setup();
+    await chooseTemplate(user, "vpc");
     await user.click(screen.getByRole("combobox", { name: "Revision" }));
     await user.click(within(await screen.findByRole("listbox")).getByRole("option", { name: /3c0e112/ }));
     await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
     fireEvent.change(screen.getByLabelText(/region/), { target: { value: "eu-west-1" } });
 
-    fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
+    await user.click(screen.getByRole("button", { name: "Change" }));
+    await user.click(await screen.findByRole("option", { name: /^vpc/ }));
 
     expect(screen.getByRole("combobox", { name: "Revision" }).querySelector('[data-slot="select-value"]')?.textContent).toContain("3c0e112");
     expect((screen.getByLabelText(/region/) as HTMLInputElement).value).toBe("eu-west-1");
   });
 
-  it("does not allow choosing a template with no active revision, and says why", () => {
+  it("does not allow choosing a template with no active revision, and says why", async () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [
       templateRevision({ id: "rev_pending", status: "pending_validation" })
     ]);
 
     renderScreen(queryClient);
+    const user = userEvent.setup();
+    await user.click(searchBox());
 
-    const row = screen.getByTestId("add-template-choice-tmpl_src_1");
-    expect((row as HTMLButtonElement).disabled).toBe(true);
-    // A disabled row says why, as an icon and a word.
-    expect(row.textContent).toContain("waiting for validation");
-    expect(row.querySelector("[data-tone]")).not.toBeNull();
+    const option = await screen.findByRole("option", { name: /^vpc/ });
+    expect(option.getAttribute("aria-disabled")).toBe("true");
+    // A disabled choice says why, as an icon and a word.
+    expect(option.textContent).toContain("waiting for validation");
+    expect(option.querySelector("[data-tone]")).not.toBeNull();
+
+    await user.click(option);
+    expect(screen.queryByTestId("add-template-picked")).toBeNull();
   });
 
-  it("installs the newest active revision when a newer one failed validation", () => {
+  it("installs the newest active revision when a newer one failed validation", async () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [
       templateRevision({ id: "rev_bad", status: "invalid", resolved_commit_sha: "44b2e0199999" }),
@@ -290,16 +357,17 @@ describe("AddStackTemplateScreen", () => {
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_good"), [variable()]);
 
     renderScreen(queryClient);
+    const user = userEvent.setup();
+    await user.click(searchBox());
 
-    const row = screen.getByTestId("add-template-choice-tmpl_src_1");
-    // Selectable, because a validated revision is still available to install —
-    // and the commit shown is that one, not the newer broken one.
-    expect((row as HTMLButtonElement).disabled).toBe(false);
+    const option = await screen.findByRole("option", { name: /^vpc/ });
+    // Selectable, because a validated revision is still available to install.
+    expect(option.getAttribute("aria-disabled")).not.toBe("true");
     // The newest revision's failure is not hidden behind an older success.
-    expect(row.textContent).toContain("failed validation");
-    expect(row.textContent).toContain("1 revision");
+    expect(option.textContent).toContain("failed validation");
+    expect(option.textContent).toContain("1 revision");
 
-    fireEvent.click(row);
+    await user.click(option);
 
     // What gets installed is the active revision, not the newer broken one.
     const shown = screen.getByRole("combobox", { name: "Revision" }).querySelector('[data-slot="select-value"]')?.textContent ?? "";
@@ -321,7 +389,7 @@ describe("AddStackTemplateScreen", () => {
 
     renderScreen(queryClient);
 
-    fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
+    await chooseTemplate(userEvent.setup(), "vpc");
     fireEvent.change(screen.getByLabelText(/region/), { target: { value: "eu-west-1" } });
     fireEvent.click(screen.getByRole("button", { name: "Add template" }));
 
@@ -352,13 +420,13 @@ describe("AddStackTemplateScreen", () => {
 
     renderScreen(queryClient);
 
-    fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
+    await chooseTemplate(userEvent.setup(), "vpc");
     fireEvent.click(screen.getByRole("button", { name: "Add template" }));
 
     await waitFor(() => expect(screen.getByTestId("add-stack-template-error")).toBeTruthy());
   });
 
-  it("disables Add template and hides the empty-variables message while the chosen revision's variables are loading", () => {
+  it("disables Add template and hides the empty-variables message while the chosen revision's variables are loading", async () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [templateRevision()]);
     // Variables for rev_1 are deliberately left unseeded, and fetch never
@@ -367,18 +435,18 @@ describe("AddStackTemplateScreen", () => {
 
     renderScreen(queryClient);
 
-    fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
+    await chooseTemplate(userEvent.setup(), "vpc");
 
     expect(screen.getByTestId("add-stack-template-variables-loading")).toBeTruthy();
     expect(screen.queryByText("This template declares no variables.")).toBeNull();
     expect((screen.getByRole("button", { name: "Add template" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("does not render the previous revision's variable names after switching to a revision whose variables have not loaded", () => {
+  it("does not render the previous revision's variable names after switching to a revision whose variables have not loaded", async () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [
       templateRevision(),
-      templateRevision({ id: "rev_2", source_template_id: "tmpl_src_2", repo_owner: "my-org", repo_name: "rds" })
+      templateRevision({ id: "rev_2", source_template_id: "tmpl_src_2", name: "rds", repo_owner: "my-org", repo_name: "rds" })
     ]);
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [variable()]);
     // rev_2's variables are deliberately left unseeded, and fetch never
@@ -387,11 +455,13 @@ describe("AddStackTemplateScreen", () => {
     vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
 
     renderScreen(queryClient);
+    const user = userEvent.setup();
 
-    fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
+    await chooseTemplate(user, "vpc");
     expect(screen.getByLabelText(/region/)).toBeTruthy();
 
-    fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_2"));
+    await user.click(screen.getByRole("button", { name: "Change" }));
+    await user.click(await screen.findByRole("option", { name: /^rds/ }));
 
     expect(screen.queryByLabelText(/region/)).toBeNull();
     expect(screen.getByTestId("add-stack-template-variables-loading")).toBeTruthy();
@@ -418,7 +488,7 @@ describe("AddStackTemplateScreen", () => {
 
     renderScreen(queryClient);
 
-    fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
+    await chooseTemplate(userEvent.setup(), "vpc");
 
     await waitFor(() => expect(screen.getByTestId("add-stack-template-variables-error")).toBeTruthy());
     expect(screen.queryByText("This template declares no variables.")).toBeNull();
@@ -435,9 +505,10 @@ describe("AddStackTemplateScreen", () => {
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [variable()]);
 
     renderScreen(queryClient);
-    fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
+    const user = userEvent.setup();
+    await chooseTemplate(user, "vpc");
 
-    await userEvent.setup().click(screen.getByRole("combobox", { name: "Revision" }));
+    await user.click(screen.getByRole("combobox", { name: "Revision" }));
     const options = within(await screen.findByRole("listbox")).getAllByRole("option").map((option) => option.textContent ?? "");
     expect(options).toHaveLength(1);
     expect(options[0]).toContain("abcdef1");
@@ -455,12 +526,13 @@ describe("AddStackTemplateScreen", () => {
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_new"), [variable()]);
 
     renderScreen(queryClient);
-    fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
+    const user = userEvent.setup();
+    await chooseTemplate(user, "vpc");
 
     const select = screen.getByRole("combobox", { name: "Revision" });
     expect(select.querySelector('[data-slot="select-value"]')?.textContent).toContain("f17f983");
 
-    await userEvent.setup().click(select);
+    await user.click(select);
     const options = within(await screen.findByRole("listbox")).getAllByRole("option").map((option) => option.textContent ?? "");
     expect(options).toHaveLength(3);
     expect(options[0]).toContain("f17f983");
@@ -487,9 +559,9 @@ describe("AddStackTemplateScreen", () => {
     );
 
     renderScreen(queryClient);
-    fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
-    fireEvent.change(screen.getByLabelText(/region/), { target: { value: "eu-west-1" } });
     const user = userEvent.setup();
+    await chooseTemplate(user, "vpc");
+    fireEvent.change(screen.getByLabelText(/region/), { target: { value: "eu-west-1" } });
     await user.click(screen.getByRole("combobox", { name: "Revision" }));
     await user.click(within(await screen.findByRole("listbox")).getByRole("option", { name: /3c0e112/ }));
     await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
@@ -559,7 +631,7 @@ describe("AddStackTemplateScreen", () => {
         <Route path="runs" element={<LocationProbe />} />
       </Route>
     );
-    fireEvent.click(screen.getByTestId("add-template-choice-tmpl_src_1"));
+    await chooseTemplate(userEvent.setup(), "vpc");
     fireEvent.change(screen.getByLabelText(/region/), { target: { value: "eu-west-1" } });
     fireEvent.click(screen.getByRole("button", { name: "Add template" }));
 

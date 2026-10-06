@@ -8,6 +8,7 @@ import {
   revisionCountLabel,
   revisionSourceLabel,
   revisionsForSourceTemplate,
+  searchTemplates,
   sourceTemplateKey,
   templateDisplayName,
   templateRevisionLabel,
@@ -234,6 +235,57 @@ describe("matchesTemplateFilter", () => {
 
   it("does not match what is not there", () => {
     expect(matchesTemplateFilter(network, "kafka")).toBe(false);
+  });
+});
+
+describe("searchTemplates", () => {
+  // One template per spec, each its own source template.
+  const templates = (...specs: Array<Partial<TemplateRevision>>) =>
+    groupTemplatesByRepository(specs.map((spec, index) => revision({ id: `rev_${index}`, source_template_id: `tpl_${index}`, ...spec }))).flatMap(
+      (group) => group.sourceTemplates
+    );
+  const names = (query: string, ...specs: Array<Partial<TemplateRevision>>) =>
+    searchTemplates(templates(...specs), query).map((match) => match.sourceTemplate.name);
+
+  it("lists every template by name when nothing is typed", () => {
+    expect(names("  ", { name: "redis" }, { name: "network" }, { name: "eks" })).toEqual(["eks", "network", "redis"]);
+  });
+
+  it("ranks a name that starts with the query first, then one that contains it, then one with its letters apart", () => {
+    expect(
+      names("redis", { name: "redshift-cluster" }, { name: "memorystore-redis" }, { name: "redis-operator" }, { name: "redis" }, { name: "network" })
+    ).toEqual(["redis", "redis-operator", "memorystore-redis", "redshift-cluster"]);
+  });
+
+  it("matches a name's letters in order, and says which ones matched", () => {
+    const [match] = searchTemplates(templates({ name: "rds-postgres" }), "rpg");
+    expect(match.nameHits).toEqual([0, 4, 8]);
+  });
+
+  it("does not match letters scattered across a long name", () => {
+    expect(names("ab", { name: "a-very-long-name-b" })).toEqual([]);
+  });
+
+  // Fuzzy matching a long repository or path would light up nearly every
+  // template for a short query.
+  it("matches the repository and the path only as a run of letters", () => {
+    const eks = { name: "eks", repo_owner: "acme", repo_name: "infra-modules", root_path: "aws/eks" };
+    const [byRepository] = searchTemplates(templates(eks), "infra");
+    expect(byRepository.repositoryHits).toEqual([5, 6, 7, 8, 9]);
+    expect(byRepository.nameHits).toEqual([]);
+    const [byPath] = searchTemplates(templates(eks), "aws/");
+    expect(byPath.pathHits).toEqual([0, 1, 2, 3]);
+    expect(names("aim", eks)).toEqual([]);
+  });
+
+  it("needs every word to match somewhere", () => {
+    expect(
+      names("gcp redis", { name: "memorystore-redis", repo_name: "gcp-modules", root_path: "memorystore" }, { name: "redis", root_path: "aws/redis" })
+    ).toEqual(["memorystore-redis"]);
+  });
+
+  it("ignores case and the spaces around what was typed", () => {
+    expect(names("  REDIS ", { name: "redis" }, { name: "network" })).toEqual(["redis"]);
   });
 });
 

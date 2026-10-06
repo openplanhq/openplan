@@ -143,6 +143,113 @@ export function matchesTemplateFilter(sourceTemplate: SourceTemplateGroup, query
   );
 }
 
+/** A template found by searchTemplates, and which characters of it matched. */
+export interface TemplateSearchMatch {
+  sourceTemplate: SourceTemplateGroup;
+  /** "owner/name". */
+  repository: string;
+  /** Indices into the name, the repository and the root path, for highlighting. */
+  nameHits: number[];
+  repositoryHits: number[];
+  pathHits: number[];
+}
+
+/**
+ * The templates matching what someone typed in the Add template search, best
+ * first. Every word must match the name, the repository or the root path.
+ * Names match fuzzily, their letters in order; the repository and the path
+ * only as a run of letters, so a short word cannot light up every long path.
+ * With nothing typed, every template, by name.
+ */
+export function searchTemplates(sourceTemplates: SourceTemplateGroup[], query: string): TemplateSearchMatch[] {
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const scored: Array<{ match: TemplateSearchMatch; score: number }> = [];
+
+  for (const sourceTemplate of sourceTemplates) {
+    const latest = sourceTemplate.latestRevision;
+    const match: TemplateSearchMatch = {
+      sourceTemplate,
+      repository: `${latest.repo_owner}/${latest.repo_name}`,
+      nameHits: [],
+      repositoryHits: [],
+      pathHits: []
+    };
+    let score = 0;
+    let matchesEveryWord = true;
+    for (const word of words) {
+      // A word found only in the repository or the path ranks below one found
+      // in the name, since the name is what people search for.
+      const candidates = [
+        { hits: match.nameHits, found: scoreWord(word, sourceTemplate.name, true), penalty: 0 },
+        { hits: match.repositoryHits, found: scoreWord(word, match.repository, false), penalty: 60 },
+        { hits: match.pathHits, found: scoreWord(word, sourceTemplate.rootPath, false), penalty: 60 }
+      ];
+      let best: (typeof candidates)[number] | null = null;
+      for (const candidate of candidates) {
+        if (candidate.found && (!best?.found || candidate.found.score - candidate.penalty > best.found.score - best.penalty)) {
+          best = candidate;
+        }
+      }
+      if (!best?.found) {
+        matchesEveryWord = false;
+        break;
+      }
+      score += best.found.score - best.penalty;
+      best.hits.push(...best.found.hits);
+    }
+    if (matchesEveryWord) {
+      scored.push({ match, score });
+    }
+  }
+
+  if (words.length === 0) {
+    return scored.map(({ match }) => match).sort((a, b) => a.sourceTemplate.name.localeCompare(b.sourceTemplate.name));
+  }
+  // Ties go to the shorter name: "redis" before "redis-operator".
+  return scored
+    .sort((a, b) => b.score - a.score || a.match.sourceTemplate.name.length - b.match.sourceTemplate.name.length)
+    .map(({ match }) => match);
+}
+
+// How well one word matches one string, and where; null when it does not. A
+// run of letters beats letters apart, and either beats more for starting a
+// word ("-", "_", "/", "." or a space before it) and for starting earlier.
+function scoreWord(word: string, text: string, fuzzy: boolean): { score: number; hits: number[] } | null {
+  const haystack = text.toLowerCase();
+  const startsWord = (index: number) => index === 0 || "-_/. ".includes(haystack[index - 1]);
+
+  const at = haystack.indexOf(word);
+  if (at >= 0) {
+    return {
+      score: 100 + (startsWord(at) ? 30 : 0) - at - haystack.length * 0.5,
+      hits: Array.from({ length: word.length }, (_, offset) => at + offset)
+    };
+  }
+  if (!fuzzy) {
+    return null;
+  }
+
+  const hits: number[] = [];
+  let score = 0;
+  for (let index = 0; index < haystack.length && hits.length < word.length; index++) {
+    if (haystack[index] !== word[hits.length]) {
+      continue;
+    }
+    const follows = hits.length > 0 && hits[hits.length - 1] === index - 1;
+    score += 1 + (startsWord(index) ? 4 : 0) + (follows ? 3 : 0);
+    hits.push(index);
+  }
+  if (hits.length < word.length) {
+    return null;
+  }
+  // Letters spread across a long name are more likely chance than intent.
+  const span = hits[hits.length - 1] - hits[0] + 1;
+  if (span > Math.max(word.length * 3, word.length + 6)) {
+    return null;
+  }
+  return { score: score - (span - word.length) * 0.5, hits };
+}
+
 /**
  * What to call a template. `name` is inferred per revision and can be blank, so
  * fall through to the root path and finally the repository. A root path of "."
