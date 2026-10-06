@@ -386,12 +386,14 @@ Recorded here because each is part of what this branch landed, and each has a te
 | `bcfa76f` | Keep Register template's status region mounted so its progress is announced. |
 | `cda5f11` | Read null template tags and variables as empty lists in the web layer. |
 | `c437283` | Store and read no template or stack tags as empty, not null. |
+| `2412128` | Store and read no default credentials as empty, not null. |
+| `5e1f231` | Pin that Register template gives way when its list cannot load. |
 
-### Known gap, left in place
+### The gap that was not one
 
-`RegisterTemplatePanel`'s `opening` is true whenever the registration completed with a revision id but the refetched list does not hold that revision yet. The revisions query has no error branch, so a refetch that fails and exhausts its retries leaves `opening` true, the fields and button disabled behind the progress spinner, and no error to show. Nothing bounds it either, so a refetch that runs before the revision is in the list hangs the same way on a healthy server. Fix it by reading the query's error as terminal, or by polling the list while opening.
+`RegisterTemplatePanel`'s `opening` was once recorded here as a known gap: a refetch that failed, or ran before the revision was in the list, would leave the panel busy for good. Neither can. The sync workflow records the registration completed only with the id of the revision it already wrote, so a list fetched after the poll reads completed holds it; and a failed refetch puts the list query in error, which `TemplatesPage` draws in place of the panel. `5e1f231` corrects the comment and pins the second through the page.
 
-`internal/postgres/repositories.go` also still has a dead `if credentialIDsJSON == nil` guard after `json.Marshal`, which can never fire for the same reason the tag guards in `c437283` never fired. It predates this work (`8247ec7`) and is harmless on the way out, since `newStackResponse` normalises to `[]`.
+The dead `if credentialIDsJSON == nil` guard that predated this work (`8247ec7`) hid a real write: the service hands a stack without default credentials a nil slice, so every such stack was stored as `null`. `2412128` fixes it the way `c437283` fixed tags.
 
 ## After merge
 
