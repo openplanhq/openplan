@@ -116,8 +116,8 @@ CI: a `site` job in `.github/workflows/ci.yml`, beside the `web` job: `npm ci`,
 
 ## Open questions
 
-- **The painting's credit and licence.** Its artist, title and source are not
-  known yet. It must not ship until they are, with a credit line in the footer
-  and a licence that allows it.
+- **The painting's credit and licence.** Resolved: a study by J. M. W. Turner
+  (1775–1851), public domain, found on Artvee. The footer credits it as
+  "Painting by J. M. W. Turner, via Artvee".
 - **Hosting and domain.** GitHub Pages from a workflow is the simplest; a domain
   needs a DNS record. Decided before a deploy workflow is added.

@@ -29,7 +29,7 @@ describe("site/index.html", () => {
     const used = new Set(
       [...HTML.matchAll(/\b(?:bg|text|border|fill|stroke)-([a-z]+(?:-[a-z]+)*)\b/g)]
         .map((m) => m[1])
-        .filter((name) => !/^(?:none|sm|lg|xl|base|meta|row-title|page-title|panel-title|t|b|l|r|x|y|width|dasharray|linecap|linejoin)$/.test(name))
+        .filter((name) => !/^(?:none|xs|sm|lg|xl|base|meta|row-title|page-title|panel-title|t|b|l|r|x|y|width|dasharray|linecap|linejoin)$/.test(name))
     );
     const defined = new Set([...THEME.matchAll(/--color-([a-z-]+):/g)].map((m) => m[1]));
     expect([...used].filter((name) => !defined.has(name))).toEqual([]);
@@ -67,5 +67,6 @@ describe("site/index.html", () => {
     expect(footer).toMatch(/<img\b[^>]*\bsrc="\/footer-train\.jpg"/);
     expect(() => read("public/footer-train.jpg")).not.toThrow();
     expect(footer).toContain("Apache 2.0");
+    expect(footer).toContain("Painting by J. M. W. Turner");
   });
 });
