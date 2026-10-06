@@ -17,7 +17,12 @@ describe("site/index.html", () => {
       expect(source).not.toMatch(/\b(?:rgba?|hsla?|oklch)\(/i);
     }
     const paint = [...HTML.matchAll(/\b(?:fill|stroke)="([^"]*)"/g)].map((m) => m[1]);
-    expect(paint.filter((value) => value !== "none" && value !== "currentColor")).toEqual([]);
+    expect(paint.filter((value) => value !== "none" && value !== "currentColor")).toEqual([]);    // Arbitrary values and inline styles are the other ways a colour gets in.
+    expect(HTML).not.toMatch(/-\[(?!\d)[a-z]+\]/i);
+    expect(HTML).not.toMatch(/style="[^"]*(?:color|fill|stroke)/i);
+    // The stylesheet only imports: anything else in it is a rule the guards above do not read.
+    const rules = CSS.replace(/\/\*[\s\S]*?\*\//g, "").split("\n").map((line) => line.trim()).filter(Boolean);
+    expect(rules.filter((line) => !line.startsWith("@import "))).toEqual([]);
   });
 
   it("uses only theme colours that theme.css defines", () => {
@@ -50,8 +55,9 @@ describe("site/index.html", () => {
     const features = HTML.split("<li data-feature").slice(1).map((chunk) => chunk.split("</li>")[0]);
     expect(features).toHaveLength(8);
     for (const feature of features) {
-      expect(feature).toMatch(/<svg\b/);
-      expect(feature).toMatch(/\b(?:stroke|fill)-primary\b/);
+      const drawing = feature.split("<svg")[1]?.split("</svg>")[0] ?? "";
+      expect(drawing).not.toBe("");
+      expect(drawing).toMatch(/\b(?:stroke|fill)-primary(?![\w-])/);
       expect(feature).toMatch(/<h3\b[^>]*>[^<]+<\/h3>/);
     }
   });
