@@ -4,8 +4,7 @@ A public page that says what openplan is and lists its features, in the app's
 design language. Designed on the "openplan website" canvas
 (https://claude.ai/artifact/XcwSGV8i1Ytki2i29qFUtS).
 
-**Out of scope:** docs pages, a dark theme (the app is light only), and
-deploying it.
+**Out of scope:** docs pages, and a dark theme (the app is light only).
 
 ## The page
 
@@ -40,4 +39,5 @@ deploying it.
 `src/page.test.ts`, which guards the rules above. CI runs `npm test` and
 `npm run build` in a `site` job beside `web`.
 
-**Open:** hosting and domain. If served from a subpath, set Vite's `base`.
+**Hosting:** GitHub Pages at https://openplan.run (GoDaddy DNS), deployed by
+`.github/workflows/site.yml` on pushes to `main` that touch `site/` or the theme.
