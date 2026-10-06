@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>openplan: self-hosted Terraform for your whole team</title>
+    <meta name="description" content="openplan is a self-hosted, open-source alternative to Terraform Cloud." />
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body class="bg-canvas">
+    <header class="flex items-center justify-between border-b bg-card px-4 py-3 sm:px-6">
+      <span class="text-lg leading-none font-semibold tracking-title">openplan</span>
+      <a class="inline-flex h-8 items-center rounded-lg border bg-card px-3 text-sm font-medium transition-colors hover:bg-muted" href="https://github.com/openplanhq/openplan">GitHub</a>
+    </header>
+
+    <main>
+      <section class="mx-auto flex max-w-[1216px] flex-wrap items-center gap-10 px-5 py-14">
+        <div class="flex min-w-0 flex-[1_1_440px] flex-col gap-5">
+          <h1 class="text-4xl leading-[1.1] font-semibold tracking-title sm:text-[44px]">Terraform for your whole team, on your own infrastructure.</h1>
+          <p class="text-[17px] leading-relaxed text-muted-foreground">openplan is a self-hosted, open-source alternative to Terraform Cloud. Register a Terraform or OpenTofu module once, and anyone on your team can stand up their own copy from a web UI, with their own variables, their own credentials and a full history of every change.</p>
+          <div>
+            <a class="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-strong" href="https://github.com/openplanhq/openplan">
+              View on GitHub
+              <svg aria-hidden="true" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+            </a>
+          </div>
+          <p class="flex items-start gap-2 text-meta text-muted-foreground">
+            <svg aria-hidden="true" class="mt-0.5 size-3.5 shrink-0 text-warning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>
+            <span>Not production ready. openplan is an MVP for local development and evaluation.</span>
+          </p>
+        </div>
+
+        <div class="min-w-0 flex-[1.15_1_480px]">
+          <div class="rounded-panel border bg-card p-3">
+            <div class="rounded-lg bg-canvas px-4 py-6">
+              <!-- A dashed plan, a person approving it, then solid applied infrastructure. -->
+              <svg aria-hidden="true" class="block h-auto w-full" viewBox="0 50 520 230">
+                <g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <rect class="stroke-separator" x="20" y="70" width="140" height="160" rx="16" stroke-dasharray="5 6" />
+                  <rect class="fill-card stroke-separator" x="42" y="98" width="96" height="22" rx="6" stroke-dasharray="4 5" />
+                  <rect class="fill-card stroke-separator" x="42" y="139" width="96" height="22" rx="6" stroke-dasharray="4 5" />
+                  <rect class="fill-card stroke-separator" x="42" y="180" width="96" height="22" rx="6" stroke-dasharray="4 5" />
+                  <path class="stroke-separator" d="M172 150 H206 M199 143 L206 150 L199 157" />
+                  <circle class="fill-card stroke-primary" cx="260" cy="150" r="44" />
+                  <circle class="fill-card stroke-primary" cx="260" cy="137" r="10" />
+                  <path class="fill-card stroke-primary" d="M240 172 C240 154 280 154 280 172 Z" />
+                  <circle class="fill-primary" cx="293" cy="118" r="12" />
+                  <path class="stroke-card" stroke-width="2" d="M287 118 L291 122 L299 114" />
+                  <path class="stroke-separator" d="M314 150 H348 M341 143 L348 150 L341 157" />
+                  <rect class="fill-card stroke-muted-foreground" x="360" y="70" width="140" height="160" rx="16" />
+                  <rect class="fill-card stroke-muted-foreground" x="382" y="98" width="96" height="22" rx="6" />
+                  <rect class="fill-card stroke-muted-foreground" x="382" y="139" width="96" height="22" rx="6" />
+                  <rect class="fill-card stroke-muted-foreground" x="382" y="180" width="96" height="22" rx="6" />
+                  <path class="stroke-dashed-border" d="M20 262 H500" stroke-dasharray="2 6" />
+                </g>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="border-t" aria-labelledby="features-title">
+        <div class="mx-auto flex max-w-[1216px] flex-col gap-8 px-5 py-14">
+          <div class="flex max-w-[720px] flex-col gap-3">
+            <h2 id="features-title" class="text-[28px] leading-[1.2] font-semibold tracking-title">Features</h2>
+            <p class="text-[15px] leading-relaxed text-muted-foreground">Everything a team needs to share Terraform without sharing a laptop.</p>
+          </div>
+          <ul class="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-5">
+            <li data-feature class="flex flex-col gap-4 rounded-panel border bg-card p-3">
+              <div class="flex h-[150px] items-center justify-center rounded-lg bg-canvas">
+                <svg aria-hidden="true" class="block h-auto w-full max-w-[240px]" viewBox="0 0 240 140">
+                  <g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect class="fill-card stroke-muted-foreground" x="30" y="50" width="40" height="40" rx="8" />
+                    <path class="stroke-separator" d="M40 64 H60 M40 72 H54" />
+                    <path class="stroke-dashed-border" d="M70 70 C110 70 110 34 150 34 M70 70 H150 M70 70 C110 70 110 106 150 106" />
+                    <rect class="fill-card stroke-separator" x="150" y="20" width="28" height="28" rx="6" />
+                    <rect class="fill-card stroke-primary" x="150" y="56" width="28" height="28" rx="6" />
+                    <rect class="fill-card stroke-separator" x="150" y="92" width="28" height="28" rx="6" />
+                  </g>
+                </svg>
+              </div>
+              <div class="flex flex-col gap-1.5 px-2 pb-3">
+                <h3 class="text-row-title font-medium">Register templates</h3>
+                <p class="text-sm leading-normal text-muted-foreground">Point openplan at a Git repository and a revision. That becomes a reusable template anyone on the platform can install.</p>
+              </div>
+            </li>
+            <li data-feature class="flex flex-col gap-4 rounded-panel border bg-card p-3">
+              <div class="flex h-[150px] items-center justify-center rounded-lg bg-canvas">
+                <svg aria-hidden="true" class="block h-auto w-full max-w-[240px]" viewBox="0 0 240 140">
+                  <g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect class="stroke-separator" x="62" y="22" width="116" height="96" rx="14" stroke-dasharray="4 5" />
+                    <rect class="fill-card stroke-muted-foreground" x="78" y="36" width="84" height="18" rx="5" />
+                    <rect class="fill-card stroke-primary" x="78" y="61" width="84" height="18" rx="5" />
+                    <rect class="fill-card stroke-muted-foreground" x="78" y="86" width="84" height="18" rx="5" />
+                  </g>
+                </svg>
+              </div>
+              <div class="flex flex-col gap-1.5 px-2 pb-3">
+                <h3 class="text-row-title font-medium">Compose stacks</h3>
+                <p class="text-sm leading-normal text-muted-foreground">A stack groups the templates that make up one environment or one service, each with its own configuration.</p>
+              </div>
+            </li>
+            <li data-feature class="flex flex-col gap-4 rounded-panel border bg-card p-3">
+              <div class="flex h-[150px] items-center justify-center rounded-lg bg-canvas">
+                <svg aria-hidden="true" class="block h-auto w-full max-w-[240px]" viewBox="0 0 240 140">
+                  <g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path class="stroke-dashed-border" stroke-width="2" d="M50 42 H190 M50 70 H190 M50 98 H190" />
+                    <path class="stroke-muted-foreground" stroke-width="2" d="M50 42 H90 M50 98 H70" />
+                    <path class="stroke-primary" stroke-width="2" d="M50 70 H150" />
+                    <circle class="fill-card stroke-muted-foreground" cx="90" cy="42" r="7" />
+                    <circle class="fill-primary" cx="150" cy="70" r="7" />
+                    <circle class="fill-card stroke-muted-foreground" cx="70" cy="98" r="7" />
+                  </g>
+                </svg>
+              </div>
+              <div class="flex flex-col gap-1.5 px-2 pb-3">
+                <h3 class="text-row-title font-medium">Configure per stack</h3>
+                <p class="text-sm leading-normal text-muted-foreground">Set input variables and attach cloud credentials without editing anyone's Terraform.</p>
+              </div>
+            </li>
+            <li data-feature class="flex flex-col gap-4 rounded-panel border bg-card p-3">
+              <div class="flex h-[150px] items-center justify-center rounded-lg bg-canvas">
+                <svg aria-hidden="true" class="block h-auto w-full max-w-[240px]" viewBox="0 0 240 140">
+                  <g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect class="fill-card stroke-separator" x="34" y="40" width="60" height="60" rx="10" stroke-dasharray="5 5" />
+                    <path class="stroke-separator" d="M106 70 H134 M128 64 L134 70 L128 76" />
+                    <rect class="fill-card stroke-primary" x="146" y="40" width="60" height="60" rx="10" />
+                    <rect class="fill-primary" x="162" y="56" width="28" height="28" rx="6" />
+                  </g>
+                </svg>
+              </div>
+              <div class="flex flex-col gap-1.5 px-2 pb-3">
+                <h3 class="text-row-title font-medium">Plan, apply and destroy</h3>
+                <p class="text-sm leading-normal text-muted-foreground">Run it all from the browser. Runs are durable on Temporal, so a plan or apply survives a restart.</p>
+              </div>
+            </li>
+            <li data-feature class="flex flex-col gap-4 rounded-panel border bg-card p-3">
+              <div class="flex h-[150px] items-center justify-center rounded-lg bg-canvas">
+                <svg aria-hidden="true" class="block h-auto w-full max-w-[240px]" viewBox="0 0 240 140">
+                  <g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path class="stroke-dashed-border" d="M52 30 V110" />
+                    <circle class="fill-card stroke-muted-foreground" cx="52" cy="34" r="5" />
+                    <circle class="fill-card stroke-muted-foreground" cx="52" cy="58" r="5" />
+                    <circle class="fill-card stroke-muted-foreground" cx="52" cy="82" r="5" />
+                    <circle class="fill-primary" cx="52" cy="106" r="5" />
+                    <path class="stroke-separator" d="M70 34 H170 M70 58 H200 M70 82 H150" />
+                    <path class="stroke-primary" d="M70 106 H186" />
+                  </g>
+                </svg>
+              </div>
+              <div class="flex flex-col gap-1.5 px-2 pb-3">
+                <h3 class="text-row-title font-medium">Watch runs and read logs</h3>
+                <p class="text-sm leading-normal text-muted-foreground">Every run keeps its init, plan and workspace output, along with its history.</p>
+              </div>
+            </li>
+            <li data-feature class="flex flex-col gap-4 rounded-panel border bg-card p-3">
+              <div class="flex h-[150px] items-center justify-center rounded-lg bg-canvas">
+                <svg aria-hidden="true" class="block h-auto w-full max-w-[240px]" viewBox="0 0 240 140">
+                  <g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path class="stroke-dashed-border" d="M78 70 H162" />
+                    <circle class="fill-card stroke-separator" cx="60" cy="70" r="18" />
+                    <rect class="fill-card stroke-muted-foreground" x="114" y="46" width="12" height="48" rx="4" />
+                    <circle class="fill-card stroke-primary" cx="180" cy="70" r="18" />
+                    <circle class="fill-primary" cx="180" cy="70" r="6" />
+                  </g>
+                </svg>
+              </div>
+              <div class="flex flex-col gap-1.5 px-2 pb-3">
+                <h3 class="text-row-title font-medium">Upgrade deliberately</h3>
+                <p class="text-sm leading-normal text-muted-foreground">Moving a stack to a new template revision is an explicit, reviewable step. Nothing drifts silently.</p>
+              </div>
+            </li>
+            <li data-feature class="flex flex-col gap-4 rounded-panel border bg-card p-3">
+              <div class="flex h-[150px] items-center justify-center rounded-lg bg-canvas">
+                <svg aria-hidden="true" class="block h-auto w-full max-w-[240px]" viewBox="0 0 240 140">
+                  <g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle class="fill-card stroke-muted-foreground" cx="120" cy="30" r="9" />
+                    <path class="fill-card stroke-muted-foreground" d="M104 60 C104 43 136 43 136 60 Z" />
+                    <path class="stroke-primary" d="M120 62 V78" />
+                    <rect class="fill-card stroke-separator" x="34" y="80" width="40" height="40" rx="8" stroke-dasharray="4 5" />
+                    <rect class="fill-card stroke-primary" x="100" y="80" width="40" height="40" rx="8" />
+                    <rect class="fill-card stroke-separator" x="166" y="80" width="40" height="40" rx="8" stroke-dasharray="4 5" />
+                  </g>
+                </svg>
+              </div>
+              <div class="flex flex-col gap-1.5 px-2 pb-3">
+                <h3 class="text-row-title font-medium">Control access per stack</h3>
+                <p class="text-sm leading-normal text-muted-foreground">Grant people a role on the stacks they need, rather than on everything.</p>
+              </div>
+            </li>
+            <li data-feature class="flex flex-col gap-4 rounded-panel border bg-card p-3">
+              <div class="flex h-[150px] items-center justify-center rounded-lg bg-canvas">
+                <svg aria-hidden="true" class="block h-auto w-full max-w-[240px]" viewBox="0 0 240 140">
+                  <g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path class="stroke-dashed-border" d="M58 36 C110 36 110 70 150 70 M58 70 H150 M58 104 C110 104 110 70 150 70" />
+                    <circle class="fill-card stroke-separator" cx="46" cy="36" r="11" />
+                    <rect class="fill-card stroke-separator" x="35" y="59" width="22" height="22" rx="4" />
+                    <path class="fill-card stroke-separator" d="M46 92 L58 114 H34 Z" />
+                    <rect class="fill-card stroke-primary" x="150" y="40" width="48" height="60" rx="10" />
+                    <circle class="fill-primary" cx="174" cy="64" r="5" />
+                    <path class="stroke-primary" stroke-width="3" d="M174 68 V80" />
+                  </g>
+                </svg>
+              </div>
+              <div class="flex flex-col gap-1.5 px-2 pb-3">
+                <h3 class="text-row-title font-medium">Sign in with SSO</h3>
+                <p class="text-sm leading-normal text-muted-foreground">openplan signs in through Dex. A corporate IdP, GitHub or LDAP plugs in as a connector.</p>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </section>
+    </main>
+
+    <footer class="border-t bg-card">
+      <img src="/footer-train.jpg" alt="A watercolour of a steam train crossing a viaduct over water" class="block h-[300px] w-full bg-canvas object-cover object-[50%_62%]" />
+      <div class="mx-auto flex max-w-[1216px] flex-wrap items-center justify-between gap-x-8 gap-y-4 px-5 py-8">
+        <div class="flex flex-col gap-2">
+          <span class="text-lg leading-none font-semibold tracking-title">openplan</span>
+          <span class="text-meta text-muted-foreground">Self-hosted, open-source Terraform for your whole team.</span>
+        </div>
+        <nav aria-label="Footer" class="flex gap-6 text-meta font-medium">
+          <a class="text-primary hover:underline" href="https://github.com/openplanhq/openplan">GitHub</a>
+          <a class="text-primary hover:underline" href="https://github.com/openplanhq/openplan/releases">Releases</a>
+        </nav>
+        <span class="text-meta text-muted-foreground">Open source under the Apache 2.0 licence</span>
+      </div>
+    </footer>
+  </body>
+</html>
