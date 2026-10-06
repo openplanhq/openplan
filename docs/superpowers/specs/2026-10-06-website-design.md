@@ -31,7 +31,8 @@ design language. Designed on the "openplan website" canvas
 - Drawings are inline SVG, `aria-hidden`, no words: strokes 1.5 in
   `muted-foreground` (subject), `separator` (secondary), `dashed-border`
   (connectors), shapes filled `card`, one `primary` accent marking the point.
-- No JavaScript ships: plain Vite and Tailwind, no framework.
+- No JavaScript of our own: plain Vite and Tailwind, no framework. The one
+  script is the Cloudflare Web Analytics beacon (cookieless page views).
 
 ## Build and checks
 

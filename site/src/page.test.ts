@@ -71,8 +71,13 @@ describe("site/index.html", () => {
     expect(imgs.filter((tag) => !/\balt="[^"]+"/.test(tag))).toEqual([]);
   });
 
-  it("ships no JavaScript", () => {
-    expect(HTML).not.toMatch(/<script\b/);
+  it("ships no JavaScript but the Cloudflare Web Analytics beacon", () => {
+    const scripts = [...HTML.matchAll(/<script\b[^>]*>[\s\S]*?<\/script>/g)].map((m) => m[0]);
+    expect(scripts).toHaveLength(1);
+    expect(scripts[0]).toMatch(/\bdefer\b/);
+    expect(scripts[0]).toContain('src="https://static.cloudflareinsights.com/beacon.min.js"');
+    expect(scripts[0]).toContain(`data-cf-beacon='{"token": "e93881027b4c4ef99c377908d9f44d19"}'`);
+    expect(scripts[0]).toMatch(/><\/script>$/);
   });
 
   it("lists the eight features, each drawing with a primary accent", () => {
