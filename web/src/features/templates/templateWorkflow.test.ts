@@ -4,14 +4,16 @@ import {
   activeRevisions,
   groupTemplatesByRepository,
   latestActiveRevision,
+  matchesTemplateFilter,
   revisionCountLabel,
   revisionSourceLabel,
   revisionsForSourceTemplate,
+  sourceTemplateKey,
   templateDisplayName,
   templateRevisionLabel,
-  templateRootPathLabel,
-  unsettledStatusTone
+  templateRootPathLabel
 } from "./templateWorkflow";
+import { revision } from "./testSupport";
 
 describe("template workflow helpers", () => {
   it("formats menu labels from persisted template revision rows", () => {
@@ -61,18 +63,6 @@ describe("revisionCountLabel", () => {
   it("singularises one revision", () => {
     expect(revisionCountLabel(1)).toBe("1 revision");
     expect(revisionCountLabel(4)).toBe("4 revisions");
-  });
-});
-
-describe("unsettledStatusTone", () => {
-  it("gives active no indicator at all", () => {
-    expect(unsettledStatusTone("active")).toBeNull();
-  });
-
-  it("tones every status a user might have to act on", () => {
-    expect(unsettledStatusTone("invalid")).toBe("failed");
-    expect(unsettledStatusTone("validating")).toBe("progress");
-    expect(unsettledStatusTone("pending_validation")).toBe("waiting");
   });
 });
 
@@ -225,5 +215,33 @@ describe("revisionSourceLabel", () => {
     for (const rootPath of [".", "", "  "]) {
       expect(revisionSourceLabel(templateRevision({ root_path: rootPath, repo_owner: "acme", repo_name: "infra-modules" }))).toBe("acme/infra-modules");
     }
+  });
+});
+
+describe("matchesTemplateFilter", () => {
+  const [network] = groupTemplatesByRepository([
+    revision({ name: "network", root_path: "aws/network", description: "A VPC with public and private subnets.", tags: ["networking"] })
+  ])[0].sourceTemplates;
+
+  it.each(["network", "acme/infra", "aws/net", "private subnets", "networking", ""])("matches %j", (query) => {
+    expect(matchesTemplateFilter(network, query)).toBe(true);
+  });
+
+  it("ignores case and the spaces around what was typed", () => {
+    expect(matchesTemplateFilter(network, "  NETWORKING  ")).toBe(true);
+    expect(matchesTemplateFilter(network, "VPC")).toBe(true);
+  });
+
+  it("does not match what is not there", () => {
+    expect(matchesTemplateFilter(network, "kafka")).toBe(false);
+  });
+});
+
+describe("sourceTemplateKey", () => {
+  it("is the source template id, or the identity tuple when there is none", () => {
+    expect(sourceTemplateKey(revision({ source_template_id: "tpl_9" }))).toBe("tpl_9");
+    expect(sourceTemplateKey(revision({ source_template_id: "", root_path: "." }))).toBe(
+      JSON.stringify(["acme", "infra-modules", ".", "main"])
+    );
   });
 });

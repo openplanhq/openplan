@@ -57,7 +57,8 @@ describe("read-only query hooks", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([{ id: "rev_1" }]));
     const { result } = renderHook(() => useTemplateRevisionsQuery("tenant_123"), { wrapper: wrapper(testQueryClient()) });
 
-    await waitFor(() => expect(result.current.data).toEqual([{ id: "rev_1" }]));
+    // The client fills in tags a server leaves out.
+    await waitFor(() => expect(result.current.data).toEqual([{ id: "rev_1", tags: [] }]));
     expect(fetch).toHaveBeenCalledWith(
       "/v1/tenants/tenant_123/template-revisions",
       expect.objectContaining({ method: "GET" })

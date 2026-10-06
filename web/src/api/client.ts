@@ -90,12 +90,21 @@ export function getTemplateRegistration(tenantID: string, registrationID: string
   return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/template-registrations/${encodeURIComponent(registrationID)}`);
 }
 
-export function getTemplateRevisionVariables(tenantID: string, templateRevisionID: string): Promise<TemplateVariable[]> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/template-revisions/${encodeURIComponent(templateRevisionID)}/variables`);
+// A Go nil slice is JSON null. Servers before the fix store and serve a
+// template registered without tags as "tags": null, and could serve a list
+// with nothing in it as null; every screen reads them as lists.
+type TemplateRevisionResponse = Omit<TemplateRevision, "tags"> & { tags?: string[] | null };
+
+export async function getTemplateRevisionVariables(tenantID: string, templateRevisionID: string): Promise<TemplateVariable[]> {
+  const variables = await requestJSON<TemplateVariable[] | null>(
+    `/v1/tenants/${encodeURIComponent(tenantID)}/template-revisions/${encodeURIComponent(templateRevisionID)}/variables`
+  );
+  return variables ?? [];
 }
 
-export function listTemplateRevisions(tenantID: string): Promise<TemplateRevision[]> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/template-revisions`);
+export async function listTemplateRevisions(tenantID: string): Promise<TemplateRevision[]> {
+  const templateRevisions = await requestJSON<TemplateRevisionResponse[] | null>(`/v1/tenants/${encodeURIComponent(tenantID)}/template-revisions`);
+  return (templateRevisions ?? []).map((templateRevision) => ({ ...templateRevision, tags: templateRevision.tags ?? [] }));
 }
 
 export function createStack(tenantID: string, body: CreateStackRequest): Promise<Stack> {

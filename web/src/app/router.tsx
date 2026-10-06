@@ -19,9 +19,13 @@ import TemplateCredentialsTab from "../features/stacks/TemplateCredentialsTab";
 import TemplateSettingsTab from "../features/stacks/TemplateSettingsTab";
 import UpgradeStackTemplateScreen from "../features/stacks/UpgradeStackTemplateScreen";
 import EnvironmentScreen from "../features/stacks/EnvironmentScreen";
-import TemplateRegistryScreen from "../features/templates/TemplateRegistryScreen";
-import TemplateRegistrationScreen from "../features/templates/TemplateRegistrationScreen";
-import TemplateDetailScreen from "../features/templates/TemplateDetailScreen";
+import RegisterTemplatePanel from "../features/templates/RegisterTemplatePanel";
+import RevisionsTab from "../features/templates/RevisionsTab";
+import RegistryTemplatePanel from "../features/templates/TemplatePanel";
+import TemplatesIndexPanel from "../features/templates/TemplatesIndexPanel";
+import TemplatesPage from "../features/templates/TemplatesPage";
+import { templatePath } from "../features/templates/templateRoutes";
+import RegistryVariablesTab from "../features/templates/VariablesTab";
 import RunDetailScreen from "../features/runs/RunDetailScreen";
 import StackAccessScreen from "../features/stacks/StackAccessScreen";
 import CreateStackScreen from "../features/stacks/CreateStackScreen";
@@ -141,11 +145,33 @@ export const routeConfig: RouteObject[] = [
               }
             ]
           },
-          { path: "templates", element: <TemplateRegistryScreen /> },
-          { path: "templates/new", element: <TemplateRegistrationScreen /> },
-          // After "templates/new", so the static segment is matched first
-          // rather than being read as a source template id.
-          { path: "templates/:sourceTemplateId", element: <TemplateDetailScreen /> },
+          // Every registered template, and the selected one's panel, which
+          // each route below draws into. "new" is a static segment, so it is
+          // matched before a template id.
+          {
+            path: "templates",
+            element: <TemplatesPage />,
+            handle: canvas,
+            children: [
+              { index: true, element: <TemplatesIndexPanel /> },
+              {
+                path: "new",
+                element: <RequireCapability capability="canPublishTemplate" mode="route" />,
+                children: [{ index: true, element: <RegisterTemplatePanel /> }]
+              },
+              {
+                path: ":sourceTemplateId",
+                element: <RegistryTemplatePanel />,
+                children: [
+                  // A loader redirect, so the old /templates/:id links land
+                  // on Variables before anything renders.
+                  { index: true, loader: ({ params }) => redirect(templatePath(params.sourceTemplateId ?? "")) },
+                  { path: "variables", element: <RegistryVariablesTab /> },
+                  { path: "revisions", element: <RevisionsTab /> }
+                ]
+              }
+            ]
+          },
           { path: "*", element: <NotFound /> }
         ]
       }
