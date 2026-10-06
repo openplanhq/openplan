@@ -16,8 +16,8 @@ deploying it.
 - **Features:** a centred intro, then eight stacked rows (register templates,
   compose stacks, configure per stack, plan/apply/destroy, runs and logs,
   upgrade deliberately, access per stack, SSO), drawing and text alternating
-  sides. Each row: a drawing on a dot grid, an "NN / 08" counter, a title, a
-  sentence from the README and a mono detail tag. The drawings animate in CSS
+  sides. Each row: a drawing on a dot grid, an "NN / 08" counter, a title and a
+  sentence from the README. The drawings animate in CSS
   (`src/drawings.css`) and hold still under `prefers-reduced-motion: reduce`.
 - **Call to action:** "Run it on your own machine", the release compose
   command, and a link to the README's "Running it locally".

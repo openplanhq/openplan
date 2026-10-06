@@ -85,10 +85,9 @@ describe("site/index.html", () => {
     }
   });
 
-  it("numbers every feature and gives it a detail tag", () => {
+  it("numbers every feature", () => {
     FEATURES.forEach((feature, index) => {
       expect(feature).toContain(`>0${index + 1} / 08<`);
-      expect(feature).toMatch(/<span\b[^>]*\bdata-tag\b[^>]*>[^<]+<\/span>/);
     });
   });
 
