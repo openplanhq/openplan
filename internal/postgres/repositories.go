@@ -472,12 +472,9 @@ func insertStack(ctx context.Context, tx pgx.Tx, stack domain.Stack) error {
 		return fmt.Errorf("marshal stack tags: %w", err)
 	}
 
-	credentialIDsJSON, err := json.Marshal(stack.DefaultCredentialIDs)
+	credentialIDsJSON, err := encodeStackCredentialIDs(stack.DefaultCredentialIDs)
 	if err != nil {
 		return fmt.Errorf("marshal default credential IDs: %w", err)
-	}
-	if credentialIDsJSON == nil {
-		credentialIDsJSON = []byte("[]")
 	}
 
 	// A caller that sets no status gets ready, the only one there is.
@@ -1671,6 +1668,28 @@ func decodeStackTags(tagsJSON []byte) (map[string]string, error) {
 	return tags, nil
 }
 
+// encodeStackCredentialIDs is a stack's default credentials as stored: [] for
+// none.
+func encodeStackCredentialIDs(ids []domain.CredentialSetID) ([]byte, error) {
+	if ids == nil {
+		ids = []domain.CredentialSetID{}
+	}
+	return json.Marshal(ids)
+}
+
+// decodeStackCredentialIDs reads stored default credentials, an empty slice
+// for none.
+func decodeStackCredentialIDs(idsJSON []byte) ([]domain.CredentialSetID, error) {
+	var ids []domain.CredentialSetID
+	if err := json.Unmarshal(idsJSON, &ids); err != nil {
+		return nil, err
+	}
+	if ids == nil {
+		ids = []domain.CredentialSetID{}
+	}
+	return ids, nil
+}
+
 func scanStack(scanner stackScanner) (domain.Stack, error) {
 	var stack domain.Stack
 	var tagsJSON []byte
@@ -1697,9 +1716,11 @@ func scanStack(scanner stackScanner) (domain.Stack, error) {
 		return domain.Stack{}, fmt.Errorf("unmarshal stack tags: %w", err)
 	}
 	stack.Tags = tags
-	if err := json.Unmarshal(credentialIDsJSON, &stack.DefaultCredentialIDs); err != nil {
+	credentialIDs, err := decodeStackCredentialIDs(credentialIDsJSON)
+	if err != nil {
 		return domain.Stack{}, fmt.Errorf("unmarshal stack credential IDs: %w", err)
 	}
+	stack.DefaultCredentialIDs = credentialIDs
 	return stack, nil
 }
 

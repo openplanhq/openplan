@@ -938,6 +938,47 @@ func TestStackWithoutTagsIsStoredAndReadAsNoTags(t *testing.T) {
 	}
 }
 
+// A stack created without default credentials has a nil slice, which
+// json.Marshal writes as null. It is stored as [], and a row stored as null is
+// read as none.
+func TestStackWithoutDefaultCredentialsIsStoredAndReadAsNone(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := NewStore(pool)
+	stack := domain.Stack{
+		ID:        domain.StackID("stack_uncredentialed"),
+		TenantID:  domain.TenantID("tenant_123"),
+		Name:      "Uncredentialed",
+		Slug:      "uncredentialed",
+		CreatedBy: domain.UserID("user_123"),
+		CreatedAt: time.Now().UTC(),
+	}
+	if err := store.CreateStack(ctx, stack); err != nil {
+		t.Fatalf("CreateStack returned error: %v", err)
+	}
+
+	var stored string
+	if err := pool.QueryRow(ctx, `select default_credential_ids_json::text from stacks where id = $1`, stack.ID).Scan(&stored); err != nil {
+		t.Fatalf("read stored default credential IDs: %v", err)
+	}
+	if stored != "[]" {
+		t.Fatalf("stored default credential IDs = %s, want []", stored)
+	}
+
+	if _, err := pool.Exec(ctx, `update stacks set default_credential_ids_json = 'null'::jsonb where id = $1`, stack.ID); err != nil {
+		t.Fatalf("store null default credential IDs: %v", err)
+	}
+	got, err := store.GetStack(ctx, stack.TenantID, stack.ID)
+	if err != nil {
+		t.Fatalf("GetStack returned error: %v", err)
+	}
+	if got.DefaultCredentialIDs == nil || len(got.DefaultCredentialIDs) != 0 {
+		t.Fatalf("default credential IDs = %#v, want an empty non-nil slice", got.DefaultCredentialIDs)
+	}
+}
+
 func TestCreateStackReturnsDuplicateSlugConflict(t *testing.T) {
 	t.Parallel()
 

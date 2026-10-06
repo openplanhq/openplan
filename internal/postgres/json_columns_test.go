@@ -118,3 +118,56 @@ func TestDecodeStackTagsReadsNullAsNoTags(t *testing.T) {
 		t.Fatalf("decodeStackTags = %#v, want env=prod", tags)
 	}
 }
+
+func TestEncodeStackCredentialIDsStoresNoneAsAnEmptyArray(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name string
+		ids  []domain.CredentialSetID
+		want string
+	}{
+		{name: "nil", ids: nil, want: "[]"},
+		{name: "empty", ids: []domain.CredentialSetID{}, want: "[]"},
+		{name: "ids", ids: []domain.CredentialSetID{"cred_1", "cred_2"}, want: `["cred_1","cred_2"]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := encodeStackCredentialIDs(tc.ids)
+			if err != nil {
+				t.Fatalf("encodeStackCredentialIDs returned error: %v", err)
+			}
+			if string(got) != tc.want {
+				t.Fatalf("encodeStackCredentialIDs(%#v) = %s, want %s", tc.ids, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDecodeStackCredentialIDsReadsNullAsNone(t *testing.T) {
+	t.Parallel()
+
+	for _, stored := range []string{"null", "[]"} {
+		ids, err := decodeStackCredentialIDs([]byte(stored))
+		if err != nil {
+			t.Fatalf("decodeStackCredentialIDs(%s) returned error: %v", stored, err)
+		}
+		if ids == nil || len(ids) != 0 {
+			t.Fatalf("decodeStackCredentialIDs(%s) = %#v, want an empty non-nil slice", stored, ids)
+		}
+		served, err := json.Marshal(domain.Stack{DefaultCredentialIDs: ids})
+		if err != nil {
+			t.Fatalf("marshal stack: %v", err)
+		}
+		if !strings.Contains(string(served), `"default_credential_ids":[]`) {
+			t.Fatalf("served %s, want \"default_credential_ids\":[]", served)
+		}
+	}
+
+	ids, err := decodeStackCredentialIDs([]byte(`["cred_1"]`))
+	if err != nil {
+		t.Fatalf("decodeStackCredentialIDs returned error: %v", err)
+	}
+	if len(ids) != 1 || ids[0] != "cred_1" {
+		t.Fatalf("decodeStackCredentialIDs = %#v, want [cred_1]", ids)
+	}
+}
