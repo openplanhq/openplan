@@ -1,6 +1,6 @@
-# CI for openplan. Three jobs, one per thing AGENTS.md tells a contributor to
-# run: the Go build from the repository root, the frontend checks from web/, and
-# the lint the Makefile pins.
+# CI for openplan. Four jobs, one per thing AGENTS.md tells a contributor to
+# run: the Go build from the repository root, the frontend checks from web/, the
+# website checks from site/, and the lint the Makefile pins.
 #
 # The authorization differential test is deliberately NOT here. It needs a real
 # Postgres and is the only guard on internal/authorization/write.go, so it gets
@@ -88,6 +88,33 @@ jobs:
 
       # `tsc -b` runs inside this, so a type error fails the build rather than
       # shipping.
+      - name: build
+        run: npm run build
+
+  site:
+    name: site (test, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # The same Node as the web job.
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: install
+        run: npm ci
+
+      # The guards read ../web/src/styles/theme.css, so a theme change that
+      # drops a colour the page uses fails here.
+      - name: test
+        run: npm test
+
       - name: build
         run: npm run build
 
