@@ -3,3 +3,5 @@
 @import "@fontsource-variable/geist-mono";
 /* The app's theme, read only: every colour, radius and type step on the page is the app's. */
 @import "../../web/src/styles/theme.css";
+/* The feature drawings' dot grid and animations; page.test.ts guards its colours. */
+@import "./drawings.css";

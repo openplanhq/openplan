@@ -13,9 +13,14 @@ deploying it.
 - **Hero:** headline, the README's pitch, "View on GitHub", the "Not production
   ready" note; beside it a drawing of a dashed plan, a person approving it, and
   solid applied infrastructure.
-- **Features:** eight cards (register templates, compose stacks, configure per
-  stack, plan/apply/destroy, runs and logs, upgrade deliberately, access per
-  stack, SSO), each a drawing over a title and a sentence from the README.
+- **Features:** a centred intro, then eight stacked rows (register templates,
+  compose stacks, configure per stack, plan/apply/destroy, runs and logs,
+  upgrade deliberately, access per stack, SSO), drawing and text alternating
+  sides. Each row: a drawing on a dot grid, an "NN / 08" counter, a title, a
+  sentence from the README and a mono detail tag. The drawings animate in CSS
+  (`src/drawings.css`) and hold still under `prefers-reduced-motion: reduce`.
+- **Call to action:** "Run it on your own machine", the release compose
+  command, and a link to the README's "Running it locally".
 - **Footer:** a 300px band of a J. M. W. Turner study (public domain, via
   Artvee, credited), then the wordmark, GitHub and Releases links, and the
   licence line.
@@ -31,7 +36,7 @@ deploying it.
 
 ## Build and checks
 
-`site/` holds `index.html`, `src/styles.css`, the painting in `public/`, and
+`site/` holds `index.html`, `src/styles.css` (imports only), `src/drawings.css`, the painting in `public/`, and
 `src/page.test.ts`, which guards the rules above. CI runs `npm test` and
 `npm run build` in a `site` job beside `web`.
 
