@@ -8,7 +8,7 @@ import type { StatusTone } from "./statusTone";
 afterEach(cleanup);
 
 describe("StatusBadge", () => {
-  // The tone table in docs/superpowers/specs/2026-09-29-shadcn-adoption-design.md.
+  // Each status tone renders as exactly one Badge variant.
   it.each([
     ["settled", "success"],
     ["failed", "destructive"],

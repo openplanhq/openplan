@@ -55,8 +55,7 @@ const devRoutes: RouteObject[] = import.meta.env.DEV
 // <Navigate> element so react-router resolves it before rendering anything:
 // the shell never flashes an empty index.
 //
-// Routes with a capability in the parent spec's route map are wrapped in a <RequireCapability mode="route"> layout route —
-// see docs/superpowers/specs/2026-07-19-capability-gating-primitives-design.md.
+// Routes that need a capability are wrapped in a <RequireCapability mode="route"> layout route.
 // The pages redesigned on openplan UI, which the shell puts on the grey canvas.
 const canvas: RouteHandle = { canvas: true };
 

@@ -5,10 +5,8 @@ executors and Postgres, from the Apply click until the run reads `completed`.
 An apply run plans first and saves the plan; approving it applies exactly that
 saved plan, in a second workflow that usually lands on a different executor.
 A destroy run goes the same way with a plan to destroy. A plan run stops after
-the plan, and an auto-approved apply run skips it (both below). The design is in
-[the saved-plan flow spec](superpowers/specs/2026-09-21-saved-plan-flow-design.md).
-Background on why the processes are split this way is in
-[the control plane split spec](superpowers/specs/2026-09-15-control-plane-split.md).
+the plan, and an auto-approved apply run skips it (both below). Why the
+processes are split this way is in [the architecture](architecture.md).
 
 ## Who connects to whom
 

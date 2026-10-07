@@ -3,7 +3,7 @@
 This document defines how openplan authenticates through Dex and the OpenFGA
 model used for per-stack authorization. The broader
 trust model and authorization invariants remain in the
-[authentication and authorization security architecture](superpowers/specs/2026-07-14-authn-authz-security-architecture-design.md).
+[authentication and authorization security architecture](security-architecture.md).
 
 ## Identity Provider
 
@@ -281,8 +281,7 @@ expires, and revokes on its own terms, which an ID token cannot offer: its
 `exp` is fixed when it is minted, so it cannot slide on activity, and a copy of
 it cannot be revoked. Dex v2.45.1 keeps no browser session of its own, so
 nothing on the provider side supplies either. The session cookie once held the
-raw ID token; why that changed is in the [app-owned session
-design](superpowers/specs/2026-08-29-app-owned-session-design.md).
+raw ID token, with exactly those limits.
 `internal/authentication.Session` is the Go type; `internal/authentication.SessionStore` is the
 persistence interface the cookie path of `RequireAuthentication` depends on.
 
@@ -355,9 +354,7 @@ There is still no refresh token — that part of the design is unchanged.
 Storing and rotating one was evaluated and rejected: correct handling needs a
 transactional store with row locking to survive concurrent requests racing a
 single-use refresh token, and the new cookie has nowhere reliable to ride out
-on a streaming log response. The full reasoning, including the ArgoCD
-comparison that shaped it, is in the [design
-doc](superpowers/specs/2026-08-25-oidc-server-side-flow-design.md). What has
+on a streaming log response. What has
 changed is what "expired" means: it is no longer the IdP's ID token `exp` but
 openplan's own idle and absolute bounds.
 

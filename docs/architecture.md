@@ -2,7 +2,7 @@
 
 The authentication and authorization trust boundaries, identity propagation,
 role semantics, failure contracts, and threat model are defined in the
-[Authentication and Authorization Security Architecture](superpowers/specs/2026-07-14-authn-authz-security-architecture-design.md).
+[Authentication and Authorization Security Architecture](security-architecture.md).
 
 This document describes openplan's current MVP product model, system architecture, execution workflows, persistence boundaries, security posture, and deferred design topics. For setup and local development, see the [project README](../README.md).
 
@@ -34,7 +34,7 @@ The MVP uses Temporal OSS as the durable workflow engine, Postgres as the applic
 
 The architecture also defines a pluggable `EventBus` interface for system events, live log fanout, and future pub/sub needs. The MVP can start with a no-op, in-memory, or simple local implementation, then swap in Redis, NATS JetStream, Kafka, or another broker without changing API or workflow semantics.
 
-The system is split into a control plane and a data plane (design: `docs/superpowers/specs/2026-09-15-control-plane-split.md`). The API process is the control plane: it serves HTTP, owns the database and every key, runs the queue loop that turns committed intents into workflow starts and signals, and polls Temporal's `control` task queue for workflow tasks and the activities that write product state. The executor process is the data plane: it polls only the `execution` task queue and runs workspace preparation, source checkout, and Terraform. It holds no database URL and no key. Neither process calls the other; every exchange goes through Temporal. [Apply run sequence](apply-run-sequence.md) walks an apply through every round trip.
+The system is split into a control plane and a data plane. The API process is the control plane: it serves HTTP, owns the database and every key, runs the queue loop that turns committed intents into workflow starts and signals, and polls Temporal's `control` task queue for workflow tasks and the activities that write product state. The executor process is the data plane: it polls only the `execution` task queue and runs workspace preparation, source checkout, and Terraform. It holds no database URL and no key. Neither process calls the other; every exchange goes through Temporal. [Apply run sequence](apply-run-sequence.md) walks an apply through every round trip.
 
 ```text
 UI --> openplan-api  (control plane)                      Temporal Server
