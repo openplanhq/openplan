@@ -44,6 +44,11 @@ type artifactStores struct {
 }
 
 func main() {
+	// First, before config is read or any subprocess exists. Fail closed: an
+	// executor that cannot hide its own process must not run template code.
+	if err := setNotDumpable(); err != nil {
+		log.Fatalf("set not dumpable: %v", err)
+	}
 	if err := run(context.Background(), os.Getenv); err != nil {
 		log.Fatal(err)
 	}
