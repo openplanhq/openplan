@@ -171,7 +171,13 @@ The runner should be implemented behind an interface so a future `KubernetesJobR
 
 ### Runner Security
 
-The MVP local process runner is optimized for fast feedback, but it should be treated as trusted-template execution. OpenTofu/Terraform providers, provisioners, external data sources, and local-exec style behavior may execute code inside the executor pod with access to the run's injected credentials. The executor holds no database URL or key, but it can still reach Temporal, which has no access control yet; see "Temporal access control" in the control plane split spec.
+Terraform code is untrusted. A template is arbitrary code: OpenTofu/Terraform providers, provisioners, external data sources and `local-exec` run anything inside the executor pod, with access to the run's injected credentials. Publishing templates is limited to editors, but that only limits who can write a template, not what its code can do. Every executor-side design must assume the template is hostile.
+
+The MVP local process runner does not isolate that code yet:
+
+- Runs share the executor's uid, so one run can read another run's credentials and the executor's own process, environment included. Process isolation is a 1.0 blocker: #331 and #240. Tofu and git are no longer handed that environment at start: theirs is an allowlist in `internal/runner/executor.go` plus what the run passes explicitly (#172).
+- The executor holds no database URL or key, but tofu can still reach Temporal, which has no access control yet (#246). See "Temporal access control" in the control plane split spec.
+- Network isolation, resource limits and a sandbox runtime come after 1.0 (#245).
 
 MVP executor deployments should use the following guardrails:
 
