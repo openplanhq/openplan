@@ -175,7 +175,7 @@ Terraform code is untrusted. A template is arbitrary code: OpenTofu/Terraform pr
 
 The MVP local process runner does not isolate that code yet:
 
-- Runs share the executor's uid, so one run can read another run's credentials and the executor's own process, environment included. Process isolation is a 1.0 blocker: #331 and #240. Tofu and git are no longer handed that environment at start: theirs is an allowlist in `internal/runner/executor.go` plus what the run passes explicitly (#172).
+- Runs share the executor's uid, so one run can read another run's credentials, including through the other run's `/proc` entries. Process isolation is a 1.0 blocker: #331. The executor's own process is out of reach: it clears its dumpable flag at startup, so the kernel makes its `/proc/<pid>` entries (the environment recorded at exec, and memory holding the runs' sealing keys) root's (#240). Tofu and git are no longer handed that environment at start either: theirs is an allowlist in `internal/runner/executor.go` plus what the run passes explicitly (#172).
 - The executor holds no database URL or key, but tofu can still reach Temporal, which has no access control yet (#246). See "Temporal access control" in the control plane split spec.
 - Network isolation, resource limits and a sandbox runtime come after 1.0 (#245).
 
