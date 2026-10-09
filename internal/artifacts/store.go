@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"os"
@@ -152,25 +153,68 @@ func NewFilesystemStore(root string) FilesystemStore {
 	return FilesystemStore{root: root}
 }
 
+// The filesystem store is shared by the api, as openplan, and the executor,
+// as root without CAP_DAC_OVERRIDE or CAP_FOWNER (#331). Neither can override
+// the other's permissions, so both reach objects through the group openplan:
+// directories are setgid, so new files inherit the group, and modes are set
+// explicitly, because the umask would strip group write.
+const (
+	sharedDirMode  = 0o770 | os.ModeSetgid
+	sharedFileMode = 0o660
+)
+
 func (store FilesystemStore) PutObject(_ context.Context, key string, _ string, body io.Reader) error {
 	objectPath, err := store.objectPath(key)
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(objectPath), 0o700); err != nil {
+	dir := filepath.Dir(objectPath)
+	if err := mkdirShared(store.root, dir); err != nil {
 		return fmt.Errorf("create object directory: %w", err)
 	}
-	file, err := os.OpenFile(objectPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	// A temporary file of our own, renamed into place: an object already
+	// there may belong to the other service, and only its owner can chmod it.
+	file, err := os.CreateTemp(dir, ".put-*")
 	if err != nil {
 		return fmt.Errorf("open object for write: %w", err)
 	}
 	_, copyErr := io.Copy(file, body)
+	chmodErr := file.Chmod(sharedFileMode)
 	closeErr := file.Close()
-	if copyErr != nil {
-		return fmt.Errorf("write object: %w", copyErr)
+	if err := errors.Join(copyErr, chmodErr, closeErr); err != nil {
+		_ = os.Remove(file.Name())
+		return fmt.Errorf("write object: %w", err)
 	}
-	if closeErr != nil {
-		return fmt.Errorf("close object: %w", closeErr)
+	if err := os.Rename(file.Name(), objectPath); err != nil {
+		_ = os.Remove(file.Name())
+		return fmt.Errorf("store object: %w", err)
+	}
+	return nil
+}
+
+// mkdirShared makes each missing directory from root down to dir, shared. A
+// directory that already exists is left alone: it may be the other service's.
+func mkdirShared(root, dir string) error {
+	if err := os.MkdirAll(root, 0o770); err != nil { //nolint:gosec // the group is how the api and the executor share the store
+		return err
+	}
+	rel, err := filepath.Rel(root, dir)
+	if err != nil || rel == "." {
+		return err
+	}
+	path := root
+	for part := range strings.SplitSeq(rel, string(filepath.Separator)) {
+		path = filepath.Join(path, part)
+		err := os.Mkdir(path, 0o770) //nolint:gosec // as above
+		if errors.Is(err, fs.ErrExist) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if err := os.Chmod(path, sharedDirMode); err != nil {
+			return err
+		}
 	}
 	return nil
 }

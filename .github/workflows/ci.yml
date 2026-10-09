@@ -62,6 +62,17 @@ jobs:
       - name: test
         run: go test ./...
 
+  isolation:
+    name: isolation (executor image, #331)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Runs as root in the real executor image with the compose security
+      # settings: what go test ./... on the runner cannot check.
+      - name: isolation tests
+        run: make isolation-test
+
   web:
     name: web (test, build)
     runs-on: ubuntu-latest

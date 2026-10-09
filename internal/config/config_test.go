@@ -506,8 +506,36 @@ func TestExecutorConfigHoldsNoControlPlaneSettings(t *testing.T) {
 	for i := range configType.NumField() {
 		got = append(got, configType.Field(i).Name)
 	}
-	want := []string{"TemporalAddress", "TemporalNamespace", "RunRoot", "ArtifactStore"}
+	want := []string{"TemporalAddress", "TemporalNamespace", "RunRoot", "ArtifactStore", "MaxSessions"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("ExecutorConfig fields = %v, want %v", got, want)
+	}
+}
+
+func TestLoadExecutorConfigMaxSessions(t *testing.T) {
+	t.Parallel()
+	env := func(value string) func(string) string {
+		return func(name string) string {
+			switch name {
+			case "TEMPORAL_ADDRESS":
+				return "localhost:7233"
+			case "EXECUTOR_MAX_SESSIONS":
+				return value
+			}
+			return ""
+		}
+	}
+
+	cfg, err := LoadExecutorConfig(env(""))
+	if err != nil || cfg.MaxSessions != 20 {
+		t.Fatalf("default = %d, %v; want 20", cfg.MaxSessions, err)
+	}
+	if cfg, err := LoadExecutorConfig(env("8")); err != nil || cfg.MaxSessions != 8 {
+		t.Fatalf("8 = %d, %v", cfg.MaxSessions, err)
+	}
+	for _, bad := range []string{"0", "-1", "ten"} {
+		if _, err := LoadExecutorConfig(env(bad)); !errors.Is(err, ErrInvalidConfig) {
+			t.Errorf("%q: error = %v, want ErrInvalidConfig", bad, err)
+		}
 	}
 }

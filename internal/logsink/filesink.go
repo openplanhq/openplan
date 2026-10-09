@@ -12,16 +12,17 @@ import (
 )
 
 type FileSink struct {
-	workspacePath string
+	runDirectory string
 }
 
 type LocalReader struct {
 	runRoot string
 }
 
-// NewFileSink returns a local filesystem-backed sink rooted at workspacePath.
-func NewFileSink(workspacePath string) FileSink {
-	return FileSink{workspacePath: workspacePath}
+// NewFileSink returns a local filesystem-backed sink that writes
+// <runDirectory>/logs/<file>.
+func NewFileSink(runDirectory string) FileSink {
+	return FileSink{runDirectory: runDirectory}
 }
 
 // NewLocalReader returns a local filesystem-backed reader rooted at runRoot.
@@ -30,8 +31,9 @@ func NewLocalReader(runRoot string) LocalReader {
 }
 
 // COMMENT: this just looks like a helper method for activities, don't think it belongs here
-// RunWorkspacePath returns the local workspace path for one tenant-owned run.
-func RunWorkspacePath(runRoot string, tenantID domain.TenantID, runID domain.TemplateRunID) (string, error) {
+// RunDirectory returns the directory of one tenant-owned run: its logs/ and
+// its workspace/.
+func RunDirectory(runRoot string, tenantID domain.TenantID, runID domain.TemplateRunID) (string, error) {
 	if strings.TrimSpace(runRoot) == "" {
 		return "", fmt.Errorf("run root is required")
 	}
@@ -47,14 +49,14 @@ const LogFileExtension = ".log"
 
 // Open opens the append-only log file with this name, such as plan-init.log.
 func (sink FileSink) Open(fileName string) (io.WriteCloser, error) {
-	if strings.TrimSpace(sink.workspacePath) == "" {
-		return nil, fmt.Errorf("workspace path is required")
+	if strings.TrimSpace(sink.runDirectory) == "" {
+		return nil, fmt.Errorf("run directory is required")
 	}
 	if !safePathComponent(fileName) {
 		return nil, fmt.Errorf("log file name must be a safe path component")
 	}
 
-	logsPath := filepath.Join(sink.workspacePath, "logs")
+	logsPath := filepath.Join(sink.runDirectory, "logs")
 	if err := os.MkdirAll(logsPath, 0o700); err != nil {
 		return nil, fmt.Errorf("create log directory: %w", err)
 	}
@@ -92,7 +94,7 @@ func FileNameForTerraformCommand(command domain.TerraformCommandType, runPhase d
 
 // ReadTemplateRunLog reads one tenant/run phase log from the local run root.
 func (reader LocalReader) ReadTemplateRunLog(_ context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, phase string) ([]byte, error) {
-	workspacePath, err := RunWorkspacePath(reader.runRoot, tenantID, runID)
+	runDirectory, err := RunDirectory(reader.runRoot, tenantID, runID)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +102,7 @@ func (reader LocalReader) ReadTemplateRunLog(_ context.Context, tenantID domain.
 		return nil, fmt.Errorf("phase must be a safe path component")
 	}
 
-	path := filepath.Join(workspacePath, "logs", phase+LogFileExtension)
+	path := filepath.Join(runDirectory, "logs", phase+LogFileExtension)
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read phase log: %w", err)

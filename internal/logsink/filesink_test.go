@@ -14,8 +14,8 @@ import (
 func TestFileSinkWritesAndAppendsPhaseLog(t *testing.T) {
 	t.Parallel()
 
-	workspacePath := t.TempDir()
-	sink := NewFileSink(workspacePath)
+	runDirectory := t.TempDir()
+	sink := NewFileSink(runDirectory)
 
 	first, err := sink.Open("plan.log")
 	if err != nil {
@@ -39,7 +39,7 @@ func TestFileSinkWritesAndAppendsPhaseLog(t *testing.T) {
 		t.Fatalf("close second log: %v", err)
 	}
 
-	got, err := os.ReadFile(filepath.Join(workspacePath, "logs", "plan.log"))
+	got, err := os.ReadFile(filepath.Join(runDirectory, "logs", "plan.log"))
 	if err != nil {
 		t.Fatalf("read phase log: %v", err)
 	}
@@ -126,14 +126,14 @@ func TestLocalReaderReadsTenantRunPhaseLog(t *testing.T) {
 	}
 }
 
-func TestRunWorkspacePathMatchesWorkspaceLayout(t *testing.T) {
+func TestRunDirectoryMatchesRunLayout(t *testing.T) {
 	t.Parallel()
 
 	runRoot := t.TempDir()
 
-	path, err := RunWorkspacePath(runRoot, domain.TenantID("tenant_123"), domain.TemplateRunID("run_123"))
+	path, err := RunDirectory(runRoot, domain.TenantID("tenant_123"), domain.TemplateRunID("run_123"))
 	if err != nil {
-		t.Fatalf("RunWorkspacePath returned error: %v", err)
+		t.Fatalf("RunDirectory returned error: %v", err)
 	}
 
 	want := filepath.Join(runRoot, "tenant_123", "run_123")
@@ -142,12 +142,12 @@ func TestRunWorkspacePathMatchesWorkspaceLayout(t *testing.T) {
 	}
 }
 
-func TestRunWorkspacePathRejectsUnsafePathComponents(t *testing.T) {
+func TestRunDirectoryRejectsUnsafePathComponents(t *testing.T) {
 	t.Parallel()
 
-	_, err := RunWorkspacePath(t.TempDir(), domain.TenantID("tenant_123"), domain.TemplateRunID("../run"))
+	_, err := RunDirectory(t.TempDir(), domain.TenantID("tenant_123"), domain.TemplateRunID("../run"))
 	if err == nil {
-		t.Fatal("RunWorkspacePath returned nil error for unsafe run ID")
+		t.Fatal("RunDirectory returned nil error for unsafe run ID")
 	}
 	if !strings.Contains(err.Error(), "safe path") {
 		t.Fatalf("error = %q, want safe path context", err.Error())

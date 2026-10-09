@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/vishu42/openplan/internal/domain"
 	"github.com/vishu42/openplan/internal/githubapp"
+	"github.com/vishu42/openplan/internal/runhelper"
 	"github.com/vishu42/openplan/internal/runner"
 	"github.com/zclconf/go-cty/cty"
 	"gopkg.in/yaml.v3"
@@ -295,17 +296,7 @@ func safeTemplateRootPath(rootPath string) (string, error) {
 }
 
 func ensureTemplateRoot(templateRoot string) error {
-	info, err := os.Stat(templateRoot)
-	if errors.Is(err, os.ErrNotExist) {
-		return errors.New("directory does not exist")
-	}
-	if err != nil {
-		return err
-	}
-	if !info.IsDir() {
-		return errors.New("is not a directory")
-	}
-	return nil
+	return runhelper.CheckRoot(templateRoot)
 }
 
 type parsedTemplateMetadata struct {
