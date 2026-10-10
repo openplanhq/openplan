@@ -32,8 +32,8 @@ func TestIsPoolUID(t *testing.T) {
 	}
 }
 
-// Off root a process can only "switch" to itself, which is how unit tests and
-// development run every branch as the current user.
+// Off root a process can only "switch" to itself, which is how unit tests run
+// every branch as the current user.
 func TestCredentialAsTheCurrentUserNeedsNoSwitch(t *testing.T) {
 	t.Parallel()
 	if os.Geteuid() == 0 {

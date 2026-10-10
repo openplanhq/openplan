@@ -37,9 +37,9 @@ func PoolUsers() []User {
 	return users
 }
 
-// DevelopmentUsers returns count users that are all the current user. Off
-// Linux there are no pool users, so every session runs as whoever started the
-// executor: no isolation, for development only.
+// DevelopmentUsers returns count users that are all the current user, so
+// tests can run sessions without root or the image's pool users. The executor
+// itself never uses them: it refuses to start outside its image.
 func DevelopmentUsers(count int) []User {
 	uid, gid := uint32(os.Getuid()), uint32(os.Getgid()) //nolint:gosec // the kernel stores uids and gids in 32 bits
 	users := make([]User, count)
