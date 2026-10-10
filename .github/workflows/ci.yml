@@ -63,7 +63,7 @@ jobs:
         run: go test ./...
 
   isolation:
-    name: isolation (executor image, #331)
+    name: "isolation (executor image, #331)"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
