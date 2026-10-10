@@ -11,10 +11,13 @@ FROM alpine:3.21
 # git: template sync clones repositories, and it runs in the API's control-plane
 # worker.
 RUN apk add --no-cache ca-certificates git \
-    && addgroup -S openplan \
-    && adduser -S -D -H -G openplan openplan \
+    # Same uid and gid as Dockerfile.executor: the two share the artifacts
+    # volume through the group openplan.
+    && addgroup -S -g 10001 openplan \
+    && adduser -S -D -H -u 10001 -G openplan openplan \
     && mkdir -p /var/lib/openplan/artifacts \
-    && chown -R openplan:openplan /var/lib/openplan
+    && chown -R openplan:openplan /var/lib/openplan \
+    && chmod 2770 /var/lib/openplan/artifacts
 COPY --from=build /out/openplan-api /usr/local/bin/openplan-api
 
 USER openplan

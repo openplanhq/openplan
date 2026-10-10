@@ -11,7 +11,7 @@ FROM alpine:3.21
 ARG OPENTOFU_VERSION=1.12.5
 ARG TARGETARCH
 
-RUN apk add --no-cache ca-certificates git \
+RUN apk add --no-cache ca-certificates git tini \
     && wget -O "/tmp/tofu_${OPENTOFU_VERSION}_linux_${TARGETARCH}.tar.gz" \
         "https://github.com/opentofu/opentofu/releases/download/v${OPENTOFU_VERSION}/tofu_${OPENTOFU_VERSION}_linux_${TARGETARCH}.tar.gz" \
     && wget -O "/tmp/tofu_${OPENTOFU_VERSION}_SHA256SUMS" \
@@ -21,20 +21,29 @@ RUN apk add --no-cache ca-certificates git \
     && tar -xzf "tofu_${OPENTOFU_VERSION}_linux_${TARGETARCH}.tar.gz" -C /usr/local/bin tofu \
     && rm -f "tofu_${OPENTOFU_VERSION}_linux_${TARGETARCH}.tar.gz" "tofu_${OPENTOFU_VERSION}_SHA256SUMS" \
     && cd / \
-    && addgroup -S openplan \
-    && adduser -S -D -H -G openplan openplan \
-    && mkdir -p /var/lib/openplan/artifacts /var/lib/openplan/runs /var/lib/openplan/plugin-cache \
-    && chown -R openplan:openplan /var/lib/openplan
+    # Same uid and gid as Dockerfile.api: the two share the artifacts volume
+    # through the group openplan, and root joins it.
+    && addgroup -S -g 10001 openplan \
+    && adduser -S -D -H -u 10001 -G openplan openplan \
+    && addgroup root openplan \
+    # The pool: one user and one group per concurrent session, above the
+    # system and login ranges so they do not collide with users on the host
+    # (internal/runuser). Changing the count means changing runuser.PoolSize.
+    && for i in $(seq 1 40); do \
+         id=$((70000 + i)); \
+         addgroup -g "$id" "openplan-run-$i"; \
+         adduser -D -H -h /nonexistent -s /sbin/nologin -u "$id" -G "openplan-run-$i" "openplan-run-$i"; \
+       done \
+    && mkdir -p /var/lib/openplan/artifacts /var/lib/openplan/runs \
+    && chown openplan:openplan /var/lib/openplan/artifacts \
+    && chmod 2770 /var/lib/openplan/artifacts \
+    # 0711: a branch walks down to its own workspace but lists nobody's.
+    && chmod 0711 /var/lib/openplan/runs
 COPY --from=build /out/openplan-executor /usr/local/bin/openplan-executor
 
-# tofu inherits this from the executor through the allowlist in
-# internal/runner/executor.go, so every init reuses providers already
-# unpacked here. It only skips the download when the template commits a
-# .terraform.lock.hcl whose hashes the cached copy matches; without one, tofu
-# re-downloads to verify. Do not set TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE:
-# the cache is shared by every tenant's run and writable by them, and that flag
-# makes tofu trust whatever binary is in it.
-ENV TF_PLUGIN_CACHE_DIR=/var/lib/openplan/plugin-cache
-
-USER openplan
-ENTRYPOINT ["/usr/local/bin/openplan-executor"]
+# Root, but compose and Helm drop every capability except SETUID, SETGID and
+# CHOWN, and set no_new_privs; the executor refuses to start otherwise. Each
+# branch runs as a pool user, and switching from root clears its capabilities.
+# tini is PID 1 because processes a branch leaves behind are re-attached to
+# PID 1, and Go never reaps processes it did not start.
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/openplan-executor"]

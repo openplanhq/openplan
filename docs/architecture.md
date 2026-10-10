@@ -173,15 +173,20 @@ The runner should be implemented behind an interface so a future `KubernetesJobR
 
 Terraform code is untrusted. A template is arbitrary code: OpenTofu/Terraform providers, provisioners, external data sources and `local-exec` run anything inside the executor pod, with access to the run's injected credentials. Publishing templates is limited to editors, but that only limits who can write a template, not what its code can do. Every executor-side design must assume the template is hostile.
 
-The MVP local process runner does not isolate that code yet:
+The local process runner keeps sessions apart by Linux user, and no further:
 
-- Runs share the executor's uid, so one run can read another run's credentials, including through the other run's `/proc` entries. Process isolation is a 1.0 blocker: #331. The executor's own process is out of reach: it clears its dumpable flag at startup, so the kernel makes its `/proc/<pid>` entries (the environment recorded at exec, and memory holding the runs' sealing keys) root's (#240). Tofu and git are no longer handed that environment at start either: theirs is an allowlist in `internal/runner/executor.go` plus what the run passes explicitly (#172).
+- Each session runs as a pool user of its own (`openplan-run-1` to `openplan-run-40`), so the kernel keeps sessions apart: their processes, `/proc` entries, files and signals (#331). The executor runs as root with only `CAP_SETUID`, `CAP_SETGID` and `CAP_CHOWN` and `no_new_privs`, and refuses to start otherwise. It never touches a workspace itself: a helper running as the pool user does. Its own process stays non-dumpable as a second layer (#240), and tofu and git still get an allowlisted environment (#172). Every process a session started is killed after each command and when the session ends; processes that slip away are still the pool user's, and the next reclaim of that user kills them.
 - The executor holds no database URL or key, but tofu can still reach Temporal, which has no access control yet (#246). See "Temporal access control" in the control plane split spec.
 - Network isolation, resource limits and a sandbox runtime come after 1.0 (#245).
+- Loopback TCP and abstract unix sockets are not separated by uid.
+- CPU, memory, disk and the process table are shared.
+- A kernel exploit crosses every boundary.
+
+`SECURITY.md` (#321) should list these gaps once it exists.
 
 MVP executor deployments should use the following guardrails:
 
-- Run executor containers as non-root.
+- Run the executor as its image starts it: as root with `cap_drop: [ALL]`, `cap_add: [SETUID, SETGID, CHOWN]` and `no-new-privileges`. On Kubernetes that means `runAsUser: 0`, `allowPrivilegeEscalation: false`, and the Pod Security level "baseline".
 - Avoid host mounts and shared writable volumes.
 - Use fresh per-run working directories with cleanup after every run.
 - Apply CPU, memory, ephemeral storage, and wall-clock limits.

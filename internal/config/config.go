@@ -16,6 +16,7 @@ const (
 	DefaultHTTPAddress                 = ":8081"
 	DefaultExecutorRunRoot             = "/tmp/openplan/runs"
 	DefaultArtifactStoreFilesystemRoot = "/tmp/openplan/artifacts"
+	DefaultExecutorMaxSessions         = 20
 )
 
 var ErrInvalidConfig = errors.New("invalid config")
@@ -47,6 +48,10 @@ type ExecutorConfig struct {
 	// RunRoot is where each run's workspace is checked out.
 	RunRoot       string
 	ArtifactStore ArtifactStoreConfig
+	// MaxSessions caps the sessions this executor runs at once. Each holds a
+	// pool user, and the image carries two users per session, so the spares
+	// absorb leases stuck until their 25-hour take-back.
+	MaxSessions int
 }
 
 type ArtifactStoreKind string
@@ -135,6 +140,14 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 	}
 	if cfg.RunRoot == "" {
 		cfg.RunRoot = DefaultExecutorRunRoot
+	}
+	cfg.MaxSessions = DefaultExecutorMaxSessions
+	if raw := strings.TrimSpace(getenv("EXECUTOR_MAX_SESSIONS")); raw != "" {
+		maxSessions, err := strconv.Atoi(raw)
+		if err != nil || maxSessions < 1 {
+			return ExecutorConfig{}, fmt.Errorf("%w: EXECUTOR_MAX_SESSIONS must be a positive integer, got %q", ErrInvalidConfig, raw)
+		}
+		cfg.MaxSessions = maxSessions
 	}
 	if cfg.TemporalAddress == "" {
 		return ExecutorConfig{}, fmt.Errorf("%w: TEMPORAL_ADDRESS is required", ErrInvalidConfig)

@@ -6,10 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/vishu42/openplan/internal/domain"
@@ -17,6 +20,7 @@ import (
 	"github.com/vishu42/openplan/internal/planbundle"
 	"github.com/vishu42/openplan/internal/runner"
 	"github.com/vishu42/openplan/internal/runseal"
+	"github.com/vishu42/openplan/internal/runuser"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/temporal"
 )
@@ -69,6 +73,31 @@ type CredentialDecryptor interface {
 	Decrypt(string) (string, error)
 }
 
+// WorkspaceHelper does the work inside a session's workspace as the session's
+// pool user (runhelper.Client). The executor never reads or writes there
+// itself: root without CAP_DAC_OVERRIDE cannot, and a branch controls every
+// name in it (#331).
+type WorkspaceHelper interface {
+	Kill(ctx context.Context, user runuser.User) error
+	Reclaim(ctx context.Context, user runuser.User, workspace string) error
+	Pack(ctx context.Context, user runuser.User, dir string) ([]byte, error)
+	Unpack(ctx context.Context, user runuser.User, dir string, bundle []byte) error
+	CheckRoot(ctx context.Context, user runuser.User, dir string) error
+}
+
+// Isolation is what runs each session as a pool user of its own.
+type Isolation struct {
+	Users  []runuser.User
+	Helper WorkspaceHelper
+}
+
+const (
+	// workspaceDirName and logsDirName are the two halves of a run directory:
+	// the branch's, and the executor's.
+	workspaceDirName = "workspace"
+	logsDirName      = "logs"
+)
+
 // TemplateRunActivities are the execution activities: the ones that run next
 // to tenant Terraform on the executor, which holds no database connection and
 // no keys beyond its per-run sealing keys.
@@ -83,6 +112,10 @@ type TemplateRunActivities struct {
 	plans PlanArtifactStore
 	// keys holds each in-flight run's private sealing key.
 	keys *runseal.KeyRing
+	// users leases each session a pool user of its own.
+	users *runuser.Pool
+	// helper works inside a session's workspace as its pool user.
+	helper WorkspaceHelper
 }
 
 // NewTemplateRunActivities constructs the execution activities.
@@ -90,9 +123,10 @@ type TemplateRunActivities struct {
 // By default it wires a local OpenTofu-backed runner that uploads phase logs
 // to logStore. Tests may pass a TerraformRunner override to avoid invoking the
 // OpenTofu binary. A nil keys gets a fresh ring.
-func NewTemplateRunActivities(runRoot string, logStore TemplateRunLogStore, plans PlanArtifactStore, keys *runseal.KeyRing, terraformRunners ...TerraformRunner) *TemplateRunActivities {
+func NewTemplateRunActivities(runRoot string, logStore TemplateRunLogStore, plans PlanArtifactStore, keys *runseal.KeyRing, isolation Isolation, terraformRunners ...TerraformRunner) *TemplateRunActivities {
 	terraformRunner := TerraformRunner(localTerraformRunner{
-		runner:   runner.NewLocalProcessRunner(),
+		runRoot:  runRoot,
+		runner:   runner.NewIsolatedProcessRunner(isolation.Helper.Kill),
 		logStore: logStore,
 	})
 	if len(terraformRunners) > 0 {
@@ -101,59 +135,102 @@ func NewTemplateRunActivities(runRoot string, logStore TemplateRunLogStore, plan
 	if keys == nil {
 		keys = runseal.NewKeyRing()
 	}
-
-	return &TemplateRunActivities{
+	activities := &TemplateRunActivities{
 		runRoot:         runRoot,
 		terraformRunner: terraformRunner,
-		git:             runner.NewLocalGitRunner(),
+		git:             runner.NewIsolatedGitRunner(isolation.Helper.Kill),
 		plans:           plans,
 		keys:            keys,
+		helper:          isolation.Helper,
 	}
+	activities.users = runuser.NewPool(isolation.Users, activities.reclaim)
+	return activities
 }
 
-// PrepareWorkspace creates the filesystem workspace used by later Terraform activities.
+// PrepareWorkspace leases the session a pool user and lays out its run
+// directory: logs/ for the executor, and workspace/ with home/ and tmp/ for
+// the branch.
 //
-// The workspace path is derived from the configured run root plus tenant and run
-// IDs. Those IDs are validated as single safe path components before joining, so
-// callers cannot escape the run root with absolute paths or parent-directory
-// traversal. The resulting path is returned to the workflow and then passed back
-// into RunTerraform activity calls.
+// The run directory is derived from the configured run root plus tenant and
+// run IDs, validated as single safe path components, so callers cannot escape
+// the run root.
 func (activities *TemplateRunActivities) PrepareWorkspace(ctx context.Context, input domain.PrepareWorkspaceActivityInput) (domain.PrepareWorkspaceActivityOutput, error) {
-	workspacePath, err := logsink.RunWorkspacePath(activities.runRoot, input.TenantID, input.RunID)
+	runDir, err := logsink.RunDirectory(activities.runRoot, input.TenantID, input.RunID)
 	if err != nil {
 		return domain.PrepareWorkspaceActivityOutput{}, err
 	}
-
-	if err := os.MkdirAll(workspacePath, 0o700); err != nil {
-		return domain.PrepareWorkspaceActivityOutput{}, fmt.Errorf("prepare workspace directory: %w", err)
+	id := domain.RunKeyID(input.TenantID, input.RunID)
+	user, err := activities.users.Lease(ctx, id, runDir)
+	if err != nil {
+		return domain.PrepareWorkspaceActivityOutput{}, fmt.Errorf("lease a pool user: %w", err)
+	}
+	workspace, err := makeRunDirectory(runDir, user)
+	if err != nil {
+		// Hand the user back now rather than hold it for 25 hours.
+		return domain.PrepareWorkspaceActivityOutput{}, errors.Join(err, activities.users.Release(ctx, id))
 	}
 
 	// The session pins every later activity of this run to this process, so the
 	// key generated here is the one that opens what the control plane seals.
-	publicKey, err := activities.keys.Generate(domain.RunKeyID(input.TenantID, input.RunID))
+	publicKey, err := activities.keys.Generate(id)
 	if err != nil {
-		return domain.PrepareWorkspaceActivityOutput{}, err
+		return domain.PrepareWorkspaceActivityOutput{}, errors.Join(err, activities.users.Release(ctx, id))
 	}
-
-	return domain.PrepareWorkspaceActivityOutput{WorkspacePath: workspacePath, PublicKey: publicKey}, nil
+	return domain.PrepareWorkspaceActivityOutput{WorkspacePath: workspace, PublicKey: publicKey}, nil
 }
 
-// CleanupWorkspace deletes a run's workspace at the end of a session, and on
-// the apply phase also its saved plan, which nothing reads after the apply.
+// makeRunDirectory lays out one session's directories and hands the branch its
+// own. Everything is made as root first: once workspace/ belongs to the pool
+// user, root (without CAP_DAC_OVERRIDE) can no longer create anything in it.
+// No run code has executed yet and root owns every parent, so nothing can race.
+func makeRunDirectory(runDir string, user runuser.User) (string, error) {
+	// 0711 down to the run: a branch can walk to its own workspace but list
+	// nobody's.
+	if err := os.MkdirAll(runDir, 0o711); err != nil { //nolint:gosec // 0711 lets a branch through to its workspace, not list the runs
+		return "", fmt.Errorf("prepare run directory: %w", err)
+	}
+	if err := os.Chmod(runDir, 0o711); err != nil { //nolint:gosec // as above
+		return "", fmt.Errorf("prepare run directory: %w", err)
+	}
+	if err := os.Mkdir(filepath.Join(runDir, logsDirName), 0o700); err != nil {
+		return "", fmt.Errorf("prepare log directory: %w", err)
+	}
+	workspace := filepath.Join(runDir, workspaceDirName)
+	branchDirs := []string{workspace, filepath.Join(workspace, "home"), filepath.Join(workspace, "tmp")}
+	for _, dir := range branchDirs {
+		if err := os.Mkdir(dir, 0o700); err != nil {
+			return "", fmt.Errorf("prepare workspace: %w", err)
+		}
+	}
+	// Innermost first: chowning workspace/ before its children would lock
+	// root out of them.
+	for _, dir := range slices.Backward(branchDirs) {
+		if err := os.Lchown(dir, int(user.UID), int(user.GID)); err != nil {
+			return "", fmt.Errorf("hand the workspace to %s: %w", user.Name, err)
+		}
+	}
+	return workspace, nil
+}
+
+// CleanupWorkspace ends a session: it releases the run's pool user, whose
+// reclaim kills the branch's processes and deletes the run directory, and on
+// the apply phase also deletes the saved plan, which nothing reads after the
+// apply.
 //
-// The workspace is found from the run's identity, never from the path in the
-// input, so this can only ever remove a run workspace under the run root.
-// Both deletions are best effort from the workflow's point of view: a
-// workspace left behind costs disk, and a saved plan left behind is unreadable
-// once the run is terminal, because the control plane drops its key.
+// The run is found from its identity, never from the path in the input, so
+// this can only ever remove a run directory under the run root. Both deletions
+// are best effort from the workflow's point of view: a run directory left
+// behind costs disk until the lease expires, and a saved plan left behind is
+// unreadable once the run is terminal, because the control plane drops its
+// key.
 func (activities *TemplateRunActivities) CleanupWorkspace(ctx context.Context, input domain.CleanupWorkspaceActivityInput) error {
-	workspacePath, err := logsink.RunWorkspacePath(activities.runRoot, input.TenantID, input.RunID)
-	if err != nil {
+	// For the ID validation: the pool knows the run directory itself.
+	if _, err := logsink.RunDirectory(activities.runRoot, input.TenantID, input.RunID); err != nil {
 		return err
 	}
 	var errs []error
-	if err := os.RemoveAll(workspacePath); err != nil {
-		errs = append(errs, fmt.Errorf("remove run workspace: %w", err))
+	if err := activities.users.Release(ctx, domain.RunKeyID(input.TenantID, input.RunID)); err != nil {
+		errs = append(errs, fmt.Errorf("reclaim the run's branch: %w", err))
 	}
 	if input.DeletePlan && activities.plans != nil {
 		if err := activities.plans.DeletePlan(ctx, input.TenantID, input.RunID); err != nil {
@@ -161,6 +238,89 @@ func (activities *TemplateRunActivities) CleanupWorkspace(ctx context.Context, i
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// reclaim is the pool's Reclaimer: it ends a session's branch and deletes its
+// run directory. The helper empties workspace/ as the pool user; the rest of
+// the run directory is root's.
+func (activities *TemplateRunActivities) reclaim(ctx context.Context, user runuser.User, runDir string) error {
+	workspace := filepath.Join(runDir, workspaceDirName)
+	if _, err := os.Lstat(workspace); errors.Is(err, fs.ErrNotExist) {
+		workspace = ""
+	}
+	if err := activities.helper.Reclaim(ctx, user, workspace); err != nil {
+		return err
+	}
+	return os.RemoveAll(runDir)
+}
+
+// Sweep ends every branch an earlier executor process left behind. Run it once,
+// before the worker takes sessions: after a restart no lease is valid, since
+// the pool and the key ring died with the process. It fails closed: an
+// executor that cannot clear a pool user must not hand that user out.
+func (activities *TemplateRunActivities) Sweep(ctx context.Context) error {
+	var errs []error
+	for _, user := range activities.users.Users() {
+		if err := activities.helper.Reclaim(ctx, user, ""); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	tenants, err := os.ReadDir(activities.runRoot)
+	if errors.Is(err, fs.ErrNotExist) {
+		return errors.Join(errs...)
+	}
+	if err != nil {
+		return errors.Join(append(errs, err)...)
+	}
+	for _, tenant := range tenants {
+		runs, err := os.ReadDir(filepath.Join(activities.runRoot, tenant.Name()))
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		for _, run := range runs {
+			if err := activities.sweepRunDirectory(ctx, filepath.Join(activities.runRoot, tenant.Name(), run.Name())); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func (activities *TemplateRunActivities) sweepRunDirectory(ctx context.Context, runDir string) error {
+	if err := activities.sweepWorkspace(ctx, filepath.Join(runDir, workspaceDirName)); err != nil {
+		return fmt.Errorf("sweep %s: %w", runDir, err)
+	}
+	return os.RemoveAll(runDir)
+}
+
+// sweepWorkspace empties workspace as the pool user who owns it, so root can
+// then remove it.
+func (activities *TemplateRunActivities) sweepWorkspace(ctx context.Context, workspace string) error {
+	info, err := os.Lstat(workspace)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		// RemoveAll removes a symlink itself, never what it points to.
+		return nil
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return errors.New("workspace has no owner")
+	}
+	// Root's: a PrepareWorkspace that died before the chown.
+	if stat.Uid == 0 {
+		return nil
+	}
+	user, ok := activities.users.ByUID(stat.Uid)
+	if !ok {
+		return fmt.Errorf("workspace owner %d is not a pool user", stat.Uid)
+	}
+	return activities.helper.Reclaim(ctx, user, workspace)
 }
 
 // UploadPlan encrypts the saved plan the plan command left in TerraformPath,
@@ -174,7 +334,13 @@ func (activities *TemplateRunActivities) UploadPlan(ctx context.Context, input d
 	if err != nil {
 		return err
 	}
-	bundle, err := planbundle.Pack(input.TerraformPath)
+	ctx, user, err := activities.branch(ctx, input.TenantID, input.RunID)
+	if err != nil {
+		return err
+	}
+	// The helper reads the plan as the pool user, so a plan file the branch
+	// swapped for a symlink yields only what the branch could read anyway.
+	bundle, err := activities.helper.Pack(ctx, user, input.TerraformPath)
 	if err != nil {
 		return fmt.Errorf("pack saved plan: %w", err)
 	}
@@ -204,7 +370,13 @@ func (activities *TemplateRunActivities) DownloadPlan(ctx context.Context, input
 	if err != nil {
 		return err
 	}
-	if err := planbundle.Unpack(bundle, input.TerraformPath); err != nil {
+	ctx, user, err := activities.branch(ctx, input.TenantID, input.RunID)
+	if err != nil {
+		return err
+	}
+	// The key never leaves the executor: only the plaintext bundle crosses the
+	// pipe to the helper, which writes it as the pool user.
+	if err := activities.helper.Unpack(ctx, user, input.TerraformPath, bundle); err != nil {
 		return fmt.Errorf("unpack saved plan: %w", err)
 	}
 	return nil
@@ -219,6 +391,26 @@ func (activities *TemplateRunActivities) openPlanKey(input domain.PlanArtifactAc
 		return nil, fmt.Errorf("open plan key: %w", err)
 	}
 	return key, nil
+}
+
+// branch returns ctx carrying the session's branch: its pool user, and HOME
+// and TMPDIR inside its workspace. It fails when the session holds no lease,
+// so a step never runs as another session's user.
+func (activities *TemplateRunActivities) branch(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) (context.Context, runuser.User, error) {
+	runDir, err := logsink.RunDirectory(activities.runRoot, tenantID, runID)
+	if err != nil {
+		return nil, runuser.User{}, err
+	}
+	user, err := activities.users.Lookup(domain.RunKeyID(tenantID, runID))
+	if err != nil {
+		return nil, runuser.User{}, err
+	}
+	workspace := filepath.Join(runDir, workspaceDirName)
+	return runuser.WithBranch(ctx, runuser.Branch{
+		User:    user,
+		Home:    filepath.Join(workspace, "home"),
+		TempDir: filepath.Join(workspace, "tmp"),
+	}), user, nil
 }
 
 // requirePlans returns the plan store, or one that fails every call when none
@@ -267,12 +459,13 @@ func (activities *TemplateRunActivities) FetchSource(ctx context.Context, input 
 	if strings.TrimSpace(input.WorkspacePath) == "" {
 		return domain.FetchSourceActivityOutput{}, fmt.Errorf("workspace path is required")
 	}
+	ctx, user, err := activities.branch(ctx, input.TenantID, input.RunID)
+	if err != nil {
+		return domain.FetchSourceActivityOutput{}, err
+	}
 
 	sourcePath := filepath.Join(input.WorkspacePath, "source")
 	git := activities.git
-	if git == nil {
-		git = runner.NewLocalGitRunner()
-	}
 	repoURL, err := gitHubRepoURL(input.RepoOwner, input.RepoName)
 	if err != nil {
 		return domain.FetchSourceActivityOutput{}, err
@@ -308,7 +501,8 @@ func (activities *TemplateRunActivities) FetchSource(ctx context.Context, input 
 	}
 
 	terraformPath := filepath.Clean(filepath.Join(sourcePath, rootPath))
-	if err := ensureTemplateRoot(terraformPath); err != nil {
+	// As the pool user: the executor never looks inside a workspace itself.
+	if err := activities.helper.CheckRoot(ctx, user, terraformPath); err != nil {
 		return domain.FetchSourceActivityOutput{}, fmt.Errorf("source root %q: %w", rootPath, err)
 	}
 
@@ -334,6 +528,10 @@ func (activities *TemplateRunActivities) RunTerraform(ctx context.Context, input
 		}
 		input.Environment = environment
 	}
+	ctx, _, err := activities.branch(ctx, input.TenantID, input.RunID)
+	if err != nil {
+		return domain.RunTerraformActivityOutput{}, err
+	}
 	output, err := activities.terraformRunner.RunTerraform(ctx, input)
 	if err != nil {
 		if output.Log.ObjectKey == "" {
@@ -353,6 +551,8 @@ func (activities *TemplateRunActivities) RunTerraform(ctx context.Context, input
 // workflow command types to log phases and opening the per-workspace log file
 // before delegating to runner.LocalProcessRunner.
 type localTerraformRunner struct {
+	// runRoot is where the run directories, and so the log spools, live.
+	runRoot string
 	// runner owns Terraform CLI argument construction and subprocess execution.
 	runner   *runner.LocalProcessRunner
 	logStore TemplateRunLogStore
@@ -383,11 +583,12 @@ func recordActivityHeartbeat(ctx context.Context) {
 	activity.RecordHeartbeat(ctx)
 }
 
-// RunTerraform writes command output to the workspace log file and runs OpenTofu.
+// RunTerraform writes command output to the run's log file and runs OpenTofu.
 //
 // The log phase is derived from the Terraform command and the run phase it belongs to
-// so each phase writes to a predictable file under the workspace logs
-// directory. The file is opened for append, so commands sharing a phase leave
+// so each phase writes to a predictable file under the run directory's logs/,
+// which the branch cannot see: a symlink planted in the workspace would
+// otherwise have root append tofu's output to a file of root's. The file is opened for append, so commands sharing a phase leave
 // their output in the order they ran. Stdout and stderr share
 // the same writer for now, preserving command output ordering in a single phase
 // log. The log file is closed after the command completes, and close errors are
@@ -399,7 +600,11 @@ func (localRunner localTerraformRunner) RunTerraform(ctx context.Context, input 
 	}
 	phase := strings.TrimSuffix(fileName, logsink.LogFileExtension)
 
-	writer, err := logsink.NewFileSink(input.WorkspacePath).Open(fileName)
+	runDir, err := logsink.RunDirectory(localRunner.runRoot, input.TenantID, input.RunID)
+	if err != nil {
+		return domain.RunTerraformActivityOutput{}, err
+	}
+	writer, err := logsink.NewFileSink(runDir).Open(fileName)
 	if err != nil {
 		return domain.RunTerraformActivityOutput{}, fmt.Errorf("open terraform log: %w", err)
 	}
@@ -422,7 +627,7 @@ func (localRunner localTerraformRunner) RunTerraform(ctx context.Context, input 
 	}
 	var log domain.TemplateRunLog
 	if localRunner.logStore != nil {
-		file, err := os.Open(filepath.Join(input.WorkspacePath, "logs", fileName))
+		file, err := os.Open(filepath.Join(runDir, logsDirName, fileName))
 		if err != nil {
 			return domain.RunTerraformActivityOutput{}, fmt.Errorf("open terraform log for upload: %w", err)
 		}

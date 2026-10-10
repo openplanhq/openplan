@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -272,5 +273,40 @@ func TestPlanKeyRejectsUnsafeComponents(t *testing.T) {
 
 	if _, err := PlanKey("tenant_123", "../run"); err == nil {
 		t.Fatal("PlanKey accepted a path traversal")
+	}
+}
+
+func TestFilesystemStoreSharesObjectsThroughTheGroup(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	store := NewFilesystemStore(root)
+
+	if err := store.PutObject(context.Background(), "tenants/t/runs/r/logs/plan.log", "text/plain", strings.NewReader("one")); err != nil {
+		t.Fatal(err)
+	}
+	// Overwriting replaces the object in place.
+	if err := store.PutObject(context.Background(), "tenants/t/runs/r/logs/plan.log", "text/plain", strings.NewReader("two")); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, dir := range []string{"tenants", "tenants/t", "tenants/t/runs", "tenants/t/runs/r", "tenants/t/runs/r/logs"} {
+		info, err := os.Stat(filepath.Join(root, dir))
+		if err != nil || info.Mode().Perm() != 0o770 {
+			t.Errorf("%s: %v, %v; want 0770", dir, info, err)
+		}
+		if runtime.GOOS == "linux" && info.Mode()&os.ModeSetgid == 0 {
+			t.Errorf("%s has no setgid bit", dir)
+		}
+	}
+	path := filepath.Join(root, "tenants", "t", "runs", "r", "logs", "plan.log")
+	info, err := os.Stat(path)
+	if err != nil || info.Mode().Perm() != 0o660 {
+		t.Fatalf("object: %v, %v; want 0660", info, err)
+	}
+	if got, _ := os.ReadFile(path); string(got) != "two" {
+		t.Fatalf("object = %q", got)
+	}
+	if entries, _ := os.ReadDir(filepath.Dir(path)); len(entries) != 1 {
+		t.Fatalf("leftover temporary files: %v", entries)
 	}
 }

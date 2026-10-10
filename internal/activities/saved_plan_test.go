@@ -56,7 +56,8 @@ func TestSavedPlanTravelsFromThePlanExecutorToTheApplyExecutor(t *testing.T) {
 
 	// Plan phase, on the first executor.
 	planKeys := runseal.NewKeyRing()
-	planExecutor := NewTemplateRunActivities(t.TempDir(), nil, plans, planKeys)
+	planIsolation, planHelper := testIsolation()
+	planExecutor := NewTemplateRunActivities(t.TempDir(), nil, plans, planKeys, planIsolation)
 	planWorkspace, err := planExecutor.PrepareWorkspace(ctx, domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
 		t.Fatalf("PrepareWorkspace returned error: %v", err)
@@ -71,6 +72,9 @@ func TestSavedPlanTravelsFromThePlanExecutorToTheApplyExecutor(t *testing.T) {
 	if err := planExecutor.UploadPlan(ctx, domain.PlanArtifactActivityInput{TenantID: "tenant_123", RunID: "run_123", TerraformPath: planRoot, SealedPlanKey: sealedForPlan.SealedPlanKey}); err != nil {
 		t.Fatalf("UploadPlan returned error: %v", err)
 	}
+	if len(planHelper.packedBy) != 1 {
+		t.Fatalf("packed by %v, want the helper once", planHelper.packedBy)
+	}
 	stored := plans.plans["tenant_123/run_123"]
 	if len(stored) == 0 || bytes.Contains(stored, []byte("the reviewed plan")) {
 		t.Fatalf("stored plan = %q, want ciphertext", stored)
@@ -78,7 +82,8 @@ func TestSavedPlanTravelsFromThePlanExecutorToTheApplyExecutor(t *testing.T) {
 
 	// Apply phase, on a second executor with its own run key.
 	applyKeys := runseal.NewKeyRing()
-	applyExecutor := NewTemplateRunActivities(t.TempDir(), nil, plans, applyKeys)
+	applyIsolation, applyHelper := testIsolation()
+	applyExecutor := NewTemplateRunActivities(t.TempDir(), nil, plans, applyKeys, applyIsolation)
 	applyWorkspace, err := applyExecutor.PrepareWorkspace(ctx, domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
 		t.Fatalf("PrepareWorkspace returned error: %v", err)
@@ -95,6 +100,9 @@ func TestSavedPlanTravelsFromThePlanExecutorToTheApplyExecutor(t *testing.T) {
 	}
 	if err := applyExecutor.DownloadPlan(ctx, domain.PlanArtifactActivityInput{TenantID: "tenant_123", RunID: "run_123", TerraformPath: applyRoot, SealedPlanKey: sealedForApply.SealedPlanKey}); err != nil {
 		t.Fatalf("DownloadPlan returned error: %v", err)
+	}
+	if len(applyHelper.unpacked) != 1 {
+		t.Fatalf("unpacked by %v, want the helper once", applyHelper.unpacked)
 	}
 	assertTestFile(t, applyRoot, "tfplan", "the reviewed plan")
 	assertTestFile(t, applyRoot, ".terraform.lock.hcl", "providers it was made with")
@@ -116,7 +124,8 @@ func TestDownloadPlanRefusesAPlanSavedForAnotherRun(t *testing.T) {
 	plans.plans["tenant_123/run_123"] = sealed
 
 	keys := runseal.NewKeyRing()
-	executor := NewTemplateRunActivities(t.TempDir(), nil, plans, keys)
+	isolation, _ := testIsolation()
+	executor := NewTemplateRunActivities(t.TempDir(), nil, plans, keys, isolation)
 	workspace, err := executor.PrepareWorkspace(ctx, domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
 		t.Fatal(err)
@@ -142,7 +151,7 @@ func TestCleanupWorkspaceRemovesTheRunWorkspaceAndOptionallyThePlan(t *testing.T
 	ctx := context.Background()
 	runRoot := t.TempDir()
 	plans := newMemoryPlanStore()
-	executor := NewTemplateRunActivities(runRoot, nil, plans, runseal.NewKeyRing())
+	executor, _ := newTestTemplateRunActivities(t, runRoot, plans)
 	workspace, err := executor.PrepareWorkspace(ctx, domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
 		t.Fatal(err)
@@ -168,9 +177,9 @@ func TestCleanupWorkspaceRemovesTheRunWorkspaceAndOptionallyThePlan(t *testing.T
 	if len(plans.deleted) != 1 || plans.deleted[0] != "tenant_123/run_123" {
 		t.Fatalf("deleted plans = %v, want the run's", plans.deleted)
 	}
-	wantPath, _ := logsink.RunWorkspacePath(runRoot, "tenant_123", "run_123")
-	if wantPath != workspace.WorkspacePath {
-		t.Fatalf("workspace path = %q, want %q", workspace.WorkspacePath, wantPath)
+	wantPath, _ := logsink.RunDirectory(runRoot, "tenant_123", "run_123")
+	if filepath.Join(wantPath, "workspace") != workspace.WorkspacePath {
+		t.Fatalf("workspace path = %q, want %q", workspace.WorkspacePath, filepath.Join(wantPath, "workspace"))
 	}
 }
 
