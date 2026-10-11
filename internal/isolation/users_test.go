@@ -1,23 +1,23 @@
-package runuser
+package isolation
 
 import (
-	"context"
 	"os"
+	"strings"
 	"testing"
 )
 
 func TestPoolUsersMatchTheImage(t *testing.T) {
 	t.Parallel()
 
-	users := PoolUsers()
+	users := poolUsers()
 	if len(users) != PoolSize {
 		t.Fatalf("len = %d, want %d", len(users), PoolSize)
 	}
 	first, last := users[0], users[len(users)-1]
-	if first != (User{Name: "openplan-run-1", UID: 70001, GID: 70001}) {
+	if first != (user{name: "openplan-run-1", uid: 70001, gid: 70001}) {
 		t.Fatalf("first = %+v", first)
 	}
-	if last != (User{Name: "openplan-run-40", UID: 70040, GID: 70040}) {
+	if last != (user{name: "openplan-run-40", uid: 70040, gid: 70040}) {
 		t.Fatalf("last = %+v", last)
 	}
 }
@@ -26,34 +26,34 @@ func TestIsPoolUID(t *testing.T) {
 	t.Parallel()
 
 	for uid, want := range map[int]bool{0: false, 10001: false, 70000: false, 70001: true, 70040: true, 70041: false} {
-		if got := IsPoolUID(uid); got != want {
-			t.Errorf("IsPoolUID(%d) = %v, want %v", uid, got, want)
+		if got := isPoolUID(uid); got != want {
+			t.Errorf("isPoolUID(%d) = %v, want %v", uid, got, want)
 		}
 	}
 }
 
 // Off root a process can only "switch" to itself, which is how unit tests run
-// every branch as the current user.
+// every session as the current user.
 func TestCredentialAsTheCurrentUserNeedsNoSwitch(t *testing.T) {
 	t.Parallel()
 	if os.Geteuid() == 0 {
 		t.Skip("as root every user gets a credential")
 	}
 
-	credential, err := DevelopmentUsers(1)[0].Credential()
+	credential, err := developmentUsers(1)[0].credential()
 	if err != nil || credential != nil {
-		t.Fatalf("Credential() = %v, %v; want nil, nil", credential, err)
+		t.Fatalf("credential() = %v, %v; want nil, nil", credential, err)
 	}
 }
 
 func TestCredentialForAnotherUserNeedsRoot(t *testing.T) {
 	t.Parallel()
 	if os.Geteuid() == 0 {
-		t.Skip("root can switch to any user")
+		t.Skip("root can switch to any pool user")
 	}
 
-	if _, err := PoolUsers()[0].Credential(); err == nil {
-		t.Fatal("Credential() for another uid returned no error without root")
+	if _, err := poolUsers()[0].credential(); err == nil {
+		t.Fatal("credential() for another uid returned no error without root")
 	}
 }
 
@@ -65,7 +65,7 @@ func TestCredentialAsRootClearsGroups(t *testing.T) {
 		t.Skip("needs root")
 	}
 
-	credential, err := PoolUsers()[0].Credential()
+	credential, err := poolUsers()[0].credential()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,15 +74,17 @@ func TestCredentialAsRootClearsGroups(t *testing.T) {
 	}
 }
 
-func TestBranchTravelsInTheContext(t *testing.T) {
+// A user nobody filled in has uid 0. As root, starting a child as it would
+// run tenant code as root, with root's capabilities.
+func TestCredentialAsRootRefusesUsersOutsideThePool(t *testing.T) {
 	t.Parallel()
-
-	if _, ok := BranchFrom(context.Background()); ok {
-		t.Fatal("empty context has a branch")
+	if os.Geteuid() != 0 {
+		t.Skip("needs root")
 	}
-	branch := Branch{User: PoolUsers()[2], Home: "/w/home", TempDir: "/w/tmp"}
-	got, ok := BranchFrom(WithBranch(context.Background(), branch))
-	if !ok || got != branch {
-		t.Fatalf("BranchFrom = %+v, %v; want %+v", got, ok, branch)
+
+	for _, u := range []user{{}, {name: "openplan", uid: 10001, gid: 10001}} {
+		if _, err := u.credential(); err == nil || !strings.Contains(err.Error(), "not a pool user") {
+			t.Errorf("credential() for uid %d = %v, want a refusal", u.uid, err)
+		}
 	}
 }

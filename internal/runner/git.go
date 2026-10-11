@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"strings"
+
+	"github.com/vishu42/openplan/internal/isolation"
 )
 
 // GitRunner is the subprocess boundary for source repository operations.
@@ -23,9 +25,12 @@ type LocalGitRunner struct {
 	executor CommandExecutor
 }
 
-// NewLocalGitRunner returns a runner backed by the local git executable.
+// NewLocalGitRunner returns a runner backed by the local git executable,
+// started as this process's own user: template sync on the api. The
+// executor's runners start git in a session instead
+// (isolation.SessionExecutor).
 func NewLocalGitRunner() *LocalGitRunner {
-	return NewLocalGitRunnerWithExecutor(osExecCommandExecutor{})
+	return NewLocalGitRunnerWithExecutor(isolation.HostExecutor())
 }
 
 // NewLocalGitRunnerWithExecutor returns a Git runner backed by executor.

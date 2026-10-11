@@ -4,20 +4,15 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
-	"os"
-	"path/filepath"
+	"reflect"
 	"testing"
 )
 
 func TestBundleRoundTripsThePlanAndLockFile(t *testing.T) {
 	t.Parallel()
 
-	source := t.TempDir()
-	writeFile(t, source, "tfplan", "plan bytes")
-	writeFile(t, source, ".terraform.lock.hcl", "locked providers")
-	writeFile(t, source, "main.tf", "not bundled")
-
-	bundle, err := Pack(source)
+	files := map[string][]byte{"tfplan": []byte("plan bytes"), ".terraform.lock.hcl": []byte("locked providers")}
+	bundle, err := Pack(files)
 	if err != nil {
 		t.Fatalf("Pack returned error: %v", err)
 	}
@@ -37,16 +32,12 @@ func TestBundleRoundTripsThePlanAndLockFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open returned error: %v", err)
 	}
-	target := t.TempDir()
-	// The fetched source's own lock file gives way to the plan's.
-	writeFile(t, target, ".terraform.lock.hcl", "newer providers")
-	if err := Unpack(opened, target); err != nil {
+	unpacked, err := Unpack(opened)
+	if err != nil {
 		t.Fatalf("Unpack returned error: %v", err)
 	}
-	assertFile(t, target, "tfplan", "plan bytes")
-	assertFile(t, target, ".terraform.lock.hcl", "locked providers")
-	if _, err := os.Stat(filepath.Join(target, "main.tf")); !os.IsNotExist(err) {
-		t.Fatalf("main.tf was unpacked: %v", err)
+	if !reflect.DeepEqual(unpacked, files) {
+		t.Fatalf("Unpack = %q, want %q", unpacked, files)
 	}
 }
 
@@ -54,25 +45,27 @@ func TestBundleRoundTripsThePlanAndLockFile(t *testing.T) {
 func TestPackWithoutALockFile(t *testing.T) {
 	t.Parallel()
 
-	source := t.TempDir()
-	writeFile(t, source, "tfplan", "plan bytes")
-
-	bundle, err := Pack(source)
+	bundle, err := Pack(map[string][]byte{"tfplan": []byte("plan bytes")})
 	if err != nil {
 		t.Fatalf("Pack returned error: %v", err)
 	}
-	target := t.TempDir()
-	if err := Unpack(bundle, target); err != nil {
+	unpacked, err := Unpack(bundle)
+	if err != nil {
 		t.Fatalf("Unpack returned error: %v", err)
 	}
-	assertFile(t, target, "tfplan", "plan bytes")
+	if !reflect.DeepEqual(unpacked, map[string][]byte{"tfplan": []byte("plan bytes")}) {
+		t.Fatalf("Unpack = %q", unpacked)
+	}
 }
 
-func TestPackRequiresThePlan(t *testing.T) {
+func TestPackRequiresThePlanAndNothingElse(t *testing.T) {
 	t.Parallel()
 
-	if _, err := Pack(t.TempDir()); err == nil {
+	if _, err := Pack(map[string][]byte{".terraform.lock.hcl": []byte("lock")}); err == nil {
 		t.Fatal("Pack returned nil error without a plan file")
+	}
+	if _, err := Pack(map[string][]byte{"tfplan": []byte("plan"), "main.tf": []byte("x")}); err == nil {
+		t.Fatal("Pack bundled main.tf")
 	}
 }
 
@@ -100,8 +93,8 @@ func TestOpenRejectsAnotherRunTamperingAndTheWrongKey(t *testing.T) {
 	}
 }
 
-// Unpack writes only the two files a bundle may carry, so a bundle cannot be
-// used to drop anything else, anywhere else, on the executor.
+// Unpack returns only the two files a bundle may carry, so a bundle cannot be
+// used to drop anything else, anywhere else, in the session's workspace.
 func TestUnpackRefusesAnythingButThePlanAndLockFile(t *testing.T) {
 	t.Parallel()
 
@@ -114,26 +107,8 @@ func TestUnpackRefusesAnythingButThePlanAndLockFile(t *testing.T) {
 		_ = archive.Close()
 		_ = gz.Close()
 
-		if err := Unpack(buffer.Bytes(), t.TempDir()); err == nil {
+		if _, err := Unpack(buffer.Bytes()); err == nil {
 			t.Fatalf("Unpack accepted entry %q", name)
 		}
-	}
-}
-
-func writeFile(t *testing.T, dir string, name string, content string) {
-	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func assertFile(t *testing.T, dir string, name string, want string) {
-	t.Helper()
-	got, err := os.ReadFile(filepath.Join(dir, name))
-	if err != nil {
-		t.Fatalf("read %s: %v", name, err)
-	}
-	if string(got) != want {
-		t.Fatalf("%s = %q, want %q", name, got, want)
 	}
 }

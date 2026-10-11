@@ -1,12 +1,8 @@
-package main
+package isolation
 
 import (
-	"os"
 	"strings"
 	"testing"
-
-	"github.com/vishu42/openplan/internal/config"
-	"github.com/vishu42/openplan/internal/runuser"
 )
 
 const goodStatus = "Name:\topenplan-execu\nUid:\t0\t0\t0\t0\nCapEff:\t00000000000000c1\nNoNewPrivs:\t1\n"
@@ -33,25 +29,11 @@ func TestCheckCapabilityStatus(t *testing.T) {
 
 func TestCheckSessionLimit(t *testing.T) {
 	t.Parallel()
-	users := runuser.PoolUsers()
+	users := poolUsers()
 	if err := checkSessionLimit(20, users); err != nil {
 		t.Fatalf("20 of 40: %v", err)
 	}
 	if err := checkSessionLimit(21, users); err == nil || !strings.Contains(err.Error(), "EXECUTOR_MAX_SESSIONS") {
 		t.Fatalf("21 of 40: %v", err)
-	}
-}
-
-// The executor runs only in its Linux image, as root. Anywhere else it must
-// refuse to start rather than run sessions without isolation.
-func TestCheckIsolationRefusesANonRootExecutor(t *testing.T) {
-	t.Parallel()
-	if os.Geteuid() == 0 {
-		t.Skip("needs a non-root user")
-	}
-
-	err := checkIsolation(config.ExecutorConfig{MaxSessions: 20}, runuser.PoolUsers())
-	if err == nil || !strings.Contains(err.Error(), "want 0") {
-		t.Fatalf("checkIsolation = %v, want a refusal for a non-root executor", err)
 	}
 }

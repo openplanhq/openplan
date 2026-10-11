@@ -60,7 +60,7 @@ differential-test: ## Run the authorization tests that need a real Postgres
 
 isolation-test: ## Run the subprocess isolation tests (#331) in the executor image (needs Docker)
 	docker build -f Dockerfile.executor -t openplan-executor:isolation .
-	docker build -f internal/isolationtest/Dockerfile --build-arg EXECUTOR_IMAGE=openplan-executor:isolation -t openplan-isolation-test .
+	docker build -f internal/isolation/isolationtest/Dockerfile --build-arg EXECUTOR_IMAGE=openplan-executor:isolation -t openplan-isolation-test .
 	docker run --rm --cap-drop ALL --cap-add SETUID --cap-add SETGID --cap-add CHOWN \
 		--security-opt no-new-privileges:true openplan-isolation-test
-	./internal/isolationtest/failclosed.sh openplan-executor:isolation
+	./internal/isolation/isolationtest/failclosed.sh openplan-executor:isolation

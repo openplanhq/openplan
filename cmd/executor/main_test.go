@@ -9,11 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vishu42/openplan/internal/activities"
 	"github.com/vishu42/openplan/internal/config"
 	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/isolation"
 	"github.com/vishu42/openplan/internal/runseal"
-	"github.com/vishu42/openplan/internal/runuser"
 	"github.com/vishu42/openplan/internal/temporal"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
@@ -56,11 +55,14 @@ func TestRunWiresTemporalWorker(t *testing.T) {
 	if deps.workerOptions.MaxConcurrentSessionExecutionSize != config.DefaultExecutorMaxSessions {
 		t.Fatalf("max concurrent sessions = %d, want %d", deps.workerOptions.MaxConcurrentSessionExecutionSize, config.DefaultExecutorMaxSessions)
 	}
-	if !reflect.DeepEqual(deps.calls, []string{"newIsolation", "checkIsolation", "dialTemporal"}) {
+	if !reflect.DeepEqual(deps.calls, []string{"newSessions", "dialTemporal"}) {
 		t.Fatalf("startup order = %v, want isolation checked before dialing Temporal", deps.calls)
 	}
-	if !reflect.DeepEqual(deps.activityIsolation, deps.isolation) {
-		t.Fatalf("activities got isolation %+v, want the one newIsolation returned", deps.activityIsolation)
+	if want := (isolation.Config{RunRoot: "/tmp/openplan-executor-test", MaxSessions: config.DefaultExecutorMaxSessions}); deps.sessionsConfig != want {
+		t.Fatalf("newSessions got %+v, want %+v", deps.sessionsConfig, want)
+	}
+	if deps.activitySessions != deps.sessions {
+		t.Fatal("activities did not get the sessions newSessions returned")
 	}
 	if deps.activityKeys == nil {
 		t.Fatal("activities were not given a key ring")
@@ -94,8 +96,9 @@ func TestDefaultExecutorDependenciesRegisterOnlyExecutionActivities(t *testing.T
 	worker := &recordingTemporalWorker{}
 	deps := defaultExecutorDependencies()
 
-	isolation := activities.Isolation{Users: runuser.DevelopmentUsers(runuser.PoolSize), Helper: noopWorkspaceHelper{}}
-	if err := deps.registerActivities(context.Background(), worker, t.TempDir(), artifactStores{logs: recordingWorkerLogStore{}, plans: recordingWorkerPlanStore{}}, runseal.NewKeyRing(), isolation); err != nil {
+	runRoot := t.TempDir()
+	sessions := isolation.NewForTest(isolation.Config{RunRoot: runRoot}, 2)
+	if err := deps.registerActivities(context.Background(), worker, runRoot, artifactStores{logs: recordingWorkerLogStore{}, plans: recordingWorkerPlanStore{}}, runseal.NewKeyRing(), sessions); err != nil {
 		t.Fatalf("registerActivities returned error: %v", err)
 	}
 
@@ -113,14 +116,14 @@ func TestDefaultExecutorDependenciesRegisterOnlyExecutionActivities(t *testing.T
 	}
 }
 
-// An executor that cannot keep branches apart must not run template code: it
+// An executor that cannot keep sessions apart must not run template code: it
 // stops before it ever polls for work.
 func TestRunStopsWhenIsolationFails(t *testing.T) {
 	t.Parallel()
 
 	checkErr := errors.New("CapEff is wrong")
 	deps := newRecordingExecutorDependencies(t)
-	deps.checkErr = checkErr
+	deps.sessionsErr = checkErr
 
 	err := runWithDependencies(context.Background(), executorTestEnv, deps.executorDependencies)
 	if !errors.Is(err, checkErr) || !strings.Contains(err.Error(), "subprocess isolation") {
@@ -191,14 +194,15 @@ type recordingExecutorDependencies struct {
 	activityRunRoot     string
 	activityStores      artifactStores
 	activityKeys        *runseal.KeyRing
-	activityIsolation   activities.Isolation
+	activitySessions    *isolation.Manager
 	logStore            recordingWorkerLogStore
 	planStore           recordingWorkerPlanStore
 	dialErr             error
-	// isolation is what newIsolation returns; checkErr is what checkIsolation
-	// returns.
-	isolation activities.Isolation
-	checkErr  error
+	// sessions and sessionsErr are what newSessions returns, and
+	// sessionsConfig what it was given.
+	sessions       *isolation.Manager
+	sessionsErr    error
+	sessionsConfig isolation.Config
 	// calls records the startup steps in the order they ran.
 	calls []string
 }
@@ -209,7 +213,7 @@ func newRecordingExecutorDependencies(t *testing.T) *recordingExecutorDependenci
 	deps := &recordingExecutorDependencies{
 		temporalClient: &recordingWorkerTemporalClient{},
 		worker:         &recordingTemporalWorker{},
-		isolation:      activities.Isolation{Users: runuser.DevelopmentUsers(runuser.PoolSize)},
+		sessions:       isolation.NewForTest(isolation.Config{}, 1),
 	}
 	deps.executorDependencies = executorDependencies{
 		dialTemporal: func(_ context.Context, cfg temporal.Config) (client.Client, error) {
@@ -228,14 +232,14 @@ func newRecordingExecutorDependencies(t *testing.T) *recordingExecutorDependenci
 			deps.workerOptions = options
 			return deps.worker
 		},
-		registerActivities: func(_ context.Context, worker temporalWorker, runRoot string, stores artifactStores, keys *runseal.KeyRing, isolation activities.Isolation) error {
+		registerActivities: func(_ context.Context, worker temporalWorker, runRoot string, stores artifactStores, keys *runseal.KeyRing, sessions *isolation.Manager) error {
 			if worker != deps.worker {
 				t.Fatalf("registerActivities worker = %p, want %p", worker, deps.worker)
 			}
 			deps.activityRunRoot = runRoot
 			deps.activityStores = stores
 			deps.activityKeys = keys
-			deps.activityIsolation = isolation
+			deps.activitySessions = sessions
 			return nil
 		},
 		newArtifactStores: func(cfg config.ArtifactStoreConfig) (artifactStores, error) {
@@ -247,33 +251,17 @@ func newRecordingExecutorDependencies(t *testing.T) *recordingExecutorDependenci
 			close(ch)
 			return ch
 		},
-		newIsolation: func() (activities.Isolation, error) {
-			deps.calls = append(deps.calls, "newIsolation")
-			return deps.isolation, nil
-		},
-		checkIsolation: func(config.ExecutorConfig, []runuser.User) error {
-			deps.calls = append(deps.calls, "checkIsolation")
-			return deps.checkErr
+		newSessions: func(cfg isolation.Config) (*isolation.Manager, error) {
+			deps.calls = append(deps.calls, "newSessions")
+			deps.sessionsConfig = cfg
+			if deps.sessionsErr != nil {
+				return nil, deps.sessionsErr
+			}
+			return deps.sessions, nil
 		},
 	}
 	return deps
 }
-
-// noopWorkspaceHelper stands in for the helper where nothing runs in a
-// workspace: registration only sweeps an empty run root.
-type noopWorkspaceHelper struct{}
-
-func (noopWorkspaceHelper) Kill(context.Context, runuser.User) error { return nil }
-
-func (noopWorkspaceHelper) Reclaim(context.Context, runuser.User, string) error { return nil }
-
-func (noopWorkspaceHelper) Pack(context.Context, runuser.User, string) ([]byte, error) {
-	return nil, nil
-}
-
-func (noopWorkspaceHelper) Unpack(context.Context, runuser.User, string, []byte) error { return nil }
-
-func (noopWorkspaceHelper) CheckRoot(context.Context, runuser.User, string) error { return nil }
 
 type recordingWorkerLogStore struct{}
 

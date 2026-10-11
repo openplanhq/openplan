@@ -7,7 +7,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go test -c -tags isolation -o /out/isolation.test ./internal/isolationtest
+RUN CGO_ENABLED=0 go test -c -tags isolation -o /out/isolation.test ./internal/isolation/isolationtest
 
 FROM ${EXECUTOR_IMAGE}
 COPY --from=build /out/isolation.test /usr/local/bin/isolation.test

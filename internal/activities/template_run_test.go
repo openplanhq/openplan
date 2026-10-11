@@ -64,7 +64,7 @@ func TestPrepareWorkspaceCreatesRunDirectory(t *testing.T) {
 	t.Parallel()
 
 	runRoot := t.TempDir()
-	activities, _ := newTestTemplateRunActivities(t, runRoot, nil)
+	activities := newTestTemplateRunActivities(t, runRoot, nil)
 	input := domain.PrepareWorkspaceActivityInput{
 		RunID:    domain.TemplateRunID("run_123"),
 		TenantID: domain.TenantID("tenant_123"),
@@ -91,7 +91,7 @@ func TestPrepareWorkspaceCreatesRunDirectory(t *testing.T) {
 func TestPrepareWorkspaceRejectsEmptyRoot(t *testing.T) {
 	t.Parallel()
 
-	activities, _ := newTestTemplateRunActivities(t, "", nil)
+	activities := newTestTemplateRunActivities(t, "", nil)
 
 	_, err := activities.PrepareWorkspace(context.Background(), domain.PrepareWorkspaceActivityInput{
 		RunID:    domain.TemplateRunID("run_123"),
@@ -108,7 +108,7 @@ func TestPrepareWorkspaceRejectsEmptyRoot(t *testing.T) {
 func TestPrepareWorkspaceRejectsUnsafePathComponents(t *testing.T) {
 	t.Parallel()
 
-	activities, _ := newTestTemplateRunActivities(t, t.TempDir(), nil)
+	activities := newTestTemplateRunActivities(t, t.TempDir(), nil)
 
 	_, err := activities.PrepareWorkspace(context.Background(), domain.PrepareWorkspaceActivityInput{
 		RunID:    domain.TemplateRunID("run_123"),
@@ -130,7 +130,7 @@ func TestFetchSourceChecksOutTheResolvedCommitRatherThanTheRef(t *testing.T) {
 	t.Parallel()
 
 	git := &recordingSourceGitRunner{}
-	activities, _ := newTestTemplateRunActivities(t, t.TempDir(), nil, &recordingTerraformRunner{})
+	activities := newTestTemplateRunActivities(t, t.TempDir(), nil, &recordingTerraformRunner{})
 	activities.git = git
 	workspace, err := activities.PrepareWorkspace(context.Background(), domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
@@ -180,7 +180,7 @@ func TestFetchSourceFallsBackToTheRefWhenNoCommitWasResolved(t *testing.T) {
 	t.Parallel()
 
 	git := &recordingSourceGitRunner{}
-	activities, _ := newTestTemplateRunActivities(t, t.TempDir(), nil, &recordingTerraformRunner{})
+	activities := newTestTemplateRunActivities(t, t.TempDir(), nil, &recordingTerraformRunner{})
 	activities.git = git
 	workspace, err := activities.PrepareWorkspace(context.Background(), domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
@@ -244,7 +244,7 @@ func TestRunTerraformDelegatesToRunner(t *testing.T) {
 	t.Parallel()
 
 	runner := &recordingTerraformRunner{}
-	activities, _ := newTestTemplateRunActivities(t, t.TempDir(), nil, runner)
+	activities := newTestTemplateRunActivities(t, t.TempDir(), nil, runner)
 	workspace := prepareTestWorkspace(t, activities)
 	input := domain.RunTerraformActivityInput{
 		RunID:         domain.TemplateRunID("run_123"),
@@ -295,7 +295,7 @@ func TestRunTerraformAttachesUploadedLogToCommandFailure(t *testing.T) {
 
 	runnerErr := errors.New("terraform failed")
 	log := domain.TemplateRunLog{TenantID: "tenant_123", RunID: "run_123", Phase: "apply", ObjectKey: "tenants/tenant_123/runs/run_123/logs/apply.log"}
-	activities, _ := newTestTemplateRunActivities(t, t.TempDir(), nil, &recordingTerraformRunner{log: log, err: runnerErr})
+	activities := newTestTemplateRunActivities(t, t.TempDir(), nil, &recordingTerraformRunner{log: log, err: runnerErr})
 	prepareTestWorkspace(t, activities)
 
 	_, err := activities.RunTerraform(context.Background(), domain.RunTerraformActivityInput{
@@ -593,7 +593,7 @@ func TestRunTerraformWrapsRunnerError(t *testing.T) {
 	t.Parallel()
 
 	runnerErr := errors.New("terraform failed")
-	activities, _ := newTestTemplateRunActivities(t, t.TempDir(), nil, &recordingTerraformRunner{err: runnerErr})
+	activities := newTestTemplateRunActivities(t, t.TempDir(), nil, &recordingTerraformRunner{err: runnerErr})
 	workspace := prepareTestWorkspace(t, activities)
 
 	_, err := activities.RunTerraform(context.Background(), domain.RunTerraformActivityInput{
@@ -770,7 +770,7 @@ func (executor *recordingCommandExecutor) Run(_ context.Context, _ string, env [
 func fetchWithSealedToken(t *testing.T, tokens GitHubTokenSource, git gitrunner.GitRunner, owner string, repo string) error {
 	t.Helper()
 
-	executor, _ := newTestTemplateRunActivities(t, t.TempDir(), nil, &recordingTerraformRunner{})
+	executor := newTestTemplateRunActivities(t, t.TempDir(), nil, &recordingTerraformRunner{})
 	executor.git = git
 	workspace, err := executor.PrepareWorkspace(context.Background(), domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
@@ -905,7 +905,7 @@ func TestRunCredentialsRoundTripThroughTheRunKey(t *testing.T) {
 	t.Parallel()
 
 	runner := &recordingTerraformRunner{}
-	executor, _ := newTestTemplateRunActivities(t, t.TempDir(), nil, runner)
+	executor := newTestTemplateRunActivities(t, t.TempDir(), nil, runner)
 	workspace, err := executor.PrepareWorkspace(context.Background(), domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
 		t.Fatalf("PrepareWorkspace returned error: %v", err)
@@ -960,8 +960,8 @@ func TestPrepareWorkspaceReturnsRunPublicKey(t *testing.T) {
 	t.Parallel()
 
 	keys := runseal.NewKeyRing()
-	isolation, _ := testIsolation()
-	output, err := NewTemplateRunActivities(t.TempDir(), nil, nil, keys, isolation).PrepareWorkspace(context.Background(), domain.PrepareWorkspaceActivityInput{
+	runRoot := t.TempDir()
+	output, err := NewTemplateRunActivities(runRoot, nil, nil, keys, testSessions(runRoot)).PrepareWorkspace(context.Background(), domain.PrepareWorkspaceActivityInput{
 		TenantID: "tenant_123",
 		RunID:    "run_123",
 	})

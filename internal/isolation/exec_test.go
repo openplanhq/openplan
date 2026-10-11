@@ -1,4 +1,4 @@
-package runner
+package isolation
 
 import (
 	"bytes"
@@ -9,11 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
-
-	"github.com/vishu42/openplan/internal/runuser"
 )
 
 // The commands that turn this test binary into a child: one that prints its
@@ -26,10 +23,10 @@ const (
 	sleepCommand                 = "sleep"
 )
 
-// TestHelperProcess is not a test. It is the child the environment tests start
-// through osExecCommandExecutor, so they observe what a real subprocess
-// receives rather than what cmd.Env was set to: the leak in #172 included Go
-// filling in a nil cmd.Env, which no inspection of cmd.Env would catch.
+// TestHelperProcess is not a test. It is the child the executor tests start,
+// so they observe what a real subprocess receives rather than what cmd.Env was
+// set to: the leak in #172 included Go filling in a nil cmd.Env, which no
+// inspection of cmd.Env would catch.
 func TestHelperProcess(t *testing.T) {
 	args := os.Args
 	for len(args) > 0 && args[0] != "--" {
@@ -60,13 +57,21 @@ func helperArgs(command string) []string {
 	return []string{"-test.run=^TestHelperProcess$", "--", command}
 }
 
+// skipAsRoot skips tests that run sessions as the current user: as root that
+// is uid 0, which credential refuses, as it should.
+func skipAsRoot(t *testing.T) {
+	t.Helper()
+	if os.Geteuid() == 0 {
+		t.Skip("sessions run as the current user here, and root is not a pool user")
+	}
+}
+
 // childEnvironment starts this test binary as a real subprocess through
-// osExecCommandExecutor with env, and returns the environment the child saw.
+// HostExecutor with env, and returns the environment the child saw.
 func childEnvironment(t *testing.T, env []string) map[string]string {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
-	err := osExecCommandExecutor{}.Run(context.Background(), "", env, &stdout, &stderr,
-		os.Args[0], "-test.run=^TestHelperProcess$", "--", printEnvironmentCommand)
+	err := HostExecutor().Run(context.Background(), "", env, &stdout, &stderr, os.Args[0], helperArgs(printEnvironmentCommand)...)
 	if err != nil {
 		t.Fatalf("helper process: %v\nstderr: %s", err, stderr.String())
 	}
@@ -86,7 +91,7 @@ func childEnvironment(t *testing.T, env []string) map[string]string {
 // whatever it receives into its run log. Probing with a canary rather than
 // naming those variables pins the property: a variable added to the executor
 // later stays out without anyone remembering to list it here.
-func TestOSExecCommandExecutorWithholdsExecutorEnvironment(t *testing.T) {
+func TestExecutorWithholdsExecutorEnvironment(t *testing.T) {
 	const canary = "OPENPLAN_TEST_CANARY"
 	t.Setenv(canary, "leaked")
 
@@ -108,7 +113,7 @@ func TestOSExecCommandExecutorWithholdsExecutorEnvironment(t *testing.T) {
 	}
 }
 
-func TestOSExecCommandExecutorPassesAllowlistedEnvironment(t *testing.T) {
+func TestExecutorPassesAllowlistedEnvironment(t *testing.T) {
 	for _, name := range executorEnvironmentAllowlist {
 		t.Setenv(name, "from-executor-"+name)
 	}
@@ -127,7 +132,7 @@ func TestOSExecCommandExecutorPassesAllowlistedEnvironment(t *testing.T) {
 
 // An allowlisted variable the executor does not set must stay unset in the
 // child, not arrive empty: some readers treat the two differently.
-func TestOSExecCommandExecutorLeavesUnsetAllowlistedVariablesUnset(t *testing.T) {
+func TestExecutorLeavesUnsetAllowlistedVariablesUnset(t *testing.T) {
 	name := executorEnvironmentAllowlist[len(executorEnvironmentAllowlist)-1]
 	t.Setenv(name, "")
 	if err := os.Unsetenv(name); err != nil {
@@ -141,7 +146,7 @@ func TestOSExecCommandExecutorLeavesUnsetAllowlistedVariablesUnset(t *testing.T)
 
 // A run's credentials and TF_VAR_* arrive through env and must reach tofu as
 // given, even when the executor sets the same name.
-func TestOSExecCommandExecutorPrefersExplicitEnvironment(t *testing.T) {
+func TestExecutorPrefersExplicitEnvironment(t *testing.T) {
 	name := executorEnvironmentAllowlist[0]
 	t.Setenv(name, "from-executor")
 
@@ -155,79 +160,81 @@ func TestOSExecCommandExecutorPrefersExplicitEnvironment(t *testing.T) {
 	}
 }
 
-type recordingKill struct {
-	mu    sync.Mutex
-	users []runuser.User
-}
-
-func (k *recordingKill) kill(_ context.Context, user runuser.User) error {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	k.users = append(k.users, user)
-	return nil
-}
-
-func testBranch(t *testing.T) runuser.Branch {
-	home := t.TempDir()
-	return runuser.Branch{User: runuser.DevelopmentUsers(1)[0], Home: home, TempDir: t.TempDir()}
-}
-
-// On the executor every subprocess belongs to a session. One outside a branch
-// would run as root, with root's three capabilities.
-func TestIsolatedExecutorRefusesSubprocessesOutsideABranch(t *testing.T) {
+// On the executor every subprocess belongs to a session. One outside a
+// session would run as root, with root's three capabilities.
+func TestSessionExecutorRefusesSubprocessesOutsideASession(t *testing.T) {
 	t.Parallel()
-	err := NewIsolatedExecutor((&recordingKill{}).kill).Run(context.Background(), "", nil, io.Discard, io.Discard,
-		os.Args[0], helperArgs(printEnvironmentCommand)...)
-	if !errors.Is(err, ErrNoBranch) {
-		t.Fatalf("Run = %v, want ErrNoBranch", err)
+	err := SessionExecutor().Run(context.Background(), "", nil, io.Discard, io.Discard, os.Args[0], helperArgs(printEnvironmentCommand)...)
+	if !errors.Is(err, ErrNoSession) {
+		t.Fatalf("Run = %v, want ErrNoSession", err)
 	}
 }
 
-func TestIsolatedExecutorGivesTheBranchItsHomeAndTempDir(t *testing.T) {
+func TestSessionExecutorRefusesAClosedSession(t *testing.T) {
 	t.Parallel()
-	branch := testBranch(t)
-	ctx := runuser.WithBranch(context.Background(), branch)
-	executor := NewIsolatedExecutor((&recordingKill{}).kill)
-
-	var env, dir bytes.Buffer
-	if err := executor.Run(ctx, "", nil, &env, io.Discard, os.Args[0], helperArgs(printEnvironmentCommand)...); err != nil {
+	helper := &recordingHelper{}
+	m := newTestManager(t.TempDir(), 1, helper)
+	s := openTestSession(t, m, "t/run")
+	ctx := s.Context(context.Background())
+	if err := m.Close(context.Background(), "t/run"); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(env.String(), "HOME="+branch.Home+"\x00") || !strings.Contains(env.String(), "TMPDIR="+branch.TempDir+"\x00") {
-		t.Fatalf("environment = %q, want the branch's HOME and TMPDIR", env.String())
+
+	err := SessionExecutor().Run(ctx, "", nil, io.Discard, io.Discard, os.Args[0], helperArgs(printEnvironmentCommand)...)
+	if !errors.Is(err, ErrSessionClosed) || len(helper.killedUsers()) != 0 {
+		t.Fatalf("Run = %v, killed %v; want ErrSessionClosed and nothing started", err, helper.killedUsers())
 	}
-	if err := executor.Run(ctx, "", nil, &dir, io.Discard, os.Args[0], helperArgs(printWorkingDirectoryCommand)...); err != nil {
+}
+
+func TestSessionExecutorGivesTheSessionItsHomeAndTempDir(t *testing.T) {
+	t.Parallel()
+	skipAsRoot(t)
+	m := newTestManager(t.TempDir(), 1, &recordingHelper{})
+	s := openTestSession(t, m, "t/run")
+	ctx := s.Context(context.Background())
+
+	var env, dir bytes.Buffer
+	if err := SessionExecutor().Run(ctx, "", nil, &env, io.Discard, os.Args[0], helperArgs(printEnvironmentCommand)...); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(env.String(), "HOME="+s.home()+"\x00") || !strings.Contains(env.String(), "TMPDIR="+s.tempDir()+"\x00") {
+		t.Fatalf("environment = %q, want the session's HOME and TMPDIR", env.String())
+	}
+	if err := SessionExecutor().Run(ctx, "", nil, &dir, io.Discard, os.Args[0], helperArgs(printWorkingDirectoryCommand)...); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := filepath.EvalSymlinks(dir.String())
-	want, _ := filepath.EvalSymlinks(branch.Home)
+	want, _ := filepath.EvalSymlinks(s.home())
 	if got != want {
-		t.Fatalf("working directory = %q, want the branch's home %q", got, want)
+		t.Fatalf("working directory = %q, want the session's home %q", got, want)
 	}
 }
 
 // A command's leftovers (nohup … &) die with it, success or failure.
-func TestIsolatedExecutorKillsTheBranchAfterEachCommand(t *testing.T) {
+func TestSessionExecutorKillsTheSessionAfterEachCommand(t *testing.T) {
 	t.Parallel()
-	branch := testBranch(t)
-	kill := &recordingKill{}
+	skipAsRoot(t)
+	helper := &recordingHelper{}
+	m := newTestManager(t.TempDir(), 1, helper)
+	s := openTestSession(t, m, "t/run")
 
-	err := NewIsolatedExecutor(kill.kill).Run(runuser.WithBranch(context.Background(), branch), "", nil, io.Discard, io.Discard,
-		os.Args[0], helperArgs(printEnvironmentCommand)...)
+	err := SessionExecutor().Run(s.Context(context.Background()), "", nil, io.Discard, io.Discard, os.Args[0], helperArgs(printEnvironmentCommand)...)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(kill.users) != 1 || kill.users[0] != branch.User {
-		t.Fatalf("killed = %v, want %v once", kill.users, branch.User)
+	if killed := helper.killedUsers(); len(killed) != 1 || killed[0] != s.user {
+		t.Fatalf("killed = %v, want %v once", killed, s.user)
 	}
 }
 
-func TestIsolatedExecutorKillsTheBranchOnCancel(t *testing.T) {
+func TestSessionExecutorKillsTheSessionOnCancel(t *testing.T) {
 	t.Parallel()
-	branch := testBranch(t)
-	kill := &recordingKill{}
-	executor := osExecCommandExecutor{isolated: true, kill: kill.kill, waitDelay: 100 * time.Millisecond}
-	ctx, cancel := context.WithTimeout(runuser.WithBranch(context.Background(), branch), 200*time.Millisecond)
+	skipAsRoot(t)
+	helper := &recordingHelper{}
+	m := newTestManager(t.TempDir(), 1, helper)
+	s := openTestSession(t, m, "t/run")
+	executor := Executor{inSession: true, waitDelay: 100 * time.Millisecond}
+	ctx, cancel := context.WithTimeout(s.Context(context.Background()), 200*time.Millisecond)
 	defer cancel()
 
 	err := executor.Run(ctx, "", nil, io.Discard, io.Discard, os.Args[0], helperArgs(sleepCommand)...)
@@ -235,7 +242,7 @@ func TestIsolatedExecutorKillsTheBranchOnCancel(t *testing.T) {
 		t.Fatal("Run returned nil for a cancelled command")
 	}
 	// Once by Cancel, once after the command ended.
-	if len(kill.users) == 0 || kill.users[0] != branch.User {
-		t.Fatalf("killed = %v, want %v", kill.users, branch.User)
+	if killed := helper.killedUsers(); len(killed) == 0 || killed[0] != s.user {
+		t.Fatalf("killed = %v, want %v", killed, s.user)
 	}
 }

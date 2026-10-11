@@ -28,7 +28,7 @@ RUN apk add --no-cache ca-certificates git tini \
     && addgroup root openplan \
     # The pool: one user and one group per concurrent session, above the
     # system and login ranges so they do not collide with users on the host
-    # (internal/runuser). Changing the count means changing runuser.PoolSize.
+    # (internal/isolation). Changing the count means changing isolation.PoolSize.
     && for i in $(seq 1 40); do \
          id=$((70000 + i)); \
          addgroup -g "$id" "openplan-run-$i"; \

@@ -1,80 +1,52 @@
 package activities
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 
 	"github.com/vishu42/openplan/internal/domain"
-	"github.com/vishu42/openplan/internal/planbundle"
-	"github.com/vishu42/openplan/internal/runhelper"
+	"github.com/vishu42/openplan/internal/isolation"
 	gitrunner "github.com/vishu42/openplan/internal/runner"
 	"github.com/vishu42/openplan/internal/runseal"
-	"github.com/vishu42/openplan/internal/runuser"
 )
 
-// fakeWorkspaceHelper does the helper's work in this process, as the current
-// user, and records what it was asked to do. It never kills anything.
-type fakeWorkspaceHelper struct {
-	mu        sync.Mutex
-	reclaimed []string
-	packedBy  []runuser.User
-	unpacked  []runuser.User
-	checkedBy []runuser.User
+// testSessions runs every session as the current user, with the helper's
+// work done in this process.
+func testSessions(runRoot string) *isolation.Manager {
+	return isolation.NewForTest(isolation.Config{RunRoot: runRoot}, 4)
 }
 
-func (h *fakeWorkspaceHelper) Kill(context.Context, runuser.User) error { return nil }
-
-func (h *fakeWorkspaceHelper) Reclaim(_ context.Context, _ runuser.User, workspace string) error {
-	h.mu.Lock()
-	h.reclaimed = append(h.reclaimed, workspace)
-	h.mu.Unlock()
-	if workspace == "" {
-		return nil
-	}
-	return runhelper.EmptyDir(workspace)
-}
-
-func (h *fakeWorkspaceHelper) Pack(_ context.Context, user runuser.User, dir string) ([]byte, error) {
-	h.mu.Lock()
-	h.packedBy = append(h.packedBy, user)
-	h.mu.Unlock()
-	return planbundle.Pack(dir)
-}
-
-func (h *fakeWorkspaceHelper) Unpack(_ context.Context, user runuser.User, dir string, bundle []byte) error {
-	h.mu.Lock()
-	h.unpacked = append(h.unpacked, user)
-	h.mu.Unlock()
-	return planbundle.Unpack(bundle, dir)
-}
-
-func (h *fakeWorkspaceHelper) CheckRoot(_ context.Context, user runuser.User, dir string) error {
-	h.mu.Lock()
-	h.checkedBy = append(h.checkedBy, user)
-	h.mu.Unlock()
-	return runhelper.CheckRoot(dir)
-}
-
-// testIsolation runs every branch as the current user, through the fake.
-func testIsolation() (Isolation, *fakeWorkspaceHelper) {
-	helper := &fakeWorkspaceHelper{}
-	return Isolation{Users: runuser.DevelopmentUsers(4), Helper: helper}, helper
-}
-
-func newTestTemplateRunActivities(t *testing.T, runRoot string, plans PlanArtifactStore, runners ...TerraformRunner) (*TemplateRunActivities, *fakeWorkspaceHelper) {
+func newTestTemplateRunActivities(t *testing.T, runRoot string, plans PlanArtifactStore, runners ...TerraformRunner) *TemplateRunActivities {
 	t.Helper()
-	isolation, helper := testIsolation()
-	return NewTemplateRunActivities(runRoot, nil, plans, runseal.NewKeyRing(), isolation, runners...), helper
+	return NewTemplateRunActivities(runRoot, nil, plans, runseal.NewKeyRing(), testSessions(runRoot), runners...)
+}
+
+// sessionHome runs a command the way the executor's runners do and returns
+// the HOME it got: the session's own when ctx is tagged with an open session.
+// Sessions here run as the current user, which as root is a uid no session
+// may have, so the tests that call it skip as root.
+func sessionHome(ctx context.Context) (string, error) {
+	var home bytes.Buffer
+	err := isolation.SessionExecutor().Run(ctx, "", nil, &home, io.Discard, "/bin/sh", "-c", `printf %s "$HOME"`)
+	return home.String(), err
+}
+
+func skipAsRoot(t *testing.T) {
+	t.Helper()
+	if os.Geteuid() == 0 {
+		t.Skip("sessions run as the current user here, and root is not a pool user")
+	}
 }
 
 func TestPrepareWorkspaceLaysOutTheRunDirectory(t *testing.T) {
 	t.Parallel()
 	runRoot := t.TempDir()
-	activities, _ := newTestTemplateRunActivities(t, runRoot, nil)
+	activities := newTestTemplateRunActivities(t, runRoot, nil)
 
 	output, err := activities.PrepareWorkspace(context.Background(), domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
@@ -96,16 +68,16 @@ func TestPrepareWorkspaceLaysOutTheRunDirectory(t *testing.T) {
 			t.Errorf("%s: %v, %v; want mode %o", path, info, err, want)
 		}
 	}
-	if _, err := activities.users.Lookup(domain.RunKeyID("tenant_123", "run_123")); err != nil {
-		t.Fatalf("no lease after PrepareWorkspace: %v", err)
+	if _, err := activities.sessions.Session(domain.RunKeyID("tenant_123", "run_123")); err != nil {
+		t.Fatalf("no session after PrepareWorkspace: %v", err)
 	}
 }
 
-func TestPrepareWorkspaceTwiceReclaimsTheFirstSession(t *testing.T) {
+func TestPrepareWorkspaceTwiceEndsTheFirstSession(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	runRoot := t.TempDir()
-	activities, helper := newTestTemplateRunActivities(t, runRoot, nil)
+	activities := newTestTemplateRunActivities(t, runRoot, nil)
 	input := domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"}
 	first, err := activities.PrepareWorkspace(ctx, input)
 	if err != nil {
@@ -117,9 +89,6 @@ func TestPrepareWorkspaceTwiceReclaimsTheFirstSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(helper.reclaimed) != 1 || helper.reclaimed[0] != first.WorkspacePath {
-		t.Fatalf("reclaimed = %v, want the first workspace", helper.reclaimed)
-	}
 	if _, err := os.Stat(filepath.Join(second.WorkspacePath, "left-by-plan")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("the second session sees the first's file: %v", err)
 	}
@@ -127,72 +96,35 @@ func TestPrepareWorkspaceTwiceReclaimsTheFirstSession(t *testing.T) {
 
 func TestPrepareWorkspaceFailsWhenThePoolIsFull(t *testing.T) {
 	t.Parallel()
-	activities, _ := newTestTemplateRunActivities(t, t.TempDir(), nil)
+	activities := newTestTemplateRunActivities(t, t.TempDir(), nil)
 	for i := range 4 {
 		if _, err := activities.PrepareWorkspace(context.Background(), domain.PrepareWorkspaceActivityInput{TenantID: "t", RunID: domain.TemplateRunID("run_" + string(rune('a'+i)))}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	_, err := activities.PrepareWorkspace(context.Background(), domain.PrepareWorkspaceActivityInput{TenantID: "t", RunID: "run_e"})
-	if !errors.Is(err, runuser.ErrNoFreeUser) {
+	if !errors.Is(err, isolation.ErrNoFreeUser) {
 		t.Fatalf("PrepareWorkspace = %v, want ErrNoFreeUser", err)
 	}
 }
 
-func TestCleanupWorkspaceReclaimsTheBranch(t *testing.T) {
+func TestCleanupWorkspaceEndsTheSession(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	runRoot := t.TempDir()
-	activities, helper := newTestTemplateRunActivities(t, runRoot, newMemoryPlanStore())
-	output, err := activities.PrepareWorkspace(ctx, domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
-	if err != nil {
+	activities := newTestTemplateRunActivities(t, runRoot, newMemoryPlanStore())
+	if _, err := activities.PrepareWorkspace(ctx, domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"}); err != nil {
 		t.Fatal(err)
 	}
 
 	if err := activities.CleanupWorkspace(ctx, domain.CleanupWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"}); err != nil {
 		t.Fatal(err)
 	}
-	if len(helper.reclaimed) != 1 || helper.reclaimed[0] != output.WorkspacePath {
-		t.Fatalf("reclaimed = %v", helper.reclaimed)
-	}
 	if _, err := os.Stat(filepath.Join(runRoot, "tenant_123", "run_123")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("run directory still exists: %v", err)
 	}
-	if _, err := activities.users.Lookup(domain.RunKeyID("tenant_123", "run_123")); !errors.Is(err, runuser.ErrNoLease) {
-		t.Fatalf("lease survives cleanup: %v", err)
-	}
-}
-
-// After a restart no lease is valid: the pool died with the process. The
-// sweep ends every pool user's processes and removes every run directory.
-func TestSweepRemovesWhatAnEarlierProcessLeft(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	runRoot := t.TempDir()
-	before, _ := newTestTemplateRunActivities(t, runRoot, nil)
-	left, err := before.PrepareWorkspace(ctx, domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	after, helper := newTestTemplateRunActivities(t, runRoot, nil)
-	if err := after.Sweep(ctx); err != nil {
-		t.Fatal(err)
-	}
-	var perUser, workspaces int
-	for _, workspace := range helper.reclaimed {
-		switch workspace {
-		case "":
-			perUser++
-		case left.WorkspacePath:
-			workspaces++
-		}
-	}
-	if perUser != 4 || workspaces != 1 {
-		t.Fatalf("reclaimed = %v, want every user once and the left workspace", helper.reclaimed)
-	}
-	if entries, _ := os.ReadDir(filepath.Join(runRoot, "tenant_123")); len(entries) != 0 {
-		t.Fatalf("run directories remain: %v", entries)
+	if _, err := activities.sessions.Session(domain.RunKeyID("tenant_123", "run_123")); !errors.Is(err, isolation.ErrNoLease) {
+		t.Fatalf("session survives cleanup: %v", err)
 	}
 }
 
@@ -214,32 +146,36 @@ func TestRunTerraformWritesItsLogOutsideTheWorkspace(t *testing.T) {
 	}
 }
 
-type branchRecordingGit struct {
-	branch runuser.Branch
+// sessionRecordingGit records the HOME a command run with git's ctx would
+// get, and makes the clone's directory.
+type sessionRecordingGit struct {
+	home   string
+	err    error
 	called bool
 }
 
-func (g *branchRecordingGit) Clone(ctx context.Context, _, _, dest string, _ gitrunner.GitCredential) error {
+func (g *sessionRecordingGit) Clone(ctx context.Context, _, _, dest string, _ gitrunner.GitCredential) error {
 	return g.record(ctx, dest)
 }
 
-func (g *branchRecordingGit) CheckoutCommit(ctx context.Context, _, _, dest string, _ gitrunner.GitCredential) error {
+func (g *sessionRecordingGit) CheckoutCommit(ctx context.Context, _, _, dest string, _ gitrunner.GitCredential) error {
 	return g.record(ctx, dest)
 }
 
-func (g *branchRecordingGit) ResolveHead(context.Context, string) (string, error) { return "", nil }
+func (g *sessionRecordingGit) ResolveHead(context.Context, string) (string, error) { return "", nil }
 
-func (g *branchRecordingGit) record(ctx context.Context, dest string) error {
+func (g *sessionRecordingGit) record(ctx context.Context, dest string) error {
 	g.called = true
-	g.branch, _ = runuser.BranchFrom(ctx)
+	g.home, g.err = sessionHome(ctx)
 	return os.MkdirAll(dest, 0o700)
 }
 
-func TestFetchSourceRunsGitInTheSessionsBranch(t *testing.T) {
+func TestFetchSourceRunsGitInTheRunsSession(t *testing.T) {
 	t.Parallel()
+	skipAsRoot(t)
 	ctx := context.Background()
-	activities, helper := newTestTemplateRunActivities(t, t.TempDir(), nil)
-	git := &branchRecordingGit{}
+	activities := newTestTemplateRunActivities(t, t.TempDir(), nil)
+	git := &sessionRecordingGit{}
 	activities.git = git
 	workspace, err := activities.PrepareWorkspace(ctx, domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
@@ -253,45 +189,44 @@ func TestFetchSourceRunsGitInTheSessionsBranch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	user, _ := activities.users.Lookup(domain.RunKeyID("tenant_123", "run_123"))
-	want := runuser.Branch{User: user, Home: filepath.Join(workspace.WorkspacePath, "home"), TempDir: filepath.Join(workspace.WorkspacePath, "tmp")}
-	if git.branch != want {
-		t.Fatalf("git ran in %+v, want %+v", git.branch, want)
-	}
-	if len(helper.checkedBy) != 1 || helper.checkedBy[0] != user {
-		t.Fatalf("template root checked by %v, want the helper as %v", helper.checkedBy, user)
+	if want := filepath.Join(workspace.WorkspacePath, "home"); git.err != nil || git.home != want {
+		t.Fatalf("git ran with HOME %q, %v; want the session's %q", git.home, git.err, want)
 	}
 }
 
-// After a restart the session's lease is gone. The next step must fail, not
+// After a restart the run's session is gone. The next step must fail, not
 // run as whichever user the new pool would hand out.
-func TestFetchSourceFailsWithoutALease(t *testing.T) {
+func TestFetchSourceFailsWithoutASession(t *testing.T) {
 	t.Parallel()
-	activities, _ := newTestTemplateRunActivities(t, t.TempDir(), nil)
-	git := &branchRecordingGit{}
+	activities := newTestTemplateRunActivities(t, t.TempDir(), nil)
+	git := &sessionRecordingGit{}
 	activities.git = git
 
 	_, err := activities.FetchSource(context.Background(), domain.FetchSourceActivityInput{
 		TenantID: "tenant_123", RunID: "run_123", WorkspacePath: "/somewhere",
 		RepoOwner: "acme", RepoName: "infra", ResolvedCommitSHA: "0123456789abcdef0123456789abcdef01234567", RootPath: ".",
 	})
-	if !errors.Is(err, runuser.ErrNoLease) || git.called {
+	if !errors.Is(err, isolation.ErrNoLease) || git.called {
 		t.Fatalf("FetchSource = %v, git called = %v; want ErrNoLease and no git", err, git.called)
 	}
 }
 
-type branchRecordingTerraformRunner struct{ branch runuser.Branch }
+type sessionRecordingTerraformRunner struct {
+	home string
+	err  error
+}
 
-func (r *branchRecordingTerraformRunner) RunTerraform(ctx context.Context, _ domain.RunTerraformActivityInput) (domain.RunTerraformActivityOutput, error) {
-	r.branch, _ = runuser.BranchFrom(ctx)
+func (r *sessionRecordingTerraformRunner) RunTerraform(ctx context.Context, _ domain.RunTerraformActivityInput) (domain.RunTerraformActivityOutput, error) {
+	r.home, r.err = sessionHome(ctx)
 	return domain.RunTerraformActivityOutput{}, nil
 }
 
-func TestRunTerraformRunsInTheSessionsBranch(t *testing.T) {
+func TestRunTerraformRunsInTheRunsSession(t *testing.T) {
 	t.Parallel()
+	skipAsRoot(t)
 	ctx := context.Background()
-	recorder := &branchRecordingTerraformRunner{}
-	activities, _ := newTestTemplateRunActivities(t, t.TempDir(), nil, recorder)
+	recorder := &sessionRecordingTerraformRunner{}
+	activities := newTestTemplateRunActivities(t, t.TempDir(), nil, recorder)
 	workspace, err := activities.PrepareWorkspace(ctx, domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
 		t.Fatal(err)
@@ -300,7 +235,7 @@ func TestRunTerraformRunsInTheSessionsBranch(t *testing.T) {
 	if _, err := activities.RunTerraform(ctx, domain.RunTerraformActivityInput{TenantID: "tenant_123", RunID: "run_123", WorkspacePath: workspace.WorkspacePath}); err != nil {
 		t.Fatal(err)
 	}
-	if recorder.branch.Home != filepath.Join(workspace.WorkspacePath, "home") {
-		t.Fatalf("tofu ran in %+v", recorder.branch)
+	if want := filepath.Join(workspace.WorkspacePath, "home"); recorder.err != nil || recorder.home != want {
+		t.Fatalf("tofu ran with HOME %q, %v; want the session's %q", recorder.home, recorder.err, want)
 	}
 }

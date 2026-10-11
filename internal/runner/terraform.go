@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/isolation"
 )
 
 type TerraformCommand struct {
@@ -39,7 +40,7 @@ const terraformExecutable = "tofu"
 // context for cancellation, and write to the command's configured output
 // writers or to the process stdout/stderr when no writers are configured.
 func NewLocalProcessRunner() *LocalProcessRunner {
-	return NewLocalProcessRunnerWithExecutor(osExecCommandExecutor{})
+	return NewLocalProcessRunnerWithExecutor(isolation.HostExecutor())
 }
 
 // NewLocalProcessRunnerWithExecutor returns a runner backed by executor.
