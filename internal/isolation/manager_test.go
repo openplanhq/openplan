@@ -254,6 +254,23 @@ func TestOpenLaysOutTheRunDirectory(t *testing.T) {
 	}
 }
 
+// The sweep after a restart walks <RunRoot>/<tenant>/<run> only. A run
+// directory anywhere else would never be reclaimed, so Open refuses it.
+func TestOpenRefusesARunDirectoryTheSweepWouldMiss(t *testing.T) {
+	t.Parallel()
+	runRoot := t.TempDir()
+	for name, m := range map[string]*Manager{
+		"under root": newTestManager(runRoot, 1, inProcessHelper{}),
+		"no root":    newTestManager("", 1, inProcessHelper{}),
+	} {
+		for _, runDir := range []string{t.TempDir(), filepath.Join(runRoot, "run"), filepath.Join(runRoot, "t", "run", "deeper")} {
+			if _, err := m.Open(context.Background(), "t/run", runDir); err == nil {
+				t.Errorf("%s: Open(%s) succeeded", name, runDir)
+			}
+		}
+	}
+}
+
 func TestOpenTwiceReclaimsTheFirstSession(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

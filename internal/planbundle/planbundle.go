@@ -30,9 +30,10 @@ const LockFileName = ".terraform.lock.hcl"
 // KeySize is the length of a plan key: AES-256.
 const KeySize = 32
 
-// maxFileSize bounds each file unpacked from a bundle. Plan files for large
-// configurations run to tens of megabytes; this is well past that and still
-// small enough that a hostile bundle cannot fill the executor's disk.
+// maxFileSize bounds each file in a bundle, packed or unpacked. Plan files
+// for large configurations run to tens of megabytes; this is well past that
+// and still small enough that a hostile bundle cannot fill the executor's
+// disk.
 const maxFileSize = 512 << 20
 
 // Files are the files a bundle carries, from the root module directory: the
@@ -51,14 +52,18 @@ func NewKey() ([]byte, error) {
 }
 
 // Pack bundles files, by name. The plan must be there; a module with no
-// providers has no lock file.
+// providers has no lock file. Each file must fit Unpack's bound, or the plan
+// would be approved and then fail to unpack for its apply.
 func Pack(files map[string][]byte) ([]byte, error) {
 	if _, ok := files[runner.PlanFileName]; !ok {
 		return nil, errors.New("no saved plan to pack")
 	}
-	for name := range files {
+	for name, content := range files {
 		if !isBundled(name) {
 			return nil, fmt.Errorf("%q does not belong in a plan bundle", name)
+		}
+		if len(content) > maxFileSize {
+			return nil, fmt.Errorf("%s is larger than a plan bundle carries (%d bytes)", name, maxFileSize)
 		}
 	}
 	var buffer bytes.Buffer

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -111,6 +112,76 @@ func TestClientDistrustsTheHelpersAnswer(t *testing.T) {
 	if _, err := tampered.readFiles(context.Background(), u, t.TempDir(), []string{"tfplan"}); err == nil || !strings.Contains(err.Error(), "not asked for") {
 		t.Fatalf("readFiles = %v, want main.tf refused", err)
 	}
+	// An answer that isn't files at all fails, and the client still reads
+	// the helper to the end, so the helper exits rather than block.
+	flooding := testClient()
+	flooding.command = append(flooding.command, "flood")
+	if _, err := flooding.readFiles(context.Background(), u, t.TempDir(), []string{"tfplan"}); err == nil {
+		t.Fatal("readFiles accepted a flood")
+	}
+}
+
+// Running as the pool user keeps a symlink from reaching anything the session
+// couldn't read, but not from making the helper read forever.
+func TestReadFilesRefusesWhatCouldNeverEnd(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if err := os.Symlink("/dev/zero", filepath.Join(dir, "zero")); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Mkfifo(filepath.Join(dir, "fifo"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sparse, err := os.Create(filepath.Join(dir, "sparse"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sparse.Truncate(maxFileSize + 1); err != nil {
+		t.Fatal(err)
+	}
+	_ = sparse.Close()
+	if err := os.WriteFile(filepath.Join(dir, "plan"), []byte("the plan"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// A symlink that stays inside the directory is just another name.
+	if err := os.Symlink("plan", filepath.Join(dir, "inside")); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, name := range []string{"zero", "fifo", "sparse"} {
+		if _, err := readFiles(dir, []string{name}); err == nil {
+			t.Errorf("readFiles(%s) succeeded", name)
+		}
+	}
+	if files, err := readFiles(dir, []string{"inside"}); err != nil || string(files["inside"]) != "the plan" {
+		t.Fatalf("readFiles(inside) = %q, %v", files, err)
+	}
+}
+
+// Writing stays inside the directory too, and a FIFO left where a file
+// should go fails rather than wait for a reader.
+func TestWriteFilesRefusesNamesPointedElsewhere(t *testing.T) {
+	t.Parallel()
+	dir, outside := t.TempDir(), t.TempDir()
+	target := filepath.Join(outside, "target")
+	if err := os.WriteFile(target, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(dir, "out")); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Mkfifo(filepath.Join(dir, "fifo"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, name := range []string{"out", "fifo"} {
+		if err := writeFiles(dir, map[string][]byte{name: []byte("x")}); err == nil {
+			t.Errorf("writeFiles(%s) succeeded", name)
+		}
+	}
+	if got, _ := os.ReadFile(target); string(got) != "keep" {
+		t.Fatalf("file behind the symlink = %q, want it untouched", got)
+	}
 }
 
 func mustEncode(t *testing.T, files map[string][]byte) []byte {
@@ -126,7 +197,7 @@ func TestTransferRoundTripsFiles(t *testing.T) {
 	t.Parallel()
 	want := map[string][]byte{"tfplan": []byte("plan"), ".terraform.lock.hcl": []byte("lock"), "empty": {}}
 
-	got, err := decodeFiles(mustEncode(t, want))
+	got, err := decodeFiles(bytes.NewReader(mustEncode(t, want)))
 	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("decodeFiles = %q, %v; want %q", got, err, want)
 	}
@@ -152,8 +223,9 @@ func TestTransferRefusesWhatIsNotAPlainFile(t *testing.T) {
 		"a symlink":   entries(tar.Header{Name: "tfplan", Typeflag: tar.TypeSymlink, Linkname: "/etc/passwd"}),
 		"a directory": entries(tar.Header{Name: "dir", Typeflag: tar.TypeDir}),
 		"a duplicate": entries(plain, plain),
+		"a huge file": entries(tar.Header{Name: "tfplan", Typeflag: tar.TypeReg, Size: maxFileSize + 1}),
 	} {
-		if _, err := decodeFiles(archive); err == nil {
+		if _, err := decodeFiles(bytes.NewReader(archive)); err == nil {
 			t.Errorf("decodeFiles accepted %s", name)
 		}
 	}

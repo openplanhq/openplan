@@ -192,10 +192,14 @@ func (store FilesystemStore) PutObject(_ context.Context, key string, _ string, 
 	return nil
 }
 
-// mkdirShared makes each missing directory from root down to dir, shared. A
-// directory that already exists is left alone: it may be the other service's.
+// mkdirShared makes each missing directory from root down to dir, root
+// included, shared. A directory that already exists is left alone: it may be
+// the other service's. root's parents are nobody's to share.
 func mkdirShared(root, dir string) error {
-	if err := os.MkdirAll(root, 0o770); err != nil { //nolint:gosec // the group is how the api and the executor share the store
+	if err := os.MkdirAll(filepath.Dir(root), 0o755); err != nil { //nolint:gosec // both services walk through to the root
+		return err
+	}
+	if err := mkdirSharedOne(root); err != nil {
 		return err
 	}
 	rel, err := filepath.Rel(root, dir)
@@ -205,18 +209,24 @@ func mkdirShared(root, dir string) error {
 	path := root
 	for part := range strings.SplitSeq(rel, string(filepath.Separator)) {
 		path = filepath.Join(path, part)
-		err := os.Mkdir(path, 0o770) //nolint:gosec // as above
-		if errors.Is(err, fs.ErrExist) {
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		if err := os.Chmod(path, sharedDirMode); err != nil {
+		if err := mkdirSharedOne(path); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// mkdirSharedOne makes path shared, unless it already exists. The mode is set
+// explicitly, because the umask would strip group write.
+func mkdirSharedOne(path string) error {
+	err := os.Mkdir(path, 0o770) //nolint:gosec // the group is how the api and the executor share the store
+	if errors.Is(err, fs.ErrExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return os.Chmod(path, sharedDirMode)
 }
 
 func (store FilesystemStore) GetObject(_ context.Context, key string) ([]byte, error) {

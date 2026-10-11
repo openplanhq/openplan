@@ -29,11 +29,11 @@ func (s *Session) tempDir() string {
 	return filepath.Join(s.Workspace(), "tmp")
 }
 
-// open reports whether s is still its run's session. A zero Session has no
-// Manager, and one past its Close no longer holds the lease; either could
-// name a user that is another session's by now.
+// open reports whether s is still its run's session. A nil or zero Session
+// has no Manager, and one past its Close no longer holds the lease; either
+// could name a user that is another session's by now.
 func (s *Session) open() error {
-	if s.m == nil || !s.m.holds(s) {
+	if s == nil || s.m == nil || !s.m.holds(s) {
 		return ErrSessionClosed
 	}
 	return nil

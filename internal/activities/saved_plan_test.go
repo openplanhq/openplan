@@ -57,7 +57,7 @@ func TestSavedPlanTravelsFromThePlanExecutorToTheApplyExecutor(t *testing.T) {
 	// Plan phase, on the first executor.
 	planKeys := runseal.NewKeyRing()
 	planRunRoot := t.TempDir()
-	planExecutor := NewTemplateRunActivities(planRunRoot, nil, plans, planKeys, testSessions(planRunRoot))
+	planExecutor := NewTemplateRunActivities(planRunRoot, nil, plans, planKeys, testSessions(t, planRunRoot))
 	planWorkspace, err := planExecutor.PrepareWorkspace(ctx, domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
 		t.Fatalf("PrepareWorkspace returned error: %v", err)
@@ -80,7 +80,7 @@ func TestSavedPlanTravelsFromThePlanExecutorToTheApplyExecutor(t *testing.T) {
 	// Apply phase, on a second executor with its own run key.
 	applyKeys := runseal.NewKeyRing()
 	applyRunRoot := t.TempDir()
-	applyExecutor := NewTemplateRunActivities(applyRunRoot, nil, plans, applyKeys, testSessions(applyRunRoot))
+	applyExecutor := NewTemplateRunActivities(applyRunRoot, nil, plans, applyKeys, testSessions(t, applyRunRoot))
 	applyWorkspace, err := applyExecutor.PrepareWorkspace(ctx, domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
 		t.Fatalf("PrepareWorkspace returned error: %v", err)
@@ -119,7 +119,7 @@ func TestDownloadPlanRefusesAPlanSavedForAnotherRun(t *testing.T) {
 
 	keys := runseal.NewKeyRing()
 	runRoot := t.TempDir()
-	executor := NewTemplateRunActivities(runRoot, nil, plans, keys, testSessions(runRoot))
+	executor := NewTemplateRunActivities(runRoot, nil, plans, keys, testSessions(t, runRoot))
 	workspace, err := executor.PrepareWorkspace(ctx, domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
 		t.Fatal(err)

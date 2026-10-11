@@ -6,27 +6,27 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strings"
 )
 
-// maxTransferSize bounds the files that cross between the executor and the
-// helper, in either direction: comfortably above a saved plan and its lock
-// file, which planbundle caps at 512 MiB each.
-const maxTransferSize = 1 << 30
+// maxFileSize bounds each file that crosses between the executor and the
+// helper, and maxTransferSize all of them together. maxFileSize is
+// planbundle's own bound on a bundled file, so a plan too large to bundle
+// fails when it is read, before anyone approves it.
+const (
+	maxFileSize     = 512 << 20
+	maxTransferSize = 1 << 30
+)
 
 // encodeFiles carries files between the executor and the helper as an
 // uncompressed tar of regular files, in name order.
 func encodeFiles(files map[string][]byte) ([]byte, error) {
 	var buffer bytes.Buffer
 	archive := tar.NewWriter(&buffer)
-	names := make([]string, 0, len(files))
-	for name := range files {
-		names = append(names, name)
-	}
-	slices.Sort(names)
-	for _, name := range names {
+	for _, name := range slices.Sorted(maps.Keys(files)) {
 		if err := checkName(name); err != nil {
 			return nil, err
 		}
@@ -44,12 +44,14 @@ func encodeFiles(files map[string][]byte) ([]byte, error) {
 	return buffer.Bytes(), nil
 }
 
-// decodeFiles reads what encodeFiles wrote. Each side decodes what the other
-// sent, and the helper's side may have been tampered with, so it accepts
-// only regular files with plain names, each once.
-func decodeFiles(data []byte) (map[string][]byte, error) {
-	archive := tar.NewReader(bytes.NewReader(data))
+// decodeFiles reads what encodeFiles wrote, as it streams in, so each file is
+// held once and no more than maxTransferSize of them in all. Each side
+// decodes what the other sent, and the helper's side may have been tampered
+// with, so it accepts only regular files with plain names, each once.
+func decodeFiles(r io.Reader) (map[string][]byte, error) {
+	archive := tar.NewReader(r)
 	files := map[string][]byte{}
+	var total int64
 	for {
 		header, err := archive.Next()
 		if errors.Is(err, io.EOF) {
@@ -67,7 +69,11 @@ func decodeFiles(data []byte) (map[string][]byte, error) {
 		if _, seen := files[header.Name]; seen {
 			return nil, fmt.Errorf("%q appears twice", header.Name)
 		}
-		// data is already bounded by maxTransferSize, so ReadAll is too.
+		// Checked before reading: the tar reader yields exactly Size bytes.
+		total += header.Size
+		if header.Size > maxFileSize || total > maxTransferSize {
+			return nil, fmt.Errorf("%q takes the files past their size limit", header.Name)
+		}
 		content, err := io.ReadAll(archive)
 		if err != nil {
 			return nil, fmt.Errorf("decode %s: %w", header.Name, err)

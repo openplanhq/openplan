@@ -278,7 +278,8 @@ func TestPlanKeyRejectsUnsafeComponents(t *testing.T) {
 
 func TestFilesystemStoreSharesObjectsThroughTheGroup(t *testing.T) {
 	t.Parallel()
-	root := t.TempDir()
+	// Not there yet, as on a fresh volume: the store makes the root shared too.
+	root := filepath.Join(t.TempDir(), "artifacts")
 	store := NewFilesystemStore(root)
 
 	if err := store.PutObject(context.Background(), "tenants/t/runs/r/logs/plan.log", "text/plain", strings.NewReader("one")); err != nil {
@@ -289,7 +290,7 @@ func TestFilesystemStoreSharesObjectsThroughTheGroup(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, dir := range []string{"tenants", "tenants/t", "tenants/t/runs", "tenants/t/runs/r", "tenants/t/runs/r/logs"} {
+	for _, dir := range []string{".", "tenants", "tenants/t", "tenants/t/runs", "tenants/t/runs/r", "tenants/t/runs/r/logs"} {
 		info, err := os.Stat(filepath.Join(root, dir))
 		if err != nil || info.Mode().Perm() != 0o770 {
 			t.Errorf("%s: %v, %v; want 0770", dir, info, err)

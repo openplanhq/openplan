@@ -66,11 +66,13 @@ func subprocessEnvironment(env []string) []string {
 const defaultWaitDelay = 10 * time.Second
 
 // Executor starts subprocesses. It satisfies runner.CommandExecutor, which is
-// how the tofu and git runners start every command.
+// how the tofu and git runners start every command. The zero Executor is the
+// session executor, so one built without a constructor refuses to start
+// anything outside a session rather than start it as root.
 type Executor struct {
-	// inSession refuses subprocesses outside a session: on the executor one
-	// would run as root, with root's three capabilities.
-	inSession bool
+	// host starts subprocesses as this process's own user, outside any
+	// session: on the executor, as root with root's three capabilities.
+	host      bool
 	waitDelay time.Duration
 }
 
@@ -78,14 +80,14 @@ type Executor struct {
 // allowlisted environment. Template sync on the api uses it: it runs only git
 // clone, which runs no code from the repository.
 func HostExecutor() Executor {
-	return Executor{}
+	return Executor{host: true}
 }
 
 // SessionExecutor starts every subprocess as the pool user of the session its
 // ctx is tagged with (Session.Context), and makes sure nothing it started
 // outlives it. It refuses a ctx with no open session.
 func SessionExecutor() Executor {
-	return Executor{inSession: true}
+	return Executor{}
 }
 
 // Run starts one subprocess in dir and connects its output streams.
@@ -98,7 +100,7 @@ func SessionExecutor() Executor {
 // session's pool user; switching from root makes the kernel clear every
 // capability.
 func (e Executor) Run(ctx context.Context, dir string, env []string, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
-	if !e.inSession {
+	if e.host {
 		cmd := exec.CommandContext(ctx, name, args...) //nolint:gosec // generic by design; see above
 		cmd.Dir = dir
 		cmd.Stdout = stdout
@@ -144,6 +146,12 @@ func (e Executor) Run(ctx context.Context, dir string, env []string, stdout io.W
 // It gets a context of its own: the command's may be the very one that was
 // cancelled.
 func (e Executor) kill(ctx context.Context, s *Session) error {
+	// A session that has ended had every process of its user killed by its
+	// reclaim, and its user may be another session's by now: a kill could
+	// only reach that session.
+	if s.open() != nil {
+		return nil
+	}
 	killCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), e.delay())
 	defer cancel()
 	return s.m.helper.kill(killCtx, s.user)

@@ -33,17 +33,21 @@ func TestContextCarriesTheSession(t *testing.T) {
 	}
 }
 
-// A Session only the package can make: a zero one, or one built around a
+// A Session only the package can make: a nil or zero one, or one built around a
 // user, belongs to no manager and is refused.
 func TestMadeUpSessionsAreRefused(t *testing.T) {
 	t.Parallel()
 	for name, s := range map[string]*Session{
+		"nil":          nil,
 		"zero":         {},
 		"with a user":  {id: "t/run", user: poolUsers()[0]},
 		"with no root": {id: "t/run", runDir: "/runs/t/run"},
 	} {
 		if _, err := sessionFrom(s.Context(context.Background())); !errors.Is(err, ErrSessionClosed) {
 			t.Errorf("%s: sessionFrom = %v, want ErrSessionClosed", name, err)
+		}
+		if _, err := s.ReadFiles(context.Background(), "/", []string{"x"}); !errors.Is(err, ErrSessionClosed) {
+			t.Errorf("%s: ReadFiles = %v, want ErrSessionClosed", name, err)
 		}
 	}
 }

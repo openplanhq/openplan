@@ -961,7 +961,7 @@ func TestPrepareWorkspaceReturnsRunPublicKey(t *testing.T) {
 
 	keys := runseal.NewKeyRing()
 	runRoot := t.TempDir()
-	output, err := NewTemplateRunActivities(runRoot, nil, nil, keys, testSessions(runRoot)).PrepareWorkspace(context.Background(), domain.PrepareWorkspaceActivityInput{
+	output, err := NewTemplateRunActivities(runRoot, nil, nil, keys, testSessions(t, runRoot)).PrepareWorkspace(context.Background(), domain.PrepareWorkspaceActivityInput{
 		TenantID: "tenant_123",
 		RunID:    "run_123",
 	})

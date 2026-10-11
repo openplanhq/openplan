@@ -23,6 +23,7 @@ package isolation
 
 import (
 	"errors"
+	"testing"
 )
 
 // Config is what the executor's configuration says about sessions.
@@ -52,8 +53,12 @@ var (
 // NewForTest returns a Manager for the tests of packages built on this one.
 // Every session runs as the current user, the helper's file work runs in this
 // process, and nothing is killed, since killing every process of the current
-// user would end the test run. It isolates nothing and skips New's checks:
-// the executor never calls it.
-func NewForTest(cfg Config, sessions int) *Manager {
+// user would end the test run. It isolates nothing and skips New's checks.
+//
+// It takes a testing.TB so that only a test can call it: only the testing
+// package can make one, and the executor has none to give. Wired into the
+// executor, which runs as root, its file work would run as root.
+func NewForTest(t testing.TB, cfg Config, sessions int) *Manager {
+	t.Helper()
 	return newManager(cfg, developmentUsers(sessions), inProcessHelper{})
 }

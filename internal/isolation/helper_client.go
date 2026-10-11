@@ -60,21 +60,28 @@ func (c helperClient) reclaim(ctx context.Context, u user, workspace string) err
 	return waitForNoSurvivors(ctx, c.procRoot, u.uid)
 }
 
-// readFiles reads the helper's answer with the same bound the helper puts on
-// what it reads from the executor, and keeps only the files it asked for:
-// the helper may have been tampered with, so its answer is the session's to
-// choose.
+// readFiles decodes the helper's answer as it streams, with the same bounds
+// the helper puts on what it reads from the executor, so the executor holds
+// each file once rather than the whole answer first. It keeps only the files
+// it asked for: the helper may have been tampered with, so its answer is the
+// session's to choose.
 func (c helperClient) readFiles(ctx context.Context, u user, dir string, names []string) (map[string][]byte, error) {
-	out := &cappedBuffer{limit: maxTransferSize}
-	if err := c.run(ctx, u, nil, out, "read-files", append([]string{dir}, names...)...); err != nil {
+	reader, writer := io.Pipe()
+	done := make(chan error, 1)
+	go func() {
+		err := c.run(ctx, u, nil, writer, "read-files", append([]string{dir}, names...)...)
+		writer.CloseWithError(err)
+		done <- err
+	}()
+	files, decodeErr := decodeFiles(reader)
+	// Read to the end whatever the outcome: a helper left blocked on a full
+	// pipe would never exit.
+	_, _ = io.Copy(io.Discard, reader)
+	if err := <-done; err != nil {
 		return nil, err
 	}
-	if out.overflowed {
-		return nil, fmt.Errorf("helper read-files as %s: more than %d bytes", u.name, maxTransferSize)
-	}
-	files, err := decodeFiles(out.Bytes())
-	if err != nil {
-		return nil, fmt.Errorf("helper read-files as %s: %w", u.name, err)
+	if decodeErr != nil {
+		return nil, fmt.Errorf("helper read-files as %s: %w", u.name, decodeErr)
 	}
 	for name := range files {
 		if !slices.Contains(names, name) {
@@ -143,7 +150,6 @@ func (b *cappedBuffer) Write(p []byte) (int, error) {
 	return b.buf.Write(p)
 }
 
-func (b *cappedBuffer) Bytes() []byte  { return b.buf.Bytes() }
 func (b *cappedBuffer) String() string { return b.buf.String() }
 func (b *cappedBuffer) Len() int       { return b.buf.Len() }
 

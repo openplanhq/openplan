@@ -65,6 +65,11 @@ func newManager(cfg Config, users []user, h helper) *Manager {
 // session that lost its cleanup, then the apply session of the same run on
 // the same executor, whose old branch must end before the new one starts.
 func (m *Manager) Open(ctx context.Context, id, runDir string) (*Session, error) {
+	// The sweep after a restart walks <RunRoot>/<tenant>/<run> and nothing
+	// else: a run directory anywhere else would never be reclaimed.
+	if m.runRoot == "" || filepath.Dir(filepath.Dir(filepath.Clean(runDir))) != filepath.Clean(m.runRoot) {
+		return nil, fmt.Errorf("run directory %s is not <run root>/<tenant>/<run> under %q", runDir, m.runRoot)
+	}
 	s, err := m.lease(ctx, id, runDir)
 	if err != nil {
 		return nil, err
@@ -159,16 +164,30 @@ func (m *Manager) finish(ctx context.Context, s *Session) error {
 }
 
 // reclaimSession ends s's branch and deletes its run directory. The helper
-// empties workspace/ as the session's user; the rest of the run directory is
+// empties workspace/ as the user who owns it; the rest of the run directory is
 // root's. By the time root removes it, the helper has killed every process
 // of the user and the executor has seen none survive, so nothing is left to
 // plant anything in it.
+//
+// The owner is usually s's user, but not always: when taking back an earlier
+// session of the same run failed, its workspace is still there, and only its
+// own user can empty it. Reclaiming it as s's user would fail too, and
+// quarantine s's user as well.
 func (m *Manager) reclaimSession(ctx context.Context, s *Session) error {
 	workspace := s.Workspace()
-	if _, err := os.Lstat(workspace); errors.Is(err, fs.ErrNotExist) {
-		workspace = ""
+	owner, owned, err := m.workspaceOwner(workspace)
+	if err != nil {
+		return err
 	}
-	if err := m.helper.reclaim(ctx, s.user, workspace); err != nil {
+	switch {
+	case !owned:
+		err = m.helper.reclaim(ctx, s.user, "")
+	case owner.uid == s.user.uid:
+		err = m.helper.reclaim(ctx, s.user, workspace)
+	default:
+		err = errors.Join(m.helper.reclaim(ctx, s.user, ""), m.helper.reclaim(ctx, owner, workspace))
+	}
+	if err != nil {
 		return err
 	}
 	return os.RemoveAll(s.runDir)
@@ -210,12 +229,23 @@ func makeRunDirectory(runDir string, u user) error {
 // valid, since the leases died with the process. It fails closed: an
 // executor that cannot clear a pool user must not hand that user out.
 func (m *Manager) Sweep(ctx context.Context) error {
-	var errs []error
+	// The users are independent, so they are reclaimed at once: one round of
+	// helpers and survivor waits rather than one per user.
+	var (
+		mu   sync.Mutex
+		errs []error
+		wg   sync.WaitGroup
+	)
 	for _, u := range m.users {
-		if err := m.helper.reclaim(ctx, u, ""); err != nil {
-			errs = append(errs, err)
-		}
+		wg.Go(func() {
+			if err := m.helper.reclaim(ctx, u, ""); err != nil {
+				mu.Lock()
+				errs = append(errs, err)
+				mu.Unlock()
+			}
+		})
 	}
+	wg.Wait()
 	tenants, err := os.ReadDir(m.runRoot)
 	if errors.Is(err, fs.ErrNotExist) {
 		return errors.Join(errs...)
@@ -248,30 +278,40 @@ func (m *Manager) sweepRunDirectory(ctx context.Context, runDir string) error {
 // sweepWorkspace empties workspace as the pool user who owns it, so root can
 // then remove it.
 func (m *Manager) sweepWorkspace(ctx context.Context, workspace string) error {
-	info, err := os.Lstat(workspace)
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
+	owner, owned, err := m.workspaceOwner(workspace)
+	if err != nil || !owned {
 		return err
 	}
+	return m.helper.reclaim(ctx, owner, workspace)
+}
+
+// workspaceOwner returns the pool user who owns workspace. owned is false when
+// there is nothing for a pool user to empty: no workspace, a symlink in its
+// place (RemoveAll removes the symlink itself, never what it points to), or a
+// workspace still root's because an Open died before the chown.
+func (m *Manager) workspaceOwner(workspace string) (owner user, owned bool, err error) {
+	info, err := os.Lstat(workspace)
+	if errors.Is(err, fs.ErrNotExist) {
+		return user{}, false, nil
+	}
+	if err != nil {
+		return user{}, false, err
+	}
 	if !info.IsDir() {
-		// RemoveAll removes a symlink itself, never what it points to.
-		return nil
+		return user{}, false, nil
 	}
 	stat, ok := info.Sys().(*syscall.Stat_t)
 	if !ok {
-		return errors.New("workspace has no owner")
+		return user{}, false, errors.New("workspace has no owner")
 	}
-	// Root's: an Open that died before the chown.
 	if stat.Uid == 0 {
-		return nil
+		return user{}, false, nil
 	}
 	u, ok := m.userByUID(stat.Uid)
 	if !ok {
-		return fmt.Errorf("workspace owner %d is not a pool user", stat.Uid)
+		return user{}, false, fmt.Errorf("workspace owner %d is not a pool user", stat.Uid)
 	}
-	return m.helper.reclaim(ctx, u, workspace)
+	return u, true, nil
 }
 
 func (m *Manager) userByUID(uid uint32) (user, bool) {

@@ -162,11 +162,31 @@ func TestExecutorPrefersExplicitEnvironment(t *testing.T) {
 
 // On the executor every subprocess belongs to a session. One outside a
 // session would run as root, with root's three capabilities.
+// The zero Executor too: one built without a constructor fails closed.
 func TestSessionExecutorRefusesSubprocessesOutsideASession(t *testing.T) {
 	t.Parallel()
-	err := SessionExecutor().Run(context.Background(), "", nil, io.Discard, io.Discard, os.Args[0], helperArgs(printEnvironmentCommand)...)
-	if !errors.Is(err, ErrNoSession) {
-		t.Fatalf("Run = %v, want ErrNoSession", err)
+	for name, executor := range map[string]Executor{"SessionExecutor": SessionExecutor(), "the zero Executor": {}} {
+		err := executor.Run(context.Background(), "", nil, io.Discard, io.Discard, os.Args[0], helperArgs(printEnvironmentCommand)...)
+		if !errors.Is(err, ErrNoSession) {
+			t.Errorf("%s: Run = %v, want ErrNoSession", name, err)
+		}
+	}
+}
+
+// A session closed while its command ran had its user's processes killed by
+// the reclaim, and its user may be the next session's already: the kill after
+// the command must not reach that session.
+func TestSessionExecutorKillsNothingOnceTheSessionHasEnded(t *testing.T) {
+	t.Parallel()
+	helper := &recordingHelper{}
+	m := newTestManager(t.TempDir(), 1, helper)
+	s := openTestSession(t, m, "t/run")
+	if err := m.Close(context.Background(), "t/run"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := SessionExecutor().kill(context.Background(), s); err != nil || len(helper.killedUsers()) != 0 {
+		t.Fatalf("kill = %v, killed %v; want nothing killed", err, helper.killedUsers())
 	}
 }
 
@@ -233,7 +253,7 @@ func TestSessionExecutorKillsTheSessionOnCancel(t *testing.T) {
 	helper := &recordingHelper{}
 	m := newTestManager(t.TempDir(), 1, helper)
 	s := openTestSession(t, m, "t/run")
-	executor := Executor{inSession: true, waitDelay: 100 * time.Millisecond}
+	executor := Executor{waitDelay: 100 * time.Millisecond}
 	ctx, cancel := context.WithTimeout(s.Context(context.Background()), 200*time.Millisecond)
 	defer cancel()
 

@@ -97,7 +97,7 @@ func TestDefaultExecutorDependenciesRegisterOnlyExecutionActivities(t *testing.T
 	deps := defaultExecutorDependencies()
 
 	runRoot := t.TempDir()
-	sessions := isolation.NewForTest(isolation.Config{RunRoot: runRoot}, 2)
+	sessions := isolation.NewForTest(t, isolation.Config{RunRoot: runRoot}, 2)
 	if err := deps.registerActivities(context.Background(), worker, runRoot, artifactStores{logs: recordingWorkerLogStore{}, plans: recordingWorkerPlanStore{}}, runseal.NewKeyRing(), sessions); err != nil {
 		t.Fatalf("registerActivities returned error: %v", err)
 	}
@@ -213,7 +213,7 @@ func newRecordingExecutorDependencies(t *testing.T) *recordingExecutorDependenci
 	deps := &recordingExecutorDependencies{
 		temporalClient: &recordingWorkerTemporalClient{},
 		worker:         &recordingTemporalWorker{},
-		sessions:       isolation.NewForTest(isolation.Config{}, 1),
+		sessions:       isolation.NewForTest(t, isolation.Config{}, 1),
 	}
 	deps.executorDependencies = executorDependencies{
 		dialTemporal: func(_ context.Context, cfg temporal.Config) (client.Client, error) {

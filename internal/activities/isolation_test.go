@@ -11,19 +11,21 @@ import (
 
 	"github.com/vishu42/openplan/internal/domain"
 	"github.com/vishu42/openplan/internal/isolation"
+	"github.com/vishu42/openplan/internal/planbundle"
 	gitrunner "github.com/vishu42/openplan/internal/runner"
 	"github.com/vishu42/openplan/internal/runseal"
 )
 
 // testSessions runs every session as the current user, with the helper's
 // work done in this process.
-func testSessions(runRoot string) *isolation.Manager {
-	return isolation.NewForTest(isolation.Config{RunRoot: runRoot}, 4)
+func testSessions(t *testing.T, runRoot string) *isolation.Manager {
+	t.Helper()
+	return isolation.NewForTest(t, isolation.Config{RunRoot: runRoot}, 4)
 }
 
 func newTestTemplateRunActivities(t *testing.T, runRoot string, plans PlanArtifactStore, runners ...TerraformRunner) *TemplateRunActivities {
 	t.Helper()
-	return NewTemplateRunActivities(runRoot, nil, plans, runseal.NewKeyRing(), testSessions(runRoot), runners...)
+	return NewTemplateRunActivities(runRoot, nil, plans, runseal.NewKeyRing(), testSessions(t, runRoot), runners...)
 }
 
 // sessionHome runs a command the way the executor's runners do and returns
@@ -126,6 +128,71 @@ func TestCleanupWorkspaceEndsTheSession(t *testing.T) {
 	if _, err := activities.sessions.Session(domain.RunKeyID("tenant_123", "run_123")); !errors.Is(err, isolation.ErrNoLease) {
 		t.Fatalf("session survives cleanup: %v", err)
 	}
+}
+
+// The saved plan is read through the session, which stays inside the plan's
+// folder: a plan file the session pointed elsewhere is refused. Read
+// directly, as the executor's root, the symlink would be followed.
+func TestUploadPlanReadsThePlanThroughTheSession(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	plans := newMemoryPlanStore()
+	activities := newTestTemplateRunActivities(t, t.TempDir(), plans)
+	workspace, err := activities.PrepareWorkspace(ctx, domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	outside := t.TempDir()
+	writeTestFile(t, outside, "secret", "the executor's own")
+	planRoot := filepath.Join(workspace.WorkspacePath, "source")
+	writeTestFile(t, planRoot, ".terraform.lock.hcl", "lock")
+	if err := os.Symlink(filepath.Join(outside, "secret"), filepath.Join(planRoot, "tfplan")); err != nil {
+		t.Fatal(err)
+	}
+	sealedKey, err := runseal.Seal(workspace.PublicKey, mustPlanKey(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = activities.UploadPlan(ctx, domain.PlanArtifactActivityInput{TenantID: "tenant_123", RunID: "run_123", TerraformPath: planRoot, SealedPlanKey: sealedKey})
+	if err == nil || len(plans.plans) != 0 {
+		t.Fatalf("UploadPlan = %v, stored %d; want the symlinked plan refused", err, len(plans.plans))
+	}
+}
+
+// The saved plan is written back through the session too: a plan file the
+// session pointed elsewhere is refused, not followed.
+func TestDownloadPlanWritesThePlanThroughTheSession(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	plans := newMemoryPlanStore()
+	activities := newTestTemplateRunActivities(t, t.TempDir(), plans)
+	workspace, err := activities.PrepareWorkspace(ctx, domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := mustPlanKey(t)
+	sealed, err := planbundle.Seal(key, mustBundle(t), "tenant_123/run_123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plans.plans["tenant_123/run_123"] = sealed
+	outside := t.TempDir()
+	writeTestFile(t, outside, "target", "keep")
+	applyRoot := filepath.Join(workspace.WorkspacePath, "source")
+	writeTestFile(t, applyRoot, "main.tf", "")
+	if err := os.Symlink(filepath.Join(outside, "target"), filepath.Join(applyRoot, "tfplan")); err != nil {
+		t.Fatal(err)
+	}
+	sealedKey, err := runseal.Seal(workspace.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := activities.DownloadPlan(ctx, domain.PlanArtifactActivityInput{TenantID: "tenant_123", RunID: "run_123", TerraformPath: applyRoot, SealedPlanKey: sealedKey}); err == nil {
+		t.Fatal("DownloadPlan wrote through a symlink out of the plan's folder")
+	}
+	assertTestFile(t, outside, "target", "keep")
 }
 
 func TestRunTerraformWritesItsLogOutsideTheWorkspace(t *testing.T) {

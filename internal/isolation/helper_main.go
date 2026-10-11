@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -68,14 +69,7 @@ func dispatch(args []string, stdin io.Reader, stdout io.Writer) error {
 		_, err = stdout.Write(archive)
 		return err
 	case op == "write-files" && len(rest) == 1:
-		archive, err := io.ReadAll(io.LimitReader(stdin, maxTransferSize+1))
-		if err != nil {
-			return err
-		}
-		if len(archive) > maxTransferSize {
-			return fmt.Errorf("files to write are larger than %d bytes", maxTransferSize)
-		}
-		files, err := decodeFiles(archive)
+		files, err := decodeFiles(stdin)
 		if err != nil {
 			return err
 		}
@@ -89,13 +83,24 @@ func dispatch(args []string, stdin io.Reader, stdout io.Writer) error {
 // readFiles reads names from dir. A name that doesn't exist is left out, so
 // the caller decides which it needs: a module with no providers has no lock
 // file.
+//
+// Running as the pool user keeps a symlink from reaching anything the session
+// couldn't read anyway, but not from making the helper read forever: a name
+// pointed at /dev/zero, a FIFO with no writer, or a sparse file the size of
+// the disk would. So reads stay inside dir, take only regular files, and stop
+// at maxFileSize.
 func readFiles(dir string, names []string) (map[string][]byte, error) {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
 	files := map[string][]byte{}
 	for _, name := range names {
 		if err := checkName(name); err != nil {
 			return nil, err
 		}
-		content, err := os.ReadFile(filepath.Join(dir, name)) //nolint:gosec // the helper runs as the pool user: any path reaches only what the session already can
+		content, err := readFile(root, name)
 		if errors.Is(err, fs.ErrNotExist) {
 			continue
 		}
@@ -107,22 +112,66 @@ func readFiles(dir string, names []string) (map[string][]byte, error) {
 	return files, nil
 }
 
-// writeFiles writes files into dir, replacing any already there.
-func writeFiles(dir string, files map[string][]byte) error {
-	names := make([]string, 0, len(files))
-	for name := range files {
-		names = append(names, name)
+func readFile(root *os.Root, name string) ([]byte, error) {
+	// O_NONBLOCK: opening a FIFO would otherwise wait for a writer that
+	// never comes. Regular files ignore it.
+	file, err := root.OpenFile(name, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
 	}
-	slices.Sort(names)
-	for _, name := range names {
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, errors.New("not a regular file")
+	}
+	// The limit, not the size, bounds the read: the file can grow meanwhile.
+	content, err := io.ReadAll(io.LimitReader(file, maxFileSize+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(content) > maxFileSize {
+		return nil, fmt.Errorf("larger than %d bytes", maxFileSize)
+	}
+	return content, nil
+}
+
+// writeFiles writes files into dir, replacing any already there. Like
+// readFiles it stays inside dir and writes only regular files, so a name the
+// session pointed elsewhere, or made a FIFO, fails instead of being followed
+// or blocking.
+func writeFiles(dir string, files map[string][]byte) error {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	for _, name := range slices.Sorted(maps.Keys(files)) {
 		if err := checkName(name); err != nil {
 			return err
 		}
-		if err := os.WriteFile(filepath.Join(dir, name), files[name], 0o600); err != nil { //nolint:gosec // as readFiles
+		if err := writeFile(root, name, files[name]); err != nil {
 			return fmt.Errorf("write %s: %w", name, err)
 		}
 	}
 	return nil
+}
+
+func writeFile(root *os.Root, name string, content []byte) error {
+	file, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_TRUNC|syscall.O_NONBLOCK, 0o600)
+	if err != nil {
+		return err
+	}
+	info, err := file.Stat()
+	if err == nil && !info.Mode().IsRegular() {
+		err = errors.New("not a regular file")
+	}
+	if err == nil {
+		_, err = file.Write(content)
+	}
+	return errors.Join(err, file.Close())
 }
 
 // checkDir reports whether path is a directory.
