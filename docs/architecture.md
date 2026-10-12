@@ -173,9 +173,26 @@ The runner should be implemented behind an interface so a future `KubernetesJobR
 
 Terraform code is untrusted. A template is arbitrary code: OpenTofu/Terraform providers, provisioners, external data sources and `local-exec` run anything inside the executor pod, with access to the run's injected credentials. Publishing templates is limited to editors, but that only limits who can write a template, not what its code can do. Every executor-side design must assume the template is hostile.
 
-The local process runner keeps sessions apart by Linux user, and no further:
+The local process runner keeps sessions apart by Linux user, and no further (#331). A session is one phase, plan or apply, of one run on one executor. Each session runs as a pool user of its own, `openplan-run-1` to `openplan-run-40` (uids 70001 to 70040), and `internal/isolation` holds every mechanism that keeps it apart from other sessions and from the executor. Paths below are in that package unless noted.
 
-- Each session runs as a pool user of its own (`openplan-run-1` to `openplan-run-40`), so the kernel keeps sessions apart: their processes, `/proc` entries, files and signals (#331). The executor runs as root with only `CAP_SETUID`, `CAP_SETGID` and `CAP_CHOWN` and `no_new_privs`, and refuses to start otherwise. It never touches a workspace itself: a helper running as the pool user does. Its own process stays non-dumpable as a second layer (#240), and tofu and git still get an allowlisted environment (#172). Every process a session started is killed after each command and when the session ends; processes that slip away are still the pool user's, and the next reclaim of that user kills them.
+| Mechanism | What it stops | Where |
+|---|---|---|
+| A pool user per session, with a group of its own and no supplementary groups | A session reaching another session's processes, `/proc` entries, files or signals | `users.go`, `Dockerfile.executor` |
+| The executor runs as root with only `CAP_SETUID`, `CAP_SETGID` and `CAP_CHOWN`; switching a child to its pool user clears every capability | Template code holding any capability. Without `CAP_DAC_OVERRIDE` and `CAP_KILL`, root itself can't open a workspace or signal a session, so that work goes through the helper | `host.go`; `cap_drop` and `cap_add` in `docker-compose.yaml` |
+| `no_new_privs` | A setuid binary a session runs getting privileges back | `host.go`; `security_opt` in `docker-compose.yaml` |
+| The executor process is non-dumpable | A process of the executor's uid reading `/proc/<executor pid>/environ` (the artifact store's credentials, the Temporal address) or its memory (every run's sealing key) (#240) | `HardenProcess` |
+| An allowlisted environment for tofu and git | The executor's own environment reaching template code (#172) | `exec.go` |
+| A 0700 workspace owned by the session's user; 0711 directories above it; the run's `logs/` beside it, root's | A session listing or reading another run's directory, or planting a symlink where root writes | `makeRunDirectory` |
+| The helper: the executor binary re-run as the session's user, with an empty environment, for every read, write and check inside a workspace | Root following a symlink the session planted, for example to the executor's own `/proc/<pid>/environ` | `helper.go`, `helper_client.go`, `helper_main.go` |
+| `os.OpenRoot`, regular files only, single-component names and size limits on everything crossing the helper | A planted symlink, FIFO or endless file escaping the folder or hanging the executor; a tampered helper sending files nobody asked for | `helper_main.go`, `transfer.go` |
+| `kill(-1, SIGKILL)` as the session's user after every command, and when one is cancelled | Processes a command left running (`nohup … &`) outliving it | `exec.go` |
+| Reclaim when a session ends: kill the user's processes, delete its files in `/tmp`, `/var/tmp` and `/dev/shm`, empty the workspace; then the executor checks `/proc` itself for survivors | Anything of one session reaching the next session on the same user. A user whose reclaim fails stays out of the pool, and the spare users absorb it until a restart | `manager.go`, `helper_client.go` |
+| A sweep of every pool user and run directory at startup | Processes and files an earlier executor process left under a pool user, which the new process holds no lease for | `Manager.Sweep` |
+| Failing closed | Template code running without the above: the executor refuses to start unless it is root with exactly the three capabilities, under `no_new_privs`, with the pool users the image defines and two per session (`EXECUTOR_MAX_SESSIONS` of at most 20) | `New` |
+
+What it does not cover:
+
+- A session can read every file the image leaves world-readable.
 - The executor holds no database URL or key, but tofu can still reach Temporal, which has no access control yet (#246). See "Temporal access control" in the control plane split spec.
 - Network isolation, resource limits and a sandbox runtime come after 1.0 (#245).
 - Loopback TCP and abstract unix sockets are not separated by uid.
