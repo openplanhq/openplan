@@ -9,10 +9,18 @@ import (
 // Manager.Open to Manager.Close. Get one from Open or Manager.Session; a
 // Session made any other way, or kept past its Close, is refused everywhere.
 type Session struct {
-	id     string
+	// id is the run's lease key, "<tenant>/<run>": how the manager finds the
+	// session, and its run directory relative to the run root.
+	id string
+	// runDir is the run directory, "<run root>/<tenant>/<run>", fixed by Open.
+	// Every path the session hands out is built from it, and it is unexported
+	// so nothing outside the package can point a session somewhere else.
 	runDir string
-	user   user
-	m      *Manager
+	// user is the pool user leased to this session.
+	user user
+	// m is the manager that leased it, asked on every use whether the lease
+	// still stands.
+	m *Manager
 }
 
 // Workspace is the session's half of its run directory, which the session's
@@ -30,11 +38,11 @@ func (s *Session) LogsDir() string {
 }
 
 func (s *Session) home() string {
-	return filepath.Join(s.Workspace(), "home")
+	return filepath.Join(s.Workspace(), homeDirName)
 }
 
 func (s *Session) tempDir() string {
-	return filepath.Join(s.Workspace(), "tmp")
+	return filepath.Join(s.Workspace(), tempDirName)
 }
 
 // open reports whether s is still its run's session. A nil or zero Session

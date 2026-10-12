@@ -25,6 +25,10 @@ const (
 	// session cannot see it, so a symlink it plants cannot point root's writes
 	// elsewhere.
 	logsDirName = "logs"
+	// homeDirName and tempDirName, inside the workspace, are HOME and TMPDIR
+	// for the session's commands, so nothing it runs writes to root's.
+	homeDirName = "home"
+	tempDirName = "tmp"
 )
 
 // Manager leases each session a pool user of its own, lays out its run
@@ -247,7 +251,7 @@ func makeRunDirectory(runDir string, u user) error {
 		return fmt.Errorf("prepare log directory: %w", err)
 	}
 	workspace := filepath.Join(runDir, workspaceDirName)
-	sessionDirs := []string{workspace, filepath.Join(workspace, "home"), filepath.Join(workspace, "tmp")}
+	sessionDirs := []string{workspace, filepath.Join(workspace, homeDirName), filepath.Join(workspace, tempDirName)}
 	for _, dir := range sessionDirs {
 		if err := os.Mkdir(dir, 0o700); err != nil {
 			return fmt.Errorf("prepare workspace: %w", err)
