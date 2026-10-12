@@ -180,8 +180,8 @@ func TestSessionExecutorKillsNothingOnceTheSessionHasEnded(t *testing.T) {
 	t.Parallel()
 	helper := &recordingHelper{}
 	m := newTestManager(t.TempDir(), 1, helper)
-	s := openTestSession(t, m, "t/run")
-	if err := m.Close(context.Background(), "t/run"); err != nil {
+	s := openTestSession(t, m, "run")
+	if err := m.Close(context.Background(), "t", "run"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -194,9 +194,9 @@ func TestSessionExecutorRefusesAClosedSession(t *testing.T) {
 	t.Parallel()
 	helper := &recordingHelper{}
 	m := newTestManager(t.TempDir(), 1, helper)
-	s := openTestSession(t, m, "t/run")
+	s := openTestSession(t, m, "run")
 	ctx := s.Context(context.Background())
-	if err := m.Close(context.Background(), "t/run"); err != nil {
+	if err := m.Close(context.Background(), "t", "run"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -210,7 +210,7 @@ func TestSessionExecutorGivesTheSessionItsHomeAndTempDir(t *testing.T) {
 	t.Parallel()
 	skipAsRoot(t)
 	m := newTestManager(t.TempDir(), 1, &recordingHelper{})
-	s := openTestSession(t, m, "t/run")
+	s := openTestSession(t, m, "run")
 	ctx := s.Context(context.Background())
 
 	var env, dir bytes.Buffer
@@ -236,7 +236,7 @@ func TestSessionExecutorKillsTheSessionAfterEachCommand(t *testing.T) {
 	skipAsRoot(t)
 	helper := &recordingHelper{}
 	m := newTestManager(t.TempDir(), 1, helper)
-	s := openTestSession(t, m, "t/run")
+	s := openTestSession(t, m, "run")
 
 	err := SessionExecutor().Run(s.Context(context.Background()), "", nil, io.Discard, io.Discard, os.Args[0], helperArgs(printEnvironmentCommand)...)
 	if err != nil {
@@ -252,7 +252,7 @@ func TestSessionExecutorKillsTheSessionOnCancel(t *testing.T) {
 	skipAsRoot(t)
 	helper := &recordingHelper{}
 	m := newTestManager(t.TempDir(), 1, helper)
-	s := openTestSession(t, m, "t/run")
+	s := openTestSession(t, m, "run")
 	executor := Executor{waitDelay: 100 * time.Millisecond}
 	ctx, cancel := context.WithTimeout(s.Context(context.Background()), 200*time.Millisecond)
 	defer cancel()

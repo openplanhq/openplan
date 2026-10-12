@@ -23,9 +23,20 @@ func testSessions(t *testing.T, runRoot string) *isolation.Manager {
 	return isolation.NewForTest(t, isolation.Config{RunRoot: runRoot}, 4)
 }
 
+// sessionsWithRun returns sessions under runRoot with tenant_123's run_123
+// open, as PrepareWorkspace leaves it for the activities after it.
+func sessionsWithRun(t *testing.T, runRoot string) *isolation.Manager {
+	t.Helper()
+	sessions := testSessions(t, runRoot)
+	if _, err := sessions.Open(context.Background(), "tenant_123", "run_123"); err != nil {
+		t.Fatal(err)
+	}
+	return sessions
+}
+
 func newTestTemplateRunActivities(t *testing.T, runRoot string, plans PlanArtifactStore, runners ...TerraformRunner) *TemplateRunActivities {
 	t.Helper()
-	return NewTemplateRunActivities(runRoot, nil, plans, runseal.NewKeyRing(), testSessions(t, runRoot), runners...)
+	return NewTemplateRunActivities(nil, plans, runseal.NewKeyRing(), testSessions(t, runRoot), runners...)
 }
 
 // sessionHome runs a command the way the executor's runners do and returns
@@ -70,7 +81,7 @@ func TestPrepareWorkspaceLaysOutTheRunDirectory(t *testing.T) {
 			t.Errorf("%s: %v, %v; want mode %o", path, info, err, want)
 		}
 	}
-	if _, err := activities.sessions.Session(domain.RunKeyID("tenant_123", "run_123")); err != nil {
+	if _, err := activities.sessions.Session("tenant_123", "run_123"); err != nil {
 		t.Fatalf("no session after PrepareWorkspace: %v", err)
 	}
 }
@@ -125,7 +136,7 @@ func TestCleanupWorkspaceEndsTheSession(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(runRoot, "tenant_123", "run_123")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("run directory still exists: %v", err)
 	}
-	if _, err := activities.sessions.Session(domain.RunKeyID("tenant_123", "run_123")); !errors.Is(err, isolation.ErrNoLease) {
+	if _, err := activities.sessions.Session("tenant_123", "run_123"); !errors.Is(err, isolation.ErrNoLease) {
 		t.Fatalf("session survives cleanup: %v", err)
 	}
 }
@@ -199,7 +210,7 @@ func TestRunTerraformWritesItsLogOutsideTheWorkspace(t *testing.T) {
 	t.Parallel()
 	runRoot := t.TempDir()
 	executor := &recordingCommandExecutor{stdout: "plan stdout\n"}
-	runner := localTerraformRunner{runRoot: runRoot, runner: gitrunner.NewLocalProcessRunnerWithExecutor(executor)}
+	runner := localTerraformRunner{sessions: sessionsWithRun(t, runRoot), runner: gitrunner.NewLocalProcessRunnerWithExecutor(executor)}
 
 	if _, err := runner.RunTerraform(context.Background(), domain.RunTerraformActivityInput{
 		RunID: "run_123", TenantID: "tenant_123",

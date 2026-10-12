@@ -21,6 +21,14 @@ func (s *Session) Workspace() string {
 	return filepath.Join(s.runDir, workspaceDirName)
 }
 
+// LogsDir is the executor's half of its run directory, where the executor
+// spools the run's command logs. It is root's, beside the workspace, so the
+// session can neither read it nor plant a symlink in it to point root's
+// writes elsewhere.
+func (s *Session) LogsDir() string {
+	return filepath.Join(s.runDir, logsDirName)
+}
+
 func (s *Session) home() string {
 	return filepath.Join(s.Workspace(), "home")
 }

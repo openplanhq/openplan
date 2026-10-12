@@ -75,7 +75,7 @@ func newSessions(t *testing.T) (*isolation.Manager, string) {
 func newActivities(t *testing.T) (*activities.TemplateRunActivities, *isolation.Manager, string) {
 	t.Helper()
 	sessions, runRoot := newSessions(t)
-	return activities.NewTemplateRunActivities(runRoot, nil, nil, runseal.NewKeyRing(), sessions), sessions, runRoot
+	return activities.NewTemplateRunActivities(nil, nil, runseal.NewKeyRing(), sessions), sessions, runRoot
 }
 
 func prepare(t *testing.T, a *activities.TemplateRunActivities, sessions *isolation.Manager, run string) session {
@@ -84,7 +84,7 @@ func prepare(t *testing.T, a *activities.TemplateRunActivities, sessions *isolat
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := sessions.Session(domain.RunKeyID("tenant", domain.TemplateRunID(run)))
+	s, err := sessions.Session("tenant", run)
 	if err != nil {
 		t.Fatal(err)
 	}

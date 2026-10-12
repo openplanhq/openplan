@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/vishu42/openplan/internal/domain"
-	"github.com/vishu42/openplan/internal/logsink"
 	"github.com/vishu42/openplan/internal/planbundle"
 	"github.com/vishu42/openplan/internal/runseal"
 )
@@ -57,7 +56,7 @@ func TestSavedPlanTravelsFromThePlanExecutorToTheApplyExecutor(t *testing.T) {
 	// Plan phase, on the first executor.
 	planKeys := runseal.NewKeyRing()
 	planRunRoot := t.TempDir()
-	planExecutor := NewTemplateRunActivities(planRunRoot, nil, plans, planKeys, testSessions(t, planRunRoot))
+	planExecutor := NewTemplateRunActivities(nil, plans, planKeys, testSessions(t, planRunRoot))
 	planWorkspace, err := planExecutor.PrepareWorkspace(ctx, domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
 		t.Fatalf("PrepareWorkspace returned error: %v", err)
@@ -80,7 +79,7 @@ func TestSavedPlanTravelsFromThePlanExecutorToTheApplyExecutor(t *testing.T) {
 	// Apply phase, on a second executor with its own run key.
 	applyKeys := runseal.NewKeyRing()
 	applyRunRoot := t.TempDir()
-	applyExecutor := NewTemplateRunActivities(applyRunRoot, nil, plans, applyKeys, testSessions(t, applyRunRoot))
+	applyExecutor := NewTemplateRunActivities(nil, plans, applyKeys, testSessions(t, applyRunRoot))
 	applyWorkspace, err := applyExecutor.PrepareWorkspace(ctx, domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
 		t.Fatalf("PrepareWorkspace returned error: %v", err)
@@ -119,7 +118,7 @@ func TestDownloadPlanRefusesAPlanSavedForAnotherRun(t *testing.T) {
 
 	keys := runseal.NewKeyRing()
 	runRoot := t.TempDir()
-	executor := NewTemplateRunActivities(runRoot, nil, plans, keys, testSessions(t, runRoot))
+	executor := NewTemplateRunActivities(nil, plans, keys, testSessions(t, runRoot))
 	workspace, err := executor.PrepareWorkspace(ctx, domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
 		t.Fatal(err)
@@ -171,7 +170,7 @@ func TestCleanupWorkspaceRemovesTheRunWorkspaceAndOptionallyThePlan(t *testing.T
 	if len(plans.deleted) != 1 || plans.deleted[0] != "tenant_123/run_123" {
 		t.Fatalf("deleted plans = %v, want the run's", plans.deleted)
 	}
-	wantPath, _ := logsink.RunDirectory(runRoot, "tenant_123", "run_123")
+	wantPath := filepath.Join(runRoot, "tenant_123", "run_123")
 	if filepath.Join(wantPath, "workspace") != workspace.WorkspacePath {
 		t.Fatalf("workspace path = %q, want %q", workspace.WorkspacePath, filepath.Join(wantPath, "workspace"))
 	}

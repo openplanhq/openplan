@@ -67,9 +67,6 @@ func TestRunWiresTemporalWorker(t *testing.T) {
 	if deps.activityKeys == nil {
 		t.Fatal("activities were not given a key ring")
 	}
-	if deps.activityRunRoot != "/tmp/openplan-executor-test" {
-		t.Fatalf("activity run root = %q, want /tmp/openplan-executor-test", deps.activityRunRoot)
-	}
 	if deps.artifactStoreConfig.Kind != config.ArtifactStoreFilesystem {
 		t.Fatalf("artifact store kind = %q, want filesystem", deps.artifactStoreConfig.Kind)
 	}
@@ -96,9 +93,8 @@ func TestDefaultExecutorDependenciesRegisterOnlyExecutionActivities(t *testing.T
 	worker := &recordingTemporalWorker{}
 	deps := defaultExecutorDependencies()
 
-	runRoot := t.TempDir()
-	sessions := isolation.NewForTest(t, isolation.Config{RunRoot: runRoot}, 2)
-	if err := deps.registerActivities(context.Background(), worker, runRoot, artifactStores{logs: recordingWorkerLogStore{}, plans: recordingWorkerPlanStore{}}, runseal.NewKeyRing(), sessions); err != nil {
+	sessions := isolation.NewForTest(t, isolation.Config{RunRoot: t.TempDir()}, 2)
+	if err := deps.registerActivities(context.Background(), worker, artifactStores{logs: recordingWorkerLogStore{}, plans: recordingWorkerPlanStore{}}, runseal.NewKeyRing(), sessions); err != nil {
 		t.Fatalf("registerActivities returned error: %v", err)
 	}
 
@@ -191,7 +187,6 @@ type recordingExecutorDependencies struct {
 	workerTaskQueue     string
 	workerOptions       temporalworker.Options
 	artifactStoreConfig config.ArtifactStoreConfig
-	activityRunRoot     string
 	activityStores      artifactStores
 	activityKeys        *runseal.KeyRing
 	activitySessions    *isolation.Manager
@@ -232,11 +227,10 @@ func newRecordingExecutorDependencies(t *testing.T) *recordingExecutorDependenci
 			deps.workerOptions = options
 			return deps.worker
 		},
-		registerActivities: func(_ context.Context, worker temporalWorker, runRoot string, stores artifactStores, keys *runseal.KeyRing, sessions *isolation.Manager) error {
+		registerActivities: func(_ context.Context, worker temporalWorker, stores artifactStores, keys *runseal.KeyRing, sessions *isolation.Manager) error {
 			if worker != deps.worker {
 				t.Fatalf("registerActivities worker = %p, want %p", worker, deps.worker)
 			}
-			deps.activityRunRoot = runRoot
 			deps.activityStores = stores
 			deps.activityKeys = keys
 			deps.activitySessions = sessions

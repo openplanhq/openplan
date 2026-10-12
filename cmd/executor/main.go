@@ -30,7 +30,7 @@ type executorDependencies struct {
 	newWorker func(client.Client, string, temporalworker.Options) temporalWorker
 	// registerActivities sweeps what an earlier process left, then attaches the
 	// execution activities to the worker.
-	registerActivities func(ctx context.Context, worker temporalWorker, runRoot string, stores artifactStores, keys *runseal.KeyRing, sessions *isolation.Manager) error
+	registerActivities func(ctx context.Context, worker temporalWorker, stores artifactStores, keys *runseal.KeyRing, sessions *isolation.Manager) error
 	// newArtifactStores builds the artifact-backed stores for phase logs and
 	// saved plans.
 	newArtifactStores func(config.ArtifactStoreConfig) (artifactStores, error)
@@ -70,13 +70,13 @@ func defaultExecutorDependencies() executorDependencies {
 		newWorker: func(temporalClient client.Client, taskQueue string, options temporalworker.Options) temporalWorker {
 			return temporalworker.New(temporalClient, taskQueue, options)
 		},
-		registerActivities: func(ctx context.Context, worker temporalWorker, runRoot string, stores artifactStores, keys *runseal.KeyRing, sessions *isolation.Manager) error {
+		registerActivities: func(ctx context.Context, worker temporalWorker, stores artifactStores, keys *runseal.KeyRing, sessions *isolation.Manager) error {
 			// Before the worker takes sessions: what an earlier process left
 			// behind holds no valid lease.
 			if err := sessions.Sweep(ctx); err != nil {
 				return fmt.Errorf("sweep run directories: %w", err)
 			}
-			templateRunActivities := activities.NewTemplateRunActivities(runRoot, stores.logs, stores.plans, keys, sessions)
+			templateRunActivities := activities.NewTemplateRunActivities(stores.logs, stores.plans, keys, sessions)
 			worker.RegisterActivityWithOptions(templateRunActivities.PrepareWorkspace, activity.RegisterOptions{
 				Name: domain.PrepareWorkspaceActivityName,
 			})
@@ -153,7 +153,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps e
 		// Each session holds a pool user (#331).
 		MaxConcurrentSessionExecutionSize: cfg.MaxSessions,
 	})
-	if err := deps.registerActivities(ctx, worker, cfg.RunRoot, stores, runseal.NewKeyRing(), sessions); err != nil {
+	if err := deps.registerActivities(ctx, worker, stores, runseal.NewKeyRing(), sessions); err != nil {
 		return err
 	}
 	if err := worker.Run(deps.interruptCh()); err != nil {

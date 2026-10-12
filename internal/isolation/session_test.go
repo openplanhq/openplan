@@ -10,9 +10,10 @@ import (
 	"testing"
 )
 
-func openTestSession(t *testing.T, m *Manager, id string) *Session {
+// openTestSession opens the session of tenant t's run.
+func openTestSession(t *testing.T, m *Manager, run string) *Session {
 	t.Helper()
-	s, err := m.Open(context.Background(), id, filepath.Join(m.runRoot, id))
+	s, err := m.Open(context.Background(), "t", run)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -22,7 +23,7 @@ func openTestSession(t *testing.T, m *Manager, id string) *Session {
 func TestContextCarriesTheSession(t *testing.T) {
 	t.Parallel()
 	m := newTestManager(t.TempDir(), 1, inProcessHelper{})
-	s := openTestSession(t, m, "t/run")
+	s := openTestSession(t, m, "run")
 
 	got, err := sessionFrom(s.Context(context.Background()))
 	if err != nil || got != s {
@@ -58,12 +59,12 @@ func TestClosedSessionsAreRefused(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	m := newTestManager(t.TempDir(), 1, inProcessHelper{})
-	old := openTestSession(t, m, "t/old")
+	old := openTestSession(t, m, "old")
 	kept := old.Context(ctx)
-	if err := m.Close(ctx, "t/old"); err != nil {
+	if err := m.Close(ctx, "t", "old"); err != nil {
 		t.Fatal(err)
 	}
-	next := openTestSession(t, m, "t/next")
+	next := openTestSession(t, m, "next")
 	if next.user != old.user {
 		t.Fatalf("next session got %v, want the old session's user back", next.user)
 	}
@@ -86,7 +87,7 @@ func TestSessionFilesRoundTrip(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	m := newTestManager(t.TempDir(), 1, inProcessHelper{})
-	s := openTestSession(t, m, "t/run")
+	s := openTestSession(t, m, "run")
 	dir := filepath.Join(s.Workspace(), "source")
 	if err := os.Mkdir(dir, 0o700); err != nil {
 		t.Fatal(err)
@@ -106,7 +107,7 @@ func TestSessionCheckDir(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	m := newTestManager(t.TempDir(), 1, inProcessHelper{})
-	s := openTestSession(t, m, "t/run")
+	s := openTestSession(t, m, "run")
 	file := filepath.Join(s.Workspace(), "file")
 	if err := os.WriteFile(file, nil, 0o600); err != nil {
 		t.Fatal(err)

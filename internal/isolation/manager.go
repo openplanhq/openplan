@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -17,9 +18,13 @@ import (
 )
 
 const (
-	// workspaceDirName is the session's half of a run directory. The rest of
-	// the run directory is root's: the executor keeps its logs beside it.
+	// workspaceDirName is the session's half of a run directory, which the
+	// session's user owns.
 	workspaceDirName = "workspace"
+	// logsDirName is the executor's half, beside the workspace and root's: the
+	// session cannot see it, so a symlink it plants cannot point root's writes
+	// elsewhere.
+	logsDirName = "logs"
 )
 
 // Manager leases each session a pool user of its own, lays out its run
@@ -60,25 +65,44 @@ func newManager(cfg Config, users []user, h helper) *Manager {
 	return m
 }
 
-// Open leases run id a free pool user and lays out runDir for it. It first
-// takes back expired leases, and any earlier lease of id itself: a plan
-// session that lost its cleanup, then the apply session of the same run on
-// the same executor, whose old branch must end before the new one starts.
-func (m *Manager) Open(ctx context.Context, id, runDir string) (*Session, error) {
-	// The sweep after a restart walks <RunRoot>/<tenant>/<run> and nothing
-	// else: a run directory anywhere else would never be reclaimed.
-	if m.runRoot == "" || filepath.Dir(filepath.Dir(filepath.Clean(runDir))) != filepath.Clean(m.runRoot) {
-		return nil, fmt.Errorf("run directory %s is not <run root>/<tenant>/<run> under %q", runDir, m.runRoot)
+// Open leases tenant's run a free pool user and lays out its run directory,
+// <RunRoot>/<tenant>/<run>. The package builds that path itself, so every run
+// directory is one the sweep after a restart walks: one anywhere else would
+// never be reclaimed.
+//
+// It first takes back expired leases, and any earlier lease of the same run: a
+// plan session that lost its cleanup, then the apply session of the same run
+// on the same executor, whose old branch must end before the new one starts.
+func (m *Manager) Open(ctx context.Context, tenant, run string) (*Session, error) {
+	if m.runRoot == "" {
+		return nil, errors.New("no run root is configured")
 	}
-	s, err := m.lease(ctx, id, runDir)
+	key, err := runKey(tenant, run)
+	if err != nil {
+		return nil, err
+	}
+	runDir := filepath.Join(m.runRoot, key)
+	s, err := m.lease(ctx, key, runDir)
 	if err != nil {
 		return nil, err
 	}
 	if err := makeRunDirectory(runDir, s.user); err != nil {
 		// Hand the user back now rather than hold it until the lease expires.
-		return nil, errors.Join(err, m.Close(ctx, id))
+		return nil, errors.Join(err, m.close(ctx, key))
 	}
 	return s, nil
+}
+
+// runKey returns the lease key of tenant's run, which is also its run
+// directory under the run root. Each ID must be one path component, so no
+// run directory can lie outside its tenant's, or outside the run root.
+func runKey(tenant, run string) (string, error) {
+	for _, id := range []string{tenant, run} {
+		if strings.TrimSpace(id) == "" || checkName(id) != nil {
+			return "", fmt.Errorf("tenant %q and run %q must each be one safe path component", tenant, run)
+		}
+	}
+	return filepath.Join(tenant, run), nil
 }
 
 func (m *Manager) lease(ctx context.Context, id, runDir string) (*Session, error) {
@@ -113,24 +137,36 @@ func (m *Manager) lease(ctx context.Context, id, runDir string) (*Session, error
 	return s, nil
 }
 
-// Session returns run id's open session.
-func (m *Manager) Session(id string) (*Session, error) {
+// Session returns the open session of tenant's run.
+func (m *Manager) Session(tenant, run string) (*Session, error) {
+	key, err := runKey(tenant, run)
+	if err != nil {
+		return nil, err
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	l, ok := m.leases[id]
+	l, ok := m.leases[key]
 	if !ok {
-		return nil, fmt.Errorf("%w %q", ErrNoLease, id)
+		return nil, fmt.Errorf("%w %q", ErrNoLease, key)
 	}
 	return l.session, nil
 }
 
-// Close ends run id's session: it kills the session's processes, clears its
-// files and run directory, and frees its user. A run without a session has
-// nothing to close.
-func (m *Manager) Close(ctx context.Context, id string) error {
+// Close ends the session of tenant's run: it kills the session's processes,
+// clears its files and run directory, and frees its user. A run without a
+// session has nothing to close.
+func (m *Manager) Close(ctx context.Context, tenant, run string) error {
+	key, err := runKey(tenant, run)
+	if err != nil {
+		return err
+	}
+	return m.close(ctx, key)
+}
+
+func (m *Manager) close(ctx context.Context, key string) error {
 	m.mu.Lock()
-	l, ok := m.leases[id]
-	delete(m.leases, id)
+	l, ok := m.leases[key]
+	delete(m.leases, key)
 	m.mu.Unlock()
 	if !ok {
 		return nil
@@ -193,11 +229,11 @@ func (m *Manager) reclaimSession(ctx context.Context, s *Session) error {
 	return os.RemoveAll(s.runDir)
 }
 
-// makeRunDirectory lays out one session's run directory and hands the session
-// its own half. Everything is made as root first: once workspace/ belongs to
-// the pool user, root (without CAP_DAC_OVERRIDE) can no longer create
-// anything in it. No session code has run yet and root owns every parent, so
-// nothing can race.
+// makeRunDirectory lays out one session's run directory: logs/ stays root's,
+// and workspace/ goes to the session's user. Everything is made as root first:
+// once workspace/ belongs to the pool user, root (without CAP_DAC_OVERRIDE) can
+// no longer create anything in it. No session code has run yet and root owns
+// every parent, so nothing can race.
 func makeRunDirectory(runDir string, u user) error {
 	// 0711 down to the run: a session can walk to its own workspace but list
 	// nobody's.
@@ -206,6 +242,9 @@ func makeRunDirectory(runDir string, u user) error {
 	}
 	if err := os.Chmod(runDir, 0o711); err != nil { //nolint:gosec // as above
 		return fmt.Errorf("prepare run directory: %w", err)
+	}
+	if err := os.Mkdir(filepath.Join(runDir, logsDirName), 0o700); err != nil {
+		return fmt.Errorf("prepare log directory: %w", err)
 	}
 	workspace := filepath.Join(runDir, workspaceDirName)
 	sessionDirs := []string{workspace, filepath.Join(workspace, "home"), filepath.Join(workspace, "tmp")}

@@ -90,17 +90,17 @@ func TestLeaseSessionClose(t *testing.T) {
 	if a.user == b.user {
 		t.Fatalf("two sessions share %s", a.user.name)
 	}
-	if got, err := m.Session("t/a"); err != nil || got != a {
+	if got, err := m.Session("t", "a"); err != nil || got != a {
 		t.Fatalf("Session = %v, %v; want %v", got, err, a)
 	}
 
-	if err := m.Close(ctx, "t/a"); err != nil {
+	if err := m.Close(ctx, "t", "a"); err != nil {
 		t.Fatal(err)
 	}
 	if len(reclaimer.calls) != 1 || reclaimer.calls[0] != (reclaimCall{a.user, "/runs/t/a"}) {
 		t.Fatalf("reclaims = %v, want one for %s", reclaimer.calls, a.user.name)
 	}
-	if _, err := m.Session("t/a"); !errors.Is(err, ErrNoLease) {
+	if _, err := m.Session("t", "a"); !errors.Is(err, ErrNoLease) {
 		t.Fatalf("Session after Close = %v, want ErrNoLease", err)
 	}
 	// The released user is free again.
@@ -137,7 +137,7 @@ func TestLeaseTakesBackExpiredLeases(t *testing.T) {
 	if fresh.user != stale.user || len(reclaimer.calls) != 1 || reclaimer.calls[0].dir != "/stale" {
 		t.Fatalf("fresh = %v, reclaims = %v", fresh, reclaimer.calls)
 	}
-	if _, err := m.Session("t/stale"); !errors.Is(err, ErrNoLease) {
+	if _, err := m.Session("t", "stale"); !errors.Is(err, ErrNoLease) {
 		t.Fatalf("Session(stale) = %v, want ErrNoLease", err)
 	}
 }
@@ -168,7 +168,7 @@ func TestManagerQuarantinesAUserWhoseReclaimFailed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := m.Close(context.Background(), "t/a"); err == nil {
+	if err := m.Close(context.Background(), "t", "a"); err == nil {
 		t.Fatal("Close returned no error for a failed reclaim")
 	}
 	if _, err := m.lease(context.Background(), "t/b", "/b"); !errors.Is(err, ErrNoFreeUser) {
@@ -181,7 +181,7 @@ func TestCloseWithoutASessionIsANoOp(t *testing.T) {
 	reclaimer := &recordingReclaimer{}
 	m, _ := newLeaseTestManager(1, reclaimer)
 
-	if err := m.Close(context.Background(), "t/none"); err != nil || len(reclaimer.calls) != 0 {
+	if err := m.Close(context.Background(), "t", "none"); err != nil || len(reclaimer.calls) != 0 {
 		t.Fatalf("Close = %v, reclaims = %v; want nil and none", err, reclaimer.calls)
 	}
 }
@@ -231,16 +231,17 @@ func TestOpenLaysOutTheRunDirectory(t *testing.T) {
 	m := newTestManager(runRoot, 2, inProcessHelper{})
 	runDir := filepath.Join(runRoot, "tenant_123", "run_123")
 
-	s, err := m.Open(context.Background(), "tenant_123/run_123", runDir)
+	s, err := m.Open(context.Background(), "tenant_123", "run_123")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.Workspace() != filepath.Join(runDir, "workspace") {
-		t.Fatalf("Workspace = %q", s.Workspace())
+	if s.Workspace() != filepath.Join(runDir, "workspace") || s.LogsDir() != filepath.Join(runDir, "logs") {
+		t.Fatalf("Workspace = %q, LogsDir = %q", s.Workspace(), s.LogsDir())
 	}
 	for path, want := range map[string]os.FileMode{
-		runDir:                             0o711,
-		filepath.Join(runDir, "workspace"): 0o700,
+		runDir:                                     0o711,
+		filepath.Join(runDir, "logs"):              0o700,
+		filepath.Join(runDir, "workspace"):         0o700,
 		filepath.Join(runDir, "workspace", "home"): 0o700,
 		filepath.Join(runDir, "workspace", "tmp"):  0o700,
 	} {
@@ -249,25 +250,31 @@ func TestOpenLaysOutTheRunDirectory(t *testing.T) {
 			t.Errorf("%s: %v, %v; want mode %o", path, info, err, want)
 		}
 	}
-	if got, err := m.Session("tenant_123/run_123"); err != nil || got != s {
+	if got, err := m.Session("tenant_123", "run_123"); err != nil || got != s {
 		t.Fatalf("Session = %v, %v; want the opened session", got, err)
 	}
 }
 
-// The sweep after a restart walks <RunRoot>/<tenant>/<run> only. A run
-// directory anywhere else would never be reclaimed, so Open refuses it.
-func TestOpenRefusesARunDirectoryTheSweepWouldMiss(t *testing.T) {
+// The sweep after a restart walks <RunRoot>/<tenant>/<run> only. Each ID must
+// be one path component, so no run directory lies anywhere the sweep misses.
+func TestOpenRefusesIDsThatLeaveTheRunLayout(t *testing.T) {
 	t.Parallel()
-	runRoot := t.TempDir()
-	for name, m := range map[string]*Manager{
-		"under root": newTestManager(runRoot, 1, inProcessHelper{}),
-		"no root":    newTestManager("", 1, inProcessHelper{}),
-	} {
-		for _, runDir := range []string{t.TempDir(), filepath.Join(runRoot, "run"), filepath.Join(runRoot, "t", "run", "deeper")} {
-			if _, err := m.Open(context.Background(), "t/run", runDir); err == nil {
-				t.Errorf("%s: Open(%s) succeeded", name, runDir)
-			}
+	ctx := context.Background()
+	m := newTestManager(t.TempDir(), 1, inProcessHelper{})
+	for _, ids := range [][2]string{{"..", "run"}, {"t", ".."}, {".", "run"}, {"t", "a/b"}, {"", "run"}, {"t", " "}} {
+		if _, err := m.Open(ctx, ids[0], ids[1]); err == nil {
+			t.Errorf("Open(%q, %q) succeeded", ids[0], ids[1])
 		}
+		if err := m.Close(ctx, ids[0], ids[1]); err == nil {
+			t.Errorf("Close(%q, %q) succeeded", ids[0], ids[1])
+		}
+	}
+	// No refused Open kept the one user.
+	if _, err := m.Open(ctx, "t", "run"); err != nil {
+		t.Fatalf("Open after the refusals = %v", err)
+	}
+	if _, err := newTestManager("", 1, inProcessHelper{}).Open(ctx, "t", "run"); err == nil {
+		t.Error("Open with no run root succeeded")
 	}
 }
 
@@ -277,9 +284,8 @@ func TestOpenTwiceReclaimsTheFirstSession(t *testing.T) {
 	runRoot := t.TempDir()
 	helper := &recordingHelper{}
 	m := newTestManager(runRoot, 2, helper)
-	runDir := filepath.Join(runRoot, "t", "run")
 
-	first, err := m.Open(ctx, "t/run", runDir)
+	first, err := m.Open(ctx, "t", "run")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +293,7 @@ func TestOpenTwiceReclaimsTheFirstSession(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	second, err := m.Open(ctx, "t/run", runDir)
+	second, err := m.Open(ctx, "t", "run")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -308,7 +314,7 @@ func TestCloseRemovesTheRunDirectory(t *testing.T) {
 	runRoot := t.TempDir()
 	m := newTestManager(runRoot, 1, inProcessHelper{})
 	runDir := filepath.Join(runRoot, "t", "run")
-	s, err := m.Open(ctx, "t/run", runDir)
+	s, err := m.Open(ctx, "t", "run")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,14 +322,14 @@ func TestCloseRemovesTheRunDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := m.Close(ctx, "t/run"); err != nil {
+	if err := m.Close(ctx, "t", "run"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(runDir); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("run directory still exists: %v", err)
 	}
 	// The one user is free again.
-	if _, err := m.Open(ctx, "t/next", filepath.Join(runRoot, "t", "next")); err != nil {
+	if _, err := m.Open(ctx, "t", "next"); err != nil {
 		t.Fatalf("Open after Close = %v", err)
 	}
 }
@@ -335,7 +341,7 @@ func TestSweepRemovesWhatAnEarlierProcessLeft(t *testing.T) {
 	ctx := context.Background()
 	runRoot := t.TempDir()
 	before := newTestManager(runRoot, 4, inProcessHelper{})
-	left, err := before.Open(ctx, "tenant_123/run_123", filepath.Join(runRoot, "tenant_123", "run_123"))
+	left, err := before.Open(ctx, "tenant_123", "run_123")
 	if err != nil {
 		t.Fatal(err)
 	}

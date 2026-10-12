@@ -218,7 +218,6 @@ func TestFetchSourceRejectsUnsafeRootPath(t *testing.T) {
 
 	git := &recordingSourceGitRunner{}
 	activities := &TemplateRunActivities{
-		runRoot:         t.TempDir(),
 		terraformRunner: &recordingTerraformRunner{},
 		git:             git,
 	}
@@ -332,8 +331,8 @@ func TestLocalTerraformRunnerWritesCommandLogFile(t *testing.T) {
 		stderr: "plan stderr\n",
 	}
 	terraformRunner := localTerraformRunner{
-		runRoot: runRoot,
-		runner:  gitrunner.NewLocalProcessRunnerWithExecutor(executor),
+		sessions: sessionsWithRun(t, runRoot),
+		runner:   gitrunner.NewLocalProcessRunnerWithExecutor(executor),
 	}
 
 	runOutput, err := terraformRunner.RunTerraform(context.Background(), domain.RunTerraformActivityInput{
@@ -376,7 +375,7 @@ func TestLocalTerraformRunnerUploadsCommandLogFile(t *testing.T) {
 	}
 	logStore := &recordingTemplateRunLogStore{}
 	terraformRunner := localTerraformRunner{
-		runRoot:  runRoot,
+		sessions: sessionsWithRun(t, runRoot),
 		runner:   gitrunner.NewLocalProcessRunnerWithExecutor(executor),
 		logStore: logStore,
 	}
@@ -427,7 +426,7 @@ func TestLocalTerraformRunnerLogsInitUnderItsRunPhase(t *testing.T) {
 		workspacePath := filepath.Join(runRoot, "tenant_123", "run_123", "workspace")
 		logStore := &recordingTemplateRunLogStore{}
 		terraformRunner := localTerraformRunner{
-			runRoot:  runRoot,
+			sessions: sessionsWithRun(t, runRoot),
 			runner:   gitrunner.NewLocalProcessRunnerWithExecutor(&recordingCommandExecutor{stdout: "init stdout\n"}),
 			logStore: logStore,
 		}
@@ -462,7 +461,7 @@ func TestLocalTerraformRunnerUploadsCommandLogWhenCommandFails(t *testing.T) {
 	}
 	logStore := &recordingTemplateRunLogStore{}
 	terraformRunner := localTerraformRunner{
-		runRoot:  runRoot,
+		sessions: sessionsWithRun(t, runRoot),
 		runner:   gitrunner.NewLocalProcessRunnerWithExecutor(executor),
 		logStore: logStore,
 	}
@@ -511,7 +510,7 @@ func TestLocalTerraformRunnerHeartbeatsWhileTheCommandRuns(t *testing.T) {
 			heartbeats := newHeartbeatRecorder()
 			runRoot := t.TempDir()
 			terraformRunner := localTerraformRunner{
-				runRoot:           runRoot,
+				sessions:          sessionsWithRun(t, runRoot),
 				runner:            gitrunner.NewLocalProcessRunnerWithExecutor(executor),
 				heartbeat:         heartbeats.record,
 				heartbeatInterval: time.Millisecond,
@@ -556,7 +555,7 @@ func TestLocalTerraformRunnerStopsHeartbeatingWhenTheCommandEnds(t *testing.T) {
 	heartbeats := newHeartbeatRecorder()
 	runRoot := t.TempDir()
 	terraformRunner := localTerraformRunner{
-		runRoot:           runRoot,
+		sessions:          sessionsWithRun(t, runRoot),
 		runner:            gitrunner.NewLocalProcessRunnerWithExecutor(executor),
 		heartbeat:         heartbeats.record,
 		heartbeatInterval: time.Millisecond,
@@ -960,8 +959,7 @@ func TestPrepareWorkspaceReturnsRunPublicKey(t *testing.T) {
 	t.Parallel()
 
 	keys := runseal.NewKeyRing()
-	runRoot := t.TempDir()
-	output, err := NewTemplateRunActivities(runRoot, nil, nil, keys, testSessions(t, runRoot)).PrepareWorkspace(context.Background(), domain.PrepareWorkspaceActivityInput{
+	output, err := NewTemplateRunActivities(nil, nil, keys, testSessions(t, t.TempDir())).PrepareWorkspace(context.Background(), domain.PrepareWorkspaceActivityInput{
 		TenantID: "tenant_123",
 		RunID:    "run_123",
 	})

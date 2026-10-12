@@ -70,17 +70,10 @@ type CredentialDecryptor interface {
 	Decrypt(string) (string, error)
 }
 
-// logsDirName is the executor's half of a run directory, beside the
-// session's workspace/: the session cannot see it, so a symlink it plants
-// cannot point root's writes elsewhere.
-const logsDirName = "logs"
-
 // TemplateRunActivities are the execution activities: the ones that run next
 // to tenant Terraform on the executor, which holds no database connection and
 // no keys beyond its per-run sealing keys.
 type TemplateRunActivities struct {
-	// runRoot is the base directory under which per-tenant, per-run workspaces are created.
-	runRoot string
 	// terraformRunner executes Terraform-compatible commands for RunTerraform activity calls.
 	terraformRunner TerraformRunner
 	// git clones template source repositories into run workspaces.
@@ -89,7 +82,8 @@ type TemplateRunActivities struct {
 	plans PlanArtifactStore
 	// keys holds each in-flight run's private sealing key.
 	keys *runseal.KeyRing
-	// sessions runs each run's session as a pool user of its own (#331).
+	// sessions runs each run's session as a pool user of its own (#331), in a
+	// run directory it lays out under its run root.
 	sessions *isolation.Manager
 }
 
@@ -99,9 +93,9 @@ type TemplateRunActivities struct {
 // By default it wires a local OpenTofu-backed runner that uploads phase logs
 // to logStore. Tests may pass a TerraformRunner override to avoid invoking the
 // OpenTofu binary. A nil keys gets a fresh ring.
-func NewTemplateRunActivities(runRoot string, logStore TemplateRunLogStore, plans PlanArtifactStore, keys *runseal.KeyRing, sessions *isolation.Manager, terraformRunners ...TerraformRunner) *TemplateRunActivities {
+func NewTemplateRunActivities(logStore TemplateRunLogStore, plans PlanArtifactStore, keys *runseal.KeyRing, sessions *isolation.Manager, terraformRunners ...TerraformRunner) *TemplateRunActivities {
 	terraformRunner := TerraformRunner(localTerraformRunner{
-		runRoot:  runRoot,
+		sessions: sessions,
 		runner:   runner.NewLocalProcessRunnerWithExecutor(isolation.SessionExecutor()),
 		logStore: logStore,
 	})
@@ -112,7 +106,6 @@ func NewTemplateRunActivities(runRoot string, logStore TemplateRunLogStore, plan
 		keys = runseal.NewKeyRing()
 	}
 	return &TemplateRunActivities{
-		runRoot:         runRoot,
 		terraformRunner: terraformRunner,
 		git:             runner.NewLocalGitRunnerWithExecutor(isolation.SessionExecutor()),
 		plans:           plans,
@@ -121,33 +114,23 @@ func NewTemplateRunActivities(runRoot string, logStore TemplateRunLogStore, plan
 	}
 }
 
-// PrepareWorkspace opens the run's session, which lays out the session's half
-// of the run directory, and adds the executor's half beside it: logs/.
-//
-// The run directory is derived from the configured run root plus tenant and
-// run IDs, validated as single safe path components, so callers cannot escape
-// the run root.
+// PrepareWorkspace opens the run's session, which lays out the run's directory
+// under the run root: the session's workspace/, and the executor's logs/
+// beside it. The session checks that the tenant and run IDs are single path
+// components, so no input can place a run directory outside the run root.
 func (activities *TemplateRunActivities) PrepareWorkspace(ctx context.Context, input domain.PrepareWorkspaceActivityInput) (domain.PrepareWorkspaceActivityOutput, error) {
-	runDir, err := logsink.RunDirectory(activities.runRoot, input.TenantID, input.RunID)
-	if err != nil {
-		return domain.PrepareWorkspaceActivityOutput{}, err
-	}
-	id := domain.RunKeyID(input.TenantID, input.RunID)
-	session, err := activities.sessions.Open(ctx, id, runDir)
+	session, err := activities.sessions.Open(ctx, string(input.TenantID), string(input.RunID))
 	if err != nil {
 		return domain.PrepareWorkspaceActivityOutput{}, fmt.Errorf("open the run's session: %w", err)
-	}
-	// Root's, like the run directory it sits in. Ending the session hands the
-	// user back now rather than hold it until its lease expires.
-	if err := os.Mkdir(filepath.Join(runDir, logsDirName), 0o700); err != nil {
-		return domain.PrepareWorkspaceActivityOutput{}, errors.Join(fmt.Errorf("prepare log directory: %w", err), activities.sessions.Close(ctx, id))
 	}
 
 	// The session pins every later activity of this run to this process, so the
 	// key generated here is the one that opens what the control plane seals.
-	publicKey, err := activities.keys.Generate(id)
+	publicKey, err := activities.keys.Generate(domain.RunKeyID(input.TenantID, input.RunID))
 	if err != nil {
-		return domain.PrepareWorkspaceActivityOutput{}, errors.Join(err, activities.sessions.Close(ctx, id))
+		// Ending the session hands the user back now rather than hold it until
+		// its lease expires.
+		return domain.PrepareWorkspaceActivityOutput{}, errors.Join(err, activities.sessions.Close(ctx, string(input.TenantID), string(input.RunID)))
 	}
 	return domain.PrepareWorkspaceActivityOutput{WorkspacePath: session.Workspace(), PublicKey: publicKey}, nil
 }
@@ -163,12 +146,8 @@ func (activities *TemplateRunActivities) PrepareWorkspace(ctx context.Context, i
 // unreadable once the run is terminal, because the control plane drops its
 // key.
 func (activities *TemplateRunActivities) CleanupWorkspace(ctx context.Context, input domain.CleanupWorkspaceActivityInput) error {
-	// For the ID validation: the session knows the run directory itself.
-	if _, err := logsink.RunDirectory(activities.runRoot, input.TenantID, input.RunID); err != nil {
-		return err
-	}
 	var errs []error
-	if err := activities.sessions.Close(ctx, domain.RunKeyID(input.TenantID, input.RunID)); err != nil {
+	if err := activities.sessions.Close(ctx, string(input.TenantID), string(input.RunID)); err != nil {
 		errs = append(errs, fmt.Errorf("end the run's session: %w", err))
 	}
 	if input.DeletePlan && activities.plans != nil {
@@ -261,7 +240,7 @@ func (activities *TemplateRunActivities) openPlanKey(input domain.PlanArtifactAc
 // step never runs as another session's user, or as whichever user a
 // restarted executor would hand out.
 func (activities *TemplateRunActivities) session(tenantID domain.TenantID, runID domain.TemplateRunID) (*isolation.Session, error) {
-	return activities.sessions.Session(domain.RunKeyID(tenantID, runID))
+	return activities.sessions.Session(string(tenantID), string(runID))
 }
 
 // requirePlans returns the plan store, or one that fails every call when none
@@ -403,8 +382,8 @@ func (activities *TemplateRunActivities) RunTerraform(ctx context.Context, input
 // workflow command types to log phases and opening the per-workspace log file
 // before delegating to runner.LocalProcessRunner.
 type localTerraformRunner struct {
-	// runRoot is where the run directories, and so the log spools, live.
-	runRoot string
+	// sessions holds each run's session, and with it the run's log spool.
+	sessions *isolation.Manager
 	// runner owns Terraform CLI argument construction and subprocess execution.
 	runner   *runner.LocalProcessRunner
 	logStore TemplateRunLogStore
@@ -453,11 +432,11 @@ func (localRunner localTerraformRunner) RunTerraform(ctx context.Context, input 
 	}
 	phase := strings.TrimSuffix(fileName, logsink.LogFileExtension)
 
-	runDir, err := logsink.RunDirectory(localRunner.runRoot, input.TenantID, input.RunID)
+	session, err := localRunner.sessions.Session(string(input.TenantID), string(input.RunID))
 	if err != nil {
 		return domain.RunTerraformActivityOutput{}, err
 	}
-	writer, err := logsink.NewFileSink(runDir).Open(fileName)
+	writer, err := logsink.NewFileSink(session.LogsDir()).Open(fileName)
 	if err != nil {
 		return domain.RunTerraformActivityOutput{}, fmt.Errorf("open terraform log: %w", err)
 	}
@@ -480,7 +459,7 @@ func (localRunner localTerraformRunner) RunTerraform(ctx context.Context, input 
 	}
 	var log domain.TemplateRunLog
 	if localRunner.logStore != nil {
-		file, err := os.Open(filepath.Join(runDir, logsDirName, fileName))
+		file, err := os.Open(filepath.Join(session.LogsDir(), fileName))
 		if err != nil {
 			return domain.RunTerraformActivityOutput{}, fmt.Errorf("open terraform log for upload: %w", err)
 		}

@@ -1,8 +1,6 @@
 package logsink
 
 import (
-	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,8 +12,8 @@ import (
 func TestFileSinkWritesAndAppendsPhaseLog(t *testing.T) {
 	t.Parallel()
 
-	runDirectory := t.TempDir()
-	sink := NewFileSink(runDirectory)
+	dir := t.TempDir()
+	sink := NewFileSink(dir)
 
 	first, err := sink.Open("plan.log")
 	if err != nil {
@@ -39,7 +37,7 @@ func TestFileSinkWritesAndAppendsPhaseLog(t *testing.T) {
 		t.Fatalf("close second log: %v", err)
 	}
 
-	got, err := os.ReadFile(filepath.Join(runDirectory, "logs", "plan.log"))
+	got, err := os.ReadFile(filepath.Join(dir, "plan.log"))
 	if err != nil {
 		t.Fatalf("read phase log: %v", err)
 	}
@@ -97,95 +95,5 @@ func TestFileNameForTerraformCommandRejectsMissingRunPhase(t *testing.T) {
 
 	if _, err := FileNameForTerraformCommand(domain.TerraformCommandInit, ""); err == nil {
 		t.Fatal("FileNameForTerraformCommand accepted an empty run phase")
-	}
-}
-
-func TestLocalReaderReadsTenantRunPhaseLog(t *testing.T) {
-	t.Parallel()
-
-	runRoot := t.TempDir()
-	logPath := filepath.Join(runRoot, "tenant_123", "run_123", "logs")
-	if err := os.MkdirAll(logPath, 0o700); err != nil {
-		t.Fatalf("create log directory: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(logPath, "plan.log"), []byte("plan output\n"), 0o600); err != nil {
-		t.Fatalf("write phase log: %v", err)
-	}
-
-	content, err := NewLocalReader(runRoot).ReadTemplateRunLog(
-		context.Background(),
-		domain.TenantID("tenant_123"),
-		domain.TemplateRunID("run_123"),
-		"plan",
-	)
-	if err != nil {
-		t.Fatalf("ReadTemplateRunLog returned error: %v", err)
-	}
-	if string(content) != "plan output\n" {
-		t.Fatalf("content = %q, want plan output", string(content))
-	}
-}
-
-func TestRunDirectoryMatchesRunLayout(t *testing.T) {
-	t.Parallel()
-
-	runRoot := t.TempDir()
-
-	path, err := RunDirectory(runRoot, domain.TenantID("tenant_123"), domain.TemplateRunID("run_123"))
-	if err != nil {
-		t.Fatalf("RunDirectory returned error: %v", err)
-	}
-
-	want := filepath.Join(runRoot, "tenant_123", "run_123")
-	if path != want {
-		t.Fatalf("path = %q, want %q", path, want)
-	}
-}
-
-func TestRunDirectoryRejectsUnsafePathComponents(t *testing.T) {
-	t.Parallel()
-
-	_, err := RunDirectory(t.TempDir(), domain.TenantID("tenant_123"), domain.TemplateRunID("../run"))
-	if err == nil {
-		t.Fatal("RunDirectory returned nil error for unsafe run ID")
-	}
-	if !strings.Contains(err.Error(), "safe path") {
-		t.Fatalf("error = %q, want safe path context", err.Error())
-	}
-}
-
-func TestLocalReaderRejectsUnsafePathComponents(t *testing.T) {
-	t.Parallel()
-
-	reader := NewLocalReader(t.TempDir())
-
-	_, err := reader.ReadTemplateRunLog(context.Background(), domain.TenantID("../tenant"), domain.TemplateRunID("run_123"), "plan")
-	if err == nil {
-		t.Fatal("ReadTemplateRunLog returned nil error for unsafe tenant")
-	}
-	if !strings.Contains(err.Error(), "safe path") {
-		t.Fatalf("error = %q, want safe path context", err.Error())
-	}
-
-	_, err = reader.ReadTemplateRunLog(context.Background(), domain.TenantID("tenant_123"), domain.TemplateRunID("run_123"), "../plan")
-	if err == nil {
-		t.Fatal("ReadTemplateRunLog returned nil error for unsafe phase")
-	}
-	if !strings.Contains(err.Error(), "safe path") {
-		t.Fatalf("error = %q, want safe path context", err.Error())
-	}
-}
-
-func TestLocalReaderReturnsNotExistForMissingLog(t *testing.T) {
-	t.Parallel()
-
-	_, err := NewLocalReader(t.TempDir()).ReadTemplateRunLog(
-		context.Background(),
-		domain.TenantID("tenant_123"),
-		domain.TemplateRunID("run_123"),
-		"plan",
-	)
-	if !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("error = %v, want os.ErrNotExist", err)
 	}
 }

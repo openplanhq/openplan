@@ -1,7 +1,6 @@
 package logsink
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"os"
@@ -12,35 +11,14 @@ import (
 )
 
 type FileSink struct {
-	runDirectory string
+	dir string
 }
 
-type LocalReader struct {
-	runRoot string
-}
-
-// NewFileSink returns a local filesystem-backed sink that writes
-// <runDirectory>/logs/<file>.
-func NewFileSink(runDirectory string) FileSink {
-	return FileSink{runDirectory: runDirectory}
-}
-
-// NewLocalReader returns a local filesystem-backed reader rooted at runRoot.
-func NewLocalReader(runRoot string) LocalReader {
-	return LocalReader{runRoot: runRoot}
-}
-
-// COMMENT: this just looks like a helper method for activities, don't think it belongs here
-// RunDirectory returns the directory of one tenant-owned run: its logs/ and
-// its workspace/.
-func RunDirectory(runRoot string, tenantID domain.TenantID, runID domain.TemplateRunID) (string, error) {
-	if strings.TrimSpace(runRoot) == "" {
-		return "", fmt.Errorf("run root is required")
-	}
-	if !safePathComponent(string(tenantID)) || !safePathComponent(string(runID)) {
-		return "", fmt.Errorf("tenant ID and run ID must be safe path components")
-	}
-	return filepath.Join(runRoot, string(tenantID), string(runID)), nil
+// NewFileSink returns a local filesystem-backed sink that writes <dir>/<file>.
+// dir must exist. On the executor it is the run session's LogsDir: root's, and
+// out of the session's reach.
+func NewFileSink(dir string) FileSink {
+	return FileSink{dir: dir}
 }
 
 // LogFileExtension ends every log file name. A log's phase, the name it is
@@ -49,19 +27,14 @@ const LogFileExtension = ".log"
 
 // Open opens the append-only log file with this name, such as plan-init.log.
 func (sink FileSink) Open(fileName string) (io.WriteCloser, error) {
-	if strings.TrimSpace(sink.runDirectory) == "" {
-		return nil, fmt.Errorf("run directory is required")
+	if strings.TrimSpace(sink.dir) == "" {
+		return nil, fmt.Errorf("log directory is required")
 	}
 	if !safePathComponent(fileName) {
 		return nil, fmt.Errorf("log file name must be a safe path component")
 	}
 
-	logsPath := filepath.Join(sink.runDirectory, "logs")
-	if err := os.MkdirAll(logsPath, 0o700); err != nil {
-		return nil, fmt.Errorf("create log directory: %w", err)
-	}
-
-	path := filepath.Join(logsPath, fileName)
+	path := filepath.Join(sink.dir, fileName)
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("open phase log: %w", err)
@@ -90,24 +63,6 @@ func FileNameForTerraformCommand(command domain.TerraformCommandType, runPhase d
 	default:
 		return "", fmt.Errorf("unsupported terraform command %q", command)
 	}
-}
-
-// ReadTemplateRunLog reads one tenant/run phase log from the local run root.
-func (reader LocalReader) ReadTemplateRunLog(_ context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, phase string) ([]byte, error) {
-	runDirectory, err := RunDirectory(reader.runRoot, tenantID, runID)
-	if err != nil {
-		return nil, err
-	}
-	if !safePathComponent(phase) {
-		return nil, fmt.Errorf("phase must be a safe path component")
-	}
-
-	path := filepath.Join(runDirectory, "logs", phase+LogFileExtension)
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read phase log: %w", err)
-	}
-	return content, nil
 }
 
 // safePathComponent reports whether component can be used as one path segment.
