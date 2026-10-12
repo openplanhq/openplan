@@ -5,7 +5,7 @@ import (
 	"io"
 )
 
-// CommandExecutor is the subprocess boundary shared by LocalProcessRunner and
+// CommandExecutor is the subprocess boundary shared by LocalTerraformRunner and
 // LocalGitRunner.
 //
 // Implementations receive the fully resolved working directory, output streams,

@@ -150,7 +150,7 @@ The queue loop runs in the API. Multiple API replicas can safely run it because 
 For MVP, executors use a local process runner:
 
 ```text
-LocalProcessRunner
+LocalTerraformRunner
 ```
 
 Each Terraform-compatible activity uses the OpenTofu CLI (`tofu`) and:
@@ -214,7 +214,7 @@ MVP executor deployments should use the following guardrails:
 - Restrict executor network egress where practical.
 - Separate executors by task queue or deployment if future tenants, templates, or credential sets require stronger trust boundaries.
 
-Stronger isolation, such as a Kubernetes Job per run, sandboxed containers, remote runners, or per-tenant runner pools, remains a deferred design topic. The `LocalProcessRunner` interface keeps that migration path open without changing workflow semantics.
+Stronger isolation, such as a Kubernetes Job per run, sandboxed containers, remote runners, or per-tenant runner pools, remains a deferred design topic. The `runner.CommandExecutor` boundary keeps that migration path open without changing workflow semantics: the runners only build commands, and how a subprocess starts is decided behind it.
 
 ## Go Package Layout
 
@@ -260,7 +260,7 @@ Package ownership:
 - `internal/temporal`: Temporal client adapter that implements `app` workflow-dispatch interfaces and is wired in `cmd`. API and app code should depend on interfaces, not on this adapter package directly.
 - `internal/workflows`: deterministic Temporal workflow definitions such as `TemplatePlanWorkflow`, `TemplateSyncWorkflow`, and future `StackRunWorkflow`.
 - `internal/activities`: Temporal activities that perform side effects such as cloning repositories, parsing templates, acquiring locks, running the OpenTofu CLI for Terraform-compatible operations, persisting logs, and writing activity events.
-- `internal/runner`: Terraform-compatible runner interface and runner implementations, including the MVP OpenTofu-backed `LocalProcessRunner`.
+- `internal/runner`: the OpenTofu-backed `LocalTerraformRunner` and the `LocalGitRunner`, which build their commands and start them through the shared `CommandExecutor`.
 - `internal/terraform`: Terraform-specific helpers for HCL variable parsing, tfvars rendering, backend metadata extraction, plan summary parsing, and workspace command modeling.
 - `internal/githubapp`: GitHub App integration, installation token generation, repository clone helpers, and ref-to-commit resolution.
 - `internal/secrets`: secret store boundary, credential set resolution, and Vault or local development adapters.
@@ -996,7 +996,7 @@ Vault/secret store
 GitHub App integration
 Go API server
 Go Temporal workers
-LocalProcessRunner
+LocalTerraformRunner
 ```
 
 It prioritizes fast feedback and a clean product model while leaving room for stronger runner isolation and richer governance later.

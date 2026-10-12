@@ -14,7 +14,6 @@ import (
 	"strings"
 
 	"github.com/vishu42/openplan/internal/domain"
-	"github.com/vishu42/openplan/internal/isolation"
 )
 
 type TerraformCommand struct {
@@ -28,27 +27,24 @@ type TerraformCommand struct {
 	Stderr      io.Writer
 }
 
-type LocalProcessRunner struct {
+// LocalTerraformRunner runs OpenTofu as a subprocess via the shared
+// CommandExecutor boundary.
+type LocalTerraformRunner struct {
 	executor CommandExecutor
 }
 
 const terraformExecutable = "tofu"
 
-// NewLocalProcessRunner returns a runner that executes OpenTofu with os/exec.
+// NewLocalTerraformRunnerWithExecutor returns a runner backed by executor.
 //
 // Commands run in the requested workspace directory, inherit the process
 // context for cancellation, and write to the command's configured output
 // writers or to the process stdout/stderr when no writers are configured.
-func NewLocalProcessRunner() *LocalProcessRunner {
-	return NewLocalProcessRunnerWithExecutor(isolation.HostExecutor())
-}
-
-// NewLocalProcessRunnerWithExecutor returns a runner backed by executor.
 //
 // Tests and alternate adapters can provide a custom executor to observe command
 // construction or to avoid spawning real OpenTofu subprocesses.
-func NewLocalProcessRunnerWithExecutor(executor CommandExecutor) *LocalProcessRunner {
-	return &LocalProcessRunner{executor: executor}
+func NewLocalTerraformRunnerWithExecutor(executor CommandExecutor) *LocalTerraformRunner {
+	return &LocalTerraformRunner{executor: executor}
 }
 
 // PlanFileName is the saved plan inside the Terraform root module directory.
@@ -81,7 +77,7 @@ type Result struct {
 // has moved since it was written. An auto-approved apply has no saved plan, so
 // it plans and applies in one command, with the run's variables. Every apply
 // reports what it did, counted from its closing line.
-func (runner *LocalProcessRunner) Run(ctx context.Context, input TerraformCommand) (Result, error) {
+func (runner *LocalTerraformRunner) Run(ctx context.Context, input TerraformCommand) (Result, error) {
 	if strings.TrimSpace(input.WorkspacePath) == "" {
 		return Result{}, fmt.Errorf("workspace path is required")
 	}
@@ -112,7 +108,7 @@ func (runner *LocalProcessRunner) Run(ctx context.Context, input TerraformComman
 // plan runs `tofu plan` into PlanFileName and, when it has changes, counts
 // them. With -detailed-exitcode tofu exits 2 for a successful plan that has
 // changes, so exit 2 is success here, not failure.
-func (runner *LocalProcessRunner) plan(ctx context.Context, input TerraformCommand) (Result, error) {
+func (runner *LocalTerraformRunner) plan(ctx context.Context, input TerraformCommand) (Result, error) {
 	args := []string{"plan", "-input=false", "-no-color", "-detailed-exitcode", "-out=" + PlanFileName}
 	if input.Command == domain.TerraformCommandPlanDestroy {
 		args = append(args, "-destroy")
@@ -135,7 +131,7 @@ func (runner *LocalProcessRunner) plan(ctx context.Context, input TerraformComma
 
 // apply runs an apply and counts what it did from its closing line. The
 // output still goes to the command's writers; the counts are read from a copy.
-func (runner *LocalProcessRunner) apply(input TerraformCommand, run func(TerraformCommand) error) (Result, error) {
+func (runner *LocalTerraformRunner) apply(input TerraformCommand, run func(TerraformCommand) error) (Result, error) {
 	var output bytes.Buffer
 	stdout, _ := outputWriters(input)
 	input.Stdout = io.MultiWriter(stdout, &output)
@@ -185,7 +181,7 @@ func summarizeApplyOutput(output string) domain.PlanSummary {
 // The JSON holds variable values and sensitive attributes in plaintext, so it
 // is parsed here and only the counts leave the executor; it is never written
 // to the log.
-func (runner *LocalProcessRunner) summarize(ctx context.Context, input TerraformCommand) (domain.PlanSummary, error) {
+func (runner *LocalTerraformRunner) summarize(ctx context.Context, input TerraformCommand) (domain.PlanSummary, error) {
 	var stdout, stderr bytes.Buffer
 	if err := runner.executor.Run(ctx, input.WorkspacePath, sortedEnvironment(input.Environment), &stdout, &stderr, terraformExecutable, "show", "-json", "-no-color", PlanFileName); err != nil {
 		return domain.PlanSummary{}, &CommandError{Command: input.Command, Err: fmt.Errorf("show saved plan: %w: %s", err, strings.TrimSpace(stderr.String()))}
@@ -233,7 +229,7 @@ func summarizePlanJSON(body []byte) (domain.PlanSummary, error) {
 // OpenTofu exits non-zero when the workspace does not exist, so this method
 // treats a select failure as the signal to run `tofu workspace new`. If the
 // creation also fails, the returned error includes context for both attempts.
-func (runner *LocalProcessRunner) selectWorkspace(ctx context.Context, input TerraformCommand) error {
+func (runner *LocalTerraformRunner) selectWorkspace(ctx context.Context, input TerraformCommand) error {
 	stdout, stderr := outputWriters(input)
 	err := runner.executor.Run(
 		ctx,
@@ -274,7 +270,7 @@ func (runner *LocalProcessRunner) selectWorkspace(ctx context.Context, input Ter
 // identify which command failed via errors.As instead of parsing the error
 // text. args are the exact OpenTofu CLI arguments passed to the command
 // executor.
-func (runner *LocalProcessRunner) run(ctx context.Context, input TerraformCommand, env []string, args ...string) error {
+func (runner *LocalTerraformRunner) run(ctx context.Context, input TerraformCommand, env []string, args ...string) error {
 	stdout, stderr := outputWriters(input)
 	err := runner.executor.Run(ctx, input.WorkspacePath, env, stdout, stderr, terraformExecutable, args...)
 	if err != nil {
@@ -283,7 +279,7 @@ func (runner *LocalProcessRunner) run(ctx context.Context, input TerraformComman
 	return nil
 }
 
-func (runner *LocalProcessRunner) runWithTerraformVariables(ctx context.Context, input TerraformCommand, args ...string) error {
+func (runner *LocalTerraformRunner) runWithTerraformVariables(ctx context.Context, input TerraformCommand, args ...string) error {
 	env, err := terraformVariableEnv(input.ConfigJSON)
 	if err != nil {
 		return &CommandError{Command: input.Command, Err: fmt.Errorf("variables: %w", err)}

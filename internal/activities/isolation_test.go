@@ -23,20 +23,9 @@ func testSessions(t *testing.T, runRoot string) *isolation.Manager {
 	return isolation.NewForTest(t, isolation.Config{RunRoot: runRoot}, 4)
 }
 
-// sessionsWithRun returns sessions under runRoot with tenant_123's run_123
-// open, as PrepareWorkspace leaves it for the activities after it.
-func sessionsWithRun(t *testing.T, runRoot string) *isolation.Manager {
+func newTestTemplateRunActivities(t *testing.T, runRoot string, plans PlanArtifactStore) *TemplateRunActivities {
 	t.Helper()
-	sessions := testSessions(t, runRoot)
-	if _, err := sessions.Open(context.Background(), "tenant_123", "run_123"); err != nil {
-		t.Fatal(err)
-	}
-	return sessions
-}
-
-func newTestTemplateRunActivities(t *testing.T, runRoot string, plans PlanArtifactStore, runners ...TerraformRunner) *TemplateRunActivities {
-	t.Helper()
-	return NewTemplateRunActivities(nil, plans, runseal.NewKeyRing(), testSessions(t, runRoot), runners...)
+	return NewTemplateRunActivities(nil, plans, runseal.NewKeyRing(), testSessions(t, runRoot))
 }
 
 // sessionHome runs a command the way the executor's runners do and returns
@@ -208,44 +197,28 @@ func TestDownloadPlanWritesThePlanThroughTheSession(t *testing.T) {
 
 func TestRunTerraformWritesItsLogOutsideTheWorkspace(t *testing.T) {
 	t.Parallel()
-	runRoot := t.TempDir()
-	executor := &recordingCommandExecutor{stdout: "plan stdout\n"}
-	runner := localTerraformRunner{sessions: sessionsWithRun(t, runRoot), runner: gitrunner.NewLocalProcessRunnerWithExecutor(executor)}
+	activities, workspace := newTestTerraform(t, &recordingCommandExecutor{stdout: "plan stdout\n"})
 
-	if _, err := runner.RunTerraform(context.Background(), domain.RunTerraformActivityInput{
-		RunID: "run_123", TenantID: "tenant_123",
-		WorkspacePath: filepath.Join(runRoot, "tenant_123", "run_123", "workspace"),
-		WorkspaceName: "default", Command: domain.TerraformCommandPlan, RunPhase: domain.RunPhasePlan,
-	}); err != nil {
+	if _, err := activities.RunTerraform(context.Background(), planInput(workspace)); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := os.ReadFile(filepath.Join(runRoot, "tenant_123", "run_123", "logs", "plan.log")); err != nil || string(got) != "plan stdout\n" {
-		t.Fatalf("log = %q, %v", got, err)
+	if got := runLog(t, workspace, "plan.log"); got != "plan stdout\n" {
+		t.Fatalf("log = %q", got)
 	}
 }
 
-// sessionRecordingGit records the HOME a command run with git's ctx would
-// get, and makes the clone's directory.
-type sessionRecordingGit struct {
-	home   string
-	err    error
-	called bool
+// homeRecorder runs every command on executor, first recording the HOME a
+// command started with the same ctx gets from the session executor: the
+// session's own when ctx carries one.
+type homeRecorder struct {
+	executor gitrunner.CommandExecutor
+	home     string
+	err      error
 }
 
-func (g *sessionRecordingGit) Clone(ctx context.Context, _, _, dest string, _ gitrunner.GitCredential) error {
-	return g.record(ctx, dest)
-}
-
-func (g *sessionRecordingGit) CheckoutCommit(ctx context.Context, _, _, dest string, _ gitrunner.GitCredential) error {
-	return g.record(ctx, dest)
-}
-
-func (g *sessionRecordingGit) ResolveHead(context.Context, string) (string, error) { return "", nil }
-
-func (g *sessionRecordingGit) record(ctx context.Context, dest string) error {
-	g.called = true
-	g.home, g.err = sessionHome(ctx)
-	return os.MkdirAll(dest, 0o700)
+func (r *homeRecorder) Run(ctx context.Context, dir string, env []string, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
+	r.home, r.err = sessionHome(ctx)
+	return r.executor.Run(ctx, dir, env, stdout, stderr, name, args...)
 }
 
 func TestFetchSourceRunsGitInTheRunsSession(t *testing.T) {
@@ -253,8 +226,8 @@ func TestFetchSourceRunsGitInTheRunsSession(t *testing.T) {
 	skipAsRoot(t)
 	ctx := context.Background()
 	activities := newTestTemplateRunActivities(t, t.TempDir(), nil)
-	git := &sessionRecordingGit{}
-	activities.git = git
+	git := &homeRecorder{executor: &fakeGit{}}
+	activities.git = gitrunner.NewLocalGitRunnerWithExecutor(git)
 	workspace, err := activities.PrepareWorkspace(ctx, domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
 		t.Fatal(err)
@@ -277,43 +250,29 @@ func TestFetchSourceRunsGitInTheRunsSession(t *testing.T) {
 func TestFetchSourceFailsWithoutASession(t *testing.T) {
 	t.Parallel()
 	activities := newTestTemplateRunActivities(t, t.TempDir(), nil)
-	git := &sessionRecordingGit{}
-	activities.git = git
+	git := &fakeGit{}
+	activities.git = gitrunner.NewLocalGitRunnerWithExecutor(git)
 
 	_, err := activities.FetchSource(context.Background(), domain.FetchSourceActivityInput{
 		TenantID: "tenant_123", RunID: "run_123", WorkspacePath: "/somewhere",
 		RepoOwner: "acme", RepoName: "infra", ResolvedCommitSHA: "0123456789abcdef0123456789abcdef01234567", RootPath: ".",
 	})
-	if !errors.Is(err, isolation.ErrNoLease) || git.called {
-		t.Fatalf("FetchSource = %v, git called = %v; want ErrNoLease and no git", err, git.called)
+	if !errors.Is(err, isolation.ErrNoLease) || git.calls != 0 {
+		t.Fatalf("FetchSource = %v, git ran %d commands; want ErrNoLease and no git", err, git.calls)
 	}
-}
-
-type sessionRecordingTerraformRunner struct {
-	home string
-	err  error
-}
-
-func (r *sessionRecordingTerraformRunner) RunTerraform(ctx context.Context, _ domain.RunTerraformActivityInput) (domain.RunTerraformActivityOutput, error) {
-	r.home, r.err = sessionHome(ctx)
-	return domain.RunTerraformActivityOutput{}, nil
 }
 
 func TestRunTerraformRunsInTheRunsSession(t *testing.T) {
 	t.Parallel()
 	skipAsRoot(t)
 	ctx := context.Background()
-	recorder := &sessionRecordingTerraformRunner{}
-	activities := newTestTemplateRunActivities(t, t.TempDir(), nil, recorder)
-	workspace, err := activities.PrepareWorkspace(ctx, domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
-	if err != nil {
-		t.Fatal(err)
-	}
+	recorder := &homeRecorder{executor: &recordingCommandExecutor{}}
+	activities, workspace := newTestTerraform(t, recorder)
 
-	if _, err := activities.RunTerraform(ctx, domain.RunTerraformActivityInput{TenantID: "tenant_123", RunID: "run_123", WorkspacePath: workspace.WorkspacePath}); err != nil {
+	if _, err := activities.RunTerraform(ctx, planInput(workspace)); err != nil {
 		t.Fatal(err)
 	}
-	if want := filepath.Join(workspace.WorkspacePath, "home"); recorder.err != nil || recorder.home != want {
+	if want := filepath.Join(workspace, "home"); recorder.err != nil || recorder.home != want {
 		t.Fatalf("tofu ran with HOME %q, %v; want the session's %q", recorder.home, recorder.err, want)
 	}
 }

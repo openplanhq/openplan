@@ -115,7 +115,7 @@ func (s session) writeTemplate(t *testing.T, hcl string) {
 }
 
 func (s session) tofu(ctx context.Context, command domain.TerraformCommandType, env map[string]string) error {
-	_, err := runner.NewLocalProcessRunnerWithExecutor(isolation.SessionExecutor()).Run(s.ctx(ctx), runner.TerraformCommand{
+	_, err := runner.NewLocalTerraformRunnerWithExecutor(isolation.SessionExecutor()).Run(s.ctx(ctx), runner.TerraformCommand{
 		WorkspacePath: s.workspace, WorkspaceName: "default", Command: command, Environment: env,
 		Stdout: os.Stderr, Stderr: os.Stderr,
 	})
