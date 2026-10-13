@@ -14,8 +14,7 @@ credentials, and a full history of every change.
 
 > [!WARNING]
 > openplan is not production ready. It is an MVP baseline intended for local
-> development, evaluation, and continued hardening. See
-> [Maturity](#maturity) for what is and isn't finished.
+> development, evaluation, and continued hardening. Check back in a few days 🙂
 
 ## Why not Terraform Cloud
 
