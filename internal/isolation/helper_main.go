@@ -38,6 +38,11 @@ func HelperMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	return 0
 }
 
+// dispatch runs the operation args names. Each case takes exactly the
+// arguments helperClient sends, so a client and helper that disagree fail as
+// an unknown operation instead of running with an argument ignored. File
+// contents travel on stdin and stdout, not as arguments: a plan can run to
+// maxFileSize, far past what a command line holds.
 func dispatch(args []string, stdin io.Reader, stdout io.Writer) error {
 	if len(args) == 0 {
 		return errors.New("no operation")
@@ -47,9 +52,13 @@ func dispatch(args []string, stdin io.Reader, stdout io.Writer) error {
 	case op == "kill" && len(rest) == 0:
 		return killAll()
 	case op == "reclaim" && len(rest) <= 1:
+		// Kill first: a process left running could write new files after
+		// they are cleared.
 		if err := killAll(); err != nil {
 			return err
 		}
+		// The helper runs as the session's user, so its own uid picks out
+		// that session's files and no one else's.
 		if err := clearScratch(uint32(os.Getuid()), scratchDirs); err != nil { //nolint:gosec // the kernel stores uids in 32 bits
 			return err
 		}
