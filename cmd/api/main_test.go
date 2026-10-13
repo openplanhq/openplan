@@ -623,7 +623,7 @@ func newRecordingAPIDependencies(t *testing.T) *recordingAPIDependencies {
 			deps.migrated = true
 			return nil
 		},
-		migrateAuthorization: func(databaseURL string) error {
+		migrateAuthorization: func(_ context.Context, databaseURL string) error {
 			deps.authorizationMigratedDSN = databaseURL
 			return nil
 		},
