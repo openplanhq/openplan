@@ -38,21 +38,15 @@ type TemplateSyncStore interface {
 }
 
 type TemplateSyncActivities struct {
-	store    TemplateSyncStore
-	git      runner.GitRunner
+	store TemplateSyncStore
+	// git clones as the api's own user. Tests build it on a fake executor:
+	// the subprocess is the only part they stand in for.
+	git      *runner.LocalGitRunner
 	tempRoot string
 	tokens   GitHubTokenSource
 }
 
 type TemplateSyncOption func(*TemplateSyncActivities)
-
-func WithTemplateSyncGitRunner(git runner.GitRunner) TemplateSyncOption {
-	return func(activities *TemplateSyncActivities) {
-		if git != nil {
-			activities.git = git
-		}
-	}
-}
 
 func WithTemplateSyncTempRoot(tempRoot string) TemplateSyncOption {
 	return func(activities *TemplateSyncActivities) {

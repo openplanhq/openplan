@@ -1,6 +1,6 @@
 //go:build linux
 
-package main
+package isolation
 
 import (
 	"bufio"
@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 )
 
@@ -33,7 +34,7 @@ func TestDumpableHelperProcess(t *testing.T) {
 		return
 	}
 	if args[2] == "hardened" {
-		if err := setNotDumpable(); err != nil {
+		if err := HardenProcess(); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -78,7 +79,7 @@ func startDumpableHelper(t *testing.T, mode string) int {
 // touches, and mem is the heap holding the runs' sealing keys and opened
 // credentials. The test reads both the way a template would, from a same-uid
 // process, so it pins what the kernel enforces rather than the prctl call.
-func TestSetNotDumpableHidesProcessFromSameUID(t *testing.T) {
+func TestHardenProcessHidesProcessFromSameUID(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root reads any /proc/<pid> regardless of the dumpable flag; run as an unprivileged user")
 	}
@@ -100,5 +101,18 @@ func TestSetNotDumpableHidesProcessFromSameUID(t *testing.T) {
 		if !errors.Is(err, fs.ErrPermission) {
 			t.Errorf("read /proc/<pid>/%s of a hardened process: err = %v, want permission denied", file, err)
 		}
+	}
+}
+
+// The executor runs only in its Linux image, as root. Anywhere else New must
+// refuse to build a Manager rather than run sessions without isolation.
+func TestNewRefusesANonRootExecutor(t *testing.T) {
+	t.Parallel()
+	if os.Geteuid() == 0 {
+		t.Skip("needs a non-root user")
+	}
+
+	if m, err := New(Config{RunRoot: t.TempDir(), MaxSessions: 20}); err == nil || !strings.Contains(err.Error(), "want 0") {
+		t.Fatalf("New = %v, %v; want a refusal for a non-root executor", m, err)
 	}
 }

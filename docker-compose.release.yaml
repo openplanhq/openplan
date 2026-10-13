@@ -171,11 +171,14 @@ services:
       ARTIFACT_STORE_FILESYSTEM_ROOT: /var/lib/openplan/artifacts
       EXECUTOR_RUN_ROOT: /var/lib/openplan/runs
     restart: on-failure
+    # Root with only the three capabilities a branch's switch to its pool user
+    # needs (#331). The executor refuses to start with more, or without
+    # no-new-privileges.
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID, CHOWN]
+    security_opt: ["no-new-privileges:true"]
     volumes:
       - artifacts:/var/lib/openplan/artifacts
-      # Shared by both replicas so a provider downloads once per host rather
-      # than once per replica. Provider binaries only, never credentials.
-      - plugin-cache:/var/lib/openplan/plugin-cache
 
   web:
     image: ghcr.io/openplanhq/openplan-web:v0.2.0
@@ -189,4 +192,3 @@ services:
 volumes:
   postgres-data:
   artifacts:
-  plugin-cache:

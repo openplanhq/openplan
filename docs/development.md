@@ -32,26 +32,22 @@ OPENPLAN_PULL_POLICY=build docker compose up -d --wait
 Nothing to copy afterwards. OpenFGA runs inside the API and resolves its store
 and authorization model from the model in this repository at startup.
 
-To run the API and executor on the host instead, build their images once with
-the command above, then bring the stack down to the dependencies alone and
-start each process in its own terminal. Compose does not inject `.env` into
-containers or host processes, so a host process reads those values from your
-shell:
+To run the API on the host instead, build the images once with the command
+above, then bring the stack down to the dependencies and the executor, and
+start the API in its own terminal. The executor stays in Compose: it runs only
+in its Linux image, as root with three capabilities, starting each session as
+one of the image's pool users (see "Runner Security" in
+[architecture.md](architecture.md)), and refuses to start anywhere else.
+Compose does not inject `.env` into containers or host processes, so a host
+process reads those values from your shell:
 
 ```bash
-docker compose up -d postgres temporal dex
+docker compose up -d postgres temporal dex executor
 
 set -a
 source .env
 set +a
 go run ./cmd/api
-```
-
-```bash
-set -a
-source .env
-set +a
-go run ./cmd/executor
 ```
 
 ```bash

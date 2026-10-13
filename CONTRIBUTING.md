@@ -33,8 +33,9 @@ identity provider.
 > OPENPLAN_PULL_POLICY=build docker compose up -d --build
 > ```
 
-For a faster edit loop, run the dependencies in Docker and the Go and Node
-processes on the host. The API and executor images have to exist before this
+For a faster edit loop, run the dependencies in Docker and the API and the UI
+on the host. The executor stays in its container: it runs only in its Linux
+image, and refuses to start anywhere else. The API and executor images have to exist before this
 works, so build them once with `OPENPLAN_PULL_POLICY=build` as above:
 
 ```bash
@@ -43,7 +44,6 @@ OPENPLAN_PULL_POLICY=build docker compose up -d --wait
 
 # then, in separate shells from the repository root
 set -a && source .env && set +a && go run ./cmd/api
-set -a && source .env && set +a && go run ./cmd/executor
 cd web && npm install && npm run dev
 ```
 

@@ -5,11 +5,13 @@ import (
 	"errors"
 	"io"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/vishu42/openplan/internal/config"
 	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/isolation"
 	"github.com/vishu42/openplan/internal/runseal"
 	"github.com/vishu42/openplan/internal/temporal"
 	"go.temporal.io/sdk/activity"
@@ -49,11 +51,21 @@ func TestRunWiresTemporalWorker(t *testing.T) {
 	if !deps.workerOptions.EnableSessionWorker {
 		t.Fatal("session worker was not enabled")
 	}
+	// Each session holds a pool user; the SDK's default is 1,000 sessions.
+	if deps.workerOptions.MaxConcurrentSessionExecutionSize != config.DefaultExecutorMaxSessions {
+		t.Fatalf("max concurrent sessions = %d, want %d", deps.workerOptions.MaxConcurrentSessionExecutionSize, config.DefaultExecutorMaxSessions)
+	}
+	if !reflect.DeepEqual(deps.calls, []string{"newSessions", "dialTemporal"}) {
+		t.Fatalf("startup order = %v, want isolation checked before dialing Temporal", deps.calls)
+	}
+	if want := (isolation.Config{RunRoot: "/tmp/openplan-executor-test", MaxSessions: config.DefaultExecutorMaxSessions}); deps.sessionsConfig != want {
+		t.Fatalf("newSessions got %+v, want %+v", deps.sessionsConfig, want)
+	}
+	if deps.activitySessions != deps.sessions {
+		t.Fatal("activities did not get the sessions newSessions returned")
+	}
 	if deps.activityKeys == nil {
 		t.Fatal("activities were not given a key ring")
-	}
-	if deps.activityRunRoot != "/tmp/openplan-executor-test" {
-		t.Fatalf("activity run root = %q, want /tmp/openplan-executor-test", deps.activityRunRoot)
 	}
 	if deps.artifactStoreConfig.Kind != config.ArtifactStoreFilesystem {
 		t.Fatalf("artifact store kind = %q, want filesystem", deps.artifactStoreConfig.Kind)
@@ -81,7 +93,10 @@ func TestDefaultExecutorDependenciesRegisterOnlyExecutionActivities(t *testing.T
 	worker := &recordingTemporalWorker{}
 	deps := defaultExecutorDependencies()
 
-	deps.registerActivities(worker, t.TempDir(), artifactStores{logs: recordingWorkerLogStore{}, plans: recordingWorkerPlanStore{}}, runseal.NewKeyRing())
+	sessions := isolation.NewForTest(t, isolation.Config{RunRoot: t.TempDir()}, 2)
+	if err := deps.registerActivities(context.Background(), worker, artifactStores{logs: recordingWorkerLogStore{}, plans: recordingWorkerPlanStore{}}, runseal.NewKeyRing(), sessions); err != nil {
+		t.Fatalf("registerActivities returned error: %v", err)
+	}
 
 	want := map[string]bool{
 		domain.PrepareWorkspaceActivityName: true,
@@ -94,6 +109,24 @@ func TestDefaultExecutorDependenciesRegisterOnlyExecutionActivities(t *testing.T
 	}
 	if !reflect.DeepEqual(worker.registeredActivities, want) {
 		t.Fatalf("registered activities = %v, want %v", worker.registeredActivities, want)
+	}
+}
+
+// An executor that cannot keep sessions apart must not run template code: it
+// stops before it ever polls for work.
+func TestRunStopsWhenIsolationFails(t *testing.T) {
+	t.Parallel()
+
+	checkErr := errors.New("CapEff is wrong")
+	deps := newRecordingExecutorDependencies(t)
+	deps.sessionsErr = checkErr
+
+	err := runWithDependencies(context.Background(), executorTestEnv, deps.executorDependencies)
+	if !errors.Is(err, checkErr) || !strings.Contains(err.Error(), "subprocess isolation") {
+		t.Fatalf("error = %v, want checkErr wrapped as subprocess isolation", err)
+	}
+	if slices.Contains(deps.calls, "dialTemporal") {
+		t.Fatalf("calls = %v, want no Temporal dial", deps.calls)
 	}
 }
 
@@ -154,12 +187,19 @@ type recordingExecutorDependencies struct {
 	workerTaskQueue     string
 	workerOptions       temporalworker.Options
 	artifactStoreConfig config.ArtifactStoreConfig
-	activityRunRoot     string
 	activityStores      artifactStores
 	activityKeys        *runseal.KeyRing
+	activitySessions    *isolation.Manager
 	logStore            recordingWorkerLogStore
 	planStore           recordingWorkerPlanStore
 	dialErr             error
+	// sessions and sessionsErr are what newSessions returns, and
+	// sessionsConfig what it was given.
+	sessions       *isolation.Manager
+	sessionsErr    error
+	sessionsConfig isolation.Config
+	// calls records the startup steps in the order they ran.
+	calls []string
 }
 
 func newRecordingExecutorDependencies(t *testing.T) *recordingExecutorDependencies {
@@ -168,9 +208,11 @@ func newRecordingExecutorDependencies(t *testing.T) *recordingExecutorDependenci
 	deps := &recordingExecutorDependencies{
 		temporalClient: &recordingWorkerTemporalClient{},
 		worker:         &recordingTemporalWorker{},
+		sessions:       isolation.NewForTest(t, isolation.Config{}, 1),
 	}
 	deps.executorDependencies = executorDependencies{
 		dialTemporal: func(_ context.Context, cfg temporal.Config) (client.Client, error) {
+			deps.calls = append(deps.calls, "dialTemporal")
 			deps.temporalConfig = cfg
 			if deps.dialErr != nil {
 				return nil, deps.dialErr
@@ -185,13 +227,14 @@ func newRecordingExecutorDependencies(t *testing.T) *recordingExecutorDependenci
 			deps.workerOptions = options
 			return deps.worker
 		},
-		registerActivities: func(worker temporalWorker, runRoot string, stores artifactStores, keys *runseal.KeyRing) {
+		registerActivities: func(_ context.Context, worker temporalWorker, stores artifactStores, keys *runseal.KeyRing, sessions *isolation.Manager) error {
 			if worker != deps.worker {
 				t.Fatalf("registerActivities worker = %p, want %p", worker, deps.worker)
 			}
-			deps.activityRunRoot = runRoot
 			deps.activityStores = stores
 			deps.activityKeys = keys
+			deps.activitySessions = sessions
+			return nil
 		},
 		newArtifactStores: func(cfg config.ArtifactStoreConfig) (artifactStores, error) {
 			deps.artifactStoreConfig = cfg
@@ -201,6 +244,14 @@ func newRecordingExecutorDependencies(t *testing.T) *recordingExecutorDependenci
 			ch := make(chan any)
 			close(ch)
 			return ch
+		},
+		newSessions: func(cfg isolation.Config) (*isolation.Manager, error) {
+			deps.calls = append(deps.calls, "newSessions")
+			deps.sessionsConfig = cfg
+			if deps.sessionsErr != nil {
+				return nil, deps.sessionsErr
+			}
+			return deps.sessions, nil
 		},
 	}
 	return deps

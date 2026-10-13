@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/isolation"
 	"github.com/vishu42/openplan/internal/logsink"
 	"github.com/vishu42/openplan/internal/planbundle"
 	"github.com/vishu42/openplan/internal/runner"
@@ -29,19 +30,6 @@ type StatusRecorder interface {
 	// RecordTemplateRunEvent persists something a running run did to its
 	// stack template.
 	RecordTemplateRunEvent(context.Context, domain.TemplateRunEventActivityInput) error
-}
-
-// TerraformRunner is the activity-local boundary for running Terraform.
-//
-// The production implementation shells out to the OpenTofu CLI, while tests can
-// provide a fake runner to verify activity behavior without starting external
-// processes.
-type TerraformRunner interface {
-	// RunTerraform executes the Terraform command requested by the workflow and
-	// returns the metadata of the log it uploaded, if any, and for a plan
-	// whether it has changes. A command that fails after its log was uploaded
-	// returns both the log and the error.
-	RunTerraform(context.Context, domain.RunTerraformActivityInput) (domain.RunTerraformActivityOutput, error)
 }
 
 // PlanArtifactStore keeps each run's encrypted saved plan between its plan
@@ -73,87 +61,82 @@ type CredentialDecryptor interface {
 // to tenant Terraform on the executor, which holds no database connection and
 // no keys beyond its per-run sealing keys.
 type TemplateRunActivities struct {
-	// runRoot is the base directory under which per-tenant, per-run workspaces are created.
-	runRoot string
-	// terraformRunner executes Terraform-compatible commands for RunTerraform activity calls.
-	terraformRunner TerraformRunner
-	// git clones template source repositories into run workspaces.
-	git runner.GitRunner
+	// terraform runs OpenTofu for RunTerraform. Tests build it on a fake
+	// executor: the subprocess is the only part they stand in for.
+	terraform *runner.LocalTerraformRunner
+	// git clones template source repositories into run workspaces, on the
+	// same terms as terraform.
+	git *runner.LocalGitRunner
+	// logStore receives each Terraform command's log once the command ends.
+	logStore TemplateRunLogStore
 	// plans keeps saved plans between a run's plan and apply phases.
 	plans PlanArtifactStore
 	// keys holds each in-flight run's private sealing key.
 	keys *runseal.KeyRing
+	// sessions runs each run's session as a pool user of its own (#331), in a
+	// run directory it lays out under its run root.
+	sessions *isolation.Manager
+	// heartbeat reports liveness to Temporal. Tests replace it; a zero value
+	// means recordActivityHeartbeat, which is a no-op off an activity context.
+	heartbeat func(context.Context)
+	// heartbeatInterval overrides domain.TerraformHeartbeatInterval in tests
+	// that cannot wait twenty seconds for a tick.
+	heartbeatInterval time.Duration
 }
 
-// NewTemplateRunActivities constructs the execution activities.
-//
-// By default it wires a local OpenTofu-backed runner that uploads phase logs
-// to logStore. Tests may pass a TerraformRunner override to avoid invoking the
-// OpenTofu binary. A nil keys gets a fresh ring.
-func NewTemplateRunActivities(runRoot string, logStore TemplateRunLogStore, plans PlanArtifactStore, keys *runseal.KeyRing, terraformRunners ...TerraformRunner) *TemplateRunActivities {
-	terraformRunner := TerraformRunner(localTerraformRunner{
-		runner:   runner.NewLocalProcessRunner(),
-		logStore: logStore,
-	})
-	if len(terraformRunners) > 0 {
-		terraformRunner = terraformRunners[0]
-	}
+// NewTemplateRunActivities constructs the execution activities. Every
+// subprocess they start runs in its run's session, through sessions, and every
+// Terraform command's log is uploaded to logStore. A nil keys gets a fresh
+// ring.
+func NewTemplateRunActivities(logStore TemplateRunLogStore, plans PlanArtifactStore, keys *runseal.KeyRing, sessions *isolation.Manager) *TemplateRunActivities {
 	if keys == nil {
 		keys = runseal.NewKeyRing()
 	}
-
 	return &TemplateRunActivities{
-		runRoot:         runRoot,
-		terraformRunner: terraformRunner,
-		git:             runner.NewLocalGitRunner(),
-		plans:           plans,
-		keys:            keys,
+		terraform: runner.NewLocalTerraformRunnerWithExecutor(isolation.SessionExecutor()),
+		git:       runner.NewLocalGitRunnerWithExecutor(isolation.SessionExecutor()),
+		logStore:  logStore,
+		plans:     plans,
+		keys:      keys,
+		sessions:  sessions,
 	}
 }
 
-// PrepareWorkspace creates the filesystem workspace used by later Terraform activities.
-//
-// The workspace path is derived from the configured run root plus tenant and run
-// IDs. Those IDs are validated as single safe path components before joining, so
-// callers cannot escape the run root with absolute paths or parent-directory
-// traversal. The resulting path is returned to the workflow and then passed back
-// into RunTerraform activity calls.
+// PrepareWorkspace opens the run's session, which lays out the run's directory
+// under the run root: the session's workspace/, and the executor's logs/
+// beside it. The session checks that the tenant and run IDs are single path
+// components, so no input can place a run directory outside the run root.
 func (activities *TemplateRunActivities) PrepareWorkspace(ctx context.Context, input domain.PrepareWorkspaceActivityInput) (domain.PrepareWorkspaceActivityOutput, error) {
-	workspacePath, err := logsink.RunWorkspacePath(activities.runRoot, input.TenantID, input.RunID)
+	session, err := activities.sessions.Open(ctx, string(input.TenantID), string(input.RunID))
 	if err != nil {
-		return domain.PrepareWorkspaceActivityOutput{}, err
-	}
-
-	if err := os.MkdirAll(workspacePath, 0o700); err != nil {
-		return domain.PrepareWorkspaceActivityOutput{}, fmt.Errorf("prepare workspace directory: %w", err)
+		return domain.PrepareWorkspaceActivityOutput{}, fmt.Errorf("open the run's session: %w", err)
 	}
 
 	// The session pins every later activity of this run to this process, so the
 	// key generated here is the one that opens what the control plane seals.
 	publicKey, err := activities.keys.Generate(domain.RunKeyID(input.TenantID, input.RunID))
 	if err != nil {
-		return domain.PrepareWorkspaceActivityOutput{}, err
+		// Ending the session hands the user back now rather than hold it until
+		// its lease expires.
+		return domain.PrepareWorkspaceActivityOutput{}, errors.Join(err, activities.sessions.Close(ctx, string(input.TenantID), string(input.RunID)))
 	}
-
-	return domain.PrepareWorkspaceActivityOutput{WorkspacePath: workspacePath, PublicKey: publicKey}, nil
+	return domain.PrepareWorkspaceActivityOutput{WorkspacePath: session.Workspace(), PublicKey: publicKey}, nil
 }
 
-// CleanupWorkspace deletes a run's workspace at the end of a session, and on
-// the apply phase also its saved plan, which nothing reads after the apply.
+// CleanupWorkspace ends the run's session, which kills the session's
+// processes and deletes the run directory, and on the apply phase also deletes
+// the saved plan, which nothing reads after the apply.
 //
-// The workspace is found from the run's identity, never from the path in the
-// input, so this can only ever remove a run workspace under the run root.
-// Both deletions are best effort from the workflow's point of view: a
-// workspace left behind costs disk, and a saved plan left behind is unreadable
-// once the run is terminal, because the control plane drops its key.
+// The run is found from its identity, never from the path in the input, so
+// this can only ever remove a run directory under the run root. Both deletions
+// are best effort from the workflow's point of view: a run directory left
+// behind costs disk until the lease expires, and a saved plan left behind is
+// unreadable once the run is terminal, because the control plane drops its
+// key.
 func (activities *TemplateRunActivities) CleanupWorkspace(ctx context.Context, input domain.CleanupWorkspaceActivityInput) error {
-	workspacePath, err := logsink.RunWorkspacePath(activities.runRoot, input.TenantID, input.RunID)
-	if err != nil {
-		return err
-	}
 	var errs []error
-	if err := os.RemoveAll(workspacePath); err != nil {
-		errs = append(errs, fmt.Errorf("remove run workspace: %w", err))
+	if err := activities.sessions.Close(ctx, string(input.TenantID), string(input.RunID)); err != nil {
+		errs = append(errs, fmt.Errorf("end the run's session: %w", err))
 	}
 	if input.DeletePlan && activities.plans != nil {
 		if err := activities.plans.DeletePlan(ctx, input.TenantID, input.RunID); err != nil {
@@ -174,7 +157,17 @@ func (activities *TemplateRunActivities) UploadPlan(ctx context.Context, input d
 	if err != nil {
 		return err
 	}
-	bundle, err := planbundle.Pack(input.TerraformPath)
+	session, err := activities.session(input.TenantID, input.RunID)
+	if err != nil {
+		return err
+	}
+	// Read as the session's user, so a plan file the session swapped for a
+	// symlink yields only what the session could read anyway.
+	files, err := session.ReadFiles(ctx, input.TerraformPath, planbundle.Files)
+	if err != nil {
+		return fmt.Errorf("read saved plan: %w", err)
+	}
+	bundle, err := planbundle.Pack(files)
 	if err != nil {
 		return fmt.Errorf("pack saved plan: %w", err)
 	}
@@ -204,8 +197,18 @@ func (activities *TemplateRunActivities) DownloadPlan(ctx context.Context, input
 	if err != nil {
 		return err
 	}
-	if err := planbundle.Unpack(bundle, input.TerraformPath); err != nil {
-		return fmt.Errorf("unpack saved plan: %w", err)
+	files, err := planbundle.Unpack(bundle)
+	if err != nil {
+		return err
+	}
+	session, err := activities.session(input.TenantID, input.RunID)
+	if err != nil {
+		return err
+	}
+	// The key never leaves the executor: only the plaintext files cross to
+	// the session, written as its user.
+	if err := session.WriteFiles(ctx, input.TerraformPath, files); err != nil {
+		return fmt.Errorf("write saved plan: %w", err)
 	}
 	return nil
 }
@@ -219,6 +222,13 @@ func (activities *TemplateRunActivities) openPlanKey(input domain.PlanArtifactAc
 		return nil, fmt.Errorf("open plan key: %w", err)
 	}
 	return key, nil
+}
+
+// session returns the run's session. It fails when the run holds none, so a
+// step never runs as another session's user, or as whichever user a
+// restarted executor would hand out.
+func (activities *TemplateRunActivities) session(tenantID domain.TenantID, runID domain.TemplateRunID) (*isolation.Session, error) {
+	return activities.sessions.Session(string(tenantID), string(runID))
 }
 
 // requirePlans returns the plan store, or one that fails every call when none
@@ -267,12 +277,14 @@ func (activities *TemplateRunActivities) FetchSource(ctx context.Context, input 
 	if strings.TrimSpace(input.WorkspacePath) == "" {
 		return domain.FetchSourceActivityOutput{}, fmt.Errorf("workspace path is required")
 	}
+	session, err := activities.session(input.TenantID, input.RunID)
+	if err != nil {
+		return domain.FetchSourceActivityOutput{}, err
+	}
+	ctx = session.Context(ctx)
 
 	sourcePath := filepath.Join(input.WorkspacePath, "source")
 	git := activities.git
-	if git == nil {
-		git = runner.NewLocalGitRunner()
-	}
 	repoURL, err := gitHubRepoURL(input.RepoOwner, input.RepoName)
 	if err != nil {
 		return domain.FetchSourceActivityOutput{}, err
@@ -308,7 +320,8 @@ func (activities *TemplateRunActivities) FetchSource(ctx context.Context, input 
 	}
 
 	terraformPath := filepath.Clean(filepath.Join(sourcePath, rootPath))
-	if err := ensureTemplateRoot(terraformPath); err != nil {
+	// As the session's user: the executor never looks inside a workspace itself.
+	if err := session.CheckDir(ctx, terraformPath); err != nil {
 		return domain.FetchSourceActivityOutput{}, fmt.Errorf("source root %q: %w", rootPath, err)
 	}
 
@@ -318,9 +331,9 @@ func (activities *TemplateRunActivities) FetchSource(ctx context.Context, input 
 // RunTerraform executes one Terraform phase requested by TemplatePlanWorkflow.
 //
 // It opens the credentials the control plane sealed to this run's key, then
-// delegates command selection, log handling, and subprocess execution to the
-// configured TerraformRunner. Plaintext credentials exist only in this process
-// and the Terraform subprocess, never in workflow history.
+// runs the command in the run's session with runTerraform. Plaintext
+// credentials exist only in this process and the Terraform subprocess, never
+// in workflow history.
 //
 // A command that fails after its log was uploaded is reported as an
 // ApplicationError carrying the log metadata as details, so the workflow can
@@ -334,7 +347,11 @@ func (activities *TemplateRunActivities) RunTerraform(ctx context.Context, input
 		}
 		input.Environment = environment
 	}
-	output, err := activities.terraformRunner.RunTerraform(ctx, input)
+	session, err := activities.session(input.TenantID, input.RunID)
+	if err != nil {
+		return domain.RunTerraformActivityOutput{}, err
+	}
+	output, err := activities.runTerraform(session.Context(ctx), session, input)
 	if err != nil {
 		if output.Log.ObjectKey == "" {
 			return domain.RunTerraformActivityOutput{}, fmt.Errorf("run terraform: %w", err)
@@ -347,26 +364,9 @@ func (activities *TemplateRunActivities) RunTerraform(ctx context.Context, input
 	return output, nil
 }
 
-// localTerraformRunner adapts the shared runner package to the activity interface.
-//
-// It adds activity-specific concerns around Terraform-compatible execution, such as mapping
-// workflow command types to log phases and opening the per-workspace log file
-// before delegating to runner.LocalProcessRunner.
-type localTerraformRunner struct {
-	// runner owns Terraform CLI argument construction and subprocess execution.
-	runner   *runner.LocalProcessRunner
-	logStore TemplateRunLogStore
-	// heartbeat reports liveness to Temporal. Tests replace it; a zero value
-	// means recordActivityHeartbeat, which is a no-op off an activity context.
-	heartbeat func(context.Context)
-	// heartbeatInterval overrides domain.TerraformHeartbeatInterval in tests
-	// that cannot wait twenty seconds for a tick.
-	heartbeatInterval time.Duration
-}
-
 // recordActivityHeartbeat reports to Temporal when there is an activity to
-// report to. The same runner is exercised directly by tests holding an
-// ordinary context, where recording a heartbeat would panic.
+// report to. RunTerraform is exercised directly by tests holding an ordinary
+// context, where recording a heartbeat would panic.
 //
 // The heartbeat carries no details. Temporal does not read them: what keeps an
 // activity alive is that a heartbeat arrived, not what it said, and the
@@ -383,30 +383,33 @@ func recordActivityHeartbeat(ctx context.Context) {
 	activity.RecordHeartbeat(ctx)
 }
 
-// RunTerraform writes command output to the workspace log file and runs OpenTofu.
+// runTerraform runs OpenTofu in session, writing its output to the run's log
+// file, and uploads the log once the command ends. ctx is tagged with session.
 //
 // The log phase is derived from the Terraform command and the run phase it belongs to
-// so each phase writes to a predictable file under the workspace logs
-// directory. The file is opened for append, so commands sharing a phase leave
-// their output in the order they ran. Stdout and stderr share
+// so each phase writes to a predictable file under the run directory's logs/,
+// which the session cannot see: a symlink planted in the workspace would
+// otherwise have root append tofu's output to a file of root's. The file is
+// opened for append, so commands sharing a phase leave their output in the
+// order they ran. Stdout and stderr share
 // the same writer for now, preserving command output ordering in a single phase
 // log. The log file is closed after the command completes, and close errors are
 // surfaced only when the command itself succeeded.
-func (localRunner localTerraformRunner) RunTerraform(ctx context.Context, input domain.RunTerraformActivityInput) (domain.RunTerraformActivityOutput, error) {
+func (activities *TemplateRunActivities) runTerraform(ctx context.Context, session *isolation.Session, input domain.RunTerraformActivityInput) (domain.RunTerraformActivityOutput, error) {
 	fileName, err := logsink.FileNameForTerraformCommand(input.Command, input.RunPhase)
 	if err != nil {
 		return domain.RunTerraformActivityOutput{}, err
 	}
 	phase := strings.TrimSuffix(fileName, logsink.LogFileExtension)
 
-	writer, err := logsink.NewFileSink(input.WorkspacePath).Open(fileName)
+	writer, err := logsink.NewFileSink(session.LogsDir()).Open(fileName)
 	if err != nil {
 		return domain.RunTerraformActivityOutput{}, fmt.Errorf("open terraform log: %w", err)
 	}
 
 	redactingWriter := newRedactingWriter(writer, credentialValues(input.Environment))
-	stopHeartbeat := localRunner.startHeartbeat(ctx)
-	result, runErr := localRunner.runner.Run(ctx, runner.TerraformCommand{
+	stopHeartbeat := activities.startHeartbeat(ctx)
+	result, runErr := activities.terraform.Run(ctx, runner.TerraformCommand{
 		WorkspacePath: terraformPath(input),
 		WorkspaceName: input.WorkspaceName,
 		Command:       input.Command,
@@ -421,12 +424,12 @@ func (localRunner localTerraformRunner) RunTerraform(ctx context.Context, input 
 		return domain.RunTerraformActivityOutput{}, fmt.Errorf("close terraform log: %w", closeErr)
 	}
 	var log domain.TemplateRunLog
-	if localRunner.logStore != nil {
-		file, err := os.Open(filepath.Join(input.WorkspacePath, "logs", fileName))
+	if activities.logStore != nil {
+		file, err := os.Open(filepath.Join(session.LogsDir(), fileName))
 		if err != nil {
 			return domain.RunTerraformActivityOutput{}, fmt.Errorf("open terraform log for upload: %w", err)
 		}
-		uploaded, uploadErr := localRunner.logStore.PutTemplateRunLog(ctx, input.TenantID, input.RunID, phase, file)
+		uploaded, uploadErr := activities.logStore.PutTemplateRunLog(ctx, input.TenantID, input.RunID, phase, file)
 		closeErr := file.Close()
 		if uploadErr != nil {
 			return domain.RunTerraformActivityOutput{}, fmt.Errorf("upload terraform log: %w", uploadErr)
@@ -447,12 +450,12 @@ func (localRunner localTerraformRunner) RunTerraform(ctx context.Context, input 
 // an hour has to say so on its own, and only the executor knows it is still
 // there. Stopping is synchronous -- the goroutine has ended before stop
 // returns -- so no heartbeat is recorded after the activity has returned.
-func (localRunner localTerraformRunner) startHeartbeat(ctx context.Context) (stop func()) {
-	heartbeat := localRunner.heartbeat
+func (activities *TemplateRunActivities) startHeartbeat(ctx context.Context) (stop func()) {
+	heartbeat := activities.heartbeat
 	if heartbeat == nil {
 		heartbeat = recordActivityHeartbeat
 	}
-	interval := localRunner.heartbeatInterval
+	interval := activities.heartbeatInterval
 	if interval <= 0 {
 		interval = domain.TerraformHeartbeatInterval
 	}
