@@ -273,11 +273,19 @@ func (server *Server) debugf(format string, args ...any) {
 	}
 }
 
+// maxRequestBodyBytes caps every JSON request body. The largest legitimate one
+// is a credential set or a run's variables, a few kilobytes; a megabyte leaves
+// room for those to grow while keeping one request from holding unbounded
+// memory, since the body is buffered whole before it is validated.
+const maxRequestBodyBytes = 1 << 20
+
 func decodeRequestBody(response http.ResponseWriter, request *http.Request, destination any) bool {
-	decoder := json.NewDecoder(request.Body)
+	decoder := json.NewDecoder(http.MaxBytesReader(response, request.Body, maxRequestBodyBytes))
 	var raw json.RawMessage
 	if err := decoder.Decode(&raw); err != nil {
-		writeError(response, http.StatusBadRequest, "invalid_json", "request body must match the expected JSON schema")
+		if !writeRequestTooLarge(response, err) {
+			writeError(response, http.StatusBadRequest, "invalid_json", "request body must match the expected JSON schema")
+		}
 		return false
 	}
 	if trimmed := bytes.TrimSpace(raw); len(trimmed) == 0 || trimmed[0] != '{' {
@@ -290,10 +298,25 @@ func decodeRequestBody(response http.ResponseWriter, request *http.Request, dest
 		writeError(response, http.StatusBadRequest, "invalid_json", "request body must match the expected JSON schema")
 		return false
 	}
+	// Trailing bytes count toward the cap too, so this read can be the one
+	// that crosses it.
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		writeError(response, http.StatusBadRequest, "invalid_json", "request body must contain one JSON object")
+		if !writeRequestTooLarge(response, err) {
+			writeError(response, http.StatusBadRequest, "invalid_json", "request body must contain one JSON object")
+		}
 		return false
 	}
+	return true
+}
+
+// writeRequestTooLarge answers 413 when err is the body cap tripping, and
+// reports whether it did.
+func writeRequestTooLarge(response http.ResponseWriter, err error) bool {
+	var tooLarge *http.MaxBytesError
+	if !errors.As(err, &tooLarge) {
+		return false
+	}
+	writeError(response, http.StatusRequestEntityTooLarge, "request_too_large", "request body must not exceed 1 MiB")
 	return true
 }
 

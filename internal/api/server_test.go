@@ -1956,6 +1956,68 @@ func TestDecodeRequestBodyRejectsNonObjectAndMultipleValues(t *testing.T) {
 	}
 }
 
+func TestDecodeRequestBodyRejectsOversizedBody(t *testing.T) {
+	t.Parallel()
+
+	padding := strings.Repeat("a", maxRequestBodyBytes)
+	tests := []struct {
+		name string
+		body string
+	}{
+		// The cap must hold while the object is still being read, not only
+		// once it has been buffered.
+		{name: "one oversized object", body: `{"name":"` + padding + `"}`},
+		// A valid object under the cap followed by enough trailing bytes to
+		// cross it is still an oversized body, not a second JSON value.
+		{name: "trailing bytes past the cap", body: `{"name":"accepted"}` + strings.Repeat(" ", maxRequestBodyBytes)},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			response := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(test.body))
+			var destination struct {
+				Name string `json:"name"`
+			}
+
+			if decodeRequestBody(response, request, &destination) {
+				t.Fatal("decodeRequestBody accepted request, want rejection before service effect")
+			}
+			if response.Code != http.StatusRequestEntityTooLarge {
+				t.Fatalf("status = %d, want %d", response.Code, http.StatusRequestEntityTooLarge)
+			}
+			var body errorResponse
+			if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+				t.Fatalf("decode error body: %v", err)
+			}
+			if body.Error != "request_too_large" {
+				t.Fatalf("error = %q, want request_too_large", body.Error)
+			}
+		})
+	}
+}
+
+func TestDecodeRequestBodyAcceptsBodyAtTheCap(t *testing.T) {
+	t.Parallel()
+
+	prefix, suffix := `{"name":"`, `"}`
+	padding := strings.Repeat("a", maxRequestBodyBytes-len(prefix)-len(suffix))
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(prefix+padding+suffix))
+	var destination struct {
+		Name string `json:"name"`
+	}
+
+	if !decodeRequestBody(response, request, &destination) {
+		t.Fatalf("decodeRequestBody rejected a body of exactly %d bytes: status %d, body %s", maxRequestBodyBytes, response.Code, response.Body.String())
+	}
+	if len(destination.Name) != len(padding) {
+		t.Fatalf("len(Name) = %d, want %d", len(destination.Name), len(padding))
+	}
+}
+
 func TestMutationRequestsRejectMissingPrincipal(t *testing.T) {
 	t.Parallel()
 
