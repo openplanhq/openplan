@@ -22,6 +22,7 @@ before you apply it.
 | Browser tab, home screen, PWA | `web/` (see `web/head-snippet.html`) |
 | GitHub org avatar | `web/icon-512.png` |
 | Link previews (GitHub social preview, chat unfurls) | `social/openplan-social-preview.png` (1280 × 640) |
+| Banner atop a README or docs page | `banner/openplan-readme-banner.svg` (1280 × 400; `.png` alongside) |
 | Docs, slides, office tools | `png/` (transparent) |
 | Printers | `pdf/` (vector) |
 
@@ -104,7 +105,7 @@ Geist is licensed under the SIL Open Font License 1.1, which allows its use in a
 - **AI/EPS masters:** none; the PDFs are vector.
 - **Wired in:**
   - the favicon (`favicon.ico`, `apple-touch-icon.png`) in the app (`web/public/`) and the site (`site/public/`)
-  - the logo at the top of the root README, with a white version for GitHub's dark mode
+  - the banner at the top of the root README; it is ink in both GitHub themes
 - **GitHub settings, set by hand:** the social preview (repository Settings → General → Social preview) and
   the org avatar (organization Settings → Profile). Neither can be set from the repository.
 - **Not wired in yet:** the header lockup in the app and on the site, and the logo in the openplan UI design

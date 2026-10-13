@@ -1,14 +1,4 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="brand/svg/openplan-logo-horizontal-white.svg">
-  <img alt="openplan" src="brand/svg/openplan-logo-horizontal.svg" width="280">
-</picture>
-
-![openplan](docs/ss/stacks-list.png)
-
-**A self-hosted, open-source alternative to Terraform Cloud.** Register a
-Terraform or OpenTofu module once, and anyone on your team can stand up their
-own copy of it from a web UI, with their own variables, their own credentials,
-and a full history of every change.
+![openplan: a self-hosted, open-source alternative to Terraform Cloud](brand/banner/openplan-readme-banner.svg)
 
 [![CI](https://github.com/openplanhq/openplan/actions/workflows/ci.yml/badge.svg)](https://github.com/openplanhq/openplan/actions/workflows/ci.yml)
 [![Authorization differential test](https://github.com/openplanhq/openplan/actions/workflows/differential.yml/badge.svg)](https://github.com/openplanhq/openplan/actions/workflows/differential.yml)
@@ -16,10 +6,15 @@ and a full history of every change.
 [![Go](https://img.shields.io/badge/go-1.25-00ADD8?logo=go&logoColor=white)](go.mod)
 [![React](https://img.shields.io/badge/react-19-61DAFB?logo=react&logoColor=black)](web/package.json)
 
+Register a Terraform or OpenTofu module once, and anyone on your team can stand
+up their own copy of it from a web UI, with their own variables, their own
+credentials, and a full history of every change.
+
+![The stacks list](docs/ss/stacks-list.png)
+
 > [!WARNING]
 > openplan is not production ready. It is an MVP baseline intended for local
-> development, evaluation, and continued hardening. See
-> [Maturity](#maturity) for what is and isn't finished.
+> development, evaluation, and continued hardening. Check back in a few days 🙂
 
 ## Why not Terraform Cloud
 
@@ -33,18 +28,18 @@ openplan runs on your own Postgres and Temporal, so there is no per-resource
 meter. OpenTofu and Terraform are on equal footing, with no licence questions in
 between.
 
-|                                              | **openplan**        | HCP Terraform  | Atlantis        | Terragrunt  |
-| -------------------------------------------- | ------------------- | -------------- | --------------- | ----------- |
-| **Self-hosted**                                | Yes, Apache 2.0     | Enterprise only | Yes             | Yes         |
-| **Billed per managed resource**                | No                  | Yes            | No              | No          |
-| **Web UI for non-infra engineers**             | Yes                 | Yes            | No, PR comments | No, a CLI   |
-| **Per-stack access control**                   | Yes, OpenFGA        | Project-level  | Repo-level only | No          |
-| **SSO**                                        | Any OIDC/LDAP       | Yes            | Bring your own  | No          |
-| **Run history and log retention**              | Yes, durable        | Yes            | Yes             | Yes         |
-| **Approval gates before apply**                | Yes                 | Yes            | Yes             | No          |
-| **Terraform *and* OpenTofu**                   | Yes, first-class    | Yes            | Yes             | Yes         |
-| **Workflow engine**                            | Temporal, so you can self-host it or run it on Temporal Cloud | Built in | No | No |
-| **Cost**                                       | Your infrastructure | Per resource   | Free            | Free / paid |
+|                                    | **openplan**                   | HCP Terraform   | Atlantis        | Terragrunt  |
+| ---------------------------------- | ------------------------------ | --------------- | --------------- | ----------- |
+| **Self-hosted**                    | Yes, Apache 2.0                | Enterprise only | Yes             | Yes         |
+| **Billed per managed resource**    | No                             | Yes             | No              | No          |
+| **Web UI for non-infra engineers** | Yes                            | Yes             | No, PR comments | No, a CLI   |
+| **Per-stack access control**       | Yes, OpenFGA                   | Project-level   | Repo-level only | No          |
+| **SSO**                            | Any OIDC/LDAP                  | Yes             | Bring your own  | No          |
+| **Run history and log retention**  | Yes, durable                   | Yes             | Yes             | Yes         |
+| **Approval gates before apply**    | Yes                            | Yes             | Yes             | No          |
+| **Terraform *and* OpenTofu**       | Yes, first-class               | Yes             | Yes             | Yes         |
+| **Workflow engine**                | Temporal, self-hosted or Cloud | Built in        | No              | No          |
+| **Cost**                           | Your infrastructure            | Per resource    | Free            | Free / paid |
 
 Each of the others solves a different problem, and none of this is an argument
 against them:
@@ -55,28 +50,6 @@ against them:
   is not a service with an authorization model.
 - **Terraform Enterprise** is the real self-hosted comparison, and the one worth
   benchmarking against if openplan's feature set does not cover you yet.
-
-### Running on Temporal Cloud
-
-openplan's runs are Temporal workflows, and the API and executors connect to
-whatever cluster `TEMPORAL_ADDRESS` points at. That means you can host the API
-and the database yourself and let a managed Temporal cluster do the durable
-execution, instead of running one.
-
-Temporal Cloud is priced per action rather than per resource, so it does not
-inherit Terraform Cloud's billing problem. It starts at $50 per million actions
-with $150 in credits, storage is $0.042/GB-hour active and $0.00105/GB-hour
-retained, and the Developer plan has no base monthly fee. For an infrastructure
-platform the action count tracks runs, not resource count, so the bill stays
-small next to a per-resource meter.
-
-> [!NOTE]
-> Connecting to Temporal Cloud today needs a small change: openplan's Temporal
-> client sets only `HostPort` and `Namespace`
-> ([internal/temporal/client.go](internal/temporal/client.go)), so it speaks
-> plaintext and sends no API key. Temporal Cloud requires TLS and an API key.
-> Self-hosting Temporal works as-is. See
-> [#301](https://github.com/openplanhq/openplan/issues/301).
 
 ## What it does
 
@@ -105,11 +78,6 @@ idle timeouts rather than by Dex's token lifetime. See
 model and logout.
 
 ## Screenshots
-
-**Stacks.** Everything a team has running, in one list, with anything waiting on
-a person called out.
-
-![The stacks list](docs/ss/stacks-list.png)
 
 **What needs attention.** Plans waiting for approval and destroys that failed,
 across every stack you can see.
@@ -238,6 +206,28 @@ docker compose --profile debug up -d   # Temporal UI on http://localhost:8080
 > starting it back up. There is no upgrade path between releases yet, so a
 > preserved volume can hold state the current code cannot read.
 
+## Running on Temporal Cloud
+
+openplan's runs are Temporal workflows, and the API and executors connect to
+whatever cluster `TEMPORAL_ADDRESS` points at. That means you can host the API
+and the database yourself and let a managed Temporal cluster do the durable
+execution, instead of running one.
+
+Temporal Cloud is priced per action rather than per resource, so it does not
+inherit Terraform Cloud's billing problem. It starts at $50 per million actions
+with $150 in credits, storage is $0.042/GB-hour active and $0.00105/GB-hour
+retained, and the Developer plan has no base monthly fee. For an infrastructure
+platform the action count tracks runs, not resource count, so the bill stays
+small next to a per-resource meter.
+
+> [!NOTE]
+> Connecting to Temporal Cloud today needs a small change: openplan's Temporal
+> client sets only `HostPort` and `Namespace`
+> ([internal/temporal/client.go](internal/temporal/client.go)), so it speaks
+> plaintext and sends no API key. Temporal Cloud requires TLS and an API key.
+> Self-hosting Temporal works as-is. See
+> [#301](https://github.com/openplanhq/openplan/issues/301).
+
 ## Maturity
 
 An MVP baseline, and honest about it. What that means in practice:
@@ -252,15 +242,18 @@ An MVP baseline, and honest about it. What that means in practice:
 
 ## Documentation
 
-- [Local development](docs/development.md) - running openplan from source
+- [Local development](docs/development.md)
 - [Architecture and product model](docs/architecture.md)
+- [Apply run sequence](docs/apply-run-sequence.md)
 - [Authentication and authorization](docs/authentication.md)
+- [Authentication and authorization security architecture](docs/security-architecture.md)
 - [API reference](docs/openapi.yaml)
 
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). `make lint` and `go test ./...` from the
-repository root, `npm test` and `npm run build` from `web/`. CI runs all four.
+repository root, `npm test` and `npm run build` from `web/` and from `site/`. CI
+runs all of them.
 
 ## License
 
