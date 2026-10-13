@@ -1,7 +1,4 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="brand/svg/openplan-logo-horizontal-white.svg">
-  <img alt="openplan" src="brand/svg/openplan-logo-horizontal.svg" width="280">
-</picture>
+![openplan: a self-hosted, open-source alternative to Terraform Cloud](brand/banner/openplan-readme-banner.svg)
 
 ![openplan](docs/ss/stacks-list.png)
 
