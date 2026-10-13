@@ -1,6 +1,9 @@
-![openplan](docs/ss/stacks-list.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="brand/svg/openplan-logo-horizontal-white.svg">
+  <img alt="openplan" src="brand/svg/openplan-logo-horizontal.svg" width="280">
+</picture>
 
-# openplan
+![openplan](docs/ss/stacks-list.png)
 
 **A self-hosted, open-source alternative to Terraform Cloud.** Register a
 Terraform or OpenTofu module once, and anyone on your team can stand up their
