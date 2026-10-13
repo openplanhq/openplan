@@ -2,10 +2,11 @@
 # run: the Go build from the repository root, the frontend checks from web/, the
 # website checks from site/, and the lint the Makefile pins.
 #
-# The authorization differential test is deliberately NOT here. It needs a real
-# Postgres and is the only guard on internal/authorization/write.go, so it gets
-# its own workflow where it cannot be crowded out by an unrelated failure --
-# see differential.yml.
+# The backend job runs against a real Postgres, so every test gated on
+# OPENPLAN_POSTGRES_TEST_DSN runs here, the authorization differential test
+# among them. That test also keeps a workflow of its own, differential.yml: it
+# is the only guard on internal/authorization/write.go, and there its result
+# cannot be crowded out by an unrelated failure.
 name: CI
 
 on:
@@ -28,6 +29,26 @@ jobs:
   backend:
     name: backend (go build, vet, test)
     runs-on: ubuntu-latest
+
+    # The same service differential.yml runs. Without it the Postgres-backed
+    # tests in internal/postgres, internal/migrationlock and cmd/api skip, and
+    # a skipped guard is no guard.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          # Throwaway credentials; a CI service database is never anything else.
+          POSTGRES_USER: openplan
+          POSTGRES_PASSWORD: openplan
+          POSTGRES_DB: openplan_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U openplan -d openplan_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -57,9 +78,13 @@ jobs:
       - name: vet
         run: go vet ./...
 
-      # The suite is pure unit tests plus skips; the ones that need Postgres are
-      # gated on OPENPLAN_POSTGRES_TEST_DSN and are covered by differential.yml.
+      # Packages test in parallel against the one database. Each internal/postgres
+      # test migrates a schema of its own, and the migrations that share the
+      # public schema (cmd/api's and internal/authorization's) take the
+      # migration lock, so they do not race.
       - name: test
+        env:
+          OPENPLAN_POSTGRES_TEST_DSN: postgres://openplan:openplan@localhost:5432/openplan_test?sslmode=disable
         run: go test ./...
 
   isolation:
