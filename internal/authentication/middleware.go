@@ -110,8 +110,12 @@ func authenticate(
 	}, true
 }
 
+// writeUnauthorized answers in the API's one error envelope, the body
+// internal/api's writeError renders for the same code. It is spelled out here
+// because internal/api imports this package, not the other way round; a test
+// there keeps the two identical.
 func writeUnauthorized(response http.ResponseWriter) {
 	response.Header().Set("Content-Type", "application/json")
 	response.WriteHeader(http.StatusUnauthorized)
-	_, _ = response.Write([]byte(`{"code":"unauthorized"}`))
+	_, _ = response.Write([]byte(`{"error":"unauthorized","message":"authentication required"}`))
 }
