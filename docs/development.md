@@ -81,16 +81,26 @@ A model change writes a new immutable version the next time the API starts, and
 there is no identifier to update anywhere: the store and model are resolved by
 matching the repository model, not by configuration.
 
-The transform rejects a syntax error but not a reference to a relation that
-does not exist, so `define can_view: ownr` would transform cleanly and be
-refused by OpenFGA at write time. The permission matrix in
-`internal/authorization/authorization-model-tests.fga.yaml` is what catches that, along with
-every permission that is merely wrong. Run it on any model change; it needs the
-[`fga` CLI](https://github.com/openfga/cli) on `PATH`:
+The model is validated as it loads, so a syntax error or a reference to a
+relation that does not exist (`define can_view: ownr`) fails `go test` too.
+What validation cannot catch is a permission that is well-formed and wrong.
+The permission matrix in
+`internal/authorization/authorization-model-tests.fga.yaml` catches that: it
+asserts which roles hold each permission and which do not, and
+`go test ./internal/authorization/` runs it against the embedded model, so CI
+runs it on every change. The same test fails when the model defines a `can_*`
+permission the matrix never asserts, so a new permission lands with its checks.
+
+The file is in the format the [`fga` CLI](https://github.com/openfga/cli)
+reads, so `fga model test` runs it as well:
 
 ```bash
 cd internal/authorization && fga model test --tests authorization-model-tests.fga.yaml
 ```
+
+The Go runner implements only the parts of that format the matrix uses, and
+rejects the rest (`list_objects`, `list_users`, conditions) rather than
+skipping it. Extend `model_matrix_test.go` when the matrix needs one.
 
 ## Tests
 
