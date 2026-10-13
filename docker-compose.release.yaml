@@ -17,6 +17,7 @@
 # own, replace CREDENTIAL_ENCRYPTION_KEY and SESSION_ENCRYPTION_KEY with fresh
 # values before the first run: `openssl rand -hex 32`, and keep them, because
 # losing the credential key makes every stored Terraform credential unreadable.
+# With OPENPLAN_ENVIRONMENT=production the api refuses to start on these.
 #
 # Written against v0.2.0. `latest` moves as releases land, so pin the tag to keep
 # a stack reproducible.

@@ -187,6 +187,9 @@ func loadSecurityConfig(getenv func(string) string) (SecurityConfig, error) {
 		if publicURL.Scheme != "https" {
 			return SecurityConfig{}, authConfigError("OPENPLAN_PUBLIC_URL must use HTTPS in production")
 		}
+		if err := refusePublishedKey("SESSION_ENCRYPTION_KEY", sessionKey); err != nil {
+			return SecurityConfig{}, err
+		}
 	}
 
 	// No provider-specific configuration is read here. Identity reaches the

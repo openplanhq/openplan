@@ -102,6 +102,11 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	if err != nil {
 		return APIConfig{}, err
 	}
+	if security.Mode == RuntimeProduction {
+		if err := refusePublishedKey("CREDENTIAL_ENCRYPTION_KEY", credentialKey); err != nil {
+			return APIConfig{}, err
+		}
+	}
 	cfg.CredentialEncryptionKey = credentialKey
 
 	gitHubApp, err := loadGitHubAppConfig(getenv)
