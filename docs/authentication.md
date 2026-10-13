@@ -129,7 +129,9 @@ this value requires rebuilding and redeploying the frontend bundle.
 
 Development permits the documented loopback HTTP issuer. Production must be
 selected explicitly with `OPENPLAN_ENVIRONMENT=production`; it requires HTTPS for
-external dependencies. Unknown modes, malformed tenant IDs, and unsafe URLs or
+external dependencies and refuses the example `SESSION_ENCRYPTION_KEY` and
+`CREDENTIAL_ENCRYPTION_KEY` that `.env.example` and the compose files ship, in
+any encoding. Unknown modes, malformed tenant IDs, and unsafe URLs or
 identifiers stop startup.
 
 There is nothing to record for OpenFGA. It runs inside the API process, creates
