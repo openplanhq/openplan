@@ -146,8 +146,12 @@ services:
       # dex.yaml strands every grant.
       OPENPLAN_ROOT_SUBJECT: CiQ3YzRiMmYwZS0zZDFhLTRlOGItOWY2Yy0yYTVkOGUxYjBjNDcSBWxvY2Fs
     restart: on-failure
-    ports:
-      - "8081:8081"
+    # No published port. The browser reaches the api only through the web
+    # server, which proxies /v1 and /healthz over the compose network, and Dex
+    # posts back-channel logout to api:8081 on that network too. Publishing
+    # it would put the api on the host's network, outside whatever TLS and
+    # headers sit in front of the web server. For local debugging, bind it to
+    # loopback only: "127.0.0.1:8081:8081".
     volumes:
       - artifacts:/var/lib/openplan/artifacts
 
