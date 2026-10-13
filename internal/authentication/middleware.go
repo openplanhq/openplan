@@ -4,12 +4,13 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 )
 
 // RequireAuthentication protects every request except paths named in
-// publicPaths.
+// publicPaths, which match exactly. Anything else needs a session wherever it
+// lives, so a route added under a new prefix (/v2, /admin) is protected
+// without anyone remembering to list it.
 //
 // The session cookie is the only credential. It names an app-owned session row
 // whose lifetime openplan chose, and identity comes off that row rather than off
@@ -40,7 +41,7 @@ func RequireAuthentication(
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-			if _, ok := public[request.URL.Path]; ok || !strings.HasPrefix(request.URL.Path, "/v1/") {
+			if _, ok := public[request.URL.Path]; ok {
 				next.ServeHTTP(response, request)
 				return
 			}

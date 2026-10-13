@@ -75,8 +75,13 @@ func TestHealthzReturnsOK(t *testing.T) {
 	}
 }
 
-func TestAuthenticatedServerProtectsV1AndLeavesHealthPublic(t *testing.T) {
+func TestAuthenticatedServerProtectsEverythingButHealth(t *testing.T) {
 	server := NewAuthenticatedServer(app.NewService(app.Service{}), configuredTenantID, false)
+	// A route registered outside /v1 later, the way an admin or /v2 route
+	// would be, is protected without being listed anywhere.
+	server.mux.HandleFunc("GET /admin/settings", func(response http.ResponseWriter, _ *http.Request) {
+		response.WriteHeader(http.StatusOK)
+	})
 
 	for _, test := range []struct {
 		path   string
@@ -84,6 +89,9 @@ func TestAuthenticatedServerProtectsV1AndLeavesHealthPublic(t *testing.T) {
 	}{
 		{path: "/healthz", status: http.StatusOK},
 		{path: "/v1/tenants/tenant_123/stacks", status: http.StatusUnauthorized},
+		{path: "/admin/settings", status: http.StatusUnauthorized},
+		{path: "/v2/tenants/tenant_123/stacks", status: http.StatusUnauthorized},
+		{path: "/", status: http.StatusUnauthorized},
 	} {
 		response := httptest.NewRecorder()
 		server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, test.path, nil))

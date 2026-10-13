@@ -201,7 +201,8 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	return server
 }
 
-// NewAuthenticatedServer protects all /v1 routes and leaves health probes public.
+// NewAuthenticatedServer requires a session on every route except the health
+// probe and the sign-in routes.
 func NewAuthenticatedServer(service *app.Service, tenantID domain.TenantID, debug bool, options ...ServerOption) *Server {
 	server := NewServer(service, tenantID, options...)
 	server.debug = debug

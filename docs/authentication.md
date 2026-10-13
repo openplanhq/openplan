@@ -197,7 +197,9 @@ A non-browser caller therefore wants a credential openplan issues and can revoke
 — personal access tokens, the device authorization flow, or service accounts —
 not a re-used ID token. None of those exist yet.
 
-`/healthz` and the four `/v1/auth/*` routes below remain public. A missing,
+`/healthz` and the four `/v1/auth/*` routes below remain public, and they are
+the only paths that do: every other path needs a session, inside `/v1` or not,
+so a route added under a new prefix is protected by default. A missing,
 unknown, expired, or revoked cookie receives `401` with the stable JSON body
 `{"code":"unauthorized"}`; tokens, claims, and verifier details are never
 written to logs or responses.

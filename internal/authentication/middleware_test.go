@@ -87,6 +87,14 @@ func TestRequireAuthentication(t *testing.T) {
 	}{
 		{name: "public health", path: "/healthz", status: http.StatusOK},
 		{name: "no credential", status: http.StatusUnauthorized},
+		// Only the paths named public skip authentication. A route under a
+		// new prefix is protected without anyone remembering to list it.
+		{name: "another version prefix", path: "/v2/stacks", status: http.StatusUnauthorized},
+		{name: "a path outside any version", path: "/admin", status: http.StatusUnauthorized},
+		{name: "root", path: "/", status: http.StatusUnauthorized},
+		// Public paths match exactly, not as prefixes.
+		{name: "below a public path", path: "/healthz/details", status: http.StatusUnauthorized},
+		{name: "outside /v1 with a session", path: "/admin", cookie: sessionCookie, status: http.StatusOK},
 		{name: "unknown cookie value", cookie: &http.Cookie{Name: SessionCookieName, Value: "not-a-session"}, status: http.StatusUnauthorized},
 		// The shape a real client sends after logout clears the cookie.
 		{name: "empty cookie", cookie: &http.Cookie{Name: SessionCookieName, Value: ""}, status: http.StatusUnauthorized},
