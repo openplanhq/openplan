@@ -1,6 +1,7 @@
-# CI for openplan. Four jobs, one per thing AGENTS.md tells a contributor to
-# run: the Go build from the repository root, the frontend checks from web/, the
-# website checks from site/, and the lint the Makefile pins.
+# CI for openplan. One job per thing a contributor is asked to run: the Go
+# build from the repository root, the executor's isolation test, the frontend
+# checks from web/, the website checks from site/, and the lint and
+# vulnerability scan the Makefile pins.
 #
 # The authorization differential test is deliberately NOT here. It needs a real
 # Postgres and is the only guard on internal/authorization/write.go, so it gets
@@ -33,7 +34,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          # go.mod is the source of truth: it pins `go 1.25.7` and a toolchain
+          # go.mod is the source of truth: it pins `go 1.26.0` and a toolchain
           # line, so the workflow tracks the bump instead of drifting from it.
           go-version-file: go.mod
           cache: false
@@ -159,10 +160,37 @@ jobs:
       # CI and `make lint` must not be able to disagree about whether a change
       # lints, so the workflow runs the Makefile's exact command and nothing
       # else. Config is .golangci.yml (version "2"), hence the /v2 path.
-      #
-      # Note that golangci-lint v2.14.0 requires Go >= 1.26.0 while go.mod
-      # declares 1.25.7. That is fine: GOTOOLCHAIN defaults to auto, so `go run`
-      # downloads a newer toolchain to build the linter and the repository's own
-      # packages are still compiled by the go.mod version.
       - name: golangci-lint
         run: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0 run ./...
+
+  vulncheck:
+    name: vulncheck (govulncheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The toolchain go.mod pins is the standard library that ships, so it is
+      # the one to scan: most of what govulncheck finds is in the standard
+      # library, fixed by a toolchain bump.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: cache go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      # The Makefile's exact command, pinned the same way as golangci-lint.
+      # It fails only on vulnerabilities in code this module calls, not on
+      # everything in its dependency graph, so a red run is one to act on. A
+      # vulnerability published tomorrow turns this red on a branch that
+      # changed nothing; that is the point, not noise.
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...

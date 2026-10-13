@@ -3,7 +3,7 @@
 [![CI](https://github.com/openplanhq/openplan/actions/workflows/ci.yml/badge.svg)](https://github.com/openplanhq/openplan/actions/workflows/ci.yml)
 [![Authorization differential test](https://github.com/openplanhq/openplan/actions/workflows/differential.yml/badge.svg)](https://github.com/openplanhq/openplan/actions/workflows/differential.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Go](https://img.shields.io/badge/go-1.25-00ADD8?logo=go&logoColor=white)](go.mod)
+[![Go](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)](go.mod)
 [![React](https://img.shields.io/badge/react-19-61DAFB?logo=react&logoColor=black)](web/package.json)
 
 Register a Terraform or OpenTofu module once, and anyone on your team can stand
