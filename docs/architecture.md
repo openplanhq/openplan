@@ -193,8 +193,8 @@ The local process runner keeps sessions apart by Linux user, and no further (#33
 What it does not cover:
 
 - A session can read every file the image leaves world-readable.
-- The executor holds no database URL or key, but tofu can still reach Temporal, which has no access control yet (#246). See "Temporal access control" in the control plane split spec.
-- Network isolation, resource limits and a sandbox runtime come after 1.0 (#245).
+- The executor holds no database URL, but it holds the artifact store's S3 keys for its lifetime, and each activity opens a run's sealed secrets in its memory. The rows above keep tofu from reading either without an exploit, but tofu can still reach Temporal, which has no access control yet (#246). See "Temporal access control" in the control plane split spec.
+- Network isolation, resource limits and a sandbox runtime aren't built yet. They ship in 1.0 (#245): each session will run in a gVisor sandbox of its own.
 - Loopback TCP and abstract unix sockets are not separated by uid.
 - CPU, memory, disk and the process table are shared.
 - A kernel exploit crosses every boundary.
@@ -214,7 +214,7 @@ MVP executor deployments should use the following guardrails:
 - Restrict executor network egress where practical.
 - Separate executors by task queue or deployment if future tenants, templates, or credential sets require stronger trust boundaries.
 
-Stronger isolation, such as a Kubernetes Job per run, sandboxed containers, remote runners, or per-tenant runner pools, remains a deferred design topic. The `runner.CommandExecutor` boundary keeps that migration path open without changing workflow semantics: the runners only build commands, and how a subprocess starts is decided behind it.
+A sandbox per session ships in 1.0 (#245): the executor will start one gVisor (`runsc`) sandbox per session and keep its own credentials outside it. Further isolation, such as a Kubernetes Job per run, remote runners, or per-tenant runner pools, remains a deferred design topic. The `runner.CommandExecutor` boundary keeps that migration path open without changing workflow semantics: the runners only build commands, and how a subprocess starts is decided behind it.
 
 ## Go Package Layout
 
@@ -854,12 +854,11 @@ Future design should answer:
 
 ### Stronger Runner Isolation
 
-MVP uses local subprocess execution inside executor pods for speed.
+MVP uses local subprocess execution inside executor pods for speed. 1.0 adds a gVisor sandbox per session (#245).
 
 Future options:
 
 - Kubernetes Job per `TemplateRun`
-- sandboxed containers
 - remote execution workers
 - per-tenant runner pools
 
