@@ -218,20 +218,25 @@ services:
       EXECUTOR_SANDBOX_STATE: /var/lib/openplan/sandboxes
     restart: on-failure
     # Each activity runs in a gVisor sandbox of its own (#245), started from
-    # here with runsc: root with these five capabilities, and Docker's seccomp
-    # and AppArmor profiles off. The sandboxes' process runs unprivileged.
+    # here with runsc: root with these seven capabilities, and Docker's
+    # seccomp and AppArmor profiles off. The sandboxes' process runs
+    # unprivileged. NET_ADMIN and NET_RAW wire each sandbox's network to this
+    # container's, through a bridge and NAT, which needs forwarding on.
     cap_drop: [ALL]
-    cap_add: [SYS_ADMIN, SETUID, SETGID, SETFCAP, CHOWN]
+    cap_add: [SYS_ADMIN, SETUID, SETGID, SETFCAP, CHOWN, NET_ADMIN, NET_RAW]
     security_opt:
       - "no-new-privileges:true"
       - "seccomp=unconfined"
       - "apparmor=unconfined"
+    sysctls:
+      net.ipv4.ip_forward: 1
     # The sandboxes' cgroups live under this container's own.
     cgroup: private
     # Ephemeral, so an executor that restarts starts with no runs and no
-    # sandboxes.
+    # sandboxes. exec: providers are programs in the run's workspace, and
+    # Docker mounts a tmpfs noexec by default.
     tmpfs:
-      - /var/lib/openplan/runs:size=8g
+      - /var/lib/openplan/runs:size=8g,exec
       - /var/lib/openplan/sandboxes:size=64m
     volumes:
       - artifacts:/var/lib/openplan/artifacts

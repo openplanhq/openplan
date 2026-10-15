@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"golang.org/x/sys/unix"
 )
 
 func TestPrepareLaysOutTheRunDirectory(t *testing.T) {
@@ -84,5 +86,30 @@ func TestRemoveDeletesTheRunDirectory(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(w.Root, "tenant_1", "run_1")); !os.IsNotExist(err) {
 		t.Fatalf("run directory survived: %v", err)
+	}
+}
+
+func TestCheckAcceptsARunRootThatRunsPrograms(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.Join(t.TempDir(), "runs")
+	if err := (Workspaces{Root: root}).Check(); err != nil {
+		t.Fatalf("Check returned error: %v", err)
+	}
+	if info, err := os.Stat(root); err != nil || !info.IsDir() {
+		t.Fatalf("run root not made: %v", err)
+	}
+}
+
+// Providers are programs in the workspace: on a noexec mount, gVisor's host
+// mapping of them fails and every provider segfaults as it starts.
+func TestNoexecFlagIsRead(t *testing.T) {
+	t.Parallel()
+
+	if !noexec(unix.ST_NOEXEC | unix.ST_NOSUID) {
+		t.Fatal("ST_NOEXEC not seen")
+	}
+	if noexec(unix.ST_NOSUID | unix.ST_NODEV) {
+		t.Fatal("a mount without ST_NOEXEC read as noexec")
 	}
 }

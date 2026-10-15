@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"net/netip"
 	"reflect"
 	"strings"
 	"testing"
@@ -548,7 +549,10 @@ func TestLoadExecutorConfigSandboxDefaultsAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := SandboxConfig{Runsc: DefaultExecutorSandboxRunsc, State: DefaultExecutorSandboxState, MemoryMiB: 2048, CPUs: 2, Pids: 1024}
+	want := SandboxConfig{
+		Runsc: DefaultExecutorSandboxRunsc, State: DefaultExecutorSandboxState, MemoryMiB: 2048, CPUs: 2, Pids: 1024,
+		Subnet: netip.MustParsePrefix(DefaultExecutorSandboxSubnet),
+	}
 	if cfg.Sandbox != want {
 		t.Fatalf("sandbox = %+v, want %+v", cfg.Sandbox, want)
 	}
@@ -557,5 +561,16 @@ func TestLoadExecutorConfigSandboxDefaultsAndValidation(t *testing.T) {
 		if _, err := LoadExecutorConfig(func(k string) string { return env[k] }); !errors.Is(err, ErrInvalidConfig) {
 			t.Fatalf("%s=0: error = %v, want ErrInvalidConfig", name, err)
 		}
+	}
+	// Room for the gateway and at least a few sandboxes, on IPv4.
+	for _, subnet := range []string{"not-a-subnet", "10.0.0.0/30", "fd00::/64"} {
+		env := map[string]string{"TEMPORAL_ADDRESS": "temporal:7233", "EXECUTOR_SANDBOX_SUBNET": subnet}
+		if _, err := LoadExecutorConfig(func(k string) string { return env[k] }); !errors.Is(err, ErrInvalidConfig) {
+			t.Fatalf("EXECUTOR_SANDBOX_SUBNET=%s: error = %v, want ErrInvalidConfig", subnet, err)
+		}
+	}
+	env := map[string]string{"TEMPORAL_ADDRESS": "temporal:7233", "EXECUTOR_SANDBOX_SUBNET": "192.168.77.0/26"}
+	if cfg, err := LoadExecutorConfig(func(k string) string { return env[k] }); err != nil || cfg.Sandbox.Subnet != netip.MustParsePrefix("192.168.77.0/26") {
+		t.Fatalf("subnet = %v, %v; want 192.168.77.0/26", cfg.Sandbox.Subnet, err)
 	}
 }

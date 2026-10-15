@@ -15,6 +15,8 @@ require (
 	github.com/openfga/language/pkg/go v0.3.2-0.20260730144454-83fedf8a4e70
 	github.com/openfga/openfga v1.19.0
 	github.com/stretchr/testify v1.12.1
+	github.com/vishvananda/netlink v1.3.1
+	github.com/vishvananda/netns v0.0.5
 	github.com/zclconf/go-cty v1.16.3
 	go.temporal.io/api v1.62.12
 	go.temporal.io/sdk v1.45.0

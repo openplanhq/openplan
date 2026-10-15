@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +23,10 @@ const (
 	DefaultExecutorSandboxMemoryMiB    = 2048
 	DefaultExecutorSandboxCPUs         = 2
 	DefaultExecutorSandboxPids         = 1024
+	// DefaultExecutorSandboxSubnet is private and small, to stay clear of
+	// the networks the executor itself reaches; EXECUTOR_SANDBOX_SUBNET
+	// moves it where it collides.
+	DefaultExecutorSandboxSubnet = "10.237.0.0/24"
 )
 
 var ErrInvalidConfig = errors.New("invalid config")
@@ -71,6 +76,9 @@ type SandboxConfig struct {
 	MemoryMiB int64
 	CPUs      int64
 	Pids      int64
+	// Subnet holds the bridge's gateway and one address per running
+	// sandbox. Destinations inside it are unreachable from sandboxes.
+	Subnet netip.Prefix
 }
 
 type ArtifactStoreKind string
@@ -176,6 +184,15 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 	cfg.Sandbox = SandboxConfig{
 		Runsc: DefaultExecutorSandboxRunsc, State: DefaultExecutorSandboxState,
 		MemoryMiB: DefaultExecutorSandboxMemoryMiB, CPUs: DefaultExecutorSandboxCPUs, Pids: DefaultExecutorSandboxPids,
+		Subnet: netip.MustParsePrefix(DefaultExecutorSandboxSubnet),
+	}
+	if raw := strings.TrimSpace(getenv("EXECUTOR_SANDBOX_SUBNET")); raw != "" {
+		subnet, err := netip.ParsePrefix(raw)
+		// /29 at most: the network, the gateway and broadcast leave five.
+		if err != nil || !subnet.Addr().Is4() || subnet.Bits() > 29 {
+			return ExecutorConfig{}, fmt.Errorf("%w: EXECUTOR_SANDBOX_SUBNET must be an IPv4 subnet of /29 or larger, got %q", ErrInvalidConfig, raw)
+		}
+		cfg.Sandbox.Subnet = subnet.Masked()
 	}
 	if v := strings.TrimSpace(getenv("EXECUTOR_RUNSC")); v != "" {
 		cfg.Sandbox.Runsc = v

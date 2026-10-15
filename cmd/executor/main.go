@@ -53,7 +53,7 @@ type executorDependencies struct {
 	interruptCh func() <-chan any
 	// newSandbox readies the executor to start sandboxes, and fails when it
 	// can't: there is no way to run an activity outside one.
-	newSandbox func(config.SandboxConfig) (sandbox.Runner, error)
+	newSandbox func(cfg config.SandboxConfig, runRoot string) (sandbox.Runner, error)
 }
 
 func main() {
@@ -82,14 +82,21 @@ func defaultExecutorDependencies() executorDependencies {
 			return artifacts.NewPlanStore(store), nil
 		},
 		interruptCh: temporalworker.InterruptCh,
-		newSandbox: func(cfg config.SandboxConfig) (sandbox.Runner, error) {
+		newSandbox: func(cfg config.SandboxConfig, runRoot string) (sandbox.Runner, error) {
+			if err := (sandbox.Workspaces{Root: runRoot}).Check(); err != nil {
+				return nil, err
+			}
 			cgroups, err := sandbox.DelegateCgroups(cgroupFS)
+			if err != nil {
+				return nil, err
+			}
+			network, err := sandbox.SetupNetwork(cfg.State, cfg.Subnet)
 			if err != nil {
 				return nil, err
 			}
 			return sandbox.NewRuntime(cfg.Runsc, cfg.State, guestRoot, cgroupFS, cgroups, sandbox.Limits{
 				MemoryMiB: cfg.MemoryMiB, CPUs: cfg.CPUs, Pids: cfg.Pids,
-			}), nil
+			}, network), nil
 		},
 	}
 }
@@ -125,7 +132,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps e
 		return fmt.Errorf("load executor config: %w", err)
 	}
 	// Before Temporal: an executor that cannot sandbox must never take work.
-	runner, err := deps.newSandbox(cfg.Sandbox)
+	runner, err := deps.newSandbox(cfg.Sandbox, cfg.RunRoot)
 	if err != nil {
 		return fmt.Errorf("sandbox: %w", err)
 	}

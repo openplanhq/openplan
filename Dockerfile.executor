@@ -41,7 +41,7 @@ RUN apk add --no-cache tar zstd \
 
 FROM alpine:3.21
 
-RUN apk add --no-cache ca-certificates tini findutils \
+RUN apk add --no-cache ca-certificates tini findutils nftables \
     # Same uid and gid as Dockerfile.api: the two share the artifacts volume
     # through the group openplan, and root joins it to delete applied plans.
     && addgroup -S -g 10001 openplan \

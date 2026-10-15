@@ -14,9 +14,21 @@ type Limits struct {
 // copies the same build there, so the body that runs is this version.
 const guestBinary = "/usr/local/bin/openplan-executor"
 
-const tmpfs = "tmpfs"
+const (
+	tmpfs = "tmpfs"
+	rbind = "rbind"
+)
 
-func ociSpec(job Job, guestRoot string, env []string, cgroupsPath string, limits Limits) *specs.Spec {
+// sandboxNetwork is what a sandbox's bundle needs of its network: the
+// namespace Network.attach pinned for it, and the resolver configuration
+// pointing at the relay. Zero gives the sandbox a namespace of runsc's own
+// making, with no network in it.
+type sandboxNetwork struct {
+	Namespace  string
+	ResolvConf string
+}
+
+func ociSpec(job Job, guestRoot string, env []string, cgroupsPath string, limits Limits, network sandboxNetwork) *specs.Spec {
 	memory := limits.MemoryMiB << 20
 	period := uint64(100_000)
 	quota := limits.CPUs * int64(period)
@@ -26,12 +38,22 @@ func ociSpec(job Job, guestRoot string, env []string, cgroupsPath string, limits
 		// HOME and TMPDIR: private to this sandbox, gone with it.
 		{Destination: "/tmp", Type: tmpfs, Source: tmpfs, Options: []string{"nosuid", "nodev", "mode=1777"}},
 	}
+	if network.ResolvConf != "" {
+		mounts = append(mounts, specs.Mount{Destination: "/etc/resolv.conf", Type: "bind", Source: network.ResolvConf, Options: []string{rbind, "ro"}})
+	}
 	for _, m := range job.Mounts {
-		options := []string{"rbind", "rw"}
+		options := []string{rbind, "rw"}
 		if m.ReadOnly {
-			options = []string{"rbind", "ro"}
+			options = []string{rbind, "ro"}
 		}
 		mounts = append(mounts, specs.Mount{Destination: m.Path, Type: "bind", Source: m.Path, Options: options})
+	}
+	namespaces := []specs.LinuxNamespace{
+		{Type: specs.PIDNamespace}, {Type: specs.IPCNamespace},
+		{Type: specs.UTSNamespace}, {Type: specs.MountNamespace},
+	}
+	if network.Namespace != "" {
+		namespaces = append(namespaces, specs.LinuxNamespace{Type: specs.NetworkNamespace, Path: network.Namespace})
 	}
 	return &specs.Spec{
 		Version: specs.Version,
@@ -48,12 +70,7 @@ func ociSpec(job Job, guestRoot string, env []string, cgroupsPath string, limits
 		Hostname: "sandbox",
 		Mounts:   mounts,
 		Linux: &specs.Linux{
-			// No network namespace: the sandbox shares the executor's network,
-			// through gVisor's own stack (network isolation comes later).
-			Namespaces: []specs.LinuxNamespace{
-				{Type: specs.PIDNamespace}, {Type: specs.IPCNamespace},
-				{Type: specs.UTSNamespace}, {Type: specs.MountNamespace},
-			},
+			Namespaces:  namespaces,
 			CgroupsPath: cgroupsPath,
 			Resources: &specs.LinuxResources{
 				// Swap is memory plus swap here, so equal to the limit means

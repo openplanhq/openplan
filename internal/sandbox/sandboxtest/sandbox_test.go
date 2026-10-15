@@ -8,9 +8,13 @@ package sandboxtest
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -35,6 +39,7 @@ const (
 
 var (
 	cgroups string
+	network *sandbox.Network
 	runs    atomic.Int64
 )
 
@@ -49,11 +54,16 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	cgroups = parent
+	network, err = sandbox.SetupNetwork(state, netip.MustParsePrefix(config.DefaultExecutorSandboxSubnet))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	os.Exit(m.Run())
 }
 
 func newRuntime(memoryMiB int64) *sandbox.Runtime {
-	return sandbox.NewRuntime(runsc, state, guestRoot, "/sys/fs/cgroup", cgroups, sandbox.Limits{MemoryMiB: memoryMiB, CPUs: 1, Pids: 256})
+	return sandbox.NewRuntime(runsc, state, guestRoot, "/sys/fs/cgroup", cgroups, sandbox.Limits{MemoryMiB: memoryMiB, CPUs: 1, Pids: 256}, network)
 }
 
 // run is one template run through the real activities and the real runtime.
@@ -80,10 +90,15 @@ func newRun(t *testing.T, runner sandbox.Runner, store config.ArtifactStoreConfi
 }
 
 // template writes a root module whose only resource runs probe at apply.
-// It writes as the sandbox user: the workspace is that user's, 0700.
 func (r *run) template(t *testing.T, probe string) {
 	t.Helper()
-	main := fmt.Sprintf("resource \"terraform_data\" \"probe\" {\n  provisioner \"local-exec\" {\n    command = <<-EOT\n%s\n    EOT\n  }\n}\n", probe)
+	r.write(t, fmt.Sprintf("resource \"terraform_data\" \"probe\" {\n  provisioner \"local-exec\" {\n    command = <<-EOT\n%s\n    EOT\n  }\n}\n", probe))
+}
+
+// write makes main the run's root module. It writes as the sandbox user: the
+// workspace is that user's, 0700.
+func (r *run) write(t *testing.T, main string) {
+	t.Helper()
 	cmd := exec.Command("sh", "-c", `cat > "$1"`, "sh", filepath.Join(r.workspace, "main.tf"))
 	cmd.Stdin = strings.NewReader(main)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: sandbox.SandboxUID, Gid: sandbox.SandboxUID}}
@@ -300,4 +315,106 @@ func TestNoCgroupsMeansNoSandbox(t *testing.T) {
 	if entries, _ := os.ReadDir(filepath.Join(state, "bundles")); len(entries) != 0 {
 		t.Fatalf("%d bundles left behind", len(entries))
 	}
+	if entries, _ := os.ReadDir(filepath.Join(state, "netns")); len(entries) != 0 {
+		t.Fatalf("%d network namespaces left behind", len(entries))
+	}
+}
+
+// eth0Addresses are the executor's own addresses, which no sandbox may take.
+func eth0Addresses(t *testing.T) []string {
+	t.Helper()
+	eth0, err := net.InterfaceByName("eth0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addrs, err := eth0.Addrs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, addr := range addrs {
+		out = append(out, addr.String())
+	}
+	return out
+}
+
+// The network (#245): a real clone and a real provider download, each from
+// a sandbox of its own, while the executor keeps its address.
+func TestASandboxReachesTheInternet(t *testing.T) {
+	before := eth0Addresses(t)
+	ctx := context.Background()
+	r := newRun(t, newRuntime(512), config.ArtifactStoreConfig{})
+	// octocat/Hello-World's first commit: tiny, public, and never moving.
+	if _, err := r.activities.FetchSource(ctx, domain.FetchSourceActivityInput{
+		TenantID: "tenant", RunID: domain.TemplateRunID(r.id), RepoOwner: "octocat", RepoName: "Hello-World",
+		ResolvedCommitSHA: "7fd1a60b01f91b314f59955a4e4d4e80d8edf11d", RootPath: ".",
+	}); err != nil {
+		t.Fatalf("FetchSource: %v", err)
+	}
+	r.write(t, `terraform {
+  required_providers {
+    random = { source = "hashicorp/random", version = "3.6.3" }
+  }
+}
+
+resource "random_id" "probe" {
+  byte_length = 4
+}
+`)
+	if _, err := r.terraform(ctx, t, domain.TerraformCommandInit, nil); err != nil {
+		t.Fatalf("init: %v\n%s", err, r.log(t, "apply-init.log"))
+	}
+	if !strings.Contains(r.log(t, "apply-init.log"), "Installed hashicorp/random v3.6.3") {
+		t.Fatalf("init installed no provider:\n%s", r.log(t, "apply-init.log"))
+	}
+	if _, err := r.terraform(ctx, t, domain.TerraformCommandApplyAutoApprove, nil); err != nil {
+		t.Fatalf("apply: %v\n%s", err, r.log(t, "apply.log"))
+	}
+	if after := eth0Addresses(t); !slices.Equal(before, after) {
+		t.Fatalf("executor addresses %v became %v", before, after)
+	}
+}
+
+var addressLine = regexp.MustCompile(`ADDRESS=([0-9.]+)/`)
+
+// One sandbox can't connect to another, though the executor can reach both.
+func TestSandboxesCannotReachEachOther(t *testing.T) {
+	runtime := newRuntime(512)
+	holder := newRun(t, runtime, config.ArtifactStoreConfig{})
+	// The listener's output goes nowhere: holding the provisioner's, it would
+	// keep tofu waiting after the sleep.
+	holder.template(t, `nc -lk -p 8080 -e true >/dev/null 2>&1 &
+ip -4 -o addr show eth0 | awk '{print "ADDRESS=" $4}'
+sleep 25`)
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		if err := holder.apply(context.Background(), t, nil); err != nil {
+			t.Errorf("holder apply: %v", err)
+		}
+	})
+	defer wg.Wait()
+
+	// The holder prints its address as its apply starts.
+	var address string
+	for deadline := time.Now().Add(20 * time.Second); address == "" && time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
+		if match := addressLine.FindStringSubmatch(holder.log(t, "apply.log")); match != nil {
+			address = match[1]
+		}
+	}
+	if address == "" {
+		t.Fatalf("the holder printed no address:\n%s", holder.log(t, "apply.log"))
+	}
+
+	prober := newRun(t, runtime, config.ArtifactStoreConfig{})
+	prober.template(t, fmt.Sprintf(`if nc -z -w 3 %s 8080; then echo REACHED-THE-NEIGHBOUR; exit 1; fi`, address))
+	if err := prober.apply(context.Background(), t, nil); err != nil {
+		t.Fatalf("a sandbox reached its neighbour at %s: %v\n%s", address, err, prober.log(t, "apply.log"))
+	}
+	// The control: the holder was listening all along, so the prober was
+	// kept out rather than finding nothing there.
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort(address, "8080"), 3*time.Second)
+	if err != nil {
+		t.Fatalf("the executor can't reach the holder either (%v), so this proves nothing", err)
+	}
+	_ = conn.Close()
 }

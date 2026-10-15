@@ -34,14 +34,18 @@ type Runtime struct {
 	// Env is every sandbox's environment: baseEnvironment, never this
 	// process's own.
 	Env []string
+	// Network gives each sandbox its way out. Without one, a sandbox has no
+	// network at all.
+	Network *Network
 }
 
-// NewRuntime returns a Runtime whose sandboxes get baseEnvironment.
-func NewRuntime(runsc, state, guestRoot, cgroupFS, cgroups string, limits Limits) *Runtime {
+// NewRuntime returns a Runtime whose sandboxes get baseEnvironment and
+// network.
+func NewRuntime(runsc, state, guestRoot, cgroupFS, cgroups string, limits Limits, network *Network) *Runtime {
 	return &Runtime{
 		Runsc: runsc, State: state, GuestRoot: guestRoot,
 		CgroupFS: cgroupFS, Cgroups: cgroups, Limits: limits,
-		Env: baseEnvironment(os.LookupEnv),
+		Env: baseEnvironment(os.LookupEnv), Network: network,
 	}
 }
 
@@ -55,7 +59,7 @@ func (r *Runtime) args(subcommand string, args ...string) []string {
 		"--platform", "systrap",
 		// Writes outside the mounts go to memory private to the sandbox.
 		"--overlay2", "root:memory",
-		// gVisor's own network stack, on the executor's network.
+		// gVisor's own network stack, in the namespace the bundle names.
 		"--network", "sandbox",
 		subcommand,
 	}, args...)
@@ -93,10 +97,21 @@ func (r *Runtime) Run(ctx context.Context, job Job, output io.Writer) (json.RawM
 		return nil, err
 	}
 	defer os.RemoveAll(bundle)
+	var network sandboxNetwork
+	if r.Network != nil {
+		att, err := r.Network.attach(id)
+		if err != nil {
+			return nil, err
+		}
+		// Deferred before the delete below, so it runs after it: the
+		// namespace is freed once the sandbox has left it.
+		defer r.Network.release(att)
+		network = sandboxNetwork{Namespace: att.namespace, ResolvConf: r.Network.resolvConf}
+	}
 	// Registered before create: a create that fails halfway may leave runsc
 	// state for this id. Deleting an id runsc never made fails harmlessly.
 	defer func() { _ = r.runscWithTimeout(ctx, r.args("delete", "--force", id)...) }()
-	config, err := json.Marshal(ociSpec(job, r.GuestRoot, r.Env, path.Join(r.Cgroups, id), r.Limits))
+	config, err := json.Marshal(ociSpec(job, r.GuestRoot, r.Env, path.Join(r.Cgroups, id), r.Limits, network))
 	if err != nil {
 		return nil, err
 	}

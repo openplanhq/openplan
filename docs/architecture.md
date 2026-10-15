@@ -180,6 +180,7 @@ Every executor activity that touches tenant content runs in a gVisor sandbox of 
 | A fresh gVisor sandbox per activity, with its own kernel (gVisor's Sentry) and process space | A run reading another run's processes, files or credentials, or the executor's; a kernel exploit reaching the executor's kernel | `runsc.go`, `bundle.go` |
 | Credentials only over stdin; tofu's sandbox gets only the run's cloud credentials; storage access and the plan key only in sandboxes that run no tenant code | Template code holding the artifact store's keys, the plan key or the Temporal identity | `internal/activities/template_run.go`, `bodies.go` |
 | An environment built from scratch | The executor's own environment reaching a sandbox | `env.go` |
+| A network namespace per sandbox, wired to the executor's network through a bridge and NAT; its port on the bridge isolated, and traffic between sandboxes dropped; DNS through a relay in the executor | A run reaching another run's sandbox over the network; a sandbox taking the executor's own address, which runsc would do in the executor's namespace | `network.go`, `dns.go` |
 | Memory (with no swap), CPU and process limits per sandbox, or no sandbox | One run starving the others | `bundle.go`, `cgroup.go` |
 | The worker never opens a path a sandbox wrote, and our code inside a sandbox reads tofu's files as regular files only, without following links out | A planted symlink turning the worker, or a storage sandbox, against its own secrets | `frame.go`, `files.go` |
 | The log spool outside the workspace, capped at 64 MiB per command | tofu editing its own log; one run filling the disk through its output | `internal/activities/spool.go` |
@@ -187,7 +188,7 @@ Every executor activity that touches tenant content runs in a gVisor sandbox of 
 
 What it does not cover:
 
-- The network: sandboxes share the executor's network. tofu reaches Temporal, the api, Postgres, Valkey and the cloud metadata address. Block the metadata address outside openplan (an IMDSv2 hop limit of 1 on AWS; a NetworkPolicy on Kubernetes).
+- Egress: a sandbox reaches whatever the executor reaches, through NAT. tofu reaches Temporal, the api, Postgres, Valkey and the cloud metadata address. Block the metadata address outside openplan (an IMDSv2 hop limit of 1 on AWS; a NetworkPolicy on Kubernetes).
 - Temporal has no access control yet (#246).
 - The run's own cloud credentials: tofu needs them, so a template's author can use or copy the credentials of whoever runs it.
 - Disk: a workspace has no quota.
@@ -197,7 +198,8 @@ What it does not cover:
 
 MVP executor deployments should use the following guardrails:
 
-- Run the executor as `docker-compose.yaml` does: root with `cap_drop: [ALL]`, `cap_add: [SYS_ADMIN, SETUID, SETGID, SETFCAP, CHOWN]`, `no-new-privileges`, `seccomp=unconfined`, `apparmor=unconfined`, a private cgroup namespace, and the run root and sandbox state on tmpfs. On Kubernetes that takes the Pod Security level "privileged".
+- Run the executor as `docker-compose.yaml` does: root with `cap_drop: [ALL]`, `cap_add: [SYS_ADMIN, SETUID, SETGID, SETFCAP, CHOWN, NET_ADMIN, NET_RAW]`, `no-new-privileges`, `seccomp=unconfined`, `apparmor=unconfined`, `net.ipv4.ip_forward=1`, a private cgroup namespace, and the run root (mounted `exec`, since providers run from it) and sandbox state on tmpfs. On Kubernetes that takes the Pod Security level "privileged" and an allowed `net.ipv4.ip_forward` sysctl. The executor refuses to start without any of these.
+- Keep the sandboxes' subnet (`EXECUTOR_SANDBOX_SUBNET`, default `10.237.0.0/24`) clear of every network tofu must reach: addresses inside it route to the sandboxes' bridge.
 - Avoid host mounts and shared writable volumes beyond the artifacts volume.
 - Inject only the credential sets required for the target stack or template run, and prefer short-lived credentials.
 - Avoid persisting secret values to Postgres, object storage, Temporal payloads, or logs; known values are redacted before a log is spooled.

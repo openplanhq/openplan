@@ -61,7 +61,7 @@ differential-test: ## Run the authorization tests that need a real Postgres
 sandbox-test: ## Run the sandbox tests (#245) against runsc in the executor image (needs Docker)
 	docker build -f Dockerfile.executor -t openplan-executor:sandbox .
 	docker build -f internal/sandbox/sandboxtest/Dockerfile --build-arg EXECUTOR_IMAGE=openplan-executor:sandbox -t openplan-sandbox-test .
-	docker run --rm --cap-drop ALL --cap-add SYS_ADMIN --cap-add SETUID --cap-add SETGID --cap-add SETFCAP --cap-add CHOWN \
+	docker run --rm --cap-drop ALL --cap-add SYS_ADMIN --cap-add SETUID --cap-add SETGID --cap-add SETFCAP --cap-add CHOWN --cap-add NET_ADMIN --cap-add NET_RAW --sysctl net.ipv4.ip_forward=1 \
 		--security-opt no-new-privileges:true --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
-		--cgroupns private --tmpfs /var/lib/openplan/runs --tmpfs /var/lib/openplan/sandboxes openplan-sandbox-test
+		--cgroupns private --tmpfs /var/lib/openplan/runs:exec --tmpfs /var/lib/openplan/sandboxes openplan-sandbox-test
 	./internal/sandbox/sandboxtest/failclosed.sh openplan-executor:sandbox

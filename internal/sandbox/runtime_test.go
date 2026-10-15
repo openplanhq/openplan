@@ -63,7 +63,7 @@ func testJob() Job {
 func TestOCISpecRunsTheBodyUnprivileged(t *testing.T) {
 	t.Parallel()
 
-	spec := ociSpec(testJob(), "/opt/openplan/guest", []string{"PATH=/bin"}, "/sandboxes/x", Limits{MemoryMiB: 2048, CPUs: 2, Pids: 1024})
+	spec := ociSpec(testJob(), "/opt/openplan/guest", []string{"PATH=/bin"}, "/sandboxes/x", Limits{MemoryMiB: 2048, CPUs: 2, Pids: 1024}, sandboxNetwork{})
 
 	if want := []string{guestBinary, ActivitySubcommand, "run-terraform"}; !slices.Equal(spec.Process.Args, want) {
 		t.Fatalf("args = %q, want %q", spec.Process.Args, want)
@@ -87,7 +87,7 @@ func TestOCISpecRunsTheBodyUnprivileged(t *testing.T) {
 func TestOCISpecHoldsOnlyTheBaseEnvironment(t *testing.T) {
 	t.Parallel()
 
-	spec := ociSpec(testJob(), "/guest", []string{"PATH=/bin"}, "/sandboxes/x", Limits{MemoryMiB: 1, CPUs: 1, Pids: 1})
+	spec := ociSpec(testJob(), "/guest", []string{"PATH=/bin"}, "/sandboxes/x", Limits{MemoryMiB: 1, CPUs: 1, Pids: 1}, sandboxNetwork{})
 	encoded, err := json.Marshal(spec)
 	if err != nil {
 		t.Fatal(err)
@@ -103,7 +103,7 @@ func TestOCISpecHoldsOnlyTheBaseEnvironment(t *testing.T) {
 func TestOCISpecMountsAtTheSamePath(t *testing.T) {
 	t.Parallel()
 
-	spec := ociSpec(testJob(), "/guest", nil, "/sandboxes/x", Limits{MemoryMiB: 1, CPUs: 1, Pids: 1})
+	spec := ociSpec(testJob(), "/guest", nil, "/sandboxes/x", Limits{MemoryMiB: 1, CPUs: 1, Pids: 1}, sandboxNetwork{})
 	var found int
 	for _, m := range spec.Mounts {
 		switch m.Destination {
@@ -127,7 +127,7 @@ func TestOCISpecMountsAtTheSamePath(t *testing.T) {
 func TestOCISpecSetsTheLimits(t *testing.T) {
 	t.Parallel()
 
-	spec := ociSpec(testJob(), "/guest", nil, "/sandboxes/x", Limits{MemoryMiB: 2048, CPUs: 2, Pids: 1024})
+	spec := ociSpec(testJob(), "/guest", nil, "/sandboxes/x", Limits{MemoryMiB: 2048, CPUs: 2, Pids: 1024}, sandboxNetwork{})
 	resources := spec.Linux.Resources
 	if *resources.Memory.Limit != 2048<<20 || resources.Pids.Limit != 1024 || *resources.CPU.Quota != 200_000 {
 		t.Fatalf("resources = memory %d, pids %d, quota %d", *resources.Memory.Limit, resources.Pids.Limit, *resources.CPU.Quota)
@@ -142,7 +142,7 @@ func TestOCISpecSetsTheLimits(t *testing.T) {
 	}
 	for _, ns := range spec.Linux.Namespaces {
 		if ns.Type == "network" {
-			t.Fatal("network isolation is out of scope: the sandbox shares the executor's network")
+			t.Fatal("a bundle without a network named a network namespace")
 		}
 	}
 }

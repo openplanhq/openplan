@@ -60,6 +60,9 @@ func TestRunWiresTemporalWorker(t *testing.T) {
 	if deps.sandboxConfig.Runsc != config.DefaultExecutorSandboxRunsc {
 		t.Fatalf("newSandbox got runsc %q, want %q", deps.sandboxConfig.Runsc, config.DefaultExecutorSandboxRunsc)
 	}
+	if deps.sandboxRunRoot != "/tmp/openplan-executor-test" {
+		t.Fatalf("newSandbox got run root %q, want /tmp/openplan-executor-test", deps.sandboxRunRoot)
+	}
 	if deps.execution.runner != deps.runner {
 		t.Fatal("activities did not get the runner newSandbox returned")
 	}
@@ -193,10 +196,11 @@ type recordingExecutorDependencies struct {
 	planStore           recordingWorkerPlanStore
 	dialErr             error
 	// runner and sandboxErr are what newSandbox returns, and sandboxConfig
-	// what it was given.
-	runner        sandbox.Runner
-	sandboxErr    error
-	sandboxConfig config.SandboxConfig
+	// and sandboxRunRoot what it was given.
+	runner         sandbox.Runner
+	sandboxErr     error
+	sandboxConfig  config.SandboxConfig
+	sandboxRunRoot string
 	// calls records the startup steps in the order they ran.
 	calls []string
 }
@@ -243,9 +247,9 @@ func newRecordingExecutorDependencies(t *testing.T) *recordingExecutorDependenci
 			close(ch)
 			return ch
 		},
-		newSandbox: func(cfg config.SandboxConfig) (sandbox.Runner, error) {
+		newSandbox: func(cfg config.SandboxConfig, runRoot string) (sandbox.Runner, error) {
 			deps.calls = append(deps.calls, "newSandbox")
-			deps.sandboxConfig = cfg
+			deps.sandboxConfig, deps.sandboxRunRoot = cfg, runRoot
 			if deps.sandboxErr != nil {
 				return nil, deps.sandboxErr
 			}

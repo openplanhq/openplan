@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 // SandboxUID is the unprivileged user every sandbox's process runs as, and so
@@ -37,6 +39,26 @@ func (w Workspaces) runDir(tenant, run string) (string, error) {
 	}
 	return filepath.Join(w.Root, tenant, run), nil
 }
+
+// Check makes the run root and refuses one mounted noexec, as Docker mounts
+// a tmpfs by default. Providers are programs tofu installs in the workspace,
+// and gVisor can't map a program from a noexec mount, so every provider would
+// segfault as it starts. The executor calls it once at startup.
+func (w Workspaces) Check() error {
+	if err := os.MkdirAll(w.Root, 0o755); err != nil { //nolint:gosec // run directories below are 0711
+		return err
+	}
+	var stat unix.Statfs_t
+	if err := unix.Statfs(w.Root, &stat); err != nil {
+		return err
+	}
+	if noexec(stat.Flags) {
+		return fmt.Errorf("%s is mounted noexec, so providers can't run there: mount it with exec (Compose tmpfs: add exec to its options)", w.Root)
+	}
+	return nil
+}
+
+func noexec(flags int64) bool { return flags&unix.ST_NOEXEC != 0 }
 
 // Workspace is the run's workspace, derived from its identity alone.
 func (w Workspaces) Workspace(tenant, run string) (string, error) {
