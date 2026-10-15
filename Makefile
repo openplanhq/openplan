@@ -31,7 +31,7 @@ GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v
 
 .DEFAULT_GOAL := help
 
-.PHONY: help api-docs-preview api-docs-lint lint differential-test isolation-test
+.PHONY: help api-docs-preview api-docs-lint lint differential-test sandbox-test
 
 help: ## List the available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -58,9 +58,10 @@ lint: ## Lint the Go code with golangci-lint
 differential-test: ## Run the authorization tests that need a real Postgres
 	OPENPLAN_POSTGRES_TEST_DSN=$(TEST_DSN) go test ./internal/authorization/ -count=1 -v
 
-isolation-test: ## Run the subprocess isolation tests (#331) in the executor image (needs Docker)
-	docker build -f Dockerfile.executor -t openplan-executor:isolation .
-	docker build -f internal/isolation/isolationtest/Dockerfile --build-arg EXECUTOR_IMAGE=openplan-executor:isolation -t openplan-isolation-test .
-	docker run --rm --cap-drop ALL --cap-add SETUID --cap-add SETGID --cap-add CHOWN \
-		--security-opt no-new-privileges:true openplan-isolation-test
-	./internal/isolation/isolationtest/failclosed.sh openplan-executor:isolation
+sandbox-test: ## Run the sandbox tests (#245) against runsc in the executor image (needs Docker)
+	docker build -f Dockerfile.executor -t openplan-executor:sandbox .
+	docker build -f internal/sandbox/sandboxtest/Dockerfile --build-arg EXECUTOR_IMAGE=openplan-executor:sandbox -t openplan-sandbox-test .
+	docker run --rm --cap-drop ALL --cap-add SYS_ADMIN --cap-add SETUID --cap-add SETGID --cap-add SETFCAP --cap-add CHOWN \
+		--security-opt no-new-privileges:true --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
+		--cgroupns private --tmpfs /var/lib/openplan/runs --tmpfs /var/lib/openplan/sandboxes openplan-sandbox-test
+	./internal/sandbox/sandboxtest/failclosed.sh openplan-executor:sandbox

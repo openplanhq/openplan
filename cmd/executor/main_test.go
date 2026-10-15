@@ -3,16 +3,16 @@ package main
 import (
 	"context"
 	"errors"
-	"io"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/vishu42/openplan/internal/activities"
 	"github.com/vishu42/openplan/internal/config"
 	"github.com/vishu42/openplan/internal/domain"
-	"github.com/vishu42/openplan/internal/isolation"
 	"github.com/vishu42/openplan/internal/runseal"
+	"github.com/vishu42/openplan/internal/sandbox"
 	"github.com/vishu42/openplan/internal/temporal"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
@@ -51,33 +51,35 @@ func TestRunWiresTemporalWorker(t *testing.T) {
 	if !deps.workerOptions.EnableSessionWorker {
 		t.Fatal("session worker was not enabled")
 	}
-	// Each session holds a pool user; the SDK's default is 1,000 sessions.
 	if deps.workerOptions.MaxConcurrentSessionExecutionSize != config.DefaultExecutorMaxSessions {
 		t.Fatalf("max concurrent sessions = %d, want %d", deps.workerOptions.MaxConcurrentSessionExecutionSize, config.DefaultExecutorMaxSessions)
 	}
-	if !reflect.DeepEqual(deps.calls, []string{"newSessions", "dialTemporal"}) {
-		t.Fatalf("startup order = %v, want isolation checked before dialing Temporal", deps.calls)
+	if !reflect.DeepEqual(deps.calls, []string{"newSandbox", "dialTemporal"}) {
+		t.Fatalf("startup order = %v, want the sandbox readied before dialing Temporal", deps.calls)
 	}
-	if want := (isolation.Config{RunRoot: "/tmp/openplan-executor-test", MaxSessions: config.DefaultExecutorMaxSessions}); deps.sessionsConfig != want {
-		t.Fatalf("newSessions got %+v, want %+v", deps.sessionsConfig, want)
+	if deps.sandboxConfig.Runsc != config.DefaultExecutorSandboxRunsc {
+		t.Fatalf("newSandbox got runsc %q, want %q", deps.sandboxConfig.Runsc, config.DefaultExecutorSandboxRunsc)
 	}
-	if deps.activitySessions != deps.sessions {
-		t.Fatal("activities did not get the sessions newSessions returned")
+	if deps.execution.runner != deps.runner {
+		t.Fatal("activities did not get the runner newSandbox returned")
 	}
-	if deps.activityKeys == nil {
+	if deps.execution.keys == nil {
 		t.Fatal("activities were not given a key ring")
+	}
+	if deps.execution.plans != deps.planStore {
+		t.Fatal("activity plan store was not wired")
+	}
+	if deps.execution.workspaces.Root != "/tmp/openplan-executor-test" {
+		t.Fatalf("activity workspaces root = %q, want /tmp/openplan-executor-test", deps.execution.workspaces.Root)
+	}
+	if deps.execution.store.FilesystemRoot != "/tmp/openplan-executor-artifacts" {
+		t.Fatalf("activity artifact store root = %q, want /tmp/openplan-executor-artifacts", deps.execution.store.FilesystemRoot)
 	}
 	if deps.artifactStoreConfig.Kind != config.ArtifactStoreFilesystem {
 		t.Fatalf("artifact store kind = %q, want filesystem", deps.artifactStoreConfig.Kind)
 	}
 	if deps.artifactStoreConfig.FilesystemRoot != "/tmp/openplan-executor-artifacts" {
 		t.Fatalf("artifact store root = %q, want /tmp/openplan-executor-artifacts", deps.artifactStoreConfig.FilesystemRoot)
-	}
-	if deps.activityStores.logs != deps.logStore {
-		t.Fatal("activity log store was not wired")
-	}
-	if deps.activityStores.plans != deps.planStore {
-		t.Fatal("activity plan store was not wired")
 	}
 	if !deps.worker.ran {
 		t.Fatal("worker was not run")
@@ -93,8 +95,7 @@ func TestDefaultExecutorDependenciesRegisterOnlyExecutionActivities(t *testing.T
 	worker := &recordingTemporalWorker{}
 	deps := defaultExecutorDependencies()
 
-	sessions := isolation.NewForTest(t, isolation.Config{RunRoot: t.TempDir()}, 2)
-	if err := deps.registerActivities(context.Background(), worker, artifactStores{logs: recordingWorkerLogStore{}, plans: recordingWorkerPlanStore{}}, runseal.NewKeyRing(), sessions); err != nil {
+	if err := deps.registerActivities(worker, execution{runner: sandbox.InProcess{}, keys: runseal.NewKeyRing(), workspaces: sandbox.Workspaces{Root: t.TempDir()}}); err != nil {
 		t.Fatalf("registerActivities returned error: %v", err)
 	}
 
@@ -102,6 +103,7 @@ func TestDefaultExecutorDependenciesRegisterOnlyExecutionActivities(t *testing.T
 		domain.PrepareWorkspaceActivityName: true,
 		domain.FetchSourceActivityName:      true,
 		domain.RunTerraformActivityName:     true,
+		domain.UploadLogActivityName:        true,
 		domain.ReleaseRunKeyActivityName:    true,
 		domain.CleanupWorkspaceActivityName: true,
 		domain.UploadPlanActivityName:       true,
@@ -112,18 +114,18 @@ func TestDefaultExecutorDependenciesRegisterOnlyExecutionActivities(t *testing.T
 	}
 }
 
-// An executor that cannot keep sessions apart must not run template code: it
-// stops before it ever polls for work.
-func TestRunStopsWhenIsolationFails(t *testing.T) {
+// An executor that cannot sandbox must not run template code: it stops before
+// it ever polls for work.
+func TestRunStopsWhenItCannotSandbox(t *testing.T) {
 	t.Parallel()
 
-	checkErr := errors.New("CapEff is wrong")
+	checkErr := errors.New("cgroup2 is read-only")
 	deps := newRecordingExecutorDependencies(t)
-	deps.sessionsErr = checkErr
+	deps.sandboxErr = checkErr
 
 	err := runWithDependencies(context.Background(), executorTestEnv, deps.executorDependencies)
-	if !errors.Is(err, checkErr) || !strings.Contains(err.Error(), "subprocess isolation") {
-		t.Fatalf("error = %v, want checkErr wrapped as subprocess isolation", err)
+	if !errors.Is(err, checkErr) || !strings.Contains(err.Error(), "sandbox") {
+		t.Fatalf("error = %v, want checkErr wrapped as sandbox", err)
 	}
 	if slices.Contains(deps.calls, "dialTemporal") {
 		t.Fatalf("calls = %v, want no Temporal dial", deps.calls)
@@ -187,17 +189,14 @@ type recordingExecutorDependencies struct {
 	workerTaskQueue     string
 	workerOptions       temporalworker.Options
 	artifactStoreConfig config.ArtifactStoreConfig
-	activityStores      artifactStores
-	activityKeys        *runseal.KeyRing
-	activitySessions    *isolation.Manager
-	logStore            recordingWorkerLogStore
+	execution           execution
 	planStore           recordingWorkerPlanStore
 	dialErr             error
-	// sessions and sessionsErr are what newSessions returns, and
-	// sessionsConfig what it was given.
-	sessions       *isolation.Manager
-	sessionsErr    error
-	sessionsConfig isolation.Config
+	// runner and sandboxErr are what newSandbox returns, and sandboxConfig
+	// what it was given.
+	runner        sandbox.Runner
+	sandboxErr    error
+	sandboxConfig config.SandboxConfig
 	// calls records the startup steps in the order they ran.
 	calls []string
 }
@@ -208,7 +207,8 @@ func newRecordingExecutorDependencies(t *testing.T) *recordingExecutorDependenci
 	deps := &recordingExecutorDependencies{
 		temporalClient: &recordingWorkerTemporalClient{},
 		worker:         &recordingTemporalWorker{},
-		sessions:       isolation.NewForTest(t, isolation.Config{}, 1),
+		// A pointer, so the test can compare it: InProcess holds a map.
+		runner: &sandbox.InProcess{},
 	}
 	deps.executorDependencies = executorDependencies{
 		dialTemporal: func(_ context.Context, cfg temporal.Config) (client.Client, error) {
@@ -227,40 +227,32 @@ func newRecordingExecutorDependencies(t *testing.T) *recordingExecutorDependenci
 			deps.workerOptions = options
 			return deps.worker
 		},
-		registerActivities: func(_ context.Context, worker temporalWorker, stores artifactStores, keys *runseal.KeyRing, sessions *isolation.Manager) error {
+		registerActivities: func(worker temporalWorker, exec execution) error {
 			if worker != deps.worker {
 				t.Fatalf("registerActivities worker = %p, want %p", worker, deps.worker)
 			}
-			deps.activityStores = stores
-			deps.activityKeys = keys
-			deps.activitySessions = sessions
+			deps.execution = exec
 			return nil
 		},
-		newArtifactStores: func(cfg config.ArtifactStoreConfig) (artifactStores, error) {
+		newPlanStore: func(cfg config.ArtifactStoreConfig) (activities.PlanArtifactStore, error) {
 			deps.artifactStoreConfig = cfg
-			return artifactStores{logs: deps.logStore, plans: deps.planStore}, nil
+			return deps.planStore, nil
 		},
 		interruptCh: func() <-chan any {
 			ch := make(chan any)
 			close(ch)
 			return ch
 		},
-		newSessions: func(cfg isolation.Config) (*isolation.Manager, error) {
-			deps.calls = append(deps.calls, "newSessions")
-			deps.sessionsConfig = cfg
-			if deps.sessionsErr != nil {
-				return nil, deps.sessionsErr
+		newSandbox: func(cfg config.SandboxConfig) (sandbox.Runner, error) {
+			deps.calls = append(deps.calls, "newSandbox")
+			deps.sandboxConfig = cfg
+			if deps.sandboxErr != nil {
+				return nil, deps.sandboxErr
 			}
-			return deps.sessions, nil
+			return deps.runner, nil
 		},
 	}
 	return deps
-}
-
-type recordingWorkerLogStore struct{}
-
-func (recordingWorkerLogStore) PutTemplateRunLog(context.Context, domain.TenantID, domain.TemplateRunID, string, io.Reader) (domain.TemplateRunLog, error) {
-	return domain.TemplateRunLog{}, nil
 }
 
 type recordingWorkerPlanStore struct{}

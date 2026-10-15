@@ -17,6 +17,11 @@ const (
 	DefaultExecutorRunRoot             = "/tmp/openplan/runs"
 	DefaultArtifactStoreFilesystemRoot = "/tmp/openplan/artifacts"
 	DefaultExecutorMaxSessions         = 20
+	DefaultExecutorSandboxRunsc        = "/usr/local/bin/runsc"
+	DefaultExecutorSandboxState        = "/var/lib/openplan/sandboxes"
+	DefaultExecutorSandboxMemoryMiB    = 2048
+	DefaultExecutorSandboxCPUs         = 2
+	DefaultExecutorSandboxPids         = 1024
 )
 
 var ErrInvalidConfig = errors.New("invalid config")
@@ -48,10 +53,24 @@ type ExecutorConfig struct {
 	// RunRoot is where each run's workspace is checked out.
 	RunRoot       string
 	ArtifactStore ArtifactStoreConfig
-	// MaxSessions caps the sessions this executor runs at once. Each holds a
-	// pool user, and the image carries two users per session, so the spares
-	// absorb leases stuck until their 25-hour take-back.
+	// MaxSessions caps the sessions, and so the runs, this executor holds at
+	// once. Each runs its activities in sandboxes of their own.
 	MaxSessions int
+	Sandbox     SandboxConfig
+}
+
+// SandboxConfig is how the executor starts each activity's gVisor sandbox
+// (#245).
+type SandboxConfig struct {
+	// Runsc is the runsc binary, with its gvisor-bin/ sidecars beside it.
+	Runsc string
+	// State holds runsc's state and the sandboxes' bundles. It must be
+	// ephemeral, as the run root is.
+	State string
+	// MemoryMiB, CPUs and Pids are each sandbox's limits.
+	MemoryMiB int64
+	CPUs      int64
+	Pids      int64
 }
 
 type ArtifactStoreKind string
@@ -153,6 +172,34 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 			return ExecutorConfig{}, fmt.Errorf("%w: EXECUTOR_MAX_SESSIONS must be a positive integer, got %q", ErrInvalidConfig, raw)
 		}
 		cfg.MaxSessions = maxSessions
+	}
+	cfg.Sandbox = SandboxConfig{
+		Runsc: DefaultExecutorSandboxRunsc, State: DefaultExecutorSandboxState,
+		MemoryMiB: DefaultExecutorSandboxMemoryMiB, CPUs: DefaultExecutorSandboxCPUs, Pids: DefaultExecutorSandboxPids,
+	}
+	if v := strings.TrimSpace(getenv("EXECUTOR_RUNSC")); v != "" {
+		cfg.Sandbox.Runsc = v
+	}
+	if v := strings.TrimSpace(getenv("EXECUTOR_SANDBOX_STATE")); v != "" {
+		cfg.Sandbox.State = v
+	}
+	for _, setting := range []struct {
+		name  string
+		value *int64
+	}{
+		{"EXECUTOR_SANDBOX_MEMORY", &cfg.Sandbox.MemoryMiB},
+		{"EXECUTOR_SANDBOX_CPUS", &cfg.Sandbox.CPUs},
+		{"EXECUTOR_SANDBOX_PIDS", &cfg.Sandbox.Pids},
+	} {
+		raw := strings.TrimSpace(getenv(setting.name))
+		if raw == "" {
+			continue
+		}
+		parsed, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || parsed < 1 {
+			return ExecutorConfig{}, fmt.Errorf("%w: %s must be a positive integer, got %q", ErrInvalidConfig, setting.name, raw)
+		}
+		*setting.value = parsed
 	}
 	if cfg.TemporalAddress == "" {
 		return ExecutorConfig{}, fmt.Errorf("%w: TEMPORAL_ADDRESS is required", ErrInvalidConfig)

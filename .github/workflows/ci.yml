@@ -62,16 +62,16 @@ jobs:
       - name: test
         run: go test ./...
 
-  isolation:
-    name: "isolation (executor image, #331)"
+  sandbox:
+    name: "sandbox (executor image, #245)"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # Runs as root in the real executor image with the compose security
-      # settings: what go test ./... on the runner cannot check.
-      - name: isolation tests
-        run: make isolation-test
+      # Runs runsc as root in the real executor image with the compose
+      # security settings: what go test ./... on the runner cannot check.
+      - name: sandbox tests
+        run: make sandbox-test
 
   web:
     name: web (test, build)

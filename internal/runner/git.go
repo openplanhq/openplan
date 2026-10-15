@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"strings"
-
-	"github.com/vishu42/openplan/internal/isolation"
 )
 
 // LocalGitRunner runs git as a subprocess via the shared CommandExecutor boundary.
@@ -18,12 +16,11 @@ type LocalGitRunner struct {
 	executor CommandExecutor
 }
 
-// NewLocalGitRunner returns a runner backed by the local git executable,
-// started as this process's own user: template sync on the api. The
-// executor's runners start git in a session instead
-// (isolation.SessionExecutor).
+// NewLocalGitRunner returns a runner that starts git as this process, with
+// only the allowlisted environment. The api's template sync uses it; on the
+// executor git runs inside an activity's sandbox.
 func NewLocalGitRunner() *LocalGitRunner {
-	return NewLocalGitRunnerWithExecutor(isolation.HostExecutor())
+	return NewLocalGitRunnerWithExecutor(ProcessExecutor{})
 }
 
 // NewLocalGitRunnerWithExecutor returns a Git runner backed by executor.

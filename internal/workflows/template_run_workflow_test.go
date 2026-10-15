@@ -186,12 +186,7 @@ func TestTemplatePlanWorkflowRecordsCommandLogsOnControlQueue(t *testing.T) {
 	env.OnActivity(domain.RunTerraformActivityName, mock.Anything, mock.Anything).
 		Return(func(_ context.Context, input domain.RunTerraformActivityInput) (domain.RunTerraformActivityOutput, error) {
 			events = append(events, "terraform:"+string(input.Command))
-			return domain.RunTerraformActivityOutput{Log: domain.TemplateRunLog{
-				TenantID:  input.TenantID,
-				RunID:     input.RunID,
-				Phase:     string(input.Command),
-				ObjectKey: "logs/" + string(input.Command) + ".log",
-			}}, nil
+			return domain.RunTerraformActivityOutput{}, nil
 		})
 	env.OnActivity(domain.RecordTemplateRunLogActivityName, mock.Anything, mock.Anything).
 		Return(func(_ context.Context, log domain.TemplateRunLog) error {
@@ -224,13 +219,12 @@ func TestTemplatePlanWorkflowRecordsCommandLogsOnControlQueue(t *testing.T) {
 	}
 }
 
-// A failed command's log explains the failure, so it is recorded from the
-// error's details before the run is marked failed.
+// A failed command's log explains the failure, so it is uploaded and recorded
+// before the run is marked failed.
 func TestTemplatePlanWorkflowRecordsLogOfFailedCommand(t *testing.T) {
 	t.Parallel()
 
 	env := newTemplateRunWorkflowTestEnvironment(t)
-	failedLog := domain.TemplateRunLog{TenantID: "tenant_123", RunID: "run_123", Phase: "plan", ObjectKey: "logs/plan.log"}
 	var recorded []domain.TemplateRunLog
 	var failedStatus domain.TemplateRunStatusActivityInput
 	mockPrepareWorkspace(t, env)
@@ -241,10 +235,7 @@ func TestTemplatePlanWorkflowRecordsLogOfFailedCommand(t *testing.T) {
 			if input.Command != domain.TerraformCommandPlan {
 				return domain.RunTerraformActivityOutput{}, nil
 			}
-			return domain.RunTerraformActivityOutput{}, temporal.NewApplicationErrorWithOptions("run terraform", domain.TerraformCommandFailedErrorType, temporal.ApplicationErrorOptions{
-				Cause:   errors.New("plan: exit status 1"),
-				Details: []any{failedLog},
-			})
+			return domain.RunTerraformActivityOutput{}, errors.New("plan: exit status 1")
 		})
 	env.OnActivity(domain.RecordTemplateRunLogActivityName, mock.Anything, mock.Anything).
 		Return(func(_ context.Context, log domain.TemplateRunLog) error {
@@ -264,11 +255,40 @@ func TestTemplatePlanWorkflowRecordsLogOfFailedCommand(t *testing.T) {
 	if !env.IsWorkflowCompleted() || env.GetWorkflowError() == nil {
 		t.Fatalf("workflow completed=%v error=%v, want a failed run", env.IsWorkflowCompleted(), env.GetWorkflowError())
 	}
-	if len(recorded) != 1 || recorded[0] != failedLog {
-		t.Fatalf("recorded logs = %#v, want only the failed plan log", recorded)
+	if len(recorded) == 0 || recorded[len(recorded)-1].Phase != "plan" {
+		t.Fatalf("recorded logs = %#v, want the failed plan's last", recorded)
 	}
 	if !strings.Contains(failedStatus.ErrorSummary, "plan: exit status 1") {
 		t.Fatalf("failure summary = %q, want the command error", failedStatus.ErrorSummary)
+	}
+}
+
+// A log that cannot be uploaded fails the step, as an upload inside
+// RunTerraform did before.
+func TestTemplatePlanWorkflowFailsWhenALogCannotBeUploaded(t *testing.T) {
+	t.Parallel()
+
+	env := newTemplateRunWorkflowTestEnvironment(t)
+	var failedStatus domain.TemplateRunStatusActivityInput
+	mockPrepareWorkspace(t, env)
+	env.OnActivity(domain.FetchSourceActivityName, mock.Anything, mock.Anything).
+		Return(domain.FetchSourceActivityOutput{TerraformPath: "run/workspace/source"}, nil)
+	env.OnActivity(domain.RunTerraformActivityName, mock.Anything, mock.Anything).
+		Return(domain.RunTerraformActivityOutput{}, nil)
+	env.OnActivity(domain.UploadLogActivityName, mock.Anything, mock.Anything).
+		Return(domain.TemplateRunLog{}, errors.New("store unavailable"))
+	env.OnActivity(domain.RecordTemplateRunStatusActivityName, mock.Anything, mock.Anything).
+		Return(func(_ context.Context, input domain.TemplateRunStatusActivityInput) error {
+			if input.Status == domain.TemplateRunFailed {
+				failedStatus = input
+			}
+			return nil
+		})
+
+	env.ExecuteWorkflow(TemplatePlanWorkflow, templateRunWorkflowInput(domain.OperationPlan))
+
+	if failedStatus.Status != domain.TemplateRunFailed || !strings.Contains(failedStatus.ErrorSummary, "upload log") {
+		t.Fatalf("failed status = %+v, want the upload named", failedStatus)
 	}
 }
 
@@ -1065,6 +1085,12 @@ func newTemplateRunWorkflowTestEnvironment(t *testing.T) *testsuite.TestWorkflow
 		},
 		activity.RegisterOptions{Name: domain.RunTerraformActivityName},
 	)
+	env.RegisterActivityWithOptions(
+		func(_ context.Context, input domain.UploadLogActivityInput) (domain.TemplateRunLog, error) {
+			return domain.TemplateRunLog{Phase: string(input.Command), ObjectKey: "logs/" + string(input.Command) + ".log"}, nil
+		},
+		activity.RegisterOptions{Name: domain.UploadLogActivityName},
+	)
 	return env
 }
 
@@ -1422,14 +1448,14 @@ func TestTemplatePlanWorkflowPinsLogIdentityToTheRun(t *testing.T) {
 		Return(domain.FetchSourceActivityOutput{TerraformPath: "run/workspace/source"}, nil)
 
 	// A hostile executor claims every log belongs to another tenant's run.
-	env.OnActivity(domain.RunTerraformActivityName, mock.Anything, mock.Anything).
-		Return(func(_ context.Context, input domain.RunTerraformActivityInput) (domain.RunTerraformActivityOutput, error) {
-			return domain.RunTerraformActivityOutput{Log: domain.TemplateRunLog{
+	env.OnActivity(domain.UploadLogActivityName, mock.Anything, mock.Anything).
+		Return(func(_ context.Context, input domain.UploadLogActivityInput) (domain.TemplateRunLog, error) {
+			return domain.TemplateRunLog{
 				TenantID:  domain.TenantID("tenant_victim"),
 				RunID:     domain.TemplateRunID("run_victim"),
 				Phase:     string(input.Command),
 				ObjectKey: "logs/" + string(input.Command) + ".log",
-			}}, nil
+			}, nil
 		})
 
 	var recorded []domain.TemplateRunLog
@@ -1458,8 +1484,8 @@ func TestTemplatePlanWorkflowPinsLogIdentityToTheRun(t *testing.T) {
 	}
 }
 
-// The same pin has to hold on the failure path, where the log metadata arrives
-// in an ApplicationError's details rather than the activity result.
+// The same pin has to hold on the failure path: the failed command's log is
+// uploaded too, and its metadata is the executor's to forge.
 func TestTemplatePlanWorkflowPinsLogIdentityOfFailedCommand(t *testing.T) {
 	t.Parallel()
 
@@ -1480,12 +1506,10 @@ func TestTemplatePlanWorkflowPinsLogIdentityOfFailedCommand(t *testing.T) {
 			if input.Command != domain.TerraformCommandPlan {
 				return domain.RunTerraformActivityOutput{}, nil
 			}
-			return domain.RunTerraformActivityOutput{}, temporal.NewApplicationError(
-				"terraform plan failed",
-				domain.TerraformCommandFailedErrorType,
-				hostileLog,
-			)
+			return domain.RunTerraformActivityOutput{}, errors.New("terraform plan failed")
 		})
+	env.OnActivity(domain.UploadLogActivityName, mock.Anything, mock.Anything).
+		Return(hostileLog, nil)
 	env.OnActivity(domain.RecordTemplateRunLogActivityName, mock.Anything, mock.Anything).
 		Return(func(_ context.Context, log domain.TemplateRunLog) error {
 			recorded = append(recorded, log)

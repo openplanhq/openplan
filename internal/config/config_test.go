@@ -495,9 +495,9 @@ func TestLoadExecutorConfigRequiresTemporalAddress(t *testing.T) {
 	}
 }
 
-// The executor runs beside tenant Terraform, so whatever its configuration
-// holds, a template can read. This pins the field set: adding one means
-// deciding, here, that tenants may see it.
+// The executor's configuration stays outside every sandbox, but a template
+// that escapes one lands beside it. This pins the field set: adding one means
+// deciding, here, that it may sit that close to tenant code.
 func TestExecutorConfigHoldsNoControlPlaneSettings(t *testing.T) {
 	t.Parallel()
 
@@ -506,7 +506,7 @@ func TestExecutorConfigHoldsNoControlPlaneSettings(t *testing.T) {
 	for i := range configType.NumField() {
 		got = append(got, configType.Field(i).Name)
 	}
-	want := []string{"TemporalAddress", "TemporalNamespace", "RunRoot", "ArtifactStore", "MaxSessions"}
+	want := []string{"TemporalAddress", "TemporalNamespace", "RunRoot", "ArtifactStore", "MaxSessions", "Sandbox"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("ExecutorConfig fields = %v, want %v", got, want)
 	}
@@ -536,6 +536,26 @@ func TestLoadExecutorConfigMaxSessions(t *testing.T) {
 	for _, bad := range []string{"0", "-1", "ten"} {
 		if _, err := LoadExecutorConfig(env(bad)); !errors.Is(err, ErrInvalidConfig) {
 			t.Errorf("%q: error = %v, want ErrInvalidConfig", bad, err)
+		}
+	}
+}
+
+func TestLoadExecutorConfigSandboxDefaultsAndValidation(t *testing.T) {
+	t.Parallel()
+
+	base := map[string]string{"TEMPORAL_ADDRESS": "temporal:7233"}
+	cfg, err := LoadExecutorConfig(func(k string) string { return base[k] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := SandboxConfig{Runsc: DefaultExecutorSandboxRunsc, State: DefaultExecutorSandboxState, MemoryMiB: 2048, CPUs: 2, Pids: 1024}
+	if cfg.Sandbox != want {
+		t.Fatalf("sandbox = %+v, want %+v", cfg.Sandbox, want)
+	}
+	for _, name := range []string{"EXECUTOR_SANDBOX_MEMORY", "EXECUTOR_SANDBOX_CPUS", "EXECUTOR_SANDBOX_PIDS"} {
+		env := map[string]string{"TEMPORAL_ADDRESS": "temporal:7233", name: "0"}
+		if _, err := LoadExecutorConfig(func(k string) string { return env[k] }); !errors.Is(err, ErrInvalidConfig) {
+			t.Fatalf("%s=0: error = %v, want ErrInvalidConfig", name, err)
 		}
 	}
 }

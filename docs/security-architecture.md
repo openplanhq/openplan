@@ -99,7 +99,7 @@ credentials; production mode rejects those settings.
 | Postgres | Store product state, immutable actor subjects, append-only audits, and durable relationship intents | Store bearer tokens, passwords, or Keycloak administrative tokens |
 | Temporal | Durably execute previously authorized commands and record immutable actor subjects | Authenticate browser requests or reinterpret API permissions |
 | Workers | Execute workflow activities using narrowly scoped runtime credentials | Receive browser tokens or expose authorization data |
-| Executor | Run each session's tofu and git as that session's own pool user, and hold each run's sealing key in memory only | Run template code as root, read or write inside a workspace itself, or start when its isolation checks fail |
+| Executor | Run each activity's tofu and git in a gVisor sandbox of its own, and hold each run's sealing key in memory only | Run template code outside a sandbox, open a path a sandbox wrote, or start when it can't apply a sandbox's limits |
 | Object storage | Store redacted logs and artifacts under tenant/run keys | Decide access independently of the API |
 
 The authorization decision for starting a long-running command is made when the
@@ -359,7 +359,7 @@ administrative responses.
 | Self-approval | Requester approves their own privileged operation | Immutable requester subject, mandatory equality check after authorization, audit rejection, no Temporal signal |
 | Secret leakage | Sensitive values appear in logs, errors, payloads, or examples | Structured redaction, secret-backed configuration, production-default rejection, regression tests |
 | Directory overreach | openplan service account changes Keycloak users or global roles | Least-privilege read/search service account; lifecycle and global-role changes stay in Admin Console |
-| Hostile template code | A template's providers, provisioners or `local-exec` reach another run's credentials, files or processes, or the executor's own | A pool user per session, an executor with three capabilities under `no_new_privs`, a reclaim after every session and a sweep at startup; see "Runner Security" in [architecture.md](architecture.md), which also lists the open gaps |
+| Hostile template code | A template's providers, provisioners or `local-exec` reach another run's credentials, files or processes, or the executor's own | A fresh gVisor sandbox per activity with memory, CPU and process limits, only the run's own cloud credentials, and an environment built from scratch; see "Runner Security" in [architecture.md](architecture.md), which also lists the open gaps |
 
 ## Security Logging and Observability
 
