@@ -208,8 +208,11 @@ a:hover > .arrow {
 .motion .go .d4 { animation-delay: 0.62s; }
 .motion .go .d5 { animation-delay: 0.74s; }
 
-/* 01 Register: a beat at the template; under the pointer the source
-   streams into all three. */
+/* 01 Register: a beat at the template. Under the pointer the repository
+   lights, its source streams down all three branches, and the templates it
+   registers light in turn. These rules name .motion and .feature so they
+   outrank the one-shot .motion .go .a-draw that would otherwise keep the
+   branches still. */
 .motion .go .beat {
   transform-origin: center;
   animation: a-beat 1.6s ease-in-out infinite;
@@ -218,13 +221,27 @@ a:hover > .arrow {
   0%, 100% { opacity: 0.25; transform: scale(0.6); }
   50% { opacity: 1; transform: scale(1.3); }
 }
-.hot .flow {
+.src,
+.tpl {
+  transition: fill 0.3s ease, stroke 0.3s ease;
+}
+.motion .feature.hot .src {
+  stroke: var(--color-primary);
+}
+.motion .feature.hot .flow {
+  stroke: var(--color-primary);
   stroke-dasharray: 3 7;
-  animation: a-flow 0.7s linear infinite;
+  animation: a-flow 0.6s linear infinite;
 }
 @keyframes a-flow {
   to { stroke-dashoffset: -20; }
 }
+.motion .feature.hot .tpl {
+  fill: var(--color-primary-soft);
+  stroke: var(--color-primary);
+}
+.motion .feature.hot .t2 { transition-delay: 0.12s; }
+.motion .feature.hot .t3 { transition-delay: 0.24s; }
 
 /* 02 Compose: the template under the pointer lifts out. */
 .lift {
