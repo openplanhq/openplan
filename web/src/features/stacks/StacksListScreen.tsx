@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAttentionQuery, useStacksQuery } from "../../api/queries";
 import type { AttentionItem, StackListItem } from "../../api/types";
+import { useAuth } from "../../auth/AuthContext";
 import RequireCapability from "../../auth/RequireCapability";
 import { tenantID } from "../../config";
 import ErrorLine from "../../shared/ErrorLine";
@@ -43,6 +44,7 @@ export default function StacksListScreen() {
   // fails the stacks still show, without the summary line and chips.
   const attention = useAttentionQuery(tenantID).data ?? [];
   const boundary = useQueryErrorBoundary(error);
+  const canCreateStack = useAuth().me?.globalCapabilities.canCreateStack === true;
   const [searchParams] = useSearchParams();
   const [filter, setFilter] = useState("");
 
@@ -118,15 +120,27 @@ export default function StacksListScreen() {
       {header(stacks.length)}
       {stacks.length === 0 ? (
         // openplan UI's page-level EmptyState: a card, its one icon plain
-        // rather than on a tile.
+        // rather than on a tile. It is the first screen of a new install, so
+        // it says what a stack is for and offers the action that makes one;
+        // someone who may not create one learns how one reaches them.
         <Empty className="gap-3 rounded-panel border border-solid bg-card px-5 py-14" data-testid="stacks-list-empty">
           <EmptyHeader className="gap-3">
             <EmptyMedia>
               <Layers aria-hidden="true" className="size-5 text-muted-foreground" />
             </EmptyMedia>
-            <h2 className="font-heading text-sm font-medium tracking-tight">No stacks yet</h2>
-            <EmptyDescription className="text-meta">No stacks visible to you yet.</EmptyDescription>
+            <h2 className="font-heading text-sm font-medium">No stacks yet</h2>
+            <EmptyDescription className="text-meta">
+              {canCreateStack
+                ? "Create a stack for each environment you deploy to, such as prod or staging."
+                : "Stacks appear here once someone gives you access to one."}
+            </EmptyDescription>
           </EmptyHeader>
+          {canCreateStack && (
+            <Link to="/stacks/new" className={cn(buttonClass("outline"), "pointer-coarse:h-11")} data-testid="stacks-empty-create">
+              <Plus data-icon="inline-start" aria-hidden="true" />
+              Create stack
+            </Link>
+          )}
         </Empty>
       ) : (
         // One panel: the list, then the selected stack. On a wide screen they
