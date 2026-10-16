@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { TemplateRun, TemplateRunStatus } from "./types";
 import {
   registrationRefetchInterval,
   runRefetchInterval,
@@ -158,8 +159,19 @@ describe("polling-aware query hooks", () => {
     it("polls a runs list unless its first load failed", () => {
       expect(runsRefetchInterval({ data: undefined, fetchFailureCount: 0 })).toBe(1500);
       expect(runsRefetchInterval({ data: undefined, fetchFailureCount: 1 })).toBe(false);
-      expect(runsRefetchInterval({ data: [], fetchFailureCount: 0 })).toBe(1500);
-      expect(runsRefetchInterval({ data: [], fetchFailureCount: 2 })).toBe(1500);
+      expect(runsRefetchInterval({ data: [], fetchFailureCount: 0 })).toBe(30_000);
+      expect(runsRefetchInterval({ data: [], fetchFailureCount: 2 })).toBe(30_000);
+    });
+
+    // Settled runs cannot change, so a list of only those need not be asked
+    // for every 1.5s; one run still moving brings the fast poll back.
+    it("polls a runs list fast only while a run in it is moving", () => {
+      const run = (status: TemplateRunStatus) => ({ status }) as TemplateRun;
+      expect(runsRefetchInterval({ data: [run("completed"), run("failed"), run("canceled")], fetchFailureCount: 0 })).toBe(30_000);
+      expect(runsRefetchInterval({ data: [run("completed"), run("running")], fetchFailureCount: 0 })).toBe(1500);
+      expect(runsRefetchInterval({ data: [run("queued")], fetchFailureCount: 0 })).toBe(1500);
+      expect(runsRefetchInterval({ data: [run("approved")], fetchFailureCount: 0 })).toBe(1500);
+      expect(runsRefetchInterval({ data: [run("waiting_approval")], fetchFailureCount: 0 })).toBe(30_000);
     });
   });
 
