@@ -687,21 +687,28 @@ Object storage keys should be tenant and run scoped:
 tenants/{tenant_id}/runs/{run_id}/logs/{phase}.log
 ```
 
-Example phases:
+Each log is named for its run phase and its number among that phase's
+logs, counting from 1:
 
 ```text
-clone.log
-plan-init.log
-plan-workspace.log
-plan.log
-apply-init.log
-apply-workspace.log
-apply.log
-destroy.log
+plan-1.log    tofu init
+plan-2.log    tofu workspace select
+plan-3.log    tofu plan
+apply-1.log   tofu init
+apply-2.log   tofu workspace select
+apply-3.log   tofu apply
 ```
 
-Init and workspace selection run again before an apply, so their logs are
-named for the phase that ran them.
+The name says nothing about the command. What wrote the log, its run phase,
+number and command, is recorded beside it, and the run page shows the
+command under its phase. The workflow numbers its own commands as it runs
+them, so a plan and the apply that follows it a day later never have to agree
+on a count, a retry or replay keeps the same name, and a command run twice in
+a phase gets a log each time. The control plane derives the object key from
+the run and the name, so an executor never chooses which object a run's log
+points at. Postgres derives the name from the run phase and number rather
+than storing it beside them, and the API checks only its shape (one
+lowercase path segment).
 
 Postgres stores log metadata, not large log bodies.
 

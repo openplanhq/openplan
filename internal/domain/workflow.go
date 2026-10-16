@@ -4,6 +4,8 @@ package domain
 
 import (
 	"encoding/json"
+	"fmt"
+	"regexp"
 	"time"
 )
 
@@ -240,6 +242,32 @@ func (phase RunPhase) Valid() bool {
 	return phase == RunPhasePlan || phase == RunPhaseApply
 }
 
+// logNamePattern bounds what a run log may be called. The name is a file name
+// on the executor, a segment of its object key and of the API path, so it is
+// held to one lowercase path segment rather than to a list of known names.
+var logNamePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
+
+// ValidLogName reports whether name can name a run log.
+func ValidLogName(name string) bool {
+	return logNamePattern.MatchString(name)
+}
+
+// RunLogName names the seq'th log a run phase wrote, counting from 1: plan-1,
+// plan-2, apply-1. The name only has to be unique within the run and stable
+// across retries, so it says nothing about the command: what wrote the log is
+// recorded beside it, as its command and run phase. The workflow numbers its
+// own commands, so a plan and the apply that follows it a day later never need
+// to agree on a count, and a command run twice gets a log each time.
+func RunLogName(phase RunPhase, seq int) (string, error) {
+	if !phase.Valid() {
+		return "", fmt.Errorf("unsupported run phase %q", phase)
+	}
+	if seq < 1 {
+		return "", fmt.Errorf("log number %d, want 1 or more", seq)
+	}
+	return fmt.Sprintf("%s-%d", phase, seq), nil
+}
+
 // RunTerraformActivityInput asks the executor to run one Terraform subprocess command.
 type RunTerraformActivityInput struct {
 	RunID           TemplateRunID
@@ -249,8 +277,9 @@ type RunTerraformActivityInput struct {
 	TerraformPath   string
 	WorkspaceName   string
 	Command         TerraformCommandType
-	// RunPhase names the phase Command runs in, which picks its log.
-	RunPhase   RunPhase
+	// LogName is the log Command spools to, named by the workflow
+	// (RunLogName).
+	LogName    string
 	ConfigJSON json.RawMessage
 	// SealedEnvironment is the run's credentials sealed to its key.
 	SealedEnvironment []byte
@@ -259,14 +288,12 @@ type RunTerraformActivityInput struct {
 	Environment map[string]string `json:"-"`
 }
 
-// UploadLogActivityInput asks the executor to upload the log it spooled for
-// one Terraform command, which names the log the way RunTerraform named its
-// spool.
+// UploadLogActivityInput asks the executor to upload the log RunTerraform
+// spooled under LogName.
 type UploadLogActivityInput struct {
 	TenantID TenantID
 	RunID    TemplateRunID
-	Command  TerraformCommandType
-	RunPhase RunPhase
+	LogName  string
 }
 
 // RunTerraformActivityOutput reports what a Terraform command left behind.

@@ -77,6 +77,9 @@ type run struct {
 	id         string
 	workspace  string
 	publicKey  []byte
+	// logs counts the commands run, which numbers their logs as the workflow
+	// does.
+	logs int
 }
 
 func newRun(t *testing.T, runner sandbox.Runner, store config.ArtifactStoreConfig) *run {
@@ -120,9 +123,16 @@ func (r *run) terraform(ctx context.Context, t *testing.T, command domain.Terraf
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The workflow numbers each log; these runs stand in for its apply phase,
+	// so a run's first command, init, logs to apply-1.
+	r.logs++
+	logName, err := domain.RunLogName(domain.RunPhaseApply, r.logs)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return r.activities.RunTerraform(ctx, domain.RunTerraformActivityInput{
 		TenantID: "tenant", RunID: domain.TemplateRunID(r.id), TerraformPath: r.workspace,
-		WorkspaceName: "default", Command: command, RunPhase: domain.RunPhaseApply, SealedEnvironment: sealed,
+		WorkspaceName: "default", Command: command, LogName: logName, SealedEnvironment: sealed,
 	})
 }
 
@@ -131,11 +141,12 @@ func (r *run) apply(ctx context.Context, t *testing.T, env map[string]string) er
 	if _, err := r.terraform(ctx, t, domain.TerraformCommandInit, nil); err != nil {
 		t.Fatalf("init: %v", err)
 	}
+	// The run's second command, so its log is apply-2.
 	_, err := r.terraform(ctx, t, domain.TerraformCommandApplyAutoApprove, env)
 	// A probe passes by exiting 0, so an apply that never ran it must not
 	// pass for it.
-	if err == nil && !strings.Contains(r.log(t, "apply.log"), "Apply complete!") {
-		t.Fatalf("the apply ran no probe:\n%s", r.log(t, "apply.log"))
+	if err == nil && !strings.Contains(r.log(t, "apply-2.log"), "Apply complete!") {
+		t.Fatalf("the apply ran no probe:\n%s", r.log(t, "apply-2.log"))
 	}
 	return err
 }
@@ -170,7 +181,7 @@ func TestARunCannotSeeAnotherRunsCredential(t *testing.T) {
 	})
 	time.Sleep(8 * time.Second)
 	if err := prober.apply(context.Background(), t, nil); err != nil {
-		t.Fatalf("prober found run B's credential: %v\n%s", err, prober.log(t, "apply.log"))
+		t.Fatalf("prober found run B's credential: %v\n%s", err, prober.log(t, "apply-2.log"))
 	}
 	wg.Wait()
 }
@@ -183,7 +194,7 @@ func TestTheWorkersSecretsStayOut(t *testing.T) {
 if grep -a -l -F -f /tmp/pat /proc/[0-9]*/environ 2>/dev/null; then exit 1; fi
 exit 0`)
 	if err := r.apply(context.Background(), t, nil); err != nil {
-		t.Fatalf("tofu saw the worker's secret: %v\n%s", err, r.log(t, "apply.log"))
+		t.Fatalf("tofu saw the worker's secret: %v\n%s", err, r.log(t, "apply-2.log"))
 	}
 }
 
@@ -314,7 +325,7 @@ func TestNoCgroupsMeansNoSandbox(t *testing.T) {
 		t.Fatal("a sandbox started without its cgroup")
 	}
 	t.Logf("refused: %v", err)
-	if strings.Contains(r.log(t, "apply-init.log"), "Initializing") {
+	if strings.Contains(r.log(t, "apply-1.log"), "Initializing") {
 		t.Fatal("tofu ran without its limits")
 	}
 	if entries, _ := os.ReadDir(filepath.Join(state, "bundles")); len(entries) != 0 {
@@ -367,13 +378,13 @@ resource "random_id" "probe" {
 }
 `)
 	if _, err := r.terraform(ctx, t, domain.TerraformCommandInit, nil); err != nil {
-		t.Fatalf("init: %v\n%s", err, r.log(t, "apply-init.log"))
+		t.Fatalf("init: %v\n%s", err, r.log(t, "apply-1.log"))
 	}
-	if !strings.Contains(r.log(t, "apply-init.log"), "Installed hashicorp/random v3.6.3") {
-		t.Fatalf("init installed no provider:\n%s", r.log(t, "apply-init.log"))
+	if !strings.Contains(r.log(t, "apply-1.log"), "Installed hashicorp/random v3.6.3") {
+		t.Fatalf("init installed no provider:\n%s", r.log(t, "apply-1.log"))
 	}
 	if _, err := r.terraform(ctx, t, domain.TerraformCommandApplyAutoApprove, nil); err != nil {
-		t.Fatalf("apply: %v\n%s", err, r.log(t, "apply.log"))
+		t.Fatalf("apply: %v\n%s", err, r.log(t, "apply-2.log"))
 	}
 	if after := eth0Addresses(t); !slices.Equal(before, after) {
 		t.Fatalf("executor addresses %v became %v", before, after)
@@ -402,18 +413,18 @@ sleep 25`)
 	// The holder prints its address as its apply starts.
 	var address string
 	for deadline := time.Now().Add(20 * time.Second); address == "" && time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
-		if match := addressLine.FindStringSubmatch(holder.log(t, "apply.log")); match != nil {
+		if match := addressLine.FindStringSubmatch(holder.log(t, "apply-2.log")); match != nil {
 			address = match[1]
 		}
 	}
 	if address == "" {
-		t.Fatalf("the holder printed no address:\n%s", holder.log(t, "apply.log"))
+		t.Fatalf("the holder printed no address:\n%s", holder.log(t, "apply-2.log"))
 	}
 
 	prober := newRun(t, runtime, config.ArtifactStoreConfig{})
 	prober.template(t, fmt.Sprintf(`if nc -z -w 3 %s 8080; then echo REACHED-THE-NEIGHBOUR; exit 1; fi`, address))
 	if err := prober.apply(context.Background(), t, nil); err != nil {
-		t.Fatalf("a sandbox reached its neighbour at %s: %v\n%s", address, err, prober.log(t, "apply.log"))
+		t.Fatalf("a sandbox reached its neighbour at %s: %v\n%s", address, err, prober.log(t, "apply-2.log"))
 	}
 	// The control: the holder was listening all along, so the prober was
 	// kept out rather than finding nothing there.

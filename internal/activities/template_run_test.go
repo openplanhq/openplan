@@ -255,7 +255,7 @@ func planInput(workspace string) domain.RunTerraformActivityInput {
 		WorkspacePath: workspace,
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandPlan,
-		RunPhase:      domain.RunPhasePlan,
+		LogName:       "plan",
 	}
 }
 
@@ -273,13 +273,49 @@ func TestRecordTemplateRunLogDelegatesToRecorder(t *testing.T) {
 	t.Parallel()
 
 	recorder := &recordingLogMetadataRecorder{}
-	log := domain.TemplateRunLog{TenantID: "tenant_123", RunID: "run_123", Phase: "plan", ObjectKey: "tenants/tenant_123/runs/run_123/logs/plan.log"}
+	log := domain.TemplateRunLog{
+		TenantID: "tenant_123", RunID: "run_123", Phase: "plan-3", RunPhase: domain.RunPhasePlan, Seq: 3, Command: domain.TerraformCommandPlan,
+		ObjectKey: "tenants/tenant_123/runs/run_123/logs/plan-3.log",
+	}
 
 	if err := NewControlActivities(&controlStoreStub{logs: recorder}, nil).RecordTemplateRunLog(context.Background(), log); err != nil {
 		t.Fatalf("RecordTemplateRunLog returned error: %v", err)
 	}
 	if recorder.log != log {
 		t.Fatalf("recorded log = %#v, want %#v", recorder.log, log)
+	}
+
+	// The executor reports the object key, but the API serves whatever the row
+	// points at, so the key recorded is the one derived from the run and name.
+	forged := log
+	forged.ObjectKey = "tenants/tenant_victim/runs/run_victim/logs/plan-3.log"
+	if err := NewControlActivities(&controlStoreStub{logs: recorder}, nil).RecordTemplateRunLog(context.Background(), forged); err != nil {
+		t.Fatalf("RecordTemplateRunLog returned error: %v", err)
+	}
+	if recorder.log.ObjectKey != log.ObjectKey {
+		t.Fatalf("recorded object key = %q, want the derived %q", recorder.log.ObjectKey, log.ObjectKey)
+	}
+
+	// The name and key follow the phase and number, whatever name came in.
+	renamed := log
+	renamed.Phase = "../plan"
+	if err := NewControlActivities(&controlStoreStub{logs: recorder}, nil).RecordTemplateRunLog(context.Background(), renamed); err != nil {
+		t.Fatalf("RecordTemplateRunLog returned error: %v", err)
+	}
+	if recorder.log.Phase != "plan-3" || recorder.log.ObjectKey != log.ObjectKey {
+		t.Fatalf("recorded %q at %q, want plan-3 at %q", recorder.log.Phase, recorder.log.ObjectKey, log.ObjectKey)
+	}
+
+	unnumbered := log
+	unnumbered.Seq = 0
+	if err := NewControlActivities(&controlStoreStub{logs: recorder}, nil).RecordTemplateRunLog(context.Background(), unnumbered); err == nil {
+		t.Fatal("RecordTemplateRunLog accepted a log with no number")
+	}
+
+	unknown := log
+	unknown.Command = "refresh"
+	if err := NewControlActivities(&controlStoreStub{logs: recorder}, nil).RecordTemplateRunLog(context.Background(), unknown); err == nil {
+		t.Fatal("RecordTemplateRunLog accepted an unknown command")
 	}
 
 	recorder.err = errors.New("database unavailable")
@@ -312,30 +348,30 @@ func TestRunTerraformWritesCommandLogFile(t *testing.T) {
 	}
 }
 
-// The apply phase's init logs under its own phase, so its upload cannot
-// replace the plan phase's init log.
-func TestRunTerraformLogsInitUnderItsRunPhase(t *testing.T) {
+// RunTerraform spools to, and UploadLog uploads, the log the workflow named,
+// so the apply phase's init cannot replace the plan phase's init log.
+func TestRunTerraformLogsUnderTheWorkflowsName(t *testing.T) {
 	t.Parallel()
 
 	for _, tt := range []struct {
 		runPhase domain.RunPhase
 		want     string
 	}{
-		{runPhase: domain.RunPhasePlan, want: "plan-init"},
-		{runPhase: domain.RunPhaseApply, want: "apply-init"},
+		{runPhase: domain.RunPhasePlan, want: "plan-1"},
+		{runPhase: domain.RunPhaseApply, want: "apply-1"},
 	} {
 		activities, bodies := newTestTemplateRunActivities(t, t.TempDir(), nil)
 		bodies.terraform = gitrunner.NewLocalTerraformRunnerWithExecutor(&recordingCommandExecutor{stdout: "init stdout\n"})
 		logStore := &recordingTemplateRunLogStore{}
 		bodies.logs = logStore
 		input := planInput(prepareTestWorkspace(t, activities))
-		input.Command, input.RunPhase = domain.TerraformCommandInit, tt.runPhase
+		input.Command, input.LogName = domain.TerraformCommandInit, tt.want
 
 		if _, err := activities.RunTerraform(context.Background(), input); err != nil {
 			t.Fatalf("RunTerraform(%s) returned error: %v", tt.runPhase, err)
 		}
 		if _, err := activities.UploadLog(context.Background(), domain.UploadLogActivityInput{
-			TenantID: input.TenantID, RunID: input.RunID, Command: input.Command, RunPhase: input.RunPhase,
+			TenantID: input.TenantID, RunID: input.RunID, LogName: input.LogName,
 		}); err != nil {
 			t.Fatalf("UploadLog(%s) returned error: %v", tt.runPhase, err)
 		}
@@ -433,7 +469,7 @@ func TestRunTerraformWrapsRunnerError(t *testing.T) {
 	runnerErr := errors.New("terraform failed")
 	activities, workspace := newTestTerraform(t, &recordingCommandExecutor{err: runnerErr})
 	input := planInput(workspace)
-	input.Command, input.RunPhase = domain.TerraformCommandApply, domain.RunPhaseApply
+	input.Command, input.LogName = domain.TerraformCommandApply, "apply"
 
 	_, err := activities.RunTerraform(context.Background(), input)
 	// tofu ran in a sandbox, so its error arrives as text.

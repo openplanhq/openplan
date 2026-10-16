@@ -2192,8 +2192,11 @@ func TestRecordTemplateRunLogUpsertsTenantScopedMetadata(t *testing.T) {
 	log := domain.TemplateRunLog{
 		TenantID:    domain.TenantID("tenant_123"),
 		RunID:       domain.TemplateRunID("run_123"),
-		Phase:       "plan",
-		ObjectKey:   "tenants/tenant_123/runs/run_123/logs/plan.log",
+		Phase:       "plan-1",
+		RunPhase:    domain.RunPhasePlan,
+		Seq:         1,
+		Command:     domain.TerraformCommandPlan,
+		ObjectKey:   "tenants/tenant_123/runs/run_123/logs/plan-1.log",
 		ContentType: "text/plain; charset=utf-8",
 		SizeBytes:   18,
 		UploadedAt:  uploadedAt,
@@ -2208,7 +2211,7 @@ func TestRecordTemplateRunLogUpsertsTenantScopedMetadata(t *testing.T) {
 		t.Fatalf("RecordTemplateRunLog upsert returned error: %v", err)
 	}
 
-	got, err := store.GetTemplateRunLog(ctx, domain.TenantID("tenant_123"), domain.TemplateRunID("run_123"), "plan")
+	got, err := store.GetTemplateRunLog(ctx, domain.TenantID("tenant_123"), domain.TemplateRunID("run_123"), "plan-1")
 	if err != nil {
 		t.Fatalf("GetTemplateRunLog returned error: %v", err)
 	}
@@ -2221,7 +2224,7 @@ func TestRecordTemplateRunLogUpsertsTenantScopedMetadata(t *testing.T) {
 
 // Every log name the executor can upload under must be one the table accepts:
 // a refused name fails the run at the command that logged it.
-func TestRecordTemplateRunLogAcceptsEveryTerraformLogName(t *testing.T) {
+func TestRecordTemplateRunLogAcceptsEveryCommandInEitherPhase(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -2248,16 +2251,20 @@ func TestRecordTemplateRunLogAcceptsEveryTerraformLogName(t *testing.T) {
 		domain.TerraformCommandApplyAutoApprove,
 	}
 	for _, runPhase := range []domain.RunPhase{domain.RunPhasePlan, domain.RunPhaseApply} {
-		for _, command := range commands {
-			fileName, err := logsink.FileNameForTerraformCommand(command, runPhase)
+		for i, command := range commands {
+			seq := i + 1
+			phase, err := domain.RunLogName(runPhase, seq)
 			if err != nil {
-				t.Fatalf("FileNameForTerraformCommand(%q, %q) returned error: %v", command, runPhase, err)
+				t.Fatalf("RunLogName(%q, %d) returned error: %v", runPhase, seq, err)
 			}
-			phase := strings.TrimSuffix(fileName, logsink.LogFileExtension)
+			fileName := logsink.FileName(phase)
 			if err := store.RecordTemplateRunLog(ctx, domain.TemplateRunLog{
 				TenantID:    domain.TenantID("tenant_123"),
 				RunID:       domain.TemplateRunID("run_123"),
 				Phase:       phase,
+				RunPhase:    runPhase,
+				Seq:         seq,
+				Command:     command,
 				ObjectKey:   "tenants/tenant_123/runs/run_123/logs/" + fileName,
 				ContentType: "text/plain; charset=utf-8",
 				UploadedAt:  time.Now(),
@@ -2268,9 +2275,11 @@ func TestRecordTemplateRunLogAcceptsEveryTerraformLogName(t *testing.T) {
 	}
 }
 
-// Logs come back in the order their commands ran, which is not alphabetical:
-// workspace selection runs between init and plan.
-func TestListTemplateRunLogsReturnsTenantScopedMetadataInUploadOrder(t *testing.T) {
+// Logs come back in the order their commands ran: a phase's by number, and
+// the plan's before the apply's, whatever the executor's clocks said when
+// each was uploaded, and never by name, which would put plan-10 before
+// plan-2.
+func TestListTemplateRunLogsReturnsTenantScopedMetadataInRunOrder(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -2297,43 +2306,22 @@ func TestListTemplateRunLogsReturnsTenantScopedMetadataInUploadOrder(t *testing.
 		Status:          domain.TemplateRunQueued,
 		TriggerActor:    domain.UserID("user_456"),
 	})
+	entry := func(tenant, run string, phase domain.RunPhase, seq int, command domain.TerraformCommandType, at time.Time) domain.TemplateRunLog {
+		name, err := domain.RunLogName(phase, seq)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return domain.TemplateRunLog{
+			TenantID: domain.TenantID(tenant), RunID: domain.TemplateRunID(run), Phase: name, RunPhase: phase, Seq: seq, Command: command,
+			ObjectKey: "tenants/" + tenant + "/runs/" + run + "/logs/" + name + ".log", ContentType: "text/plain; charset=utf-8", SizeBytes: 9, UploadedAt: at,
+		}
+	}
 	for _, log := range []domain.TemplateRunLog{
-		{
-			TenantID:    domain.TenantID("tenant_123"),
-			RunID:       domain.TemplateRunID("run_123"),
-			Phase:       "plan",
-			ObjectKey:   "tenants/tenant_123/runs/run_123/logs/plan.log",
-			ContentType: "text/plain; charset=utf-8",
-			SizeBytes:   18,
-			UploadedAt:  uploadedAt,
-		},
-		{
-			TenantID:    domain.TenantID("tenant_123"),
-			RunID:       domain.TemplateRunID("run_123"),
-			Phase:       "plan-init",
-			ObjectKey:   "tenants/tenant_123/runs/run_123/logs/plan-init.log",
-			ContentType: "text/plain; charset=utf-8",
-			SizeBytes:   12,
-			UploadedAt:  uploadedAt.Add(-time.Minute),
-		},
-		{
-			TenantID:    domain.TenantID("tenant_123"),
-			RunID:       domain.TemplateRunID("run_123"),
-			Phase:       "plan-workspace",
-			ObjectKey:   "tenants/tenant_123/runs/run_123/logs/plan-workspace.log",
-			ContentType: "text/plain; charset=utf-8",
-			SizeBytes:   9,
-			UploadedAt:  uploadedAt.Add(-time.Second),
-		},
-		{
-			TenantID:    domain.TenantID("tenant_456"),
-			RunID:       domain.TemplateRunID("run_456"),
-			Phase:       "plan",
-			ObjectKey:   "tenants/tenant_456/runs/run_456/logs/plan.log",
-			ContentType: "text/plain; charset=utf-8",
-			SizeBytes:   17,
-			UploadedAt:  uploadedAt,
-		},
+		entry("tenant_123", "run_123", domain.RunPhaseApply, 1, domain.TerraformCommandInit, uploadedAt.Add(-time.Hour)),
+		entry("tenant_123", "run_123", domain.RunPhasePlan, 10, domain.TerraformCommandPlan, uploadedAt.Add(-2*time.Hour)),
+		entry("tenant_123", "run_123", domain.RunPhasePlan, 2, domain.TerraformCommandSelectWorkspace, uploadedAt),
+		entry("tenant_123", "run_123", domain.RunPhasePlan, 1, domain.TerraformCommandInit, uploadedAt.Add(time.Minute)),
+		entry("tenant_456", "run_456", domain.RunPhasePlan, 1, domain.TerraformCommandInit, uploadedAt),
 	} {
 		if err := store.RecordTemplateRunLog(ctx, log); err != nil {
 			t.Fatalf("RecordTemplateRunLog returned error: %v", err)
@@ -2349,8 +2337,50 @@ func TestListTemplateRunLogsReturnsTenantScopedMetadataInUploadOrder(t *testing.
 	for _, log := range logs {
 		phases = append(phases, log.Phase)
 	}
-	if want := []string{"plan-init", "plan-workspace", "plan"}; !reflect.DeepEqual(phases, want) {
+	if want := []string{"plan-1", "plan-2", "plan-10", "apply-1"}; !reflect.DeepEqual(phases, want) {
 		t.Fatalf("phases = %q, want %q", phases, want)
+	}
+}
+
+// A command run twice in a phase gets a log each time: its number is part of
+// its identity, so the second does not upsert over the first. The database
+// derives each name.
+func TestRecordTemplateRunLogKeepsARepeatedCommandsLogs(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := NewStore(pool)
+	seedTemplateRun(t, ctx, pool, domain.TemplateRun{
+		ID:              domain.TemplateRunID("run_123"),
+		TenantID:        domain.TenantID("tenant_123"),
+		StackTemplateID: domain.StackTemplateID("stack_template_123"),
+		Operation:       domain.OperationPlan,
+		SelectedRef:     "main",
+		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
+		Status:          domain.TemplateRunQueued,
+		TriggerActor:    domain.UserID("user_123"),
+	})
+	for _, seq := range []int{1, 4} {
+		if err := store.RecordTemplateRunLog(ctx, domain.TemplateRunLog{
+			TenantID: "tenant_123", RunID: "run_123", RunPhase: domain.RunPhasePlan, Seq: seq, Command: domain.TerraformCommandInit,
+			ObjectKey: fmt.Sprintf("tenants/tenant_123/runs/run_123/logs/plan-%d.log", seq), ContentType: "text/plain; charset=utf-8",
+			UploadedAt: time.Now(),
+		}); err != nil {
+			t.Fatalf("RecordTemplateRunLog(plan log %d) returned error: %v", seq, err)
+		}
+	}
+
+	logs, err := store.ListTemplateRunLogs(ctx, "tenant_123", "run_123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(logs) != 2 || logs[0].Phase != "plan-1" || logs[1].Phase != "plan-4" {
+		t.Fatalf("logs = %+v, want plan-1 and plan-4, both init", logs)
+	}
+	got, err := store.GetTemplateRunLog(ctx, "tenant_123", "run_123", "plan-4")
+	if err != nil || got.Seq != 4 || got.ObjectKey != "tenants/tenant_123/runs/run_123/logs/plan-4.log" {
+		t.Fatalf("GetTemplateRunLog(plan-4) = %+v, %v; want log 4", got, err)
 	}
 }
 
@@ -2374,8 +2404,11 @@ func TestRecordTemplateRunLogReturnsNotFoundForOtherTenant(t *testing.T) {
 	err := store.RecordTemplateRunLog(ctx, domain.TemplateRunLog{
 		TenantID:    domain.TenantID("tenant_456"),
 		RunID:       domain.TemplateRunID("run_123"),
-		Phase:       "plan",
-		ObjectKey:   "tenants/tenant_456/runs/run_123/logs/plan.log",
+		Phase:       "plan-1",
+		RunPhase:    domain.RunPhasePlan,
+		Seq:         1,
+		Command:     domain.TerraformCommandPlan,
+		ObjectKey:   "tenants/tenant_456/runs/run_123/logs/plan-1.log",
 		ContentType: "text/plain; charset=utf-8",
 		SizeBytes:   18,
 		UploadedAt:  time.Date(2026, 7, 6, 10, 15, 0, 0, time.UTC),
@@ -3582,10 +3615,11 @@ func TestMigrationRenamesPlanPhaseSetupLogs(t *testing.T) {
 
 	ctx := context.Background()
 	pool := openTestPool(t, ctx)
-	// Stop the first migration short of 0024 by marking it applied.
+	// Stop the first migration short of 0024 by marking it applied, and hold
+	// back 0032 and 0033 too: their columns are not in the rows 0024 converts.
 	if _, err := pool.Exec(ctx, `
 		create table schema_migrations (version text primary key, applied_at timestamptz not null default now());
-		insert into schema_migrations (version) values ('0024_run_phase_log_names');
+		insert into schema_migrations (version) values ('0024_run_phase_log_names'), ('0032_template_run_log_commands'), ('0033_template_run_log_names_derived');
 	`); err != nil {
 		t.Fatal(err)
 	}
@@ -3613,17 +3647,25 @@ func TestMigrationRenamesPlanPhaseSetupLogs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Migrate(ctx, pool); err != nil {
-		t.Fatalf("migrate 0024 over existing logs: %v", err)
-	}
+	// Only through 0024: 0032 drops every log row, and the store reads
+	// columns this schema does not have yet.
+	migrateThrough(t, ctx, pool, "0024_run_phase_log_names")
 
-	logs, err := NewStore(pool).ListTemplateRunLogs(ctx, "tenant_123", "run_123")
+	rows, err := pool.Query(ctx, `select phase, object_key from template_run_logs where tenant_id = 'tenant_123' and run_id = 'run_123'`)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer rows.Close()
 	keys := map[string]string{}
-	for _, log := range logs {
-		keys[log.Phase] = log.ObjectKey
+	for rows.Next() {
+		var phase, key string
+		if err := rows.Scan(&phase, &key); err != nil {
+			t.Fatal(err)
+		}
+		keys[phase] = key
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
 	}
 	want := map[string]string{"plan-init": "logs/init.log", "plan-workspace": "logs/workspace.log", "plan": "logs/plan.log"}
 	if !reflect.DeepEqual(keys, want) {

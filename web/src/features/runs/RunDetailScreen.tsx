@@ -180,6 +180,7 @@ export default function RunDetailScreen() {
         key={runId}
         runId={runId}
         logs={logsQuery.data}
+        executions={run?.executions}
         failed={logsQuery.isError}
         finished={Boolean(run && isTerminalRunStatus(run.status))}
       />

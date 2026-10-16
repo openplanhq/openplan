@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/vishu42/openplan/internal/artifacts"
 	"github.com/vishu42/openplan/internal/domain"
 	"github.com/vishu42/openplan/internal/runseal"
 )
@@ -86,9 +87,30 @@ func (activities *ControlActivities) RecordTemplateRunEvent(ctx context.Context,
 	return nil
 }
 
-// RecordTemplateRunLog records the metadata for a phase log the executor has
-// already uploaded. The row is keyed by run and phase, so a retry upserts.
+// RecordTemplateRunLog records the metadata for a log the executor has
+// already uploaded. The row is keyed by run, phase and number, so a retry
+// upserts.
+//
+// The object key is derived here from the run and the name rather than taken
+// from the executor's report: the key is what the API later reads, and an
+// executor that could choose it could point this run's log at any object in
+// the store, another tenant's included.
 func (activities *ControlActivities) RecordTemplateRunLog(ctx context.Context, log domain.TemplateRunLog) error {
+	if !log.Command.Valid() {
+		return fmt.Errorf("log has unknown command %q", log.Command)
+	}
+	// The name is derived from the phase and number, as the database derives
+	// its own copy, so the key below is the one the row will be read by.
+	name, err := domain.RunLogName(log.RunPhase, log.Seq)
+	if err != nil {
+		return err
+	}
+	log.Phase = name
+	key, err := artifacts.LogKey(log.TenantID, log.RunID, name)
+	if err != nil {
+		return err
+	}
+	log.ObjectKey = key
 	if err := activities.store.RecordTemplateRunLog(ctx, log); err != nil {
 		return fmt.Errorf("record template run log metadata: %w", err)
 	}

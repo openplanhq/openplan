@@ -5,6 +5,7 @@ import (
 	"go/parser"
 	"go/token"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -361,5 +362,79 @@ func TestRunPhaseValid(t *testing.T) {
 		if phase.Valid() {
 			t.Fatalf("%q.Valid() = true, want false", phase)
 		}
+	}
+}
+
+func TestRunLogName(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		phase RunPhase
+		seq   int
+		want  string
+	}{
+		{phase: RunPhasePlan, seq: 1, want: "plan-1"},
+		{phase: RunPhasePlan, seq: 12, want: "plan-12"},
+		{phase: RunPhaseApply, seq: 1, want: "apply-1"},
+	} {
+		got, err := RunLogName(tt.phase, tt.seq)
+		if err != nil {
+			t.Fatalf("RunLogName(%q, %d) returned error: %v", tt.phase, tt.seq, err)
+		}
+		if got != tt.want {
+			t.Fatalf("RunLogName(%q, %d) = %q, want %q", tt.phase, tt.seq, got, tt.want)
+		}
+		// Every name the workflow hands out must pass the check the
+		// executor, the API and the database apply.
+		if !ValidLogName(got) {
+			t.Fatalf("RunLogName(%q, %d) = %q, which ValidLogName rejects", tt.phase, tt.seq, got)
+		}
+	}
+	if _, err := RunLogName("", 1); err == nil {
+		t.Fatal("RunLogName accepted an empty run phase")
+	}
+	if _, err := RunLogName(RunPhasePlan, 0); err == nil {
+		t.Fatal("RunLogName accepted log number 0")
+	}
+}
+
+func TestValidLogName(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range []string{"plan-1", "apply-12", "plan"} {
+		if !ValidLogName(name) {
+			t.Fatalf("ValidLogName(%q) = false, want true", name)
+		}
+	}
+	for _, name := range []string{"", "Plan", "-plan", "plan.log", "../plan", "plan/init", "plan init", strings.Repeat("a", 64)} {
+		if ValidLogName(name) {
+			t.Fatalf("ValidLogName(%q) = true, want false", name)
+		}
+	}
+}
+
+func TestTerraformCommandLine(t *testing.T) {
+	t.Parallel()
+
+	for command, want := range map[TerraformCommandType]string{
+		TerraformCommandInit:            "tofu init",
+		TerraformCommandSelectWorkspace: "tofu workspace select",
+		TerraformCommandPlan:            "tofu plan",
+		TerraformCommandPlanDestroy:     "tofu plan -destroy",
+		// A destroy applies its saved plan, so it runs apply, as both
+		// other applies do.
+		TerraformCommandApply:            "tofu apply",
+		TerraformCommandDestroy:          "tofu apply",
+		TerraformCommandApplyAutoApprove: "tofu apply",
+	} {
+		if !command.Valid() {
+			t.Fatalf("%q is not valid", command)
+		}
+		if got := command.CommandLine(); got != want {
+			t.Fatalf("%q command line = %q, want %q", command, got, want)
+		}
+	}
+	if TerraformCommandType("refresh").Valid() || TerraformCommandType("refresh").CommandLine() != "" {
+		t.Fatal("an unknown command is valid or has a command line")
 	}
 }

@@ -51,7 +51,7 @@ describe("StyleGuide", () => {
   it("renders the real LogSteps in the shadcn section", () => {
     render(<StyleGuide />);
     const section = within(screen.getByTestId("sg-theme"));
-    expect(section.getByRole("button", { name: "plan" }).getAttribute("aria-expanded")).toBe("true");
+    expect(section.getByRole("button", { name: "tofu plan" }).getAttribute("aria-expanded")).toBe("true");
   });
 
   it("shows every shadcn Button variant", () => {

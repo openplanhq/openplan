@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/vishu42/openplan/internal/domain"
 )
 
 func TestFileSinkWritesAndAppendsPhaseLog(t *testing.T) {
@@ -57,43 +55,5 @@ func TestFileSinkRejectsUnsafePhase(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "safe path") {
 		t.Fatalf("error = %q, want safe path context", err.Error())
-	}
-}
-
-func TestFileNameForTerraformCommand(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		command  domain.TerraformCommandType
-		runPhase domain.RunPhase
-		want     string
-	}{
-		{command: domain.TerraformCommandInit, runPhase: domain.RunPhasePlan, want: "plan-init.log"},
-		{command: domain.TerraformCommandSelectWorkspace, runPhase: domain.RunPhasePlan, want: "plan-workspace.log"},
-		{command: domain.TerraformCommandPlan, runPhase: domain.RunPhasePlan, want: "plan.log"},
-		{command: domain.TerraformCommandPlanDestroy, runPhase: domain.RunPhasePlan, want: "plan.log"},
-		{command: domain.TerraformCommandInit, runPhase: domain.RunPhaseApply, want: "apply-init.log"},
-		{command: domain.TerraformCommandSelectWorkspace, runPhase: domain.RunPhaseApply, want: "apply-workspace.log"},
-		{command: domain.TerraformCommandApply, runPhase: domain.RunPhaseApply, want: "apply.log"},
-		{command: domain.TerraformCommandApplyAutoApprove, runPhase: domain.RunPhaseApply, want: "apply.log"},
-		{command: domain.TerraformCommandDestroy, runPhase: domain.RunPhaseApply, want: "destroy.log"},
-	}
-
-	for _, tt := range tests {
-		got, err := FileNameForTerraformCommand(tt.command, tt.runPhase)
-		if err != nil {
-			t.Fatalf("FileNameForTerraformCommand(%q, %q) returned error: %v", tt.command, tt.runPhase, err)
-		}
-		if got != tt.want {
-			t.Fatalf("FileNameForTerraformCommand(%q, %q) = %q, want %q", tt.command, tt.runPhase, got, tt.want)
-		}
-	}
-}
-
-func TestFileNameForTerraformCommandRejectsMissingRunPhase(t *testing.T) {
-	t.Parallel()
-
-	if _, err := FileNameForTerraformCommand(domain.TerraformCommandInit, ""); err == nil {
-		t.Fatal("FileNameForTerraformCommand accepted an empty run phase")
 	}
 }
