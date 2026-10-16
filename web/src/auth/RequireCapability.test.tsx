@@ -1,8 +1,10 @@
+// @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "./AuthContext";
 import type { AuthContextValue } from "./AuthContext";
 import RequireCapability from "./RequireCapability";
@@ -206,5 +208,100 @@ describe("RequireCapability — route mode", () => {
     const markup = renderRoute("canView");
 
     expect(markup).toBe("");
+  });
+});
+
+// What the stack's page shows when its stack never arrives. Before, each of
+// these was a blank page: nothing said why, and nothing offered a way on.
+describe("RequireCapability — a stack that does not load", () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  function respond(status: number, body: unknown): Response {
+    return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  }
+
+  function renderStackRoute(queryClient: QueryClient, auth: AuthContextValue = authValue()) {
+    const testRouter = createMemoryRouter(
+      [
+        {
+          path: "/stacks/:stackId",
+          element: <RequireCapability capability="canView" mode="route" />,
+          children: [{ index: true, element: <span data-testid="protected-route">shown</span> }]
+        }
+      ],
+      { initialEntries: ["/stacks/stack_1"] }
+    );
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <AuthContext.Provider value={auth}>
+          <RouterProvider router={testRouter} />
+        </AuthContext.Provider>
+      </QueryClientProvider>
+    );
+  }
+
+  it("signs the person out on a 401, with nothing drawn in the meantime", async () => {
+    // A 401 sends client.ts's fetchWithAuth to the sign-in page through
+    // location.assign; stub it so jsdom does not try to navigate.
+    vi.stubGlobal("location", { ...window.location, assign: vi.fn() });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => respond(401, { error: "unauthorized", message: "unauthorized" }));
+    const logout = vi.fn();
+
+    renderStackRoute(testQueryClient(), authValue({ logout }));
+
+    await waitFor(() => expect(logout).toHaveBeenCalled());
+    expect(screen.queryByTestId("stack-route-error")).toBeNull();
+    expect(screen.queryByTestId("protected-route")).toBeNull();
+  });
+
+  // The app retries a failed query three times; a 404 answers the same on
+  // each, so the page says so after the first rather than after the last.
+  it("says the page is not found on the first 404, without waiting out the retries", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => respond(404, { error: "not_found", message: "not found" }));
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 3, retryDelay: 60_000 } } });
+
+    renderStackRoute(queryClient);
+
+    expect(await screen.findByTestId("route-not-found")).toBeTruthy();
+  });
+
+  it("answers a stack the person may not see as not found, never as not permitted", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => respond(403, { error: "forbidden", message: "forbidden" }));
+
+    renderStackRoute(testQueryClient());
+
+    expect(await screen.findByTestId("route-not-found")).toBeTruthy();
+    expect(screen.queryByTestId("route-access-denied")).toBeNull();
+  });
+
+  it("says the authorization service is unavailable on a 503", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => respond(503, { error: "unavailable", message: "unavailable" }));
+
+    renderStackRoute(testQueryClient());
+
+    expect(await screen.findByTestId("route-service-unavailable")).toBeTruthy();
+    expect(screen.queryByTestId("protected-route")).toBeNull();
+  });
+
+  it("says the stack failed to load, and loads it on Retry", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(respond(500, { error: "internal", message: "boom" }))
+      .mockResolvedValueOnce(respond(200, stackView({ canView: true })));
+
+    renderStackRoute(testQueryClient());
+
+    const error = await screen.findByTestId("stack-route-error");
+    expect(error.textContent).toContain("Something went wrong while loading this stack.");
+    expect(screen.getByRole("alert")).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("stack-route-retry"));
+
+    expect(await screen.findByTestId("protected-route")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
