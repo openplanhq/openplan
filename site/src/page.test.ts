@@ -159,6 +159,12 @@ describe("site/index.html", () => {
     expect(HTML).toContain("url=https://github.com/openplanhq/openplan/releases/latest/download\n");
   });
 
+  it("shows the real stack page, the README's own screenshot", () => {
+    expect(HTML).toMatch(/<img\b[^>]*\bsrc="\/stack-page\.png"[^>]*\balt="[^"]{40,}"/);
+    expect(read("public/stack-page.png")).toBe(read("../docs/ss/stack-template-and-runs.png"));
+    expect(() => read("public/stack-page.webp")).not.toThrow();
+  });
+
   it("ends on a footer whose painting exists in public/", () => {
     const footer = HTML.split("<footer")[1] ?? "";
     expect(footer).toMatch(/<img\b[^>]*\bsrc="\/footer-train\.jpg"/);
