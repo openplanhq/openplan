@@ -52,11 +52,23 @@ function run(overrides: Partial<TemplateRun> = {}): TemplateRun {
   };
 }
 
+// What wrote each log, by its name, as the API reports it.
+const LOG_COMMANDS: Record<string, Pick<TemplateRunLog, "run_phase" | "command" | "command_line">> = {
+  "plan-init": { run_phase: "plan", command: "init", command_line: "tofu init" },
+  "plan-workspace": { run_phase: "plan", command: "select_workspace", command_line: "tofu workspace select" },
+  plan: { run_phase: "plan", command: "plan", command_line: "tofu plan" },
+  "apply-init": { run_phase: "apply", command: "init", command_line: "tofu init" },
+  "apply-workspace": { run_phase: "apply", command: "select_workspace", command_line: "tofu workspace select" },
+  apply: { run_phase: "apply", command: "apply", command_line: "tofu apply" }
+};
+
 function runLog(overrides: Partial<TemplateRunLog> = {}): TemplateRunLog {
+  const phase = overrides.phase ?? "plan";
   return {
     tenant_id: "tenant_123",
     run_id: "run_1",
-    phase: "plan",
+    phase,
+    ...(LOG_COMMANDS[phase] ?? { run_phase: "plan", command: phase, command_line: phase }),
     object_key: "key",
     content_type: "text/plain",
     size_bytes: 10,
@@ -227,12 +239,12 @@ describe("RunDetailScreen", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
       if (url.endsWith("/logs")) {
-        return jsonResponse([runLog({ phase: "init" }), runLog({ phase: "plan" })]);
+        return jsonResponse([runLog({ phase: "plan-init" }), runLog({ phase: "plan" })]);
       }
       if (url.endsWith("/logs/plan")) {
         return new Response("plan log body", { status: 200, headers: { "content-type": "text/plain" } });
       }
-      if (url.endsWith("/logs/init")) {
+      if (url.endsWith("/logs/plan-init")) {
         return new Response("init log body", { status: 200, headers: { "content-type": "text/plain" } });
       }
       throw new Error(`unexpected fetch: ${url}`);
@@ -247,12 +259,14 @@ describe("RunDetailScreen", () => {
     expect(screen.getByText("main @ abcdef1")).toBeTruthy();
     await waitFor(() => expect(screen.getByText("plan log body")).toBeTruthy());
     expect(screen.getByTestId("log-scroll-area-plan").getAttribute("data-slot")).toBe("scroll-area");
-    const initToggle = screen.getByRole("button", { name: "init" });
-    const planToggle = screen.getByRole("button", { name: "plan" });
+    // Rows read the command that ran, under the phase that ran it.
+    const initToggle = screen.getByRole("button", { name: "tofu init" });
+    const planToggle = screen.getByRole("button", { name: "tofu plan" });
+    expect(screen.getByRole("heading", { level: 5, name: "Plan" })).toBeTruthy();
     expect(initToggle.getAttribute("aria-expanded")).toBe("false");
     expect(planToggle.getAttribute("aria-expanded")).toBe("true");
-    // A closed phase does not fetch its log.
-    expect(fetchMock.mock.calls.some(([reqInput]) => String(reqInput).endsWith("/logs/init"))).toBe(false);
+    // A closed row does not fetch its log.
+    expect(fetchMock.mock.calls.some(([reqInput]) => String(reqInput).endsWith("/logs/plan-init"))).toBe(false);
 
     // Opening one phase leaves the others as they were.
     fireEvent.click(initToggle);
@@ -263,6 +277,42 @@ describe("RunDetailScreen", () => {
     expect(planToggle.getAttribute("aria-expanded")).toBe("false");
     expect(screen.queryByText("plan log body")).toBeNull();
     expect(screen.getByText("init log body")).toBeTruthy();
+  });
+
+  it("groups an approved run's logs under its plan and its apply, saying who started each", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(
+      queryKeys.templateRun("tenant_123", "run_1"),
+      run({
+        operation: "apply",
+        executions: [
+          { phase: "plan", actor: "user_123", actor_display_name: "Priya Raman", started_at: "2026-07-20T00:00:00Z" },
+          { phase: "apply", actor: "user_456", actor_display_name: "Sam Ortiz", started_at: "2026-07-21T09:12:00Z" }
+        ]
+      })
+    );
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/logs")) {
+        return jsonResponse(["plan-init", "plan-workspace", "plan", "apply-init", "apply-workspace", "apply"].map((phase) => runLog({ phase })));
+      }
+      return new Response("log body", { status: 200, headers: { "content-type": "text/plain" } });
+    });
+
+    renderScreen(queryClient);
+
+    const panel = screen.getByTestId("run-logs-panel");
+    await waitFor(() => expect(within(panel).getAllByRole("button", { name: "tofu init" })).toHaveLength(2));
+    const plan = within(panel).getByRole("heading", { level: 5, name: /^Plan/ });
+    const apply = within(panel).getByRole("heading", { level: 5, name: /^Apply/ });
+    expect(plan.textContent).toContain("started by Priya Raman");
+    // The apply was started by approving the plan.
+    expect(apply.textContent).toContain("approved by Sam Ortiz");
+    // Each phase holds its own init, and the apply's apply opens as the latest.
+    const applyGroup = apply.parentElement as HTMLElement;
+    expect(within(applyGroup).getByRole("button", { name: "tofu init" })).toBeTruthy();
+    expect(within(applyGroup).getByRole("button", { name: "tofu apply" }).getAttribute("aria-expanded")).toBe("true");
   });
 
   it("opens each newer phase as it arrives, keeps the rows already open or closed, and fetches each log once", async () => {
@@ -300,10 +350,10 @@ describe("RunDetailScreen", () => {
     await waitFor(() => expect(screen.getByText("plan-workspace log body")).toBeTruthy());
     expect(screen.getByText("plan-init log body")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "plan-workspace" }));
+    fireEvent.click(screen.getByRole("button", { name: "tofu workspace select" }));
     advance("planning", ["plan-init", "plan-workspace", "plan"]);
     await waitFor(() => expect(screen.getByText("plan log body")).toBeTruthy());
-    expect(screen.getByRole("button", { name: "plan-workspace" }).getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByRole("button", { name: "tofu workspace select" }).getAttribute("aria-expanded")).toBe("false");
     expect(screen.getByText("plan-init log body")).toBeTruthy();
 
     // The run moved three times; a log that was already fetched is not fetched again.

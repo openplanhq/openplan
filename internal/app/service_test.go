@@ -1773,10 +1773,13 @@ func TestGetTemplateRunReturnsTenantScopedRun(t *testing.T) {
 			Operation:       domain.OperationPlan,
 			Status:          domain.TemplateRunCompleted,
 		},
-		executions: []domain.TemplateRunWorkflowExecution{{Phase: domain.RunPhasePlan, Status: domain.TemplateRunExecutionSucceeded}},
+		executions: []domain.TemplateRunWorkflowExecution{
+			{Phase: domain.RunPhasePlan, Actor: "user_requester", Status: domain.TemplateRunExecutionSucceeded},
+			{Phase: domain.RunPhaseApply, Actor: "user_unknown", Status: domain.TemplateRunExecutionSucceeded},
+		},
 	}
 	service := NewService(Service{
-		Users:          &fakeUserRepository{},
+		Users:          &fakeUserRepository{users: []UserProfile{{Sub: "user_requester", DisplayName: "Priya Raman"}}},
 		Authorization:  testPlatformAuthorizer(t),
 		TemplateRuns:   runs,
 		StackTemplates: &recordingStackTemplateRepository{stackTemplate: domain.StackTemplate{ID: "stack_template_123", TenantID: "tenant_123", StackID: "stack_123"}},
@@ -1800,8 +1803,16 @@ func TestGetTemplateRunReturnsTenantScopedRun(t *testing.T) {
 	if runs.gotGetRunID != domain.TemplateRunID("run_123") {
 		t.Fatalf("run lookup = %q, want run_123", runs.gotGetRunID)
 	}
-	if len(run.Executions) != 1 || run.Executions[0].Phase != domain.RunPhasePlan {
-		t.Fatalf("executions = %#v, want the run's plan", run.Executions)
+	if len(run.Executions) != 2 || run.Executions[0].Phase != domain.RunPhasePlan {
+		t.Fatalf("executions = %#v, want the run's plan and apply", run.Executions)
+	}
+	// Each execution's actor is labelled as the trigger actor is: by name,
+	// or by subject when openplan has no name for it.
+	if got := run.Executions[0].ActorDisplayName; got != "Priya Raman" {
+		t.Fatalf("plan actor display name = %q, want Priya Raman", got)
+	}
+	if got := run.Executions[1].ActorDisplayName; got != "user_unknown" {
+		t.Fatalf("apply actor display name = %q, want the subject", got)
 	}
 }
 
@@ -2190,8 +2201,10 @@ func TestListTemplateRunLogsChecksRunOwnershipBeforeListingMetadata(t *testing.T
 			{
 				TenantID:    domain.TenantID("tenant_123"),
 				RunID:       domain.TemplateRunID("run_123"),
-				Phase:       "init",
-				ObjectKey:   "tenants/tenant_123/runs/run_123/logs/init.log",
+				Phase:       "plan-init",
+				RunPhase:    domain.RunPhasePlan,
+				Command:     domain.TerraformCommandInit,
+				ObjectKey:   "tenants/tenant_123/runs/run_123/logs/plan-init.log",
 				ContentType: "text/plain; charset=utf-8",
 				SizeBytes:   12,
 				UploadedAt:  time.Date(2026, 7, 6, 10, 15, 0, 0, time.UTC),
@@ -2215,6 +2228,9 @@ func TestListTemplateRunLogsChecksRunOwnershipBeforeListingMetadata(t *testing.T
 
 	if len(logs) != 1 {
 		t.Fatalf("len(logs) = %d, want 1", len(logs))
+	}
+	if logs[0].CommandLine != "tofu init" {
+		t.Fatalf("command line = %q, want tofu init", logs[0].CommandLine)
 	}
 	if metadata.gotListRunID != domain.TemplateRunID("run_123") {
 		t.Fatalf("metadata run lookup = %q, want run_123", metadata.gotListRunID)

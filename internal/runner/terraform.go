@@ -33,7 +33,7 @@ type LocalTerraformRunner struct {
 	executor CommandExecutor
 }
 
-const terraformExecutable = "tofu"
+const terraformExecutable = domain.TerraformExecutable
 
 // NewLocalTerraformRunnerWithExecutor returns a runner backed by executor.
 //

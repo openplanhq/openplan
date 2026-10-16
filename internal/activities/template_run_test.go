@@ -273,7 +273,10 @@ func TestRecordTemplateRunLogDelegatesToRecorder(t *testing.T) {
 	t.Parallel()
 
 	recorder := &recordingLogMetadataRecorder{}
-	log := domain.TemplateRunLog{TenantID: "tenant_123", RunID: "run_123", Phase: "plan", ObjectKey: "tenants/tenant_123/runs/run_123/logs/plan.log"}
+	log := domain.TemplateRunLog{
+		TenantID: "tenant_123", RunID: "run_123", Phase: "plan", RunPhase: domain.RunPhasePlan, Command: domain.TerraformCommandPlan,
+		ObjectKey: "tenants/tenant_123/runs/run_123/logs/plan.log",
+	}
 
 	if err := NewControlActivities(&controlStoreStub{logs: recorder}, nil).RecordTemplateRunLog(context.Background(), log); err != nil {
 		t.Fatalf("RecordTemplateRunLog returned error: %v", err)
@@ -297,6 +300,12 @@ func TestRecordTemplateRunLogDelegatesToRecorder(t *testing.T) {
 	unsafe.Phase = "../plan"
 	if err := NewControlActivities(&controlStoreStub{logs: recorder}, nil).RecordTemplateRunLog(context.Background(), unsafe); err == nil {
 		t.Fatal("RecordTemplateRunLog accepted an unsafe log name")
+	}
+
+	unknown := log
+	unknown.Command = "refresh"
+	if err := NewControlActivities(&controlStoreStub{logs: recorder}, nil).RecordTemplateRunLog(context.Background(), unknown); err == nil {
+		t.Fatal("RecordTemplateRunLog accepted an unknown command")
 	}
 
 	recorder.err = errors.New("database unavailable")

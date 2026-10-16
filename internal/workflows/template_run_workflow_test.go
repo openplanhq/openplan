@@ -1457,6 +1457,8 @@ func TestTemplatePlanWorkflowPinsLogIdentityToTheRun(t *testing.T) {
 				TenantID:  domain.TenantID("tenant_victim"),
 				RunID:     domain.TemplateRunID("run_victim"),
 				Phase:     "apply",
+				RunPhase:  domain.RunPhaseApply,
+				Command:   domain.TerraformCommandDestroy,
 				ObjectKey: "tenants/tenant_victim/runs/run_victim/logs/apply.log",
 			}, nil
 		})
@@ -1486,6 +1488,14 @@ func TestTemplatePlanWorkflowPinsLogIdentityToTheRun(t *testing.T) {
 		}
 		if log.Phase != named[i] {
 			t.Fatalf("recorded log %d as %q, want the workflow's name %q", i, log.Phase, named[i])
+		}
+		// What wrote the log is the workflow's to say too: a plan workflow
+		// never runs a destroy.
+		if log.RunPhase != domain.RunPhasePlan || log.Command == domain.TerraformCommandDestroy {
+			t.Fatalf("recorded %s log as %s/%s, want the plan phase's own command", log.Phase, log.RunPhase, log.Command)
+		}
+		if want, _ := domain.TerraformLogName(log.Command, log.RunPhase); want != log.Phase {
+			t.Fatalf("recorded command %s names log %q, want %q", log.Command, want, log.Phase)
 		}
 	}
 }

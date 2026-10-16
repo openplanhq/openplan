@@ -422,3 +422,29 @@ func TestValidLogName(t *testing.T) {
 		}
 	}
 }
+
+func TestTerraformCommandLine(t *testing.T) {
+	t.Parallel()
+
+	for command, want := range map[TerraformCommandType]string{
+		TerraformCommandInit:            "tofu init",
+		TerraformCommandSelectWorkspace: "tofu workspace select",
+		TerraformCommandPlan:            "tofu plan",
+		TerraformCommandPlanDestroy:     "tofu plan -destroy",
+		// A destroy applies its saved plan, so it runs apply, as both
+		// other applies do.
+		TerraformCommandApply:            "tofu apply",
+		TerraformCommandDestroy:          "tofu apply",
+		TerraformCommandApplyAutoApprove: "tofu apply",
+	} {
+		if !command.Valid() {
+			t.Fatalf("%q is not valid", command)
+		}
+		if got := command.CommandLine(); got != want {
+			t.Fatalf("%q command line = %q, want %q", command, got, want)
+		}
+	}
+	if TerraformCommandType("refresh").Valid() || TerraformCommandType("refresh").CommandLine() != "" {
+		t.Fatal("an unknown command is valid or has a command line")
+	}
+}

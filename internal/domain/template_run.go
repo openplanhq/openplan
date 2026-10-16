@@ -45,6 +45,40 @@ const (
 	TerraformCommandApplyAutoApprove TerraformCommandType = "apply_auto_approve"
 )
 
+// TerraformExecutable is the binary every Terraform command runs.
+const TerraformExecutable = "tofu"
+
+// terraformCommandLines is each command as a run's logs show it: what
+// actually ran, minus the arguments people do not need to read (the workspace
+// name, -input=false, the plan file). -destroy stays because it changes what
+// the step means. Both applies of a saved plan, a destroy's included, run
+// "apply".
+var terraformCommandLines = map[TerraformCommandType]string{
+	TerraformCommandInit:             "init",
+	TerraformCommandSelectWorkspace:  "workspace select",
+	TerraformCommandPlan:             "plan",
+	TerraformCommandPlanDestroy:      "plan -destroy",
+	TerraformCommandApply:            "apply",
+	TerraformCommandDestroy:          "apply",
+	TerraformCommandApplyAutoApprove: "apply",
+}
+
+// Valid reports whether the command is one an executor runs.
+func (command TerraformCommandType) Valid() bool {
+	_, ok := terraformCommandLines[command]
+	return ok
+}
+
+// CommandLine is the command as people read it: "tofu plan -destroy". Empty
+// for a command that is not valid.
+func (command TerraformCommandType) CommandLine() string {
+	line, ok := terraformCommandLines[command]
+	if !ok {
+		return ""
+	}
+	return TerraformExecutable + " " + line
+}
+
 // PlanSummary counts the resource changes in a saved plan. A replacement
 // counts once as an add and once as a destroy, as Terraform's own summary line
 // does.
@@ -193,8 +227,11 @@ type TemplateRunWorkflowExecution struct {
 	WorkflowID string   `json:"workflow_id"`
 	// Actor is who started this execution: the run's requester for a plan or
 	// an auto-approved apply, and its approver for an approved apply.
-	Actor  UserID                     `json:"actor"`
-	Status TemplateRunExecutionStatus `json:"status"`
+	Actor UserID `json:"actor"`
+	// ActorDisplayName labels Actor for people, as TriggerActorDisplayName
+	// labels the run's trigger actor.
+	ActorDisplayName string                     `json:"actor_display_name"`
+	Status           TemplateRunExecutionStatus `json:"status"`
 	// FinishedAt reads as the zero time while the execution runs.
 	StartedAt    time.Time `json:"started_at"`
 	FinishedAt   time.Time `json:"finished_at"`
@@ -265,13 +302,22 @@ type TemplateRun struct {
 
 // TemplateRunLog records the object-store location for one run phase log.
 type TemplateRunLog struct {
-	TenantID    TenantID      `json:"tenant_id"`
-	RunID       TemplateRunID `json:"run_id"`
-	Phase       string        `json:"phase"`
-	ObjectKey   string        `json:"object_key"`
-	ContentType string        `json:"content_type"`
-	SizeBytes   int64         `json:"size_bytes"`
-	UploadedAt  time.Time     `json:"uploaded_at"`
+	TenantID TenantID      `json:"tenant_id"`
+	RunID    TemplateRunID `json:"run_id"`
+	// Phase is the log's name, unique within the run: the key it is stored
+	// and read under (TerraformLogName), not something to show.
+	Phase string `json:"phase"`
+	// RunPhase and Command are what wrote the log: the run's plan or apply,
+	// and the Terraform command it ran.
+	RunPhase RunPhase             `json:"run_phase"`
+	Command  TerraformCommandType `json:"command"`
+	// CommandLine is Command as people read it. Derived when the log is
+	// read, never stored, so it follows what the executor runs.
+	CommandLine string    `json:"command_line"`
+	ObjectKey   string    `json:"object_key"`
+	ContentType string    `json:"content_type"`
+	SizeBytes   int64     `json:"size_bytes"`
+	UploadedAt  time.Time `json:"uploaded_at"`
 }
 
 // TemplateRunApproval records who approved a waiting run.

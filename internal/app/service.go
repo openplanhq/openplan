@@ -1732,9 +1732,10 @@ func (service *Service) ListTemplateRuns(ctx context.Context, command ListTempla
 	return runs, nil
 }
 
-// labelTriggerActors fills each run's TriggerActorDisplayName: the users
-// projection's name for its trigger actor, or the subject itself when it has
-// no row, as a grants list labels one. One lookup covers every run.
+// labelTriggerActors fills each run's TriggerActorDisplayName, and each of its
+// executions' ActorDisplayName: the users projection's name for the subject,
+// or the subject itself when it has no row, as a grants list labels one. One
+// lookup covers every run.
 func (service *Service) labelTriggerActors(ctx context.Context, runs ...*domain.TemplateRun) error {
 	if err := service.requireUserRepository(); err != nil {
 		return err
@@ -1742,14 +1743,22 @@ func (service *Service) labelTriggerActors(ctx context.Context, runs ...*domain.
 	subs := make([]string, 0, len(runs))
 	for _, run := range runs {
 		subs = append(subs, string(run.TriggerActor))
+		for _, execution := range run.Executions {
+			subs = append(subs, string(execution.Actor))
+		}
 	}
 	profiles, err := service.Users.UsersBySubs(ctx, subs)
 	if err != nil {
 		return fmt.Errorf("look up trigger actors: %w", err)
 	}
+	label := func(sub domain.UserID) string {
+		return strval.FirstNonEmpty(profiles[string(sub)].DisplayName, string(sub))
+	}
 	for _, run := range runs {
-		sub := string(run.TriggerActor)
-		run.TriggerActorDisplayName = strval.FirstNonEmpty(profiles[sub].DisplayName, sub)
+		run.TriggerActorDisplayName = label(run.TriggerActor)
+		for i := range run.Executions {
+			run.Executions[i].ActorDisplayName = label(run.Executions[i].Actor)
+		}
 	}
 	return nil
 }
@@ -1795,6 +1804,9 @@ func (service *Service) ListTemplateRunLogs(ctx context.Context, command ListTem
 	}
 	if logs == nil {
 		return []domain.TemplateRunLog{}, nil
+	}
+	for i := range logs {
+		logs[i].CommandLine = logs[i].Command.CommandLine()
 	}
 
 	return logs, nil

@@ -98,6 +98,9 @@ func (activities *ControlActivities) RecordTemplateRunLog(ctx context.Context, l
 	if !domain.ValidLogName(log.Phase) {
 		return fmt.Errorf("invalid log name %q", log.Phase)
 	}
+	if !log.RunPhase.Valid() || !log.Command.Valid() {
+		return fmt.Errorf("log %q has run phase %q and command %q, want a known pair", log.Phase, log.RunPhase, log.Command)
+	}
 	key, err := artifacts.LogKey(log.TenantID, log.RunID, log.Phase)
 	if err != nil {
 		return err

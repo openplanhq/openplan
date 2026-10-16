@@ -561,7 +561,7 @@ func (s *session) terraform(command domain.TerraformCommandType) (domain.RunTerr
 	}).Get(ctx, &output)
 	// A failed command's log is what explains the failure, so it is saved
 	// either way. A session whose executor is gone fails this too.
-	logErr := s.saveLog(logName)
+	logErr := s.saveLog(logName, command)
 	switch {
 	case runErr != nil && logErr != nil:
 		return domain.RunTerraformActivityOutput{}, fmt.Errorf("%w (also failed to save its log: %w)", runErr, logErr)
@@ -574,8 +574,10 @@ func (s *session) terraform(command domain.TerraformCommandType) (domain.RunTerr
 }
 
 // saveLog uploads the log the executor spooled under name, from a sandbox of
-// its own (UploadLog), then records it on the control plane.
-func (s *session) saveLog(name string) error {
+// its own (UploadLog), then records it on the control plane with the command
+// and phase that wrote it, which the workflow knows and the executor does not
+// get to say.
+func (s *session) saveLog(name string, command domain.TerraformCommandType) error {
 	ctx := workflow.WithStartToCloseTimeout(s.ctx, 5*time.Minute)
 	var log domain.TemplateRunLog
 	if err := workflow.ExecuteActivity(ctx, domain.UploadLogActivityName, domain.UploadLogActivityInput{
@@ -585,6 +587,8 @@ func (s *session) saveLog(name string) error {
 	}).Get(ctx, &log); err != nil {
 		return fmt.Errorf("upload log: %w", err)
 	}
+	log.Command = command
+	log.RunPhase = s.ws.phase
 	return s.run.log(name, log)
 }
 

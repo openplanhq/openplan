@@ -1104,12 +1104,14 @@ func (store *Store) RecordTemplateRunLog(ctx context.Context, log domain.Templat
 			tenant_id,
 			run_id,
 			phase,
+			run_phase,
+			command,
 			object_key,
 			content_type,
 			size_bytes,
 			uploaded_at
 		)
-		select $1, $2, $3, $4, $5, $6, $7
+		select $1, $2, $3, $4, $5, $6, $7, $8, $9
 		where exists (
 			select 1
 			from template_runs
@@ -1117,6 +1119,8 @@ func (store *Store) RecordTemplateRunLog(ctx context.Context, log domain.Templat
 				and id = $2
 		)
 		on conflict (tenant_id, run_id, phase) do update set
+			run_phase = excluded.run_phase,
+			command = excluded.command,
 			object_key = excluded.object_key,
 			content_type = excluded.content_type,
 			size_bytes = excluded.size_bytes,
@@ -1125,6 +1129,8 @@ func (store *Store) RecordTemplateRunLog(ctx context.Context, log domain.Templat
 		log.TenantID,
 		log.RunID,
 		log.Phase,
+		log.RunPhase,
+		log.Command,
 		log.ObjectKey,
 		log.ContentType,
 		log.SizeBytes,
@@ -1146,6 +1152,8 @@ func (store *Store) GetTemplateRunLog(ctx context.Context, tenantID domain.Tenan
 			tenant_id,
 			run_id,
 			phase,
+			run_phase,
+			command,
 			object_key,
 			content_type,
 			size_bytes,
@@ -1158,6 +1166,8 @@ func (store *Store) GetTemplateRunLog(ctx context.Context, tenantID domain.Tenan
 		&log.TenantID,
 		&log.RunID,
 		&log.Phase,
+		&log.RunPhase,
+		&log.Command,
 		&log.ObjectKey,
 		&log.ContentType,
 		&log.SizeBytes,
@@ -1178,6 +1188,8 @@ func (store *Store) ListTemplateRunLogs(ctx context.Context, tenantID domain.Ten
 			tenant_id,
 			run_id,
 			phase,
+			run_phase,
+			command,
 			object_key,
 			content_type,
 			size_bytes,
@@ -1199,6 +1211,8 @@ func (store *Store) ListTemplateRunLogs(ctx context.Context, tenantID domain.Ten
 			&log.TenantID,
 			&log.RunID,
 			&log.Phase,
+			&log.RunPhase,
+			&log.Command,
 			&log.ObjectKey,
 			&log.ContentType,
 			&log.SizeBytes,

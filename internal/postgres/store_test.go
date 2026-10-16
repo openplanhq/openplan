@@ -2193,6 +2193,8 @@ func TestRecordTemplateRunLogUpsertsTenantScopedMetadata(t *testing.T) {
 		TenantID:    domain.TenantID("tenant_123"),
 		RunID:       domain.TemplateRunID("run_123"),
 		Phase:       "plan",
+		RunPhase:    domain.RunPhasePlan,
+		Command:     domain.TerraformCommandPlan,
 		ObjectKey:   "tenants/tenant_123/runs/run_123/logs/plan.log",
 		ContentType: "text/plain; charset=utf-8",
 		SizeBytes:   18,
@@ -2258,6 +2260,8 @@ func TestRecordTemplateRunLogAcceptsEveryTerraformLogName(t *testing.T) {
 				TenantID:    domain.TenantID("tenant_123"),
 				RunID:       domain.TemplateRunID("run_123"),
 				Phase:       phase,
+				RunPhase:    runPhase,
+				Command:     command,
 				ObjectKey:   "tenants/tenant_123/runs/run_123/logs/" + fileName,
 				ContentType: "text/plain; charset=utf-8",
 				UploadedAt:  time.Now(),
@@ -2302,6 +2306,8 @@ func TestListTemplateRunLogsReturnsTenantScopedMetadataInUploadOrder(t *testing.
 			TenantID:    domain.TenantID("tenant_123"),
 			RunID:       domain.TemplateRunID("run_123"),
 			Phase:       "plan",
+			RunPhase:    domain.RunPhasePlan,
+			Command:     domain.TerraformCommandPlan,
 			ObjectKey:   "tenants/tenant_123/runs/run_123/logs/plan.log",
 			ContentType: "text/plain; charset=utf-8",
 			SizeBytes:   18,
@@ -2311,6 +2317,8 @@ func TestListTemplateRunLogsReturnsTenantScopedMetadataInUploadOrder(t *testing.
 			TenantID:    domain.TenantID("tenant_123"),
 			RunID:       domain.TemplateRunID("run_123"),
 			Phase:       "plan-init",
+			RunPhase:    domain.RunPhasePlan,
+			Command:     domain.TerraformCommandInit,
 			ObjectKey:   "tenants/tenant_123/runs/run_123/logs/plan-init.log",
 			ContentType: "text/plain; charset=utf-8",
 			SizeBytes:   12,
@@ -2320,6 +2328,8 @@ func TestListTemplateRunLogsReturnsTenantScopedMetadataInUploadOrder(t *testing.
 			TenantID:    domain.TenantID("tenant_123"),
 			RunID:       domain.TemplateRunID("run_123"),
 			Phase:       "plan-workspace",
+			RunPhase:    domain.RunPhasePlan,
+			Command:     domain.TerraformCommandSelectWorkspace,
 			ObjectKey:   "tenants/tenant_123/runs/run_123/logs/plan-workspace.log",
 			ContentType: "text/plain; charset=utf-8",
 			SizeBytes:   9,
@@ -2329,6 +2339,8 @@ func TestListTemplateRunLogsReturnsTenantScopedMetadataInUploadOrder(t *testing.
 			TenantID:    domain.TenantID("tenant_456"),
 			RunID:       domain.TemplateRunID("run_456"),
 			Phase:       "plan",
+			RunPhase:    domain.RunPhasePlan,
+			Command:     domain.TerraformCommandPlan,
 			ObjectKey:   "tenants/tenant_456/runs/run_456/logs/plan.log",
 			ContentType: "text/plain; charset=utf-8",
 			SizeBytes:   17,
@@ -2375,6 +2387,8 @@ func TestRecordTemplateRunLogReturnsNotFoundForOtherTenant(t *testing.T) {
 		TenantID:    domain.TenantID("tenant_456"),
 		RunID:       domain.TemplateRunID("run_123"),
 		Phase:       "plan",
+		RunPhase:    domain.RunPhasePlan,
+		Command:     domain.TerraformCommandPlan,
 		ObjectKey:   "tenants/tenant_456/runs/run_123/logs/plan.log",
 		ContentType: "text/plain; charset=utf-8",
 		SizeBytes:   18,
@@ -3582,10 +3596,11 @@ func TestMigrationRenamesPlanPhaseSetupLogs(t *testing.T) {
 
 	ctx := context.Background()
 	pool := openTestPool(t, ctx)
-	// Stop the first migration short of 0024 by marking it applied.
+	// Stop the first migration short of 0024 by marking it applied, and hold
+	// back 0032 too: its columns are not in the rows 0024 converts.
 	if _, err := pool.Exec(ctx, `
 		create table schema_migrations (version text primary key, applied_at timestamptz not null default now());
-		insert into schema_migrations (version) values ('0024_run_phase_log_names');
+		insert into schema_migrations (version) values ('0024_run_phase_log_names'), ('0032_template_run_log_commands');
 	`); err != nil {
 		t.Fatal(err)
 	}
@@ -3613,17 +3628,25 @@ func TestMigrationRenamesPlanPhaseSetupLogs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Migrate(ctx, pool); err != nil {
-		t.Fatalf("migrate 0024 over existing logs: %v", err)
-	}
+	// Only through 0024: 0032 drops every log row, and the store reads
+	// columns this schema does not have yet.
+	migrateThrough(t, ctx, pool, "0024_run_phase_log_names")
 
-	logs, err := NewStore(pool).ListTemplateRunLogs(ctx, "tenant_123", "run_123")
+	rows, err := pool.Query(ctx, `select phase, object_key from template_run_logs where tenant_id = 'tenant_123' and run_id = 'run_123'`)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer rows.Close()
 	keys := map[string]string{}
-	for _, log := range logs {
-		keys[log.Phase] = log.ObjectKey
+	for rows.Next() {
+		var phase, key string
+		if err := rows.Scan(&phase, &key); err != nil {
+			t.Fatal(err)
+		}
+		keys[phase] = key
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
 	}
 	want := map[string]string{"plan-init": "logs/init.log", "plan-workspace": "logs/workspace.log", "plan": "logs/plan.log"}
 	if !reflect.DeepEqual(keys, want) {
