@@ -28,6 +28,9 @@ export function useLockState(stackId: string, stackTemplate: Pick<StackTemplate,
 
 const RUNS_LOADING = "Loading runs…";
 const RUNS_FAILED = "This template's runs could not be loaded.";
+// On the Runs tab the history under the toolbar already says the runs failed
+// and offers Retry, so the toolbar says only what that means for its buttons.
+const RUNS_FAILED_TOOLBAR = "Plan and Apply wait until the runs load.";
 
 /** The sentence a control locked by a run shows. */
 export function runInFlightReason(run: TemplateRun, change: string): string {
@@ -45,7 +48,7 @@ export function startRunLockReason(state: LockState): string {
   const lifecycleReason = lifecycleLockReason(state.lifecycle, "run");
   if (lifecycleReason) return lifecycleReason;
   if (state.runs === "pending") return RUNS_LOADING;
-  if (state.runs === "error") return RUNS_FAILED;
+  if (state.runs === "error") return RUNS_FAILED_TOOLBAR;
   if (state.activeRun) return runInFlightReason(state.activeRun, "starting another run");
   return "";
 }

@@ -115,12 +115,21 @@ export function useTemplateRunQuery(tenantID: string, runID: string, options: { 
   });
 }
 
+// A runs list polls, except while its first load is failing. A poll starts a
+// fresh fetch, and a fresh fetch of a query with no data puts it back to
+// pending, so a list that cannot load would swing between "loading" and
+// "failed" for as long as the page is open. Once it has loaded, a failed poll
+// keeps polling under the runs already on screen.
+export function runsRefetchInterval(state: { data?: unknown; fetchFailureCount: number }): number | false {
+  return state.data === undefined && state.fetchFailureCount > 0 ? false : POLL_INTERVAL_MS;
+}
+
 export function useTemplateRunsQuery(tenantID: string, stackTemplateID: string) {
   return useQuery({
     queryKey: queryKeys.templateRuns(tenantID, stackTemplateID),
     queryFn: () => client.listTemplateRuns(tenantID, stackTemplateID),
     enabled: stackTemplateID !== "",
-    refetchInterval: POLL_INTERVAL_MS
+    refetchInterval: (query) => runsRefetchInterval(query.state)
   });
 }
 
