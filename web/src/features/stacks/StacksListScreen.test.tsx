@@ -123,10 +123,28 @@ describe("StacksListScreen", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shows a loading state while the stacks query is pending", () => {
+  // The header does not wait for the list, so nothing jumps when it lands.
+  it("shows a loading state under the page's header while the stacks query is pending", () => {
     renderScreen(testQueryClient());
 
-    expect(screen.getByTestId("stacks-list-loading")).toBeTruthy();
+    expect(screen.getByTestId("stacks-list-loading").textContent).toContain("Loading stacks…");
+    expect(screen.getByRole("heading", { level: 1, name: "Stacks" })).toBeTruthy();
+    expect(screen.getByTestId("create-stack-link")).toBeTruthy();
+    expect(screen.queryByTestId("page-count")).toBeNull();
+  });
+
+  it("says the stacks failed to load under the page's header, with an outline Retry", async () => {
+    mockAPI({ "/stacks": () => Promise.reject(new TypeError("network down")) });
+
+    renderScreen(testQueryClient());
+
+    const error = await screen.findByTestId("stacks-list-error");
+    expect(within(error).getByRole("alert").textContent).toBe("Something went wrong while loading stacks.");
+    expect(screen.getByRole("heading", { level: 1, name: "Stacks" })).toBeTruthy();
+    // An outline button, not the page's second primary one.
+    const retry = screen.getByTestId("stacks-list-retry");
+    expect(retry.classList).toContain("bg-background");
+    expect(retry.classList).not.toContain("bg-primary");
   });
 
   it("titles the page with the number of stacks", () => {
@@ -367,8 +385,36 @@ describe("StacksListScreen", () => {
     const empty = screen.getByTestId("stacks-list-empty");
     expect(empty.getAttribute("data-slot")).toBe("empty");
     expect(within(empty).getByRole("heading", { level: 2, name: "No stacks yet" })).toBeTruthy();
-    expect(within(empty).getByText("No stacks visible to you yet.")).toBeTruthy();
     expect(screen.queryByTestId("stacks-list")).toBeNull();
+  });
+
+  // A new install opens here: the empty state says what a stack is for and
+  // offers the one action that makes one.
+  it("offers Create stack in the empty state to someone who may create one", () => {
+    const queryClient = testQueryClient();
+    seed(queryClient, { stacks: [] });
+
+    renderScreen(queryClient);
+
+    const empty = screen.getByTestId("stacks-list-empty");
+    expect(within(empty).getByText("Create a stack for each environment you deploy to, such as prod or staging.")).toBeTruthy();
+    const create = within(empty).getByRole("link", { name: "Create stack" });
+    expect(create.getAttribute("href")).toBe("/stacks/new");
+    // An outline button: the header's Create stack is the page's one primary.
+    expect(create.classList).toContain("bg-background");
+  });
+
+  it("tells someone who may not create a stack how one reaches them, with no action", () => {
+    const queryClient = testQueryClient();
+    seed(queryClient, { stacks: [] });
+
+    renderScreen(queryClient, {
+      auth: authValue({ me: { sub: "user_1", tenantID: TENANT, displayName: "Test User", globalCapabilities: { isPlatformAdmin: false, canCreateStack: false, canPublishTemplate: false } } })
+    });
+
+    const empty = screen.getByTestId("stacks-list-empty");
+    expect(within(empty).getByText("Stacks appear here once someone gives you access to one.")).toBeTruthy();
+    expect(within(empty).queryByRole("link")).toBeNull();
   });
 
   // Every control takes a 44px target on a coarse pointer.
