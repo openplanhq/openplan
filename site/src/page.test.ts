@@ -49,6 +49,17 @@ describe("site/index.html", () => {
     expect(words.filter((word) => !keywords.has(word) && !word.startsWith("a-"))).toEqual([]);
   });
 
+  it("loops nothing on its own: endless animation only under the pointer, or the run's spinner", () => {
+    // WCAG 2.2.2: motion that starts by itself stops within five seconds or
+    // can be stopped. The hero's run has a button; everything else here
+    // plays a fixed number of times unless the pointer is on it.
+    const rules = [...stripComments(DRAWINGS).matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+    const endless = rules.filter(([, , body]) => /\binfinite\b/.test(body)).map(([, sel]) => sel.trim());
+    expect(endless.length).toBeGreaterThan(0);
+    expect(endless.filter((sel) => !/\.hot\b|^\.spin$/.test(sel))).toEqual([]);
+    expect(HTML).toMatch(/<button\b[^>]*\bdata-replay\b[^>]*\bhidden>/);
+  });
+
   it("stops every drawing animation for people who ask for reduced motion", () => {
     const block = stripComments(DRAWINGS).split(/@media\s*\(prefers-reduced-motion:\s*reduce\)/)[1] ?? "";
     expect(block).toMatch(/animation:\s*none/);
