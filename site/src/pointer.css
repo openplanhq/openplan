@@ -1,0 +1,36 @@
+/* A dot grid, hidden until the pointer passes: a soft circle of primary dots
+   follows it over the canvas and fades under cards, which paint over it.
+   Colours come only from the theme's custom properties; page.test.ts holds
+   this file to that, as it does drawings.css. pointer.ts moves the circle. */
+
+/* The layer spans the whole document and scrolls with it, so the dots keep
+   their place on the page instead of sliding under a still pointer. */
+body {
+  position: relative;
+}
+
+.pointer-dots {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  /* The same 16px pitch and 1px-ish dot as the feature panels' grid. */
+  background-image: radial-gradient(var(--color-primary) 1.25px, transparent 1.75px);
+  background-size: 16px 16px;
+  background-position: 8px 8px;
+  /* A mask reads only alpha: any opaque theme colour makes the lit circle. */
+  mask-image: radial-gradient(circle 160px at var(--px) var(--py), var(--color-foreground), transparent);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.pointer-dots[data-lit] {
+  opacity: 0.55;
+}
+
+/* Everything the page shows sits above the layer; transparent sections let
+   it through, cards and bars cover it. */
+body > :not(.pointer-dots) {
+  position: relative;
+  z-index: 1;
+}

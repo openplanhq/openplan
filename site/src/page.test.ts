@@ -9,6 +9,8 @@ const read = (path: string) => readFileSync(join(SITE, path), "utf8");
 const HTML = read("index.html");
 const CSS = read("src/styles.css");
 const DRAWINGS = read("src/drawings.css");
+const POINTER = read("src/pointer.css");
+const POINTER_TS = read("src/pointer.ts");
 const THEME = read("../web/src/styles/theme.css");
 
 const FEATURES = HTML.split("<li data-feature").slice(1).map((chunk) => chunk.split("</li>")[0]);
@@ -16,7 +18,7 @@ const stripComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, "");
 
 describe("site/index.html", () => {
   it("holds no colour literal", () => {
-    for (const source of [HTML, CSS, DRAWINGS]) {
+    for (const source of [HTML, CSS, DRAWINGS, POINTER]) {
       expect(source).not.toMatch(/#[0-9a-f]{3,8}\b/i);
       expect(source).not.toMatch(/\b(?:rgba?|hsla?|oklch)\(/i);
     }
@@ -30,14 +32,15 @@ describe("site/index.html", () => {
     expect(rules.filter((line) => !line.startsWith("@import "))).toEqual([]);
   });
 
-  it("names no colour in drawings.css but theme properties and transparent", () => {
+  it("names no colour in drawings.css or pointer.css but theme properties and transparent", () => {
     // Every word in a declaration's value must be a known non-colour keyword,
     // so a named colour (red, white, ...) cannot slip in.
     const keywords = new Set([
       "transparent", "none", "important", "infinite", "linear", "ease", "ease-in-out", "ease-out",
-      "fill-box", "radial-gradient", "translatex", "translatey", "scale", "scalex", "to", "px", "s"
+      "fill-box", "radial-gradient", "translatex", "translatey", "scale", "scalex", "to", "px", "s",
+      "relative", "absolute", "circle", "at", "opacity"
     ]);
-    const values = [...stripComments(DRAWINGS).matchAll(/[\w-]+\s*:\s*([^;{}]+)[;}]/g)]
+    const values = [...stripComments(DRAWINGS + POINTER).matchAll(/[\w-]+\s*:\s*([^;{}]+)[;}]/g)]
       .map((m) => m[1].replace(/var\(--[\w-]+\)/g, ""));
     expect(values.length).toBeGreaterThan(0);
     const words = values.flatMap((value) => value.toLowerCase().match(/[a-z][a-z-]*/g) ?? []);
@@ -71,13 +74,21 @@ describe("site/index.html", () => {
     expect(imgs.filter((tag) => !/\balt="[^"]+"/.test(tag))).toEqual([]);
   });
 
-  it("ships no JavaScript but the Cloudflare Web Analytics beacon", () => {
+  it("ships no JavaScript but the pointer's dot grid and the Cloudflare Web Analytics beacon", () => {
     const scripts = [...HTML.matchAll(/<script\b[^>]*>[\s\S]*?<\/script>/g)].map((m) => m[0]);
-    expect(scripts).toHaveLength(1);
-    expect(scripts[0]).toMatch(/\bdefer\b/);
-    expect(scripts[0]).toContain('src="https://static.cloudflareinsights.com/beacon.min.js"');
-    expect(scripts[0]).toContain(`data-cf-beacon='{"token": "e93881027b4c4ef99c377908d9f44d19"}'`);
-    expect(scripts[0]).toMatch(/><\/script>$/);
+    expect(scripts).toHaveLength(2);
+    // Bundled by Vite with the page: nothing of ours loads from another host.
+    expect(scripts[0]).toBe('<script type="module" src="/src/pointer.ts"></script>');
+    expect(scripts[1]).toMatch(/\bdefer\b/);
+    expect(scripts[1]).toContain('src="https://static.cloudflareinsights.com/beacon.min.js"');
+    expect(scripts[1]).toContain(`data-cf-beacon='{"token": "e93881027b4c4ef99c377908d9f44d19"}'`);
+    expect(scripts[1]).toMatch(/><\/script>$/);
+  });
+
+  it("lights the pointer's dot grid only for a hovering pointer and without reduced motion", () => {
+    expect(HTML).toContain('<div class="pointer-dots" aria-hidden="true"></div>');
+    expect(POINTER_TS).toContain('matchMedia("(hover: hover) and (pointer: fine)")');
+    expect(POINTER_TS).toContain('matchMedia("(prefers-reduced-motion: reduce)")');
   });
 
   it("lists the eight features, each drawing with a primary accent", () => {

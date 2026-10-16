@@ -23,10 +23,13 @@
     <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="stylesheet" href="/src/styles.css" />
-    <!-- Cloudflare Web Analytics: cookieless page views, the only script the page loads. -->
+    <!-- The pointer's dot grid (src/pointer.ts), bundled with the page; a module defers itself. -->
+    <script type="module" src="/src/pointer.ts"></script>
+    <!-- Cloudflare Web Analytics: cookieless page views, the only third-party script. -->
     <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "e93881027b4c4ef99c377908d9f44d19"}'></script>
   </head>
   <body class="bg-canvas">
+    <div class="pointer-dots" aria-hidden="true"></div>
     <!-- The bar spans the window; its contents sit in the page's own column, so the
          logo and the GitHub button line up with the headline and the hero drawing. -->
     <header class="border-b bg-card">
