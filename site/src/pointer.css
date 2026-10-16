@@ -14,18 +14,36 @@ body {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  /* The same 16px pitch and 1px-ish dot as the feature panels' grid. */
-  background-image: radial-gradient(var(--color-primary) 1.25px, transparent 1.75px);
-  background-size: 16px 16px;
-  background-position: 8px 8px;
-  /* A mask reads only alpha: any opaque theme colour makes the lit circle. */
-  mask-image: radial-gradient(circle 160px at var(--px) var(--py), var(--color-foreground), transparent);
   opacity: 0;
-  transition: opacity 0.4s ease;
+  transition: opacity 0.3s ease;
 }
 
 .pointer-dots[data-lit] {
-  opacity: 0.55;
+  opacity: 1;
+}
+
+/* Two grids on the same 16px pitch as the feature panels' dots. The outer
+   ring holds small dots at full strength to 40% of its radius before it
+   fades, so its edge reads as a shape, not a haze; the core's larger dots
+   sit on top of the same points, so the dots swell toward the pointer. */
+.pointer-dots::before,
+.pointer-dots::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-size: 16px 16px;
+  background-position: 8px 8px;
+}
+
+/* A mask reads only alpha: any opaque theme colour lights the circle. */
+.pointer-dots::before {
+  background-image: radial-gradient(var(--color-primary) 1.5px, transparent 2px);
+  mask-image: radial-gradient(circle 150px at var(--px) var(--py), var(--color-foreground) 40%, transparent);
+}
+
+.pointer-dots::after {
+  background-image: radial-gradient(var(--color-primary) 2.5px, transparent 3px);
+  mask-image: radial-gradient(circle 64px at var(--px) var(--py), var(--color-foreground) 30%, transparent);
 }
 
 /* Everything the page shows sits above the layer; transparent sections let
