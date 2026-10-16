@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { MemoryRouter, useInRouterContext } from "react-router-dom";
 import RouteMessage from "../app/RouteMessage";
 import Breadcrumb from "../shared/Breadcrumb";
-import { LogStep, LogSteps } from "../shared/LogSteps";
+import { LogPhase, LogStep } from "../shared/LogSteps";
 import StatusRow from "../shared/StatusRow";
 import { statusTone } from "../shared/statusTone";
 import RoleBadge from "../shared/RoleBadge";
@@ -142,21 +142,22 @@ function WithRouter({ children }: { children: ReactNode }) {
 }
 
 function LogStepsSpecimen() {
-  const [open, setOpen] = useState<Record<string, boolean>>({ plan: true });
+  const [open, setOpen] = useState<Record<string, boolean>>({ "plan-3": true });
   const setStep = (name: string) => (isOpen: boolean) => setOpen((current) => ({ ...current, [name]: isOpen }));
   return (
-    <LogSteps>
-      <LogStep name="plan-init" open={open["plan-init"] ?? false} onOpenChange={setStep("plan-init")}>
-        {`Initializing the backend...
+    <div className="divide-y divide-divider">
+      <LogPhase title="Plan" detail="started by Priya Raman · 3 Oct, 15:00">
+        <LogStep name="plan-1" label="tofu init" open={open["plan-1"] ?? false} onOpenChange={setStep("plan-1")}>
+          {`Initializing the backend...
 Successfully configured the backend "s3"!`}
-      </LogStep>
-      <LogStep name="plan" open={open.plan ?? false} onOpenChange={setStep("plan")}>
-        {`Initializing the backend...
-Terraform v1.9.5 on darwin_arm64
+        </LogStep>
+        <LogStep name="plan-3" label="tofu plan" open={open["plan-3"] ?? false} onOpenChange={setStep("plan-3")}>
+          {`OpenTofu will perform the following actions:
 Plan: 3 to add, 1 to change, 0 to destroy.
 Error: creating S3 Bucket: BucketAlreadyExists`}
-      </LogStep>
-    </LogSteps>
+        </LogStep>
+      </LogPhase>
+    </div>
   );
 }
 

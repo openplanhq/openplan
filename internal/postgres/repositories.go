@@ -1098,25 +1098,30 @@ func (store *Store) ListTemplateRuns(ctx context.Context, tenantID domain.Tenant
 	return runs, nil
 }
 
+// RecordTemplateRunLog upserts one log's metadata, keyed by its run phase and
+// number. The database derives its name, phase, from those two.
 func (store *Store) RecordTemplateRunLog(ctx context.Context, log domain.TemplateRunLog) error {
 	result, err := store.pool.Exec(ctx, `
 		insert into template_run_logs (
 			tenant_id,
 			run_id,
-			phase,
+			run_phase,
+			seq,
+			command,
 			object_key,
 			content_type,
 			size_bytes,
 			uploaded_at
 		)
-		select $1, $2, $3, $4, $5, $6, $7
+		select $1, $2, $3, $4, $5, $6, $7, $8, $9
 		where exists (
 			select 1
 			from template_runs
 			where tenant_id = $1
 				and id = $2
 		)
-		on conflict (tenant_id, run_id, phase) do update set
+		on conflict (tenant_id, run_id, run_phase, seq) do update set
+			command = excluded.command,
 			object_key = excluded.object_key,
 			content_type = excluded.content_type,
 			size_bytes = excluded.size_bytes,
@@ -1124,7 +1129,9 @@ func (store *Store) RecordTemplateRunLog(ctx context.Context, log domain.Templat
 	`,
 		log.TenantID,
 		log.RunID,
-		log.Phase,
+		log.RunPhase,
+		log.Seq,
+		log.Command,
 		log.ObjectKey,
 		log.ContentType,
 		log.SizeBytes,
@@ -1146,6 +1153,9 @@ func (store *Store) GetTemplateRunLog(ctx context.Context, tenantID domain.Tenan
 			tenant_id,
 			run_id,
 			phase,
+			run_phase,
+			seq,
+			command,
 			object_key,
 			content_type,
 			size_bytes,
@@ -1158,6 +1168,9 @@ func (store *Store) GetTemplateRunLog(ctx context.Context, tenantID domain.Tenan
 		&log.TenantID,
 		&log.RunID,
 		&log.Phase,
+		&log.RunPhase,
+		&log.Seq,
+		&log.Command,
 		&log.ObjectKey,
 		&log.ContentType,
 		&log.SizeBytes,
@@ -1178,6 +1191,9 @@ func (store *Store) ListTemplateRunLogs(ctx context.Context, tenantID domain.Ten
 			tenant_id,
 			run_id,
 			phase,
+			run_phase,
+			seq,
+			command,
 			object_key,
 			content_type,
 			size_bytes,
@@ -1185,7 +1201,7 @@ func (store *Store) ListTemplateRunLogs(ctx context.Context, tenantID domain.Ten
 		from template_run_logs
 		where tenant_id = $1
 			and run_id = $2
-		order by uploaded_at, phase
+		order by case run_phase when 'plan' then 0 else 1 end, seq
 	`, tenantID, runID)
 	if err != nil {
 		return nil, fmt.Errorf("list template run logs: %w", err)
@@ -1199,6 +1215,9 @@ func (store *Store) ListTemplateRunLogs(ctx context.Context, tenantID domain.Ten
 			&log.TenantID,
 			&log.RunID,
 			&log.Phase,
+			&log.RunPhase,
+			&log.Seq,
+			&log.Command,
 			&log.ObjectKey,
 			&log.ContentType,
 			&log.SizeBytes,

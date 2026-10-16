@@ -196,6 +196,22 @@ export interface TemplateRun {
   // What the plan would change, or, for an auto-approved apply, what it
   // changed. Null until a plan with changes, or the apply, finishes.
   plan_summary: PlanSummary | null;
+  // The workflows that carried the run, in the order they started: its plan,
+  // its apply, or one of them. Only the run's own endpoint returns them.
+  executions?: TemplateRunExecution[];
+}
+
+export type RunPhase = "plan" | "apply";
+
+// One workflow that carried a run. The fields the UI reads; the API returns
+// its status, steps and summary too.
+export interface TemplateRunExecution {
+  phase: RunPhase;
+  // Who started it: the requester for a plan or an auto-approved apply, the
+  // approver for an approved apply.
+  actor: string;
+  actor_display_name: string;
+  started_at: string;
 }
 
 // Why an installed template needs a person: a plan waiting to be approved or
@@ -217,7 +233,15 @@ export interface AttentionItem {
 export interface TemplateRunLog {
   tenant_id: string;
   run_id: string;
+  // The log's name, unique within the run: the key it is read under, not a
+  // label. Show command_line under its run_phase instead.
   phase: string;
+  run_phase: RunPhase;
+  // Its place among the phase's logs, from 1. The list arrives in run order.
+  seq: number;
+  command: string;
+  // What ran, for people to read: "tofu init", "tofu plan -destroy".
+  command_line: string;
   object_key: string;
   content_type: string;
   size_bytes: number;

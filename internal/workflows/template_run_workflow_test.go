@@ -205,9 +205,9 @@ func TestTemplatePlanWorkflowRecordsCommandLogsOnControlQueue(t *testing.T) {
 
 	assertWorkflowCompleted(t, env)
 	want := []string{
-		"terraform:init", "log:init",
-		"terraform:select_workspace", "log:select_workspace",
-		"terraform:plan", "log:plan", "status:completed",
+		"terraform:init", "log:plan-1",
+		"terraform:select_workspace", "log:plan-2",
+		"terraform:plan", "log:plan-3", "status:completed",
 	}
 	if !reflect.DeepEqual(events, want) {
 		t.Fatalf("events = %#v, want %#v", events, want)
@@ -255,7 +255,7 @@ func TestTemplatePlanWorkflowRecordsLogOfFailedCommand(t *testing.T) {
 	if !env.IsWorkflowCompleted() || env.GetWorkflowError() == nil {
 		t.Fatalf("workflow completed=%v error=%v, want a failed run", env.IsWorkflowCompleted(), env.GetWorkflowError())
 	}
-	if len(recorded) == 0 || recorded[len(recorded)-1].Phase != "plan" {
+	if len(recorded) == 0 || recorded[len(recorded)-1].Command != domain.TerraformCommandPlan {
 		t.Fatalf("recorded logs = %#v, want the failed plan's last", recorded)
 	}
 	if !strings.Contains(failedStatus.ErrorSummary, "plan: exit status 1") {
@@ -657,13 +657,16 @@ func TestTemplateApplyWorkflowAppliesTheSavedPlan(t *testing.T) {
 			env := newTemplateRunWorkflowTestEnvironment(t)
 			var writes []string
 			var events []string
+			terraformRuns := 0
 			mockPrepareWorkspace(t, env)
 			mockFetchSource(t, env)
 			env.OnActivity(domain.RunTerraformActivityName, mock.Anything, mock.Anything).
 				Return(func(_ context.Context, activityInput domain.RunTerraformActivityInput) (domain.RunTerraformActivityOutput, error) {
 					events = append(events, "terraform:"+string(activityInput.Command))
-					if activityInput.RunPhase != domain.RunPhaseApply {
-						t.Errorf("%s ran in run phase %q, want %q", activityInput.Command, activityInput.RunPhase, domain.RunPhaseApply)
+					terraformRuns++
+					// The apply workflow numbers its own logs from 1.
+					if want := fmt.Sprintf("apply-%d", terraformRuns); activityInput.LogName != want {
+						t.Errorf("%s logged to %q, want %q", activityInput.Command, activityInput.LogName, want)
 					}
 					return domain.RunTerraformActivityOutput{}, nil
 				})
@@ -791,8 +794,8 @@ func TestTemplateApplyWorkflowAppliesAnAutoApprovedRunWithoutAPlan(t *testing.T)
 	env.OnActivity(domain.RunTerraformActivityName, mock.Anything, mock.Anything).
 		Return(func(_ context.Context, activityInput domain.RunTerraformActivityInput) (domain.RunTerraformActivityOutput, error) {
 			commands = append(commands, activityInput.Command)
-			if activityInput.RunPhase != domain.RunPhaseApply {
-				t.Errorf("%s ran in run phase %q, want %q", activityInput.Command, activityInput.RunPhase, domain.RunPhaseApply)
+			if want := fmt.Sprintf("apply-%d", len(commands)); activityInput.LogName != want {
+				t.Errorf("%s logged to %q, want %q", activityInput.Command, activityInput.LogName, want)
 			}
 			if activityInput.Command == domain.TerraformCommandApplyAutoApprove {
 				return domain.RunTerraformActivityOutput{HasChanges: true, Summary: domain.PlanSummary{Add: 2, Destroy: 1}}, nil
@@ -1087,7 +1090,7 @@ func newTemplateRunWorkflowTestEnvironment(t *testing.T) *testsuite.TestWorkflow
 	)
 	env.RegisterActivityWithOptions(
 		func(_ context.Context, input domain.UploadLogActivityInput) (domain.TemplateRunLog, error) {
-			return domain.TemplateRunLog{Phase: string(input.Command), ObjectKey: "logs/" + string(input.Command) + ".log"}, nil
+			return domain.TemplateRunLog{Phase: input.LogName, ObjectKey: "logs/" + input.LogName + ".log"}, nil
 		},
 		activity.RegisterOptions{Name: domain.UploadLogActivityName},
 	)
@@ -1447,14 +1450,20 @@ func TestTemplatePlanWorkflowPinsLogIdentityToTheRun(t *testing.T) {
 	env.OnActivity(domain.FetchSourceActivityName, mock.Anything, mock.Anything).
 		Return(domain.FetchSourceActivityOutput{TerraformPath: "run/workspace/source"}, nil)
 
-	// A hostile executor claims every log belongs to another tenant's run.
+	// A hostile executor claims every log belongs to another tenant's run,
+	// under another log's name.
+	var named []string
 	env.OnActivity(domain.UploadLogActivityName, mock.Anything, mock.Anything).
 		Return(func(_ context.Context, input domain.UploadLogActivityInput) (domain.TemplateRunLog, error) {
+			named = append(named, input.LogName)
 			return domain.TemplateRunLog{
 				TenantID:  domain.TenantID("tenant_victim"),
 				RunID:     domain.TemplateRunID("run_victim"),
-				Phase:     string(input.Command),
-				ObjectKey: "logs/" + string(input.Command) + ".log",
+				Phase:     "apply-9",
+				RunPhase:  domain.RunPhaseApply,
+				Seq:       9,
+				Command:   domain.TerraformCommandDestroy,
+				ObjectKey: "tenants/tenant_victim/runs/run_victim/logs/apply.log",
 			}, nil
 		})
 
@@ -1474,12 +1483,23 @@ func TestTemplatePlanWorkflowPinsLogIdentityToTheRun(t *testing.T) {
 	if len(recorded) == 0 {
 		t.Fatal("no log metadata recorded")
 	}
-	for _, log := range recorded {
+	for i, log := range recorded {
 		if log.TenantID != input.TenantID {
 			t.Fatalf("recorded %s log tenant = %q, want %q", log.Phase, log.TenantID, input.TenantID)
 		}
 		if log.RunID != input.RunID {
 			t.Fatalf("recorded %s log run = %q, want %q", log.Phase, log.RunID, input.RunID)
+		}
+		if log.Phase != named[i] {
+			t.Fatalf("recorded log %d as %q, want the workflow's name %q", i, log.Phase, named[i])
+		}
+		// What wrote the log is the workflow's to say too: a plan workflow
+		// never runs a destroy.
+		if log.RunPhase != domain.RunPhasePlan || log.Command == domain.TerraformCommandDestroy {
+			t.Fatalf("recorded %s log as %s/%s, want the plan phase's own command", log.Phase, log.RunPhase, log.Command)
+		}
+		if want, _ := domain.RunLogName(log.RunPhase, log.Seq); want != log.Phase || log.Seq != i+1 {
+			t.Fatalf("recorded log %d as %q, number %d, want %q, number %d", i, log.Phase, log.Seq, want, i+1)
 		}
 	}
 }

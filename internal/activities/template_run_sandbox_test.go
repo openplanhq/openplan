@@ -146,7 +146,7 @@ func TestUploadLogUploadsTheSpooledLog(t *testing.T) {
 		t.Fatal(err)
 	}
 	log, err := activities.UploadLog(context.Background(), domain.UploadLogActivityInput{
-		TenantID: "tenant_123", RunID: "run_123", Command: domain.TerraformCommandPlan, RunPhase: domain.RunPhasePlan,
+		TenantID: "tenant_123", RunID: "run_123", LogName: "plan",
 	})
 	if err != nil {
 		t.Fatalf("UploadLog returned error: %v", err)

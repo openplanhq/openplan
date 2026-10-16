@@ -994,12 +994,13 @@ paths:
       tags: [Runs]
       summary: List a run's persisted logs
       description: |
-        Metadata for each phase that produced output — not the output itself.
-        Fetch a body from the per-phase endpoint.
+        Metadata for each Terraform command that has finished, in the order
+        they ran: the plan's logs, then the apply's, each by `seq` — not the
+        output itself. Fetch a body from the per-log endpoint by its `phase`.
       operationId: listTemplateRunLogs
       responses:
         "200":
-          description: One entry per persisted phase.
+          description: One entry per finished command.
           content:
             application/json:
               schema:
@@ -2024,6 +2025,11 @@ components:
           description: |
             Who started this execution: the run's requester for a plan or an
             auto-approved apply, and its approver for an approved apply.
+        actor_display_name:
+          type: string
+          description: |
+            `actor` for people to read, as `trigger_actor_display_name` is for
+            the run's trigger actor. Display only.
         status: { $ref: "#/components/schemas/TemplateRunExecutionStatus" }
         started_at: { type: string, format: date-time }
         finished_at:
@@ -2045,7 +2051,7 @@ components:
           type: array
           description: The steps it ran, in the order they started.
           items: { $ref: "#/components/schemas/TemplateRunStepExecution" }
-      required: [phase, workflow_id, actor, status, started_at, finished_at, error_summary, summary, steps]
+      required: [phase, workflow_id, actor, actor_display_name, status, started_at, finished_at, error_summary, summary, steps]
 
     TemplateRunStepExecution:
       type: object
@@ -2064,7 +2070,11 @@ components:
 
     LogPhase:
       type: string
-      enum: [clone, init, workspace, plan, apply, destroy]
+      pattern: "^[a-z][a-z0-9-]{0,62}$"
+      description: |
+        A log's name, unique within its run: its `run_phase` and `seq`, such
+        as `plan-1` or `apply-3`. The key it is stored and read under, and
+        nothing more: show `command_line` under its `run_phase` instead.
 
     TemplateRunLog:
       type: object
@@ -2075,6 +2085,28 @@ components:
         tenant_id: { type: string }
         run_id: { type: string }
         phase: { $ref: "#/components/schemas/LogPhase" }
+        run_phase:
+          type: string
+          enum: [plan, apply]
+          description: |
+            The run phase whose command wrote the log. Init and workspace
+            selection run in both, so a run can have two logs with the same
+            `command`.
+        seq:
+          type: integer
+          minimum: 1
+          description: |
+            The log's place among its phase's logs, from 1: the order the
+            commands ran in. A list sorts by `run_phase`, plan first, then
+            `seq`.
+        command: { $ref: "#/components/schemas/TerraformCommand" }
+        command_line:
+          type: string
+          description: |
+            `command` as people read it, such as `tofu init` or
+            `tofu plan -destroy`: the binary and subcommand that ran, without
+            the arguments. A destroy's second step reads `tofu apply`, since
+            it applies the saved destroy plan.
         object_key:
           type: string
           description: The object-store key. Internal — not a URL a client can fetch.
@@ -2082,7 +2114,16 @@ components:
         size_bytes: { type: integer, format: int64 }
         uploaded_at: { type: string, format: date-time }
       required:
-        [tenant_id, run_id, phase, object_key, content_type, size_bytes, uploaded_at]
+        [tenant_id, run_id, phase, run_phase, seq, command, command_line, object_key,
+         content_type, size_bytes, uploaded_at]
+
+    TerraformCommand:
+      type: string
+      description: |
+        The Terraform command that wrote a log. `plan_destroy` is a destroy
+        run's plan; `destroy` applies its saved plan; `apply_auto_approve` is
+        an auto-approved apply's one step.
+      enum: [init, select_workspace, plan, plan_destroy, apply, destroy, apply_auto_approve]
 
     AssignStackRoleRequest:
       type: object

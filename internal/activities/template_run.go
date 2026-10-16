@@ -184,15 +184,14 @@ func (activities *TemplateRunActivities) RunTerraform(ctx context.Context, input
 	if err != nil {
 		return domain.RunTerraformActivityOutput{}, err
 	}
-	fileName, err := logsink.FileNameForTerraformCommand(input.Command, input.RunPhase)
-	if err != nil {
-		return domain.RunTerraformActivityOutput{}, err
+	if !domain.ValidLogName(input.LogName) {
+		return domain.RunTerraformActivityOutput{}, fmt.Errorf("invalid log name %q", input.LogName)
 	}
 	logsDir, err := activities.workspaces.LogsDir(string(input.TenantID), string(input.RunID))
 	if err != nil {
 		return domain.RunTerraformActivityOutput{}, err
 	}
-	file, err := logsink.NewFileSink(logsDir).Open(fileName)
+	file, err := logsink.NewFileSink(logsDir).Open(logsink.FileName(input.LogName))
 	if err != nil {
 		return domain.RunTerraformActivityOutput{}, fmt.Errorf("open terraform log: %w", err)
 	}
@@ -224,9 +223,8 @@ func (activities *TemplateRunActivities) RunTerraform(ctx context.Context, input
 // UploadLog uploads the log RunTerraform spooled for a command, from a
 // sandbox that sees only the spool and the artifact store.
 func (activities *TemplateRunActivities) UploadLog(ctx context.Context, input domain.UploadLogActivityInput) (domain.TemplateRunLog, error) {
-	fileName, err := logsink.FileNameForTerraformCommand(input.Command, input.RunPhase)
-	if err != nil {
-		return domain.TemplateRunLog{}, err
+	if !domain.ValidLogName(input.LogName) {
+		return domain.TemplateRunLog{}, fmt.Errorf("invalid log name %q", input.LogName)
 	}
 	logsDir, err := activities.workspaces.LogsDir(string(input.TenantID), string(input.RunID))
 	if err != nil {
@@ -237,7 +235,7 @@ func (activities *TemplateRunActivities) UploadLog(ctx context.Context, input do
 		Activity: bodyUploadLog,
 		Request: uploadLogRequest{
 			Store: activities.store, TenantID: input.TenantID, RunID: input.RunID,
-			Phase: strings.TrimSuffix(fileName, logsink.LogFileExtension), LogsDir: logsDir, FileName: fileName,
+			Phase: input.LogName, LogsDir: logsDir, FileName: logsink.FileName(input.LogName),
 		},
 		Mounts: append([]sandbox.Mount{{Path: logsDir, ReadOnly: true}}, mounts...),
 		Groups: groups,
