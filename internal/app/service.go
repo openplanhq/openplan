@@ -2025,19 +2025,12 @@ func validateGetTemplateRunLogCommand(command GetTemplateRunLogCommand) error {
 	}); err != nil {
 		return err
 	}
-	if !validLogPhase(command.Phase) {
+	// Only the name's shape is checked: which logs a run has is the
+	// workflow's business, and an unknown name is simply not found.
+	if !domain.ValidLogName(command.Phase) {
 		return fmt.Errorf("%w: log phase is unsupported", ErrInvalidCommand)
 	}
 	return nil
-}
-
-func validLogPhase(phase string) bool {
-	switch phase {
-	case "clone", "plan-init", "plan-workspace", "plan", "apply-init", "apply-workspace", "apply", "destroy":
-		return true
-	default:
-		return false
-	}
 }
 
 func validateTemplateConfig(raw json.RawMessage, variables []domain.TemplateVariable) (json.RawMessage, error) {

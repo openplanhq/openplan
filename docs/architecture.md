@@ -690,7 +690,6 @@ tenants/{tenant_id}/runs/{run_id}/logs/{phase}.log
 Example phases:
 
 ```text
-clone.log
 plan-init.log
 plan-workspace.log
 plan.log
@@ -702,6 +701,13 @@ destroy.log
 
 Init and workspace selection run again before an apply, so their logs are
 named for the phase that ran them.
+
+The workflow names each log once, before the command runs, and passes that
+name to the executor's spool, the upload and the recorded row. Nothing else
+works the name out again. The control plane derives the object key from the
+run and the name, so an executor never chooses which object a run's log points
+at. Postgres and the API check only the name's shape (one lowercase path
+segment), so adding a log needs no migration.
 
 Postgres stores log metadata, not large log bodies.
 

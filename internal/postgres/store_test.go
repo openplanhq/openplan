@@ -2249,11 +2249,11 @@ func TestRecordTemplateRunLogAcceptsEveryTerraformLogName(t *testing.T) {
 	}
 	for _, runPhase := range []domain.RunPhase{domain.RunPhasePlan, domain.RunPhaseApply} {
 		for _, command := range commands {
-			fileName, err := logsink.FileNameForTerraformCommand(command, runPhase)
+			phase, err := domain.TerraformLogName(command, runPhase)
 			if err != nil {
-				t.Fatalf("FileNameForTerraformCommand(%q, %q) returned error: %v", command, runPhase, err)
+				t.Fatalf("TerraformLogName(%q, %q) returned error: %v", command, runPhase, err)
 			}
-			phase := strings.TrimSuffix(fileName, logsink.LogFileExtension)
+			fileName := logsink.FileName(phase)
 			if err := store.RecordTemplateRunLog(ctx, domain.TemplateRunLog{
 				TenantID:    domain.TenantID("tenant_123"),
 				RunID:       domain.TemplateRunID("run_123"),

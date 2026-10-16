@@ -5,6 +5,7 @@ import (
 	"go/parser"
 	"go/token"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -360,6 +361,64 @@ func TestRunPhaseValid(t *testing.T) {
 	for _, phase := range []RunPhase{"", "destroy"} {
 		if phase.Valid() {
 			t.Fatalf("%q.Valid() = true, want false", phase)
+		}
+	}
+}
+
+func TestTerraformLogName(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		command TerraformCommandType
+		phase   RunPhase
+		want    string
+	}{
+		{command: TerraformCommandInit, phase: RunPhasePlan, want: "plan-init"},
+		{command: TerraformCommandSelectWorkspace, phase: RunPhasePlan, want: "plan-workspace"},
+		{command: TerraformCommandPlan, phase: RunPhasePlan, want: "plan"},
+		{command: TerraformCommandPlanDestroy, phase: RunPhasePlan, want: "plan"},
+		{command: TerraformCommandInit, phase: RunPhaseApply, want: "apply-init"},
+		{command: TerraformCommandSelectWorkspace, phase: RunPhaseApply, want: "apply-workspace"},
+		{command: TerraformCommandApply, phase: RunPhaseApply, want: "apply"},
+		{command: TerraformCommandApplyAutoApprove, phase: RunPhaseApply, want: "apply"},
+		{command: TerraformCommandDestroy, phase: RunPhaseApply, want: "destroy"},
+	}
+
+	for _, tt := range tests {
+		got, err := TerraformLogName(tt.command, tt.phase)
+		if err != nil {
+			t.Fatalf("TerraformLogName(%q, %q) returned error: %v", tt.command, tt.phase, err)
+		}
+		if got != tt.want {
+			t.Fatalf("TerraformLogName(%q, %q) = %q, want %q", tt.command, tt.phase, got, tt.want)
+		}
+		// Every name the workflow hands out must pass the check the
+		// executor, the API and the database apply.
+		if !ValidLogName(got) {
+			t.Fatalf("TerraformLogName(%q, %q) = %q, which ValidLogName rejects", tt.command, tt.phase, got)
+		}
+	}
+}
+
+func TestTerraformLogNameRejectsMissingRunPhase(t *testing.T) {
+	t.Parallel()
+
+	if _, err := TerraformLogName(TerraformCommandInit, ""); err == nil {
+		t.Fatal("TerraformLogName accepted an empty run phase")
+	}
+}
+
+func TestValidLogName(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range []string{"plan", "plan-init", "apply-workspace", "step-2"} {
+		if !ValidLogName(name) {
+			t.Fatalf("ValidLogName(%q) = false, want true", name)
+		}
+	}
+	for _, name := range []string{"", "Plan", "-plan", "plan.log", "../plan", "plan/init", "plan init", strings.Repeat("a", 64)} {
+		if ValidLogName(name) {
+			t.Fatalf("ValidLogName(%q) = true, want false", name)
 		}
 	}
 }

@@ -527,6 +527,12 @@ func (s *session) terraform(command domain.TerraformCommandType) (domain.RunTerr
 	if err != nil {
 		return domain.RunTerraformActivityOutput{}, err
 	}
+	// The log is named here, once, and the name travels with every step that
+	// touches it rather than being worked out again from the command.
+	logName, err := domain.TerraformLogName(command, s.ws.phase)
+	if err != nil {
+		return domain.RunTerraformActivityOutput{}, err
+	}
 
 	// Every Terraform command gets the configured budget and the more generous
 	// retry policy, including init and workspace selection: init downloads
@@ -550,12 +556,12 @@ func (s *session) terraform(command domain.TerraformCommandType) (domain.RunTerr
 		WorkspaceName:     s.run.input.WorkspaceName,
 		Command:           command,
 		ConfigJSON:        s.run.input.ConfigJSON,
-		RunPhase:          s.ws.phase,
+		LogName:           logName,
 		SealedEnvironment: credentials.SealedEnvironment,
 	}).Get(ctx, &output)
 	// A failed command's log is what explains the failure, so it is saved
 	// either way. A session whose executor is gone fails this too.
-	logErr := s.saveLog(command)
+	logErr := s.saveLog(logName)
 	switch {
 	case runErr != nil && logErr != nil:
 		return domain.RunTerraformActivityOutput{}, fmt.Errorf("%w (also failed to save its log: %w)", runErr, logErr)
@@ -567,20 +573,19 @@ func (s *session) terraform(command domain.TerraformCommandType) (domain.RunTerr
 	return output, nil
 }
 
-// saveLog uploads the log the executor spooled for command, from a sandbox of
+// saveLog uploads the log the executor spooled under name, from a sandbox of
 // its own (UploadLog), then records it on the control plane.
-func (s *session) saveLog(command domain.TerraformCommandType) error {
+func (s *session) saveLog(name string) error {
 	ctx := workflow.WithStartToCloseTimeout(s.ctx, 5*time.Minute)
 	var log domain.TemplateRunLog
 	if err := workflow.ExecuteActivity(ctx, domain.UploadLogActivityName, domain.UploadLogActivityInput{
 		TenantID: s.run.input.TenantID,
 		RunID:    s.run.input.RunID,
-		Command:  command,
-		RunPhase: s.ws.phase,
+		LogName:  name,
 	}).Get(ctx, &log); err != nil {
 		return fmt.Errorf("upload log: %w", err)
 	}
-	return s.run.log(log)
+	return s.run.log(name, log)
 }
 
 // sealSourceToken resolves a token for the run's repository on the control
@@ -705,20 +710,23 @@ func (r *run) event(event domain.TemplateRunEvent, summary *domain.PlanSummary) 
 // which owns the database. A command that uploaded nothing is skipped.
 //
 // The identity is taken from the workflow's own input, never from the returned
-// metadata. RunTerraform runs on the data plane, so everything it returns is
+// metadata. UploadLog runs on the data plane, so everything it returns is
 // attacker-controlled once an executor is compromised, and
 // RecordTemplateRunLog upserts on (tenant_id, run_id, phase) while checking
 // only that the run exists — not that it is this run. A log claiming another
-// tenant's run would therefore repoint that run's object_key.
+// tenant's run would therefore repoint that run's object_key. For the same
+// reason the name is the one the workflow chose, and RecordTemplateRunLog
+// derives the object key from all three rather than storing the returned one.
 //
-// On the honest path this overwrites nothing: PutTemplateRunLog derives both
-// fields from the activity input the workflow supplied.
-func (r *run) log(log domain.TemplateRunLog) error {
+// On the honest path this overwrites nothing: PutTemplateRunLog derives the
+// same fields from the activity input the workflow supplied.
+func (r *run) log(name string, log domain.TemplateRunLog) error {
 	if log.ObjectKey == "" {
 		return nil
 	}
 	log.TenantID = r.input.TenantID
 	log.RunID = r.input.RunID
+	log.Phase = name
 	return workflow.ExecuteActivity(
 		r.ctx,
 		domain.RecordTemplateRunLogActivityName,

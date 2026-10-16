@@ -1599,6 +1599,8 @@ func TestListTemplateRunLogsReturnsEmptyArray(t *testing.T) {
 	}
 }
 
+// Any well-formed name is looked up, since the workflow decides which logs a
+// run has; only a name that could not be one is refused outright.
 func TestGetTemplateRunLogMapsInvalidPhaseToBadRequest(t *testing.T) {
 	t.Parallel()
 
@@ -1606,7 +1608,7 @@ func TestGetTemplateRunLogMapsInvalidPhaseToBadRequest(t *testing.T) {
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/tenants/tenant_123/template-runs/run_123/logs/refresh",
+		"/v1/tenants/tenant_123/template-runs/run_123/logs/plan.log",
 		nil,
 	)
 
