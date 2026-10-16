@@ -954,8 +954,8 @@ type stackListItemResponse struct {
 type attentionItemResponse struct {
 	// Kind is waiting_approval or destroy_failed.
 	Kind string `json:"kind"`
-	// At is when the item began to need a person; empty when unknown.
-	At            string                         `json:"at"`
+	// At is when the item began to need a person; omitted when unknown.
+	At            string                         `json:"at,omitempty"`
 	Stack         attentionStackResponse         `json:"stack"`
 	StackTemplate attentionStackTemplateResponse `json:"stack_template"`
 	// Run is the plan waiting for approval or the destroy that failed; null

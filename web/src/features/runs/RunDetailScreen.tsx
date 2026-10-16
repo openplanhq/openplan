@@ -155,9 +155,9 @@ export default function RunDetailScreen() {
               </time>
             </Fact>
             <Fact term="Finished">
-              {hasCompleted(run.completed_at) ? (
+              {run.completed_at ? (
                 <time dateTime={run.completed_at} title={run.completed_at}>
-                  {formatDateTime(run.completed_at ?? "")}
+                  {formatDateTime(run.completed_at)}
                 </time>
               ) : (
                 "Not finished"
@@ -196,9 +196,4 @@ function Fact({ term, mono = false, children }: { term: string; mono?: boolean; 
       <dd className={cn("text-meta wrap-anywhere", mono && "font-mono")}>{children}</dd>
     </div>
   );
-}
-
-// completed_at always arrives: an unfinished run reads as the zero time.
-function hasCompleted(completedAt: string | undefined): boolean {
-  return Boolean(completedAt) && !completedAt!.startsWith("0001-");
 }

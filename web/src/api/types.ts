@@ -221,8 +221,8 @@ export type AttentionKind = "waiting_approval" | "destroy_failed";
 export interface AttentionItem {
   kind: AttentionKind;
   // When it began to need a person: when the plan finished, or when the
-  // destroy stopped. Empty when unknown.
-  at: string;
+  // destroy stopped. Absent when unknown.
+  at?: string;
   stack: { id: string; name: string; slug: string };
   stack_template: { id: string; workspace_name: string; display_name: string };
   // The plan waiting for approval, or the destroy that failed. Null for a

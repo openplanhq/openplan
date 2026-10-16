@@ -1504,6 +1504,57 @@ func TestGetTemplateRunReturnsRun(t *testing.T) {
 	}
 }
 
+// An unfinished run leaves its end times out rather than sending Go's zero
+// time, which a client would otherwise have to recognise as "not yet".
+func TestGetTemplateRunOmitsEndTimesUntilTheyHappen(t *testing.T) {
+	t.Parallel()
+
+	deps := newAPITestDependencies(t)
+	deps.templateRuns.run = domain.TemplateRun{
+		ID:              domain.TemplateRunID("run_123"),
+		TenantID:        domain.TenantID("tenant_123"),
+		StackTemplateID: domain.StackTemplateID("stack_template_123"),
+		Operation:       domain.OperationPlan,
+		Status:          domain.TemplateRunRunning,
+	}
+	deps.templateRuns.executions = []domain.TemplateRunWorkflowExecution{{
+		Phase: domain.RunPhasePlan, Status: domain.TemplateRunExecutionRunning,
+		StartedAt: time.Date(2026, 7, 3, 11, 30, 0, 0, time.UTC),
+		Steps:     []domain.TemplateRunStepExecution{{Step: domain.TemplateRunStepPlanning, Status: domain.TemplateRunExecutionRunning}},
+	}}
+	server := NewServer(deps.service(), configuredTenantID)
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/template-runs/run_123", nil))
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	var body struct {
+		CompletedAt *string `json:"completed_at"`
+		Executions  []struct {
+			StartedAt  *string `json:"started_at"`
+			FinishedAt *string `json:"finished_at"`
+			Steps      []struct {
+				FinishedAt *string `json:"finished_at"`
+			} `json:"steps"`
+		} `json:"executions"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.CompletedAt != nil {
+		t.Fatalf("completed_at = %q, want it omitted", *body.CompletedAt)
+	}
+	execution := body.Executions[0]
+	if execution.StartedAt == nil {
+		t.Fatal("started_at omitted, want it sent")
+	}
+	if execution.FinishedAt != nil || execution.Steps[0].FinishedAt != nil {
+		t.Fatalf("finished_at sent for a running execution or step: %+v", execution)
+	}
+}
+
 // A single read always sends executions, as [] for a run no workflow has
 // carried yet; the run list never sends them.
 func TestTemplateRunExecutionsArePresentOnlyOnASingleRead(t *testing.T) {
