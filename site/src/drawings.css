@@ -163,22 +163,17 @@ a:hover > .arrow {
   opacity: 0;
 }
 
-/* The rail: the feature in view, and the line filled to it. */
-.rail-link {
-  color: var(--color-separator);
-  transition: color 0.25s ease;
+/* The bar beside the features: hidden until the script can fill it, then
+   filled as far as the reader has scrolled through them. */
+.rail {
+  display: none;
 }
-.rail-link:hover,
-.rail-link.passed {
-  color: var(--color-muted-foreground);
-}
-.rail-link.current {
-  color: var(--color-primary);
-  font-weight: 600;
+.motion .rail {
+  display: block;
 }
 .rail-fill {
   height: var(--fill, 0%);
-  transition: height 0.25s ease;
+  transition: height 0.15s linear;
 }
 [data-parallax] {
   transition: transform 0.2s linear;

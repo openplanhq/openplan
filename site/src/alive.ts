@@ -6,7 +6,7 @@
 // - the hero plays a run as the app shows it, on a loop, while on screen;
 // - each feature's drawing plays once when its row arrives, some loop while
 //   on screen, and where a pointer can hover some answer it;
-// - the features rail marks the one in view.
+// - a bar beside the features fills as you scroll through them.
 
 const root = document.documentElement;
 const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -276,7 +276,6 @@ function grant(c: Ctx, pick: number, role: string) {
 
 function features() {
   const rows = [...document.querySelectorAll<HTMLElement>("[data-feature]")];
-  const links = [...document.querySelectorAll<HTMLElement>(".rail-link")];
   const fill = document.querySelector<HTMLElement>(".rail-fill");
 
   rows.forEach((row) => {
@@ -309,30 +308,26 @@ function features() {
     });
   });
 
-  // The rail marks the row nearest the middle of the window, and on a wide
-  // screen with a pointer the panels drift against the scroll a little.
+  // The bar fills from the first feature's middle reaching the middle of
+  // the window to the last one's; on a wide screen with a pointer the
+  // panels also drift against the scroll a little.
   const parallax = hovers ? rows.map((row) => row.querySelector<HTMLElement>("[data-parallax]")) : [];
   let frame = 0;
   const onScroll = () => {
     frame = 0;
     const mid = innerHeight / 2;
-    let current = -1;
-    let best = Infinity;
-    rows.forEach((row, i) => {
+    const centre = (row: HTMLElement) => {
       const box = row.getBoundingClientRect();
-      const off = box.top + box.height / 2 - mid;
-      if (Math.abs(off) < best && box.bottom > 0 && box.top < innerHeight) {
-        best = Math.abs(off);
-        current = i;
-      }
+      return box.top + box.height / 2;
+    };
+    rows.forEach((row, i) => {
       const panel = parallax[i];
-      if (panel && innerWidth >= 1024) panel.style.transform = `translateY(${clamp(-off * 0.07, -28, 28).toFixed(1)}px)`;
+      if (panel && innerWidth >= 1024) panel.style.transform = `translateY(${clamp(-(centre(row) - mid) * 0.07, -28, 28).toFixed(1)}px)`;
     });
-    links.forEach((link, i) => {
-      link.classList.toggle("current", i === current);
-      link.classList.toggle("passed", current >= 0 && i < current);
-    });
-    fill?.style.setProperty("--fill", current < 0 ? "0%" : `${((current + 1) / rows.length) * 100}%`);
+    const first = centre(rows[0]);
+    const last = centre(rows[rows.length - 1]);
+    const done = clamp((mid - first) / (last - first), 0, 1);
+    fill?.style.setProperty("--fill", `${(done * 100).toFixed(1)}%`);
   };
   addEventListener("scroll", () => {
     if (!frame) frame = requestAnimationFrame(onScroll);

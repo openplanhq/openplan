@@ -112,12 +112,11 @@ describe("site/index.html", () => {
     }
   });
 
-  it("names the features in the rail, in order, and numbers none of them", () => {
-    const titles = FEATURES.map((feature) => feature.match(/<h3\b[^>]*>([^<]+)<\/h3>/)?.[1]);
-    const rail = [...HTML.matchAll(/<a class="rail-link" href="#feature-(\d)">([^<]+)<\/a>/g)];
-    expect(rail.map((m) => m[2])).toEqual(titles);
-    rail.forEach((m, index) => expect(m[1]).toBe(String(index + 1)));
+  it("numbers and lists none of the features beside them: the bar is decoration", () => {
     expect(HTML).not.toMatch(/>0\d \/ 08</);
+    const rail = HTML.match(/<div class="rail\b[^"]*"[^>]*>[\s\S]*?<\/div><\/div>/)?.[0] ?? "";
+    expect(rail).toContain('aria-hidden="true"');
+    expect(rail.replace(/<[^>]+>/g, "").trim()).toBe("");
   });
 
   it("closes on a call to action that links to the README's setup steps", () => {

@@ -126,29 +126,18 @@
            and must not make the page scroll sideways; clip, unlike hidden,
            keeps the rail sticky. -->
       <section id="features" class="overflow-x-clip border-t" aria-labelledby="features-title">
-        <div class="mx-auto max-w-[1180px] px-5 py-24 lg:grid lg:grid-cols-[160px_minmax(0,1fr)] lg:gap-x-8">
+        <div class="mx-auto max-w-[1180px] px-5 py-24 lg:grid lg:grid-cols-[2px_minmax(0,1fr)] lg:gap-x-12">
           <div class="mx-auto mb-14 flex max-w-[640px] flex-col items-center gap-4 text-center lg:col-span-2" data-reveal>
             <span class="rounded-full border bg-card px-3 py-1 text-meta font-medium text-muted-foreground">Features</span>
             <h2 id="features-title" class="text-page-title font-semibold tracking-title">Everything a team needs to share Terraform</h2>
             <p class="text-sm text-muted-foreground">Without sharing a laptop, a state file or anyone's credentials.</p>
           </div>
 
-          <!-- A rail of links to the eight features by name, beside them on wide screens.
-               src/alive.ts marks the one in view and fills the line to it. -->
+          <!-- A bar beside the features on wide screens that fills as you scroll
+               through them. Decoration: the headings carry the content. It
+               shows only when src/alive.ts can fill it. -->
           <div class="hidden lg:block">
-            <nav aria-label="Features" class="rail sticky top-24 flex gap-3">
-              <div class="relative w-0.5 rounded-full bg-divider"><div class="rail-fill absolute top-0 left-0 w-0.5 rounded-full bg-primary"></div></div>
-              <ol class="flex flex-col gap-3 text-xs leading-4">
-                <li><a class="rail-link" href="#feature-1">Register templates</a></li>
-                <li><a class="rail-link" href="#feature-2">Compose stacks</a></li>
-                <li><a class="rail-link" href="#feature-3">Configure per stack</a></li>
-                <li><a class="rail-link" href="#feature-4">Plan, apply and destroy</a></li>
-                <li><a class="rail-link" href="#feature-5">Watch runs and read logs</a></li>
-                <li><a class="rail-link" href="#feature-6">Upgrade deliberately</a></li>
-                <li><a class="rail-link" href="#feature-7">Control access per stack</a></li>
-                <li><a class="rail-link" href="#feature-8">Sign in with SSO</a></li>
-              </ol>
-            </nav>
+            <div class="rail sticky top-24 h-56 w-0.5 rounded-full bg-divider" aria-hidden="true"><div class="rail-fill w-0.5 rounded-full bg-primary"></div></div>
           </div>
 
           <!-- Every drawing stands complete without the script. With it, each
