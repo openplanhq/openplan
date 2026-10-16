@@ -66,8 +66,8 @@
         </div>
 
         <div class="min-w-0 flex-[1.15_1_480px]" data-reveal>
-          <!-- A run as the app shows it, played once by src/alive.ts when it
-               comes into view: the drawing (plan, approve, apply) and the run
+          <!-- A run as the app shows it, played on a loop by src/alive.ts while
+               it is on screen: the drawing (plan, approve, apply) and the run
                view beneath it move together. Without the script, or with
                reduced motion, both stand at the run's end: applied. It
                illustrates the copy beside it, so assistive technology skips it. -->
@@ -122,42 +122,6 @@
               </div>
             </div>
           </div>
-          <!-- One pass of the run lasts longer than five seconds, so it can be
-               stopped or played again (WCAG 2.2.2). Shown only with the script. -->
-          <button type="button" class="mt-2 inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-meta font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" data-replay hidden>
-            <svg aria-hidden="true" class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>
-            <span data-replay-label>Replay run</span>
-          </button>
-        </div>
-      </section>
-
-      <!-- Why openplan, in the README's own terms ("Why not Terraform Cloud"),
-           without prices, which date. -->
-      <section class="border-t" aria-labelledby="why-title">
-        <div class="mx-auto flex max-w-[1040px] flex-col gap-10 px-5 py-24">
-          <div class="mx-auto flex max-w-[640px] flex-col items-center gap-3 text-center" data-reveal>
-            <span class="rounded-full border bg-card px-3 py-1 text-meta font-medium text-muted-foreground">Why openplan</span>
-            <h2 id="why-title" class="text-page-title font-semibold tracking-title">Why not Terraform Cloud</h2>
-            <p class="text-sm text-balance text-muted-foreground">HCP Terraform bills every managed resource, every month, whether or not it changes. openplan runs on your own Postgres and Temporal, so there is no meter.</p>
-          </div>
-          <div class="grid gap-4 md:grid-cols-3">
-            <div class="flex flex-col gap-2 rounded-panel border bg-card p-5" data-reveal>
-              <svg aria-hidden="true" class="size-4 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2" rx="2" /><rect width="20" height="8" x="2" y="14" rx="2" /><path d="M6 6h.01" /><path d="M6 18h.01" /></svg>
-              <h3 class="text-row-title font-semibold tracking-title">No per-resource meter</h3>
-              <p class="text-sm text-muted-foreground">Self-hosted under Apache 2.0, on infrastructure you already run. HCP Terraform self-hosts only as Terraform Enterprise.</p>
-            </div>
-            <div class="flex flex-col gap-2 rounded-panel border bg-card p-5" data-reveal>
-              <svg aria-hidden="true" class="size-4 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2" /><path d="M2 8h20" /><path d="M6 4v4" /><path d="M10 4v4" /></svg>
-              <h3 class="text-row-title font-semibold tracking-title">A UI for the whole team</h3>
-              <p class="text-sm text-muted-foreground">Atlantis works through pull-request comments and Terragrunt is a CLI. openplan gives a platform team a web UI to offer self-service.</p>
-            </div>
-            <div class="flex flex-col gap-2 rounded-panel border bg-card p-5" data-reveal>
-              <svg aria-hidden="true" class="size-4 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
-              <h3 class="text-row-title font-semibold tracking-title">Access per stack</h3>
-              <p class="text-sm text-muted-foreground">People get a role on each stack through OpenFGA, where HCP Terraform grants per project and Atlantis per repository.</p>
-            </div>
-          </div>
-          <a class="self-center text-sm font-medium text-primary hover:underline" href="https://github.com/openplanhq/openplan#why-not-terraform-cloud">The full comparison, with Atlantis and Terragrunt</a>
         </div>
       </section>
 

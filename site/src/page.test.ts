@@ -49,15 +49,14 @@ describe("site/index.html", () => {
     expect(words.filter((word) => !keywords.has(word) && !word.startsWith("a-"))).toEqual([]);
   });
 
-  it("loops nothing on its own: endless animation only under the pointer, or the run's spinner", () => {
-    // WCAG 2.2.2: motion that starts by itself stops within five seconds or
-    // can be stopped. The hero's run has a button; everything else here
-    // plays a fixed number of times unless the pointer is on it.
+  it("loops no drawing on its own: endless animation only under the pointer, or the run's spinner", () => {
+    // Motion that starts by itself stops within five seconds (WCAG 2.2.2):
+    // every drawing plays a fixed number of times unless the pointer is on
+    // it. The hero's run loops in alive.ts by the owner's choice.
     const rules = [...stripComments(DRAWINGS).matchAll(/([^{}]+)\{([^{}]*)\}/g)];
     const endless = rules.filter(([, , body]) => /\binfinite\b/.test(body)).map(([, sel]) => sel.trim());
     expect(endless.length).toBeGreaterThan(0);
     expect(endless.filter((sel) => !/\.hot\b|^\.spin$/.test(sel))).toEqual([]);
-    expect(HTML).toMatch(/<button\b[^>]*\bdata-replay\b[^>]*\bhidden>/);
   });
 
   it("stops every drawing animation for people who ask for reduced motion", () => {
@@ -157,14 +156,6 @@ describe("site/index.html", () => {
     expect(files(readme).length).toBeGreaterThan(0);
     expect(files(HTML)).toEqual(files(readme));
     expect(HTML).toContain("url=https://github.com/openplanhq/openplan/releases/latest/download\n");
-  });
-
-  it("says why openplan, in the README's terms, and links its comparison", () => {
-    expect(HTML).toMatch(/<h2 id="why-title"[^>]*>Why not Terraform Cloud<\/h2>/);
-    expect(HTML).toContain('href="https://github.com/openplanhq/openplan#why-not-terraform-cloud"');
-    expect(read("../README.md")).toMatch(/^## Why not Terraform Cloud$/m);
-    // Prices date; the site leaves them to the README.
-    expect(HTML).not.toMatch(/\$\d/);
   });
 
   it("shows the real stack page, the README's own screenshot", () => {

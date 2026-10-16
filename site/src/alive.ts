@@ -3,14 +3,13 @@
 // for people who ask for reduced motion.
 //
 // - arriving: content rises in as it scrolls into view (data-reveal);
-// - the hero plays a run as the app shows it, once, when it first comes into
-//   view, with a button to stop it or play it again;
+// - the hero plays a run as the app shows it, on a loop while on screen;
 // - each feature's drawing plays once when its row arrives, and where a
 //   pointer can hover it answers it, looping only while hovered.
 //
-// Nothing moves on its own for more than five seconds without a way to stop
-// it (WCAG 2.2.2): the hero has its button, and every other loop plays a
-// single short pass, then rests on the state the HTML draws.
+// The hero loops by the owner's choice (2026-10-16), pausing off screen and
+// in a background tab. Every other loop plays a single pass inside five
+// seconds, then rests on the state the HTML draws.
 // - a bar beside the features fills as you scroll through them.
 
 const root = document.documentElement;
@@ -163,40 +162,29 @@ function heroRun() {
     }
   };
 
-  // The run plays once when it first comes into view, then rests on
-  // "applied". One pass outlasts five seconds, so a button beneath it stops
-  // it (resting on "applied") or plays it again.
-  const button = document.querySelector<HTMLButtonElement>("[data-replay]");
-  const label = button?.querySelector("[data-replay-label]");
+  // The run loops while it is on screen and the tab is in front, starting
+  // from the top when it first arrives.
   let step = 7;
   let timer = 0;
-  const rest = () => {
-    clearTimeout(timer);
-    timer = 0;
-    step = 7;
-    show(step);
-    if (label) label.textContent = "Replay run";
-  };
+  let onScreen = false;
   const tick = () => {
-    if (step >= FRAMES.length - 1) return rest();
-    step += 1;
+    step = (step + 1) % FRAMES.length;
     show(step);
     timer = window.setTimeout(tick, FRAMES[step].hold);
   };
-  const play = () => {
-    clearTimeout(timer);
-    step = 0;
-    show(step);
-    timer = window.setTimeout(tick, FRAMES[0].hold);
-    if (label) label.textContent = "Stop";
+  const sync = () => {
+    const play = onScreen && !document.hidden;
+    if (play && !timer) timer = window.setTimeout(tick, step === 7 ? 600 : FRAMES[step].hold);
+    if (!play && timer) {
+      clearTimeout(timer);
+      timer = 0;
+    }
   };
-  if (button) {
-    button.hidden = false;
-    button.addEventListener("click", () => (timer ? rest() : play()));
-  }
-  onArrival(run, () => {
-    timer = window.setTimeout(play, 600);
-  });
+  new IntersectionObserver(([entry]) => {
+    onScreen = entry.isIntersecting;
+    sync();
+  }).observe(run);
+  document.addEventListener("visibilitychange", sync);
 }
 
 // ---- Features ----
