@@ -12,8 +12,6 @@ import (
 	"github.com/vishu42/openplan/internal/authentication"
 )
 
-// TODO: we can perhaps improve error handling here
-
 // authFailureBody is the single response every authentication failure renders.
 // Distinguishing "bad state" from "expired code" from "nonce mismatch" would
 // tell an attacker which check they tripped.
