@@ -9,12 +9,28 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/vishu42/openplan/internal/migrationlock"
 )
 
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
+// Migrate applies the application's migrations that have not run yet.
+//
+// It is safe to call from several processes at once: the whole run, including
+// creating schema_migrations, happens under the schema's migration lock, so a
+// replica that starts while another is migrating waits and then finds nothing
+// left to apply.
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
+	// The pool's config carries the search_path, so the lock is taken for
+	// the same schema the migrations write to.
+	return migrationlock.Hold(ctx, pool.Config().ConnConfig, func() error {
+		return migrate(ctx, pool)
+	})
+}
+
+func migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	if _, err := pool.Exec(ctx, `
 		create table if not exists schema_migrations (
 			version text primary key,
