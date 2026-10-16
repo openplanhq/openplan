@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/openfga/openfga/pkg/server/config"
 	"github.com/openfga/openfga/pkg/storage/migrate"
+
+	"github.com/vishu42/openplan/internal/migrationlock"
 )
 
 // Migrate applies OpenFGA's schema migrations to the application database.
@@ -22,19 +25,29 @@ import (
 // expire before it is used, and a zero Timeout means the retry policy never
 // gives up -- together they hang startup with no error. OpenFGA's own defaults
 // are used so this matches what the CLI would do.
-func Migrate(databaseURL string) error {
+//
+// RunMigrations is goose.Up with no lock of its own, so the run holds the
+// schema's migration lock: api replicas starting together migrate one at a
+// time, and the ones that wait find nothing left to apply.
+func Migrate(ctx context.Context, databaseURL string) error {
 	if databaseURL == "" {
 		return fmt.Errorf("authorization: database url is required")
 	}
-	if err := migrate.RunMigrations(migrate.MigrationConfig{
-		Engine:      "postgres",
-		URI:         databaseURL,
-		Timeout:     config.DefaultDatastorePingRetryMaxElapsedTime,
-		PingTimeout: config.DefaultDatastorePingTimeout,
-	}); err != nil {
-		return fmt.Errorf("authorization: migrate: %w", err)
+	lockConfig, err := pgx.ParseConfig(databaseURL)
+	if err != nil {
+		return fmt.Errorf("authorization: parse database url: %w", err)
 	}
-	return nil
+	return migrationlock.Hold(ctx, lockConfig, func() error {
+		if err := migrate.RunMigrations(migrate.MigrationConfig{
+			Engine:      "postgres",
+			URI:         databaseURL,
+			Timeout:     config.DefaultDatastorePingRetryMaxElapsedTime,
+			PingTimeout: config.DefaultDatastorePingTimeout,
+		}); err != nil {
+			return fmt.Errorf("authorization: migrate: %w", err)
+		}
+		return nil
+	})
 }
 
 // requireMigratedSchema fails before the server starts when OpenFGA's tables

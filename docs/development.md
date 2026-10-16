@@ -32,26 +32,22 @@ OPENPLAN_PULL_POLICY=build docker compose up -d --wait
 Nothing to copy afterwards. OpenFGA runs inside the API and resolves its store
 and authorization model from the model in this repository at startup.
 
-To run the API and executor on the host instead, build their images once with
-the command above, then bring the stack down to the dependencies alone and
-start each process in its own terminal. Compose does not inject `.env` into
-containers or host processes, so a host process reads those values from your
-shell:
+To run the API on the host instead, build the images once with the command
+above, then bring the stack down to the dependencies and the executor, and
+start the API in its own terminal. The executor stays in Compose: it runs only
+in its Linux image, as root with the privileges runsc needs, starting each
+activity in a gVisor sandbox of its own (see "Runner Security" in
+[architecture.md](architecture.md)), and refuses to start anywhere else.
+Compose does not inject `.env` into containers or host processes, so a host
+process reads those values from your shell:
 
 ```bash
-docker compose up -d postgres temporal dex
+docker compose up -d postgres temporal dex executor
 
 set -a
 source .env
 set +a
 go run ./cmd/api
-```
-
-```bash
-set -a
-source .env
-set +a
-go run ./cmd/executor
 ```
 
 ```bash
@@ -85,16 +81,26 @@ A model change writes a new immutable version the next time the API starts, and
 there is no identifier to update anywhere: the store and model are resolved by
 matching the repository model, not by configuration.
 
-The transform rejects a syntax error but not a reference to a relation that
-does not exist, so `define can_view: ownr` would transform cleanly and be
-refused by OpenFGA at write time. The permission matrix in
-`internal/authorization/authorization-model-tests.fga.yaml` is what catches that, along with
-every permission that is merely wrong. Run it on any model change; it needs the
-[`fga` CLI](https://github.com/openfga/cli) on `PATH`:
+The model is validated as it loads, so a syntax error or a reference to a
+relation that does not exist (`define can_view: ownr`) fails `go test` too.
+What validation cannot catch is a permission that is well-formed and wrong.
+The permission matrix in
+`internal/authorization/authorization-model-tests.fga.yaml` catches that: it
+asserts which roles hold each permission and which do not, and
+`go test ./internal/authorization/` runs it against the embedded model, so CI
+runs it on every change. The same test fails when the model defines a `can_*`
+permission the matrix never asserts, so a new permission lands with its checks.
+
+The file is in the format the [`fga` CLI](https://github.com/openfga/cli)
+reads, so `fga model test` runs it as well:
 
 ```bash
 cd internal/authorization && fga model test --tests authorization-model-tests.fga.yaml
 ```
+
+The Go runner implements only the parts of that format the matrix uses, and
+rejects the rest (`list_objects`, `list_users`, conditions) rather than
+skipping it. Extend `model_matrix_test.go` when the matrix needs one.
 
 ## Tests
 
@@ -104,12 +110,21 @@ gofmt -l cmd internal
 node scripts/verify-auth-compose.mjs
 ```
 
-The tests that need Postgres skip without one, including the differential test
-that guards `internal/authorization/write.go` against upstream drift. With the
-Compose stack up, run them for real:
+The tests that need Postgres skip without one. CI runs every one of them
+against a Postgres service. Locally, with the Compose stack up,
+`make differential-test` runs the authorization ones, including the
+differential test that guards `internal/authorization/write.go` against
+upstream drift:
 
 ```bash
 make differential-test
+```
+
+and the same DSN runs the rest:
+
+```bash
+OPENPLAN_POSTGRES_TEST_DSN='postgres://openplan:openplan@localhost:55432/openplan_test?sslmode=disable' \
+  go test ./internal/postgres/ ./internal/migrationlock/ ./cmd/api/
 ```
 
 ```bash

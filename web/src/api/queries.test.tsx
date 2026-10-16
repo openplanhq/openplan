@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   registrationRefetchInterval,
   runRefetchInterval,
+  runsRefetchInterval,
   useAddTemplateToStackMutation,
   useApproveRunMutation,
   useDiscardRunMutation,
@@ -57,7 +58,8 @@ describe("read-only query hooks", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([{ id: "rev_1" }]));
     const { result } = renderHook(() => useTemplateRevisionsQuery("tenant_123"), { wrapper: wrapper(testQueryClient()) });
 
-    await waitFor(() => expect(result.current.data).toEqual([{ id: "rev_1" }]));
+    // The client fills in tags a server leaves out.
+    await waitFor(() => expect(result.current.data).toEqual([{ id: "rev_1", tags: [] }]));
     expect(fetch).toHaveBeenCalledWith(
       "/v1/tenants/tenant_123/template-revisions",
       expect.objectContaining({ method: "GET" })
@@ -149,6 +151,15 @@ describe("polling-aware query hooks", () => {
       expect(runRefetchInterval("running", true)).toBe(1500);
       expect(runRefetchInterval("completed", true)).toBe(false);
       expect(runRefetchInterval("running", false)).toBe(false);
+    });
+
+    // Polling a list that never loaded would put it back to pending on every
+    // poll, so its failure would flicker in and out instead of staying put.
+    it("polls a runs list unless its first load failed", () => {
+      expect(runsRefetchInterval({ data: undefined, fetchFailureCount: 0 })).toBe(1500);
+      expect(runsRefetchInterval({ data: undefined, fetchFailureCount: 1 })).toBe(false);
+      expect(runsRefetchInterval({ data: [], fetchFailureCount: 0 })).toBe(1500);
+      expect(runsRefetchInterval({ data: [], fetchFailureCount: 2 })).toBe(1500);
     });
   });
 

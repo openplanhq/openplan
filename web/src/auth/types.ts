@@ -1,5 +1,4 @@
-// Identity and capability contract the frontend commits to for AUTH-017 (see
-// docs/superpowers/specs/2026-07-18-ui-revamp-design.md, "Identity & capability contract").
+// Identity and capability contract the frontend commits to for AUTH-017.
 // The backend resolves capabilities server-side; the frontend only ever reads booleans —
 // no raw tokens, no role-name strings, and no tenant ID (implicit in the deployment).
 

@@ -13,11 +13,11 @@ import (
 	"github.com/vishu42/openplan/internal/domain"
 )
 
-func TestLocalProcessRunnerRunsTerraformPlan(t *testing.T) {
+func TestLocalTerraformRunnerRunsTerraformPlan(t *testing.T) {
 	t.Parallel()
 
 	executor := &recordingCommandExecutor{}
-	runner := NewLocalProcessRunnerWithExecutor(executor)
+	runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
@@ -40,10 +40,10 @@ func TestLocalProcessRunnerRunsTerraformPlan(t *testing.T) {
 	}
 }
 
-// TestLocalProcessRunnerInjectsCredentialEnvironment verifies resolved credentials reach the subprocess.
-func TestLocalProcessRunnerInjectsCredentialEnvironment(t *testing.T) {
+// TestLocalTerraformRunnerInjectsCredentialEnvironment verifies resolved credentials reach the subprocess.
+func TestLocalTerraformRunnerInjectsCredentialEnvironment(t *testing.T) {
 	executor := &recordingCommandExecutor{}
-	runner := NewLocalProcessRunnerWithExecutor(executor)
+	runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
@@ -79,11 +79,11 @@ func TestSortedEnvironmentReturnsSortedNameValueEntries(t *testing.T) {
 	}
 }
 
-func TestLocalProcessRunnerRunsTerraformApply(t *testing.T) {
+func TestLocalTerraformRunnerRunsTerraformApply(t *testing.T) {
 	t.Parallel()
 
 	executor := &recordingCommandExecutor{}
-	runner := NewLocalProcessRunnerWithExecutor(executor)
+	runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
@@ -106,14 +106,14 @@ func TestLocalProcessRunnerRunsTerraformApply(t *testing.T) {
 	}
 }
 
-// TestLocalProcessRunnerRunsTerraformDestroy verifies that a destroy run's
+// TestLocalTerraformRunnerRunsTerraformDestroy verifies that a destroy run's
 // apply phase applies its saved plan too: the plan was made with -destroy, so
 // applying it is the destroy, and running `tofu destroy` would plan again.
-func TestLocalProcessRunnerRunsTerraformDestroy(t *testing.T) {
+func TestLocalTerraformRunnerRunsTerraformDestroy(t *testing.T) {
 	t.Parallel()
 
 	executor := &recordingCommandExecutor{}
-	runner := NewLocalProcessRunnerWithExecutor(executor)
+	runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
@@ -139,7 +139,7 @@ func TestLocalProcessRunnerRunsTerraformDestroy(t *testing.T) {
 // Variables go to whatever plans and nowhere after it: a saved plan carries
 // the values it was made with, and applying it must not be able to change
 // them. An auto-approved apply plans as it applies, so it takes them.
-func TestLocalProcessRunnerSetsTerraformVariablesOnlyWhenPlanning(t *testing.T) {
+func TestLocalTerraformRunnerSetsTerraformVariablesOnlyWhenPlanning(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -183,7 +183,7 @@ func TestLocalProcessRunnerSetsTerraformVariablesOnlyWhenPlanning(t *testing.T) 
 			t.Parallel()
 
 			executor := &recordingCommandExecutor{}
-			runner := NewLocalProcessRunnerWithExecutor(executor)
+			runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 			_, err := runner.Run(context.Background(), TerraformCommand{
 				WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
@@ -212,11 +212,11 @@ func TestLocalProcessRunnerSetsTerraformVariablesOnlyWhenPlanning(t *testing.T) 
 
 // An auto-approved apply has no saved plan to count, so its counts come from
 // the "Apply complete!" line, and its output still reaches the log.
-func TestLocalProcessRunnerCountsAnAutoApprovedApplyFromItsOutput(t *testing.T) {
+func TestLocalTerraformRunnerCountsAnAutoApprovedApplyFromItsOutput(t *testing.T) {
 	t.Parallel()
 
 	executor := &recordingCommandExecutor{stdout: "aws_s3_bucket.logs: Creating...\n\nApply complete! Resources: 1 imported, 2 added, 1 changed, 3 destroyed.\n"}
-	runner := NewLocalProcessRunnerWithExecutor(executor)
+	runner := NewLocalTerraformRunnerWithExecutor(executor)
 	var log bytes.Buffer
 
 	result, err := runner.Run(context.Background(), TerraformCommand{
@@ -267,7 +267,7 @@ func (err exitCodeError) ExitCode() int { return err.code }
 
 // Exit 2 from a -detailed-exitcode plan is a plan with changes, not a failure.
 // The runner then reads the saved plan back and counts what it would do.
-func TestLocalProcessRunnerCountsTheChangesOfAPlanThatHasThem(t *testing.T) {
+func TestLocalTerraformRunnerCountsTheChangesOfAPlanThatHasThem(t *testing.T) {
 	t.Parallel()
 
 	executor := &scriptedCommandExecutor{steps: []scriptedStep{
@@ -281,7 +281,7 @@ func TestLocalProcessRunnerCountsTheChangesOfAPlanThatHasThem(t *testing.T) {
 			{"change":{"actions":["no-op"]}}
 		]}`},
 	}}
-	runner := NewLocalProcessRunnerWithExecutor(executor)
+	runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 	result, err := runner.Run(context.Background(), TerraformCommand{
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
@@ -305,11 +305,11 @@ func TestLocalProcessRunnerCountsTheChangesOfAPlanThatHasThem(t *testing.T) {
 	}
 }
 
-func TestLocalProcessRunnerReportsAPlanWithoutChangesAsSuch(t *testing.T) {
+func TestLocalTerraformRunnerReportsAPlanWithoutChangesAsSuch(t *testing.T) {
 	t.Parallel()
 
 	executor := &scriptedCommandExecutor{steps: []scriptedStep{{}}}
-	runner := NewLocalProcessRunnerWithExecutor(executor)
+	runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 	result, err := runner.Run(context.Background(), TerraformCommand{
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
@@ -328,11 +328,11 @@ func TestLocalProcessRunnerReportsAPlanWithoutChangesAsSuch(t *testing.T) {
 }
 
 // Any exit code but 0 and 2 is a failed plan, even though 2 is not.
-func TestLocalProcessRunnerFailsAPlanThatExitsOne(t *testing.T) {
+func TestLocalTerraformRunnerFailsAPlanThatExitsOne(t *testing.T) {
 	t.Parallel()
 
 	executor := &scriptedCommandExecutor{steps: []scriptedStep{{err: exitCodeError{code: 1}}}}
-	runner := NewLocalProcessRunnerWithExecutor(executor)
+	runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
@@ -345,11 +345,11 @@ func TestLocalProcessRunnerFailsAPlanThatExitsOne(t *testing.T) {
 	}
 }
 
-func TestLocalProcessRunnerSelectsExistingWorkspace(t *testing.T) {
+func TestLocalTerraformRunnerSelectsExistingWorkspace(t *testing.T) {
 	t.Parallel()
 
 	executor := &recordingCommandExecutor{}
-	runner := NewLocalProcessRunnerWithExecutor(executor)
+	runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
@@ -372,13 +372,13 @@ func TestLocalProcessRunnerSelectsExistingWorkspace(t *testing.T) {
 	}
 }
 
-func TestLocalProcessRunnerCreatesMissingWorkspace(t *testing.T) {
+func TestLocalTerraformRunnerCreatesMissingWorkspace(t *testing.T) {
 	t.Parallel()
 
 	executor := &recordingCommandExecutor{
 		errs: []error{errors.New("workspace does not exist")},
 	}
-	runner := NewLocalProcessRunnerWithExecutor(executor)
+	runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
@@ -406,14 +406,14 @@ func TestLocalProcessRunnerCreatesMissingWorkspace(t *testing.T) {
 	}
 }
 
-func TestLocalProcessRunnerWrapsWorkspaceCreationErrorWithTofuContext(t *testing.T) {
+func TestLocalTerraformRunnerWrapsWorkspaceCreationErrorWithTofuContext(t *testing.T) {
 	t.Parallel()
 
 	createErr := errors.New("create failed")
 	executor := &recordingCommandExecutor{
 		errs: []error{errors.New("workspace does not exist"), createErr},
 	}
-	runner := NewLocalProcessRunnerWithExecutor(executor)
+	runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
@@ -432,12 +432,12 @@ func TestLocalProcessRunnerWrapsWorkspaceCreationErrorWithTofuContext(t *testing
 	}
 }
 
-func TestLocalProcessRunnerWrapsCommandErrors(t *testing.T) {
+func TestLocalTerraformRunnerWrapsCommandErrors(t *testing.T) {
 	t.Parallel()
 
 	commandErr := errors.New("terraform failed")
 	executor := &recordingCommandExecutor{errs: []error{commandErr}}
-	runner := NewLocalProcessRunnerWithExecutor(executor)
+	runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
@@ -456,14 +456,14 @@ func TestLocalProcessRunnerWrapsCommandErrors(t *testing.T) {
 	}
 }
 
-func TestLocalProcessRunnerPassesOutputWritersToExecutor(t *testing.T) {
+func TestLocalTerraformRunnerPassesOutputWritersToExecutor(t *testing.T) {
 	t.Parallel()
 
 	executor := &recordingCommandExecutor{
 		stdout: "terraform stdout\n",
 		stderr: "terraform stderr\n",
 	}
-	runner := NewLocalProcessRunnerWithExecutor(executor)
+	runner := NewLocalTerraformRunnerWithExecutor(executor)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
@@ -486,10 +486,10 @@ func TestLocalProcessRunnerPassesOutputWritersToExecutor(t *testing.T) {
 	}
 }
 
-func TestLocalProcessRunnerRequiresWorkspacePath(t *testing.T) {
+func TestLocalTerraformRunnerRequiresWorkspacePath(t *testing.T) {
 	t.Parallel()
 
-	runner := NewLocalProcessRunnerWithExecutor(&recordingCommandExecutor{})
+	runner := NewLocalTerraformRunnerWithExecutor(&recordingCommandExecutor{})
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
@@ -572,7 +572,7 @@ type recordedCommand struct {
 // An approved apply and a destroy apply a saved plan, and count what they did
 // from the closing line, as an auto-approved apply does, whichever of tofu's
 // two lines it prints.
-func TestLocalProcessRunnerCountsASavedPlanApplyFromItsOutput(t *testing.T) {
+func TestLocalTerraformRunnerCountsASavedPlanApplyFromItsOutput(t *testing.T) {
 	t.Parallel()
 
 	for _, testCase := range []struct {
@@ -588,7 +588,7 @@ func TestLocalProcessRunnerCountsASavedPlanApplyFromItsOutput(t *testing.T) {
 			t.Parallel()
 
 			executor := &recordingCommandExecutor{stdout: testCase.stdout}
-			runner := NewLocalProcessRunnerWithExecutor(executor)
+			runner := NewLocalTerraformRunnerWithExecutor(executor)
 			var log bytes.Buffer
 
 			result, err := runner.Run(context.Background(), TerraformCommand{

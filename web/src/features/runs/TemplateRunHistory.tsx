@@ -1,9 +1,13 @@
+import { RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTemplateRunsQuery } from "../../api/queries";
 import type { TemplateRun } from "../../api/types";
 import { tenantID } from "../../config";
+import { buttonClass } from "../../shared/buttonClass";
+import ErrorLine from "../../shared/ErrorLine";
 import { formatDateTime } from "../../shared/formatTimestamp";
 import PlanDiff from "../../shared/PlanDiff";
+import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
@@ -11,8 +15,10 @@ import RunStatusLabel from "./RunStatusLabel";
 
 // 8px either side of a column boundary makes the 16px between columns, and
 // 16px at the row's ends. Each column's width is its content's (run 64,
-// status 190, changes 110, time 110) plus that padding.
-const cellClass = "px-2 py-2 first:pl-4 last:pr-4";
+// status 190, changes 110, time 110) plus that padding. Every cell holds
+// meta-sized text, and sets it as its own size so all five share one
+// baseline; the table's 14px would put a 13px name 1px off its neighbours.
+const cellClass = "px-2 py-2 text-meta first:pl-4 last:pr-4";
 
 interface TemplateRunHistoryProps {
   stackId: string;
@@ -24,7 +30,37 @@ interface TemplateRunHistoryProps {
 // rows take no actions: a plan is approved or discarded on its run, after
 // someone has read it, and a run planning or applying cannot be stopped.
 export default function TemplateRunHistory({ stackId, stackTemplateId }: TemplateRunHistoryProps) {
-  const runs = useTemplateRunsQuery(tenantID, stackTemplateId).data ?? [];
+  const runsQuery = useTemplateRunsQuery(tenantID, stackTemplateId);
+  const runs = runsQuery.data;
+  const boundary = useQueryErrorBoundary(runsQuery.error);
+
+  // "No runs yet" before the list arrives would tell someone a template with
+  // a history has never run. While it loads this space stays empty (the
+  // toolbar's note says the runs are loading to anyone who could start one);
+  // if it never arrives, say that, with a retry. A failed poll keeps the runs
+  // it had, and they stay on screen.
+  if (runs === undefined) {
+    if (runsQuery.status !== "error") {
+      return null;
+    }
+    if (boundary !== null) {
+      return <>{boundary}</>;
+    }
+    return (
+      <div className="flex flex-col items-start gap-3" data-testid="template-run-history-error">
+        <ErrorLine live={false}>Something went wrong while loading this template's runs.</ErrorLine>
+        <button
+          type="button"
+          className={cn(buttonClass("outline"), "pointer-coarse:h-11")}
+          data-testid="template-run-history-retry"
+          onClick={() => void runsQuery.refetch()}
+        >
+          <RefreshCw data-icon="inline-start" aria-hidden="true" />
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-w-0" data-testid="template-run-history">

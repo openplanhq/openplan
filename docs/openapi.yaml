@@ -44,11 +44,19 @@ info:
     rejected with `400 invalid_json`. Endpoints that take no fields — such as
     run approval — still require a body of `{}`.
 
+    A JSON request body may be at most 1 MiB; a larger one is rejected with
+    `413 request_too_large` before any of it is acted on.
+
     ## Errors
 
     Every JSON error shares one envelope: an `error` code meant for code to
     branch on, and a `message` meant for a person to read. See the `Error`
-    schema for the full set of codes.
+    schema for the full set of codes. That includes the `401` for a missing
+    or expired session, and a request no route matches: `404 not_found` for
+    an unknown path, `405 method_not_allowed` (with an `Allow` header) for a
+    known path and the wrong method. The sign-in routes are the exception:
+    their failures are an HTML page for the browser, and back-channel logout
+    answers Dex in plain text.
   license:
     name: Apache-2.0
     identifier: Apache-2.0
@@ -316,6 +324,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
     get:
@@ -427,6 +436,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
     get:
@@ -534,6 +544,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
 
@@ -575,6 +586,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
     get:
@@ -687,6 +699,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
 
@@ -754,6 +767,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
 
@@ -796,6 +810,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
 
@@ -831,6 +846,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
     get:
@@ -927,6 +943,7 @@ paths:
                   value: { error: run_in_flight, message: a run is already in flight for this component }
                 planStale:
                   value: { error: plan_stale, message: the plan is stale; re-plan before applying }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
     get:
@@ -1077,6 +1094,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
 
@@ -1111,6 +1129,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
 
@@ -1296,6 +1315,12 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
+    RequestTooLarge:
+      description: The JSON request body is larger than 1 MiB (`request_too_large`).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: request_too_large, message: request body must not exceed 1 MiB }
     InternalError:
       description: |
         An unexpected failure (`internal_error`). The message is deliberately
@@ -1337,8 +1362,10 @@ components:
             - forbidden
             - self_approval_forbidden
             - not_found
+            - method_not_allowed
             - invalid_request
             - invalid_json
+            - request_too_large
             - unknown_user
             - plan_stale
             - run_in_flight

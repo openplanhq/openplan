@@ -518,9 +518,8 @@ func (s *session) transferPlan(step domain.TemplateRunStep, activityName string,
 }
 
 // terraform runs one Terraform command on the executor as the step it is,
-// with the run's credentials sealed to the workspace's key, then records the
-// log the executor uploaded for it. A failed command's log is what explains the
-// failure, so it is recorded before the error propagates.
+// with the run's credentials sealed to the workspace's key, then has the
+// executor upload the log it spooled, and records it.
 func (s *session) terraform(command domain.TerraformCommandType) (domain.RunTerraformActivityOutput, error) {
 	// Sealed for every command rather than once per run: credentials are read
 	// fresh each time, and an apply can start a day after its plan.
@@ -542,7 +541,7 @@ func (s *session) terraform(command domain.TerraformCommandType) (domain.RunTerr
 	ctx = workflow.WithHeartbeatTimeout(ctx, domain.TerraformHeartbeatTimeout)
 	ctx = workflow.WithRetryPolicy(ctx, *terraformRetryPolicy)
 	var output domain.RunTerraformActivityOutput
-	if err := ExecuteStep(ctx, s.run, terraformCommandSteps[command], domain.RunTerraformActivityName, domain.RunTerraformActivityInput{
+	runErr := ExecuteStep(ctx, s.run, terraformCommandSteps[command], domain.RunTerraformActivityName, domain.RunTerraformActivityInput{
 		RunID:             s.run.input.RunID,
 		TenantID:          s.run.input.TenantID,
 		StackTemplateID:   s.run.input.StackTemplateID,
@@ -553,18 +552,35 @@ func (s *session) terraform(command domain.TerraformCommandType) (domain.RunTerr
 		ConfigJSON:        s.run.input.ConfigJSON,
 		RunPhase:          s.ws.phase,
 		SealedEnvironment: credentials.SealedEnvironment,
-	}).Get(ctx, &output); err != nil {
-		if log, ok := failedCommandLog(err); ok {
-			if logErr := s.run.log(log); logErr != nil {
-				return domain.RunTerraformActivityOutput{}, fmt.Errorf("%w (also failed to record its log: %w)", err, logErr)
-			}
-		}
-		return domain.RunTerraformActivityOutput{}, err
-	}
-	if err := s.run.log(output.Log); err != nil {
-		return domain.RunTerraformActivityOutput{}, err
+	}).Get(ctx, &output)
+	// A failed command's log is what explains the failure, so it is saved
+	// either way. A session whose executor is gone fails this too.
+	logErr := s.saveLog(command)
+	switch {
+	case runErr != nil && logErr != nil:
+		return domain.RunTerraformActivityOutput{}, fmt.Errorf("%w (also failed to save its log: %w)", runErr, logErr)
+	case runErr != nil:
+		return domain.RunTerraformActivityOutput{}, runErr
+	case logErr != nil:
+		return domain.RunTerraformActivityOutput{}, logErr
 	}
 	return output, nil
+}
+
+// saveLog uploads the log the executor spooled for command, from a sandbox of
+// its own (UploadLog), then records it on the control plane.
+func (s *session) saveLog(command domain.TerraformCommandType) error {
+	ctx := workflow.WithStartToCloseTimeout(s.ctx, 5*time.Minute)
+	var log domain.TemplateRunLog
+	if err := workflow.ExecuteActivity(ctx, domain.UploadLogActivityName, domain.UploadLogActivityInput{
+		TenantID: s.run.input.TenantID,
+		RunID:    s.run.input.RunID,
+		Command:  command,
+		RunPhase: s.ws.phase,
+	}).Get(ctx, &log); err != nil {
+		return fmt.Errorf("upload log: %w", err)
+	}
+	return s.run.log(log)
 }
 
 // sealSourceToken resolves a token for the run's repository on the control
@@ -627,20 +643,6 @@ var terraformCommandSteps = map[domain.TerraformCommandType]domain.TemplateRunSt
 	domain.TerraformCommandApply:            domain.TemplateRunStepApplying,
 	domain.TerraformCommandDestroy:          domain.TemplateRunStepApplying,
 	domain.TerraformCommandApplyAutoApprove: domain.TemplateRunStepApplying,
-}
-
-// failedCommandLog recovers the log metadata RunTerraform attaches to a command
-// failure whose log was already uploaded.
-func failedCommandLog(err error) (domain.TemplateRunLog, bool) {
-	var applicationErr *temporal.ApplicationError
-	if !errors.As(err, &applicationErr) || applicationErr.Type() != domain.TerraformCommandFailedErrorType || !applicationErr.HasDetails() {
-		return domain.TemplateRunLog{}, false
-	}
-	var log domain.TemplateRunLog
-	if err := applicationErr.Details(&log); err != nil {
-		return domain.TemplateRunLog{}, false
-	}
-	return log, true
 }
 
 // Record records the step the run is starting, for the people watching it.

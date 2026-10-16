@@ -19,7 +19,7 @@ type Cipher struct {
 
 // NewCipher constructs an AES-GCM cipher from a 32-byte raw, base64, or hex key.
 func NewCipher(rawKey string) (*Cipher, error) {
-	key, err := decodeKey(rawKey)
+	key, err := DecodeKey(rawKey)
 	if err != nil {
 		return nil, err
 	}
@@ -61,8 +61,10 @@ func (cipher *Cipher) Decrypt(encoded string) (string, error) {
 	return string(plaintext), nil
 }
 
-// decodeKey accepts the supported key encodings and requires exactly 32 bytes.
-func decodeKey(raw string) ([]byte, error) {
+// DecodeKey accepts the supported key encodings and requires exactly 32 bytes.
+// It is exported so a caller can compare keys as bytes, whatever encoding each
+// one is written in.
+func DecodeKey(raw string) ([]byte, error) {
 	if decoded, err := base64.RawStdEncoding.DecodeString(raw); err == nil && len(decoded) == 32 {
 		return decoded, nil
 	}

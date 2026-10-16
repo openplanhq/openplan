@@ -18,8 +18,10 @@ const sectionLinkClass = cn(buttonClass("section"), "pointer-coarse:h-11");
 // openplan UI's ResourceRow as table cells: 8px of padding either side of a
 // column boundary makes the 16px between columns, and 16px at the row's ends.
 // Each column's width is its content's (status 190, time 170, action 100)
-// plus that padding.
-const cellClass = "px-2 py-2 first:pl-4 last:pr-4";
+// plus that padding. Every cell holds meta-sized text and sets it as its own
+// size, so all four share one baseline; the table's 14px would put the
+// status and the action 1px below the name and the time.
+const cellClass = "px-2 py-2 text-meta first:pl-4 last:pr-4";
 
 // openplan UI's PreviewPanel: the right side of the stacks index, the
 // selected stack at a glance, with links into its sections and its own page.

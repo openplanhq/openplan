@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 export default function AuthCard({ className, ...props }: ComponentProps<typeof Card>) {
   return (
     <main className="grid min-h-svh place-items-center bg-background p-6">
-      <Card className={cn("w-full max-w-sm", className)} {...props} />
+      <Card className={cn("w-full max-w-77", className)} {...props} />
     </main>
   );
 }

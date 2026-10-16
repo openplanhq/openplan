@@ -19,9 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
-	"os"
-	"path/filepath"
 	"slices"
 
 	"github.com/vishu42/openplan/internal/runner"
@@ -33,13 +30,17 @@ const LockFileName = ".terraform.lock.hcl"
 // KeySize is the length of a plan key: AES-256.
 const KeySize = 32
 
-// maxFileSize bounds each file unpacked from a bundle. Plan files for large
-// configurations run to tens of megabytes; this is well past that and still
-// small enough that a hostile bundle cannot fill the executor's disk.
+// maxFileSize bounds each file in a bundle, packed or unpacked. Plan files
+// for large configurations run to tens of megabytes; this is well past that
+// and still small enough that a hostile bundle cannot fill the executor's
+// disk.
 const maxFileSize = 512 << 20
 
-// bundled is every file a bundle may carry. Unpack refuses anything else.
-var bundled = []string{runner.PlanFileName, LockFileName}
+// Files are the files a bundle carries, from the root module directory: the
+// saved plan and the dependency lock file. Pack takes nothing else and Unpack
+// returns nothing else. The caller reads and writes them; on the executor,
+// through the session that owns the directory.
+var Files = []string{runner.PlanFileName, LockFileName}
 
 // NewKey returns a fresh random plan key.
 func NewKey() ([]byte, error) {
@@ -50,19 +51,28 @@ func NewKey() ([]byte, error) {
 	return key, nil
 }
 
-// Pack reads the saved plan, and the lock file when there is one, from dir.
-// The plan file must exist; a module with no providers has no lock file.
-func Pack(dir string) ([]byte, error) {
+// Pack bundles files, by name. The plan must be there; a module with no
+// providers has no lock file. Each file must fit Unpack's bound, or the plan
+// would be approved and then fail to unpack for its apply.
+func Pack(files map[string][]byte) ([]byte, error) {
+	if _, ok := files[runner.PlanFileName]; !ok {
+		return nil, errors.New("no saved plan to pack")
+	}
+	for name, content := range files {
+		if !isBundled(name) {
+			return nil, fmt.Errorf("%q does not belong in a plan bundle", name)
+		}
+		if len(content) > maxFileSize {
+			return nil, fmt.Errorf("%s is larger than a plan bundle carries (%d bytes)", name, maxFileSize)
+		}
+	}
 	var buffer bytes.Buffer
 	gz := gzip.NewWriter(&buffer)
 	archive := tar.NewWriter(gz)
-	for _, name := range bundled {
-		content, err := os.ReadFile(filepath.Join(dir, name))
-		if errors.Is(err, fs.ErrNotExist) && name == LockFileName {
+	for _, name := range Files {
+		content, ok := files[name]
+		if !ok {
 			continue
-		}
-		if err != nil {
-			return nil, fmt.Errorf("read %s: %w", name, err)
 		}
 		if err := archive.WriteHeader(&tar.Header{Name: name, Mode: 0o600, Size: int64(len(content))}); err != nil {
 			return nil, fmt.Errorf("pack %s: %w", name, err)
@@ -80,49 +90,46 @@ func Pack(dir string) ([]byte, error) {
 	return buffer.Bytes(), nil
 }
 
-// Unpack writes a bundle's files into dir, replacing any already there: the
-// lock file in the fetched source, if it has one, gives way to the one the
-// plan was made with.
-func Unpack(bundle []byte, dir string) error {
+// Unpack returns a bundle's files, by name, for the caller to write back into
+// the root module directory, replacing any already there: the lock file in
+// the fetched source, if it has one, gives way to the one the plan was made
+// with.
+func Unpack(bundle []byte) (map[string][]byte, error) {
 	gz, err := gzip.NewReader(bytes.NewReader(bundle))
 	if err != nil {
-		return fmt.Errorf("open plan bundle: %w", err)
+		return nil, fmt.Errorf("open plan bundle: %w", err)
 	}
 	defer gz.Close()
 	archive := tar.NewReader(gz)
-	sawPlan := false
+	files := map[string][]byte{}
 	for {
 		header, err := archive.Next()
 		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
-			return fmt.Errorf("read plan bundle: %w", err)
+			return nil, fmt.Errorf("read plan bundle: %w", err)
 		}
 		if !isBundled(header.Name) || header.Typeflag != tar.TypeReg {
-			return fmt.Errorf("plan bundle holds unexpected entry %q", header.Name)
+			return nil, fmt.Errorf("plan bundle holds unexpected entry %q", header.Name)
 		}
 		if header.Size > maxFileSize {
-			return fmt.Errorf("plan bundle entry %q is too large", header.Name)
+			return nil, fmt.Errorf("plan bundle entry %q is too large", header.Name)
 		}
 		content, err := io.ReadAll(io.LimitReader(archive, maxFileSize))
 		if err != nil {
-			return fmt.Errorf("read %s from plan bundle: %w", header.Name, err)
+			return nil, fmt.Errorf("read %s from plan bundle: %w", header.Name, err)
 		}
-		// isBundled admitted header.Name above, so it cannot traverse out of dir.
-		if err := os.WriteFile(filepath.Join(dir, header.Name), content, 0o600); err != nil { //nolint:gosec // see above
-			return fmt.Errorf("write %s: %w", header.Name, err)
-		}
-		sawPlan = sawPlan || header.Name == runner.PlanFileName
+		files[header.Name] = content
 	}
-	if !sawPlan {
-		return errors.New("plan bundle holds no plan file")
+	if _, ok := files[runner.PlanFileName]; !ok {
+		return nil, errors.New("plan bundle holds no plan file")
 	}
-	return nil
+	return files, nil
 }
 
 func isBundled(name string) bool {
-	return slices.Contains(bundled, name)
+	return slices.Contains(Files, name)
 }
 
 // Seal encrypts a bundle with key. context is bound in as additional data, so

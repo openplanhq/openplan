@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/vishu42/openplan/internal/domain"
-	"github.com/vishu42/openplan/internal/logsink"
 	"github.com/vishu42/openplan/internal/planbundle"
 	"github.com/vishu42/openplan/internal/runseal"
 )
@@ -55,8 +54,7 @@ func TestSavedPlanTravelsFromThePlanExecutorToTheApplyExecutor(t *testing.T) {
 	control := NewControlActivities(&controlStoreStub{planKey: mustPlanKey(t)}, nil)
 
 	// Plan phase, on the first executor.
-	planKeys := runseal.NewKeyRing()
-	planExecutor := NewTemplateRunActivities(t.TempDir(), nil, plans, planKeys)
+	planExecutor, _ := newTestTemplateRunActivities(t, t.TempDir(), plans)
 	planWorkspace, err := planExecutor.PrepareWorkspace(ctx, domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
 		t.Fatalf("PrepareWorkspace returned error: %v", err)
@@ -77,8 +75,7 @@ func TestSavedPlanTravelsFromThePlanExecutorToTheApplyExecutor(t *testing.T) {
 	}
 
 	// Apply phase, on a second executor with its own run key.
-	applyKeys := runseal.NewKeyRing()
-	applyExecutor := NewTemplateRunActivities(t.TempDir(), nil, plans, applyKeys)
+	applyExecutor, _ := newTestTemplateRunActivities(t, t.TempDir(), plans)
 	applyWorkspace, err := applyExecutor.PrepareWorkspace(ctx, domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
 		t.Fatalf("PrepareWorkspace returned error: %v", err)
@@ -115,8 +112,7 @@ func TestDownloadPlanRefusesAPlanSavedForAnotherRun(t *testing.T) {
 	}
 	plans.plans["tenant_123/run_123"] = sealed
 
-	keys := runseal.NewKeyRing()
-	executor := NewTemplateRunActivities(t.TempDir(), nil, plans, keys)
+	executor, _ := newTestTemplateRunActivities(t, t.TempDir(), plans)
 	workspace, err := executor.PrepareWorkspace(ctx, domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
 		t.Fatal(err)
@@ -125,7 +121,11 @@ func TestDownloadPlanRefusesAPlanSavedForAnotherRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	root := t.TempDir()
+	// Inside the workspace: a path outside it would be refused for that alone.
+	root := filepath.Join(workspace.WorkspacePath, "source")
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	if err := executor.DownloadPlan(ctx, domain.PlanArtifactActivityInput{TenantID: "tenant_123", RunID: "run_123", TerraformPath: root, SealedPlanKey: sealedKey}); err == nil {
 		t.Fatal("DownloadPlan accepted a plan sealed for another run")
 	}
@@ -142,7 +142,7 @@ func TestCleanupWorkspaceRemovesTheRunWorkspaceAndOptionallyThePlan(t *testing.T
 	ctx := context.Background()
 	runRoot := t.TempDir()
 	plans := newMemoryPlanStore()
-	executor := NewTemplateRunActivities(runRoot, nil, plans, runseal.NewKeyRing())
+	executor, _ := newTestTemplateRunActivities(t, runRoot, plans)
 	workspace, err := executor.PrepareWorkspace(ctx, domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
 		t.Fatal(err)
@@ -168,9 +168,9 @@ func TestCleanupWorkspaceRemovesTheRunWorkspaceAndOptionallyThePlan(t *testing.T
 	if len(plans.deleted) != 1 || plans.deleted[0] != "tenant_123/run_123" {
 		t.Fatalf("deleted plans = %v, want the run's", plans.deleted)
 	}
-	wantPath, _ := logsink.RunWorkspacePath(runRoot, "tenant_123", "run_123")
-	if wantPath != workspace.WorkspacePath {
-		t.Fatalf("workspace path = %q, want %q", workspace.WorkspacePath, wantPath)
+	wantPath := filepath.Join(runRoot, "tenant_123", "run_123")
+	if filepath.Join(wantPath, "workspace") != workspace.WorkspacePath {
+		t.Fatalf("workspace path = %q, want %q", workspace.WorkspacePath, filepath.Join(wantPath, "workspace"))
 	}
 }
 
@@ -218,9 +218,7 @@ func mustPlanKey(t *testing.T) []byte {
 
 func mustBundle(t *testing.T) []byte {
 	t.Helper()
-	dir := t.TempDir()
-	writeTestFile(t, dir, "tfplan", "plan")
-	bundle, err := planbundle.Pack(dir)
+	bundle, err := planbundle.Pack(map[string][]byte{"tfplan": []byte("plan")})
 	if err != nil {
 		t.Fatal(err)
 	}

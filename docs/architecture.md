@@ -2,7 +2,7 @@
 
 The authentication and authorization trust boundaries, identity propagation,
 role semantics, failure contracts, and threat model are defined in the
-[Authentication and Authorization Security Architecture](superpowers/specs/2026-07-14-authn-authz-security-architecture-design.md).
+[Authentication and Authorization Security Architecture](security-architecture.md).
 
 This document describes openplan's current MVP product model, system architecture, execution workflows, persistence boundaries, security posture, and deferred design topics. For setup and local development, see the [project README](../README.md).
 
@@ -34,7 +34,7 @@ The MVP uses Temporal OSS as the durable workflow engine, Postgres as the applic
 
 The architecture also defines a pluggable `EventBus` interface for system events, live log fanout, and future pub/sub needs. The MVP can start with a no-op, in-memory, or simple local implementation, then swap in Redis, NATS JetStream, Kafka, or another broker without changing API or workflow semantics.
 
-The system is split into a control plane and a data plane (design: `docs/superpowers/specs/2026-09-15-control-plane-split.md`). The API process is the control plane: it serves HTTP, owns the database and every key, runs the queue loop that turns committed intents into workflow starts and signals, and polls Temporal's `control` task queue for workflow tasks and the activities that write product state. The executor process is the data plane: it polls only the `execution` task queue and runs workspace preparation, source checkout, and Terraform. It holds no database URL and no key. Neither process calls the other; every exchange goes through Temporal. [Apply run sequence](apply-run-sequence.md) walks an apply through every round trip.
+The system is split into a control plane and a data plane. The API process is the control plane: it serves HTTP, owns the database and every key, runs the queue loop that turns committed intents into workflow starts and signals, and polls Temporal's `control` task queue for workflow tasks and the activities that write product state. The executor process is the data plane: it polls only the `execution` task queue and runs workspace preparation, source checkout, and Terraform. It holds no database URL and no key. Neither process calls the other; every exchange goes through Temporal. [Apply run sequence](apply-run-sequence.md) walks an apply through every round trip.
 
 ```text
 UI --> openplan-api  (control plane)                      Temporal Server
@@ -150,7 +150,7 @@ The queue loop runs in the API. Multiple API replicas can safely run it because 
 For MVP, executors use a local process runner:
 
 ```text
-LocalProcessRunner
+LocalTerraformRunner
 ```
 
 Each Terraform-compatible activity uses the OpenTofu CLI (`tofu`) and:
@@ -171,22 +171,41 @@ The runner should be implemented behind an interface so a future `KubernetesJobR
 
 ### Runner Security
 
-The MVP local process runner is optimized for fast feedback, but it should be treated as trusted-template execution. OpenTofu/Terraform providers, provisioners, external data sources, and local-exec style behavior may execute code inside the executor pod with access to the run's injected credentials. The executor holds no database URL or key, but it can still reach Temporal, which has no access control yet; see "Temporal access control" in the control plane split spec.
+Terraform code is untrusted. A template is arbitrary code: OpenTofu/Terraform providers, provisioners, external data sources and `local-exec` run anything inside the executor pod, with access to the run's injected credentials. Publishing templates is limited to editors, but that only limits who can write a template, not what its code can do. Every executor-side design must assume the template is hostile.
+
+Every executor activity that touches tenant content runs in a gVisor sandbox of its own (#245), started by the executor with runsc: `FetchSource`, each `RunTerraform` command, `UploadLog`, `UploadPlan` and `DownloadPlan`. The Temporal worker stays outside every sandbox, with its connection to Temporal and the run keys. A sandbox boots a read-only guest root (tofu, git, CA certificates and the executor binary) and runs the activity's body as `openplan-executor activity <name>`. `internal/sandbox` holds the mechanism; `internal/activities` splits each activity into a worker-side shim and the body.
+
+| Mechanism | What it stops | Where |
+|---|---|---|
+| A fresh gVisor sandbox per activity, with its own kernel (gVisor's Sentry) and process space | A run reading another run's processes, files or credentials, or the executor's; a kernel exploit reaching the executor's kernel | `runsc.go`, `bundle.go` |
+| Credentials only over stdin; tofu's sandbox gets only the run's cloud credentials; storage access and the plan key only in sandboxes that run no tenant code | Template code holding the artifact store's keys, the plan key or the Temporal identity | `internal/activities/template_run.go`, `bodies.go` |
+| An environment built from scratch | The executor's own environment reaching a sandbox | `env.go` |
+| A network namespace per sandbox, wired to the executor's network through a bridge and NAT; its port on the bridge isolated, and traffic between sandboxes dropped; DNS through a relay in the executor | A run reaching another run's sandbox over the network; a sandbox taking the executor's own address, which runsc would do in the executor's namespace | `network.go`, `dns.go` |
+| Memory (with no swap), CPU and process limits per sandbox, or no sandbox | One run starving the others | `bundle.go`, `cgroup.go` |
+| The worker never opens a path a sandbox wrote, and our code inside a sandbox reads tofu's files as regular files only, without following links out | A planted symlink turning the worker, or a storage sandbox, against its own secrets | `frame.go`, `files.go` |
+| The log spool outside the workspace, capped at 64 MiB per command | tofu editing its own log; one run filling the disk through its output | `internal/activities/spool.go` |
+| Sandbox user 70000, no capabilities, `no_new_privs` | Template code holding any privilege inside its sandbox | `bundle.go` |
+
+What it does not cover:
+
+- Egress: a sandbox reaches whatever the executor reaches, through NAT. tofu reaches Temporal, the api, Postgres, Valkey and the cloud metadata address. Block the metadata address outside openplan (an IMDSv2 hop limit of 1 on AWS; a NetworkPolicy on Kubernetes).
+- Temporal has no access control yet (#246).
+- The run's own cloud credentials: tofu needs them, so a template's author can use or copy the credentials of whoever runs it.
+- Disk: a workspace has no quota.
+- Escaping gVisor: code that escapes lands as root in the executor container, which runs with `SYS_ADMIN` and with Docker's seccomp and AppArmor profiles off.
+
+`SECURITY.md` (#321) should list these gaps once it exists.
 
 MVP executor deployments should use the following guardrails:
 
-- Run executor containers as non-root.
-- Avoid host mounts and shared writable volumes.
-- Use fresh per-run working directories with cleanup after every run.
-- Apply CPU, memory, ephemeral storage, and wall-clock limits.
-- Inject only the credential sets required for the target stack or template run.
-- Prefer short-lived credentials wherever supported.
-- Avoid persisting secret values to Postgres, object storage, Temporal payloads, or logs.
-- Redact known secret values before logs are streamed or persisted.
-- Restrict executor network egress where practical.
+- Run the executor as `docker-compose.yaml` does: root with `cap_drop: [ALL]`, `cap_add: [SYS_ADMIN, SETUID, SETGID, SETFCAP, CHOWN, NET_ADMIN, NET_RAW]`, `no-new-privileges`, `seccomp=unconfined`, `apparmor=unconfined`, `net.ipv4.ip_forward=1`, a private cgroup namespace, and the run root (mounted `exec`, since providers run from it) and sandbox state on tmpfs. On Kubernetes that takes the Pod Security level "privileged" and an allowed `net.ipv4.ip_forward` sysctl. The executor refuses to start without any of these.
+- Keep the sandboxes' subnet (`EXECUTOR_SANDBOX_SUBNET`, default `10.237.0.0/24`) clear of every network tofu must reach: addresses inside it route to the sandboxes' bridge.
+- Avoid host mounts and shared writable volumes beyond the artifacts volume.
+- Inject only the credential sets required for the target stack or template run, and prefer short-lived credentials.
+- Avoid persisting secret values to Postgres, object storage, Temporal payloads, or logs; known values are redacted before a log is spooled.
 - Separate executors by task queue or deployment if future tenants, templates, or credential sets require stronger trust boundaries.
 
-Stronger isolation, such as a Kubernetes Job per run, sandboxed containers, remote runners, or per-tenant runner pools, remains a deferred design topic. The `LocalProcessRunner` interface keeps that migration path open without changing workflow semantics.
+Further isolation, such as a Kubernetes Job per run, remote runners, or per-tenant runner pools, remains a deferred design topic. `sandbox.Runner` is the seam: a backend that runs a job somewhere else needs no change to the activities.
 
 ## Go Package Layout
 
@@ -232,7 +251,7 @@ Package ownership:
 - `internal/temporal`: Temporal client adapter that implements `app` workflow-dispatch interfaces and is wired in `cmd`. API and app code should depend on interfaces, not on this adapter package directly.
 - `internal/workflows`: deterministic Temporal workflow definitions such as `TemplatePlanWorkflow`, `TemplateSyncWorkflow`, and future `StackRunWorkflow`.
 - `internal/activities`: Temporal activities that perform side effects such as cloning repositories, parsing templates, acquiring locks, running the OpenTofu CLI for Terraform-compatible operations, persisting logs, and writing activity events.
-- `internal/runner`: Terraform-compatible runner interface and runner implementations, including the MVP OpenTofu-backed `LocalProcessRunner`.
+- `internal/runner`: the OpenTofu-backed `LocalTerraformRunner` and the `LocalGitRunner`, which build their commands and start them through the shared `CommandExecutor`.
 - `internal/terraform`: Terraform-specific helpers for HCL variable parsing, tfvars rendering, backend metadata extraction, plan summary parsing, and workspace command modeling.
 - `internal/githubapp`: GitHub App integration, installation token generation, repository clone helpers, and ref-to-commit resolution.
 - `internal/secrets`: secret store boundary, credential set resolution, and Vault or local development adapters.
@@ -826,12 +845,11 @@ Future design should answer:
 
 ### Stronger Runner Isolation
 
-MVP uses local subprocess execution inside executor pods for speed.
+MVP uses local subprocess execution inside executor pods for speed. 1.0 adds a gVisor sandbox per session (#245).
 
 Future options:
 
 - Kubernetes Job per `TemplateRun`
-- sandboxed containers
 - remote execution workers
 - per-tenant runner pools
 
@@ -968,7 +986,7 @@ Vault/secret store
 GitHub App integration
 Go API server
 Go Temporal workers
-LocalProcessRunner
+LocalTerraformRunner
 ```
 
 It prioritizes fast feedback and a clean product model while leaving room for stronger runner isolation and richer governance later.

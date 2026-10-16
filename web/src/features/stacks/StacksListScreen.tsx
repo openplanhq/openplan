@@ -3,9 +3,10 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAttentionQuery, useStacksQuery } from "../../api/queries";
 import type { AttentionItem, StackListItem } from "../../api/types";
+import { useAuth } from "../../auth/AuthContext";
 import RequireCapability from "../../auth/RequireCapability";
 import { tenantID } from "../../config";
-import Breadcrumb from "../../shared/Breadcrumb";
+import ErrorLine from "../../shared/ErrorLine";
 import PageHeader from "../../shared/PageHeader";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import {
@@ -22,7 +23,6 @@ import { buttonClass } from "../../shared/buttonClass";
 import Chip from "../../shared/Chip";
 import { listItemClass } from "../../shared/listItemClass";
 import SearchField from "../../shared/SearchField";
-import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from "@/components/ui/empty";
 import { cn } from "@/lib/utils";
 
@@ -44,13 +44,40 @@ export default function StacksListScreen() {
   // fails the stacks still show, without the summary line and chips.
   const attention = useAttentionQuery(tenantID).data ?? [];
   const boundary = useQueryErrorBoundary(error);
+  const canCreateStack = useAuth().me?.globalCapabilities.canCreateStack === true;
   const [searchParams] = useSearchParams();
   const [filter, setFilter] = useState("");
 
+  // The header stands while the stacks load and when they fail, so the page
+  // keeps its title and its one action, and only the panel below waits.
+  const header = (count?: number) => (
+    <PageHeader
+      title="Stacks"
+      count={count}
+      action={
+        <RequireCapability capability="canCreateStack">
+          {/* A link that looks like the page's primary action. Full width
+              on a phone, where the header stacks. */}
+          <Link
+            className={cn(buttonClass("primary", "lg"), "w-full pointer-coarse:h-11 md:w-auto")}
+            to="/stacks/new"
+            data-testid="create-stack-link"
+          >
+            <Plus data-icon="inline-start" aria-hidden="true" />
+            Create stack
+          </Link>
+        </RequireCapability>
+      }
+    >
+      <AttentionSummary items={attention} />
+    </PageHeader>
+  );
+
   if (status === "pending") {
     return (
-      <section data-testid="stacks-list-loading">
-        <p className="flex items-center gap-2 text-muted-foreground">
+      <section>
+        {header()}
+        <p className="flex items-center gap-2 text-meta text-muted-foreground" data-testid="stacks-list-loading">
           <Loader2 aria-hidden="true" className="size-4 animate-spin" /> Loading stacks…
         </p>
       </section>
@@ -61,14 +88,22 @@ export default function StacksListScreen() {
     if (boundary !== null) {
       return <>{boundary}</>;
     }
+    // openplan UI's ErrorLine in place of the panel, an outline Retry under it.
     return (
-      <section className="grid justify-items-start gap-4" data-testid="stacks-list-error">
-        <Breadcrumb items={[{ label: "Stacks" }]} className="mb-0" />
-        <p className="text-muted-foreground">Something went wrong while loading stacks.</p>
-        <Button className="pointer-coarse:h-11" data-testid="stacks-list-retry" onClick={() => refetch()}>
-          <RefreshCw data-icon="inline-start" aria-hidden="true" />
-          Retry
-        </Button>
+      <section>
+        {header()}
+        <div className="flex flex-col items-start gap-3" data-testid="stacks-list-error">
+          <ErrorLine>Something went wrong while loading stacks.</ErrorLine>
+          <button
+            type="button"
+            className={cn(buttonClass("outline"), "pointer-coarse:h-11")}
+            data-testid="stacks-list-retry"
+            onClick={() => void refetch()}
+          >
+            <RefreshCw data-icon="inline-start" aria-hidden="true" />
+            Retry
+          </button>
+        </div>
       </section>
     );
   }
@@ -82,37 +117,30 @@ export default function StacksListScreen() {
 
   return (
     <section>
-      <PageHeader
-        title="Stacks"
-        count={stacks.length}
-        action={
-          <RequireCapability capability="canCreateStack">
-            {/* A link that looks like the page's primary action. Full width
-                on a phone, where the header stacks. */}
-            <Link
-              className={cn(buttonClass("primary", "lg"), "w-full pointer-coarse:h-11 md:w-auto")}
-              to="/stacks/new"
-              data-testid="create-stack-link"
-            >
-              <Plus data-icon="inline-start" aria-hidden="true" />
-              Create stack
-            </Link>
-          </RequireCapability>
-        }
-      >
-        <AttentionSummary items={attention} />
-      </PageHeader>
+      {header(stacks.length)}
       {stacks.length === 0 ? (
         // openplan UI's page-level EmptyState: a card, its one icon plain
-        // rather than on a tile.
+        // rather than on a tile. It is the first screen of a new install, so
+        // it says what a stack is for and offers the action that makes one;
+        // someone who may not create one learns how one reaches them.
         <Empty className="gap-3 rounded-panel border border-solid bg-card px-5 py-14" data-testid="stacks-list-empty">
           <EmptyHeader className="gap-3">
             <EmptyMedia>
               <Layers aria-hidden="true" className="size-5 text-muted-foreground" />
             </EmptyMedia>
-            <h2 className="font-heading text-sm font-medium tracking-tight">No stacks yet</h2>
-            <EmptyDescription className="text-meta">No stacks visible to you yet.</EmptyDescription>
+            <h2 className="font-heading text-sm font-medium">No stacks yet</h2>
+            <EmptyDescription className="text-meta">
+              {canCreateStack
+                ? "Create a stack for each environment you deploy to, such as prod or staging."
+                : "Stacks appear here once someone gives you access to one."}
+            </EmptyDescription>
           </EmptyHeader>
+          {canCreateStack && (
+            <Link to="/stacks/new" className={cn(buttonClass("outline"), "pointer-coarse:h-11")} data-testid="stacks-empty-create">
+              <Plus data-icon="inline-start" aria-hidden="true" />
+              Create stack
+            </Link>
+          )}
         </Empty>
       ) : (
         // One panel: the list, then the selected stack. On a wide screen they

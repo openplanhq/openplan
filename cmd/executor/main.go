@@ -11,15 +11,32 @@ import (
 	"github.com/vishu42/openplan/internal/config"
 	"github.com/vishu42/openplan/internal/domain"
 	"github.com/vishu42/openplan/internal/runseal"
+	"github.com/vishu42/openplan/internal/sandbox"
 	"github.com/vishu42/openplan/internal/temporal"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
 	temporalworker "go.temporal.io/sdk/worker"
 )
 
+// cgroupFS is the container's cgroup2 mount, and guestRoot the read-only root
+// every sandbox boots from (Dockerfile.executor).
+const (
+	cgroupFS  = "/sys/fs/cgroup"
+	guestRoot = "/opt/openplan/guest"
+)
+
 type temporalWorker interface {
 	RegisterActivityWithOptions(any, activity.RegisterOptions)
 	Run(<-chan any) error
+}
+
+// execution is what the execution activities are built from.
+type execution struct {
+	plans      activities.PlanArtifactStore
+	keys       *runseal.KeyRing
+	runner     sandbox.Runner
+	workspaces sandbox.Workspaces
+	store      config.ArtifactStoreConfig
 }
 
 type executorDependencies struct {
@@ -28,22 +45,23 @@ type executorDependencies struct {
 	// newWorker creates the Temporal worker bound to the execution task queue.
 	newWorker func(client.Client, string, temporalworker.Options) temporalWorker
 	// registerActivities attaches the execution activities to the worker.
-	registerActivities func(worker temporalWorker, runRoot string, stores artifactStores, keys *runseal.KeyRing)
-	// newArtifactStores builds the artifact-backed stores for phase logs and
-	// saved plans.
-	newArtifactStores func(config.ArtifactStoreConfig) (artifactStores, error)
+	registerActivities func(worker temporalWorker, exec execution) error
+	// newPlanStore builds the store CleanupWorkspace deletes applied plans
+	// from.
+	newPlanStore func(config.ArtifactStoreConfig) (activities.PlanArtifactStore, error)
 	// interruptCh provides the shutdown signal consumed by the Temporal worker run loop.
 	interruptCh func() <-chan any
-}
-
-// artifactStores are the executor's two uses of the artifact store: the log of
-// each Terraform phase, and each run's saved plan.
-type artifactStores struct {
-	logs  activities.TemplateRunLogStore
-	plans activities.PlanArtifactStore
+	// newSandbox readies the executor to start sandboxes, and fails when it
+	// can't: there is no way to run an activity outside one.
+	newSandbox func(cfg config.SandboxConfig, runRoot string) (sandbox.Runner, error)
 }
 
 func main() {
+	// A sandbox's process: this binary, run inside gVisor as one activity's
+	// body. It is not the executor and must not run its startup.
+	if len(os.Args) > 1 && os.Args[1] == sandbox.ActivitySubcommand {
+		os.Exit(sandbox.Serve(context.Background(), activities.NewBodies().Handlers(), os.Args[2:], os.Stdin, os.Stdout))
+	}
 	if err := run(context.Background(), os.Getenv); err != nil {
 		log.Fatal(err)
 	}
@@ -55,39 +73,49 @@ func defaultExecutorDependencies() executorDependencies {
 		newWorker: func(temporalClient client.Client, taskQueue string, options temporalworker.Options) temporalWorker {
 			return temporalworker.New(temporalClient, taskQueue, options)
 		},
-		registerActivities: func(worker temporalWorker, runRoot string, stores artifactStores, keys *runseal.KeyRing) {
-			templateRunActivities := activities.NewTemplateRunActivities(runRoot, stores.logs, stores.plans, keys)
-			worker.RegisterActivityWithOptions(templateRunActivities.PrepareWorkspace, activity.RegisterOptions{
-				Name: domain.PrepareWorkspaceActivityName,
-			})
-			worker.RegisterActivityWithOptions(templateRunActivities.FetchSource, activity.RegisterOptions{
-				Name: domain.FetchSourceActivityName,
-			})
-			worker.RegisterActivityWithOptions(templateRunActivities.RunTerraform, activity.RegisterOptions{
-				Name: domain.RunTerraformActivityName,
-			})
-			worker.RegisterActivityWithOptions(templateRunActivities.ReleaseRunKey, activity.RegisterOptions{
-				Name: domain.ReleaseRunKeyActivityName,
-			})
-			worker.RegisterActivityWithOptions(templateRunActivities.CleanupWorkspace, activity.RegisterOptions{
-				Name: domain.CleanupWorkspaceActivityName,
-			})
-			worker.RegisterActivityWithOptions(templateRunActivities.UploadPlan, activity.RegisterOptions{
-				Name: domain.UploadPlanActivityName,
-			})
-			worker.RegisterActivityWithOptions(templateRunActivities.DownloadPlan, activity.RegisterOptions{
-				Name: domain.DownloadPlanActivityName,
-			})
-		},
-		newArtifactStores: func(cfg config.ArtifactStoreConfig) (artifactStores, error) {
+		registerActivities: registerActivities,
+		newPlanStore: func(cfg config.ArtifactStoreConfig) (activities.PlanArtifactStore, error) {
 			store, err := artifacts.NewObjectStore(cfg)
 			if err != nil {
-				return artifactStores{}, err
+				return nil, err
 			}
-			return artifactStores{logs: artifacts.NewLogStore(store), plans: artifacts.NewPlanStore(store)}, nil
+			return artifacts.NewPlanStore(store), nil
 		},
 		interruptCh: temporalworker.InterruptCh,
+		newSandbox: func(cfg config.SandboxConfig, runRoot string) (sandbox.Runner, error) {
+			if err := (sandbox.Workspaces{Root: runRoot}).Check(); err != nil {
+				return nil, err
+			}
+			cgroups, err := sandbox.DelegateCgroups(cgroupFS)
+			if err != nil {
+				return nil, err
+			}
+			network, err := sandbox.SetupNetwork(cfg.State, cfg.Subnet)
+			if err != nil {
+				return nil, err
+			}
+			return sandbox.NewRuntime(cfg.Runsc, cfg.State, guestRoot, cgroupFS, cgroups, sandbox.Limits{
+				MemoryMiB: cfg.MemoryMiB, CPUs: cfg.CPUs, Pids: cfg.Pids,
+			}, network), nil
+		},
 	}
+}
+
+func registerActivities(worker temporalWorker, exec execution) error {
+	templateRun := activities.NewTemplateRunActivities(exec.runner, exec.workspaces, exec.store, exec.plans, exec.keys)
+	for name, fn := range map[string]any{
+		domain.PrepareWorkspaceActivityName: templateRun.PrepareWorkspace,
+		domain.FetchSourceActivityName:      templateRun.FetchSource,
+		domain.RunTerraformActivityName:     templateRun.RunTerraform,
+		domain.UploadLogActivityName:        templateRun.UploadLog,
+		domain.ReleaseRunKeyActivityName:    templateRun.ReleaseRunKey,
+		domain.CleanupWorkspaceActivityName: templateRun.CleanupWorkspace,
+		domain.UploadPlanActivityName:       templateRun.UploadPlan,
+		domain.DownloadPlanActivityName:     templateRun.DownloadPlan,
+	} {
+		worker.RegisterActivityWithOptions(fn, activity.RegisterOptions{Name: name})
+	}
+	return nil
 }
 
 func run(ctx context.Context, getenv func(string) string) error {
@@ -95,37 +123,43 @@ func run(ctx context.Context, getenv func(string) string) error {
 }
 
 // runWithDependencies runs the executor: a Temporal worker on the execution
-// queue, next to tenant Terraform. It deliberately opens no database connection
-// and parses no key. Everything secret a run needs arrives sealed to a key this
-// process generates for that run, and everything a run produces goes back
-// through Temporal to the control plane.
+// queue that runs each activity's body in a gVisor sandbox. It opens no
+// database connection and parses no key; what a run needs arrives sealed to a
+// key this process makes for it.
 func runWithDependencies(ctx context.Context, getenv func(string) string, deps executorDependencies) error {
 	cfg, err := config.LoadExecutorConfig(getenv)
 	if err != nil {
 		return fmt.Errorf("load executor config: %w", err)
 	}
-
-	stores, err := deps.newArtifactStores(cfg.ArtifactStore)
+	// Before Temporal: an executor that cannot sandbox must never take work.
+	runner, err := deps.newSandbox(cfg.Sandbox, cfg.RunRoot)
 	if err != nil {
-		return fmt.Errorf("wire artifact stores: %w", err)
+		return fmt.Errorf("sandbox: %w", err)
 	}
-
-	temporalClient, err := deps.dialTemporal(ctx, temporal.Config{
-		Address:   cfg.TemporalAddress,
-		Namespace: cfg.TemporalNamespace,
-	})
+	plans, err := deps.newPlanStore(cfg.ArtifactStore)
+	if err != nil {
+		return fmt.Errorf("wire the plan store: %w", err)
+	}
+	temporalClient, err := deps.dialTemporal(ctx, temporal.Config{Address: cfg.TemporalAddress, Namespace: cfg.TemporalNamespace})
 	if err != nil {
 		return fmt.Errorf("dial temporal: %w", err)
 	}
 	defer temporalClient.Close()
 
-	// Sessions pin a run's workspace activities, and so its sealing key, to this
-	// process.
-	worker := deps.newWorker(temporalClient, domain.ExecutionTaskQueue, temporalworker.Options{EnableSessionWorker: true})
-	deps.registerActivities(worker, cfg.RunRoot, stores, runseal.NewKeyRing())
+	// Sessions pin a run's activities, its workspace and its sealing key to
+	// this process.
+	worker := deps.newWorker(temporalClient, domain.ExecutionTaskQueue, temporalworker.Options{
+		EnableSessionWorker:               true,
+		MaxConcurrentSessionExecutionSize: cfg.MaxSessions,
+	})
+	if err := deps.registerActivities(worker, execution{
+		plans: plans, keys: runseal.NewKeyRing(), runner: runner,
+		workspaces: sandbox.Workspaces{Root: cfg.RunRoot}, store: cfg.ArtifactStore,
+	}); err != nil {
+		return err
+	}
 	if err := worker.Run(deps.interruptCh()); err != nil {
 		return fmt.Errorf("run worker: %w", err)
 	}
-
 	return nil
 }

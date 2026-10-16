@@ -1,0 +1,56 @@
+/* The feature drawings' frame and motion. Colours come only from the theme's
+   custom properties; page.test.ts holds this file to that. */
+
+.dot-grid {
+  background-image: radial-gradient(var(--color-border) 1px, transparent 1px);
+  background-size: 16px 16px;
+  background-position: 8px 8px;
+}
+
+/* Scale and translate each shape about its own box, not the SVG's. */
+.fx * {
+  transform-box: fill-box;
+}
+
+.a-draw { stroke-dasharray: 120; animation: a-draw 4s ease-in-out infinite; }
+@keyframes a-draw { 0% { stroke-dashoffset: 120; } 40%, 100% { stroke-dashoffset: 0; } }
+
+.a-pop { animation: a-pop 4s ease-out infinite; }
+@keyframes a-pop { 0%, 30% { opacity: 0; transform: scale(.6); } 45%, 100% { opacity: 1; transform: scale(1); } }
+
+.a-drop { animation: a-drop 4s ease-out infinite; }
+@keyframes a-drop { 0%, 8% { opacity: 0; transform: translateY(-14px); } 28%, 100% { opacity: 1; transform: none; } }
+
+.a-knob { animation: a-knob 4s ease-in-out infinite; }
+@keyframes a-knob { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-60px); } }
+
+.a-bar { animation: a-bar 4s ease-in-out infinite; }
+@keyframes a-bar { 0%, 100% { transform: scaleX(1); } 50% { transform: scaleX(.4); } }
+
+.a-grow { animation: a-grow 4s ease-in-out infinite; }
+@keyframes a-grow { 0%, 35% { transform: scale(0); } 55%, 85% { transform: scale(1); } 100% { transform: scale(0); } }
+
+.a-nudge { animation: a-nudge 4s ease-in-out infinite; }
+@keyframes a-nudge { 0%, 15%, 45%, 100% { transform: none; } 30% { transform: translateX(6px); } }
+
+.a-type { animation: a-type 4s ease-out infinite; }
+@keyframes a-type { 0% { transform: scaleX(0); } 25%, 100% { transform: scaleX(1); } }
+
+.a-lift { animation: a-lift 4s ease-in-out infinite; }
+@keyframes a-lift { 0%, 20% { transform: none; } 40%, 75% { transform: translateY(-34px); } 95%, 100% { transform: none; } }
+
+.a-on { animation: a-on 4s ease-in-out infinite; }
+@keyframes a-on { 0%, 40% { opacity: 0; } 55%, 80% { opacity: 1; } 95%, 100% { opacity: 0; } }
+
+.a-flow { stroke-dasharray: 4 6; animation: a-flow 1.2s linear infinite; }
+@keyframes a-flow { to { stroke-dashoffset: -20; } }
+
+.a-pulse { animation: a-pulse 2s ease-in-out infinite; }
+@keyframes a-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+
+/* Every drawing reads complete when it holds still. */
+@media (prefers-reduced-motion: reduce) {
+  .fx * {
+    animation: none !important;
+  }
+}

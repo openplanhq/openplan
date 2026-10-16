@@ -29,9 +29,13 @@ REDOCLY_LINT    := @redocly/cli@2.53.0
 # later runs hit the build cache. Linters are configured in .golangci.yml.
 GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
 
+# Pinned the same way. It reports vulnerabilities only on code paths this
+# module actually calls, and CI runs this exact command.
+GOVULNCHECK := go run golang.org/x/vuln/cmd/govulncheck@v1.1.4
+
 .DEFAULT_GOAL := help
 
-.PHONY: help api-docs-preview api-docs-lint lint differential-test
+.PHONY: help api-docs-preview api-docs-lint lint vulncheck differential-test sandbox-test
 
 help: ## List the available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -46,6 +50,9 @@ api-docs-lint: ## Validate docs/openapi.yaml against the OpenAPI spec
 lint: ## Lint the Go code with golangci-lint
 	$(GOLANGCI_LINT) run ./...
 
+vulncheck: ## Scan the Go code for known vulnerabilities it calls
+	$(GOVULNCHECK) ./...
+
 # internal/authorization/write.go is a transcription of OpenFGA's own write path
 # with its BeginTx/Commit removed, so a tuple write can join our transaction.
 # A transcription diverges silently: an upstream migration that adds a column
@@ -57,3 +64,11 @@ lint: ## Lint the Go code with golangci-lint
 # Run it after every `go get github.com/openfga/openfga@...`.
 differential-test: ## Run the authorization tests that need a real Postgres
 	OPENPLAN_POSTGRES_TEST_DSN=$(TEST_DSN) go test ./internal/authorization/ -count=1 -v
+
+sandbox-test: ## Run the sandbox tests (#245) against runsc in the executor image (needs Docker)
+	docker build -f Dockerfile.executor -t openplan-executor:sandbox .
+	docker build -f internal/sandbox/sandboxtest/Dockerfile --build-arg EXECUTOR_IMAGE=openplan-executor:sandbox -t openplan-sandbox-test .
+	docker run --rm --cap-drop ALL --cap-add SYS_ADMIN --cap-add SETUID --cap-add SETGID --cap-add SETFCAP --cap-add CHOWN --cap-add NET_ADMIN --cap-add NET_RAW --sysctl net.ipv4.ip_forward=1 \
+		--security-opt no-new-privileges:true --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
+		--cgroupns private --tmpfs /var/lib/openplan/runs:exec --tmpfs /var/lib/openplan/sandboxes openplan-sandbox-test
+	./internal/sandbox/sandboxtest/failclosed.sh openplan-executor:sandbox

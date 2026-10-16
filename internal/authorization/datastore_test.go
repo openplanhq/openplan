@@ -31,7 +31,7 @@ func testPool(t *testing.T) *pgxpool.Pool {
 	if dsn == "" {
 		t.Skip("set OPENPLAN_POSTGRES_TEST_DSN (or run `make differential-test`)")
 	}
-	require.NoError(t, authorization.Migrate(dsn))
+	require.NoError(t, authorization.Migrate(context.Background(), dsn))
 	pool, err := pgxpool.New(context.Background(), dsn)
 	require.NoError(t, err)
 	t.Cleanup(pool.Close)
@@ -262,6 +262,16 @@ func TestListGrantsInsideATransactionSeesItsOwnWrites(t *testing.T) {
 // all, which is the state the New guard exists to report.
 func unmigratedTestPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
+	pool, err := pgxpool.New(context.Background(), emptyTestDatabase(t))
+	require.NoError(t, err)
+	t.Cleanup(pool.Close)
+	return pool
+}
+
+// emptyTestDatabase creates a database with no schema at all, dropped when the
+// test ends, and returns its DSN.
+func emptyTestDatabase(t *testing.T) string {
+	t.Helper()
 	dsn := os.Getenv("OPENPLAN_POSTGRES_TEST_DSN")
 	if dsn == "" {
 		t.Skip("set OPENPLAN_POSTGRES_TEST_DSN (or run `make differential-test`)")
@@ -281,11 +291,7 @@ func unmigratedTestPool(t *testing.T) *pgxpool.Pool {
 		defer cleanup.Close()
 		_, _ = cleanup.Exec(context.Background(), "drop database if exists "+name+" with (force)")
 	})
-
-	pool, err := pgxpool.New(context.Background(), replaceDatabase(t, dsn, name))
-	require.NoError(t, err)
-	t.Cleanup(pool.Close)
-	return pool
+	return replaceDatabase(t, dsn, name)
 }
 
 func randomBytes(t *testing.T, size int) []byte {

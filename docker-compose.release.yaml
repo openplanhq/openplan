@@ -17,6 +17,7 @@
 # own, replace CREDENTIAL_ENCRYPTION_KEY and SESSION_ENCRYPTION_KEY with fresh
 # values before the first run: `openssl rand -hex 32`, and keep them, because
 # losing the credential key makes every stored Terraform credential unreadable.
+# With OPENPLAN_ENVIRONMENT=production the api refuses to start on these.
 #
 # Written against v0.2.0. `latest` moves as releases land, so pin the tag to keep
 # a stack reproducible.
@@ -145,8 +146,12 @@ services:
       # dex.yaml strands every grant.
       OPENPLAN_ROOT_SUBJECT: CiQ3YzRiMmYwZS0zZDFhLTRlOGItOWY2Yy0yYTVkOGUxYjBjNDcSBWxvY2Fs
     restart: on-failure
-    ports:
-      - "8081:8081"
+    # No published port. The browser reaches the api only through the web
+    # server, which proxies /v1 and /healthz over the compose network, and Dex
+    # posts back-channel logout to api:8081 on that network too. Publishing
+    # it would put the api on the host's network, outside whatever TLS and
+    # headers sit in front of the web server. For local debugging, bind it to
+    # loopback only: "127.0.0.1:8081:8081".
     volumes:
       - artifacts:/var/lib/openplan/artifacts
 
@@ -171,11 +176,14 @@ services:
       ARTIFACT_STORE_FILESYSTEM_ROOT: /var/lib/openplan/artifacts
       EXECUTOR_RUN_ROOT: /var/lib/openplan/runs
     restart: on-failure
+    # Root with only the three capabilities a branch's switch to its pool user
+    # needs (#331). The executor refuses to start with more, or without
+    # no-new-privileges.
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID, CHOWN]
+    security_opt: ["no-new-privileges:true"]
     volumes:
       - artifacts:/var/lib/openplan/artifacts
-      # Shared by both replicas so a provider downloads once per host rather
-      # than once per replica. Provider binaries only, never credentials.
-      - plugin-cache:/var/lib/openplan/plugin-cache
 
   web:
     image: ghcr.io/openplanhq/openplan-web:v0.2.0
@@ -189,4 +197,3 @@ services:
 volumes:
   postgres-data:
   artifacts:
-  plugin-cache:

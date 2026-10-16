@@ -540,6 +540,31 @@ describe("TemplateCredentialsTab", () => {
     expect(screen.getByRole("button", { name: "Add credential" })).toBeTruthy();
   });
 
+  // A list that failed is not an empty one: saying the runs use the stack
+  // environment would be a guess, and the form would invite a duplicate.
+  it("says the credentials failed to load, in place of the list and its form, and retries", async () => {
+    const queryClient = testQueryClient();
+    seedDefaultData(queryClient);
+    const respond = (body: unknown, status: number) =>
+      new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(respond({ error: "internal", message: "boom" }, 500))
+      .mockResolvedValueOnce(respond([{ id: "c1", name: "TEMPLATE_ONLY", scope: "stack_template", created_at: "2026-07-19T00:00:00Z" }], 200));
+
+    renderAt(queryClient, "/stacks/stack_1/templates/st_1/credentials");
+
+    const error = await screen.findByTestId("template-credentials-error");
+    expect(error.textContent).toContain("Something went wrong while loading this template's credentials.");
+    expect(screen.queryByText("No credentials for this template")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add credential" })).toBeNull();
+
+    fireEvent.click(screen.getByTestId("template-credentials-retry"));
+
+    expect(await screen.findByText("TEMPLATE_ONLY")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("denies the tab itself without canManageAccess", async () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient, { ...allAllowed, canManageAccess: false });

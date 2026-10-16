@@ -6,26 +6,21 @@ import (
 	"strings"
 )
 
-// GitRunner is the subprocess boundary for source repository operations.
+// LocalGitRunner runs git as a subprocess via the shared CommandExecutor boundary.
 //
 // Clone and CheckoutCommit take a credential because the remote may be private.
 // It is a parameter rather than runner state on purpose: one runner serves every
 // repository, and the token is scoped to a single one, so holding it would be
 // both wrong and a data race. ResolveHead needs none -- it reads a local clone.
-type GitRunner interface {
-	Clone(ctx context.Context, repoURL string, ref string, dest string, credential GitCredential) error
-	CheckoutCommit(ctx context.Context, repoURL string, commitSHA string, dest string, credential GitCredential) error
-	ResolveHead(ctx context.Context, repoPath string) (string, error)
-}
-
-// LocalGitRunner runs git as a subprocess via the shared CommandExecutor boundary.
 type LocalGitRunner struct {
 	executor CommandExecutor
 }
 
-// NewLocalGitRunner returns a runner backed by the local git executable.
+// NewLocalGitRunner returns a runner that starts git as this process, with
+// only the allowlisted environment. The api's template sync uses it; on the
+// executor git runs inside an activity's sandbox.
 func NewLocalGitRunner() *LocalGitRunner {
-	return NewLocalGitRunnerWithExecutor(osExecCommandExecutor{})
+	return NewLocalGitRunnerWithExecutor(ProcessExecutor{})
 }
 
 // NewLocalGitRunnerWithExecutor returns a Git runner backed by executor.

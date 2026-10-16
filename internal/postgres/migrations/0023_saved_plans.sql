@@ -1,8 +1,7 @@
 -- Saved plans (#249). A run is now plan -> approve -> apply the saved plan:
 -- the plan phase writes an encrypted plan file to the artifact store and waits
 -- for approval without holding an executor, and approving it starts a second
--- workflow that applies exactly that file. See
--- docs/superpowers/specs/2026-09-21-saved-plan-flow-design.md.
+-- workflow that applies exactly that file. See docs/apply-run-sequence.md.
 --
 -- openplan is pre-production, so this converts in place rather than migrating
 -- behaviour: runs of the old shape are closed out, and the old approval queue

@@ -1,7 +1,7 @@
 -- openplan holds no credentials. Every sign-in goes through the identity
 -- provider (Dex on the local stack), which keeps its own password store, and
 -- root is an identity-provider user named by OPENPLAN_ROOT_SUBJECT plus an
--- OpenFGA tuple. See docs/superpowers/specs/2026-09-30-dex-adoption-design.md.
+-- OpenFGA tuple. See docs/authentication.md.
 --
 -- 0020 created this table and stays as written: migrations are append-only.
 -- Its rows are not carried anywhere. They are argon2id hashes for accounts

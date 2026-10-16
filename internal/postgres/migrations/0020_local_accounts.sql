@@ -3,9 +3,8 @@
 -- This is not a second identity provider. openplan signs nothing and issues no
 -- token: a local sign-in verifies a password and then mints the same session
 -- row the OIDC callback mints, and every request after it is authenticated by
--- the same opaque session cookie. See #211 and
--- docs/superpowers/specs/2026-09-01-local-accounts-considerations.md for why
--- the token-issuing design this replaced could not work.
+-- the same opaque session cookie. See #211 for why the token-issuing design
+-- this replaced could not work.
 --
 -- Distinct from users (0019), which is a projection written at every sign-in
 -- from whatever the provider asserted. This table is the credential store for

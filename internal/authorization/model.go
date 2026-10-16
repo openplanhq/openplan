@@ -3,8 +3,9 @@
 // authorization-model.fga is the source of truth and the only form of the model
 // in this repository. It is transformed to OpenFGA's protobuf form in process,
 // so there is no generated JSON artifact to regenerate or keep in step.
-// authorization-model-tests.fga.yaml beside it is the model's own test matrix,
-// run by the `fga model test` CLI rather than by `go test`.
+// authorization-model-tests.fga.yaml beside it is the model's own test matrix:
+// model_matrix_test.go runs it under `go test`, and `fga model test` reads the
+// same file.
 package authorization
 
 import (

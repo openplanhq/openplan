@@ -197,11 +197,49 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/template-runs/{run_id}/approval", server.handleApproveRun)
 	// Discards a template run's plan waiting for approval.
 	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/template-runs/{run_id}/discard", server.handleDiscardRun)
-	server.handler = server.mux
+	server.handler = withErrorEnvelope(server.mux)
 	return server
 }
 
-// NewAuthenticatedServer protects all /v1 routes and leaves health probes public.
+// withErrorEnvelope answers requests no route matches in the API's error
+// envelope. Left to itself the mux writes plain text: "404 page not found",
+// or "Method Not Allowed" with an Allow header.
+//
+// Only unrouted requests are touched. mux.Handler reports the pattern a
+// request would reach, and it is empty exactly when the mux would answer with
+// one of those two errors; a redirect to a canonical path still has one.
+func withErrorEnvelope(mux *http.ServeMux) http.Handler {
+	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if _, pattern := mux.Handler(request); pattern != "" {
+			mux.ServeHTTP(response, request)
+			return
+		}
+		// Let the mux decide 404 or 405 and set Allow, then replace only
+		// its plain-text body.
+		unrouted := &unroutedResponse{header: response.Header()}
+		mux.ServeHTTP(unrouted, request)
+		if unrouted.status == http.StatusMethodNotAllowed {
+			writeError(response, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+			return
+		}
+		writeError(response, http.StatusNotFound, "not_found", "resource not found")
+	})
+}
+
+// unroutedResponse records the status the mux chose for an unrouted request
+// and discards its body. Headers go straight to the real response, so Allow
+// arrives with the envelope.
+type unroutedResponse struct {
+	header http.Header
+	status int
+}
+
+func (response *unroutedResponse) Header() http.Header            { return response.header }
+func (response *unroutedResponse) Write(body []byte) (int, error) { return len(body), nil }
+func (response *unroutedResponse) WriteHeader(status int)         { response.status = status }
+
+// NewAuthenticatedServer requires a session on every route except the health
+// probe and the sign-in routes.
 func NewAuthenticatedServer(service *app.Service, tenantID domain.TenantID, debug bool, options ...ServerOption) *Server {
 	server := NewServer(service, tenantID, options...)
 	server.debug = debug
@@ -216,7 +254,7 @@ func NewAuthenticatedServer(service *app.Service, tenantID domain.TenantID, debu
 		server.auth.Clock,
 		// Sign-in has to be reachable before there is a session.
 		"/healthz", "/v1/auth/login", "/v1/auth/callback", "/v1/auth/logout", "/v1/auth/backchannel-logout",
-	)(server.mux)
+	)(server.handler)
 	return server
 }
 
@@ -272,11 +310,19 @@ func (server *Server) debugf(format string, args ...any) {
 	}
 }
 
+// maxRequestBodyBytes caps every JSON request body. The largest legitimate one
+// is a credential set or a run's variables, a few kilobytes; a megabyte leaves
+// room for those to grow while keeping one request from holding unbounded
+// memory, since the body is buffered whole before it is validated.
+const maxRequestBodyBytes = 1 << 20
+
 func decodeRequestBody(response http.ResponseWriter, request *http.Request, destination any) bool {
-	decoder := json.NewDecoder(request.Body)
+	decoder := json.NewDecoder(http.MaxBytesReader(response, request.Body, maxRequestBodyBytes))
 	var raw json.RawMessage
 	if err := decoder.Decode(&raw); err != nil {
-		writeError(response, http.StatusBadRequest, "invalid_json", "request body must match the expected JSON schema")
+		if !writeRequestTooLarge(response, err) {
+			writeError(response, http.StatusBadRequest, "invalid_json", "request body must match the expected JSON schema")
+		}
 		return false
 	}
 	if trimmed := bytes.TrimSpace(raw); len(trimmed) == 0 || trimmed[0] != '{' {
@@ -289,10 +335,24 @@ func decodeRequestBody(response http.ResponseWriter, request *http.Request, dest
 		writeError(response, http.StatusBadRequest, "invalid_json", "request body must match the expected JSON schema")
 		return false
 	}
+	// Trailing bytes count toward the cap too, so this read can be the one
+	// that crosses it.
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		writeError(response, http.StatusBadRequest, "invalid_json", "request body must contain one JSON object")
+		if !writeRequestTooLarge(response, err) {
+			writeError(response, http.StatusBadRequest, "invalid_json", "request body must contain one JSON object")
+		}
 		return false
 	}
+	return true
+}
+
+// writeRequestTooLarge answers 413 when err is the body cap tripping, and
+// reports whether it did.
+func writeRequestTooLarge(response http.ResponseWriter, err error) bool {
+	if _, ok := errors.AsType[*http.MaxBytesError](err); !ok {
+		return false
+	}
+	writeError(response, http.StatusRequestEntityTooLarge, "request_too_large", "request body must not exceed 1 MiB")
 	return true
 }
 

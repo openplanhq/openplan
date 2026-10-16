@@ -294,13 +294,9 @@ func (store *Store) UpsertTemplateRevisionWithVariables(ctx context.Context, tem
 	}
 	defer tx.Rollback(ctx)
 
-	tagsJSON, err := json.Marshal(templateRevision.Tags)
+	tagsJSON, err := encodeTemplateRevisionTags(templateRevision.Tags)
 	if err != nil {
 		return domain.TemplateRevision{}, fmt.Errorf("marshal template revision tags: %w", err)
-	}
-	if tagsJSON == nil {
-		// Store an empty JSON array rather than a null tags column.
-		tagsJSON = []byte("[]")
 	}
 
 	sourceTemplateID, err := upsertSourceTemplate(ctx, tx, templateRevision)
@@ -392,7 +388,8 @@ func (store *Store) GetTemplateRevisionVariables(ctx context.Context, tenantID d
 	}
 	defer rows.Close()
 
-	var variables []domain.TemplateVariable
+	// Empty rather than nil, which the API would serve as null.
+	variables := []domain.TemplateVariable{}
 	for rows.Next() {
 		var variable domain.TemplateVariable
 		if err := rows.Scan(
@@ -470,20 +467,14 @@ func (store *Store) CreateStack(ctx context.Context, stack domain.Stack) error {
 }
 
 func insertStack(ctx context.Context, tx pgx.Tx, stack domain.Stack) error {
-	tagsJSON, err := json.Marshal(stack.Tags)
+	tagsJSON, err := encodeStackTags(stack.Tags)
 	if err != nil {
 		return fmt.Errorf("marshal stack tags: %w", err)
 	}
-	if tagsJSON == nil {
-		tagsJSON = []byte("{}")
-	}
 
-	credentialIDsJSON, err := json.Marshal(stack.DefaultCredentialIDs)
+	credentialIDsJSON, err := encodeStackCredentialIDs(stack.DefaultCredentialIDs)
 	if err != nil {
 		return fmt.Errorf("marshal default credential IDs: %w", err)
-	}
-	if credentialIDsJSON == nil {
-		credentialIDsJSON = []byte("[]")
 	}
 
 	// A caller that sets no status gets ready, the only one there is.
@@ -1625,10 +1616,78 @@ func scanTemplateRevision(scanner templateScanner) (domain.TemplateRevision, err
 	); err != nil {
 		return domain.TemplateRevision{}, err
 	}
-	if err := json.Unmarshal(tagsJSON, &templateRevision.Tags); err != nil {
+	tags, err := decodeTemplateRevisionTags(tagsJSON)
+	if err != nil {
 		return domain.TemplateRevision{}, fmt.Errorf("unmarshal template revision tags: %w", err)
 	}
+	templateRevision.Tags = tags
 	return templateRevision, nil
+}
+
+// json.Marshal writes a nil slice or map as null, and the API serves these
+// columns as it reads them, so no tags are stored as an empty array or
+// object. Rows stored as null before that are read as empty.
+
+// encodeTemplateRevisionTags is a revision's tags as stored: [] for none.
+func encodeTemplateRevisionTags(tags []string) ([]byte, error) {
+	if tags == nil {
+		tags = []string{}
+	}
+	return json.Marshal(tags)
+}
+
+// decodeTemplateRevisionTags reads stored tags, an empty slice for none.
+func decodeTemplateRevisionTags(tagsJSON []byte) ([]string, error) {
+	var tags []string
+	if err := json.Unmarshal(tagsJSON, &tags); err != nil {
+		return nil, err
+	}
+	if tags == nil {
+		tags = []string{}
+	}
+	return tags, nil
+}
+
+// encodeStackTags is a stack's tags as stored: {} for none.
+func encodeStackTags(tags map[string]string) ([]byte, error) {
+	if tags == nil {
+		tags = map[string]string{}
+	}
+	return json.Marshal(tags)
+}
+
+// decodeStackTags reads stored stack tags, an empty map for none.
+func decodeStackTags(tagsJSON []byte) (map[string]string, error) {
+	var tags map[string]string
+	if err := json.Unmarshal(tagsJSON, &tags); err != nil {
+		return nil, err
+	}
+	if tags == nil {
+		tags = map[string]string{}
+	}
+	return tags, nil
+}
+
+// encodeStackCredentialIDs is a stack's default credentials as stored: [] for
+// none.
+func encodeStackCredentialIDs(ids []domain.CredentialSetID) ([]byte, error) {
+	if ids == nil {
+		ids = []domain.CredentialSetID{}
+	}
+	return json.Marshal(ids)
+}
+
+// decodeStackCredentialIDs reads stored default credentials, an empty slice
+// for none.
+func decodeStackCredentialIDs(idsJSON []byte) ([]domain.CredentialSetID, error) {
+	var ids []domain.CredentialSetID
+	if err := json.Unmarshal(idsJSON, &ids); err != nil {
+		return nil, err
+	}
+	if ids == nil {
+		ids = []domain.CredentialSetID{}
+	}
+	return ids, nil
 }
 
 func scanStack(scanner stackScanner) (domain.Stack, error) {
@@ -1652,12 +1711,16 @@ func scanStack(scanner stackScanner) (domain.Stack, error) {
 		return domain.Stack{}, err
 	}
 	stack.Status = domain.StackStatus(status)
-	if err := json.Unmarshal(tagsJSON, &stack.Tags); err != nil {
+	tags, err := decodeStackTags(tagsJSON)
+	if err != nil {
 		return domain.Stack{}, fmt.Errorf("unmarshal stack tags: %w", err)
 	}
-	if err := json.Unmarshal(credentialIDsJSON, &stack.DefaultCredentialIDs); err != nil {
+	stack.Tags = tags
+	credentialIDs, err := decodeStackCredentialIDs(credentialIDsJSON)
+	if err != nil {
 		return domain.Stack{}, fmt.Errorf("unmarshal stack credential IDs: %w", err)
 	}
+	stack.DefaultCredentialIDs = credentialIDs
 	return stack, nil
 }
 
@@ -1837,9 +1900,11 @@ func insertTemplateRevision(ctx context.Context, tx pgx.Tx, templateRevision dom
 		&inserted.CreatedAt,
 	)
 	if err == nil {
-		if err := json.Unmarshal(insertedTagsJSON, &inserted.Tags); err != nil {
+		tags, err := decodeTemplateRevisionTags(insertedTagsJSON)
+		if err != nil {
 			return domain.TemplateRevision{}, false, fmt.Errorf("unmarshal inserted template revision tags: %w", err)
 		}
+		inserted.Tags = tags
 		return inserted, true, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
@@ -1900,9 +1965,11 @@ func selectTemplateRevisionByIdentity(ctx context.Context, tx pgx.Tx, templateRe
 	if err != nil {
 		return domain.TemplateRevision{}, fmt.Errorf("select template revision by identity: %w", err)
 	}
-	if err := json.Unmarshal(tagsJSON, &selected.Tags); err != nil {
+	tags, err := decodeTemplateRevisionTags(tagsJSON)
+	if err != nil {
 		return domain.TemplateRevision{}, fmt.Errorf("unmarshal selected template revision tags: %w", err)
 	}
+	selected.Tags = tags
 	return selected, nil
 }
 

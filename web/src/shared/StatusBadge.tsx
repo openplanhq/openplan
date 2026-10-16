@@ -3,7 +3,7 @@ import { Badge, type BadgeVariant } from "@/components/ui/badge";
 import { statusGlyph } from "./statusTone";
 import type { StatusTone } from "./statusTone";
 
-// The tone table in docs/superpowers/specs/2026-09-29-shadcn-adoption-design.md.
+// The Badge variant each status tone renders as.
 const VARIANTS: Record<StatusTone, BadgeVariant> = {
   settled: "success",
   progress: "progress",

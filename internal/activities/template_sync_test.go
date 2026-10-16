@@ -55,8 +55,8 @@ func TestSyncTemplateClonesPublicRepoAndPersistsMetadata(t *testing.T) {
 	t.Parallel()
 
 	store := &recordingTemplateSyncStore{}
-	gitRunner := &recordingGitRunner{
-		commitSHA: "abc123",
+	git := &fakeGit{
+		head: "abc123",
 		populate: func(repoPath string) error {
 			root := filepath.Join(repoPath, "modules", "vpc")
 			if err := os.MkdirAll(root, 0o700); err != nil {
@@ -81,11 +81,7 @@ variable "cidr" {
 			return nil
 		},
 	}
-	activities := NewTemplateSyncActivities(
-		store,
-		WithTemplateSyncGitRunner(gitRunner),
-		WithTemplateSyncTempRoot(t.TempDir()),
-	)
+	activities := newTestTemplateSyncActivities(t, store, git)
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
 		RegistrationID: domain.TemplateRegistrationID("template_registration_123"),
@@ -105,11 +101,11 @@ variable "cidr" {
 	if output.ResolvedCommitSHA != "abc123" {
 		t.Fatalf("resolved sha = %q, want abc123", output.ResolvedCommitSHA)
 	}
-	if gitRunner.repoURL != "https://github.com/acme/infra-templates.git" {
-		t.Fatalf("repo URL = %q", gitRunner.repoURL)
+	if git.repoURL != "https://github.com/acme/infra-templates.git" {
+		t.Fatalf("repo URL = %q", git.repoURL)
 	}
-	if gitRunner.ref != "v0.0.1" {
-		t.Fatalf("ref = %q, want v0.0.1", gitRunner.ref)
+	if git.ref != "v0.0.1" {
+		t.Fatalf("ref = %q, want v0.0.1", git.ref)
 	}
 	if store.template.Name != "vpc" {
 		t.Fatalf("template name = %q, want vpc", store.template.Name)
@@ -132,12 +128,8 @@ func TestSyncTemplateRejectsUnsafeRootPath(t *testing.T) {
 	t.Parallel()
 
 	store := &recordingTemplateSyncStore{}
-	gitRunner := &recordingGitRunner{commitSHA: "abc123"}
-	activities := NewTemplateSyncActivities(
-		store,
-		WithTemplateSyncGitRunner(gitRunner),
-		WithTemplateSyncTempRoot(t.TempDir()),
-	)
+	git := &fakeGit{head: "abc123"}
+	activities := newTestTemplateSyncActivities(t, store, git)
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
 		TenantID:  domain.TenantID("tenant_123"),
@@ -161,8 +153,8 @@ func TestSyncTemplateSupportsRepositoryRootPath(t *testing.T) {
 	t.Parallel()
 
 	store := &recordingTemplateSyncStore{}
-	gitRunner := &recordingGitRunner{
-		commitSHA: "abc123",
+	git := &fakeGit{
+		head: "abc123",
 		populate: func(repoPath string) error {
 			if err := os.MkdirAll(repoPath, 0o700); err != nil {
 				return err
@@ -171,11 +163,7 @@ func TestSyncTemplateSupportsRepositoryRootPath(t *testing.T) {
 			return nil
 		},
 	}
-	activities := NewTemplateSyncActivities(
-		store,
-		WithTemplateSyncGitRunner(gitRunner),
-		WithTemplateSyncTempRoot(t.TempDir()),
-	)
+	activities := newTestTemplateSyncActivities(t, store, git)
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
 		TenantID:  domain.TenantID("tenant_123"),
@@ -202,8 +190,8 @@ func TestSyncTemplateRejectsSensitiveVariables(t *testing.T) {
 	t.Parallel()
 
 	store := &recordingTemplateSyncStore{}
-	gitRunner := &recordingGitRunner{
-		commitSHA: "abc123",
+	git := &fakeGit{
+		head: "abc123",
 		populate: func(repoPath string) error {
 			root := filepath.Join(repoPath, "modules", "db")
 			if err := os.MkdirAll(root, 0o700); err != nil {
@@ -218,11 +206,7 @@ variable "password" {
 			return nil
 		},
 	}
-	activities := NewTemplateSyncActivities(
-		store,
-		WithTemplateSyncGitRunner(gitRunner),
-		WithTemplateSyncTempRoot(t.TempDir()),
-	)
+	activities := newTestTemplateSyncActivities(t, store, git)
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
 		TenantID:  domain.TenantID("tenant_123"),
@@ -255,8 +239,8 @@ func TestSyncTemplateReturnsExistingImmutableTemplate(t *testing.T) {
 			ResolvedCommitSHA: "abc123",
 		},
 	}
-	gitRunner := &recordingGitRunner{
-		commitSHA: "abc123",
+	git := &fakeGit{
+		head: "abc123",
 		populate: func(repoPath string) error {
 			root := filepath.Join(repoPath, "modules", "vpc")
 			if err := os.MkdirAll(root, 0o700); err != nil {
@@ -266,11 +250,7 @@ func TestSyncTemplateReturnsExistingImmutableTemplate(t *testing.T) {
 			return nil
 		},
 	}
-	activities := NewTemplateSyncActivities(
-		store,
-		WithTemplateSyncGitRunner(gitRunner),
-		WithTemplateSyncTempRoot(t.TempDir()),
-	)
+	activities := newTestTemplateSyncActivities(t, store, git)
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
 		TenantID:  domain.TenantID("tenant_123"),
@@ -322,40 +302,13 @@ func (store *recordingTemplateSyncStore) UpsertTemplateRevisionWithVariables(_ c
 	return template, nil
 }
 
-type recordingGitRunner struct {
-	repoURL    string
-	ref        string
-	dest       string
-	commitSHA  string
-	credential gitrunner.GitCredential
-	populate   func(string) error
-	err        error
-}
-
-func (runner *recordingGitRunner) Clone(ctx context.Context, repoURL string, ref string, dest string, credential gitrunner.GitCredential) error {
-	_ = ctx
-	runner.credential = credential
-	runner.repoURL = repoURL
-	runner.ref = ref
-	runner.dest = dest
-	if runner.err != nil {
-		return runner.err
-	}
-	if runner.populate != nil {
-		return runner.populate(dest)
-	}
-	return nil
-}
-
-// CheckoutCommit exists to satisfy runner.GitRunner and fails loudly: template
-// sync is the path that resolves a ref to a commit in the first place, so it
-// has no commit to check out and must clone the ref.
-func (runner *recordingGitRunner) CheckoutCommit(context.Context, string, string, string, gitrunner.GitCredential) error {
-	return errors.New("template sync must clone a ref, not check out a commit")
-}
-
-func (runner *recordingGitRunner) ResolveHead(context.Context, string) (string, error) {
-	return runner.commitSHA, nil
+// newTestTemplateSyncActivities returns sync activities that clone with git,
+// in a temp root of the test's own.
+func newTestTemplateSyncActivities(t *testing.T, store TemplateSyncStore, git *fakeGit, options ...TemplateSyncOption) *TemplateSyncActivities {
+	t.Helper()
+	activities := NewTemplateSyncActivities(store, append([]TemplateSyncOption{WithTemplateSyncTempRoot(t.TempDir())}, options...)...)
+	activities.git = gitrunner.NewLocalGitRunnerWithExecutor(git)
+	return activities
 }
 
 func writeFile(t *testing.T, path string, content string) {
@@ -372,18 +325,8 @@ func TestSyncTemplatePassesInstallationTokenToClone(t *testing.T) {
 	t.Parallel()
 
 	store := &recordingTemplateSyncStore{}
-	gitRunner := &recordingGitRunner{
-		commitSHA: "abc123",
-		populate: func(repoPath string) error {
-			return os.MkdirAll(filepath.Join(repoPath, "modules", "vpc"), 0o700)
-		},
-	}
-	activities := NewTemplateSyncActivities(
-		store,
-		WithTemplateSyncGitRunner(gitRunner),
-		WithTemplateSyncTempRoot(t.TempDir()),
-		WithTemplateSyncTokenSource(stubTokenSource{token: "ghs_minted"}),
-	)
+	git := &fakeGit{head: "abc123"}
+	activities := newTestTemplateSyncActivities(t, store, git, WithTemplateSyncTokenSource(stubTokenSource{token: "ghs_minted"}))
 
 	if _, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
 		TenantID:  domain.TenantID("tenant_123"),
@@ -395,7 +338,7 @@ func TestSyncTemplatePassesInstallationTokenToClone(t *testing.T) {
 		t.Fatalf("SyncTemplate returned error: %v", err)
 	}
 
-	if gitRunner.credential != gitrunner.NewGitCredential("ghs_minted") {
+	if git.token != "ghs_minted" {
 		t.Fatal("clone did not receive the installation credential")
 	}
 }
@@ -411,12 +354,7 @@ func TestSyncTemplateReportsUninstalledApp(t *testing.T) {
 
 	store := &recordingTemplateSyncStore{}
 	cloneErr := errors.New("authentication required")
-	activities := NewTemplateSyncActivities(
-		store,
-		WithTemplateSyncGitRunner(&recordingGitRunner{commitSHA: "abc123", err: cloneErr}),
-		WithTemplateSyncTempRoot(t.TempDir()),
-		WithTemplateSyncTokenSource(stubTokenSource{err: githubapp.ErrAppNotInstalled}),
-	)
+	activities := newTestTemplateSyncActivities(t, store, &fakeGit{head: "abc123", err: cloneErr}, WithTemplateSyncTokenSource(stubTokenSource{err: githubapp.ErrAppNotInstalled}))
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
 		TenantID:  domain.TenantID("tenant_123"),
@@ -451,18 +389,8 @@ func TestSyncTemplateSucceedsWithZeroCredentialWhenAppNotInstalled(t *testing.T)
 	t.Parallel()
 
 	store := &recordingTemplateSyncStore{}
-	gitRunner := &recordingGitRunner{
-		commitSHA: "abc123",
-		populate: func(repoPath string) error {
-			return os.MkdirAll(filepath.Join(repoPath, "modules", "vpc"), 0o700)
-		},
-	}
-	activities := NewTemplateSyncActivities(
-		store,
-		WithTemplateSyncGitRunner(gitRunner),
-		WithTemplateSyncTempRoot(t.TempDir()),
-		WithTemplateSyncTokenSource(stubTokenSource{err: githubapp.ErrAppNotInstalled}),
-	)
+	git := &fakeGit{head: "abc123"}
+	activities := newTestTemplateSyncActivities(t, store, git, WithTemplateSyncTokenSource(stubTokenSource{err: githubapp.ErrAppNotInstalled}))
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
 		TenantID:  domain.TenantID("tenant_123"),
@@ -477,7 +405,7 @@ func TestSyncTemplateSucceedsWithZeroCredentialWhenAppNotInstalled(t *testing.T)
 	if output.Status != domain.TemplateRegistrationCompleted {
 		t.Fatalf("status = %q, want completed; summary = %q", output.Status, output.ErrorSummary)
 	}
-	if gitRunner.credential != (gitrunner.GitCredential{}) {
+	if git.token != "" {
 		t.Fatal("clone received a non-zero credential for a repo the App is not installed on")
 	}
 }
@@ -489,18 +417,8 @@ func TestSyncTemplateSucceedsWithZeroCredentialWhenAppNotInstalled(t *testing.T)
 func TestSyncTemplateSucceedsWithZeroCredentialWhenTokenLookupFails(t *testing.T) {
 	t.Parallel()
 
-	gitRunner := &recordingGitRunner{
-		commitSHA: "abc123",
-		populate: func(repoPath string) error {
-			return os.MkdirAll(filepath.Join(repoPath, "modules", "vpc"), 0o700)
-		},
-	}
-	activities := NewTemplateSyncActivities(
-		&recordingTemplateSyncStore{},
-		WithTemplateSyncGitRunner(gitRunner),
-		WithTemplateSyncTempRoot(t.TempDir()),
-		WithTemplateSyncTokenSource(stubTokenSource{err: errors.New("resolve installation: unexpected status 503 Service Unavailable")}),
-	)
+	git := &fakeGit{head: "abc123"}
+	activities := newTestTemplateSyncActivities(t, &recordingTemplateSyncStore{}, git, WithTemplateSyncTokenSource(stubTokenSource{err: errors.New("resolve installation: unexpected status 503 Service Unavailable")}))
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
 		TenantID:  domain.TenantID("tenant_123"),
@@ -515,7 +433,7 @@ func TestSyncTemplateSucceedsWithZeroCredentialWhenTokenLookupFails(t *testing.T
 	if output.Status != domain.TemplateRegistrationCompleted {
 		t.Fatalf("status = %q, want completed; summary = %q", output.Status, output.ErrorSummary)
 	}
-	if gitRunner.credential != (gitrunner.GitCredential{}) {
+	if git.token != "" {
 		t.Fatal("clone received a non-zero credential after the token lookup failed")
 	}
 }
@@ -533,12 +451,7 @@ func TestSyncTemplateRetriesWhenTokenLookupFailedAndCloneFailed(t *testing.T) {
 
 	cloneErr := errors.New("authentication required")
 	lookupErr := errors.New("resolve installation: unexpected status 503 Service Unavailable")
-	activities := NewTemplateSyncActivities(
-		&recordingTemplateSyncStore{},
-		WithTemplateSyncGitRunner(&recordingGitRunner{commitSHA: "abc123", err: cloneErr}),
-		WithTemplateSyncTempRoot(t.TempDir()),
-		WithTemplateSyncTokenSource(stubTokenSource{err: lookupErr}),
-	)
+	activities := newTestTemplateSyncActivities(t, &recordingTemplateSyncStore{}, &fakeGit{head: "abc123", err: cloneErr}, WithTemplateSyncTokenSource(stubTokenSource{err: lookupErr}))
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
 		TenantID:  domain.TenantID("tenant_123"),
@@ -569,11 +482,7 @@ func TestSyncTemplateReportsPlainCloneFailureAsInvalid(t *testing.T) {
 	t.Parallel()
 
 	cloneErr := errors.New("repository not found")
-	activities := NewTemplateSyncActivities(
-		&recordingTemplateSyncStore{},
-		WithTemplateSyncGitRunner(&recordingGitRunner{commitSHA: "abc123", err: cloneErr}),
-		WithTemplateSyncTempRoot(t.TempDir()),
-	)
+	activities := newTestTemplateSyncActivities(t, &recordingTemplateSyncStore{}, &fakeGit{head: "abc123", err: cloneErr})
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
 		TenantID:  domain.TenantID("tenant_123"),
@@ -602,11 +511,7 @@ func TestSyncTemplateReportsPlainCloneFailureAsInvalid(t *testing.T) {
 func TestSyncTemplateRejectsUnsafeRepoIdentifiers(t *testing.T) {
 	t.Parallel()
 
-	activities := NewTemplateSyncActivities(
-		&recordingTemplateSyncStore{},
-		WithTemplateSyncGitRunner(&recordingGitRunner{commitSHA: "abc123"}),
-		WithTemplateSyncTempRoot(t.TempDir()),
-	)
+	activities := newTestTemplateSyncActivities(t, &recordingTemplateSyncStore{}, &fakeGit{head: "abc123"})
 
 	for _, owner := range []string{"acme/evil", "acme?x=1", "acme#frag", "acme corp", "acme\nx"} {
 		output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{

@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +17,16 @@ const (
 	DefaultHTTPAddress                 = ":8081"
 	DefaultExecutorRunRoot             = "/tmp/openplan/runs"
 	DefaultArtifactStoreFilesystemRoot = "/tmp/openplan/artifacts"
+	DefaultExecutorMaxSessions         = 20
+	DefaultExecutorSandboxRunsc        = "/usr/local/bin/runsc"
+	DefaultExecutorSandboxState        = "/var/lib/openplan/sandboxes"
+	DefaultExecutorSandboxMemoryMiB    = 2048
+	DefaultExecutorSandboxCPUs         = 2
+	DefaultExecutorSandboxPids         = 1024
+	// DefaultExecutorSandboxSubnet is private and small, to stay clear of
+	// the networks the executor itself reaches; EXECUTOR_SANDBOX_SUBNET
+	// moves it where it collides.
+	DefaultExecutorSandboxSubnet = "10.237.0.0/24"
 )
 
 var ErrInvalidConfig = errors.New("invalid config")
@@ -47,6 +58,27 @@ type ExecutorConfig struct {
 	// RunRoot is where each run's workspace is checked out.
 	RunRoot       string
 	ArtifactStore ArtifactStoreConfig
+	// MaxSessions caps the sessions, and so the runs, this executor holds at
+	// once. Each runs its activities in sandboxes of their own.
+	MaxSessions int
+	Sandbox     SandboxConfig
+}
+
+// SandboxConfig is how the executor starts each activity's gVisor sandbox
+// (#245).
+type SandboxConfig struct {
+	// Runsc is the runsc binary, with its gvisor-bin/ sidecars beside it.
+	Runsc string
+	// State holds runsc's state and the sandboxes' bundles. It must be
+	// ephemeral, as the run root is.
+	State string
+	// MemoryMiB, CPUs and Pids are each sandbox's limits.
+	MemoryMiB int64
+	CPUs      int64
+	Pids      int64
+	// Subnet holds the bridge's gateway and one address per running
+	// sandbox. Destinations inside it are unreachable from sandboxes.
+	Subnet netip.Prefix
 }
 
 type ArtifactStoreKind string
@@ -97,6 +129,11 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	if err != nil {
 		return APIConfig{}, err
 	}
+	if security.Mode == RuntimeProduction {
+		if err := refusePublishedKey("CREDENTIAL_ENCRYPTION_KEY", credentialKey); err != nil {
+			return APIConfig{}, err
+		}
+	}
 	cfg.CredentialEncryptionKey = credentialKey
 
 	gitHubApp, err := loadGitHubAppConfig(getenv)
@@ -135,6 +172,51 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 	}
 	if cfg.RunRoot == "" {
 		cfg.RunRoot = DefaultExecutorRunRoot
+	}
+	cfg.MaxSessions = DefaultExecutorMaxSessions
+	if raw := strings.TrimSpace(getenv("EXECUTOR_MAX_SESSIONS")); raw != "" {
+		maxSessions, err := strconv.Atoi(raw)
+		if err != nil || maxSessions < 1 {
+			return ExecutorConfig{}, fmt.Errorf("%w: EXECUTOR_MAX_SESSIONS must be a positive integer, got %q", ErrInvalidConfig, raw)
+		}
+		cfg.MaxSessions = maxSessions
+	}
+	cfg.Sandbox = SandboxConfig{
+		Runsc: DefaultExecutorSandboxRunsc, State: DefaultExecutorSandboxState,
+		MemoryMiB: DefaultExecutorSandboxMemoryMiB, CPUs: DefaultExecutorSandboxCPUs, Pids: DefaultExecutorSandboxPids,
+		Subnet: netip.MustParsePrefix(DefaultExecutorSandboxSubnet),
+	}
+	if raw := strings.TrimSpace(getenv("EXECUTOR_SANDBOX_SUBNET")); raw != "" {
+		subnet, err := netip.ParsePrefix(raw)
+		// /29 at most: the network, the gateway and broadcast leave five.
+		if err != nil || !subnet.Addr().Is4() || subnet.Bits() > 29 {
+			return ExecutorConfig{}, fmt.Errorf("%w: EXECUTOR_SANDBOX_SUBNET must be an IPv4 subnet of /29 or larger, got %q", ErrInvalidConfig, raw)
+		}
+		cfg.Sandbox.Subnet = subnet.Masked()
+	}
+	if v := strings.TrimSpace(getenv("EXECUTOR_RUNSC")); v != "" {
+		cfg.Sandbox.Runsc = v
+	}
+	if v := strings.TrimSpace(getenv("EXECUTOR_SANDBOX_STATE")); v != "" {
+		cfg.Sandbox.State = v
+	}
+	for _, setting := range []struct {
+		name  string
+		value *int64
+	}{
+		{"EXECUTOR_SANDBOX_MEMORY", &cfg.Sandbox.MemoryMiB},
+		{"EXECUTOR_SANDBOX_CPUS", &cfg.Sandbox.CPUs},
+		{"EXECUTOR_SANDBOX_PIDS", &cfg.Sandbox.Pids},
+	} {
+		raw := strings.TrimSpace(getenv(setting.name))
+		if raw == "" {
+			continue
+		}
+		parsed, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || parsed < 1 {
+			return ExecutorConfig{}, fmt.Errorf("%w: %s must be a positive integer, got %q", ErrInvalidConfig, setting.name, raw)
+		}
+		*setting.value = parsed
 	}
 	if cfg.TemporalAddress == "" {
 		return ExecutorConfig{}, fmt.Errorf("%w: TEMPORAL_ADDRESS is required", ErrInvalidConfig)
