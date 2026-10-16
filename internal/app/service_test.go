@@ -773,6 +773,42 @@ func TestUpdateStackTemplateConfigRejectsMissingDesiredRevision(t *testing.T) {
 	}
 }
 
+// A template being torn down cannot take a config edit, and says so in its
+// own terms rather than as a failed upgrade.
+func TestUpdateStackTemplateConfigRejectsAnInactiveTemplate(t *testing.T) {
+	t.Parallel()
+
+	stackTemplates := &recordingStackTemplateRepository{
+		stackTemplate: domain.StackTemplate{
+			ID:                        domain.StackTemplateID("stack_template_123"),
+			TenantID:                  domain.TenantID("tenant_123"),
+			DesiredTemplateRevisionID: domain.TemplateRevisionID("template_rev_1"),
+			Lifecycle:                 domain.StackTemplateDestroying,
+		},
+	}
+	service := NewService(Service{
+		TemplateRuns:      &recordingTemplateRunRepository{},
+		Authorization:     testPlatformAuthorizer(t),
+		StackTemplates:    stackTemplates,
+		TemplateRevisions: &recordingTemplateRepository{},
+	})
+
+	_, err := service.UpdateStackTemplateConfig(authenticatedContext(), UpdateStackTemplateConfigCommand{
+		TenantID:        domain.TenantID("tenant_123"),
+		StackTemplateID: domain.StackTemplateID("stack_template_123"),
+		ConfigJSON:      json.RawMessage(`{}`),
+	})
+	if !errors.Is(err, ErrStackTemplateNotEditable) {
+		t.Fatalf("error = %v, want ErrStackTemplateNotEditable", err)
+	}
+	if errors.Is(err, ErrStackTemplateUpgradeInvalid) {
+		t.Fatalf("error = %v, want it not to read as an upgrade failure", err)
+	}
+	if stackTemplates.gotConfigJSON != nil {
+		t.Fatalf("updated config = %s, want no update", stackTemplates.gotConfigJSON)
+	}
+}
+
 func TestUpgradeStackTemplateCarriesForwardCompatibleConfig(t *testing.T) {
 	t.Parallel()
 

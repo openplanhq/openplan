@@ -704,6 +704,12 @@ func (server *Server) handleUpdateStackTemplateConfig(response http.ResponseWrit
 	if !decodeRequestBody(response, request, &body) {
 		return
 	}
+	// The edit replaces the whole config, so a missing one would wipe every
+	// value rather than leave them alone. Send {} to clear it on purpose.
+	if body.Config == nil {
+		writeError(response, http.StatusBadRequest, "invalid_request", "config is required")
+		return
+	}
 
 	configJSON, ok := stackTemplateConfigJSON(response, body.Config)
 	if !ok {
@@ -1224,6 +1230,7 @@ func writeAppError(response http.ResponseWriter, err error) {
 		errors.Is(err, app.ErrTemplateNotInstallable),
 		errors.Is(err, app.ErrStackTemplateConfigInvalid),
 		errors.Is(err, app.ErrStackTemplateUpgradeInvalid),
+		errors.Is(err, app.ErrStackTemplateNotEditable),
 		errors.Is(err, app.ErrLastOwner),
 		errors.Is(err, app.ErrCredentialNameInvalid),
 		errors.Is(err, app.ErrDuplicateCredentialName):

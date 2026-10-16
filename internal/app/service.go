@@ -30,6 +30,7 @@ var (
 	ErrTemplateNotInstallable             = errors.New("template is not installable")
 	ErrStackTemplateConfigInvalid         = errors.New("stack template config is invalid")
 	ErrStackTemplateUpgradeInvalid        = errors.New("stack template upgrade is invalid")
+	ErrStackTemplateNotEditable           = errors.New("stack template config cannot be edited")
 	ErrStackTemplateNotRunnable           = errors.New("stack template is not runnable")
 	ErrStackTemplatePlanStale             = errors.New("stack template plan does not match desired state")
 	ErrTemplateRunInFlight                = errors.New("a run is already in flight for this stack template")
@@ -981,7 +982,7 @@ func (service *Service) UpdateStackTemplateConfig(ctx context.Context, command U
 		return StackTemplateView{}, err
 	}
 	if stackTemplate.Lifecycle != domain.StackTemplateActive {
-		return StackTemplateView{}, fmt.Errorf("%w: lifecycle is %q", ErrStackTemplateUpgradeInvalid, stackTemplate.Lifecycle)
+		return StackTemplateView{}, fmt.Errorf("%w: lifecycle is %q", ErrStackTemplateNotEditable, stackTemplate.Lifecycle)
 	}
 	if err := service.requireNoRunInFlight(ctx, command.TenantID, command.StackTemplateID); err != nil {
 		return StackTemplateView{}, err

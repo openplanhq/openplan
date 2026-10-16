@@ -1159,6 +1159,37 @@ func TestUpdateStackTemplateConfigCallsService(t *testing.T) {
 	}
 }
 
+// The edit replaces the whole config, so leaving config out must not read as
+// "clear everything".
+func TestUpdateStackTemplateConfigRequiresConfig(t *testing.T) {
+	t.Parallel()
+
+	for _, requestBody := range []string{`{}`, `{"config":null}`} {
+		deps := newAPITestDependencies(t)
+		deps.stackTemplates.stackTemplate = domain.StackTemplate{
+			ID:                        domain.StackTemplateID("stack_template_123"),
+			TenantID:                  domain.TenantID("tenant_123"),
+			DesiredTemplateRevisionID: domain.TemplateRevisionID("template_rev_1"),
+			Lifecycle:                 domain.StackTemplateActive,
+		}
+		server := NewServer(deps.service(), configuredTenantID)
+		response := httptest.NewRecorder()
+
+		server.ServeHTTP(response, authenticatedRequest(
+			http.MethodPatch,
+			"/v1/tenants/tenant_123/stack-templates/stack_template_123/config",
+			strings.NewReader(requestBody),
+		))
+
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("%s: status = %d, want %d; body = %s", requestBody, response.Code, http.StatusBadRequest, response.Body.String())
+		}
+		if deps.stackTemplates.gotConfigJSON != nil {
+			t.Fatalf("%s: config updated to %s, want no update", requestBody, deps.stackTemplates.gotConfigJSON)
+		}
+	}
+}
+
 func TestUpgradeStackTemplateCallsService(t *testing.T) {
 	t.Parallel()
 
