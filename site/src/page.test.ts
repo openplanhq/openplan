@@ -69,7 +69,7 @@ describe("site/index.html", () => {
     const used = new Set(
       [...HTML.matchAll(/\b(?:bg|text|border|fill|stroke)-([a-z]+(?:-[a-z]+)*)\b/g)]
         .map((m) => m[1])
-        .filter((name) => !/^(?:none|xs|sm|lg|xl|base|meta|row-title|page-title|panel-title|center|left|t|b|l|r|x|y|width|dasharray|linecap|linejoin)$/.test(name))
+        .filter((name) => !/^(?:none|xs|sm|lg|xl|base|meta|row-title|page-title|panel-title|center|left|balance|t|b|l|r|x|y|width|dasharray|linecap|linejoin)$/.test(name))
     );
     const defined = new Set([...THEME.matchAll(/--color-([a-z-]+):/g)].map((m) => m[1]));
     expect([...used].filter((name) => !defined.has(name))).toEqual([]);
@@ -157,6 +157,14 @@ describe("site/index.html", () => {
     expect(files(readme).length).toBeGreaterThan(0);
     expect(files(HTML)).toEqual(files(readme));
     expect(HTML).toContain("url=https://github.com/openplanhq/openplan/releases/latest/download\n");
+  });
+
+  it("says why openplan, in the README's terms, and links its comparison", () => {
+    expect(HTML).toMatch(/<h2 id="why-title"[^>]*>Why not Terraform Cloud<\/h2>/);
+    expect(HTML).toContain('href="https://github.com/openplanhq/openplan#why-not-terraform-cloud"');
+    expect(read("../README.md")).toMatch(/^## Why not Terraform Cloud$/m);
+    // Prices date; the site leaves them to the README.
+    expect(HTML).not.toMatch(/\$\d/);
   });
 
   it("shows the real stack page, the README's own screenshot", () => {
