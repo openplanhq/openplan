@@ -3922,3 +3922,92 @@ func newFailingAPIAuthorization(t *testing.T) *authorization.Authorization {
 	datastore.failing = true
 	return auth
 }
+
+// decodeErrorEnvelope fails unless response is a JSON error in the API's one
+// envelope, and returns it.
+func decodeErrorEnvelope(t *testing.T, response *httptest.ResponseRecorder) errorResponse {
+	t.Helper()
+	if contentType := response.Header().Get("Content-Type"); !strings.HasPrefix(contentType, "application/json") {
+		t.Fatalf("Content-Type = %q, want application/json; body = %s", contentType, response.Body.String())
+	}
+	decoder := json.NewDecoder(response.Body)
+	decoder.DisallowUnknownFields()
+	var body errorResponse
+	if err := decoder.Decode(&body); err != nil {
+		t.Fatalf("body is not the error envelope: %v", err)
+	}
+	if body.Error == "" || body.Message == "" {
+		t.Fatalf("envelope = %+v, want both error and message", body)
+	}
+	return body
+}
+
+// The middleware answers 401 before any handler runs, so it is the one error
+// that never passes through writeError. It must still match it.
+func TestUnauthenticatedRequestGetsTheErrorEnvelope(t *testing.T) {
+	server := NewAuthenticatedServer(app.NewService(app.Service{}), configuredTenantID, false)
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/v1/tenants/tenant_123/stacks", nil))
+
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
+	}
+	rendered := httptest.NewRecorder()
+	writeError(rendered, http.StatusUnauthorized, "unauthorized", "authentication required")
+	if got, want := decodeErrorEnvelope(t, response), decodeErrorEnvelope(t, rendered); got != want {
+		t.Fatalf("middleware 401 = %+v, want %+v, what writeError renders", got, want)
+	}
+}
+
+// A request no route matches would otherwise get the mux's plain-text "404
+// page not found" or "Method Not Allowed".
+func TestUnroutedRequestsGetTheErrorEnvelope(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name      string
+		method    string
+		path      string
+		status    int
+		code      string
+		wantAllow string
+	}{
+		{name: "unknown path", method: http.MethodGet, path: "/v1/no-such-route", status: http.StatusNotFound, code: "not_found"},
+		{name: "unknown path outside /v1", method: http.MethodGet, path: "/nothing-here", status: http.StatusNotFound, code: "not_found"},
+		// The mux's 405 names the allowed methods; that header survives.
+		{name: "wrong method", method: http.MethodDelete, path: "/v1/me", status: http.StatusMethodNotAllowed, code: "method_not_allowed", wantAllow: http.MethodGet},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := NewServer(nil, configuredTenantID)
+			response := httptest.NewRecorder()
+			server.ServeHTTP(response, authenticatedRequest(test.method, test.path, nil))
+
+			if response.Code != test.status {
+				t.Fatalf("status = %d, want %d; body = %s", response.Code, test.status, response.Body.String())
+			}
+			if body := decodeErrorEnvelope(t, response); body.Error != test.code {
+				t.Fatalf("error = %q, want %q", body.Error, test.code)
+			}
+			if test.wantAllow != "" && !strings.Contains(response.Header().Get("Allow"), test.wantAllow) {
+				t.Fatalf("Allow = %q, want it to include %s", response.Header().Get("Allow"), test.wantAllow)
+			}
+		})
+	}
+}
+
+// A path the mux redirects to its canonical form is still routed, so it keeps
+// the mux's redirect rather than becoming a 404.
+func TestNonCanonicalPathStillRedirects(t *testing.T) {
+	t.Parallel()
+
+	server := NewServer(nil, configuredTenantID)
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/v1//me", nil))
+
+	if response.Code != http.StatusMovedPermanently {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusMovedPermanently)
+	}
+}

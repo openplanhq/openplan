@@ -137,7 +137,7 @@ func TestRequireAuthentication(t *testing.T) {
 			}
 			switch {
 			case test.status == http.StatusUnauthorized:
-				if principal != nil || response.Body.String() != `{"code":"unauthorized"}` {
+				if principal != nil || response.Body.String() != `{"error":"unauthorized","message":"authentication required"}` {
 					t.Fatalf("handler ran = %t, body = %q", principal != nil, response.Body.String())
 				}
 			case test.path == "":
