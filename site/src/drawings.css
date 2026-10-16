@@ -151,7 +151,8 @@ a:hover > .arrow {
   position: absolute;
   right: 12px;
   bottom: 12px;
-  color: var(--color-separator);
+  /* subtle-foreground: 4.7:1 on the panel's white, AA for 12px text. */
+  color: var(--color-subtle-foreground);
   font-size: 12px;
   line-height: 26px;
   transition: opacity 0.3s ease;
