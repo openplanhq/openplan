@@ -32,14 +32,19 @@ type StatusLabelProps = ComponentProps<"span"> & {
 // A state as an icon and a word, with no pill and no fill: openplan UI's
 // StatusLabel. The word carries the meaning, so the icon is decorative, and
 // colour is never the only signal.
+//
+// The words sit on the baseline and the icon is centred on them. With the
+// whole label centred instead, its baseline would be the icon's bottom edge,
+// and in a line of text, such as a table cell, the words would ride 2px
+// above their neighbours.
 export default function StatusLabel({ icon: Icon, tone, strong = false, className, children, ...props }: StatusLabelProps) {
   return (
     <span
       data-tone={tone}
-      className={cn("inline-flex items-center gap-1.75 text-meta whitespace-nowrap", TONE_CLASSES[tone], strong && "font-medium", className)}
+      className={cn("inline-flex items-baseline gap-1.75 text-meta whitespace-nowrap", TONE_CLASSES[tone], strong && "font-medium", className)}
       {...props}
     >
-      <Icon aria-hidden="true" className="size-3.5 shrink-0" strokeWidth={2.25} />
+      <Icon aria-hidden="true" className="size-3.5 shrink-0 self-center" strokeWidth={2.25} />
       {children}
     </span>
   );
