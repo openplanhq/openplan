@@ -266,8 +266,15 @@
       <section class="border-t bg-card" aria-labelledby="run-title">
         <div class="mx-auto flex max-w-[760px] flex-col items-center gap-5 px-5 py-[88px] text-center">
           <h2 id="run-title" class="text-[32px] leading-[1.15] font-semibold tracking-title">Run it on your own machine</h2>
-          <p class="text-base leading-[1.55] text-muted-foreground">You need Docker and nothing else. Download the release files and start it in a minute or two.</p>
-          <code class="block max-w-full overflow-x-auto rounded-lg border bg-canvas px-4 py-3 font-mono text-meta whitespace-nowrap text-code-foreground">docker compose -f docker-compose.release.yaml up -d</code>
+          <p class="text-base leading-[1.55] text-muted-foreground">You need Docker and nothing else. Download three files, start it, and open localhost:5173 a minute or two later.</p>
+          <!-- The README's "Without a checkout" steps, whole, so they run as pasted. The
+               latest/download URLs follow each new release, so the site never pins one.
+               tabindex lets a keyboard scroll it where it overflows (phones). -->
+          <pre tabindex="0" aria-label="Commands to download and start openplan" class="w-full overflow-x-auto rounded-lg border bg-canvas px-4 py-3 text-left font-mono text-meta leading-relaxed text-code-foreground"><code>url=https://github.com/openplanhq/openplan/releases/latest/download
+curl -LO $url/docker-compose.release.yaml
+curl -LO $url/dex.yaml
+curl -LO $url/init-databases.sh
+docker compose -f docker-compose.release.yaml up -d</code></pre>
           <a class="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-strong" href="https://github.com/openplanhq/openplan#running-it-locally">
             Read the setup steps
             <svg aria-hidden="true" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
