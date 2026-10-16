@@ -478,10 +478,15 @@ func TestAuthCallbackFailuresAreIndistinguishable(t *testing.T) {
 
 // normalizedHeaderDump renders response headers deterministically: sorted
 // keys, and sorted values within a key, so every Set-Cookie is included and
-// header order (which carries no meaning) cannot cause a false mismatch.
+// header order (which carries no meaning) cannot cause a false mismatch. The
+// request id is left out: it is random per request, so it differs between any
+// two responses and says nothing about which check failed.
 func normalizedHeaderDump(header http.Header) string {
 	keys := make([]string, 0, len(header))
 	for key := range header {
+		if key == RequestIDHeader {
+			continue
+		}
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)

@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -296,7 +297,7 @@ func (server *Server) requireConfiguredTenant(next http.Handler) http.Handler {
 
 func (server *Server) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	server.debugf("%s %s", request.Method, request.URL.Path)
-	server.handler.ServeHTTP(response, request)
+	withRequestID(server.handler).ServeHTTP(response, request)
 }
 
 func (server *Server) now() time.Time {
@@ -451,6 +452,7 @@ func (server *Server) handleRegisterTemplate(response http.ResponseWriter, reque
 		return
 	}
 
+	setLocation(response, request, "template-registrations", string(registration.ID))
 	writeJSON(response, http.StatusAccepted, registration)
 }
 
@@ -521,6 +523,7 @@ func (server *Server) handleCreateStack(response http.ResponseWriter, request *h
 		return
 	}
 
+	setLocation(response, request, "stacks", string(stack.ID))
 	writeJSON(response, http.StatusCreated, newStackResponse(stack, caps))
 }
 
@@ -792,6 +795,7 @@ func (server *Server) handleStartTemplateRun(response http.ResponseWriter, reque
 		return
 	}
 
+	setLocation(response, request, "template-runs", string(run.ID))
 	writeJSON(response, http.StatusCreated, run)
 }
 
@@ -885,6 +889,13 @@ func (server *Server) handleDiscardRun(response http.ResponseWriter, request *ht
 	}
 
 	response.WriteHeader(http.StatusNoContent)
+}
+
+// setLocation points a 201 or 202 at the URL that reads the new resource back,
+// under the request's tenant. An installed template and a credential have no
+// read of their own, so their responses carry none.
+func setLocation(response http.ResponseWriter, request *http.Request, collection, id string) {
+	response.Header().Set("Location", "/v1/tenants/"+url.PathEscape(request.PathValue("tenant_id"))+"/"+collection+"/"+url.PathEscape(id))
 }
 
 func stackTemplateConfigJSON(response http.ResponseWriter, config map[string]any) (json.RawMessage, bool) {
@@ -1057,6 +1068,8 @@ type stackTemplateResponse struct {
 type errorResponse struct {
 	Error   string `json:"error"`
 	Message string `json:"message"`
+	// RequestID matches the response's X-Request-Id and the API's log lines.
+	RequestID string `json:"request_id,omitempty"`
 }
 
 func newStackViewResponse(view app.StackView) stackViewResponse {
@@ -1257,6 +1270,10 @@ func writeAppError(response http.ResponseWriter, err error) {
 		// authorization service to report as unavailable any more, and a denial
 		// never reaches this point: it is (false, nil) at the boundary and
 		// becomes ErrForbidden above, so a failure can never render as 403.
+		//
+		// The body says nothing about the cause, so the log is the only place
+		// it survives; the request id is how an operator finds this line.
+		log.Printf("api: internal error request_id=%s: %v", requestIDOf(response), err)
 		writeError(response, http.StatusInternalServerError, "internal_error", "internal server error")
 	}
 }
@@ -1270,8 +1287,9 @@ func writeJSON(response http.ResponseWriter, status int, body any) {
 
 func writeError(response http.ResponseWriter, status int, code string, message string) {
 	writeJSON(response, status, errorResponse{
-		Error:   code,
-		Message: message,
+		Error:     code,
+		Message:   message,
+		RequestID: requestIDOf(response),
 	})
 }
 

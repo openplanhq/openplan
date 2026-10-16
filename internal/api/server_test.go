@@ -315,6 +315,9 @@ func TestStartTemplateRunCallsService(t *testing.T) {
 	if response.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusCreated, response.Body.String())
 	}
+	if got, want := response.Header().Get("Location"), "/v1/tenants/tenant_123/template-runs/run_123"; got != want {
+		t.Fatalf("Location = %q, want %q", got, want)
+	}
 	if deps.stackTemplates.gotTenantID != domain.TenantID("tenant_123") {
 		t.Fatalf("tenant id = %q", deps.stackTemplates.gotTenantID)
 	}
@@ -652,6 +655,10 @@ func TestRegisterTemplateCallsService(t *testing.T) {
 	if response.Code != http.StatusAccepted {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusAccepted, response.Body.String())
 	}
+	// The registration is read back at its own URL, not the one it was posted to.
+	if got, want := response.Header().Get("Location"), "/v1/tenants/tenant_123/template-registrations/template_registration_123"; got != want {
+		t.Fatalf("Location = %q, want %q", got, want)
+	}
 	if deps.registrations.created.TenantID != domain.TenantID("tenant_123") {
 		t.Fatalf("tenant id = %q", deps.registrations.created.TenantID)
 	}
@@ -738,6 +745,9 @@ func TestCreateStackCallsService(t *testing.T) {
 
 	if response.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusCreated, response.Body.String())
+	}
+	if got, want := response.Header().Get("Location"), "/v1/tenants/tenant_123/stacks/"+string(deps.createdStackID); got != want {
+		t.Fatalf("Location = %q, want %q", got, want)
 	}
 	if deps.stacks.created.TenantID != domain.TenantID("tenant_123") {
 		t.Fatalf("tenant id = %q, want tenant_123", deps.stacks.created.TenantID)
@@ -4197,10 +4207,73 @@ func TestUnauthenticatedRequestGetsTheErrorEnvelope(t *testing.T) {
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
 	}
+	requestID := response.Header().Get(RequestIDHeader)
+	if requestID == "" {
+		t.Fatal("middleware 401 has no request id")
+	}
 	rendered := httptest.NewRecorder()
+	rendered.Header().Set(RequestIDHeader, requestID)
 	writeError(rendered, http.StatusUnauthorized, "unauthorized", "authentication required")
 	if got, want := decodeErrorEnvelope(t, response), decodeErrorEnvelope(t, rendered); got != want {
 		t.Fatalf("middleware 401 = %+v, want %+v, what writeError renders", got, want)
+	}
+}
+
+// Every response carries a request id, and an error body repeats it, so a
+// person can quote it and an operator can find the matching log line.
+func TestResponsesCarryARequestID(t *testing.T) {
+	t.Parallel()
+
+	server := NewServer(newAPITestDependencies(t).service(), configuredTenantID)
+
+	ok := httptest.NewRecorder()
+	server.ServeHTTP(ok, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	if ok.Header().Get(RequestIDHeader) == "" {
+		t.Fatal("200 has no request id")
+	}
+
+	failed := httptest.NewRecorder()
+	server.ServeHTTP(failed, authenticatedRequest(http.MethodGet, "/v1/tenants/other_tenant/stacks", nil))
+	if failed.Code < 400 {
+		t.Fatalf("status = %d, want an error", failed.Code)
+	}
+	header := failed.Header().Get(RequestIDHeader)
+	if body := decodeErrorEnvelope(t, failed); header == "" || body.RequestID != header {
+		t.Fatalf("header request id = %q, body request_id = %q, want the same non-empty id", header, body.RequestID)
+	}
+	if header == ok.Header().Get(RequestIDHeader) {
+		t.Fatal("two requests got the same id")
+	}
+}
+
+// An id a proxy already assigned is kept, so its logs and ours line up; one
+// that could forge a log line is replaced.
+func TestInboundRequestIDIsReusedOnlyWhenPlain(t *testing.T) {
+	t.Parallel()
+
+	server := NewServer(newAPITestDependencies(t).service(), configuredTenantID)
+	for _, test := range []struct {
+		inbound string
+		kept    bool
+	}{
+		{inbound: "edge-7f3a.42_b", kept: true},
+		{inbound: "spoof\nlevel=error msg=forged", kept: false},
+		{inbound: "has space", kept: false},
+		{inbound: strings.Repeat("a", 129), kept: false},
+	} {
+		request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+		request.Header.Set(RequestIDHeader, test.inbound)
+		response := httptest.NewRecorder()
+
+		server.ServeHTTP(response, request)
+
+		got := response.Header().Get(RequestIDHeader)
+		if kept := got == test.inbound; kept != test.kept {
+			t.Fatalf("inbound %q: response id = %q, kept = %t, want %t", test.inbound, got, kept, test.kept)
+		}
+		if got == "" {
+			t.Fatalf("inbound %q: no request id", test.inbound)
+		}
 	}
 }
 
