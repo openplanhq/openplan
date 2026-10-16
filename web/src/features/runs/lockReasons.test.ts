@@ -90,10 +90,12 @@ describe("lock reasons", () => {
       "Only an active template can be destroyed."
     ],
     ["runs still loading", { runs: "pending" }, "Loading runs…", "", "", "Loading runs…"],
+    // On the Runs tab the history says the runs failed, with Retry; the
+    // toolbar says what that means for Plan and Apply.
     [
       "runs that failed to load",
       { runs: "error" },
-      "This template's runs could not be loaded.",
+      "Plan and Apply wait until the runs load.",
       "",
       "",
       "This template's runs could not be loaded."
