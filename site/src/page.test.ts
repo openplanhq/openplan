@@ -35,7 +35,12 @@ describe("site/index.html", () => {
     // so a named colour (red, white, ...) cannot slip in.
     const keywords = new Set([
       "transparent", "none", "important", "infinite", "linear", "ease", "ease-in-out", "ease-out",
-      "fill-box", "radial-gradient", "translatex", "translatey", "scale", "scalex", "to", "px", "s"
+      "fill-box", "radial-gradient", "translatex", "translatey", "scale", "scalex", "to", "px", "s",
+      // Motion and layout words: easings, transforms, clip and gradient shapes,
+      // the properties a transition names, and layout keywords.
+      "cubic-bezier", "steps", "end", "both", "inset", "rotate", "deg", "calc", "circle", "at", "center",
+      "opacity", "transform", "stroke", "fill", "color", "height", "cx", "d", "left", "var",
+      "absolute", "hidden", "solid", "ellipsis", "nowrap", "block"
     ]);
     const values = [...stripComments(DRAWINGS).matchAll(/[\w-]+\s*:\s*([^;{}]+)[;}]/g)]
       .map((m) => m[1].replace(/var\(--[\w-]+\)/g, ""));
@@ -71,13 +76,30 @@ describe("site/index.html", () => {
     expect(imgs.filter((tag) => !/\balt="[^"]+"/.test(tag))).toEqual([]);
   });
 
-  it("ships no JavaScript but the Cloudflare Web Analytics beacon", () => {
+  it("ships no JavaScript but its own motion module and the Cloudflare Web Analytics beacon", () => {
     const scripts = [...HTML.matchAll(/<script\b[^>]*>[\s\S]*?<\/script>/g)].map((m) => m[0]);
-    expect(scripts).toHaveLength(1);
-    expect(scripts[0]).toMatch(/\bdefer\b/);
-    expect(scripts[0]).toContain('src="https://static.cloudflareinsights.com/beacon.min.js"');
-    expect(scripts[0]).toContain(`data-cf-beacon='{"token": "e93881027b4c4ef99c377908d9f44d19"}'`);
-    expect(scripts[0]).toMatch(/><\/script>$/);
+    expect(scripts).toHaveLength(2);
+    // Bundled by Vite with the page: nothing of ours loads from another host.
+    expect(scripts[0]).toBe('<script type="module" src="/src/alive.ts"></script>');
+    expect(scripts[1]).toMatch(/\bdefer\b/);
+    expect(scripts[1]).toContain('src="https://static.cloudflareinsights.com/beacon.min.js"');
+    expect(scripts[1]).toContain(`data-cf-beacon='{"token": "e93881027b4c4ef99c377908d9f44d19"}'`);
+    expect(scripts[1]).toMatch(/><\/script>$/);
+  });
+
+  it("reads complete without the script: motion only hides what .motion gates", () => {
+    // Every rule that hides or offsets arriving content needs .motion, which
+    // alive.ts adds only when people have not asked for reduced motion.
+    const rules = [...stripComments(DRAWINGS).matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+    const hiding = rules.filter(([, sel, body]) => sel.includes("[data-reveal]") && /opacity:\s*0\b|translate/.test(body));
+    expect(hiding.length).toBeGreaterThan(0);
+    for (const [, sel] of hiding) expect(sel.trim()).toMatch(/^\.motion\b/);
+    // The hero stands at the end of its run: applied.
+    expect(HTML).toMatch(/data-run data-step="7"/);
+    expect(HTML).toContain("<span data-word>applied</span>");
+    const script = read("src/alive.ts");
+    expect(script).toContain('matchMedia("(prefers-reduced-motion: reduce)")');
+    expect(script).toContain('matchMedia("(hover: hover) and (pointer: fine)")');
   });
 
   it("lists the eight features, each drawing with a primary accent", () => {

@@ -23,7 +23,10 @@
     <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="stylesheet" href="/src/styles.css" />
-    <!-- Cloudflare Web Analytics: cookieless page views, the only script the page loads. -->
+    <!-- The page's motion (src/alive.ts), bundled with it. Without it every
+         drawing stands complete; a module defers itself. -->
+    <script type="module" src="/src/alive.ts"></script>
+    <!-- Cloudflare Web Analytics: cookieless page views, the only third-party script. -->
     <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "e93881027b4c4ef99c377908d9f44d19"}'></script>
   </head>
   <body class="bg-canvas">
@@ -45,12 +48,12 @@
     <main>
       <section class="mx-auto flex max-w-[1216px] flex-wrap items-center gap-10 px-5 py-14">
         <div class="flex min-w-0 flex-[1_1_440px] flex-col gap-5">
-          <h1 class="text-[30px] leading-[1.15] font-semibold tracking-title sm:text-[36px]">Terraform for your whole team, on your own infrastructure.</h1>
-          <p class="text-sm text-muted-foreground">openplan is a self-hosted, open-source alternative to Terraform Cloud. Register a Terraform or OpenTofu module once, and anyone on your team can stand up their own copy from a web UI, with their own variables, their own credentials and a full history of every change.</p>
+          <h1 data-reveal class="text-[30px] leading-[1.15] font-semibold tracking-title sm:text-[36px]">Terraform for your whole team, on your own infrastructure.</h1>
+          <p data-reveal class="d1 text-sm text-muted-foreground">openplan is a self-hosted, open-source alternative to Terraform Cloud. Register a Terraform or OpenTofu module once, and anyone on your team can stand up their own copy from a web UI, with their own variables, their own credentials and a full history of every change.</p>
           <div>
             <a class="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary pr-2 pl-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-strong" href="https://github.com/openplanhq/openplan">
               View on GitHub
-              <svg aria-hidden="true" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+              <svg aria-hidden="true" class="arrow size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
             </a>
           </div>
           <p class="flex items-start gap-2 text-meta text-muted-foreground">
@@ -59,207 +62,310 @@
           </p>
         </div>
 
-        <div class="min-w-0 flex-[1.15_1_480px]">
-          <div class="rounded-panel border bg-card p-3">
-            <div class="rounded-lg bg-canvas px-4 py-6">
-              <!-- A dashed plan, a person approving it, then solid applied infrastructure. -->
-              <svg aria-hidden="true" class="block h-auto w-full" viewBox="0 55 520 190">
+        <div class="min-w-0 flex-[1.15_1_480px]" data-reveal>
+          <!-- A run as the app shows it, played on a loop by src/alive.ts: the
+               drawing (plan, approve, apply) and the run view beneath it move
+               together. Without the script, or with reduced motion, both stand
+               at the run's end: applied. It illustrates the copy beside it, so
+               assistive technology skips it. -->
+          <div class="flex flex-col gap-3 rounded-panel border bg-card p-3" data-run data-step="7" aria-hidden="true">
+            <div class="rounded-lg bg-canvas px-4 pt-5 pb-3">
+              <svg aria-hidden="true" class="hero-art block h-auto w-full" viewBox="0 55 520 190">
                 <g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                  <rect class="stroke-separator" x="20" y="70" width="140" height="160" rx="16" stroke-dasharray="5 6" />
-                  <rect class="fill-card stroke-separator" x="42" y="98" width="96" height="22" rx="6" stroke-dasharray="4 5" />
-                  <rect class="fill-card stroke-separator" x="42" y="139" width="96" height="22" rx="6" stroke-dasharray="4 5" />
-                  <rect class="fill-card stroke-separator" x="42" y="180" width="96" height="22" rx="6" stroke-dasharray="4 5" />
-                  <path class="stroke-dashed-border" d="M172 150 H206 M199 143 L206 150 L199 157" />
-                  <circle class="fill-card stroke-primary" cx="260" cy="150" r="44" />
-                  <circle class="fill-card stroke-primary" cx="260" cy="137" r="10" />
-                  <path class="fill-card stroke-primary" d="M240 172 C240 154 280 154 280 172 Z" />
-                  <circle class="fill-primary" cx="293" cy="118" r="12" />
-                  <path class="stroke-card" stroke-width="2" d="M287 118 L291 122 L299 114" />
-                  <path class="stroke-dashed-border" d="M314 150 H348 M341 143 L348 150 L341 157" />
-                  <rect class="fill-card stroke-muted-foreground" x="360" y="70" width="140" height="160" rx="16" />
-                  <rect class="fill-card stroke-muted-foreground" x="382" y="98" width="96" height="22" rx="6" />
-                  <rect class="fill-card stroke-muted-foreground" x="382" y="139" width="96" height="22" rx="6" />
-                  <rect class="fill-card stroke-muted-foreground" x="382" y="180" width="96" height="22" rx="6" />
+                  <rect class="h-plan stroke-separator" x="20" y="70" width="140" height="160" rx="16" stroke-dasharray="5 6" />
+                  <rect class="h-plan fill-card stroke-separator" x="42" y="98" width="96" height="22" rx="6" stroke-dasharray="4 5" />
+                  <rect class="h-plan fill-card stroke-separator" x="42" y="139" width="96" height="22" rx="6" stroke-dasharray="4 5" />
+                  <rect class="h-plan fill-card stroke-separator" x="42" y="180" width="96" height="22" rx="6" stroke-dasharray="4 5" />
+                  <path class="h-arrow h-arrow1 stroke-dashed-border on" d="M172 150 H206 M199 143 L206 150 L199 157" />
+                  <circle class="h-approver fill-card stroke-separator done" cx="260" cy="150" r="44" />
+                  <circle class="h-approver fill-card stroke-separator done" cx="260" cy="137" r="10" />
+                  <path class="h-approver fill-card stroke-separator done" d="M240 172 C240 154 280 154 280 172 Z" />
+                  <g class="h-badge"><circle class="fill-primary" cx="293" cy="118" r="12" /><path class="stroke-card" stroke-width="2" d="M287 118 L291 122 L299 114" /></g>
+                  <path class="h-arrow h-arrow2 stroke-dashed-border on" d="M314 150 H348 M341 143 L348 150 L341 157" />
+                  <rect class="h-apply done" x="360" y="70" width="140" height="160" rx="16" />
+                  <rect class="h-slab fill-card stroke-muted-foreground" x="382" y="98" width="96" height="22" rx="6" />
+                  <rect class="h-slab fill-card stroke-muted-foreground" x="382" y="139" width="96" height="22" rx="6" />
+                  <rect class="h-slab fill-card stroke-muted-foreground" x="382" y="180" width="96" height="22" rx="6" />
                 </g>
               </svg>
+            </div>
+            <div class="flex flex-col gap-3 rounded-lg border border-divider bg-card px-4 py-3.5">
+              <div class="flex min-h-7 items-center justify-between gap-3">
+                <div class="flex min-w-0 items-center gap-2.5 text-meta">
+                  <span class="text-subtle-foreground">prod</span>
+                  <span class="text-dashed-border">/</span>
+                  <code class="font-mono text-code-foreground">eks</code>
+                  <span class="text-sm font-semibold tracking-title">Run #14</span>
+                </div>
+                <div class="flex gap-2" data-actions hidden>
+                  <span class="inline-flex h-7 items-center rounded-md border bg-background px-2.5 text-[0.8rem] font-medium">Discard</span>
+                  <span class="inline-flex h-7 items-center rounded-md bg-primary px-2.5 text-[0.8rem] font-medium text-primary-foreground" data-approve>Approve</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 text-sm">
+                <!-- Status is an icon and a word, as in the app (runIndicator.ts). -->
+                <span class="inline-flex items-center gap-1.5 font-medium text-muted-foreground" data-status>
+                  <svg aria-hidden="true" class="spin size-3.5" data-icon="spin" hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
+                  <svg aria-hidden="true" class="size-3.5" data-icon="wait" hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M5 22h14" /><path d="M5 2h14" /><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22" /><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2" /></svg>
+                  <svg aria-hidden="true" class="size-3.5" data-icon="done" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+                  <span data-word>applied</span>
+                </span>
+                <span class="inline-flex gap-2 font-mono text-meta" data-diff><span class="text-success">+3</span><span class="text-warning">~1</span><span class="text-destructive">−0</span></span>
+              </div>
+              <div class="flex h-[104px] flex-col justify-end overflow-hidden rounded-md bg-canvas px-3 py-2.5 font-mono text-xs leading-[1.7] text-muted-foreground" data-log>
+                <div class="truncate text-code-foreground">Plan: 3 to add, 1 to change, 0 to destroy.</div>
+                <div class="truncate text-subtle-foreground">aws_eks_node_group.default: Creating...</div>
+                <div class="truncate text-success">Apply complete! Resources: 3 added, 1 changed, 0 destroyed.</div>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      <section id="features" class="border-t" aria-labelledby="features-title">
-        <div class="mx-auto flex max-w-[1040px] flex-col gap-14 px-5 py-24">
-          <div class="mx-auto mb-6 flex max-w-[640px] flex-col items-center gap-4 text-center">
+      <!-- overflow-x-clip: panels waiting to slide in sit 48px off their side
+           and must not make the page scroll sideways; clip, unlike hidden,
+           keeps the rail sticky. -->
+      <section id="features" class="overflow-x-clip border-t" aria-labelledby="features-title">
+        <div class="mx-auto max-w-[1180px] px-5 py-24 lg:grid lg:grid-cols-[64px_minmax(0,1fr)] lg:gap-x-8">
+          <div class="mx-auto mb-14 flex max-w-[640px] flex-col items-center gap-4 text-center lg:col-span-2" data-reveal>
             <span class="rounded-full border bg-card px-3 py-1 text-meta font-medium text-muted-foreground">Features</span>
             <h2 id="features-title" class="text-page-title font-semibold tracking-title">Everything a team needs to share Terraform</h2>
             <p class="text-sm text-muted-foreground">Without sharing a laptop, a state file or anyone's credentials.</p>
           </div>
-          <ul class="flex flex-col gap-14">
-            <li data-feature class="flex flex-wrap items-center gap-10">
-              <div class="min-w-0 flex-[1_1_420px]">
-                <div class="dot-grid flex h-[240px] items-center justify-center rounded-panel border bg-card">
-                  <svg aria-hidden="true" class="fx block h-auto w-full max-w-[380px]" viewBox="0 0 240 140">
-                    <g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                      <rect class="fill-card stroke-muted-foreground" x="30" y="50" width="40" height="40" rx="8" />
-                      <path class="stroke-separator" d="M40 64 H60 M40 72 H54" />
-                      <path class="stroke-dashed-border a-draw" pathLength="120" d="M70 70 C110 70 110 34 150 34" />
-                      <path class="stroke-dashed-border a-draw [animation-delay:0.15s]" pathLength="120" d="M70 70 H150" />
-                      <path class="stroke-dashed-border a-draw [animation-delay:0.3s]" pathLength="120" d="M70 70 C110 70 110 106 150 106" />
-                      <rect class="fill-card stroke-separator a-pop origin-center" x="150" y="20" width="28" height="28" rx="6" />
-                      <rect class="fill-card stroke-primary a-pop origin-center [animation-delay:0.15s]" x="150" y="56" width="28" height="28" rx="6" />
-                      <rect class="fill-card stroke-separator a-pop origin-center [animation-delay:0.3s]" x="150" y="92" width="28" height="28" rx="6" />
-                    </g>
-                  </svg>
+
+          <!-- A rail of links to the eight features, beside them on wide screens.
+               src/alive.ts marks the one in view and fills the line to it. -->
+          <div class="hidden lg:block">
+            <nav aria-label="Features" class="rail sticky top-24 flex gap-3">
+              <div class="relative w-0.5 rounded-full bg-divider"><div class="rail-fill absolute top-0 left-0 w-0.5 rounded-full bg-primary"></div></div>
+              <ol class="flex flex-col gap-3 font-mono text-xs">
+                <li><a class="rail-link" href="#feature-1">01</a></li>
+                <li><a class="rail-link" href="#feature-2">02</a></li>
+                <li><a class="rail-link" href="#feature-3">03</a></li>
+                <li><a class="rail-link" href="#feature-4">04</a></li>
+                <li><a class="rail-link" href="#feature-5">05</a></li>
+                <li><a class="rail-link" href="#feature-6">06</a></li>
+                <li><a class="rail-link" href="#feature-7">07</a></li>
+                <li><a class="rail-link" href="#feature-8">08</a></li>
+              </ol>
+            </nav>
+          </div>
+
+          <!-- Every drawing stands complete without the script. With it, each
+               plays once when its row arrives; some loop while on screen, and
+               some answer the pointer, which the hint in the corner names. The
+               readout chip says what the drawing shows, in openplan's words. -->
+          <ul class="flex flex-col gap-16">
+            <li data-feature data-kind="register" id="feature-1" class="feature flex scroll-mt-24 flex-wrap items-center gap-10">
+              <div class="min-w-0 flex-[1_1_440px]" data-reveal data-side="left">
+                <div data-parallax>
+                  <div class="glow rounded-panel">
+                    <div class="dot-grid relative flex h-[220px] items-center justify-center overflow-hidden rounded-panel bg-card">
+                      <svg aria-hidden="true" class="fx block h-auto w-full max-w-[320px]" viewBox="0 0 240 140">
+                        <g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                          <rect class="fill-card stroke-muted-foreground" x="24" y="48" width="44" height="44" rx="9" />
+                          <path class="stroke-separator" d="M34 62 H58 M34 70 H52 M34 78 H56" />
+                          <path class="a-draw flow stroke-separator" pathLength="120" d="M68 70 C110 70 110 34 150 34" />
+                          <path class="a-draw flow d1 stroke-primary" pathLength="120" d="M68 70 H150" />
+                          <path class="a-draw flow d2 stroke-separator" pathLength="120" d="M68 70 C110 70 110 106 150 106" />
+                          <rect class="a-pop d3 fill-card stroke-separator" x="150" y="20" width="28" height="28" rx="6" />
+                          <rect class="a-pop d4 fill-card stroke-primary" x="150" y="56" width="28" height="28" rx="6" />
+                          <rect class="a-pop d5 fill-card stroke-separator" x="150" y="92" width="28" height="28" rx="6" />
+                          <circle class="beat fill-primary" cx="164" cy="70" r="3" />
+                        </g>
+                      </svg>
+                      <span class="readout" aria-hidden="true" data-readout>acme/terraform-aws-eks @ v1.4.2</span>
+                      <span class="hint" aria-hidden="true">hover to install</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-3">
-                <span class="font-mono text-meta text-subtle-foreground">01 / 08</span>
+              <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-2" data-reveal>
+                <span class="num font-mono text-meta text-subtle-foreground">01 / 08</span>
                 <h3 class="text-row-title font-semibold tracking-title">Register templates</h3>
                 <p class="text-sm text-muted-foreground">Point openplan at a Git repository and a revision. That becomes a reusable template anyone on the platform can install.</p>
               </div>
             </li>
-            <li data-feature class="flex flex-row-reverse flex-wrap items-center gap-10">
-              <div class="min-w-0 flex-[1_1_420px]">
-                <div class="dot-grid flex h-[240px] items-center justify-center rounded-panel border bg-card">
-                  <svg aria-hidden="true" class="fx block h-auto w-full max-w-[380px]" viewBox="0 0 240 140">
-                    <g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                      <rect class="stroke-separator" x="62" y="22" width="116" height="96" rx="14" stroke-dasharray="4 5" />
-                      <rect class="fill-card stroke-muted-foreground a-drop" x="78" y="86" width="84" height="18" rx="5" />
-                      <rect class="fill-card stroke-primary a-drop [animation-delay:0.25s]" x="78" y="61" width="84" height="18" rx="5" />
-                      <rect class="fill-card stroke-muted-foreground a-drop [animation-delay:0.5s]" x="78" y="36" width="84" height="18" rx="5" />
-                    </g>
-                  </svg>
+            <li data-feature data-kind="stack" id="feature-2" class="feature flex scroll-mt-24 flex-row-reverse flex-wrap items-center gap-10">
+              <div class="min-w-0 flex-[1_1_440px]" data-reveal data-side="right">
+                <div data-parallax>
+                  <div class="glow rounded-panel">
+                    <div class="dot-grid relative flex h-[220px] items-center justify-center overflow-hidden rounded-panel bg-card">
+                      <svg aria-hidden="true" class="fx block h-auto w-full max-w-[320px]" viewBox="0 0 240 140">
+                        <g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                          <rect class="stroke-separator" x="62" y="20" width="116" height="100" rx="14" stroke-dasharray="4 5" />
+                          <g class="a-drop d3"><rect class="lift fill-card stroke-muted-foreground" data-slab="0" x="78" y="34" width="84" height="20" rx="5" /></g>
+                          <g class="a-drop d2"><rect class="lift up fill-card stroke-primary" data-slab="1" x="78" y="60" width="84" height="20" rx="5" /></g>
+                          <g class="a-drop"><rect class="lift fill-card stroke-muted-foreground" data-slab="2" x="78" y="86" width="84" height="20" rx="5" /></g>
+                        </g>
+                      </svg>
+                      <span class="readout" aria-hidden="true" data-readout>prod / eks</span>
+                      <span class="hint" aria-hidden="true">move over the stack</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-3">
-                <span class="font-mono text-meta text-subtle-foreground">02 / 08</span>
+              <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-2" data-reveal>
+                <span class="num font-mono text-meta text-subtle-foreground">02 / 08</span>
                 <h3 class="text-row-title font-semibold tracking-title">Compose stacks</h3>
                 <p class="text-sm text-muted-foreground">A stack groups the templates that make up one environment or one service, each with its own configuration.</p>
               </div>
             </li>
-            <li data-feature class="flex flex-wrap items-center gap-10">
-              <div class="min-w-0 flex-[1_1_420px]">
-                <div class="dot-grid flex h-[240px] items-center justify-center rounded-panel border bg-card">
-                  <svg aria-hidden="true" class="fx block h-auto w-full max-w-[380px]" viewBox="0 0 240 140">
-                    <g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                      <path class="stroke-dashed-border" stroke-width="2" d="M50 42 H190 M50 70 H190 M50 98 H190" />
-                      <path class="stroke-muted-foreground" stroke-width="2" d="M50 42 H90 M50 98 H70" />
-                      <path class="stroke-primary a-bar origin-left" stroke-width="2" d="M50 70 H150" />
-                      <circle class="fill-card stroke-muted-foreground" cx="90" cy="42" r="7" />
-                      <circle class="fill-primary a-knob" cx="150" cy="70" r="7" />
-                      <circle class="fill-card stroke-muted-foreground" cx="70" cy="98" r="7" />
-                    </g>
-                  </svg>
+            <li data-feature data-kind="config" id="feature-3" class="feature flex scroll-mt-24 flex-wrap items-center gap-10">
+              <div class="min-w-0 flex-[1_1_440px]" data-reveal data-side="left">
+                <div data-parallax>
+                  <div class="glow rounded-panel">
+                    <div class="dot-grid relative flex h-[220px] items-center justify-center overflow-hidden rounded-panel bg-card">
+                      <svg aria-hidden="true" class="fx block h-auto w-full max-w-[320px]" viewBox="0 0 240 140">
+                        <g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path class="stroke-border" d="M50 42 H190 M50 70 H190 M50 98 H190" />
+                          <path class="stroke-muted-foreground" d="M50 42 H96 M50 98 H74" />
+                          <path class="track stroke-primary" data-bar d="M50 70 H150" />
+                          <circle class="fill-card stroke-muted-foreground" stroke-width="1.5" cx="96" cy="42" r="7" />
+                          <circle class="knob fill-primary" data-knob cx="150" cy="70" r="8" />
+                          <circle class="fill-card stroke-muted-foreground" stroke-width="1.5" cx="74" cy="98" r="7" />
+                        </g>
+                      </svg>
+                      <span class="readout" aria-hidden="true" data-readout>node_count = 8</span>
+                      <span class="hint" aria-hidden="true">move across to set it</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-3">
-                <span class="font-mono text-meta text-subtle-foreground">03 / 08</span>
+              <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-2" data-reveal>
+                <span class="num font-mono text-meta text-subtle-foreground">03 / 08</span>
                 <h3 class="text-row-title font-semibold tracking-title">Configure per stack</h3>
                 <p class="text-sm text-muted-foreground">Set input variables and attach cloud credentials without editing anyone's Terraform. Credentials are write-only and injected only while Terraform runs.</p>
               </div>
             </li>
-            <li data-feature class="flex flex-row-reverse flex-wrap items-center gap-10">
-              <div class="min-w-0 flex-[1_1_420px]">
-                <div class="dot-grid flex h-[240px] items-center justify-center rounded-panel border bg-card">
-                  <svg aria-hidden="true" class="fx block h-auto w-full max-w-[380px]" viewBox="0 0 240 140">
-                    <g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                      <rect class="fill-card stroke-separator" x="34" y="40" width="60" height="60" rx="10" stroke-dasharray="5 5" />
-                      <path class="stroke-dashed-border a-nudge" d="M106 70 H134 M128 64 L134 70 L128 76" />
-                      <rect class="fill-card stroke-primary" x="146" y="40" width="60" height="60" rx="10" />
-                      <rect class="fill-primary a-grow origin-center" x="162" y="56" width="28" height="28" rx="6" />
-                    </g>
-                  </svg>
+            <li data-feature data-kind="run" id="feature-4" class="feature flex scroll-mt-24 flex-row-reverse flex-wrap items-center gap-10">
+              <div class="min-w-0 flex-[1_1_440px]" data-reveal data-side="right">
+                <div data-parallax>
+                  <div class="glow rounded-panel">
+                    <div class="dot-grid relative flex h-[220px] items-center justify-center overflow-hidden rounded-panel bg-card">
+                      <svg aria-hidden="true" class="fx block h-auto w-full max-w-[320px]" viewBox="0 0 240 140">
+                        <g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                          <rect class="r-plan fill-card stroke-separator" x="30" y="40" width="60" height="60" rx="10" stroke-dasharray="5 5" />
+                          <rect class="r-plan stroke-separator" x="44" y="54" width="32" height="32" rx="6" stroke-dasharray="4 4" />
+                          <path class="nudge stroke-separator" d="M104 70 H132 M126 64 L132 70 L126 76" />
+                          <rect class="r-live live fill-card stroke-primary" x="148" y="40" width="60" height="60" rx="10" />
+                          <rect class="r-core live fill-primary" x="162" y="54" width="32" height="32" rx="6" />
+                        </g>
+                      </svg>
+                      <span class="readout" aria-hidden="true" data-readout>applied +3 ~1 −0</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-3">
-                <span class="font-mono text-meta text-subtle-foreground">04 / 08</span>
+              <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-2" data-reveal>
+                <span class="num font-mono text-meta text-subtle-foreground">04 / 08</span>
                 <h3 class="text-row-title font-semibold tracking-title">Plan, apply and destroy</h3>
                 <p class="text-sm text-muted-foreground">Run it all from the browser. Runs are orchestrated durably on Temporal, so a plan or apply survives a restart instead of being lost halfway.</p>
               </div>
             </li>
-            <li data-feature class="flex flex-wrap items-center gap-10">
-              <div class="min-w-0 flex-[1_1_420px]">
-                <div class="dot-grid flex h-[240px] items-center justify-center rounded-panel border bg-card">
-                  <svg aria-hidden="true" class="fx block h-auto w-full max-w-[380px]" viewBox="0 0 240 140">
-                    <g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                      <path class="stroke-dashed-border" d="M52 30 V110" />
-                      <circle class="fill-card stroke-muted-foreground" cx="52" cy="34" r="5" />
-                      <circle class="fill-card stroke-muted-foreground" cx="52" cy="58" r="5" />
-                      <circle class="fill-card stroke-muted-foreground" cx="52" cy="82" r="5" />
-                      <circle class="fill-primary a-pulse" cx="52" cy="106" r="5" />
-                      <path class="stroke-separator a-type origin-left" d="M70 34 H170" />
-                      <path class="stroke-separator a-type origin-left [animation-delay:0.3s]" d="M70 58 H200" />
-                      <path class="stroke-separator a-type origin-left [animation-delay:0.6s]" d="M70 82 H150" />
-                      <path class="stroke-primary a-type origin-left [animation-delay:0.9s]" d="M70 106 H186" />
-                    </g>
-                  </svg>
+            <li data-feature data-kind="logs" id="feature-5" class="feature flex scroll-mt-24 flex-wrap items-center gap-10">
+              <div class="min-w-0 flex-[1_1_440px]" data-reveal data-side="left">
+                <div data-parallax>
+                  <div class="glow rounded-panel">
+                    <div class="dot-grid relative flex h-[220px] items-center justify-center overflow-hidden rounded-panel bg-card">
+                      <svg aria-hidden="true" class="fx block h-auto w-full max-w-[320px]" viewBox="0 0 240 140">
+                        <g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                          <path class="stroke-border" d="M46 26 V114" />
+                          <g class="logline shown" data-line="0"><circle class="dot fill-card stroke-separator" cx="46" cy="30" r="5" /><path class="bar stroke-separator" d="M62 30 H162" /></g>
+                          <g class="logline shown" data-line="1"><circle class="dot fill-card stroke-separator" cx="46" cy="50" r="5" /><path class="bar stroke-separator" d="M62 50 H192" /></g>
+                          <g class="logline shown" data-line="2"><circle class="dot fill-card stroke-separator" cx="46" cy="70" r="5" /><path class="bar stroke-separator" d="M62 70 H152" /></g>
+                          <g class="logline shown" data-line="3"><circle class="dot fill-card stroke-separator" cx="46" cy="90" r="5" /><path class="bar stroke-separator" d="M62 90 H202" /></g>
+                          <g class="logline shown" data-line="4"><circle class="dot fill-primary stroke-primary" cx="46" cy="110" r="5" /><path class="bar stroke-primary" d="M62 110 H177" /></g>
+                        </g>
+                      </svg>
+                      <span class="readout" aria-hidden="true" data-readout>Apply complete! Resources: 3 added, 1 changed, 0 destroyed.</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-3">
-                <span class="font-mono text-meta text-subtle-foreground">05 / 08</span>
+              <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-2" data-reveal>
+                <span class="num font-mono text-meta text-subtle-foreground">05 / 08</span>
                 <h3 class="text-row-title font-semibold tracking-title">Watch runs and read logs</h3>
                 <p class="text-sm text-muted-foreground">Every run keeps its init, plan and workspace output, along with its history.</p>
               </div>
             </li>
-            <li data-feature class="flex flex-row-reverse flex-wrap items-center gap-10">
-              <div class="min-w-0 flex-[1_1_420px]">
-                <div class="dot-grid flex h-[240px] items-center justify-center rounded-panel border bg-card">
-                  <svg aria-hidden="true" class="fx block h-auto w-full max-w-[380px]" viewBox="0 0 240 140">
-                    <g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                      <path class="stroke-dashed-border" d="M78 70 H162" />
-                      <circle class="fill-card stroke-separator" cx="60" cy="70" r="18" />
-                      <circle class="fill-card stroke-primary" cx="180" cy="70" r="18" />
-                      <circle class="fill-primary a-on" cx="180" cy="70" r="6" />
-                      <rect class="fill-card stroke-muted-foreground a-lift" x="114" y="46" width="12" height="48" rx="4" />
-                    </g>
-                  </svg>
+            <li data-feature data-kind="upgrade" id="feature-6" class="feature flex scroll-mt-24 flex-row-reverse flex-wrap items-center gap-10">
+              <div class="min-w-0 flex-[1_1_440px]" data-reveal data-side="right">
+                <div data-parallax>
+                  <div class="glow rounded-panel">
+                    <div class="dot-grid relative flex h-[220px] items-center justify-center overflow-hidden rounded-panel bg-card">
+                      <svg aria-hidden="true" class="fx block h-auto w-full max-w-[320px]" viewBox="0 0 240 140">
+                        <g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                          <path class="wire stroke-dashed-border" d="M78 70 H162" />
+                          <circle class="fill-card stroke-separator" cx="60" cy="70" r="18" />
+                          <circle class="fill-card stroke-primary" cx="180" cy="70" r="18" />
+                          <circle class="u-dot fill-primary" cx="180" cy="70" r="6" />
+                          <circle class="travel fill-primary" cx="78" cy="70" r="4" />
+                          <rect class="gate fill-card stroke-muted-foreground" x="114" y="46" width="12" height="48" rx="4" />
+                        </g>
+                      </svg>
+                      <span class="readout" aria-hidden="true" data-readout>eks v1.3 · v1.4 available</span>
+                      <span class="hint" aria-hidden="true">hover to upgrade</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-3">
-                <span class="font-mono text-meta text-subtle-foreground">06 / 08</span>
+              <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-2" data-reveal>
+                <span class="num font-mono text-meta text-subtle-foreground">06 / 08</span>
                 <h3 class="text-row-title font-semibold tracking-title">Upgrade deliberately</h3>
                 <p class="text-sm text-muted-foreground">When a template gets a new revision, moving a stack to it is an explicit, reviewable step. Nothing drifts silently.</p>
               </div>
             </li>
-            <li data-feature class="flex flex-wrap items-center gap-10">
-              <div class="min-w-0 flex-[1_1_420px]">
-                <div class="dot-grid flex h-[240px] items-center justify-center rounded-panel border bg-card">
-                  <svg aria-hidden="true" class="fx block h-auto w-full max-w-[380px]" viewBox="0 0 240 140">
-                    <g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                      <circle class="fill-card stroke-muted-foreground" cx="120" cy="30" r="9" />
-                      <path class="fill-card stroke-muted-foreground" d="M104 60 C104 43 136 43 136 60 Z" />
-                      <path class="stroke-primary a-draw" pathLength="120" d="M120 62 V78" />
-                      <rect class="fill-card stroke-separator" x="34" y="80" width="40" height="40" rx="8" stroke-dasharray="4 5" />
-                      <rect class="fill-card stroke-primary a-pop origin-center [animation-delay:0.4s]" x="100" y="80" width="40" height="40" rx="8" />
-                      <rect class="fill-card stroke-separator" x="166" y="80" width="40" height="40" rx="8" stroke-dasharray="4 5" />
-                    </g>
-                  </svg>
+            <li data-feature data-kind="access" id="feature-7" class="feature flex scroll-mt-24 flex-wrap items-center gap-10">
+              <div class="min-w-0 flex-[1_1_440px]" data-reveal data-side="left">
+                <div data-parallax>
+                  <div class="glow rounded-panel">
+                    <div class="dot-grid relative flex h-[220px] items-center justify-center overflow-hidden rounded-panel bg-card">
+                      <svg aria-hidden="true" class="fx block h-auto w-full max-w-[320px]" viewBox="0 0 240 140">
+                        <g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                          <circle class="fill-card stroke-muted-foreground" cx="120" cy="26" r="9" />
+                          <path class="fill-card stroke-muted-foreground" d="M104 56 C104 39 136 39 136 56 Z" />
+                          <path class="grant stroke-primary" data-grant d="M120 56 C120 72 120 68 120 84" />
+                          <rect class="stack-box fill-card stroke-separator" data-stack="0" x="34" y="84" width="40" height="40" rx="8" />
+                          <rect class="stack-box picked fill-card stroke-separator" data-stack="1" x="100" y="84" width="40" height="40" rx="8" />
+                          <rect class="stack-box fill-card stroke-separator" data-stack="2" x="166" y="84" width="40" height="40" rx="8" />
+                        </g>
+                      </svg>
+                      <span class="readout" aria-hidden="true" data-readout>ana → staging: Operator</span>
+                      <span class="hint" aria-hidden="true">point at a stack</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-3">
-                <span class="font-mono text-meta text-subtle-foreground">07 / 08</span>
+              <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-2" data-reveal>
+                <span class="num font-mono text-meta text-subtle-foreground">07 / 08</span>
                 <h3 class="text-row-title font-semibold tracking-title">Control access per stack</h3>
                 <p class="text-sm text-muted-foreground">Grant people a role on the stacks they need, rather than on everything.</p>
               </div>
             </li>
-            <li data-feature class="flex flex-row-reverse flex-wrap items-center gap-10">
-              <div class="min-w-0 flex-[1_1_420px]">
-                <div class="dot-grid flex h-[240px] items-center justify-center rounded-panel border bg-card">
-                  <svg aria-hidden="true" class="fx block h-auto w-full max-w-[380px]" viewBox="0 0 240 140">
-                    <g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                      <path class="stroke-dashed-border a-flow" d="M58 36 C110 36 110 70 150 70 M58 70 H150 M58 104 C110 104 110 70 150 70" />
-                      <circle class="fill-card stroke-separator" cx="46" cy="36" r="11" />
-                      <rect class="fill-card stroke-separator" x="35" y="59" width="22" height="22" rx="4" />
-                      <path class="fill-card stroke-separator" d="M46 92 L58 114 H34 Z" />
-                      <rect class="fill-card stroke-primary" x="150" y="40" width="48" height="60" rx="10" />
-                      <circle class="fill-primary a-pulse" cx="174" cy="64" r="5" />
-                      <path class="stroke-primary" stroke-width="3" d="M174 68 V80" />
-                    </g>
-                  </svg>
+            <li data-feature data-kind="sso" id="feature-8" class="feature flex scroll-mt-24 flex-row-reverse flex-wrap items-center gap-10">
+              <div class="min-w-0 flex-[1_1_440px]" data-reveal data-side="right">
+                <div data-parallax>
+                  <div class="glow rounded-panel">
+                    <div class="dot-grid relative flex h-[220px] items-center justify-center overflow-hidden rounded-panel bg-card">
+                      <svg aria-hidden="true" class="fx block h-auto w-full max-w-[320px]" viewBox="0 0 240 140">
+                        <g fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                          <path class="stream stroke-separator" d="M58 36 C110 36 110 70 150 70 M58 70 H150 M58 104 C110 104 110 70 150 70" />
+                          <circle class="fill-card stroke-separator" cx="46" cy="36" r="11" />
+                          <rect class="fill-card stroke-separator" x="35" y="59" width="22" height="22" rx="4" />
+                          <path class="fill-card stroke-separator" d="M46 92 L58 114 H34 Z" />
+                          <rect class="keybox fill-card stroke-primary" x="150" y="40" width="48" height="60" rx="10" />
+                          <g class="keyhole"><circle class="fill-primary" cx="174" cy="64" r="5" /><path class="stroke-primary" stroke-width="3" d="M174 68 V80" /></g>
+                        </g>
+                      </svg>
+                      <span class="readout" aria-hidden="true" data-readout>GitHub · LDAP · OIDC → Dex</span>
+                      <span class="hint" aria-hidden="true">hover to sign in</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-3">
-                <span class="font-mono text-meta text-subtle-foreground">08 / 08</span>
+              <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-2" data-reveal>
+                <span class="num font-mono text-meta text-subtle-foreground">08 / 08</span>
                 <h3 class="text-row-title font-semibold tracking-title">Sign in with SSO</h3>
                 <p class="text-sm text-muted-foreground">openplan signs in through Dex. A corporate IdP, GitHub or LDAP plugs in as a Dex connector.</p>
               </div>
@@ -270,19 +376,20 @@
 
       <section class="border-t bg-card" aria-labelledby="run-title">
         <div class="mx-auto flex max-w-[760px] flex-col items-center gap-5 px-5 py-[88px] text-center">
-          <h2 id="run-title" class="text-page-title font-semibold tracking-title">Run it on your own machine</h2>
-          <p class="text-sm text-muted-foreground">You need Docker and nothing else. Download three files, start it, and open localhost:5173 a minute or two later.</p>
+          <h2 id="run-title" data-reveal class="text-page-title font-semibold tracking-title">Run it on your own machine</h2>
+          <p data-reveal class="d1 text-sm text-muted-foreground">You need Docker and nothing else. Download three files, start it, and open localhost:5173 a minute or two later.</p>
           <!-- The README's "Without a checkout" steps, whole, so they run as pasted. The
                latest/download URLs follow each new release, so the site never pins one.
-               tabindex lets a keyboard scroll it where it overflows (phones). -->
-          <pre tabindex="0" aria-label="Commands to download and start openplan" class="w-full overflow-x-auto rounded-lg border bg-canvas px-4 py-3 text-left font-mono text-meta leading-relaxed text-code-foreground"><code>url=https://github.com/openplanhq/openplan/releases/latest/download
+               tabindex lets a keyboard scroll it where it overflows (phones). Its
+               lines arrive one at a time when it scrolls into view. -->
+          <pre tabindex="0" aria-label="Commands to download and start openplan" data-reveal class="cmds w-full overflow-x-auto rounded-lg border bg-canvas px-4 py-3 text-left font-mono text-meta leading-relaxed text-code-foreground"><code>url=https://github.com/openplanhq/openplan/releases/latest/download
 curl -LO $url/docker-compose.release.yaml
 curl -LO $url/dex.yaml
 curl -LO $url/init-databases.sh
 docker compose -f docker-compose.release.yaml up -d</code></pre>
           <a class="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary pr-2 pl-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-strong" href="https://github.com/openplanhq/openplan#running-it-locally">
             Read the setup steps
-            <svg aria-hidden="true" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+            <svg aria-hidden="true" class="arrow size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
           </a>
         </div>
       </section>
