@@ -1208,6 +1208,15 @@ func writeAppError(response http.ResponseWriter, err error) {
 	// the client its view of the run history is stale and worth refetching.
 	case errors.Is(err, app.ErrTemplateRunInFlight):
 		writeError(response, http.StatusConflict, "run_in_flight", err.Error())
+	// Its own code, because the fix is in the request: pick a component_key the
+	// stack does not already use, rather than retrying the same install.
+	case errors.Is(err, app.ErrDuplicateStackTemplateComponentKey):
+		writeError(response, http.StatusConflict, "duplicate_component_key", err.Error())
+	// 503 with its own code, because no request can succeed until an operator
+	// configures the encryption key: it is server setup, not a client error and
+	// not an unexplained failure.
+	case errors.Is(err, app.ErrCredentialEncryptionUnavailable):
+		writeError(response, http.StatusServiceUnavailable, "credential_encryption_unavailable", err.Error())
 	case errors.Is(err, app.ErrStackTemplateNotRunnable),
 		errors.Is(err, app.ErrRunNotApprovable),
 		errors.Is(err, app.ErrRunNotDiscardable),

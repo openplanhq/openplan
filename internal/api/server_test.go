@@ -461,6 +461,69 @@ func TestStartTemplateRunMapsAnInFlightRunToConflictWithItsOwnCode(t *testing.T)
 	}
 }
 
+func TestAddTemplateToStackMapsDuplicateComponentKeyToConflictWithItsOwnCode(t *testing.T) {
+	t.Parallel()
+
+	deps := newAPITestDependencies(t)
+	deps.stacks.stack = domain.Stack{ID: domain.StackID("stack_123"), TenantID: domain.TenantID("tenant_123"), Slug: "acme-prod"}
+	deps.templates.template = domain.TemplateRevision{ID: domain.TemplateRevisionID("template_123"), TenantID: domain.TenantID("tenant_123"), Status: domain.TemplateRevisionActive}
+	deps.templates.variables = []domain.TemplateVariable{{Name: "region", Required: true}}
+	deps.stackTemplateID = domain.StackTemplateID("stack_template_a1b2c3d4")
+	// What the store returns when the stack already has a template under this
+	// component_key.
+	deps.stackTemplateInstaller.createErr = app.ErrDuplicateStackTemplateComponentKey
+	server := NewServer(deps.service(), configuredTenantID)
+	response := httptest.NewRecorder()
+	request := authenticatedRequest(
+		http.MethodPost,
+		"/v1/tenants/tenant_123/stacks/stack_123/templates",
+		strings.NewReader(`{"template_revision_id":"template_123","config":{"region":"us-east-1"}}`),
+	)
+
+	server.ServeHTTP(response, request)
+
+	if response.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusConflict, response.Body.String())
+	}
+	var body errorResponse
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	// Distinct from the generic "conflict" so the client can point at the
+	// component_key field instead of showing a generic failure.
+	if body.Error != "duplicate_component_key" {
+		t.Fatalf("error code = %q, want duplicate_component_key", body.Error)
+	}
+}
+
+func TestCreateCredentialWithoutEncryptionKeyReturnsServiceUnavailable(t *testing.T) {
+	t.Parallel()
+
+	// The test service wires no credential store or encryptor, which is how the
+	// API runs when no encryption key is configured.
+	deps := newAPITestDependencies(t)
+	server := NewServer(deps.service(), configuredTenantID)
+	response := httptest.NewRecorder()
+	request := authenticatedRequest(
+		http.MethodPost,
+		"/v1/tenants/tenant_123/stacks/stack_123/credentials",
+		strings.NewReader(`{"name":"AWS_ACCESS_KEY_ID","value":"secret"}`),
+	)
+
+	server.ServeHTTP(response, request)
+
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusServiceUnavailable, response.Body.String())
+	}
+	var body errorResponse
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.Error != "credential_encryption_unavailable" {
+		t.Fatalf("error code = %q, want credential_encryption_unavailable", body.Error)
+	}
+}
+
 func TestStackTemplateResponseCarriesDerivedStatesNotRawConfigs(t *testing.T) {
 	t.Parallel()
 
