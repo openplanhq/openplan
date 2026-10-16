@@ -1859,6 +1859,40 @@ func TestApproveRunCallsService(t *testing.T) {
 	}
 }
 
+// Approving carries no data, so a client may send no body at all; a body it
+// does send is still held to the schema.
+func TestApproveRunTakesAnEmptyBodyButNotAMalformedOne(t *testing.T) {
+	t.Parallel()
+
+	deps := newAPITestDependencies(t)
+	server := NewServer(deps.service(), configuredTenantID)
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, authenticatedRequest(http.MethodPost, "/v1/tenants/tenant_123/template-runs/run_123/approval", nil))
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("empty body: status = %d, want %d; body = %s", response.Code, http.StatusNoContent, response.Body.String())
+	}
+	if deps.templateRuns.approval.RunID != domain.TemplateRunID("run_123") {
+		t.Fatalf("empty body: approval was not recorded")
+	}
+
+	for _, requestBody := range []string{`{"unexpected":true}`, `[]`, `{`} {
+		deps := newAPITestDependencies(t)
+		server := NewServer(deps.service(), configuredTenantID)
+		response := httptest.NewRecorder()
+
+		server.ServeHTTP(response, authenticatedRequest(http.MethodPost, "/v1/tenants/tenant_123/template-runs/run_123/approval", strings.NewReader(requestBody)))
+
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("%s: status = %d, want %d", requestBody, response.Code, http.StatusBadRequest)
+		}
+		if deps.templateRuns.approval.RunID != "" {
+			t.Fatalf("%s: approval recorded, want none", requestBody)
+		}
+	}
+}
+
 func TestApproveRunAllowsSelfApproval(t *testing.T) {
 	t.Parallel()
 
@@ -1922,6 +1956,23 @@ func TestDiscardRunCallsService(t *testing.T) {
 	}
 	if len(deps.work.requests) != 0 {
 		t.Fatalf("queued requests = %#v, want none", deps.work.requests)
+	}
+}
+
+func TestDiscardRunTakesAnEmptyBody(t *testing.T) {
+	t.Parallel()
+
+	deps := newAPITestDependencies(t)
+	server := NewServer(deps.service(), configuredTenantID)
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, authenticatedRequest(http.MethodPost, "/v1/tenants/tenant_123/template-runs/run_123/discard", nil))
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusNoContent, response.Body.String())
+	}
+	if deps.templateRuns.discarded.RunID != domain.TemplateRunID("run_123") || deps.templateRuns.discarded.Reason != "" {
+		t.Fatalf("discard = %+v, want run_123 with no reason", deps.templateRuns.discarded)
 	}
 }
 
@@ -3995,6 +4046,30 @@ func TestListQueueReturnsOnlyCallerItems(t *testing.T) {
 	}
 	if reader.tenantID != "tenant_123" || reader.actorSubject != apiOIDCSubject {
 		t.Fatalf("reader called with tenant %q actor %q, want the authenticated caller", reader.tenantID, reader.actorSubject)
+	}
+}
+
+// A failing queue read answers like every other failure: the generic 500
+// envelope, with nothing of the underlying error in it.
+func TestListQueueFailureUsesTheGenericInternalError(t *testing.T) {
+	t.Parallel()
+
+	reader := &stubQueueReader{err: errors.New("pq: connection refused")}
+	deps := newAPITestDependencies(t)
+	server := NewServer(deps.service(), configuredTenantID, WithQueueReader(reader))
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/queue", nil))
+
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusInternalServerError)
+	}
+	var body errorResponse
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.Error != "internal_error" || body.Message != "internal server error" {
+		t.Fatalf("body = %+v, want the generic internal error", body)
 	}
 }
 

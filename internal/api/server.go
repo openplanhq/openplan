@@ -1,10 +1,12 @@
 package api
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -344,6 +346,21 @@ func decodeRequestBody(response http.ResponseWriter, request *http.Request, dest
 		return false
 	}
 	return true
+}
+
+// decodeOptionalRequestBody is decodeRequestBody for an action whose body
+// carries nothing it needs: no body at all is accepted as {}, and anything
+// sent must still be one JSON object that matches destination.
+func decodeOptionalRequestBody(response http.ResponseWriter, request *http.Request, destination any) bool {
+	reader := bufio.NewReader(request.Body)
+	if _, err := reader.Peek(1); errors.Is(err, io.EOF) {
+		return true
+	}
+	request.Body = struct {
+		io.Reader
+		io.Closer
+	}{reader, request.Body}
+	return decodeRequestBody(response, request, destination)
 }
 
 // writeRequestTooLarge answers 413 when err is the body cap tripping, and
@@ -835,7 +852,7 @@ func (server *Server) handleListTemplateRunLogs(response http.ResponseWriter, re
 
 func (server *Server) handleApproveRun(response http.ResponseWriter, request *http.Request) {
 	var body approveRunRequest
-	if !decodeRequestBody(response, request, &body) {
+	if !decodeOptionalRequestBody(response, request, &body) {
 		return
 	}
 
@@ -853,7 +870,7 @@ func (server *Server) handleApproveRun(response http.ResponseWriter, request *ht
 
 func (server *Server) handleDiscardRun(response http.ResponseWriter, request *http.Request) {
 	var body discardRunRequest
-	if !decodeRequestBody(response, request, &body) {
+	if !decodeOptionalRequestBody(response, request, &body) {
 		return
 	}
 
@@ -1284,7 +1301,7 @@ func (server *Server) handleListQueue(response http.ResponseWriter, request *htt
 
 	statuses, err := server.queue.ListByActor(request.Context(), request.PathValue("tenant_id"), principal.Subject, 50)
 	if err != nil {
-		writeError(response, http.StatusInternalServerError, "internal_error", "list queue failed")
+		writeAppError(response, fmt.Errorf("list queue: %w", err))
 		return
 	}
 
