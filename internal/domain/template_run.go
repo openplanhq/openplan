@@ -58,10 +58,14 @@ var terraformCommandLines = map[TerraformCommandType]string{
 	TerraformCommandSelectWorkspace:  "workspace select",
 	TerraformCommandPlan:             "plan",
 	TerraformCommandPlanDestroy:      "plan -destroy",
-	TerraformCommandApply:            "apply",
-	TerraformCommandDestroy:          "apply",
-	TerraformCommandApplyAutoApprove: "apply",
+	TerraformCommandApply:            tofuApply,
+	TerraformCommandDestroy:          tofuApply,
+	TerraformCommandApplyAutoApprove: tofuApply,
 }
+
+// tofuApply is the subcommand all three applies run. It is tofu's word, not
+// OperationApply's, which only happens to spell the same.
+const tofuApply = "apply"
 
 // Valid reports whether the command is one an executor runs.
 func (command TerraformCommandType) Valid() bool {
