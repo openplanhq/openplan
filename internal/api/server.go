@@ -349,8 +349,7 @@ func decodeRequestBody(response http.ResponseWriter, request *http.Request, dest
 // writeRequestTooLarge answers 413 when err is the body cap tripping, and
 // reports whether it did.
 func writeRequestTooLarge(response http.ResponseWriter, err error) bool {
-	var tooLarge *http.MaxBytesError
-	if !errors.As(err, &tooLarge) {
+	if _, ok := errors.AsType[*http.MaxBytesError](err); !ok {
 		return false
 	}
 	writeError(response, http.StatusRequestEntityTooLarge, "request_too_large", "request body must not exceed 1 MiB")
