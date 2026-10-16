@@ -53,7 +53,7 @@ describe("site/index.html", () => {
     const used = new Set(
       [...HTML.matchAll(/\b(?:bg|text|border|fill|stroke)-([a-z]+(?:-[a-z]+)*)\b/g)]
         .map((m) => m[1])
-        .filter((name) => !/^(?:none|xs|sm|lg|xl|base|meta|row-title|page-title|panel-title|center|t|b|l|r|x|y|width|dasharray|linecap|linejoin)$/.test(name))
+        .filter((name) => !/^(?:none|xs|sm|lg|xl|base|meta|row-title|page-title|panel-title|center|left|t|b|l|r|x|y|width|dasharray|linecap|linejoin)$/.test(name))
     );
     const defined = new Set([...THEME.matchAll(/--color-([a-z-]+):/g)].map((m) => m[1]));
     expect([...used].filter((name) => !defined.has(name))).toEqual([]);
@@ -108,6 +108,14 @@ describe("site/index.html", () => {
       expect(part).toMatch(/<img\b[^>]*\bsrc="\/logo\.svg"[^>]*\balt="openplan"/);
     }
     expect(read("public/logo.svg")).toBe(read("../brand/svg/openplan-logo-horizontal.svg"));
+  });
+
+  it("downloads every file the README's no-checkout steps download, from the latest release", () => {
+    const files = (text: string) => [...text.matchAll(/curl -LO \S*\/([^/\s]+)$/gm)].map((m) => m[1]);
+    const readme = read("../README.md").split("### Without a checkout")[1]?.split("\n### ")[0] ?? "";
+    expect(files(readme).length).toBeGreaterThan(0);
+    expect(files(HTML)).toEqual(files(readme));
+    expect(HTML).toContain("url=https://github.com/openplanhq/openplan/releases/latest/download\n");
   });
 
   it("ends on a footer whose painting exists in public/", () => {
