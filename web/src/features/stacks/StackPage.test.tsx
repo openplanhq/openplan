@@ -156,6 +156,14 @@ describe("StackPage header", () => {
     expect(screen.queryByRole("link", { name: "Environment" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Access" })).toBeNull();
   });
+
+  // jsdom lays nothing out, so this pins the class that keeps a long stack
+  // name from squeezing Environment and Access into a column.
+  it("keeps Environment and Access on one row beside a long name", () => {
+    renderPage(seed([network]), "/stacks/stack_1");
+
+    expect(screen.getByRole("link", { name: "Environment" }).parentElement?.classList).toContain("shrink-0");
+  });
 });
 
 describe("StackPage selection", () => {
