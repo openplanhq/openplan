@@ -163,6 +163,13 @@ describe("site/index.html", () => {
     const footer = HTML.split("<footer")[1] ?? "";
     expect(footer).toMatch(/<img\b[^>]*\bsrc="\/footer-train\.jpg"/);
     expect(() => read("public/footer-train.jpg")).not.toThrow();
+    // The lighter encodings the <picture> offers exist too, and the
+    // painting waits until the reader nears the foot of the page.
+    for (const kind of ["avif", "webp"]) {
+      expect(footer).toContain(`srcset="/footer-train.${kind}" type="image/${kind}"`);
+      expect(() => read(`public/footer-train.${kind}`)).not.toThrow();
+    }
+    expect(footer).toMatch(/<img\b[^>]*\bloading="lazy"/);
     expect(footer).toContain("Apache 2.0");
     expect(footer).toContain("Painting by J. M. W. Turner");
   });
