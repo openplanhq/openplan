@@ -328,7 +328,6 @@ function features() {
       const panel = parallax[i];
       if (panel && innerWidth >= 1024) panel.style.transform = `translateY(${clamp(-off * 0.07, -28, 28).toFixed(1)}px)`;
     });
-    rows.forEach((row, i) => row.classList.toggle("current", i === current));
     links.forEach((link, i) => {
       link.classList.toggle("current", i === current);
       link.classList.toggle("passed", current >= 0 && i < current);

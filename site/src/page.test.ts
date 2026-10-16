@@ -112,10 +112,12 @@ describe("site/index.html", () => {
     }
   });
 
-  it("numbers every feature", () => {
-    FEATURES.forEach((feature, index) => {
-      expect(feature).toContain(`>0${index + 1} / 08<`);
-    });
+  it("names the features in the rail, in order, and numbers none of them", () => {
+    const titles = FEATURES.map((feature) => feature.match(/<h3\b[^>]*>([^<]+)<\/h3>/)?.[1]);
+    const rail = [...HTML.matchAll(/<a class="rail-link" href="#feature-(\d)">([^<]+)<\/a>/g)];
+    expect(rail.map((m) => m[2])).toEqual(titles);
+    rail.forEach((m, index) => expect(m[1]).toBe(String(index + 1)));
+    expect(HTML).not.toMatch(/>0\d \/ 08</);
   });
 
   it("closes on a call to action that links to the README's setup steps", () => {
