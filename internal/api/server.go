@@ -186,9 +186,12 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	// Searches signed-in users by display name or email.
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/users/search", server.handleSearchUsers)
 
+	// Queue route.
+	// Lists the work items the caller queued.
+	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/queue", server.handleListQueue)
+
 	// Stack grant routes.
 	// Lists grants for a stack.
-	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/queue", server.handleListQueue)
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/stacks/{stack_id}/grants", server.handleListStackGrants)
 	// Assigns a role on a stack.
 	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/stacks/{stack_id}/grants", server.handleAssignStackRole)
@@ -1225,8 +1228,6 @@ func writeAppError(response http.ResponseWriter, err error) {
 		writeError(response, http.StatusUnauthorized, "unauthorized", "authentication required")
 	case errors.Is(err, app.ErrForbidden):
 		writeError(response, http.StatusForbidden, "forbidden", "forbidden")
-	case errors.Is(err, app.ErrSelfApprovalForbidden):
-		writeError(response, http.StatusForbidden, "self_approval_forbidden", "self-approval forbidden")
 	case errors.Is(err, app.ErrInvalidCommand):
 		writeError(response, http.StatusBadRequest, "invalid_request", err.Error())
 	case errors.Is(err, app.ErrNotFound):

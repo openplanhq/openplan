@@ -36,7 +36,6 @@ var (
 	ErrTemplateRunInFlight                = errors.New("a run is already in flight for this stack template")
 	ErrRunNotApprovable                   = errors.New("run is not approvable")
 	ErrRunNotDiscardable                  = errors.New("run has no plan waiting to discard")
-	ErrSelfApprovalForbidden              = errors.New("self-approval forbidden")
 	ErrLastOwner                          = errors.New("cannot remove the last stack owner")
 	ErrCredentialNameInvalid              = errors.New("credential name is invalid")
 	ErrDuplicateCredentialName            = errors.New("duplicate credential name")
