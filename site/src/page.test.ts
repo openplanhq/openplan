@@ -171,6 +171,12 @@ describe("site/index.html", () => {
     }
     expect(footer).toMatch(/<img\b[^>]*\bloading="lazy"/);
     expect(footer).toContain("Apache 2.0");
+    // Honest about maturity: the warning says where to read what works.
+    expect(HTML).toContain('href="https://github.com/openplanhq/openplan#maturity"');
+    expect(footer).toContain('href="https://github.com/openplanhq/openplan#documentation"');
+    const readme = read("../README.md");
+    expect(readme).toMatch(/^## Maturity$/m);
+    expect(readme).toMatch(/^## Documentation$/m);
     expect(footer).toContain("Painting by J. M. W. Turner");
   });
 
