@@ -103,6 +103,13 @@ describe("site/index.html", () => {
     expect(cta).toMatch(/<a\b[^>]*\bhref="https:\/\/github\.com\/openplanhq\/openplan#running-it-locally"/);
   });
 
+  it("shows the brand kit's logo, not the name retyped, in the header and the footer", () => {
+    for (const part of [HTML.split("<header")[1]?.split("</header>")[0], HTML.split("<footer")[1]]) {
+      expect(part).toMatch(/<img\b[^>]*\bsrc="\/logo\.svg"[^>]*\balt="openplan"/);
+    }
+    expect(read("public/logo.svg")).toBe(read("../brand/svg/openplan-logo-horizontal.svg"));
+  });
+
   it("ends on a footer whose painting exists in public/", () => {
     const footer = HTML.split("<footer")[1] ?? "";
     expect(footer).toMatch(/<img\b[^>]*\bsrc="\/footer-train\.jpg"/);
