@@ -11,8 +11,10 @@ import RunStatusLabel from "./RunStatusLabel";
 
 // 8px either side of a column boundary makes the 16px between columns, and
 // 16px at the row's ends. Each column's width is its content's (run 64,
-// status 190, changes 110, time 110) plus that padding.
-const cellClass = "px-2 py-2 first:pl-4 last:pr-4";
+// status 190, changes 110, time 110) plus that padding. Every cell holds
+// meta-sized text, and sets it as its own size so all five share one
+// baseline; the table's 14px would put a 13px name 1px off its neighbours.
+const cellClass = "px-2 py-2 text-meta first:pl-4 last:pr-4";
 
 interface TemplateRunHistoryProps {
   stackId: string;
