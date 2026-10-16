@@ -123,10 +123,28 @@ describe("StacksListScreen", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shows a loading state while the stacks query is pending", () => {
+  // The header does not wait for the list, so nothing jumps when it lands.
+  it("shows a loading state under the page's header while the stacks query is pending", () => {
     renderScreen(testQueryClient());
 
-    expect(screen.getByTestId("stacks-list-loading")).toBeTruthy();
+    expect(screen.getByTestId("stacks-list-loading").textContent).toContain("Loading stacks…");
+    expect(screen.getByRole("heading", { level: 1, name: "Stacks" })).toBeTruthy();
+    expect(screen.getByTestId("create-stack-link")).toBeTruthy();
+    expect(screen.queryByTestId("page-count")).toBeNull();
+  });
+
+  it("says the stacks failed to load under the page's header, with an outline Retry", async () => {
+    mockAPI({ "/stacks": () => Promise.reject(new TypeError("network down")) });
+
+    renderScreen(testQueryClient());
+
+    const error = await screen.findByTestId("stacks-list-error");
+    expect(within(error).getByRole("alert").textContent).toBe("Something went wrong while loading stacks.");
+    expect(screen.getByRole("heading", { level: 1, name: "Stacks" })).toBeTruthy();
+    // An outline button, not the page's second primary one.
+    const retry = screen.getByTestId("stacks-list-retry");
+    expect(retry.classList).toContain("bg-background");
+    expect(retry.classList).not.toContain("bg-primary");
   });
 
   it("titles the page with the number of stacks", () => {
