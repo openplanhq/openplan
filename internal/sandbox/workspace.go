@@ -113,15 +113,33 @@ func (w Workspaces) Remove(ctx context.Context, tenant, run string) error {
 	}
 	workspace := filepath.Join(dir, "workspace")
 	if _, err := os.Lstat(workspace); err == nil {
-		cmd := exec.CommandContext(ctx, "find", workspace, "-mindepth", "1", "-delete") //nolint:gosec // workspace is derived from checked IDs under the run root
-		if os.Geteuid() == 0 {
-			cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: SandboxUID, Gid: SandboxUID}}
+		// Tenant code owns every directory here, the workspace included, so it
+		// can take away the write or search access deleting their entries
+		// needs. Give it back first: one directory at a time (\;) and before
+		// find descends into it, which a single pass can't do, since -delete
+		// makes find work depth first. Symlinks aren't directories to find, so
+		// nothing outside the workspace is touched.
+		if err := asSandboxUser(ctx, "find", workspace, "-type", "d", "!", "-perm", "-0700", "-exec", "chmod", "u+rwx", "{}", ";"); err != nil {
+			return fmt.Errorf("unlock the workspace: %w", err)
 		}
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("empty the workspace: %w: %s", err, out)
+		if err := asSandboxUser(ctx, "find", workspace, "-mindepth", "1", "-delete"); err != nil {
+			return fmt.Errorf("empty the workspace: %w", err)
 		}
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
 	return os.RemoveAll(dir)
+}
+
+// asSandboxUser runs a command on a workspace as SandboxUID, its owner. Off
+// root, in tests, it runs as the current user, who owns the workspace there.
+func asSandboxUser(ctx context.Context, name string, args ...string) error {
+	cmd := exec.CommandContext(ctx, name, args...) //nolint:gosec // our own find and chmod, on a workspace derived from checked IDs under the run root
+	if os.Geteuid() == 0 {
+		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: SandboxUID, Gid: SandboxUID}}
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("%w: %s", err, out)
+	}
+	return nil
 }

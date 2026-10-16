@@ -243,27 +243,32 @@ type attachment struct {
 
 // attach makes a sandbox's namespace and wires it to the bridge, with its
 // own address and a default route through the gateway, for runsc to copy
-// into gVisor. A failure undoes whatever it made.
-func (n *Network) attach(id string) (att *attachment, err error) {
+// into gVisor. A failure undoes whatever it made, the address included.
+func (n *Network) attach(id string) (*attachment, error) {
 	n.mu.Lock()
 	addr, err := n.pool.take()
 	n.mu.Unlock()
 	if err != nil {
 		return nil, err
 	}
-	att = &attachment{namespace: filepath.Join(n.namespaces, id), addr: addr, hostLink: hostLinkName(id)}
-	defer func() {
-		if err != nil {
-			n.release(att)
-			att = nil
-		}
-	}()
+	att := &attachment{namespace: filepath.Join(n.namespaces, id), addr: addr, hostLink: hostLinkName(id)}
+	// Undone here rather than deferred against named results, which a
+	// `return nil, err` would have set to nil before the undo ran.
+	if err := n.wire(att); err != nil {
+		n.release(att)
+		return nil, err
+	}
+	return att, nil
+}
+
+// wire makes att's namespace and its veth pair, and configures both ends.
+func (n *Network) wire(att *attachment) error {
 	if err := pinNewNamespace(att.namespace); err != nil {
-		return nil, fmt.Errorf("make the sandbox's network namespace: %w", err)
+		return fmt.Errorf("make the sandbox's network namespace: %w", err)
 	}
 	ns, err := netns.GetFromPath(att.namespace)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer ns.Close()
 	veth := &netlink.Veth{
@@ -273,18 +278,18 @@ func (n *Network) attach(id string) (att *attachment, err error) {
 		PeerMTU:       uint32(n.mtu), //nolint:gosec // an MTU
 	}
 	if err := netlink.LinkAdd(veth); err != nil {
-		return nil, fmt.Errorf("make the sandbox's veth pair: %w", err)
+		return fmt.Errorf("make the sandbox's veth pair: %w", err)
 	}
 	if err := netlink.LinkSetIsolated(veth, true); err != nil {
-		return nil, fmt.Errorf("isolate the sandbox's bridge port: %w", err)
+		return fmt.Errorf("isolate the sandbox's bridge port: %w", err)
 	}
 	if err := netlink.LinkSetUp(veth); err != nil {
-		return nil, err
+		return err
 	}
-	if err := n.configureInside(ns, addr); err != nil {
-		return nil, fmt.Errorf("configure the sandbox's network: %w", err)
+	if err := n.configureInside(ns, att.addr); err != nil {
+		return fmt.Errorf("configure the sandbox's network: %w", err)
 	}
-	return att, nil
+	return nil
 }
 
 // configureInside gives the namespace's eth0 its address and default route,

@@ -89,6 +89,45 @@ func TestRemoveDeletesTheRunDirectory(t *testing.T) {
 	}
 }
 
+// The workspace is the sandbox user's, so tenant code can take its own write
+// access away from a directory in it, or from the workspace itself. Cleanup
+// must empty it anyway, or the run's files stay on the run root every run
+// shares.
+func TestRemoveDeletesWhatTheSandboxMadeUnwritable(t *testing.T) {
+	t.Parallel()
+	if os.Geteuid() == 0 {
+		t.Skip("as root the workspace is SandboxUID's, which this test doesn't write as: run it as a regular user")
+	}
+
+	w := Workspaces{Root: t.TempDir()}
+	workspace, err := w.Prepare(context.Background(), "tenant_1", "run_1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	inner := filepath.Join(workspace, "locked", "inner")
+	if err := os.MkdirAll(inner, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(inner, "file"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Deepest first: a directory locked earlier would hide the ones below.
+	for _, lock := range []struct {
+		dir  string
+		mode os.FileMode
+	}{{inner, 0}, {filepath.Dir(inner), 0o500}, {workspace, 0}} {
+		if err := os.Chmod(lock.dir, lock.mode); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := w.Remove(context.Background(), "tenant_1", "run_1"); err != nil {
+		t.Fatalf("Remove returned error: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(w.Root, "tenant_1", "run_1")); !os.IsNotExist(err) {
+		t.Fatalf("run directory survived: %v", err)
+	}
+}
+
 func TestCheckAcceptsARunRootThatRunsPrograms(t *testing.T) {
 	t.Parallel()
 

@@ -218,11 +218,24 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 		}
 		*setting.value = parsed
 	}
+	// Every running sandbox holds one of the subnet's addresses, and every
+	// session can be running one. Too few, and activities would fail to start
+	// once the addresses ran out, rather than the executor refuse its config.
+	if hosts := sandboxAddresses(cfg.Sandbox.Subnet); hosts < cfg.MaxSessions {
+		return ExecutorConfig{}, fmt.Errorf("%w: EXECUTOR_SANDBOX_SUBNET %s holds %d sandbox addresses, fewer than EXECUTOR_MAX_SESSIONS (%d)", ErrInvalidConfig, cfg.Sandbox.Subnet, hosts, cfg.MaxSessions)
+	}
 	if cfg.TemporalAddress == "" {
 		return ExecutorConfig{}, fmt.Errorf("%w: TEMPORAL_ADDRESS is required", ErrInvalidConfig)
 	}
 
 	return cfg, nil
+}
+
+// sandboxAddresses is how many sandboxes subnet can address at once: all of
+// it but the network address, the gateway and broadcast, as the executor's
+// address pool hands them out. The subnet is IPv4 and /29 or larger.
+func sandboxAddresses(subnet netip.Prefix) int {
+	return 1<<(32-subnet.Bits()) - 3
 }
 
 // loadTerraformTimeout reads OPENPLAN_TERRAFORM_TIMEOUT, the ceiling on a single

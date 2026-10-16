@@ -16,6 +16,10 @@ import (
 // every sandbox's cgroup is created in.
 const sandboxCgroup = "sandboxes"
 
+// executorCgroup is the leaf, under the container's own cgroup, that the
+// container's processes move to.
+const executorCgroup = "executor"
+
 // controllers are the ones Limits sets.
 const controllers = "+memory +pids +cpu"
 
@@ -24,9 +28,17 @@ const controllers = "+memory +pids +cpu"
 // container's cgroupfs is mounted read-only, and cgroup v2 lets a cgroup give
 // controllers to children only once it holds no process itself, so it
 // remounts root read-write, moves the container's processes into a leaf, and
-// enables the controllers for sandboxCgroup. The executor calls it once at
-// startup and refuses to start if it fails.
+// enables the controllers for sandboxCgroup, once checkCgroupNamespace has
+// made sure root is the container's and not the host's. The executor calls it
+// once at startup and refuses to start if it fails.
 func DelegateCgroups(root string) (string, error) {
+	self, err := os.ReadFile("/proc/self/cgroup")
+	if err != nil {
+		return "", err
+	}
+	if err := checkCgroupNamespace(string(self)); err != nil {
+		return "", err
+	}
 	if err := unix.Mount("", root, "", unix.MS_REMOUNT|unix.MS_NOSUID|unix.MS_NODEV|unix.MS_NOEXEC|unix.MS_RELATIME, ""); err != nil {
 		return "", fmt.Errorf("remount %s read-write: %w", root, err)
 	}
@@ -34,7 +46,7 @@ func DelegateCgroups(root string) (string, error) {
 }
 
 func delegate(root string) (string, error) {
-	leaf := filepath.Join(root, "executor")
+	leaf := filepath.Join(root, executorCgroup)
 	if err := os.Mkdir(leaf, 0o755); err != nil && !errors.Is(err, fs.ErrExist) { //nolint:gosec // a cgroup directory
 		return "", fmt.Errorf("create the executor's leaf cgroup: %w", err)
 	}
@@ -70,4 +82,22 @@ func delegate(root string) (string, error) {
 		return "", fmt.Errorf("enable %s for sandboxes: %w", controllers, err)
 	}
 	return "/" + sandboxCgroup, nil
+}
+
+// checkCgroupNamespace refuses delegation unless the executor has a cgroup
+// namespace of its own, where /proc/self/cgroup names its namespace's root,
+// or the leaf delegate moved it to. In the host's namespace the cgroup mount
+// is the host's whole hierarchy: delegating would move the host's processes
+// into the executor's leaf, and put every sandbox outside the container's
+// limits.
+func checkCgroupNamespace(procSelfCgroup string) error {
+	for line := range strings.SplitSeq(procSelfCgroup, "\n") {
+		if cgroup, ok := strings.CutPrefix(line, "0::"); ok {
+			if cgroup == "/" || cgroup == "/"+executorCgroup {
+				return nil
+			}
+			return fmt.Errorf("the executor is in cgroup %s, not at the root of a cgroup namespace of its own: give it a private one (Compose: cgroup: private)", cgroup)
+		}
+	}
+	return errors.New("the executor sees no cgroup v2 hierarchy: it needs cgroup v2, in a private cgroup namespace")
 }

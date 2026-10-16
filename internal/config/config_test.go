@@ -541,6 +541,33 @@ func TestLoadExecutorConfigMaxSessions(t *testing.T) {
 	}
 }
 
+// Each running sandbox holds an address of the subnet, and every session can
+// be running one: a subnet too small for EXECUTOR_MAX_SESSIONS fails here,
+// not as activities fail to start once it runs out.
+func TestLoadExecutorConfigNeedsASandboxAddressPerSession(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		subnet, sessions string
+		ok               bool
+	}{
+		{"10.237.0.0/29", "5", true},
+		{"10.237.0.0/29", "6", false},
+		{"10.237.0.0/29", "", false},
+		{"", "253", true},
+		{"", "254", false},
+	} {
+		env := map[string]string{"TEMPORAL_ADDRESS": "temporal:7233", "EXECUTOR_SANDBOX_SUBNET": tc.subnet, "EXECUTOR_MAX_SESSIONS": tc.sessions}
+		_, err := LoadExecutorConfig(func(k string) string { return env[k] })
+		if tc.ok && err != nil {
+			t.Errorf("subnet %q, %q sessions: error = %v, want none", tc.subnet, tc.sessions, err)
+		}
+		if !tc.ok && !errors.Is(err, ErrInvalidConfig) {
+			t.Errorf("subnet %q, %q sessions: error = %v, want ErrInvalidConfig", tc.subnet, tc.sessions, err)
+		}
+	}
+}
+
 func TestLoadExecutorConfigSandboxDefaultsAndValidation(t *testing.T) {
 	t.Parallel()
 

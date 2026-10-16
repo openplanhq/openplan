@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"net/netip"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -108,5 +109,23 @@ func TestOCISpecJoinsTheSandboxsNetworkNamespace(t *testing.T) {
 	}
 	if !mounted {
 		t.Fatalf("mounts = %+v, want resolv.conf read-only", spec.Mounts)
+	}
+}
+
+// A failed attach undoes itself, its address included: one that kept the
+// address would leave the subnet a sandbox short after every failure, until
+// no sandbox could start.
+func TestAFailedAttachGivesItsAddressBack(t *testing.T) {
+	t.Parallel()
+
+	subnet := netip.MustParsePrefix("10.237.0.0/29")
+	// No directory to pin the namespace in: attach fails before it needs a
+	// privilege.
+	n := &Network{subnet: subnet, namespaces: filepath.Join(t.TempDir(), "missing"), pool: newAddressPool(subnet)}
+	if _, err := n.attach("openplan-0123456789abcdef01234567"); err == nil {
+		t.Fatal("attach succeeded with nowhere to pin the namespace")
+	}
+	if len(n.pool.used) != 0 {
+		t.Fatalf("addresses taken after a failed attach: %v, want none", n.pool.used)
 	}
 }

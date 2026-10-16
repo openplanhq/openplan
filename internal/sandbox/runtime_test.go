@@ -124,6 +124,29 @@ func TestOCISpecMountsAtTheSamePath(t *testing.T) {
 	}
 }
 
+// Every sandbox gets the runtime's own mounts, the CA paths, beside its job's.
+func TestRuntimeSpecAddsTheTrustMounts(t *testing.T) {
+	t.Parallel()
+
+	r := &Runtime{GuestRoot: "/guest", Cgroups: "/sandboxes", Limits: Limits{MemoryMiB: 1, CPUs: 1, Pids: 1}, Mounts: []Mount{{Path: "/etc/ssl/corp.pem", ReadOnly: true}}}
+	spec := r.spec(testJob(), "x", sandboxNetwork{})
+	var ca, workspace bool
+	for _, m := range spec.Mounts {
+		switch m.Destination {
+		case "/etc/ssl/corp.pem":
+			ca = m.Source == m.Destination && slices.Contains(m.Options, "ro")
+		case "/runs/t/r/workspace":
+			workspace = true
+		}
+	}
+	if !ca || !workspace {
+		t.Fatalf("mounts = %+v, want the CA read-only and the job's workspace", spec.Mounts)
+	}
+	if spec.Linux.CgroupsPath != "/sandboxes/x" {
+		t.Fatalf("cgroups path = %q, want /sandboxes/x", spec.Linux.CgroupsPath)
+	}
+}
+
 func TestOCISpecSetsTheLimits(t *testing.T) {
 	t.Parallel()
 
@@ -190,6 +213,26 @@ func TestOOMKilledReadsMemoryEvents(t *testing.T) {
 	}
 }
 
+// With the host's cgroup namespace, the cgroup mount is the host's own
+// hierarchy, and delegating would move the host's processes. The executor
+// must see itself at its namespace's root, or in the leaf it moved itself to.
+func TestDelegationNeedsAPrivateCgroupNamespace(t *testing.T) {
+	t.Parallel()
+
+	for content, private := range map[string]bool{
+		"0::/\n":         true,
+		"0::/executor\n": true,
+		"0::/system.slice/docker-0123abcd.scope\n": false,
+		"0::/kubepods/burstable/pod1/0123abcd\n":   false,
+		// cgroup v1: no unified hierarchy to delegate.
+		"4:memory:/docker/0123abcd\n1:name=systemd:/docker/0123abcd\n": false,
+	} {
+		if err := checkCgroupNamespace(content); (err == nil) != private {
+			t.Errorf("%q: error = %v, want accepted %v", content, err, private)
+		}
+	}
+}
+
 func TestDelegateMovesProcessesAndEnablesControllers(t *testing.T) {
 	t.Parallel()
 
@@ -212,6 +255,40 @@ func TestDelegateMovesProcessesAndEnablesControllers(t *testing.T) {
 		control, _ := os.ReadFile(filepath.Join(dir, "cgroup.subtree_control"))
 		if string(control) != controllers {
 			t.Fatalf("%s subtree_control = %q, want %q", dir, control, controllers)
+		}
+	}
+}
+
+// diesWithoutResult is a runsc whose sandbox writes nothing to stdout, its
+// body's stderr landing in create's, and exits 2.
+const diesWithoutResult = `#!/bin/sh
+for arg; do subcommand=$arg; case $arg in create|start|wait|kill|delete) break ;; esac; done
+case $subcommand in
+create) echo "panic: the body fell over" >&2 ;;
+wait) echo '{"id":"x","exitStatus":2}' ;;
+esac
+exit 0
+`
+
+// A body that dies without a result says why: its stderr and exit status,
+// not only that there was no result.
+func TestRunReportsWhyTheBodyDied(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	runsc := filepath.Join(dir, "runsc")
+	if err := os.WriteFile(runsc, []byte(diesWithoutResult), 0o700); err != nil { //nolint:gosec // an executable test double
+		t.Fatal(err)
+	}
+	runtime := &Runtime{Runsc: runsc, State: filepath.Join(dir, "state"), Limits: Limits{MemoryMiB: 1, CPUs: 1, Pids: 1}}
+
+	_, err := runtime.Run(context.Background(), Job{Activity: "run-terraform"}, io.Discard)
+	if err == nil {
+		t.Fatal("Run returned no error for a sandbox that wrote no result")
+	}
+	for _, want := range []string{"without a result", "exit status 2", "panic: the body fell over"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error = %q, want %q in it", err, want)
 		}
 	}
 }
