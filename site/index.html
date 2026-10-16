@@ -126,27 +126,27 @@
            and must not make the page scroll sideways; clip, unlike hidden,
            keeps the rail sticky. -->
       <section id="features" class="overflow-x-clip border-t" aria-labelledby="features-title">
-        <div class="mx-auto max-w-[1180px] px-5 py-24 lg:grid lg:grid-cols-[64px_minmax(0,1fr)] lg:gap-x-8">
+        <div class="mx-auto max-w-[1180px] px-5 py-24 lg:grid lg:grid-cols-[160px_minmax(0,1fr)] lg:gap-x-8">
           <div class="mx-auto mb-14 flex max-w-[640px] flex-col items-center gap-4 text-center lg:col-span-2" data-reveal>
             <span class="rounded-full border bg-card px-3 py-1 text-meta font-medium text-muted-foreground">Features</span>
             <h2 id="features-title" class="text-page-title font-semibold tracking-title">Everything a team needs to share Terraform</h2>
             <p class="text-sm text-muted-foreground">Without sharing a laptop, a state file or anyone's credentials.</p>
           </div>
 
-          <!-- A rail of links to the eight features, beside them on wide screens.
+          <!-- A rail of links to the eight features by name, beside them on wide screens.
                src/alive.ts marks the one in view and fills the line to it. -->
           <div class="hidden lg:block">
             <nav aria-label="Features" class="rail sticky top-24 flex gap-3">
               <div class="relative w-0.5 rounded-full bg-divider"><div class="rail-fill absolute top-0 left-0 w-0.5 rounded-full bg-primary"></div></div>
-              <ol class="flex flex-col gap-3 font-mono text-xs">
-                <li><a class="rail-link" href="#feature-1">01</a></li>
-                <li><a class="rail-link" href="#feature-2">02</a></li>
-                <li><a class="rail-link" href="#feature-3">03</a></li>
-                <li><a class="rail-link" href="#feature-4">04</a></li>
-                <li><a class="rail-link" href="#feature-5">05</a></li>
-                <li><a class="rail-link" href="#feature-6">06</a></li>
-                <li><a class="rail-link" href="#feature-7">07</a></li>
-                <li><a class="rail-link" href="#feature-8">08</a></li>
+              <ol class="flex flex-col gap-3 text-xs leading-4">
+                <li><a class="rail-link" href="#feature-1">Register templates</a></li>
+                <li><a class="rail-link" href="#feature-2">Compose stacks</a></li>
+                <li><a class="rail-link" href="#feature-3">Configure per stack</a></li>
+                <li><a class="rail-link" href="#feature-4">Plan, apply and destroy</a></li>
+                <li><a class="rail-link" href="#feature-5">Watch runs and read logs</a></li>
+                <li><a class="rail-link" href="#feature-6">Upgrade deliberately</a></li>
+                <li><a class="rail-link" href="#feature-7">Control access per stack</a></li>
+                <li><a class="rail-link" href="#feature-8">Sign in with SSO</a></li>
               </ol>
             </nav>
           </div>
@@ -181,7 +181,6 @@
                 </div>
               </div>
               <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-2" data-reveal>
-                <span class="num font-mono text-meta text-subtle-foreground">01 / 08</span>
                 <h3 class="text-row-title font-semibold tracking-title">Register templates</h3>
                 <p class="text-sm text-muted-foreground">Point openplan at a Git repository and a revision. That becomes a reusable template anyone on the platform can install.</p>
               </div>
@@ -206,7 +205,6 @@
                 </div>
               </div>
               <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-2" data-reveal>
-                <span class="num font-mono text-meta text-subtle-foreground">02 / 08</span>
                 <h3 class="text-row-title font-semibold tracking-title">Compose stacks</h3>
                 <p class="text-sm text-muted-foreground">A stack groups the templates that make up one environment or one service, each with its own configuration.</p>
               </div>
@@ -233,7 +231,6 @@
                 </div>
               </div>
               <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-2" data-reveal>
-                <span class="num font-mono text-meta text-subtle-foreground">03 / 08</span>
                 <h3 class="text-row-title font-semibold tracking-title">Configure per stack</h3>
                 <p class="text-sm text-muted-foreground">Set input variables and attach cloud credentials without editing anyone's Terraform. Credentials are write-only and injected only while Terraform runs.</p>
               </div>
@@ -258,7 +255,6 @@
                 </div>
               </div>
               <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-2" data-reveal>
-                <span class="num font-mono text-meta text-subtle-foreground">04 / 08</span>
                 <h3 class="text-row-title font-semibold tracking-title">Plan, apply and destroy</h3>
                 <p class="text-sm text-muted-foreground">Run it all from the browser. Runs are orchestrated durably on Temporal, so a plan or apply survives a restart instead of being lost halfway.</p>
               </div>
@@ -284,7 +280,6 @@
                 </div>
               </div>
               <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-2" data-reveal>
-                <span class="num font-mono text-meta text-subtle-foreground">05 / 08</span>
                 <h3 class="text-row-title font-semibold tracking-title">Watch runs and read logs</h3>
                 <p class="text-sm text-muted-foreground">Every run keeps its init, plan and workspace output, along with its history.</p>
               </div>
@@ -311,7 +306,6 @@
                 </div>
               </div>
               <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-2" data-reveal>
-                <span class="num font-mono text-meta text-subtle-foreground">06 / 08</span>
                 <h3 class="text-row-title font-semibold tracking-title">Upgrade deliberately</h3>
                 <p class="text-sm text-muted-foreground">When a template gets a new revision, moving a stack to it is an explicit, reviewable step. Nothing drifts silently.</p>
               </div>
@@ -338,7 +332,6 @@
                 </div>
               </div>
               <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-2" data-reveal>
-                <span class="num font-mono text-meta text-subtle-foreground">07 / 08</span>
                 <h3 class="text-row-title font-semibold tracking-title">Control access per stack</h3>
                 <p class="text-sm text-muted-foreground">Grant people a role on the stacks they need, rather than on everything.</p>
               </div>
@@ -365,7 +358,6 @@
                 </div>
               </div>
               <div class="flex min-w-0 flex-[1_1_360px] flex-col gap-2" data-reveal>
-                <span class="num font-mono text-meta text-subtle-foreground">08 / 08</span>
                 <h3 class="text-row-title font-semibold tracking-title">Sign in with SSO</h3>
                 <p class="text-sm text-muted-foreground">openplan signs in through Dex. A corporate IdP, GitHub or LDAP plugs in as a Dex connector.</p>
               </div>
