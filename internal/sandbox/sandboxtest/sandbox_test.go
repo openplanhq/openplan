@@ -62,8 +62,13 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func newRuntime(memoryMiB int64) *sandbox.Runtime {
-	return sandbox.NewRuntime(runsc, state, guestRoot, "/sys/fs/cgroup", cgroups, sandbox.Limits{MemoryMiB: memoryMiB, CPUs: 1, Pids: 256}, network)
+func newRuntime(t *testing.T, memoryMiB int64) *sandbox.Runtime {
+	t.Helper()
+	runtime, err := sandbox.NewRuntime(runsc, state, guestRoot, "/sys/fs/cgroup", cgroups, sandbox.Limits{MemoryMiB: memoryMiB, CPUs: 1, Pids: 256}, network)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return runtime
 }
 
 // run is one template run through the real activities and the real runtime.
@@ -151,7 +156,7 @@ exit 0`
 // #245's canary: run B holds a credential while run A looks everywhere it can
 // for it.
 func TestARunCannotSeeAnotherRunsCredential(t *testing.T) {
-	runtime := newRuntime(512)
+	runtime := newRuntime(t, 512)
 	holder := newRun(t, runtime, config.ArtifactStoreConfig{})
 	holder.template(t, "sleep 25")
 	prober := newRun(t, runtime, config.ArtifactStoreConfig{})
@@ -173,7 +178,7 @@ func TestARunCannotSeeAnotherRunsCredential(t *testing.T) {
 // The worker's own environment never reaches tofu.
 func TestTheWorkersSecretsStayOut(t *testing.T) {
 	t.Setenv("S3_SECRET_ACCESS_KEY", "worker-secret-9c1e")
-	r := newRun(t, newRuntime(512), config.ArtifactStoreConfig{})
+	r := newRun(t, newRuntime(t, 512), config.ArtifactStoreConfig{})
 	r.template(t, `printf '%s%s' 'worker-secret-' '9c1e' > /tmp/pat
 if grep -a -l -F -f /tmp/pat /proc/[0-9]*/environ 2>/dev/null; then exit 1; fi
 exit 0`)
@@ -193,7 +198,7 @@ func TestUploadPlanRefusesASymlinkedPlan(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := config.ArtifactStoreConfig{Kind: config.ArtifactStoreFilesystem, FilesystemRoot: artifacts}
-	r := newRun(t, newRuntime(512), store)
+	r := newRun(t, newRuntime(t, 512), store)
 	r.template(t, `ln -sf /proc/self/environ tfplan`)
 	if err := r.apply(context.Background(), t, nil); err != nil {
 		t.Fatalf("apply: %v", err)
@@ -217,7 +222,7 @@ func TestUploadPlanRefusesASymlinkedPlan(t *testing.T) {
 }
 
 func TestNothingOutlivesItsActivity(t *testing.T) {
-	r := newRun(t, newRuntime(512), config.ArtifactStoreConfig{})
+	r := newRun(t, newRuntime(t, 512), config.ArtifactStoreConfig{})
 	r.template(t, `nohup sleep 300 >/dev/null 2>&1 &`)
 	if err := r.apply(context.Background(), t, nil); err != nil {
 		t.Fatalf("first apply: %v", err)
@@ -230,7 +235,7 @@ func TestNothingOutlivesItsActivity(t *testing.T) {
 
 // Review focus 2: the hog fails its own activity in words; its neighbour runs.
 func TestAMemoryHogFailsOnlyItsOwnActivity(t *testing.T) {
-	runtime := newRuntime(256)
+	runtime := newRuntime(t, 256)
 	hog := newRun(t, runtime, config.ArtifactStoreConfig{})
 	// Real bytes into the sandbox's memory-backed /tmp: zeros may never be
 	// committed, and with swap allowed this pages out instead of failing.
@@ -253,7 +258,7 @@ func TestAMemoryHogFailsOnlyItsOwnActivity(t *testing.T) {
 }
 
 func TestAForkBombIsContained(t *testing.T) {
-	runtime := newRuntime(512)
+	runtime := newRuntime(t, 512)
 	bomb := newRun(t, runtime, config.ArtifactStoreConfig{})
 	bomb.template(t, `b(){ b|b & }; b; sleep 20`)
 	neighbour := newRun(t, runtime, config.ArtifactStoreConfig{})
@@ -275,7 +280,7 @@ func TestAForkBombIsContained(t *testing.T) {
 }
 
 func TestCancellingAnActivityRemovesItsSandbox(t *testing.T) {
-	r := newRun(t, newRuntime(512), config.ArtifactStoreConfig{})
+	r := newRun(t, newRuntime(t, 512), config.ArtifactStoreConfig{})
 	r.template(t, `sleep 300`)
 	if _, err := r.terraform(context.Background(), t, domain.TerraformCommandInit, nil); err != nil {
 		t.Fatal(err)
@@ -297,7 +302,7 @@ func TestCancellingAnActivityRemovesItsSandbox(t *testing.T) {
 
 // Review focus 5: no limits, no sandbox, and nothing left behind.
 func TestNoCgroupsMeansNoSandbox(t *testing.T) {
-	runtime := newRuntime(512)
+	runtime := newRuntime(t, 512)
 	// The executor's own leaf holds processes, so cgroup v2 refuses to give
 	// its children controllers: limits can't apply there. (A cgroup that
 	// merely doesn't exist yet, runsc creates.)
@@ -343,7 +348,7 @@ func eth0Addresses(t *testing.T) []string {
 func TestASandboxReachesTheInternet(t *testing.T) {
 	before := eth0Addresses(t)
 	ctx := context.Background()
-	r := newRun(t, newRuntime(512), config.ArtifactStoreConfig{})
+	r := newRun(t, newRuntime(t, 512), config.ArtifactStoreConfig{})
 	// octocat/Hello-World's first commit: tiny, public, and never moving.
 	if _, err := r.activities.FetchSource(ctx, domain.FetchSourceActivityInput{
 		TenantID: "tenant", RunID: domain.TemplateRunID(r.id), RepoOwner: "octocat", RepoName: "Hello-World",
@@ -379,7 +384,7 @@ var addressLine = regexp.MustCompile(`ADDRESS=([0-9.]+)/`)
 
 // One sandbox can't connect to another, though the executor can reach both.
 func TestSandboxesCannotReachEachOther(t *testing.T) {
-	runtime := newRuntime(512)
+	runtime := newRuntime(t, 512)
 	holder := newRun(t, runtime, config.ArtifactStoreConfig{})
 	// The listener's output goes nowhere: holding the provisioner's, it would
 	// keep tofu waiting after the sleep.

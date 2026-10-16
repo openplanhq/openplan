@@ -13,8 +13,11 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
+
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 
 // Runtime runs each job in a fresh gVisor sandbox with runsc.
@@ -37,16 +40,24 @@ type Runtime struct {
 	// Network gives each sandbox its way out. Without one, a sandbox has no
 	// network at all.
 	Network *Network
+	// Mounts are bound into every sandbox beside its job's own: the CA
+	// paths Env forwards (trustMounts).
+	Mounts []Mount
 }
 
-// NewRuntime returns a Runtime whose sandboxes get baseEnvironment and
-// network.
-func NewRuntime(runsc, state, guestRoot, cgroupFS, cgroups string, limits Limits, network *Network) *Runtime {
+// NewRuntime returns a Runtime whose sandboxes get baseEnvironment, the CA
+// paths it names, and network. It fails when one of those paths can't be
+// mounted.
+func NewRuntime(runsc, state, guestRoot, cgroupFS, cgroups string, limits Limits, network *Network) (*Runtime, error) {
+	mounts, err := trustMounts(os.LookupEnv)
+	if err != nil {
+		return nil, err
+	}
 	return &Runtime{
 		Runsc: runsc, State: state, GuestRoot: guestRoot,
 		CgroupFS: cgroupFS, Cgroups: cgroups, Limits: limits,
-		Env: baseEnvironment(os.LookupEnv), Network: network,
-	}
+		Env: baseEnvironment(os.LookupEnv), Network: network, Mounts: mounts,
+	}, nil
 }
 
 // runscTimeout bounds every runsc command but the wait for a sandbox's body.
@@ -66,13 +77,19 @@ func (r *Runtime) args(subcommand string, args ...string) []string {
 }
 
 func (r *Runtime) runsc(ctx context.Context, args ...string) error {
-	var stderr bytes.Buffer
+	_, err := r.runscOutput(ctx, args...)
+	return err
+}
+
+// runscOutput runs a runsc command and returns what it printed.
+func (r *Runtime) runscOutput(ctx context.Context, args ...string) ([]byte, error) {
+	var stdout, stderr bytes.Buffer
 	cmd := exec.CommandContext(ctx, r.Runsc, args...) //nolint:gosec // our own runsc, our own arguments
-	cmd.Stderr = &stderr
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("%s %s: %w: %s", r.Runsc, strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
+		return nil, fmt.Errorf("%s %s: %w: %s", r.Runsc, strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
 	}
-	return nil
+	return stdout.Bytes(), nil
 }
 
 // runscWithTimeout runs a runsc command that must finish even once ctx is
@@ -111,7 +128,7 @@ func (r *Runtime) Run(ctx context.Context, job Job, output io.Writer) (json.RawM
 	// Registered before create: a create that fails halfway may leave runsc
 	// state for this id. Deleting an id runsc never made fails harmlessly.
 	defer func() { _ = r.runscWithTimeout(ctx, r.args("delete", "--force", id)...) }()
-	config, err := json.Marshal(ociSpec(job, r.GuestRoot, r.Env, path.Join(r.Cgroups, id), r.Limits, network))
+	config, err := json.Marshal(r.spec(job, id, network))
 	if err != nil {
 		return nil, err
 	}
@@ -187,12 +204,18 @@ func (r *Runtime) Run(ctx context.Context, job Job, output io.Writer) (json.RawM
 		_ = stdinWrite.Close()
 	}()
 	// No timeout: the activity's own timeout cancels ctx, which kills it.
-	waitErr := r.runsc(context.WithoutCancel(ctx), r.args("wait", id)...)
+	waited, waitErr := r.runscOutput(context.WithoutCancel(ctx), r.args("wait", id)...)
 	oom := r.oomKilled(id)
 	// Closes the sandbox's ends of the pipes, should it still hold them, so
 	// the reader reaches the end of the stream.
 	_ = r.runscWithTimeout(ctx, r.args("delete", "--force", id)...)
 	result := <-frames
+	if errors.Is(result.err, errNoResult) {
+		// The body's stderr is the one create handed the sandbox, so a body
+		// that died left its reason (a panic's trace, say) in create's log,
+		// which goes with the bundle.
+		result.err = fmt.Errorf("%w (%s)%s", errNoResult, waitStatus(waited), logHead(createLog.Name()))
+	}
 
 	switch {
 	case ctx.Err() != nil:
@@ -205,6 +228,45 @@ func (r *Runtime) Run(ctx context.Context, job Job, output io.Writer) (json.RawM
 		return nil, result.err
 	}
 	return decodeResult(result.message)
+}
+
+// waitStatus reads how the sandbox's process ended from runsc wait's report,
+// which it prints rather than exits with: the exit code, or 128 plus the
+// signal that killed it.
+func waitStatus(waited []byte) string {
+	var report struct {
+		ExitStatus *int `json:"exitStatus"`
+	}
+	if json.Unmarshal(waited, &report) != nil || report.ExitStatus == nil {
+		return "exit status unknown"
+	}
+	return fmt.Sprintf("exit status %d", *report.ExitStatus)
+}
+
+// stderrHeadSize bounds what of a sandbox's stderr reaches an error. A Go
+// panic says what it was first, before its goroutines' traces.
+const stderrHeadSize = 4 << 10
+
+// logHead is the start of the log at name, as ": " and the text, or nothing
+// when it is empty. Bounded: the sandbox wrote it.
+func logHead(name string) string {
+	file, err := os.Open(name) //nolint:gosec // a log in the sandbox's own bundle
+	if err != nil {
+		return ""
+	}
+	defer file.Close()
+	head, _ := io.ReadAll(io.LimitReader(file, stderrHeadSize))
+	if text := strings.TrimSpace(string(head)); text != "" {
+		return ": " + text
+	}
+	return ""
+}
+
+// spec is the bundle configuration for job in the sandbox id: the job's mounts
+// after every sandbox's.
+func (r *Runtime) spec(job Job, id string, network sandboxNetwork) *specs.Spec {
+	job.Mounts = append(slices.Clone(r.Mounts), job.Mounts...)
+	return ociSpec(job, r.GuestRoot, r.Env, path.Join(r.Cgroups, id), r.Limits, network)
 }
 
 // oomKilled reports whether the kernel killed anything in the sandbox's

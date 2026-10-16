@@ -96,7 +96,7 @@ func defaultExecutorDependencies() executorDependencies {
 			}
 			return sandbox.NewRuntime(cfg.Runsc, cfg.State, guestRoot, cgroupFS, cgroups, sandbox.Limits{
 				MemoryMiB: cfg.MemoryMiB, CPUs: cfg.CPUs, Pids: cfg.Pids,
-			}, network), nil
+			}, network)
 		},
 	}
 }
