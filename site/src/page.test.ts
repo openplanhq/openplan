@@ -40,7 +40,7 @@ describe("site/index.html", () => {
       // the properties a transition names, and layout keywords.
       "cubic-bezier", "steps", "end", "both", "inset", "rotate", "deg", "calc", "circle", "at", "center",
       "opacity", "transform", "stroke", "fill", "color", "height", "cx", "d", "left", "var",
-      "absolute", "hidden", "solid", "ellipsis", "nowrap", "block"
+      "absolute", "hidden", "solid", "ellipsis", "nowrap", "block", "smooth"
     ]);
     const values = [...stripComments(DRAWINGS).matchAll(/[\w-]+\s*:\s*([^;{}]+)[;}]/g)]
       .map((m) => m[1].replace(/var\(--[\w-]+\)/g, ""));
@@ -128,6 +128,13 @@ describe("site/index.html", () => {
     const rail = HTML.match(/<div class="rail\b[^"]*"[^>]*>[\s\S]*?<\/div><\/div>/)?.[0] ?? "";
     expect(rail).toContain('aria-hidden="true"');
     expect(rail.replace(/<[^>]+>/g, "").trim()).toBe("");
+  });
+
+  it("leads the hero with the way to try it: a link down to the setup steps", () => {
+    const hero = HTML.split("<main")[1]?.split("</section>")[0] ?? "";
+    const links = [...hero.matchAll(/<a\b[^>]*\bhref="([^"]+)"/g)].map((m) => m[1]);
+    expect(links[0]).toBe("#run");
+    expect(HTML).toMatch(/<section id="run"\s/);
   });
 
   it("closes on a call to action that links to the README's setup steps", () => {

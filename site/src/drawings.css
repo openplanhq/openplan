@@ -55,6 +55,17 @@
 a:hover > .arrow {
   transform: translateX(3px);
 }
+.arrow-down {
+  transition: transform 0.2s ease;
+}
+a:hover > .arrow-down {
+  transform: translateY(2px);
+}
+
+/* "Run it locally" glides down to the setup steps rather than jumping. */
+.motion {
+  scroll-behavior: smooth;
+}
 
 /* ---- The hero's run. alive.ts sets each part's state per step. ---- */
 

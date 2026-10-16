@@ -50,11 +50,14 @@
         <div class="flex min-w-0 flex-[1_1_440px] flex-col gap-5">
           <h1 data-reveal class="text-[30px] leading-[1.15] font-semibold tracking-title sm:text-[36px]">Terraform for your whole team, on your own infrastructure.</h1>
           <p data-reveal class="d1 text-sm text-muted-foreground">openplan is a self-hosted, open-source alternative to Terraform Cloud. Register a Terraform or OpenTofu module once, and anyone on your team can stand up their own copy from a web UI, with their own variables, their own credentials and a full history of every change.</p>
-          <div>
-            <a class="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary pr-2 pl-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-strong" href="https://github.com/openplanhq/openplan">
-              View on GitHub
-              <svg aria-hidden="true" class="arrow size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+          <!-- Trying it is the page's job, so the setup steps lead; the repository
+               follows as the outline button, as the app pairs them. -->
+          <div class="flex flex-wrap gap-2">
+            <a class="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary pr-2 pl-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-strong" href="#run">
+              Run it locally
+              <svg aria-hidden="true" class="arrow-down size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14" /><path d="m19 12-7 7-7-7" /></svg>
             </a>
+            <a class="inline-flex h-8 items-center gap-1.5 rounded-lg border bg-background px-2.5 text-sm font-medium transition-colors hover:bg-muted" href="https://github.com/openplanhq/openplan">View on GitHub</a>
           </div>
           <p class="flex items-start gap-2 text-meta text-muted-foreground">
             <svg aria-hidden="true" class="mt-0.5 size-3.5 shrink-0 text-warning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>
@@ -361,7 +364,7 @@
         </div>
       </section>
 
-      <section class="border-t bg-card" aria-labelledby="run-title">
+      <section id="run" class="scroll-mt-6 border-t bg-card" aria-labelledby="run-title">
         <div class="mx-auto flex max-w-[760px] flex-col items-center gap-5 px-5 py-[88px] text-center">
           <h2 id="run-title" data-reveal class="text-page-title font-semibold tracking-title">Run it on your own machine</h2>
           <p data-reveal class="d1 text-sm text-muted-foreground">You need Docker and nothing else. Download three files, start it, and open localhost:5173 a minute or two later.</p>
