@@ -647,39 +647,39 @@ func (service *Service) CreateStack(ctx context.Context, command CreateStackComm
 }
 
 // AddTemplateToStack validates one template install and persists the tenant-owned stack template.
-func (service *Service) AddTemplateToStack(ctx context.Context, command AddTemplateToStackCommand) (domain.StackTemplate, error) {
+func (service *Service) AddTemplateToStack(ctx context.Context, command AddTemplateToStackCommand) (StackTemplateView, error) {
 	actor, err := authenticatedActor(ctx)
 	if err != nil {
-		return domain.StackTemplate{}, err
+		return StackTemplateView{}, err
 	}
 	if err := validateAddTemplateToStackCommand(command); err != nil {
-		return domain.StackTemplate{}, err
+		return StackTemplateView{}, err
 	}
 
 	if err := authorizeStack(ctx, service.Authorization, command.StackID, authorization.RelationCanOperate, ErrForbidden); err != nil {
 		service.auditFailedAccess(ctx, actor, command.TenantID, command.StackID)
-		return domain.StackTemplate{}, err
+		return StackTemplateView{}, err
 	}
 	stack, err := service.Stacks.GetStack(ctx, command.TenantID, command.StackID)
 	if err != nil {
-		return domain.StackTemplate{}, fmt.Errorf("get stack: %w", err)
+		return StackTemplateView{}, fmt.Errorf("get stack: %w", err)
 	}
 
 	templateRevision, err := service.TemplateRevisionMetadata.GetTemplateRevision(ctx, command.TenantID, command.TemplateRevisionID)
 	if err != nil {
-		return domain.StackTemplate{}, fmt.Errorf("get template revision: %w", err)
+		return StackTemplateView{}, fmt.Errorf("get template revision: %w", err)
 	}
 	if templateRevision.Status != domain.TemplateRevisionActive {
-		return domain.StackTemplate{}, fmt.Errorf("%w: status is %q", ErrTemplateNotInstallable, templateRevision.Status)
+		return StackTemplateView{}, fmt.Errorf("%w: status is %q", ErrTemplateNotInstallable, templateRevision.Status)
 	}
 
 	variables, err := service.TemplateRevisions.GetTemplateRevisionVariables(ctx, command.TenantID, command.TemplateRevisionID)
 	if err != nil {
-		return domain.StackTemplate{}, fmt.Errorf("get template revision variables: %w", err)
+		return StackTemplateView{}, fmt.Errorf("get template revision variables: %w", err)
 	}
 	configJSON, err := validateTemplateConfig(command.ConfigJSON, variables)
 	if err != nil {
-		return domain.StackTemplate{}, err
+		return StackTemplateView{}, err
 	}
 
 	id := service.StackTemplateIDs.NewStackTemplateID()
@@ -698,9 +698,9 @@ func (service *Service) AddTemplateToStack(ctx context.Context, command AddTempl
 	}
 
 	if err := service.StackTemplateInstaller.CreateStackTemplate(ctx, stackTemplate); err != nil {
-		return domain.StackTemplate{}, fmt.Errorf("create stack template: %w", err)
+		return StackTemplateView{}, fmt.Errorf("create stack template: %w", err)
 	}
-	return stackTemplate, nil
+	return stackTemplateView(stackTemplate, templateRevision), nil
 }
 
 // StartTemplateRun creates a queued run. The repository persists its workflow
@@ -967,99 +967,105 @@ func credentialScope(credential domain.CredentialSet) domain.CredentialScope {
 }
 
 // UpdateStackTemplateConfig validates and saves desired config for an installed template.
-func (service *Service) UpdateStackTemplateConfig(ctx context.Context, command UpdateStackTemplateConfigCommand) (domain.StackTemplate, error) {
+func (service *Service) UpdateStackTemplateConfig(ctx context.Context, command UpdateStackTemplateConfigCommand) (StackTemplateView, error) {
 	actor, err := authenticatedActor(ctx)
 	if err != nil {
-		return domain.StackTemplate{}, err
+		return StackTemplateView{}, err
 	}
 	if err := validateUpdateStackTemplateConfigCommand(command); err != nil {
-		return domain.StackTemplate{}, err
+		return StackTemplateView{}, err
 	}
 
 	stackTemplate, err := service.operableStackTemplate(ctx, actor, command.TenantID, command.StackTemplateID)
 	if err != nil {
-		return domain.StackTemplate{}, err
+		return StackTemplateView{}, err
 	}
 	if stackTemplate.Lifecycle != domain.StackTemplateActive {
-		return domain.StackTemplate{}, fmt.Errorf("%w: lifecycle is %q", ErrStackTemplateUpgradeInvalid, stackTemplate.Lifecycle)
+		return StackTemplateView{}, fmt.Errorf("%w: lifecycle is %q", ErrStackTemplateUpgradeInvalid, stackTemplate.Lifecycle)
 	}
 	if err := service.requireNoRunInFlight(ctx, command.TenantID, command.StackTemplateID); err != nil {
-		return domain.StackTemplate{}, err
+		return StackTemplateView{}, err
 	}
 
 	desiredTemplateRevisionID := stackTemplate.DesiredTemplateRevisionID
 	if desiredTemplateRevisionID == "" {
-		return domain.StackTemplate{}, fmt.Errorf("%w: desired template revision is required", ErrStackTemplateConfigInvalid)
+		return StackTemplateView{}, fmt.Errorf("%w: desired template revision is required", ErrStackTemplateConfigInvalid)
+	}
+	// Read before the write so the response can be labelled like a read, and
+	// so a failed lookup stops the edit rather than failing after it landed.
+	desiredRevision, err := service.TemplateRevisionMetadata.GetTemplateRevision(ctx, command.TenantID, desiredTemplateRevisionID)
+	if err != nil {
+		return StackTemplateView{}, fmt.Errorf("get template revision: %w", err)
 	}
 	variables, err := service.TemplateRevisions.GetTemplateRevisionVariables(ctx, command.TenantID, desiredTemplateRevisionID)
 	if err != nil {
-		return domain.StackTemplate{}, fmt.Errorf("get template revision variables: %w", err)
+		return StackTemplateView{}, fmt.Errorf("get template revision variables: %w", err)
 	}
 	configJSON, err := validateTemplateConfig(command.ConfigJSON, variables)
 	if err != nil {
-		return domain.StackTemplate{}, err
+		return StackTemplateView{}, err
 	}
 
 	updated, err := service.StackTemplates.UpdateStackTemplateConfig(ctx, command.TenantID, command.StackTemplateID, configJSON)
 	if err != nil {
-		return domain.StackTemplate{}, fmt.Errorf("update stack template config: %w", err)
+		return StackTemplateView{}, fmt.Errorf("update stack template config: %w", err)
 	}
-	return updated, nil
+	return stackTemplateView(updated, desiredRevision), nil
 }
 
 // UpgradeStackTemplate changes desired revision for an existing installed template.
-func (service *Service) UpgradeStackTemplate(ctx context.Context, command UpgradeStackTemplateCommand) (domain.StackTemplate, error) {
+func (service *Service) UpgradeStackTemplate(ctx context.Context, command UpgradeStackTemplateCommand) (StackTemplateView, error) {
 	actor, err := authenticatedActor(ctx)
 	if err != nil {
-		return domain.StackTemplate{}, err
+		return StackTemplateView{}, err
 	}
 	if err := validateUpgradeStackTemplateCommand(command); err != nil {
-		return domain.StackTemplate{}, err
+		return StackTemplateView{}, err
 	}
 
 	stackTemplate, err := service.operableStackTemplate(ctx, actor, command.TenantID, command.StackTemplateID)
 	if err != nil {
-		return domain.StackTemplate{}, err
+		return StackTemplateView{}, err
 	}
 	if stackTemplate.Lifecycle != domain.StackTemplateActive {
-		return domain.StackTemplate{}, fmt.Errorf("%w: lifecycle is %q", ErrStackTemplateUpgradeInvalid, stackTemplate.Lifecycle)
+		return StackTemplateView{}, fmt.Errorf("%w: lifecycle is %q", ErrStackTemplateUpgradeInvalid, stackTemplate.Lifecycle)
 	}
 	if err := service.requireNoRunInFlight(ctx, command.TenantID, command.StackTemplateID); err != nil {
-		return domain.StackTemplate{}, err
+		return StackTemplateView{}, err
 	}
 
 	targetRevision, err := service.TemplateRevisionMetadata.GetTemplateRevision(ctx, command.TenantID, command.TargetTemplateRevisionID)
 	if err != nil {
-		return domain.StackTemplate{}, fmt.Errorf("get target template revision: %w", err)
+		return StackTemplateView{}, fmt.Errorf("get target template revision: %w", err)
 	}
 	if targetRevision.Status != domain.TemplateRevisionActive {
-		return domain.StackTemplate{}, fmt.Errorf("%w: status is %q", ErrTemplateNotInstallable, targetRevision.Status)
+		return StackTemplateView{}, fmt.Errorf("%w: status is %q", ErrTemplateNotInstallable, targetRevision.Status)
 	}
 	if stackTemplate.SourceTemplateID != "" && targetRevision.SourceTemplateID != "" && stackTemplate.SourceTemplateID != targetRevision.SourceTemplateID {
-		return domain.StackTemplate{}, fmt.Errorf("%w: source template mismatch", ErrStackTemplateUpgradeInvalid)
+		return StackTemplateView{}, fmt.Errorf("%w: source template mismatch", ErrStackTemplateUpgradeInvalid)
 	}
 
 	variables, err := service.TemplateRevisions.GetTemplateRevisionVariables(ctx, command.TenantID, command.TargetTemplateRevisionID)
 	if err != nil {
-		return domain.StackTemplate{}, fmt.Errorf("get target template revision variables: %w", err)
+		return StackTemplateView{}, fmt.Errorf("get target template revision variables: %w", err)
 	}
 	configJSON := command.ConfigJSON
 	if len(configJSON) == 0 {
 		configJSON, err = carryForwardConfig(stackTemplate.DesiredConfig(), variables)
 		if err != nil {
-			return domain.StackTemplate{}, err
+			return StackTemplateView{}, err
 		}
 	}
 	configJSON, err = validateTemplateConfig(configJSON, variables)
 	if err != nil {
-		return domain.StackTemplate{}, err
+		return StackTemplateView{}, err
 	}
 
 	updated, err := service.StackTemplates.UpdateStackTemplateDesiredRevision(ctx, command.TenantID, command.StackTemplateID, targetRevision.ID, configJSON)
 	if err != nil {
-		return domain.StackTemplate{}, fmt.Errorf("update stack template desired revision: %w", err)
+		return StackTemplateView{}, fmt.Errorf("update stack template desired revision: %w", err)
 	}
-	return updated, nil
+	return stackTemplateView(updated, targetRevision), nil
 }
 
 // GetStack returns one tenant-owned stack with installed templates.
@@ -1115,10 +1121,20 @@ func (service *Service) labelStackTemplates(ctx context.Context, tenantID domain
 		if !ok {
 			continue
 		}
-		view.DisplayName = templateDisplayName(rev.RepoName, rev.RootPath)
-		view.SourceRef = rev.SourceRef
+		*view = stackTemplateView(view.StackTemplate, rev)
 	}
 	return nil
+}
+
+// stackTemplateView labels a stack template from its desired revision. Writes
+// call it with the revision they already hold, so they answer with the same
+// fields a read does without a second lookup.
+func stackTemplateView(stackTemplate domain.StackTemplate, revision domain.TemplateRevision) StackTemplateView {
+	return StackTemplateView{
+		StackTemplate: stackTemplate,
+		DisplayName:   templateDisplayName(revision.RepoName, revision.RootPath),
+		SourceRef:     revision.SourceRef,
+	}
 }
 
 // ListStacks returns tenant-owned stacks ordered for UI selection.

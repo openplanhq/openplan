@@ -707,15 +707,17 @@ func TestUpdateStackTemplateConfigValidatesDesiredRevisionVariables(t *testing.T
 		},
 	}
 	templates := &recordingTemplateRepository{
+		template: domain.TemplateRevision{ID: "template_rev_2", RepoName: "infra", RootPath: "modules/vpc", SourceRef: "v1.2.0"},
 		variables: []domain.TemplateVariable{
 			{Name: "region", Required: true},
 		},
 	}
 	service := NewService(Service{
-		TemplateRuns:      &recordingTemplateRunRepository{},
-		Authorization:     testPlatformAuthorizer(t),
-		StackTemplates:    stackTemplates,
-		TemplateRevisions: templates,
+		TemplateRuns:             &recordingTemplateRunRepository{},
+		Authorization:            testPlatformAuthorizer(t),
+		StackTemplates:           stackTemplates,
+		TemplateRevisions:        templates,
+		TemplateRevisionMetadata: templates,
 	})
 
 	updated, err := service.UpdateStackTemplateConfig(authenticatedContext(), UpdateStackTemplateConfigCommand{
@@ -735,6 +737,9 @@ func TestUpdateStackTemplateConfigValidatesDesiredRevisionVariables(t *testing.T
 	}
 	if string(updated.DesiredConfigJSON) != `{"region":"us-east-1"}` {
 		t.Fatalf("returned desired config = %s", updated.DesiredConfigJSON)
+	}
+	if updated.DisplayName != "vpc" || updated.SourceRef != "v1.2.0" {
+		t.Fatalf("labels = %q, %q, want vpc and v1.2.0", updated.DisplayName, updated.SourceRef)
 	}
 }
 

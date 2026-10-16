@@ -696,7 +696,7 @@ func (server *Server) handleAddTemplateToStack(response http.ResponseWriter, req
 		return
 	}
 
-	writeJSON(response, http.StatusCreated, newStackTemplateResponse(app.StackTemplateView{StackTemplate: stackTemplate}))
+	writeJSON(response, http.StatusCreated, newStackTemplateResponse(stackTemplate))
 }
 
 func (server *Server) handleUpdateStackTemplateConfig(response http.ResponseWriter, request *http.Request) {
@@ -720,7 +720,7 @@ func (server *Server) handleUpdateStackTemplateConfig(response http.ResponseWrit
 		return
 	}
 
-	writeJSON(response, http.StatusOK, newStackTemplateResponse(app.StackTemplateView{StackTemplate: stackTemplate}))
+	writeJSON(response, http.StatusOK, newStackTemplateResponse(stackTemplate))
 }
 
 func (server *Server) handleUpgradeStackTemplate(response http.ResponseWriter, request *http.Request) {
@@ -749,7 +749,7 @@ func (server *Server) handleUpgradeStackTemplate(response http.ResponseWriter, r
 		return
 	}
 
-	writeJSON(response, http.StatusOK, newStackTemplateResponse(app.StackTemplateView{StackTemplate: stackTemplate}))
+	writeJSON(response, http.StatusOK, newStackTemplateResponse(stackTemplate))
 }
 
 func (server *Server) handleStartTemplateRun(response http.ResponseWriter, request *http.Request) {

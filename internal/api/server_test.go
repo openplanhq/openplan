@@ -1065,7 +1065,10 @@ func TestAddTemplateToStackCallsService(t *testing.T) {
 
 	deps := newAPITestDependencies(t)
 	deps.stacks.stack = domain.Stack{ID: domain.StackID("stack_123"), TenantID: domain.TenantID("tenant_123"), Slug: "acme-prod"}
-	deps.templates.template = domain.TemplateRevision{ID: domain.TemplateRevisionID("template_123"), TenantID: domain.TenantID("tenant_123"), Status: domain.TemplateRevisionActive}
+	deps.templates.template = domain.TemplateRevision{
+		ID: domain.TemplateRevisionID("template_123"), TenantID: domain.TenantID("tenant_123"), Status: domain.TemplateRevisionActive,
+		RepoName: "infra", RootPath: "modules/vpc", SourceRef: "v1.2.0",
+	}
 	deps.templates.variables = []domain.TemplateVariable{{Name: "region", Required: true}}
 	deps.stackTemplateID = domain.StackTemplateID("stack_template_a1b2c3d4")
 	server := NewServer(deps.service(), configuredTenantID)
@@ -1105,6 +1108,11 @@ func TestAddTemplateToStackCallsService(t *testing.T) {
 	if !ok || config["region"] != "us-east-1" {
 		t.Fatalf("response config = %#v", body["config"])
 	}
+	// Labelled like a read of the stack, so a client caching this response
+	// does not show blanks.
+	if body["display_name"] != "vpc" || body["source_ref"] != "v1.2.0" {
+		t.Fatalf("display_name = %q, source_ref = %q, want vpc and v1.2.0", body["display_name"], body["source_ref"])
+	}
 }
 
 func TestUpdateStackTemplateConfigCallsService(t *testing.T) {
@@ -1116,6 +1124,10 @@ func TestUpdateStackTemplateConfigCallsService(t *testing.T) {
 		TenantID:                  domain.TenantID("tenant_123"),
 		DesiredTemplateRevisionID: domain.TemplateRevisionID("template_rev_1"),
 		Lifecycle:                 domain.StackTemplateActive,
+	}
+	deps.templates.template = domain.TemplateRevision{
+		ID: domain.TemplateRevisionID("template_rev_1"), TenantID: domain.TenantID("tenant_123"),
+		RepoName: "infra", RootPath: "modules/vpc", SourceRef: "v1.2.0",
 	}
 	deps.templates.variables = []domain.TemplateVariable{{Name: "region", Required: true}}
 	server := NewServer(deps.service(), configuredTenantID)
@@ -1142,6 +1154,9 @@ func TestUpdateStackTemplateConfigCallsService(t *testing.T) {
 	if body.Config["region"] != "us-west-2" {
 		t.Fatalf("response config = %#v", body.Config)
 	}
+	if body.DisplayName != "vpc" || body.SourceRef != "v1.2.0" {
+		t.Fatalf("display_name = %q, source_ref = %q, want vpc and v1.2.0", body.DisplayName, body.SourceRef)
+	}
 }
 
 func TestUpgradeStackTemplateCallsService(t *testing.T) {
@@ -1161,6 +1176,9 @@ func TestUpgradeStackTemplateCallsService(t *testing.T) {
 		TenantID:         domain.TenantID("tenant_123"),
 		SourceTemplateID: domain.SourceTemplateID("source_template_vpc"),
 		Status:           domain.TemplateRevisionActive,
+		RepoName:         "infra",
+		RootPath:         "modules/vpc",
+		SourceRef:        "v2.0.0",
 	}
 	deps.templates.variables = []domain.TemplateVariable{{Name: "region", Required: true}}
 	server := NewServer(deps.service(), configuredTenantID)
@@ -1189,6 +1207,10 @@ func TestUpgradeStackTemplateCallsService(t *testing.T) {
 	}
 	if body.Config["region"] != "us-east-1" {
 		t.Fatalf("response config = %#v", body.Config)
+	}
+	// The target revision's ref, not the one the template had before.
+	if body.DisplayName != "vpc" || body.SourceRef != "v2.0.0" {
+		t.Fatalf("display_name = %q, source_ref = %q, want vpc and v2.0.0", body.DisplayName, body.SourceRef)
 	}
 }
 
