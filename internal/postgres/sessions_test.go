@@ -27,9 +27,9 @@ func newSessionTestStore(t *testing.T, ctx context.Context) *Store {
 func newTestSession(t *testing.T, now time.Time) (raw string, session authentication.Session) {
 	t.Helper()
 
-	raw, err := authentication.NewOpaqueToken()
+	raw, err := authentication.NewRandomToken()
 	if err != nil {
-		t.Fatalf("NewOpaqueToken: %v", err)
+		t.Fatalf("NewRandomToken: %v", err)
 	}
 	return raw, authentication.Session{
 		IDHash:            authentication.HashSessionID(raw),

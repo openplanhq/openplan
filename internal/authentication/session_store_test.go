@@ -7,17 +7,17 @@ import (
 	"time"
 )
 
-func newTestOpaqueToken(t *testing.T) string {
+func newTestRandomToken(t *testing.T) string {
 	t.Helper()
-	token, err := NewOpaqueToken()
+	token, err := NewRandomToken()
 	if err != nil {
-		t.Fatalf("NewOpaqueToken: %v", err)
+		t.Fatalf("NewRandomToken: %v", err)
 	}
 	return token
 }
 
-func TestNewOpaqueTokenIsUnpredictableAndURLSafe(t *testing.T) {
-	first, second := newTestOpaqueToken(t), newTestOpaqueToken(t)
+func TestNewRandomTokenIsUnpredictableAndURLSafe(t *testing.T) {
+	first, second := newTestRandomToken(t), newTestRandomToken(t)
 	if first == second {
 		t.Fatal("two session IDs are identical, so they are not random")
 	}
@@ -31,7 +31,7 @@ func TestNewOpaqueTokenIsUnpredictableAndURLSafe(t *testing.T) {
 }
 
 func TestHashSessionIDIsStableAndNotTheInput(t *testing.T) {
-	raw, other := newTestOpaqueToken(t), newTestOpaqueToken(t)
+	raw, other := newTestRandomToken(t), newTestRandomToken(t)
 	hash := HashSessionID(raw)
 	if hash == raw {
 		t.Fatal("hash equals the raw ID, so the database would hold a usable cookie")

@@ -23,8 +23,8 @@ const authFailureBody = `<!doctype html><meta charset="utf-8"><title>Sign-in fai
 func (server *Server) handleAuthLogin(response http.ResponseWriter, request *http.Request) {
 	response.Header().Set("Cache-Control", "no-store")
 
-	state, stateErr := authentication.NewOpaqueToken()
-	nonce, nonceErr := authentication.NewOpaqueToken()
+	state, stateErr := authentication.NewRandomToken()
+	nonce, nonceErr := authentication.NewRandomToken()
 	if stateErr != nil || nonceErr != nil {
 		server.failAuth(response, "auth login: failed to generate state/nonce token: state error = %v, nonce error = %v", stateErr, nonceErr)
 		return
@@ -153,7 +153,7 @@ func (server *Server) establishSession(
 		return fmt.Errorf("failed to project signed-in user: %w", err)
 	}
 
-	sessionID, err := authentication.NewOpaqueToken()
+	sessionID, err := authentication.NewRandomToken()
 	if err != nil {
 		return fmt.Errorf("failed to generate session id: %w", err)
 	}

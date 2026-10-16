@@ -5,5 +5,5 @@
 //
 // It deliberately does not own "security helpers" generally -- scrubbing a
 // secret out of text is strval.Redact, and minting an unguessable token is
-// authentication.NewOpaqueToken.
+// authentication.NewRandomToken.
 package encryption
