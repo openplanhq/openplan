@@ -110,12 +110,21 @@ gofmt -l cmd internal
 node scripts/verify-auth-compose.mjs
 ```
 
-The tests that need Postgres skip without one, including the differential test
-that guards `internal/authorization/write.go` against upstream drift. With the
-Compose stack up, run them for real:
+The tests that need Postgres skip without one. CI runs every one of them
+against a Postgres service. Locally, with the Compose stack up,
+`make differential-test` runs the authorization ones, including the
+differential test that guards `internal/authorization/write.go` against
+upstream drift:
 
 ```bash
 make differential-test
+```
+
+and the same DSN runs the rest:
+
+```bash
+OPENPLAN_POSTGRES_TEST_DSN='postgres://openplan:openplan@localhost:55432/openplan_test?sslmode=disable' \
+  go test ./internal/postgres/ ./internal/migrationlock/ ./cmd/api/
 ```
 
 ```bash

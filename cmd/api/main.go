@@ -88,7 +88,7 @@ type tokenVerifier interface {
 type apiDependencies struct {
 	newPostgresPool      func(context.Context, string) (postgresPool, error)
 	migratePostgres      func(context.Context, postgresPool) error
-	migrateAuthorization func(string) error
+	migrateAuthorization func(context.Context, string) error
 	newStore             func(postgresPool, *queue.SpecRegistry, *encryption.Cipher, *encryption.Cipher) (appRepositories, error)
 	newLogReader         func(config.ArtifactStoreConfig) (app.TemplateRunLogReader, error)
 	newService           func(app.Service) (*app.Service, error)
@@ -340,7 +340,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 
 	// OpenFGA's schema is versioned by OpenFGA, so it is migrated separately
 	// from the application's and from its own DSN rather than the pool.
-	if err := deps.migrateAuthorization(cfg.DatabaseURL); err != nil {
+	if err := deps.migrateAuthorization(ctx, cfg.DatabaseURL); err != nil {
 		return fmt.Errorf("migrate authorization: %w", err)
 	}
 

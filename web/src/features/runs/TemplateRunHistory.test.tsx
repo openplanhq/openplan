@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { queryKeys } from "../../api/queryKeys";
@@ -144,4 +144,36 @@ describe("TemplateRunHistory", () => {
     expect(screen.getByTestId("template-run-history-empty").textContent).toContain("Plan to see what this template would create.");
   });
 
+  // A template with a history must not read as never run while its history
+  // is on the way.
+  it("says nothing about the runs while they load", () => {
+    vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise<Response>(() => {}));
+
+    renderHistory(testQueryClient());
+
+    expect(screen.queryByTestId("template-run-history-empty")).toBeNull();
+    expect(screen.queryByTestId("template-run-history-error")).toBeNull();
+  });
+
+  it("says the runs failed to load, in place of the empty state, and retries", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ error: "internal", message: "boom" }, 500))
+      .mockResolvedValueOnce(jsonResponse([run({ id: "run_plan_1", run_number: 1, status: "completed" })]));
+
+    renderHistory(testQueryClient());
+
+    const error = await screen.findByTestId("template-run-history-error");
+    expect(error.textContent).toContain("Something went wrong while loading this template's runs.");
+    expect(screen.queryByTestId("template-run-history-empty")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("template-run-history-retry"));
+
+    expect(await screen.findByTestId("template-run-row-run_plan_1")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+}

@@ -106,14 +106,19 @@ function StackTemplateRow({
         <span className={cn("truncate font-mono text-meta leading-label font-medium", selected && "text-primary-strong")} title={label}>
           {label}
         </span>
+        {/* A branch can be a long ref. It gives way, cut with its full text in
+            a title, so what last happened (a failed destroy's time, say)
+            stays readable and nothing runs under the chips. */}
         <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="shrink-0 font-mono">{stackTemplate.source_ref}</span>
+          <span className="min-w-0 truncate font-mono" title={stackTemplate.source_ref}>
+            {stackTemplate.source_ref}
+          </span>
           {activity && (
             <>
-              <span aria-hidden="true" className="text-separator">
+              <span aria-hidden="true" className="shrink-0 text-separator">
                 ·
               </span>
-              <span className="truncate">{activity}</span>
+              <span className="shrink-0">{activity}</span>
             </>
           )}
         </span>

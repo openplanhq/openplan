@@ -51,7 +51,12 @@ info:
 
     Every JSON error shares one envelope: an `error` code meant for code to
     branch on, and a `message` meant for a person to read. See the `Error`
-    schema for the full set of codes.
+    schema for the full set of codes. That includes the `401` for a missing
+    or expired session, and a request no route matches: `404 not_found` for
+    an unknown path, `405 method_not_allowed` (with an `Allow` header) for a
+    known path and the wrong method. The sign-in routes are the exception:
+    their failures are an HTML page for the browser, and back-channel logout
+    answers Dex in plain text.
   license:
     name: Apache-2.0
     identifier: Apache-2.0
@@ -1357,6 +1362,7 @@ components:
             - forbidden
             - self_approval_forbidden
             - not_found
+            - method_not_allowed
             - invalid_request
             - invalid_json
             - request_too_large

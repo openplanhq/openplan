@@ -156,6 +156,14 @@ describe("StackPage header", () => {
     expect(screen.queryByRole("link", { name: "Environment" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Access" })).toBeNull();
   });
+
+  // jsdom lays nothing out, so this pins the class that keeps a long stack
+  // name from squeezing Environment and Access into a column.
+  it("keeps Environment and Access on one row beside a long name", () => {
+    renderPage(seed([network]), "/stacks/stack_1");
+
+    expect(screen.getByRole("link", { name: "Environment" }).parentElement?.classList).toContain("shrink-0");
+  });
 });
 
 describe("StackPage selection", () => {
@@ -249,6 +257,20 @@ describe("StackPage list", () => {
     const networkRow = screen.getByTestId("stack-template-link-network");
     expect(networkRow.textContent).toMatch(/Applied 22 Sept? 2026/);
     expect(within(networkRow).queryByText(/plan to approve|destroy failed/)).toBeNull();
+  });
+
+  // jsdom lays nothing out, so this pins the classes that keep a long branch
+  // from running under the chips and pushing the time out of the row.
+  it("cuts a long ref rather than what last happened", () => {
+    const longRef = "release/2026-09-a-very-long-branch-name";
+    renderPage(seed([template("cloudfront", { lifecycle: "failed", source_ref: longRef })]), "/stacks/stack_1");
+
+    const ref = within(screen.getByTestId("stack-template-link-cloudfront")).getByText(longRef);
+    expect(ref.getAttribute("title")).toBe(longRef);
+    expect(ref.className).toContain("truncate");
+    expect(ref.className).not.toContain("shrink-0");
+    const activity = within(screen.getByTestId("stack-template-link-cloudfront")).getByText(/Failed 29 Sept?, \d\d:\d\d/);
+    expect(activity.className).toContain("shrink-0");
   });
 
   it("narrows the list as the person types, keeps the selection, and says when nothing matches", () => {

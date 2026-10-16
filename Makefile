@@ -29,9 +29,13 @@ REDOCLY_LINT    := @redocly/cli@2.53.0
 # later runs hit the build cache. Linters are configured in .golangci.yml.
 GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
 
+# Pinned the same way. It reports vulnerabilities only on code paths this
+# module actually calls, and CI runs this exact command.
+GOVULNCHECK := go run golang.org/x/vuln/cmd/govulncheck@v1.1.4
+
 .DEFAULT_GOAL := help
 
-.PHONY: help api-docs-preview api-docs-lint lint differential-test sandbox-test
+.PHONY: help api-docs-preview api-docs-lint lint vulncheck differential-test sandbox-test
 
 help: ## List the available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -45,6 +49,9 @@ api-docs-lint: ## Validate docs/openapi.yaml against the OpenAPI spec
 
 lint: ## Lint the Go code with golangci-lint
 	$(GOLANGCI_LINT) run ./...
+
+vulncheck: ## Scan the Go code for known vulnerabilities it calls
+	$(GOVULNCHECK) ./...
 
 # internal/authorization/write.go is a transcription of OpenFGA's own write path
 # with its BeginTx/Commit removed, so a tuple write can join our transaction.

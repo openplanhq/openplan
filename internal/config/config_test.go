@@ -504,8 +504,8 @@ func TestExecutorConfigHoldsNoControlPlaneSettings(t *testing.T) {
 
 	var got []string
 	configType := reflect.TypeFor[ExecutorConfig]()
-	for i := range configType.NumField() {
-		got = append(got, configType.Field(i).Name)
+	for field := range configType.Fields() {
+		got = append(got, field.Name)
 	}
 	want := []string{"TemporalAddress", "TemporalNamespace", "RunRoot", "ArtifactStore", "MaxSessions", "Sandbox"}
 	if !reflect.DeepEqual(got, want) {

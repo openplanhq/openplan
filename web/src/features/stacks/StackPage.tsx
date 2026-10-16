@@ -63,7 +63,9 @@ export default function StackPage() {
         trail={[{ label: "Stacks", to: "/stacks" }]}
         action={
           <RequireCapability capability="canManageAccess" stackId={stackId}>
-            <div className="flex flex-wrap items-center gap-2">
+            {/* The buttons hold their row: a long stack name wraps instead,
+                rather than squeezing them into a ragged column. */}
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
               <Link to={`/stacks/${stackId}/environment`} className={sectionLinkClass}>
                 <KeyRound data-icon="inline-start" aria-hidden="true" />
                 Environment
