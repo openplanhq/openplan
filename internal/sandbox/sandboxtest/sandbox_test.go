@@ -120,9 +120,14 @@ func (r *run) terraform(ctx context.Context, t *testing.T, command domain.Terraf
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The workflow names each log; these runs stand in for its apply phase.
+	logName, err := domain.TerraformLogName(command, domain.RunPhaseApply)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return r.activities.RunTerraform(ctx, domain.RunTerraformActivityInput{
 		TenantID: "tenant", RunID: domain.TemplateRunID(r.id), TerraformPath: r.workspace,
-		WorkspaceName: "default", Command: command, RunPhase: domain.RunPhaseApply, SealedEnvironment: sealed,
+		WorkspaceName: "default", Command: command, LogName: logName, SealedEnvironment: sealed,
 	})
 }
 
