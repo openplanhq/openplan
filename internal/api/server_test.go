@@ -3999,7 +3999,8 @@ func TestUnroutedRequestsGetTheErrorEnvelope(t *testing.T) {
 }
 
 // A path the mux redirects to its canonical form is still routed, so it keeps
-// the mux's redirect rather than becoming a 404.
+// the mux's redirect rather than becoming a 404. Which redirect status is the
+// mux's call, not ours: Go 1.26 moved it from 301 to 307.
 func TestNonCanonicalPathStillRedirects(t *testing.T) {
 	t.Parallel()
 
@@ -4007,7 +4008,10 @@ func TestNonCanonicalPathStillRedirects(t *testing.T) {
 	response := httptest.NewRecorder()
 	server.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/v1//me", nil))
 
-	if response.Code != http.StatusMovedPermanently {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusMovedPermanently)
+	if response.Code < 300 || response.Code > 399 {
+		t.Fatalf("status = %d, want a redirect", response.Code)
+	}
+	if location := response.Header().Get("Location"); location != "/v1/me" {
+		t.Fatalf("Location = %q, want /v1/me", location)
 	}
 }
