@@ -50,24 +50,27 @@
         <div class="flex min-w-0 flex-[1_1_440px] flex-col gap-5">
           <h1 data-reveal class="text-[30px] leading-[1.15] font-semibold tracking-title sm:text-[36px]">Terraform for your whole team, on your own infrastructure.</h1>
           <p data-reveal class="d1 text-sm text-muted-foreground">openplan is a self-hosted, open-source alternative to Terraform Cloud. Register a Terraform or OpenTofu module once, and anyone on your team can stand up their own copy from a web UI, with their own variables, their own credentials and a full history of every change.</p>
-          <div>
-            <a class="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary pr-2 pl-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-strong" href="https://github.com/openplanhq/openplan">
-              View on GitHub
-              <svg aria-hidden="true" class="arrow size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+          <!-- Trying it is the page's job, so the setup steps lead; the repository
+               follows as the outline button, as the app pairs them. -->
+          <div class="flex flex-wrap gap-2">
+            <a class="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary pr-2 pl-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-strong" href="#run">
+              Run it locally
+              <svg aria-hidden="true" class="arrow-down size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14" /><path d="m19 12-7 7-7-7" /></svg>
             </a>
+            <a class="inline-flex h-8 items-center gap-1.5 rounded-lg border bg-background px-2.5 text-sm font-medium transition-colors hover:bg-muted" href="https://github.com/openplanhq/openplan">View on GitHub</a>
           </div>
           <p class="flex items-start gap-2 text-meta text-muted-foreground">
             <svg aria-hidden="true" class="mt-0.5 size-3.5 shrink-0 text-warning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>
-            <span>Not production ready. openplan is an MVP for local development and evaluation.</span>
+            <span>Not production ready. openplan is an MVP for local development and evaluation. <a class="font-medium whitespace-nowrap text-primary hover:underline" href="https://github.com/openplanhq/openplan#maturity">What works today</a></span>
           </p>
         </div>
 
         <div class="min-w-0 flex-[1.15_1_480px]" data-reveal>
-          <!-- A run as the app shows it, played on a loop by src/alive.ts: the
-               drawing (plan, approve, apply) and the run view beneath it move
-               together. Without the script, or with reduced motion, both stand
-               at the run's end: applied. It illustrates the copy beside it, so
-               assistive technology skips it. -->
+          <!-- A run as the app shows it, played on a loop by src/alive.ts while
+               it is on screen: the drawing (plan, approve, apply) and the run
+               view beneath it move together. Without the script, or with
+               reduced motion, both stand at the run's end: applied. It
+               illustrates the copy beside it, so assistive technology skips it. -->
           <div class="flex flex-col gap-3 rounded-panel border bg-card p-3" data-run data-step="7" aria-hidden="true">
             <div class="rounded-lg bg-canvas px-4 pt-5 pb-3">
               <svg aria-hidden="true" class="hero-art block h-auto w-full" viewBox="0 55 520 190">
@@ -355,7 +358,28 @@
         </div>
       </section>
 
-      <section class="border-t bg-card" aria-labelledby="run-title">
+      <!-- The real product: the stack page from the README's screenshots
+           (docs/ss), with the README's own caption. -->
+      <section class="border-t" aria-labelledby="product-title">
+        <div class="mx-auto flex max-w-[1216px] flex-col items-center gap-10 px-5 py-24">
+          <div class="flex max-w-[640px] flex-col items-center gap-3 text-center" data-reveal>
+            <span class="rounded-full border bg-card px-3 py-1 text-meta font-medium text-muted-foreground">In the app</span>
+            <h2 id="product-title" class="text-page-title font-semibold tracking-title">A stack, on one screen</h2>
+            <p class="text-sm text-balance text-muted-foreground">The templates a stack is built from, the plan and apply controls, and the run history, all on one screen.</p>
+          </div>
+          <figure class="w-full max-w-[1040px] rounded-panel border bg-card p-2" data-reveal>
+            <!-- On a phone the screen shrinks past reading; a tap opens it full size. -->
+            <a href="/stack-page.png" class="block rounded-lg">
+            <picture>
+              <source srcset="/stack-page.webp" type="image/webp" />
+              <img src="/stack-page.png" alt="openplan's stack page for Payments production: its four templates on the left, and service-graph open on the right with its Runs tab, Plan and Apply buttons, and one applied run" width="1512" height="593" loading="lazy" decoding="async" class="block h-auto w-full rounded-lg" />
+            </picture>
+            </a>
+          </figure>
+        </div>
+      </section>
+
+      <section id="run" class="scroll-mt-6 border-t bg-card" aria-labelledby="run-title">
         <div class="mx-auto flex max-w-[760px] flex-col items-center gap-5 px-5 py-[88px] text-center">
           <h2 id="run-title" data-reveal class="text-page-title font-semibold tracking-title">Run it on your own machine</h2>
           <p data-reveal class="d1 text-sm text-muted-foreground">You need Docker and nothing else. Download three files, start it, and open localhost:5173 a minute or two later.</p>
@@ -377,7 +401,13 @@ docker compose -f docker-compose.release.yaml up -d</code></pre>
     </main>
 
     <footer class="border-t bg-card">
-      <img src="/footer-train.jpg" alt="A watercolour of a steam train crossing a viaduct over water" class="block h-[300px] w-full bg-canvas object-cover object-[65%_62%] sm:object-[50%_62%]" />
+      <!-- AVIF (29 KB) or WebP (74 KB) where the browser takes them, the 323 KB
+           JPEG otherwise; it sits at the page's foot, so it loads lazily. -->
+      <picture>
+        <source srcset="/footer-train.avif" type="image/avif" />
+        <source srcset="/footer-train.webp" type="image/webp" />
+        <img src="/footer-train.jpg" alt="A watercolour of a steam train crossing a viaduct over water" width="1800" height="796" loading="lazy" decoding="async" class="block h-[300px] w-full bg-canvas object-cover object-[65%_62%] sm:object-[50%_62%]" />
+      </picture>
       <div class="mx-auto flex max-w-[1216px] flex-wrap items-center justify-between gap-x-8 gap-y-4 px-5 py-8">
         <div class="flex flex-col gap-2">
           <img src="/logo.svg" alt="openplan" width="101" height="19" class="block h-[19px] w-auto" />
@@ -386,6 +416,7 @@ docker compose -f docker-compose.release.yaml up -d</code></pre>
         <nav aria-label="Footer" class="flex gap-6 text-meta font-medium">
           <a class="text-primary hover:underline" href="https://github.com/openplanhq/openplan">GitHub</a>
           <a class="text-primary hover:underline" href="https://github.com/openplanhq/openplan/releases">Releases</a>
+          <a class="text-primary hover:underline" href="https://github.com/openplanhq/openplan#documentation">Docs</a>
         </nav>
         <div class="flex flex-col gap-1 sm:items-end">
           <span class="text-meta text-muted-foreground">Open source under the Apache 2.0 licence</span>

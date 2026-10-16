@@ -55,6 +55,17 @@
 a:hover > .arrow {
   transform: translateX(3px);
 }
+.arrow-down {
+  transition: transform 0.2s ease;
+}
+a:hover > .arrow-down {
+  transform: translateY(2px);
+}
+
+/* "Run it locally" glides down to the setup steps rather than jumping. */
+.motion {
+  scroll-behavior: smooth;
+}
 
 /* ---- The hero's run. alive.ts sets each part's state per step. ---- */
 
@@ -151,7 +162,8 @@ a:hover > .arrow {
   position: absolute;
   right: 12px;
   bottom: 12px;
-  color: var(--color-separator);
+  /* subtle-foreground: 4.7:1 on the panel's white, AA for 12px text. */
+  color: var(--color-subtle-foreground);
   font-size: 12px;
   line-height: 26px;
   transition: opacity 0.3s ease;
@@ -213,9 +225,13 @@ a:hover > .arrow {
    registers light in turn. These rules name .motion and .feature so they
    outrank the one-shot .motion .go .a-draw that would otherwise keep the
    branches still. */
+/* Three beats on arrival, then endless only under the pointer. */
 .motion .go .beat {
   transform-origin: center;
-  animation: a-beat 1.6s ease-in-out infinite;
+  animation: a-beat 1.6s ease-in-out 3;
+}
+.motion .feature.hot .beat {
+  animation-iteration-count: infinite;
 }
 @keyframes a-beat {
   0%, 100% { opacity: 0.25; transform: scale(0.6); }
@@ -261,7 +277,7 @@ a:hover > .arrow {
 
 /* 04 Run: plan, applied, destroyed, a beat each. */
 .motion .go .nudge {
-  animation: a-nudge 1.1s ease-in-out infinite;
+  animation: a-nudge 1.1s ease-in-out 3;
 }
 @keyframes a-nudge {
   0%, 100% { transform: none; }
@@ -350,11 +366,12 @@ a:hover > .arrow {
 /* 08 SSO: sign-ins stream to Dex, faster under the pointer. */
 .motion .go .stream {
   stroke-dasharray: 4 6;
-  animation: a-flow 1.6s linear infinite;
+  animation: a-flow 1.6s linear 3;
 }
 .feature.hot .stream {
   stroke: var(--color-primary);
   animation-duration: 0.45s;
+  animation-iteration-count: infinite;
 }
 .keybox {
   transition: fill 0.3s ease;

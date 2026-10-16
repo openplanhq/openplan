@@ -3,9 +3,13 @@
 // for people who ask for reduced motion.
 //
 // - arriving: content rises in as it scrolls into view (data-reveal);
-// - the hero plays a run as the app shows it, on a loop, while on screen;
-// - each feature's drawing plays once when its row arrives, some loop while
-//   on screen, and where a pointer can hover some answer it;
+// - the hero plays a run as the app shows it, on a loop while on screen;
+// - each feature's drawing plays once when its row arrives, and where a
+//   pointer can hover it answers it, looping only while hovered.
+//
+// The hero loops by the owner's choice (2026-10-16), pausing off screen and
+// in a background tab. Every other loop plays a single pass inside five
+// seconds, then rests on the state the HTML draws.
 // - a bar beside the features fills as you scroll through them.
 
 const root = document.documentElement;
@@ -44,23 +48,31 @@ function reveal() {
   waiting.forEach((el) => seen.observe(el));
 }
 
-// Runs fn every ms while el is on screen and the tab is visible.
-function whileVisible(el: Element, ms: number, fn: () => void) {
-  let timer = 0;
-  let onScreen = false;
-  const sync = () => {
-    const run = onScreen && !document.hidden;
-    if (run && !timer) timer = window.setInterval(fn, ms);
-    if (!run && timer) {
+// Calls fn once el first comes into view.
+function onArrival(el: Element, fn: () => void) {
+  const seen = new IntersectionObserver(([entry]) => {
+    if (!entry.isIntersecting) return;
+    seen.disconnect();
+    fn();
+  });
+  seen.observe(el);
+}
+
+// Plays beats 0..count-1, ms apart, then calls done. Returns a stop that
+// cancels the rest without calling done.
+function playBeats(count: number, ms: number, beat: (n: number) => void, done: () => void) {
+  let n = 0;
+  beat(n);
+  const timer = window.setInterval(() => {
+    n += 1;
+    if (n < count) {
+      beat(n);
+    } else {
       clearInterval(timer);
-      timer = 0;
+      done();
     }
-  };
-  new IntersectionObserver(([entry]) => {
-    onScreen = entry.isIntersecting;
-    sync();
-  }).observe(el);
-  document.addEventListener("visibilitychange", sync);
+  }, ms);
+  return () => clearInterval(timer);
 }
 
 // ---- The hero's run ----
@@ -150,6 +162,8 @@ function heroRun() {
     }
   };
 
+  // The run loops while it is on screen and the tab is in front, starting
+  // from the top when it first arrives.
   let step = 7;
   let timer = 0;
   let onScreen = false;
@@ -160,7 +174,7 @@ function heroRun() {
   };
   const sync = () => {
     const play = onScreen && !document.hidden;
-    if (play && !timer) timer = window.setTimeout(tick, FRAMES[step].hold);
+    if (play && !timer) timer = window.setTimeout(tick, step === 7 ? 600 : FRAMES[step].hold);
     if (!play && timer) {
       clearTimeout(timer);
       timer = 0;
@@ -179,9 +193,11 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 
 type Ctx = { row: HTMLElement; readout: HTMLElement; fx: number; fy: number };
 
-// What each feature does under the pointer (hover) and while on screen
-// (beat), in openplan's own terms.
-const KINDS: Record<string, { hover?: (c: Ctx) => void; leave?: (c: Ctx) => void; beat?: (c: Ctx, n: number) => void }> = {
+// What each feature does under the pointer (hover), and the short pass some
+// play when their row arrives and loop while hovered (beat, beats of it, and
+// rest: the beat the HTML draws), in openplan's own terms.
+type Kind = { hover?: (c: Ctx) => void; leave?: (c: Ctx) => void; beat?: (c: Ctx, n: number) => void; beats?: number; rest?: number };
+const KINDS: Record<string, Kind> = {
   register: {
     hover: (c) => (c.readout.textContent = "acme/terraform-aws-eks @ v1.4.2 → eks"),
     leave: (c) => (c.readout.textContent = "acme/terraform-aws-eks @ v1.4.2")
@@ -197,6 +213,8 @@ const KINDS: Record<string, { hover?: (c: Ctx) => void; leave?: (c: Ctx) => void
     leave: (c) => setKnob(c, 150)
   },
   run: {
+    beats: 3,
+    rest: 1,
     beat: (c, n) => {
       const phase = n % 3;
       c.row.querySelectorAll(".r-plan").forEach((el) => el.classList.toggle("on", phase === 0));
@@ -205,6 +223,8 @@ const KINDS: Record<string, { hover?: (c: Ctx) => void; leave?: (c: Ctx) => void
     }
   },
   logs: {
+    beats: 6,
+    rest: 5,
     beat: (c, n) => {
       const shown = n % 6;
       c.row.querySelectorAll<SVGElement>(".logline").forEach((el, i) => {
@@ -234,10 +254,12 @@ const KINDS: Record<string, { hover?: (c: Ctx) => void; leave?: (c: Ctx) => void
     leave: (c) => (c.readout.textContent = "eks v1.3 · v1.4 available")
   },
   access: {
-    // Point at a stack to grant on it; on screen, the role cycles through
+    // Point at a stack to grant on it; on arrival, the role steps through
     // the four a stack has.
     hover: (c) => grant(c, clamp(Math.floor(c.fx * 3), 0, 2), "Operator"),
     leave: (c) => grant(c, 1, "Operator"),
+    beats: 4,
+    rest: 1,
     beat: (c, n) => {
       if (!c.row.classList.contains("hot")) grant(c, 1, ["Viewer", "Operator", "Approver", "Owner"][n % 4]);
     }
@@ -283,10 +305,21 @@ function features() {
     const ctx: Ctx = { row, readout: row.querySelector<HTMLElement>("[data-readout]")!, fx: 0.5, fy: 0.5 };
     const glow = row.querySelector<HTMLElement>(".glow")!;
 
+    // One pass on arrival, 750ms a beat so it ends inside five seconds;
+    // with a pointer, the same pass loops while hovered.
+    let stopBeats: (() => void) | null = null;
+    const settle = () => {
+      stopBeats = null;
+      kind.beat?.(ctx, kind.rest ?? 0);
+    };
     if (kind.beat) {
-      let n = 0;
-      whileVisible(row, 1100, () => kind.beat!(ctx, ++n));
+      onArrival(row, () => {
+        stopBeats = playBeats(kind.beats ?? 1, 750, (n) => kind.beat!(ctx, n), settle);
+      });
     }
+    const loop = () => {
+      stopBeats = playBeats(kind.beats ?? 1, 750, (n) => kind.beat!(ctx, n), loop);
+    };
     if (!hovers) return;
     glow.addEventListener("pointermove", (e) => {
       const box = glow.getBoundingClientRect();
@@ -301,10 +334,20 @@ function features() {
       ctx.fy = clamp(y / box.height, 0, 1);
       kind.hover?.(ctx);
     });
+    glow.addEventListener("pointerenter", () => {
+      if (kind.beat && kind.beats && !kind.hover) {
+        stopBeats?.();
+        loop();
+      }
+    });
     glow.addEventListener("pointerleave", () => {
       glow.classList.remove("lit");
       row.classList.remove("hot");
       kind.leave?.(ctx);
+      if (kind.beat && !kind.hover) {
+        stopBeats?.();
+        settle();
+      }
     });
   });
 

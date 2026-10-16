@@ -40,13 +40,23 @@ describe("site/index.html", () => {
       // the properties a transition names, and layout keywords.
       "cubic-bezier", "steps", "end", "both", "inset", "rotate", "deg", "calc", "circle", "at", "center",
       "opacity", "transform", "stroke", "fill", "color", "height", "cx", "d", "left", "var",
-      "absolute", "hidden", "solid", "ellipsis", "nowrap", "block"
+      "absolute", "hidden", "solid", "ellipsis", "nowrap", "block", "smooth"
     ]);
     const values = [...stripComments(DRAWINGS).matchAll(/[\w-]+\s*:\s*([^;{}]+)[;}]/g)]
       .map((m) => m[1].replace(/var\(--[\w-]+\)/g, ""));
     expect(values.length).toBeGreaterThan(0);
     const words = values.flatMap((value) => value.toLowerCase().match(/[a-z][a-z-]*/g) ?? []);
     expect(words.filter((word) => !keywords.has(word) && !word.startsWith("a-"))).toEqual([]);
+  });
+
+  it("loops no drawing on its own: endless animation only under the pointer, or the run's spinner", () => {
+    // Motion that starts by itself stops within five seconds (WCAG 2.2.2):
+    // every drawing plays a fixed number of times unless the pointer is on
+    // it. The hero's run loops in alive.ts by the owner's choice.
+    const rules = [...stripComments(DRAWINGS).matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+    const endless = rules.filter(([, , body]) => /\binfinite\b/.test(body)).map(([, sel]) => sel.trim());
+    expect(endless.length).toBeGreaterThan(0);
+    expect(endless.filter((sel) => !/\.hot\b|^\.spin$/.test(sel))).toEqual([]);
   });
 
   it("stops every drawing animation for people who ask for reduced motion", () => {
@@ -58,7 +68,7 @@ describe("site/index.html", () => {
     const used = new Set(
       [...HTML.matchAll(/\b(?:bg|text|border|fill|stroke)-([a-z]+(?:-[a-z]+)*)\b/g)]
         .map((m) => m[1])
-        .filter((name) => !/^(?:none|xs|sm|lg|xl|base|meta|row-title|page-title|panel-title|center|left|t|b|l|r|x|y|width|dasharray|linecap|linejoin)$/.test(name))
+        .filter((name) => !/^(?:none|xs|sm|lg|xl|base|meta|row-title|page-title|panel-title|center|left|balance|t|b|l|r|x|y|width|dasharray|linecap|linejoin)$/.test(name))
     );
     const defined = new Set([...THEME.matchAll(/--color-([a-z-]+):/g)].map((m) => m[1]));
     expect([...used].filter((name) => !defined.has(name))).toEqual([]);
@@ -119,6 +129,13 @@ describe("site/index.html", () => {
     expect(rail.replace(/<[^>]+>/g, "").trim()).toBe("");
   });
 
+  it("leads the hero with the way to try it: a link down to the setup steps", () => {
+    const hero = HTML.split("<main")[1]?.split("</section>")[0] ?? "";
+    const links = [...hero.matchAll(/<a\b[^>]*\bhref="([^"]+)"/g)].map((m) => m[1]);
+    expect(links[0]).toBe("#run");
+    expect(HTML).toMatch(/<section id="run"\s/);
+  });
+
   it("closes on a call to action that links to the README's setup steps", () => {
     const main = HTML.split("<main")[1]?.split("</main>")[0] ?? "";
     const cta = main.split("</section>").at(-2) ?? "";
@@ -141,11 +158,30 @@ describe("site/index.html", () => {
     expect(HTML).toContain("url=https://github.com/openplanhq/openplan/releases/latest/download\n");
   });
 
+  it("shows the real stack page, the README's own screenshot", () => {
+    expect(HTML).toMatch(/<img\b[^>]*\bsrc="\/stack-page\.png"[^>]*\balt="[^"]{40,}"/);
+    expect(read("public/stack-page.png")).toBe(read("../docs/ss/stack-template-and-runs.png"));
+    expect(() => read("public/stack-page.webp")).not.toThrow();
+  });
+
   it("ends on a footer whose painting exists in public/", () => {
     const footer = HTML.split("<footer")[1] ?? "";
     expect(footer).toMatch(/<img\b[^>]*\bsrc="\/footer-train\.jpg"/);
     expect(() => read("public/footer-train.jpg")).not.toThrow();
+    // The lighter encodings the <picture> offers exist too, and the
+    // painting waits until the reader nears the foot of the page.
+    for (const kind of ["avif", "webp"]) {
+      expect(footer).toContain(`srcset="/footer-train.${kind}" type="image/${kind}"`);
+      expect(() => read(`public/footer-train.${kind}`)).not.toThrow();
+    }
+    expect(footer).toMatch(/<img\b[^>]*\bloading="lazy"/);
     expect(footer).toContain("Apache 2.0");
+    // Honest about maturity: the warning says where to read what works.
+    expect(HTML).toContain('href="https://github.com/openplanhq/openplan#maturity"');
+    expect(footer).toContain('href="https://github.com/openplanhq/openplan#documentation"');
+    const readme = read("../README.md");
+    expect(readme).toMatch(/^## Maturity$/m);
+    expect(readme).toMatch(/^## Documentation$/m);
     expect(footer).toContain("Painting by J. M. W. Turner");
   });
 
