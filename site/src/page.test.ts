@@ -117,4 +117,14 @@ describe("site/index.html", () => {
     expect(footer).toContain("Apache 2.0");
     expect(footer).toContain("Painting by J. M. W. Turner");
   });
+
+  it("gives link previews the brand kit's social card at an absolute URL", () => {
+    const meta = (key: string) =>
+      HTML.match(new RegExp(`<meta (?:property|name)="${key}" content="([^"]*)"`))?.[1];
+    expect(meta("og:image")).toBe("https://openplan.run/social-preview.png");
+    expect(read("public/social-preview.png")).toBe(read("../brand/social/openplan-social-preview.png"));
+    expect(meta("og:title")).toBe(HTML.match(/<title>([^<]*)<\/title>/)?.[1]);
+    expect(meta("og:description")).toBe(meta("description"));
+    expect(meta("twitter:card")).toBe("summary_large_image");
+  });
 });
