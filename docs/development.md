@@ -35,8 +35,8 @@ and authorization model from the model in this repository at startup.
 To run the API on the host instead, build the images once with the command
 above, then bring the stack down to the dependencies and the executor, and
 start the API in its own terminal. The executor stays in Compose: it runs only
-in its Linux image, as root with three capabilities, starting each session as
-one of the image's pool users (see "Runner Security" in
+in its Linux image, as root with the privileges runsc needs, starting each
+activity in a gVisor sandbox of its own (see "Runner Security" in
 [architecture.md](architecture.md)), and refuses to start anywhere else.
 Compose does not inject `.env` into containers or host processes, so a host
 process reads those values from your shell:

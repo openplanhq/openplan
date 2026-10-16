@@ -15,8 +15,8 @@ type FileSink struct {
 }
 
 // NewFileSink returns a local filesystem-backed sink that writes <dir>/<file>.
-// dir must exist. On the executor it is the run session's LogsDir: root's, and
-// out of the session's reach.
+// dir must exist. On the executor it is a run's logs/ spool: root's, mounted
+// read-only into UploadLog's sandbox, which reads it as the sandbox user.
 func NewFileSink(dir string) FileSink {
 	return FileSink{dir: dir}
 }
@@ -35,7 +35,7 @@ func (sink FileSink) Open(fileName string) (io.WriteCloser, error) {
 	}
 
 	path := filepath.Join(sink.dir, fileName)
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644) //nolint:gosec // UploadLog's sandbox reads it as the sandbox user
 	if err != nil {
 		return nil, fmt.Errorf("open phase log: %w", err)
 	}

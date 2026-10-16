@@ -153,9 +153,10 @@ func NewFilesystemStore(root string) FilesystemStore {
 	return FilesystemStore{root: root}
 }
 
-// The filesystem store is shared by the api, as openplan, and the executor,
-// as root without CAP_DAC_OVERRIDE or CAP_FOWNER (#331). Neither can override
-// the other's permissions, so both reach objects through the group openplan:
+// The filesystem store is shared by the api, as openplan, and the executor:
+// its storage sandboxes as the sandbox user with the group openplan, and the
+// worker as root without CAP_DAC_OVERRIDE or CAP_FOWNER (#245). None can
+// override another's permissions, so all reach objects through that group:
 // directories are setgid, so new files inherit the group, and modes are set
 // explicitly, because the umask would strip group write.
 const (

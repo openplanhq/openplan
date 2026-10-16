@@ -196,9 +196,9 @@ services:
   # key: secrets arrive sealed to a per-run key, and results go back to the API
   # through Temporal. Add nothing here a template must not read.
   #
-  # Two replicas, so runs actually land on different hosts. A run's workspace
-  # activities and sealing key stay on one executor through a Temporal session;
-  # EXECUTOR_RUN_ROOT is container-local for the same reason.
+  # Two replicas, so runs actually land on different hosts. A Temporal session
+  # pins each run's activities and sealing key to one executor, so the run root
+  # is a tmpfs of that container's own.
   executor:
     image: ghcr.io/openplanhq/openplan-executor:${OPENPLAN_IMAGE_TAG:-latest}
     pull_policy: ${OPENPLAN_PULL_POLICY:-missing}
@@ -215,13 +215,29 @@ services:
       ARTIFACT_STORE_KIND: filesystem
       ARTIFACT_STORE_FILESYSTEM_ROOT: /var/lib/openplan/artifacts
       EXECUTOR_RUN_ROOT: /var/lib/openplan/runs
+      EXECUTOR_SANDBOX_STATE: /var/lib/openplan/sandboxes
     restart: on-failure
-    # Root with only the three capabilities a branch's switch to its pool user
-    # needs (#331). The executor refuses to start with more, or without
-    # no-new-privileges.
+    # Each activity runs in a gVisor sandbox of its own (#245), started from
+    # here with runsc: root with these seven capabilities, and Docker's
+    # seccomp and AppArmor profiles off. The sandboxes' process runs
+    # unprivileged. NET_ADMIN and NET_RAW wire each sandbox's network to this
+    # container's, through a bridge and NAT, which needs forwarding on.
     cap_drop: [ALL]
-    cap_add: [SETUID, SETGID, CHOWN]
-    security_opt: ["no-new-privileges:true"]
+    cap_add: [SYS_ADMIN, SETUID, SETGID, SETFCAP, CHOWN, NET_ADMIN, NET_RAW]
+    security_opt:
+      - "no-new-privileges:true"
+      - "seccomp=unconfined"
+      - "apparmor=unconfined"
+    sysctls:
+      net.ipv4.ip_forward: 1
+    # The sandboxes' cgroups live under this container's own.
+    cgroup: private
+    # Ephemeral, so an executor that restarts starts with no runs and no
+    # sandboxes. exec: providers are programs in the run's workspace, and
+    # Docker mounts a tmpfs noexec by default.
+    tmpfs:
+      - /var/lib/openplan/runs:size=8g,exec
+      - /var/lib/openplan/sandboxes:size=64m
     volumes:
       - artifacts:/var/lib/openplan/artifacts
 

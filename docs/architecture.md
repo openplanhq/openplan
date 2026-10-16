@@ -173,48 +173,39 @@ The runner should be implemented behind an interface so a future `KubernetesJobR
 
 Terraform code is untrusted. A template is arbitrary code: OpenTofu/Terraform providers, provisioners, external data sources and `local-exec` run anything inside the executor pod, with access to the run's injected credentials. Publishing templates is limited to editors, but that only limits who can write a template, not what its code can do. Every executor-side design must assume the template is hostile.
 
-The local process runner keeps sessions apart by Linux user, and no further (#331). A session is one phase, plan or apply, of one run on one executor. Each session runs as a pool user of its own, `openplan-run-1` to `openplan-run-40` (uids 70001 to 70040), and `internal/isolation` holds every mechanism that keeps it apart from other sessions and from the executor. Paths below are in that package unless noted.
+Every executor activity that touches tenant content runs in a gVisor sandbox of its own (#245), started by the executor with runsc: `FetchSource`, each `RunTerraform` command, `UploadLog`, `UploadPlan` and `DownloadPlan`. The Temporal worker stays outside every sandbox, with its connection to Temporal and the run keys. A sandbox boots a read-only guest root (tofu, git, CA certificates and the executor binary) and runs the activity's body as `openplan-executor activity <name>`. `internal/sandbox` holds the mechanism; `internal/activities` splits each activity into a worker-side shim and the body.
 
 | Mechanism | What it stops | Where |
 |---|---|---|
-| A pool user per session, with a group of its own and no supplementary groups | A session reaching another session's processes, `/proc` entries, files or signals | `users.go`, `Dockerfile.executor` |
-| The executor runs as root with only `CAP_SETUID`, `CAP_SETGID` and `CAP_CHOWN`; switching a child to its pool user clears every capability | Template code holding any capability. Without `CAP_DAC_OVERRIDE` and `CAP_KILL`, root itself can't open a workspace or signal a session, so that work goes through the helper | `host.go`; `cap_drop` and `cap_add` in `docker-compose.yaml` |
-| `no_new_privs` | A setuid binary a session runs getting privileges back | `host.go`; `security_opt` in `docker-compose.yaml` |
-| The executor process is non-dumpable | A process of the executor's uid reading `/proc/<executor pid>/environ` (the artifact store's credentials, the Temporal address) or its memory (every run's sealing key) (#240) | `HardenProcess` |
-| An allowlisted environment for tofu and git | The executor's own environment reaching template code (#172) | `exec.go` |
-| A 0700 workspace owned by the session's user; 0711 directories above it; the run's `logs/` beside it, root's | A session listing or reading another run's directory, or planting a symlink where root writes | `makeRunDirectory` |
-| The helper: the executor binary re-run as the session's user, with an empty environment, for every read, write and check inside a workspace | Root following a symlink the session planted, for example to the executor's own `/proc/<pid>/environ` | `helper.go`, `helper_client.go`, `helper_main.go` |
-| `os.OpenRoot`, regular files only, single-component names and size limits on everything crossing the helper | A planted symlink, FIFO or endless file escaping the folder or hanging the executor; a tampered helper sending files nobody asked for | `helper_main.go`, `transfer.go` |
-| `kill(-1, SIGKILL)` as the session's user after every command, and when one is cancelled | Processes a command left running (`nohup … &`) outliving it | `exec.go` |
-| Reclaim when a session ends: kill the user's processes, delete its files in `/tmp`, `/var/tmp` and `/dev/shm`, empty the workspace; then the executor checks `/proc` itself for survivors | Anything of one session reaching the next session on the same user. A user whose reclaim fails stays out of the pool, and the spare users absorb it until a restart | `manager.go`, `helper_client.go` |
-| A sweep of every pool user and run directory at startup | Processes and files an earlier executor process left under a pool user, which the new process holds no lease for | `Manager.Sweep` |
-| Failing closed | Template code running without the above: the executor refuses to start unless it is root with exactly the three capabilities, under `no_new_privs`, with the pool users the image defines and two per session (`EXECUTOR_MAX_SESSIONS` of at most 20) | `New` |
+| A fresh gVisor sandbox per activity, with its own kernel (gVisor's Sentry) and process space | A run reading another run's processes, files or credentials, or the executor's; a kernel exploit reaching the executor's kernel | `runsc.go`, `bundle.go` |
+| Credentials only over stdin; tofu's sandbox gets only the run's cloud credentials; storage access and the plan key only in sandboxes that run no tenant code | Template code holding the artifact store's keys, the plan key or the Temporal identity | `internal/activities/template_run.go`, `bodies.go` |
+| An environment built from scratch | The executor's own environment reaching a sandbox | `env.go` |
+| A network namespace per sandbox, wired to the executor's network through a bridge and NAT; its port on the bridge isolated, and traffic between sandboxes dropped; DNS through a relay in the executor | A run reaching another run's sandbox over the network; a sandbox taking the executor's own address, which runsc would do in the executor's namespace | `network.go`, `dns.go` |
+| Memory (with no swap), CPU and process limits per sandbox, or no sandbox | One run starving the others | `bundle.go`, `cgroup.go` |
+| The worker never opens a path a sandbox wrote, and our code inside a sandbox reads tofu's files as regular files only, without following links out | A planted symlink turning the worker, or a storage sandbox, against its own secrets | `frame.go`, `files.go` |
+| The log spool outside the workspace, capped at 64 MiB per command | tofu editing its own log; one run filling the disk through its output | `internal/activities/spool.go` |
+| Sandbox user 70000, no capabilities, `no_new_privs` | Template code holding any privilege inside its sandbox | `bundle.go` |
 
 What it does not cover:
 
-- A session can read every file the image leaves world-readable.
-- The executor holds no database URL, but it holds the artifact store's S3 keys for its lifetime, and each activity opens a run's sealed secrets in its memory. The rows above keep tofu from reading either without an exploit, but tofu can still reach Temporal, which has no access control yet (#246). See "Temporal access control" in the control plane split spec.
-- Network isolation, resource limits and a sandbox runtime aren't built yet. They ship in 1.0 (#245): each session will run in a gVisor sandbox of its own.
-- Loopback TCP and abstract unix sockets are not separated by uid.
-- CPU, memory, disk and the process table are shared.
-- A kernel exploit crosses every boundary.
+- Egress: a sandbox reaches whatever the executor reaches, through NAT. tofu reaches Temporal, the api, Postgres, Valkey and the cloud metadata address. Block the metadata address outside openplan (an IMDSv2 hop limit of 1 on AWS; a NetworkPolicy on Kubernetes).
+- Temporal has no access control yet (#246).
+- The run's own cloud credentials: tofu needs them, so a template's author can use or copy the credentials of whoever runs it.
+- Disk: a workspace has no quota.
+- Escaping gVisor: code that escapes lands as root in the executor container, which runs with `SYS_ADMIN` and with Docker's seccomp and AppArmor profiles off.
 
 `SECURITY.md` (#321) should list these gaps once it exists.
 
 MVP executor deployments should use the following guardrails:
 
-- Run the executor as its image starts it: as root with `cap_drop: [ALL]`, `cap_add: [SETUID, SETGID, CHOWN]` and `no-new-privileges`. On Kubernetes that means `runAsUser: 0`, `allowPrivilegeEscalation: false`, and the Pod Security level "baseline".
-- Avoid host mounts and shared writable volumes.
-- Use fresh per-run working directories with cleanup after every run.
-- Apply CPU, memory, ephemeral storage, and wall-clock limits.
-- Inject only the credential sets required for the target stack or template run.
-- Prefer short-lived credentials wherever supported.
-- Avoid persisting secret values to Postgres, object storage, Temporal payloads, or logs.
-- Redact known secret values before logs are streamed or persisted.
-- Restrict executor network egress where practical.
+- Run the executor as `docker-compose.yaml` does: root with `cap_drop: [ALL]`, `cap_add: [SYS_ADMIN, SETUID, SETGID, SETFCAP, CHOWN, NET_ADMIN, NET_RAW]`, `no-new-privileges`, `seccomp=unconfined`, `apparmor=unconfined`, `net.ipv4.ip_forward=1`, a private cgroup namespace, and the run root (mounted `exec`, since providers run from it) and sandbox state on tmpfs. On Kubernetes that takes the Pod Security level "privileged" and an allowed `net.ipv4.ip_forward` sysctl. The executor refuses to start without any of these.
+- Keep the sandboxes' subnet (`EXECUTOR_SANDBOX_SUBNET`, default `10.237.0.0/24`) clear of every network tofu must reach: addresses inside it route to the sandboxes' bridge.
+- Avoid host mounts and shared writable volumes beyond the artifacts volume.
+- Inject only the credential sets required for the target stack or template run, and prefer short-lived credentials.
+- Avoid persisting secret values to Postgres, object storage, Temporal payloads, or logs; known values are redacted before a log is spooled.
 - Separate executors by task queue or deployment if future tenants, templates, or credential sets require stronger trust boundaries.
 
-A sandbox per session ships in 1.0 (#245): the executor will start one gVisor (`runsc`) sandbox per session and keep its own credentials outside it. Further isolation, such as a Kubernetes Job per run, remote runners, or per-tenant runner pools, remains a deferred design topic. The `runner.CommandExecutor` boundary keeps that migration path open without changing workflow semantics: the runners only build commands, and how a subprocess starts is decided behind it.
+Further isolation, such as a Kubernetes Job per run, remote runners, or per-tenant runner pools, remains a deferred design topic. `sandbox.Runner` is the seam: a backend that runs a job somewhere else needs no change to the activities.
 
 ## Go Package Layout
 

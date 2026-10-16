@@ -18,7 +18,6 @@ import (
 	"github.com/vishu42/openplan/internal/githubapp"
 	gitrunner "github.com/vishu42/openplan/internal/runner"
 	"github.com/vishu42/openplan/internal/runseal"
-	"go.temporal.io/sdk/temporal"
 )
 
 func TestRecordTemplateRunStatusDelegatesToRecorder(t *testing.T) {
@@ -66,7 +65,7 @@ func TestPrepareWorkspaceCreatesRunDirectory(t *testing.T) {
 	t.Parallel()
 
 	runRoot := t.TempDir()
-	activities := newTestTemplateRunActivities(t, runRoot, nil)
+	activities, _ := newTestTemplateRunActivities(t, runRoot, nil)
 	input := domain.PrepareWorkspaceActivityInput{
 		RunID:    domain.TemplateRunID("run_123"),
 		TenantID: domain.TenantID("tenant_123"),
@@ -93,7 +92,7 @@ func TestPrepareWorkspaceCreatesRunDirectory(t *testing.T) {
 func TestPrepareWorkspaceRejectsEmptyRoot(t *testing.T) {
 	t.Parallel()
 
-	activities := newTestTemplateRunActivities(t, "", nil)
+	activities, _ := newTestTemplateRunActivities(t, "", nil)
 
 	_, err := activities.PrepareWorkspace(context.Background(), domain.PrepareWorkspaceActivityInput{
 		RunID:    domain.TemplateRunID("run_123"),
@@ -110,7 +109,7 @@ func TestPrepareWorkspaceRejectsEmptyRoot(t *testing.T) {
 func TestPrepareWorkspaceRejectsUnsafePathComponents(t *testing.T) {
 	t.Parallel()
 
-	activities := newTestTemplateRunActivities(t, t.TempDir(), nil)
+	activities, _ := newTestTemplateRunActivities(t, t.TempDir(), nil)
 
 	_, err := activities.PrepareWorkspace(context.Background(), domain.PrepareWorkspaceActivityInput{
 		RunID:    domain.TemplateRunID("run_123"),
@@ -119,8 +118,8 @@ func TestPrepareWorkspaceRejectsUnsafePathComponents(t *testing.T) {
 	if err == nil {
 		t.Fatal("PrepareWorkspace returned nil error, want error")
 	}
-	if !strings.Contains(err.Error(), "safe path") {
-		t.Fatalf("error = %q, want safe path context", err.Error())
+	if !strings.Contains(err.Error(), "single path component") {
+		t.Fatalf("error = %q, want the unsafe component refused", err.Error())
 	}
 }
 
@@ -132,8 +131,8 @@ func TestFetchSourceChecksOutTheResolvedCommitRatherThanTheRef(t *testing.T) {
 	t.Parallel()
 
 	git := &fakeGit{}
-	activities := newTestTemplateRunActivities(t, t.TempDir(), nil)
-	activities.git = gitrunner.NewLocalGitRunnerWithExecutor(git)
+	activities, bodies := newTestTemplateRunActivities(t, t.TempDir(), nil)
+	bodies.git = gitrunner.NewLocalGitRunnerWithExecutor(git)
 	workspace, err := activities.PrepareWorkspace(context.Background(), domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
 		t.Fatalf("PrepareWorkspace returned error: %v", err)
@@ -182,8 +181,8 @@ func TestFetchSourceFallsBackToTheRefWhenNoCommitWasResolved(t *testing.T) {
 	t.Parallel()
 
 	git := &fakeGit{}
-	activities := newTestTemplateRunActivities(t, t.TempDir(), nil)
-	activities.git = gitrunner.NewLocalGitRunnerWithExecutor(git)
+	activities, bodies := newTestTemplateRunActivities(t, t.TempDir(), nil)
+	bodies.git = gitrunner.NewLocalGitRunnerWithExecutor(git)
 	workspace, err := activities.PrepareWorkspace(context.Background(), domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
 		t.Fatalf("PrepareWorkspace returned error: %v", err)
@@ -219,7 +218,8 @@ func TestFetchSourceRejectsUnsafeRootPath(t *testing.T) {
 	t.Parallel()
 
 	git := &fakeGit{}
-	activities := &TemplateRunActivities{git: gitrunner.NewLocalGitRunnerWithExecutor(git)}
+	activities, bodies := newTestTemplateRunActivities(t, t.TempDir(), nil)
+	bodies.git = gitrunner.NewLocalGitRunnerWithExecutor(git)
 
 	_, err := activities.FetchSource(context.Background(), domain.FetchSourceActivityInput{
 		RunID:         domain.TemplateRunID("run_123"),
@@ -242,8 +242,8 @@ func TestFetchSourceRejectsUnsafeRootPath(t *testing.T) {
 // tenant_123's run_123 prepared, and the run's workspace.
 func newTestTerraform(t *testing.T, executor gitrunner.CommandExecutor) (*TemplateRunActivities, string) {
 	t.Helper()
-	activities := newTestTemplateRunActivities(t, t.TempDir(), nil)
-	activities.terraform = gitrunner.NewLocalTerraformRunnerWithExecutor(executor)
+	activities, bodies := newTestTemplateRunActivities(t, t.TempDir(), nil)
+	bodies.terraform = gitrunner.NewLocalTerraformRunnerWithExecutor(executor)
 	return activities, prepareTestWorkspace(t, activities)
 }
 
@@ -289,41 +289,6 @@ func TestRecordTemplateRunLogDelegatesToRecorder(t *testing.T) {
 	}
 }
 
-// A failed command's log is what explains the failure, so it must reach the
-// workflow even though the activity errored: as ApplicationError details.
-func TestRunTerraformAttachesUploadedLogToCommandFailure(t *testing.T) {
-	t.Parallel()
-
-	runnerErr := errors.New("terraform failed")
-	activities, workspace := newTestTerraform(t, &recordingCommandExecutor{stdout: "apply stdout before failure\n", err: runnerErr})
-	logStore := &recordingTemplateRunLogStore{}
-	activities.logStore = logStore
-	input := planInput(workspace)
-	input.Command, input.RunPhase = domain.TerraformCommandApply, domain.RunPhaseApply
-
-	_, err := activities.RunTerraform(context.Background(), input)
-	if logStore.content != "apply stdout before failure\n" {
-		t.Fatalf("uploaded content = %q", logStore.content)
-	}
-	var applicationErr *temporal.ApplicationError
-	if !errors.As(err, &applicationErr) {
-		t.Fatalf("error = %T %v, want *temporal.ApplicationError", err, err)
-	}
-	if applicationErr.Type() != domain.TerraformCommandFailedErrorType {
-		t.Fatalf("error type = %q, want %q", applicationErr.Type(), domain.TerraformCommandFailedErrorType)
-	}
-	if !errors.Is(err, runnerErr) || !strings.Contains(err.Error(), "run terraform") {
-		t.Fatalf("error = %v, want run terraform context wrapping runnerErr", err)
-	}
-	var got domain.TemplateRunLog
-	if err := applicationErr.Details(&got); err != nil {
-		t.Fatalf("Details returned error: %v", err)
-	}
-	if got != logStore.returned {
-		t.Fatalf("details log = %#v, want the uploaded %#v", got, logStore.returned)
-	}
-}
-
 func TestRunTerraformWritesCommandLogFile(t *testing.T) {
 	t.Parallel()
 
@@ -335,51 +300,15 @@ func TestRunTerraformWritesCommandLogFile(t *testing.T) {
 	input := planInput(workspace)
 	input.ConfigJSON = []byte(`{"region":"us-east-1"}`)
 
-	output, err := activities.RunTerraform(context.Background(), input)
-	if err != nil {
+	if _, err := activities.RunTerraform(context.Background(), input); err != nil {
 		t.Fatalf("RunTerraform returned error: %v", err)
 	}
 
 	if got := runLog(t, workspace, "plan.log"); got != "plan stdout\nplan stderr\n" {
 		t.Fatalf("plan log = %q", got)
 	}
-	if output.Log != (domain.TemplateRunLog{}) {
-		t.Fatalf("log = %#v, want none without a log store", output.Log)
-	}
 	if !reflect.DeepEqual(executor.env, []string{"TF_VAR_region=us-east-1"}) {
 		t.Fatalf("env = %#v, want TF_VAR_region", executor.env)
-	}
-}
-
-func TestRunTerraformUploadsCommandLogFile(t *testing.T) {
-	t.Parallel()
-
-	activities, workspace := newTestTerraform(t, &recordingCommandExecutor{
-		stdout: "plan stdout\n",
-		stderr: "plan stderr\n",
-	})
-	logStore := &recordingTemplateRunLogStore{}
-	activities.logStore = logStore
-
-	output, err := activities.RunTerraform(context.Background(), planInput(workspace))
-	if err != nil {
-		t.Fatalf("RunTerraform returned error: %v", err)
-	}
-
-	if logStore.tenantID != domain.TenantID("tenant_123") {
-		t.Fatalf("tenantID = %q, want tenant_123", logStore.tenantID)
-	}
-	if logStore.runID != domain.TemplateRunID("run_123") {
-		t.Fatalf("runID = %q, want run_123", logStore.runID)
-	}
-	if logStore.phase != "plan" {
-		t.Fatalf("phase = %q, want plan", logStore.phase)
-	}
-	if logStore.content != "plan stdout\nplan stderr\n" {
-		t.Fatalf("uploaded content = %q", logStore.content)
-	}
-	if output.Log != logStore.returned {
-		t.Fatalf("log = %#v, want the uploaded metadata %#v", output.Log, logStore.returned)
 	}
 }
 
@@ -395,14 +324,20 @@ func TestRunTerraformLogsInitUnderItsRunPhase(t *testing.T) {
 		{runPhase: domain.RunPhasePlan, want: "plan-init"},
 		{runPhase: domain.RunPhaseApply, want: "apply-init"},
 	} {
-		activities, workspace := newTestTerraform(t, &recordingCommandExecutor{stdout: "init stdout\n"})
+		activities, bodies := newTestTemplateRunActivities(t, t.TempDir(), nil)
+		bodies.terraform = gitrunner.NewLocalTerraformRunnerWithExecutor(&recordingCommandExecutor{stdout: "init stdout\n"})
 		logStore := &recordingTemplateRunLogStore{}
-		activities.logStore = logStore
-		input := planInput(workspace)
+		bodies.logs = logStore
+		input := planInput(prepareTestWorkspace(t, activities))
 		input.Command, input.RunPhase = domain.TerraformCommandInit, tt.runPhase
 
 		if _, err := activities.RunTerraform(context.Background(), input); err != nil {
 			t.Fatalf("RunTerraform(%s) returned error: %v", tt.runPhase, err)
+		}
+		if _, err := activities.UploadLog(context.Background(), domain.UploadLogActivityInput{
+			TenantID: input.TenantID, RunID: input.RunID, Command: input.Command, RunPhase: input.RunPhase,
+		}); err != nil {
+			t.Fatalf("UploadLog(%s) returned error: %v", tt.runPhase, err)
 		}
 		if logStore.phase != tt.want {
 			t.Fatalf("%s init uploaded phase %q, want %q", tt.runPhase, logStore.phase, tt.want)
@@ -501,7 +436,8 @@ func TestRunTerraformWrapsRunnerError(t *testing.T) {
 	input.Command, input.RunPhase = domain.TerraformCommandApply, domain.RunPhaseApply
 
 	_, err := activities.RunTerraform(context.Background(), input)
-	if !errors.Is(err, runnerErr) {
+	// tofu ran in a sandbox, so its error arrives as text.
+	if err == nil || !strings.Contains(err.Error(), runnerErr.Error()) {
 		t.Fatalf("error = %v, want runnerErr", err)
 	}
 	if !strings.Contains(err.Error(), "run terraform") {
@@ -700,8 +636,8 @@ func (executor *recordingCommandExecutor) Run(_ context.Context, _ string, env [
 func fetchWithSealedToken(t *testing.T, tokens GitHubTokenSource, git *fakeGit, owner string, repo string) error {
 	t.Helper()
 
-	executor := newTestTemplateRunActivities(t, t.TempDir(), nil)
-	executor.git = gitrunner.NewLocalGitRunnerWithExecutor(git)
+	executor, bodies := newTestTemplateRunActivities(t, t.TempDir(), nil)
+	bodies.git = gitrunner.NewLocalGitRunnerWithExecutor(git)
 	workspace, err := executor.PrepareWorkspace(context.Background(), domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
 		t.Fatalf("PrepareWorkspace returned error: %v", err)
@@ -754,8 +690,9 @@ func TestFetchSourceReportsUninstalledApp(t *testing.T) {
 
 	checkoutErr := errors.New("authentication required")
 	err := fetchWithSealedToken(t, stubTokenSource{err: githubapp.ErrAppNotInstalled}, &fakeGit{err: checkoutErr}, "acme", "private-infra")
-	if !errors.Is(err, checkoutErr) {
-		t.Fatalf("error = %v, want it to wrap the underlying checkout failure", err)
+	// The checkout ran in a sandbox, so its error arrives as text.
+	if err == nil || !strings.Contains(err.Error(), checkoutErr.Error()) {
+		t.Fatalf("error = %v, want the underlying checkout failure", err)
 	}
 	if !strings.Contains(err.Error(), "acme/private-infra") {
 		t.Fatalf("error = %v, want it to name the repository", err)
@@ -805,8 +742,9 @@ func TestFetchSourceReportsTokenLookupFailure(t *testing.T) {
 	checkoutErr := errors.New("authentication required")
 	lookupErr := errors.New("resolve installation: unexpected status 503 Service Unavailable")
 	err := fetchWithSealedToken(t, stubTokenSource{err: lookupErr}, &fakeGit{err: checkoutErr}, "acme", "private-infra")
-	if !errors.Is(err, checkoutErr) {
-		t.Fatalf("error = %v, want it to wrap the underlying checkout failure", err)
+	// The checkout ran in a sandbox, so its error arrives as text.
+	if err == nil || !strings.Contains(err.Error(), checkoutErr.Error()) {
+		t.Fatalf("error = %v, want the underlying checkout failure", err)
 	}
 	if !strings.Contains(err.Error(), "503") {
 		t.Fatalf("error = %v, want it to name the token lookup failure", err)
@@ -835,8 +773,8 @@ func TestRunCredentialsRoundTripThroughTheRunKey(t *testing.T) {
 	t.Parallel()
 
 	tofu := &recordingCommandExecutor{}
-	executor := newTestTemplateRunActivities(t, t.TempDir(), nil)
-	executor.terraform = gitrunner.NewLocalTerraformRunnerWithExecutor(tofu)
+	executor, bodies := newTestTemplateRunActivities(t, t.TempDir(), nil)
+	bodies.terraform = gitrunner.NewLocalTerraformRunnerWithExecutor(tofu)
 	workspace, err := executor.PrepareWorkspace(context.Background(), domain.PrepareWorkspaceActivityInput{TenantID: "tenant_123", RunID: "run_123"})
 	if err != nil {
 		t.Fatalf("PrepareWorkspace returned error: %v", err)
@@ -880,8 +818,8 @@ func TestRunCredentialsRoundTripThroughTheRunKey(t *testing.T) {
 func TestPrepareWorkspaceReturnsRunPublicKey(t *testing.T) {
 	t.Parallel()
 
-	keys := runseal.NewKeyRing()
-	output, err := NewTemplateRunActivities(nil, nil, keys, testSessions(t, t.TempDir())).PrepareWorkspace(context.Background(), domain.PrepareWorkspaceActivityInput{
+	activities, _ := newTestTemplateRunActivities(t, t.TempDir(), nil)
+	output, err := activities.PrepareWorkspace(context.Background(), domain.PrepareWorkspaceActivityInput{
 		TenantID: "tenant_123",
 		RunID:    "run_123",
 	})
@@ -893,7 +831,7 @@ func TestPrepareWorkspaceReturnsRunPublicKey(t *testing.T) {
 		t.Fatalf("Seal returned error: %v", err)
 	}
 	var opened string
-	if err := keys.Open(domain.RunKeyID("tenant_123", "run_123"), sealed, &opened); err != nil || opened != "value" {
+	if err := activities.keys.Open(domain.RunKeyID("tenant_123", "run_123"), sealed, &opened); err != nil || opened != "value" {
 		t.Fatalf("Open = %q, %v; want the key PrepareWorkspace returned to open", opened, err)
 	}
 }
@@ -998,7 +936,7 @@ func TestRecordTemplateRunEventDelegatesToTheStore(t *testing.T) {
 	}
 }
 
-// prepareTestWorkspace leases activities' session for tenant_123/run_123, as
+// prepareTestWorkspace lays out tenant_123/run_123's run directory and key, as
 // every later step needs, and returns its workspace.
 func prepareTestWorkspace(t *testing.T, activities *TemplateRunActivities) string {
 	t.Helper()

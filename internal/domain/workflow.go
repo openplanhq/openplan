@@ -36,6 +36,7 @@ const (
 	PrepareWorkspaceActivityName                 = "PrepareWorkspace"
 	FetchSourceActivityName                      = "FetchSource"
 	RunTerraformActivityName                     = "RunTerraform"
+	UploadLogActivityName                        = "UploadLog"
 	SyncTemplateActivityName                     = "SyncTemplate"
 	SealSourceTokenActivityName                  = "SealSourceToken"
 	SealRunCredentialsActivityName               = "SealRunCredentials" //nolint:gosec // an activity name, not a credential
@@ -46,10 +47,6 @@ const (
 	DownloadPlanActivityName                     = "DownloadPlan"
 	FinishPlanActivityName                       = "FinishPlan"
 	BeginApplyActivityName                       = "BeginApply"
-
-	// TerraformCommandFailedErrorType marks a RunTerraform failure whose
-	// ApplicationError details carry the uploaded log's TemplateRunLog.
-	TerraformCommandFailedErrorType = "TerraformCommandFailed"
 )
 
 const (
@@ -262,11 +259,18 @@ type RunTerraformActivityInput struct {
 	Environment map[string]string `json:"-"`
 }
 
+// UploadLogActivityInput asks the executor to upload the log it spooled for
+// one Terraform command, which names the log the way RunTerraform named its
+// spool.
+type UploadLogActivityInput struct {
+	TenantID TenantID
+	RunID    TemplateRunID
+	Command  TerraformCommandType
+	RunPhase RunPhase
+}
+
 // RunTerraformActivityOutput reports what a Terraform command left behind.
 type RunTerraformActivityOutput struct {
-	// Log describes the uploaded phase log. The executor has no database, so
-	// the workflow records it through a control activity.
-	Log TemplateRunLog
 	// HasChanges and Summary describe a plan or an apply: whether it would
 	// change, or changed, anything, and what. Zero for every other command.
 	HasChanges bool
