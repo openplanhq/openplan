@@ -1137,16 +1137,17 @@ paths:
       - $ref: "#/components/parameters/RunID"
     get:
       tags: [Runs]
-      summary: List a run's persisted logs
+      summary: List a run's logs
       description: |
-        Metadata for each Terraform command that has finished, in the order
+        Metadata for each Terraform command that has started, in the order
         they ran: the plan's logs, then the apply's, each by `seq` — not the
-        output itself. Fetch a body from the per-log endpoint by the log's
-        `name`.
+        output itself. Each entry's `state` says whether its body can be
+        read yet. Fetch a `complete` log's body from the per-log endpoint by
+        the log's `name`.
       operationId: listTemplateRunLogs
       responses:
         "200":
-          description: One entry per finished command.
+          description: One entry per started command.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/TemplateRunLogList" }
@@ -1171,9 +1172,10 @@ paths:
       tags: [Runs]
       summary: Read one log's body
       description: |
-        Returns the raw Terraform output as `text/plain`, not JSON. A log
-        that has not been recorded yet, or a name that isn't a log name,
-        returns `404`.
+        Returns the raw Terraform output as `text/plain`, not JSON. Only a
+        log whose `state` is `complete` has a body: a `live` one returns
+        `409 log-live`, a `lost` one `404 log-lost`. A log that has not
+        started yet, or a name that isn't a log name, returns `404`.
       operationId: getTemplateRunLog
       responses:
         "200":
@@ -1183,7 +1185,20 @@ paths:
               schema: { type: string }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
+        "404":
+          description: |
+            No such log, or one the caller can't see (`about:blank`); or the
+            log's output was not stored (`log-lost`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "409":
+          description: |
+            The command is still running, so its output isn't stored yet
+            (`log-live`). Try again when the log is `complete`.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "500": { $ref: "#/components/responses/InternalError" }
 
   /v1/tenants/{tenant_id}/template-runs/{run_id}/approve:
@@ -1689,6 +1704,8 @@ components:
             - https://openplan.run/problems/duplicate-component-key
             - https://openplan.run/problems/duplicate-credential-name
             - https://openplan.run/problems/last-owner
+            - https://openplan.run/problems/log-live
+            - https://openplan.run/problems/log-lost
             - https://openplan.run/problems/credential-encryption-unavailable
             - https://openplan.run/problems/queue-unavailable
         title:
@@ -2445,7 +2462,8 @@ components:
     TemplateRunLog:
       type: object
       description: |
-        Where one command's output is stored. Read the body from
+        One command's log, from the moment the command starts. Once its
+        `state` is `complete`, read the body from
         `GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{name}`,
         with this entry's `name`.
       properties:
@@ -2474,12 +2492,37 @@ components:
             `tofu plan -destroy`: the binary and subcommand that ran, without
             the arguments. A destroy's second step reads `tofu apply`, since
             it applies the saved destroy plan.
-        content_type: { type: string }
-        size_bytes: { type: integer, format: int64 }
-        uploaded_at: { type: string, format: date-time }
+        state:
+          type: string
+          enum: [live, complete, lost]
+          description: |
+            Where the output is. `live` — the command is still running and
+            its output isn't stored yet. `complete` — the output is stored;
+            read the body. `lost` — the output will never be stored;
+            `lost_reason` says why.
+        lost_reason:
+          type: string
+          enum: [upload_failed, executor_gone, run_terminated]
+          description: |
+            Present only when `state` is `lost`. `upload_failed` — the
+            command finished but its output couldn't be stored.
+            `executor_gone` — the executor stopped answering before the
+            output was stored. `run_terminated` — the run ended while the
+            command was still live, as when it was stopped by hand.
+        content_type:
+          type: string
+          description: Present only when `state` is `complete`.
+        size_bytes:
+          type: integer
+          format: int64
+          description: Present only when `state` is `complete`.
+        uploaded_at:
+          type: string
+          format: date-time
+          description: Present only when `state` is `complete`.
       required:
         [tenant_id, run_id, name, run_phase, seq, command, command_line,
-         content_type, size_bytes, uploaded_at]
+         state]
 
     TerraformCommand:
       type: string

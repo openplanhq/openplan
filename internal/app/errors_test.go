@@ -132,6 +132,8 @@ var sentinelNames = map[error]string{
 	ErrCredentialNameInvalid:              "ErrCredentialNameInvalid",
 	ErrDuplicateCredentialName:            "ErrDuplicateCredentialName",
 	ErrCredentialEncryptionUnavailable:    "ErrCredentialEncryptionUnavailable",
+	ErrTemplateRunLogLive:                 "ErrTemplateRunLogLive",
+	ErrTemplateRunLogLost:                 "ErrTemplateRunLogLost",
 	ErrForbidden:                          "ErrForbidden",
 	ErrUserNotProvisioned:                 "ErrUserNotProvisioned",
 }

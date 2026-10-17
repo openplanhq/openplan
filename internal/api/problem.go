@@ -152,6 +152,18 @@ var problemTypes = []problemType{
 		title:  "The stack needs an owner",
 		detail: "This is the stack's last owner. Make someone else owner first.",
 	},
+	{
+		sentinel: app.ErrTemplateRunLogLive, status: http.StatusConflict, slug: "log-live",
+		title:  "The log is still being written",
+		detail: "This command is still running. Follow it live, or try again when it finishes.",
+	},
+	// 404, not 409: no wait brings the body back, but its own type lets the
+	// client say the output was lost rather than that the log doesn't exist.
+	{
+		sentinel: app.ErrTemplateRunLogLost, status: http.StatusNotFound, slug: "log-lost",
+		title:  "The log was lost",
+		detail: "This command's output was not stored.",
+	},
 
 	// These three always arrive as field errors, which writeAppError renders
 	// before reaching the table; the rows cover one returned bare.

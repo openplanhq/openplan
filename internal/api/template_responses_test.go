@@ -98,13 +98,14 @@ func TestTemplateRunLogResponseFields(t *testing.T) {
 	response := newTemplateRunLogResponse(domain.TemplateRunLog{
 		TenantID: "tenant-1", RunID: "run-1", Phase: "plan-1", RunPhase: domain.RunPhasePlan,
 		Seq: 1, Command: domain.TerraformCommandPlan, CommandLine: "tofu plan",
+		State:     domain.TemplateRunLogComplete,
 		ObjectKey: "tenants/tenant-1/runs/run-1/plan-1.log", ContentType: "text/plain",
 		SizeBytes: 12, UploadedAt: time.Date(2026, 10, 17, 9, 0, 0, 0, time.UTC),
 	})
 
 	assert.Equal(t, []string{
 		"command", "command_line", "content_type", "name", "run_id", "run_phase", "seq",
-		"size_bytes", "tenant_id", "uploaded_at",
+		"size_bytes", "state", "tenant_id", "uploaded_at",
 	}, jsonKeys(t, response))
 	// name is what GET .../logs/{name} reads the log under.
 	assert.Equal(t, "plan-1", response.Name)
