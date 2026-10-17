@@ -16,6 +16,7 @@ function stack(overrides: Partial<Stack> = {}): Stack {
     tenant_id: "tenant_123",
     name: "My Stack",
     slug: "my-stack",
+    slug_is_derived: true,
     tags: {},
     default_credential_ids: [],
     created_by: "user_1",

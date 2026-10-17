@@ -65,8 +65,10 @@ export function failedChipLabel(failed: number): string {
   return failed === 1 ? "destroy failed" : `${failed} destroys failed`;
 }
 
-export function templateCountLabel(templates: number): string {
-  return templates === 0 ? "no templates" : count(templates, "template", "templates");
+/** The word after a list row's template count; the row sets the number apart
+    and says "No templates" itself when there are none. */
+export function templateCountWord(templates: number): string {
+  return templates === 1 ? "template" : "templates";
 }
 
 /** Where an item's run is read, or null when it has none. */

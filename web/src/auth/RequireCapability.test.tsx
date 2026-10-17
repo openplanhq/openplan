@@ -40,6 +40,7 @@ function stackView(capabilities: Partial<StackView["stack"]["effective_capabilit
       tenant_id: "tenant_123",
       name: "Stack",
       slug: "stack",
+      slug_is_derived: true,
       tags: {},
       default_credential_ids: [],
       created_by: "user_123",

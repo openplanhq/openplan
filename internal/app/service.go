@@ -2202,6 +2202,14 @@ func normalizeWorkspacePart(value string) string {
 	return strings.Trim(builder.String(), "_")
 }
 
+// SlugIsDerived reports whether a stack's slug is the one its name gives,
+// which is what a stack created without a slug carries. A slug typed to the
+// same value counts as derived too: it adds nothing the name doesn't say, so
+// a screen can leave it out.
+func SlugIsDerived(name, slug string) bool {
+	return slug == slugFromName(name)
+}
+
 func slugFromName(name string) string {
 	var builder strings.Builder
 	lastHyphen := false

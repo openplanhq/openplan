@@ -967,10 +967,13 @@ type stackViewResponse struct {
 }
 
 type stackResponse struct {
-	ID                    string                    `json:"id"`
-	TenantID              string                    `json:"tenant_id"`
-	Name                  string                    `json:"name"`
-	Slug                  string                    `json:"slug"`
+	ID       string `json:"id"`
+	TenantID string `json:"tenant_id"`
+	Name     string `json:"name"`
+	Slug     string `json:"slug"`
+	// SlugIsDerived is true when the slug is the one the name gives, so a
+	// screen can show the slug only when someone chose it.
+	SlugIsDerived         bool                      `json:"slug_is_derived"`
 	Status                string                    `json:"status"`
 	Tags                  map[string]string         `json:"tags"`
 	DefaultCredentialIDs  []string                  `json:"default_credential_ids"`
@@ -1108,6 +1111,7 @@ func newStackResponse(stack domain.Stack, capabilities app.StackCapabilities) st
 		TenantID:             string(stack.TenantID),
 		Name:                 stack.Name,
 		Slug:                 stack.Slug,
+		SlugIsDerived:        app.SlugIsDerived(stack.Name, stack.Slug),
 		Status:               status,
 		Tags:                 tags,
 		DefaultCredentialIDs: credentialIDs,

@@ -27,6 +27,7 @@ function stackView(overrides: Partial<StackView["stack"]> = {}): StackView {
       tenant_id: "tenant_123",
       name: "Stack",
       slug: "stack",
+      slug_is_derived: true,
       tags: {},
       default_credential_ids: [],
       created_by: "user_123",

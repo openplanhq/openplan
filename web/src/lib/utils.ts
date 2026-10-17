@@ -11,6 +11,7 @@ export const cn = createCn({
       radius: ["panel"],
       leading: ["label", "title"],
       tracking: ["title"],
+      container: ["beside-slug"],
     },
   },
 })
