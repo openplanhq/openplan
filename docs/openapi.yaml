@@ -38,6 +38,15 @@ info:
     one configured tenant; any other value returns `404`, not `403`. Read the
     one you are allowed to use from `GET /v1/me` (`tenant_id`).
 
+    ## Authorization
+
+    Access is granted per stack, and a stack's templates, runs, credentials
+    and grants follow it. If you can't view the stack, every route under it
+    answers `404` on every method, reads and writes alike, exactly as when it
+    doesn't exist. `403` means you can view the stack but your role doesn't
+    allow this action, such as a viewer starting a run or listing
+    credentials. A refusal never confirms that a stack you can't see exists.
+
     ## Request bodies
 
     JSON request bodies must be exactly one JSON object, and unknown fields are

@@ -2471,12 +2471,27 @@ func TestCreateStackWithNilAuditRepositoryDoesNotPanic(t *testing.T) {
 	}
 }
 
+// Both refusals are audited: the caller is told 404 when they can't view the
+// stack, but it is still a refused write.
 func TestAddTemplateToStackAuditsAuthorizationDenial(t *testing.T) {
 	t.Parallel()
 
+	for _, refusal := range writeRefusals {
+		t.Run(refusal.name, func(t *testing.T) {
+			t.Parallel()
+			testAddTemplateToStackAuditsRefusal(t, refusal)
+		})
+	}
+}
+
+func testAddTemplateToStackAuditsRefusal(t *testing.T, refusal writeRefusal) {
+	t.Helper()
+
+	auth := newTestAuthorization(t)
+	refusal.grant(t, auth, oidcSubject, "stack_123")
 	audit := &recordingAuditRepository{}
 	service := NewService(Service{
-		Authorization: newTestAuthorization(t),
+		Authorization: auth,
 		Stacks: &recordingStackRepository{
 			stack: domain.Stack{ID: "stack_123", TenantID: "tenant_123", Slug: "acme-prod"},
 		},
@@ -2501,8 +2516,8 @@ func TestAddTemplateToStackAuditsAuthorizationDenial(t *testing.T) {
 		TemplateRevisionID: domain.TemplateRevisionID("template_123"),
 		ConfigJSON:         json.RawMessage(`{"region":"us-east-1"}`),
 	})
-	if !errors.Is(err, ErrForbidden) {
-		t.Fatalf("error = %v, want ErrForbidden", err)
+	if !errors.Is(err, refusal.want) {
+		t.Fatalf("error = %v, want %v", err, refusal.want)
 	}
 
 	if len(audit.events) != 1 {
@@ -2522,6 +2537,7 @@ func TestAddTemplateToStackAuditsAuthorizationDenial(t *testing.T) {
 
 type recordingStackTemplateRepository struct {
 	stackTemplate                domain.StackTemplate
+	getErr                       error
 	gotTenantID                  domain.TenantID
 	gotID                        domain.StackTemplateID
 	gotConfigJSON                json.RawMessage
@@ -2531,6 +2547,9 @@ type recordingStackTemplateRepository struct {
 func (repository *recordingStackTemplateRepository) GetStackTemplate(_ context.Context, tenantID domain.TenantID, id domain.StackTemplateID) (domain.StackTemplate, error) {
 	repository.gotTenantID = tenantID
 	repository.gotID = id
+	if repository.getErr != nil {
+		return domain.StackTemplate{}, repository.getErr
+	}
 	stackTemplate := repository.stackTemplate
 	if stackTemplate.StackID == "" {
 		stackTemplate.StackID = "stack_123"
@@ -3350,44 +3369,53 @@ func TestOperableStackTemplateCommandsAuditRefusals(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			audit := &recordingAuditRepository{}
-			service := NewService(Service{
-				TemplateRuns:  &recordingTemplateRunRepository{},
-				Authorization: newTestAuthorization(t),
-				StackTemplates: &recordingStackTemplateRepository{
-					stackTemplate: domain.StackTemplate{
-						ID:        domain.StackTemplateID("stack_template_123"),
-						Lifecycle: domain.StackTemplateActive,
-					},
-				},
-				Audit: audit,
-				Clock: fixedClock{now: time.Now()},
+		for _, refusal := range writeRefusals {
+			t.Run(test.name+"/"+refusal.name, func(t *testing.T) {
+				t.Parallel()
+				testOperableCommandAuditsRefusal(t, test.call, refusal)
 			})
+		}
+	}
+}
 
-			err := test.call(service, authenticatedContext())
-			if !errors.Is(err, ErrForbidden) {
-				t.Fatalf("error = %v, want ErrForbidden", err)
-			}
+func testOperableCommandAuditsRefusal(t *testing.T, call func(*Service, context.Context) error, refusal writeRefusal) {
+	t.Helper()
 
-			if len(audit.events) != 1 {
-				t.Fatalf("audit events = %d, want 1", len(audit.events))
-			}
-			event := audit.events[0]
-			if event.Action != domain.AuditActionFailedAccessAttempt {
-				t.Fatalf("action = %q, want %q", event.Action, domain.AuditActionFailedAccessAttempt)
-			}
-			if event.Outcome != domain.AuditOutcomeFailure {
-				t.Fatalf("outcome = %q, want %q", event.Outcome, domain.AuditOutcomeFailure)
-			}
-			if event.ActorSubject != oidcSubject {
-				t.Fatalf("actor_subject = %q, want %q", event.ActorSubject, oidcSubject)
-			}
-			if event.TenantID != domain.TenantID("tenant_123") {
-				t.Fatalf("tenant_id = %q, want %q", event.TenantID, "tenant_123")
-			}
-		})
+	auth := newTestAuthorization(t)
+	refusal.grant(t, auth, oidcSubject, "stack_123")
+	audit := &recordingAuditRepository{}
+	service := NewService(Service{
+		TemplateRuns:  &recordingTemplateRunRepository{},
+		Authorization: auth,
+		StackTemplates: &recordingStackTemplateRepository{
+			stackTemplate: domain.StackTemplate{
+				ID:        domain.StackTemplateID("stack_template_123"),
+				Lifecycle: domain.StackTemplateActive,
+			},
+		},
+		Audit: audit,
+		Clock: fixedClock{now: time.Now()},
+	})
+
+	err := call(service, authenticatedContext())
+	if !errors.Is(err, refusal.want) {
+		t.Fatalf("error = %v, want %v", err, refusal.want)
+	}
+
+	if len(audit.events) != 1 {
+		t.Fatalf("audit events = %d, want 1", len(audit.events))
+	}
+	event := audit.events[0]
+	if event.Action != domain.AuditActionFailedAccessAttempt {
+		t.Fatalf("action = %q, want %q", event.Action, domain.AuditActionFailedAccessAttempt)
+	}
+	if event.Outcome != domain.AuditOutcomeFailure {
+		t.Fatalf("outcome = %q, want %q", event.Outcome, domain.AuditOutcomeFailure)
+	}
+	if event.ActorSubject != oidcSubject {
+		t.Fatalf("actor_subject = %q, want %q", event.ActorSubject, oidcSubject)
+	}
+	if event.TenantID != domain.TenantID("tenant_123") {
+		t.Fatalf("tenant_id = %q, want %q", event.TenantID, "tenant_123")
 	}
 }

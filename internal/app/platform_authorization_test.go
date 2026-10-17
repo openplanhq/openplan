@@ -136,20 +136,22 @@ func TestPlatformViewerReadsTheCatalogButCannotPublishToIt(t *testing.T) {
 // The parent edge is what carries it, so the test proves the route rather than
 // the outcome: with the edge the administrator is allowed, and without it the
 // same administrator is refused. A short-circuit on "is an administrator" in Go
-// would allow both and fail the second half.
+// would allow both and fail the second half. Without the edge the administrator
+// can't view the stack either, so the refusal is ErrNotFound, as for anyone
+// else who can't see it.
 func TestPlatformAdminReachesAStackThroughTheModel(t *testing.T) {
 	t.Parallel()
 
 	auth := newPlatformAuthorizer(t, platformAdmin("admin-subject"))
 	linkStackToPlatform(t, auth, "stack_linked")
 
-	if err := authorizeStack(platformContext("admin-subject"), auth, domain.StackID("stack_linked"), authorization.RelationCanOperate, ErrForbidden); err != nil {
+	if err := authorizeStack(platformContext("admin-subject"), auth, domain.StackID("stack_linked"), authorization.RelationCanOperate); err != nil {
 		t.Fatalf("authorizeStack with a parent edge = %v, want nil", err)
 	}
 
-	err := authorizeStack(platformContext("admin-subject"), auth, domain.StackID("stack_unlinked"), authorization.RelationCanOperate, ErrForbidden)
-	if !errors.Is(err, ErrForbidden) {
-		t.Fatalf("authorizeStack without a parent edge = %v, want ErrForbidden -- the answer must come from the model", err)
+	err := authorizeStack(platformContext("admin-subject"), auth, domain.StackID("stack_unlinked"), authorization.RelationCanOperate)
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("authorizeStack without a parent edge = %v, want ErrNotFound -- the answer must come from the model", err)
 	}
 }
 

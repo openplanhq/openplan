@@ -624,7 +624,8 @@ func assertValidationFailed(t *testing.T, response *httptest.ResponseRecorder, w
 	}
 }
 
-func TestStartTemplateRunHidesMissingStackTemplateAsForbidden(t *testing.T) {
+// A missing stack template answers 404 on a write, as it does on a read (#387).
+func TestStartTemplateRunHidesMissingStackTemplateAsNotFound(t *testing.T) {
 	t.Parallel()
 
 	deps := newAPITestDependencies(t)
@@ -639,8 +640,8 @@ func TestStartTemplateRunHidesMissingStackTemplateAsForbidden(t *testing.T) {
 
 	server.ServeHTTP(response, request)
 
-	if response.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusForbidden, response.Body.String())
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusNotFound, response.Body.String())
 	}
 }
 
@@ -1329,7 +1330,7 @@ func TestUpgradeStackTemplateMapsSourceMismatchToValidationFailed(t *testing.T) 
 	assertValidationFailed(t, response, "#/target_template_revision_id different_template")
 }
 
-func TestStackTemplateEditRoutesHideMissingStackTemplateAsForbidden(t *testing.T) {
+func TestStackTemplateEditRoutesHideMissingStackTemplateAsNotFound(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -1364,8 +1365,8 @@ func TestStackTemplateEditRoutesHideMissingStackTemplateAsForbidden(t *testing.T
 
 			server.ServeHTTP(response, request)
 
-			if response.Code != http.StatusForbidden {
-				t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusForbidden, response.Body.String())
+			if response.Code != http.StatusNotFound {
+				t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusNotFound, response.Body.String())
 			}
 		})
 	}
@@ -2454,6 +2455,9 @@ func TestStackRoleRoutesDenyInsufficientRoles(t *testing.T) {
 	}{
 		{name: "unassigned list is empty", method: http.MethodGet, path: "/v1/tenants/tenant_123/stacks", status: http.StatusOK, permission: authorization.RelationCanView},
 		{name: "unassigned cannot read stack", method: http.MethodGet, path: "/v1/tenants/tenant_123/stacks/stack_123", status: http.StatusNotFound, permission: authorization.RelationCanView},
+		{name: "unassigned cannot install template", method: http.MethodPost, path: "/v1/tenants/tenant_123/stacks/stack_123/templates", body: `{"template_revision_id":"revision_123","config":{}}`, status: http.StatusNotFound, permission: authorization.RelationCanOperate},
+		{name: "unassigned cannot approve run", method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/approval", body: `{}`, status: http.StatusNotFound, permission: authorization.RelationCanApprove},
+		{name: "unassigned cannot assign role", method: http.MethodPost, path: "/v1/tenants/tenant_123/stacks/stack_123/grants", body: `{"user_sub":"user-2","role":"viewer"}`, status: http.StatusNotFound, permission: authorization.RelationCanManageAccess},
 		{name: "viewer cannot install template", role: authorization.RelationViewer, method: http.MethodPost, path: "/v1/tenants/tenant_123/stacks/stack_123/templates", body: `{"template_revision_id":"revision_123","config":{}}`, status: http.StatusForbidden, permission: authorization.RelationCanOperate},
 		{name: "approver cannot update config", role: authorization.RelationApprover, method: http.MethodPatch, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/config", body: `{"config":{}}`, status: http.StatusForbidden, permission: authorization.RelationCanOperate},
 		{name: "viewer cannot upgrade template", role: authorization.RelationViewer, method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/upgrade", body: `{"target_template_revision_id":"revision_123"}`, status: http.StatusForbidden, permission: authorization.RelationCanOperate},
@@ -2559,6 +2563,8 @@ func TestStackListLaterBatchFailureReturnsNoPartialResponse(t *testing.T) {
 	}
 }
 
+// A caller with no grant on the stack can't tell a missing object from one it
+// can't see: both are 404, on writes as well as reads (#387).
 func TestInheritedRouteMissingAndDeniedStatusesMatch(t *testing.T) {
 	t.Parallel()
 
@@ -2567,18 +2573,17 @@ func TestInheritedRouteMissingAndDeniedStatusesMatch(t *testing.T) {
 		method   string
 		path     string
 		body     string
-		status   int
 		resource string
 	}{
-		{name: "config", method: http.MethodPatch, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/config", body: `{"config":{}}`, status: http.StatusForbidden, resource: "stack-template"},
-		{name: "upgrade", method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/upgrade", body: `{"target_template_revision_id":"revision_123"}`, status: http.StatusForbidden, resource: "stack-template"},
-		{name: "start run", method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/runs", body: `{"operation":"plan"}`, status: http.StatusForbidden, resource: "stack-template"},
-		{name: "run detail", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123", status: http.StatusNotFound},
-		{name: "approval", method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/approval", body: `{}`, status: http.StatusForbidden},
-		{name: "discard", method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/discard", body: `{}`, status: http.StatusForbidden},
-		{name: "log list", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123/logs", status: http.StatusNotFound},
-		{name: "log body", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123/logs/plan", status: http.StatusNotFound},
-		{name: "run history", method: http.MethodGet, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/runs", status: http.StatusNotFound, resource: "stack-template"},
+		{name: "config", method: http.MethodPatch, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/config", body: `{"config":{}}`, resource: "stack-template"},
+		{name: "upgrade", method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/upgrade", body: `{"target_template_revision_id":"revision_123"}`, resource: "stack-template"},
+		{name: "start run", method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/runs", body: `{"operation":"plan"}`, resource: "stack-template"},
+		{name: "run detail", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123"},
+		{name: "approval", method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/approval", body: `{}`},
+		{name: "discard", method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/discard", body: `{}`},
+		{name: "log list", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123/logs"},
+		{name: "log body", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123/logs/plan"},
+		{name: "run history", method: http.MethodGet, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/runs", resource: "stack-template"},
 	}
 
 	for _, test := range tests {
@@ -2606,8 +2611,8 @@ func TestInheritedRouteMissingAndDeniedStatusesMatch(t *testing.T) {
 					t.Fatal("protected missing or denied request had side effects")
 				}
 			}
-			if statuses[0] != test.status || statuses[1] != test.status {
-				t.Fatalf("missing=%d denied=%d want=%d", statuses[0], statuses[1], test.status)
+			if statuses[0] != http.StatusNotFound || statuses[1] != http.StatusNotFound {
+				t.Fatalf("missing=%d denied=%d want=%d", statuses[0], statuses[1], http.StatusNotFound)
 			}
 		})
 	}
@@ -2648,8 +2653,9 @@ func newPermissionMatrixDependencies(t *testing.T) *apiTestDependencies {
 func TestDeniedStackMutationReturnsForbiddenWithoutSideEffects(t *testing.T) {
 	t.Parallel()
 
-	deps := newBareAPITestDependencies(t)
-	// The subject holds no grants, which is what denial looks like.
+	// A viewer can see the stack, so the refusal is 403. A subject with no
+	// grant gets 404 instead (TestStackRoleRoutesDenyInsufficientRoles).
+	deps := newBareAPITestDependencies(t).withGrants(mustAPIGrant(t, apiOIDCSubject, "stack_123", authorization.RelationViewer))
 	server := NewServer(deps.service(), configuredTenantID)
 	response := httptest.NewRecorder()
 	request := ordinaryAuthenticatedRequest(http.MethodPost, "/v1/tenants/tenant_123/stacks/stack_123/templates", strings.NewReader(`{"template_revision_id":"revision_123","config":{}}`))
@@ -3931,8 +3937,8 @@ func TestAssignStackRoleRejectsInvalidJSON(t *testing.T) {
 func TestAssignStackRoleRequiresManageAccess(t *testing.T) {
 	t.Parallel()
 
-	deps := newBareAPITestDependencies(t)
-	// The subject holds no grants, which is what denial looks like.
+	// An operator can see the stack and act on it, but not manage who else can.
+	deps := newBareAPITestDependencies(t).withGrants(mustAPIGrant(t, apiOIDCSubject, "stack_123", authorization.RelationOperator))
 	server := NewServer(deps.service(), configuredTenantID)
 	response := httptest.NewRecorder()
 	request := ordinaryAuthenticatedRequest(

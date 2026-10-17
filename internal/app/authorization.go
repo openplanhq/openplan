@@ -75,36 +75,47 @@ func checkPlatform(ctx context.Context, auth *authorization.Authorization, relat
 }
 
 // authorizeStack answers "may the request's principal do relation to this
-// stack?", returning denied rather than a generic error so a caller controls
-// whether the client sees 403 or 404.
+// stack?" for reads and writes alike. A caller who can't view the stack is told
+// it isn't there, so a refused write never confirms that a stack the caller
+// can't see exists; only a caller who can see it learns they may not act.
+//
+// Both questions go in one BatchCheck rather than two round trips. Asking
+// can_view alone when it is the relation keeps reads at one check.
 //
 // A platform administrator is not special-cased here. The model derives it:
 // can_manage_access includes "can_administer from parent", so the same Check
 // that answers for an owner answers for an administrator.
 //
 //	stack owned by alice, principal alice, RelationCanOperate  → nil
-//	stack owned by alice, principal bob, RelationCanOperate    → denied
-//	principal holds platform admin, any stack                  → nil (from the model)
-//	stackID = "bad:id"                                         → denied
+//	stack owned by alice, principal bob, RelationCanOperate    → ErrNotFound
+//	bob is a viewer of it, RelationCanOperate                  → ErrForbidden
+//	principal holds platform admin, any linked stack           → nil (from the model)
+//	stackID = "bad:id"                                         → ErrNotFound
 //	OpenFGA unreachable                                        → error (never a decision)
-func authorizeStack(ctx context.Context, auth *authorization.Authorization, stackID domain.StackID, relation authorization.Relation, denied error) error {
-	principal, err := requirePrincipalAndAuthorizer(ctx, auth)
-	if err != nil {
+func authorizeStack(ctx context.Context, auth *authorization.Authorization, stackID domain.StackID, relation authorization.Relation) error {
+	if _, err := requirePrincipalAndAuthorizer(ctx, auth); err != nil {
 		return err
 	}
 	object, err := authorization.ObjectFromID(authorization.TypeStack, string(stackID))
 	if errors.Is(err, authorization.ErrInvalidInput) {
-		return denied
+		return ErrNotFound
 	}
 	if err != nil {
 		return err
 	}
-	allowed, err := auth.Can(ctx, principal.Subject, relation, object)
+	relations := []authorization.Relation{authorization.RelationCanView}
+	if relation != authorization.RelationCanView {
+		relations = append(relations, relation)
+	}
+	allowed, err := batchCheckObject(ctx, auth, object, relations)
 	if err != nil {
 		return err
 	}
-	if !allowed {
-		return denied
+	if !allowed[0] {
+		return ErrNotFound
+	}
+	if !allowed[len(allowed)-1] {
+		return ErrForbidden
 	}
 	return nil
 }
@@ -186,16 +197,16 @@ func stackPageOrderBefore(left, right domain.Stack) bool {
 	return left.ID > right.ID
 }
 
-func (service *Service) authorizedStackTemplate(ctx context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID, relation authorization.Relation, denied error) (domain.StackTemplate, error) {
+// authorizedStackTemplate loads a stack template and authorizes relation on the
+// stack that owns it. A template that doesn't exist is ErrNotFound, the same
+// answer as one the caller can't view, so the two can't be told apart.
+func (service *Service) authorizedStackTemplate(ctx context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID, relation authorization.Relation) (domain.StackTemplate, error) {
 	// Fails an unauthenticated or unconfigured request before the repository
 	// read; authorizeStack below re-derives the principal for the Check.
 	if _, err := requirePrincipalAndAuthorizer(ctx, service.Authorization); err != nil {
 		return domain.StackTemplate{}, err
 	}
 	stackTemplate, err := service.StackTemplates.GetStackTemplate(ctx, tenantID, stackTemplateID)
-	if errors.Is(err, ErrNotFound) {
-		return domain.StackTemplate{}, denied
-	}
 	if err != nil {
 		return domain.StackTemplate{}, err
 	}
@@ -204,7 +215,7 @@ func (service *Service) authorizedStackTemplate(ctx context.Context, tenantID do
 	} else if err != nil {
 		return domain.StackTemplate{}, err
 	}
-	if err := authorizeStack(ctx, service.Authorization, stackTemplate.StackID, relation, denied); err != nil {
+	if err := authorizeStack(ctx, service.Authorization, stackTemplate.StackID, relation); err != nil {
 		return domain.StackTemplate{}, err
 	}
 	return stackTemplate, nil
@@ -212,15 +223,16 @@ func (service *Service) authorizedStackTemplate(ctx context.Context, tenantID do
 
 // operableStackTemplate is authorizedStackTemplate for the mutating commands:
 // the same lookup, with the refusal recorded and wrapped the one way all of
-// them want it. The read-only callers deliberately do not use it -- they refuse
-// with ErrNotFound and write no audit event.
+// them want it. The read-only callers deliberately do not use it -- they write
+// no audit event. An unseen or missing template is still audited: it is a
+// refused write, whatever the client is told.
 func (service *Service) operableStackTemplate(
 	ctx context.Context,
 	actor domain.UserID,
 	tenantID domain.TenantID,
 	stackTemplateID domain.StackTemplateID,
 ) (domain.StackTemplate, error) {
-	stackTemplate, err := service.authorizedStackTemplate(ctx, tenantID, stackTemplateID, authorization.RelationCanOperate, ErrForbidden)
+	stackTemplate, err := service.authorizedStackTemplate(ctx, tenantID, stackTemplateID, authorization.RelationCanOperate)
 	if err != nil {
 		// No StackID: the refusal can precede resolving which stack owns the
 		// template, so naming one here would sometimes be a guess.
@@ -391,18 +403,17 @@ func ResolveStacksCapabilities(ctx context.Context, auth *authorization.Authoriz
 	return caps, nil
 }
 
-func (service *Service) authorizedTemplateRun(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, relation authorization.Relation, denied error) (domain.TemplateRun, error) {
+// authorizedTemplateRun is authorizedStackTemplate for a run: a missing run is
+// ErrNotFound, and the run's stack template decides the rest.
+func (service *Service) authorizedTemplateRun(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, relation authorization.Relation) (domain.TemplateRun, error) {
 	if _, err := requirePrincipalAndAuthorizer(ctx, service.Authorization); err != nil {
 		return domain.TemplateRun{}, err
 	}
 	run, err := service.TemplateRuns.GetTemplateRun(ctx, tenantID, runID)
-	if errors.Is(err, ErrNotFound) {
-		return domain.TemplateRun{}, denied
-	}
 	if err != nil {
 		return domain.TemplateRun{}, err
 	}
-	if _, err := service.authorizedStackTemplate(ctx, tenantID, run.StackTemplateID, relation, denied); err != nil {
+	if _, err := service.authorizedStackTemplate(ctx, tenantID, run.StackTemplateID, relation); err != nil {
 		return domain.TemplateRun{}, err
 	}
 	return run, nil
