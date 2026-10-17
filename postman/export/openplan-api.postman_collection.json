@@ -1042,6 +1042,77 @@
           }
         },
         {
+          "name": "Follow one log live",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () =\u003e pm.response.to.have.status(200));",
+                  "pm.test('body is an event stream', () =\u003e pm.expect(pm.response.headers.get('Content-Type')).to.include('text/event-stream'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/template-runs/{{run_id}}/logs/{{name}}/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "{{tenant_id}}",
+                "template-runs",
+                "{{run_id}}",
+                "logs",
+                "{{name}}",
+                "events"
+              ]
+            },
+            "description": "Streams a running command's output as server-sent events\n(`text/event-stream`), for a browser's `EventSource`. The stream\nreplays the output so far, then follows it as the command writes,\nand ends with one `log_end` event. Three event types, each with a\nJSON `data` line:\n\n- `log`: the next bytes of output. `data` is\n  `{\"offset\": \u003cn\u003e, \"data\": \"\u003ctext\u003e\"}`: `offset` is the first byte's\n  position in the log, and `text` is the bytes as UTF-8, with any\n  invalid sequence replaced by U+FFFD. The event's `id` is what to\n  send back as `Last-Event-ID`.\n- `log_truncated`: the output outgrew what is streamed live, and no\n  more `log` events follow. `data` is `{}`. Read the rest from the\n  log's body once it is `complete`.\n- `log_end`: the last event. `data` is `{\"state\": \"\u003cstate\u003e\"}`:\n  `complete` (read the whole body from the log's body endpoint),\n  `lost` (the output was not stored), or `live` (the command is still\n  running, but this stream stopped following it: reconnect with\n  `Last-Event-ID`, after a backoff of the client's own).\n\nA log that is not `live` when the request arrives gets its\n`log_end` straight away. The stream carries no event while the\ncommand prints nothing, including before its first byte.\n\nIn a collection run the plan has finished, so the stream is one `log_end` and closes."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "header": [],
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/template-runs/{{run_id}}/logs/{{name}}/events",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "tenants",
+                    "{{tenant_id}}",
+                    "template-runs",
+                    "{{run_id}}",
+                    "logs",
+                    "{{name}}",
+                    "events"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "text",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "text/event-stream"
+                }
+              ],
+              "body": "event: log\nid: 1760720000000-0\ndata: {\"offset\":0,\"data\":\"Initializing the backend...\\n\"}\n\nevent: log_end\ndata: {\"state\":\"complete\"}\n"
+            }
+          ]
+        },
+        {
           "name": "Approve a waiting plan, which applies it",
           "event": [
             {

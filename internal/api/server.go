@@ -25,6 +25,7 @@ type Server struct {
 	service  *app.Service
 	tenantID domain.TenantID
 	queue    queue.Reader
+	liveLogs LiveLogSubscriber
 	auth     AuthConfig
 	mux      *http.ServeMux
 	handler  http.Handler
@@ -37,6 +38,12 @@ type ServerOption func(*Server)
 // WithQueueReader enables the queue read endpoint.
 func WithQueueReader(reader queue.Reader) ServerOption {
 	return func(server *Server) { server.queue = reader }
+}
+
+// WithLiveLogs enables following a running command's log over server-sent
+// events.
+func WithLiveLogs(subscriber LiveLogSubscriber) ServerOption {
+	return func(server *Server) { server.liveLogs = subscriber }
 }
 
 // AuthFlow is the subset of the OIDC flow the handlers use. *authentication.Flow
@@ -183,6 +190,8 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs", server.handleListTemplateRunLogs)
 	// Reads one persisted log body by the log's name, such as plan-1.
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{name}", server.handleGetTemplateRunLog)
+	// Follows one log live, as server-sent events, while its command runs.
+	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{name}/events", server.handleStreamTemplateRunLog)
 
 	// User search routes.
 	// Searches signed-in users by display name or email.

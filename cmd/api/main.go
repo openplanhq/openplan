@@ -98,7 +98,8 @@ type apiDependencies struct {
 	newAuthorization     func(context.Context, postgresPool, string) (*authorization.Authorization, error)
 	listenAndServe       func(context.Context, string, http.Handler) error
 	// dialLiveLogs connects to the Valkey the executor publishes commands'
-	// output to: the API ends each finished log's stream there.
+	// output to: the API ends each finished log's stream there, and follows
+	// a running one's for its viewers.
 	dialLiveLogs func(ctx context.Context, url string) (*redis.Client, error)
 
 	dialTemporal       func(context.Context, temporal.Config) (client.Client, error)
@@ -425,6 +426,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 
 	handler := api.NewAuthenticatedServer(service, cfg.Security.TenantID, cfg.Debug,
 		api.WithQueueReader(store),
+		api.WithLiveLogs(livelog.NewRegistry(liveLogs)),
 		api.WithAuth(api.AuthConfig{
 			Flow:                flow,
 			Verifier:            verifier,

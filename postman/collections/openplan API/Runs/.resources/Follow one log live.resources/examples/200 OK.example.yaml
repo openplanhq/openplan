@@ -1,0 +1,20 @@
+$kind: http-example
+request:
+  url: '{{base_url}}/v1/tenants/{{tenant_id}}/template-runs/{{run_id}}/logs/{{name}}/events'
+  method: GET
+response:
+  statusCode: 200
+  statusText: OK
+  headers:
+    - key: Content-Type
+      value: text/event-stream
+  body:
+    type: text
+    content: |
+      event: log
+      id: 1760720000000-0
+      data: {"offset":0,"data":"Initializing the backend...\n"}
+
+      event: log_end
+      data: {"state":"complete"}
+order: 1000

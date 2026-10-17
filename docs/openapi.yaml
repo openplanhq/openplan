@@ -1201,6 +1201,79 @@ paths:
               schema: { $ref: "#/components/schemas/Problem" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{name}/events:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/RunID"
+      - name: name
+        in: path
+        required: true
+        description: The log's name, such as `plan-1`, as for its body.
+        schema: { $ref: "#/components/schemas/LogName" }
+      - name: Last-Event-ID
+        in: header
+        required: false
+        description: |
+          The `id` of the last `log` event the client has. The stream starts
+          after it instead of from the log's first byte. A browser's
+          `EventSource` sends it on its own when it reconnects.
+        schema: { type: string, example: "1760720000000-0" }
+    get:
+      tags: [Runs]
+      summary: Follow one log live
+      description: |
+        Streams a running command's output as server-sent events
+        (`text/event-stream`), for a browser's `EventSource`. The stream
+        replays the output so far, then follows it as the command writes,
+        and ends with one `log_end` event. Three event types, each with a
+        JSON `data` line:
+
+        - `log`: the next bytes of output. `data` is
+          `{"offset": <n>, "data": "<text>"}`: `offset` is the first byte's
+          position in the log, and `text` is the bytes as UTF-8, with any
+          invalid sequence replaced by U+FFFD. The event's `id` is what to
+          send back as `Last-Event-ID`.
+        - `log_truncated`: the output outgrew what is streamed live, and no
+          more `log` events follow. `data` is `{}`. Read the rest from the
+          log's body once it is `complete`.
+        - `log_end`: the last event. `data` is `{"state": "<state>"}`:
+          `complete` (read the whole body from the log's body endpoint),
+          `lost` (the output was not stored), or `live` (the command is still
+          running, but this stream stopped following it: reconnect with
+          `Last-Event-ID`, after a backoff of the client's own).
+
+        A log that is not `live` when the request arrives gets its
+        `log_end` straight away. The stream carries no event while the
+        command prints nothing, including before its first byte.
+      operationId: streamTemplateRunLog
+      responses:
+        "200":
+          description: The log's events, until its `log_end`.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              example: |
+                event: log
+                id: 1760720000000-0
+                data: {"offset":0,"data":"Initializing the backend...\n"}
+
+                event: log_end
+                data: {"state":"complete"}
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503":
+          description: |
+            Live logs aren't configured for this deployment
+            (`live-logs-unavailable`), or this server is following as many
+            live logs as it can (`live-logs-busy`): try again shortly. Either
+            way the log's body can be read once it is `complete`.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
   /v1/tenants/{tenant_id}/template-runs/{run_id}/approve:
     parameters:
       - $ref: "#/components/parameters/TenantID"
@@ -1708,6 +1781,8 @@ components:
             - https://openplan.run/problems/log-lost
             - https://openplan.run/problems/credential-encryption-unavailable
             - https://openplan.run/problems/queue-unavailable
+            - https://openplan.run/problems/live-logs-unavailable
+            - https://openplan.run/problems/live-logs-busy
         title:
           type: string
           description: |
