@@ -138,7 +138,7 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 
 	// Template revision registration routes.
 	// Starts async registration for a public GitHub Terraform template source.
-	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/template-revisions", server.handleRegisterTemplate)
+	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/template-registrations", server.handleRegisterTemplate)
 	// Lists registered template revision metadata for the tenant.
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/template-revisions", server.handleListTemplateRevisions)
 	// Reads the current state of a template registration attempt.
@@ -814,7 +814,7 @@ func (server *Server) handleStartTemplateRun(response http.ResponseWriter, reque
 	}
 
 	setLocation(response, request, "template-runs", string(run.ID))
-	writeJSON(response, http.StatusCreated, run)
+	writeJSON(response, http.StatusAccepted, run)
 }
 
 func (server *Server) handleGetTemplateRun(response http.ResponseWriter, request *http.Request) {
@@ -878,7 +878,7 @@ func (server *Server) handleApproveRun(response http.ResponseWriter, request *ht
 		return
 	}
 
-	err := server.service.ApproveRun(request.Context(), app.ApproveRunCommand{
+	run, err := server.service.ApproveRun(request.Context(), app.ApproveRunCommand{
 		TenantID: domain.TenantID(request.PathValue("tenant_id")),
 		RunID:    domain.TemplateRunID(request.PathValue("run_id")),
 	})
@@ -887,7 +887,9 @@ func (server *Server) handleApproveRun(response http.ResponseWriter, request *ht
 		return
 	}
 
-	response.WriteHeader(http.StatusNoContent)
+	// The apply is queued, not done: the client follows it at the run.
+	setLocation(response, request, "template-runs", string(run.ID))
+	writeJSON(response, http.StatusAccepted, run)
 }
 
 func (server *Server) handleDiscardRun(response http.ResponseWriter, request *http.Request) {
@@ -909,8 +911,8 @@ func (server *Server) handleDiscardRun(response http.ResponseWriter, request *ht
 	response.WriteHeader(http.StatusNoContent)
 }
 
-// setLocation points a 201 or 202 at the URL that reads the new resource back,
-// under the request's tenant. An installed template and a credential have no
+// setLocation points a 201 or 202 at the URL that reads back the resource it
+// created or set working, under the request's tenant. An installed template and a credential have no
 // read of their own, so their responses carry none.
 func setLocation(response http.ResponseWriter, request *http.Request, collection, id string) {
 	response.Header().Set("Location", "/v1/tenants/"+url.PathEscape(request.PathValue("tenant_id"))+"/"+collection+"/"+url.PathEscape(id))

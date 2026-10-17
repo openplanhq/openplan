@@ -548,7 +548,7 @@ describe("RunDetailScreen", () => {
     );
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       if (init?.method === "POST") {
-        return new Response(null, { status: 204 });
+        return jsonResponse(run({ operation: "destroy", status: "approved", plan_summary: { add: 0, change: 0, destroy: 4 } }), 202);
       }
       if (String(input).endsWith("/template-runs/run_1")) {
         return jsonResponse(run({ operation: "destroy", status: "approved", plan_summary: { add: 0, change: 0, destroy: 4 } }));
@@ -585,6 +585,8 @@ describe("RunDetailScreen", () => {
       )
     );
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+    // The approval's own answer moves the run off waiting_approval.
+    await waitFor(() => expect(screen.queryByRole("button", { name: /Destroy 4/ })).toBeNull());
   });
 
   it("hides Approve when canApprove is denied", async () => {

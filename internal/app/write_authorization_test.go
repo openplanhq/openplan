@@ -130,7 +130,8 @@ var writePaths = []writePath{
 		return service.RevokeStackRole(ctx, RevokeStackRoleCommand{TenantID: "tenant_123", StackID: stackID, UserSub: "user_456"})
 	}},
 	{"ApproveRun", viaRun, func(service *Service, ctx context.Context, _ domain.StackID) error {
-		return service.ApproveRun(ctx, ApproveRunCommand{TenantID: "tenant_123", RunID: "run_123"})
+		_, err := service.ApproveRun(ctx, ApproveRunCommand{TenantID: "tenant_123", RunID: "run_123"})
+		return err
 	}},
 	{"DiscardRun", viaRun, func(service *Service, ctx context.Context, _ domain.StackID) error {
 		return service.DiscardRun(ctx, DiscardRunCommand{TenantID: "tenant_123", RunID: "run_123"})

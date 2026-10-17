@@ -247,8 +247,10 @@ export function useApproveRunMutation(tenantID: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (runID: string) => client.approveRun(tenantID, runID),
-    onSuccess: (_data, runID) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.templateRun(tenantID, runID) });
+    onSuccess: (run) => {
+      // The approval answers with the run, so the screen moves off "waiting
+      // for approval" without reading it again.
+      queryClient.setQueryData(queryKeys.templateRun(tenantID, run.id), run);
       queryClient.invalidateQueries({ queryKey: queryKeys.attention(tenantID) });
     }
   });

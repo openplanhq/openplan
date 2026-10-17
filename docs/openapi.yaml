@@ -321,7 +321,7 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
-  /v1/tenants/{tenant_id}/template-revisions:
+  /v1/tenants/{tenant_id}/template-registrations:
     parameters:
       - $ref: "#/components/parameters/TenantID"
     post:
@@ -336,7 +336,7 @@ paths:
         `GET /v1/tenants/{tenant_id}/template-registrations/{registration_id}`
         until its `status` is terminal; on `completed` it carries the
         `template_revision_id` the rest of the API takes.
-      operationId: registerTemplateRevision
+      operationId: createTemplateRegistration
       requestBody:
         required: true
         content:
@@ -364,6 +364,10 @@ paths:
         "413": { $ref: "#/components/responses/RequestTooLarge" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
         "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/template-revisions:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
     get:
       tags: [Templates]
       summary: List registered template revisions
@@ -391,7 +395,7 @@ paths:
     get:
       tags: [Templates]
       summary: Read a template registration
-      description: Poll this after `POST /v1/tenants/{tenant_id}/template-revisions`.
+      description: Poll this after `POST /v1/tenants/{tenant_id}/template-registrations`.
       operationId: getTemplateRegistration
       responses:
         "200":
@@ -987,7 +991,7 @@ paths:
             schema: { $ref: "#/components/schemas/StartTemplateRunRequest" }
             example: { operation: apply, auto_approve: false }
       responses:
-        "201":
+        "202":
           description: The run was created and queued.
           headers:
             Location:
@@ -1135,7 +1139,9 @@ paths:
         component's desired config and revision. Those cannot change while
         the plan waits, so this is a backstop.
 
-        Takes no fields: send `{}` or no body at all.
+        Takes no fields: send `{}` or no body at all. Returns `202` with the
+        run, now `approved`, while its apply waits for an executor; poll the
+        run until its `status` is terminal.
       operationId: approveRun
       requestBody:
         required: false
@@ -1146,8 +1152,15 @@ paths:
               additionalProperties: false
             example: {}
       responses:
-        "204":
-          description: Approved. The run proceeds.
+        "202":
+          description: Approved, and the apply queued.
+          headers:
+            Location:
+              description: Where to poll it, `/v1/tenants/{tenant_id}/template-runs/{run_id}`.
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TemplateRun" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }

@@ -37,7 +37,7 @@ describe("api client", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "/v1/tenants/tenant_123/template-revisions",
+      "/v1/tenants/tenant_123/template-registrations",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
@@ -190,10 +190,12 @@ describe("api client", () => {
   });
 
   it("posts run operations, approvals, and discards", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: "run_123" }));
+    // A fresh response per call: the approval now reads its body too.
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(() => Promise.resolve(jsonResponse({ id: "run_123" })));
 
     await startTemplateRun("tenant_123", "stack_template_123", { operation: "apply", auto_approve: true });
-    await approveRun("tenant_123", "run_123");
+    // The approval answers with the run, now approved, for the caller to show.
+    await expect(approveRun("tenant_123", "run_123")).resolves.toEqual({ id: "run_123" });
     await discardRun("tenant_123", "run_456", { reason: "manual stop" });
 
     expect(fetchMock).toHaveBeenNthCalledWith(

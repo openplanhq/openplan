@@ -585,7 +585,7 @@ visibility is never an authorization boundary.
 
 | Route | Required permission |
 |---|---|
-| `POST /v1/tenants/{tenant_id}/template-revisions` | Global `platform-admin` or `stack-creator` |
+| `POST /v1/tenants/{tenant_id}/template-registrations` | Global `platform-admin` or `stack-creator` |
 | `GET /v1/tenants/{tenant_id}/template-revisions` | Global `platform-admin` or `stack-creator` |
 | `GET /v1/tenants/{tenant_id}/template-registrations/{registration_id}` | Global `platform-admin` or `stack-creator` |
 | `GET /v1/tenants/{tenant_id}/template-revisions/{template_revision_id}/variables` | Global `platform-admin` or `stack-creator` |

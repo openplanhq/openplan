@@ -1585,36 +1585,45 @@ func (service *Service) RevokeStackRole(ctx context.Context, command RevokeStack
 
 // ApproveRun approves a plan waiting for approval and starts the workflow that
 // applies it. Approval, its audit record and the start intent commit together.
+// It returns the run as a read of it would, now approved, so the client can
+// follow the apply without reading it again.
 //
 // The plan has to still describe desired state. Config and revision cannot
 // change while a run is in flight, so this only refuses when something got
 // past that rule; it is the backstop, not the gate.
-func (service *Service) ApproveRun(ctx context.Context, command ApproveRunCommand) error {
+func (service *Service) ApproveRun(ctx context.Context, command ApproveRunCommand) (domain.TemplateRun, error) {
 	actor, err := authenticatedActor(ctx)
 	if err != nil {
-		return err
+		return domain.TemplateRun{}, err
 	}
 	if err := validateApproveRunCommand(command); err != nil {
-		return err
+		return domain.TemplateRun{}, err
 	}
 
 	run, err := service.authorizedTemplateRun(ctx, command.TenantID, command.RunID, authorization.RelationCanApprove)
 	if err != nil {
-		return err
+		return domain.TemplateRun{}, err
 	}
 	if run.Status != domain.TemplateRunWaitingApproval {
-		return fmt.Errorf("approve template run: %w", ErrRunNotApprovable)
+		return domain.TemplateRun{}, fmt.Errorf("approve template run: %w", ErrRunNotApprovable)
 	}
 	stackTemplate, err := service.StackTemplates.GetStackTemplate(ctx, command.TenantID, run.StackTemplateID)
 	if err != nil {
-		return fmt.Errorf("get stack template: %w", err)
+		return domain.TemplateRun{}, fmt.Errorf("get stack template: %w", err)
 	}
 	if stackTemplate.PendingPlanRunID != run.ID || stackTemplate.PlanState() != domain.PlanMatches {
-		return &PlanStaleError{RunNumber: run.RunNumber, PlanState: stackTemplate.PlanState()}
+		return domain.TemplateRun{}, &PlanStaleError{RunNumber: run.RunNumber, PlanState: stackTemplate.PlanState()}
 	}
 	templateRevision, err := service.TemplateRevisionMetadata.GetTemplateRevision(ctx, command.TenantID, run.TemplateRevisionID)
 	if err != nil {
-		return fmt.Errorf("get template revision metadata: %w", err)
+		return domain.TemplateRun{}, fmt.Errorf("get template revision metadata: %w", err)
+	}
+	// Described before the approval commits, as StartTemplateRun labels its
+	// run before creating it: a lookup failing after the commit would answer
+	// 500 for an approval whose apply is already queued, and a retry would
+	// then be refused as not approvable.
+	if err := service.describeTemplateRun(ctx, &run); err != nil {
+		return domain.TemplateRun{}, fmt.Errorf("approve template run: %w", err)
 	}
 
 	approval := domain.TemplateRunApproval{
@@ -1625,7 +1634,7 @@ func (service *Service) ApproveRun(ctx context.Context, command ApproveRunComman
 	}
 	payload, err := json.Marshal(StartTemplateApplyPayload(templateRunWorkflowInput(run, templateRevision)))
 	if err != nil {
-		return fmt.Errorf("encode start template apply payload: %w", err)
+		return domain.TemplateRun{}, fmt.Errorf("encode start template apply payload: %w", err)
 	}
 	auditEvent := domain.SecurityAuditEvent{
 		ActorSubject:  string(actor),
@@ -1648,10 +1657,14 @@ func (service *Service) ApproveRun(ctx context.Context, command ApproveRunComman
 			TenantID:     string(command.TenantID),
 		})
 	}); err != nil {
-		return fmt.Errorf("approve template run: %w", err)
+		return domain.TemplateRun{}, fmt.Errorf("approve template run: %w", err)
 	}
 
-	return nil
+	// Status is the only field of the run the approval writes. Who approved it
+	// shows up later, as the actor of the apply execution, which has not
+	// started yet.
+	run.Status = domain.TemplateRunApproved
+	return run, nil
 }
 
 // requireNoRunInFlight refuses to change a stack template's desired state while
@@ -1745,16 +1758,23 @@ func (service *Service) GetTemplateRun(ctx context.Context, command GetTemplateR
 	if err != nil {
 		return domain.TemplateRun{}, fmt.Errorf("get template run: %w", err)
 	}
-	executions, err := service.TemplateRuns.ListTemplateRunExecutions(ctx, command.TenantID, command.RunID)
-	if err != nil {
-		return domain.TemplateRun{}, fmt.Errorf("get template run executions: %w", err)
-	}
-	run.Executions = executions
-	if err := service.labelTriggerActors(ctx, &run); err != nil {
+	if err := service.describeTemplateRun(ctx, &run); err != nil {
 		return domain.TemplateRun{}, fmt.Errorf("get template run: %w", err)
 	}
 
 	return run, nil
+}
+
+// describeTemplateRun fills in what a read of one run shows beyond its row:
+// its workflow executions, and display names for everyone on it. Approval
+// answers with the same shape, so both go through here.
+func (service *Service) describeTemplateRun(ctx context.Context, run *domain.TemplateRun) error {
+	executions, err := service.TemplateRuns.ListTemplateRunExecutions(ctx, run.TenantID, run.ID)
+	if err != nil {
+		return fmt.Errorf("list template run executions: %w", err)
+	}
+	run.Executions = executions
+	return service.labelTriggerActors(ctx, run)
 }
 
 // ListTemplateRuns returns tenant-owned runs for one stack template, most recent first,

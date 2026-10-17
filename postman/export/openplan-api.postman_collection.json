@@ -111,7 +111,7 @@
               }
             },
             "url": {
-              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/template-revisions",
+              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/template-registrations",
               "host": [
                 "{{base_url}}"
               ],
@@ -119,7 +119,7 @@
                 "v1",
                 "tenants",
                 "{{tenant_id}}",
-                "template-revisions"
+                "template-registrations"
               ]
             },
             "description": "Points openplan at a GitHub repository and a revision, and starts an\nasynchronous registration: resolve the ref to a commit, fetch the\nsource, and infer the root module's input variables.\n\nReturns `202` with a registration record, not a revision. Poll\n`GET /v1/tenants/{tenant_id}/template-registrations/{registration_id}`\nuntil its `status` is terminal; on `completed` it carries the\n`template_revision_id` the rest of the API takes."
@@ -196,7 +196,7 @@
                 "{{registration_id}}"
               ]
             },
-            "description": "Poll this after `POST /v1/tenants/{tenant_id}/template-revisions`.\n\nIn a collection run this re-sends itself until the registration ends, and saves its revision."
+            "description": "Poll this after `POST /v1/tenants/{tenant_id}/template-registrations`.\n\nIn a collection run this re-sends itself until the registration ends, and saves its revision."
           }
         },
         {
@@ -767,7 +767,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status is 201', () =\u003e pm.response.to.have.status(201));",
+                  "pm.test('status is 202', () =\u003e pm.response.to.have.status(202));",
                   "if (pm.response.code \u003c 300) { pm.environment.set('run_id', pm.response.json().id); }"
                 ]
               }
@@ -992,7 +992,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status is one of 204, 409', () =\u003e pm.expect(pm.response.code).to.be.oneOf([204, 409]));"
+                  "pm.test('status is one of 202, 409', () =\u003e pm.expect(pm.response.code).to.be.oneOf([202, 409]));"
                 ]
               }
             }
@@ -1014,7 +1014,7 @@
                 "approval"
               ]
             },
-            "description": "Valid only while the run's `status` is `waiting_approval`. Approving\nstarts the apply of the plan the run saved: the same file, applied\nwith `tofu apply` on whichever executor picks it up, so what was\nreviewed is exactly what runs. If the state has moved on since the\nplan was made, tofu refuses the plan and the run fails; plan again.\n\nRefused with `409 plan-stale` if the plan no longer describes the\ncomponent's desired config and revision. Those cannot change while\nthe plan waits, so this is a backstop.\n\nTakes no fields: send `{}` or no body at all.\n\n`409` when the plan had no changes, so there is nothing to approve."
+            "description": "Valid only while the run's `status` is `waiting_approval`. Approving\nstarts the apply of the plan the run saved: the same file, applied\nwith `tofu apply` on whichever executor picks it up, so what was\nreviewed is exactly what runs. If the state has moved on since the\nplan was made, tofu refuses the plan and the run fails; plan again.\n\nRefused with `409 plan-stale` if the plan no longer describes the\ncomponent's desired config and revision. Those cannot change while\nthe plan waits, so this is a backstop.\n\nTakes no fields: send `{}` or no body at all. Returns `202` with the\nrun, now `approved`, while its apply waits for an executor; poll the\nrun until its `status` is terminal.\n\n`409` when the plan had no changes, so there is nothing to approve."
           }
         },
         {

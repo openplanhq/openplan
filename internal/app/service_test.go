@@ -57,7 +57,8 @@ func TestActorMutationsRejectMissingPrincipal(t *testing.T) {
 			return err
 		}},
 		{name: "approve run", call: func() error {
-			return service.ApproveRun(context.Background(), ApproveRunCommand{})
+			_, err := service.ApproveRun(context.Background(), ApproveRunCommand{})
+			return err
 		}},
 		{name: "discard run", call: func() error {
 			return service.DiscardRun(context.Background(), DiscardRunCommand{})
@@ -1041,7 +1042,7 @@ func TestApproveRunRejectsAPlanThatNoLongerMatchesDesired(t *testing.T) {
 				TemplateRevisionMetadata: &recordingTemplateRepository{},
 			})
 
-			err := service.ApproveRun(authenticatedContext(), ApproveRunCommand{TenantID: "tenant_123", RunID: "run_123"})
+			_, err := service.ApproveRun(authenticatedContext(), ApproveRunCommand{TenantID: "tenant_123", RunID: "run_123"})
 			if !errors.Is(err, ErrStackTemplatePlanStale) {
 				t.Fatalf("error = %v, want ErrStackTemplatePlanStale", err)
 			}
@@ -1071,7 +1072,7 @@ func TestApproveRunRejectsARunThatIsNotWaiting(t *testing.T) {
 		TemplateRevisionMetadata: &recordingTemplateRepository{},
 	})
 
-	err := service.ApproveRun(authenticatedContext(), ApproveRunCommand{TenantID: "tenant_123", RunID: "run_123"})
+	_, err := service.ApproveRun(authenticatedContext(), ApproveRunCommand{TenantID: "tenant_123", RunID: "run_123"})
 	if !errors.Is(err, ErrRunNotApprovable) {
 		t.Fatalf("error = %v, want ErrRunNotApprovable", err)
 	}
@@ -1663,6 +1664,7 @@ func TestApproveRunRecordsApprovalAndQueuesTheApply(t *testing.T) {
 	work := &recordingUnitOfWork{templateRuns: runs}
 
 	service := NewService(Service{
+		Users:                    &fakeUserRepository{},
 		Authorization:            testPlatformAuthorizer(t),
 		Work:                     work,
 		TemplateRuns:             runs,
@@ -1671,7 +1673,7 @@ func TestApproveRunRecordsApprovalAndQueuesTheApply(t *testing.T) {
 		Clock:                    fixedClock{now: now},
 	})
 
-	err := service.ApproveRun(ctx, ApproveRunCommand{
+	_, err := service.ApproveRun(ctx, ApproveRunCommand{
 		TenantID: domain.TenantID("tenant_123"),
 		RunID:    domain.TemplateRunID("run_123"),
 	})
@@ -1700,13 +1702,28 @@ func TestApproveRunRecordsApprovalAndQueuesTheApply(t *testing.T) {
 	}
 }
 
-func TestApproveRunQueuesNothingWhenRunIsNotApprovable(t *testing.T) {
+// The approval answers with the run as a read of it would show it, already
+// approved, so the client can follow the apply without reading it again. It
+// is described before the commit and never read back after: a read failing
+// there would report an approval that went through as a failure.
+func TestApproveRunReturnsTheRunAsApproved(t *testing.T) {
 	t.Parallel()
 
-	runs := &recordingTemplateRunRepository{run: domain.TemplateRun{ID: "run_123", TenantID: "tenant_123", StackTemplateID: "stack_template_123", Status: domain.TemplateRunWaitingApproval}, approvalErr: ErrRunNotApprovable}
+	runs := &readTrackingTemplateRunRepository{recordingTemplateRunRepository: &recordingTemplateRunRepository{
+		run: domain.TemplateRun{
+			ID:              "run_123",
+			TenantID:        "tenant_123",
+			StackTemplateID: "stack_template_123",
+			Status:          domain.TemplateRunWaitingApproval,
+			TriggerActor:    "sub_ada",
+		},
+		executions: []domain.TemplateRunWorkflowExecution{
+			{Phase: domain.RunPhasePlan, Actor: "sub_ada", Status: domain.TemplateRunExecutionSucceeded},
+		},
+	}}
 	work := &recordingUnitOfWork{templateRuns: runs}
-
 	service := NewService(Service{
+		Users:                    &fakeUserRepository{users: []UserProfile{{Sub: "sub_ada", DisplayName: "Ada Lovelace"}}},
 		Authorization:            testPlatformAuthorizer(t),
 		Work:                     work,
 		TemplateRuns:             runs,
@@ -1715,7 +1732,95 @@ func TestApproveRunQueuesNothingWhenRunIsNotApprovable(t *testing.T) {
 		Clock:                    fixedClock{now: time.Now()},
 	})
 
-	err := service.ApproveRun(authenticatedContext(), ApproveRunCommand{
+	run, err := service.ApproveRun(authenticatedContext(), ApproveRunCommand{TenantID: "tenant_123", RunID: "run_123"})
+	if err != nil {
+		t.Fatalf("ApproveRun returned error: %v", err)
+	}
+
+	if run.ID != "run_123" || run.Status != domain.TemplateRunApproved {
+		t.Fatalf("run = %s %q, want run_123 %q", run.ID, run.Status, domain.TemplateRunApproved)
+	}
+	if run.TriggerActorDisplayName != "Ada Lovelace" {
+		t.Fatalf("trigger actor display name = %q, want Ada Lovelace", run.TriggerActorDisplayName)
+	}
+	if len(run.Executions) != 1 || run.Executions[0].ActorDisplayName != "Ada Lovelace" {
+		t.Fatalf("executions = %#v, want the plan execution, labelled", run.Executions)
+	}
+	if runs.readsAfterApproval != 0 {
+		t.Fatalf("run reads after the approval = %d, want 0", runs.readsAfterApproval)
+	}
+}
+
+// A run that cannot be described is not approved: describing it comes before
+// the commit, so its failure leaves no approval and no queued apply behind.
+func TestApproveRunApprovesNothingWhenDescribingTheRunFails(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name          string
+		users         *fakeUserRepository
+		executionsErr error
+	}{
+		{name: "executions", users: &fakeUserRepository{}, executionsErr: errors.New("executions unavailable")},
+		{name: "display names", users: &fakeUserRepository{lookupErr: errors.New("users unavailable")}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			runs := &readTrackingTemplateRunRepository{
+				recordingTemplateRunRepository: &recordingTemplateRunRepository{run: domain.TemplateRun{
+					ID:              "run_123",
+					TenantID:        "tenant_123",
+					StackTemplateID: "stack_template_123",
+					Status:          domain.TemplateRunWaitingApproval,
+				}},
+				executionsErr: test.executionsErr,
+			}
+			work := &recordingUnitOfWork{templateRuns: runs}
+			service := NewService(Service{
+				Users:                    test.users,
+				Authorization:            testPlatformAuthorizer(t),
+				Work:                     work,
+				TemplateRuns:             runs,
+				StackTemplates:           approvableStackTemplates(),
+				TemplateRevisionMetadata: &recordingTemplateRepository{},
+				Clock:                    fixedClock{now: time.Now()},
+			})
+
+			run, err := service.ApproveRun(authenticatedContext(), ApproveRunCommand{TenantID: "tenant_123", RunID: "run_123"})
+			if err == nil {
+				t.Fatal("ApproveRun returned nil error, want the lookup's")
+			}
+			if run.ID != "" {
+				t.Fatalf("run = %#v, want none", run)
+			}
+			if work.inTxCalls != 0 || runs.approval.RunID != "" {
+				t.Fatalf("approval = %#v after %d transactions, want none", runs.approval, work.inTxCalls)
+			}
+			if len(work.requests) != 0 {
+				t.Fatalf("queued requests = %#v, want none", work.requests)
+			}
+		})
+	}
+}
+
+func TestApproveRunQueuesNothingWhenRunIsNotApprovable(t *testing.T) {
+	t.Parallel()
+
+	runs := &recordingTemplateRunRepository{run: domain.TemplateRun{ID: "run_123", TenantID: "tenant_123", StackTemplateID: "stack_template_123", Status: domain.TemplateRunWaitingApproval}, approvalErr: ErrRunNotApprovable}
+	work := &recordingUnitOfWork{templateRuns: runs}
+
+	service := NewService(Service{
+		Users:                    &fakeUserRepository{},
+		Authorization:            testPlatformAuthorizer(t),
+		Work:                     work,
+		TemplateRuns:             runs,
+		StackTemplates:           approvableStackTemplates(),
+		TemplateRevisionMetadata: &recordingTemplateRepository{},
+		Clock:                    fixedClock{now: time.Now()},
+	})
+
+	_, err := service.ApproveRun(authenticatedContext(), ApproveRunCommand{
 		TenantID: domain.TenantID("tenant_123"),
 		RunID:    domain.TemplateRunID("run_123"),
 	})
@@ -1743,6 +1848,7 @@ func TestApproveRunAllowsSelfApproval(t *testing.T) {
 	audit := &recordingAuditRepository{}
 
 	service := NewService(Service{
+		Users:                    &fakeUserRepository{},
 		Authorization:            testPlatformAuthorizer(t),
 		Work:                     work,
 		TemplateRuns:             runs,
@@ -1751,7 +1857,7 @@ func TestApproveRunAllowsSelfApproval(t *testing.T) {
 		Audit:                    audit,
 	})
 
-	err := service.ApproveRun(ctx, ApproveRunCommand{
+	_, err := service.ApproveRun(ctx, ApproveRunCommand{
 		TenantID: domain.TenantID("tenant_123"),
 		RunID:    domain.TemplateRunID("run_123"),
 	})
@@ -1783,6 +1889,7 @@ func TestApproveRunSelfApprovalWorksForPlatformAdmins(t *testing.T) {
 	audit := &recordingAuditRepository{}
 
 	service := NewService(Service{
+		Users:                    &fakeUserRepository{},
 		Authorization:            testPlatformAuthorizer(t),
 		Work:                     work,
 		TemplateRuns:             runs,
@@ -1791,7 +1898,7 @@ func TestApproveRunSelfApprovalWorksForPlatformAdmins(t *testing.T) {
 		Audit:                    audit,
 	})
 
-	err := service.ApproveRun(ctx, ApproveRunCommand{
+	_, err := service.ApproveRun(ctx, ApproveRunCommand{
 		TenantID: domain.TenantID("tenant_123"),
 		RunID:    domain.TemplateRunID("run_123"),
 	})
@@ -1820,6 +1927,7 @@ func TestApproveRunAuditsSuccessfulApproval(t *testing.T) {
 	audit := &recordingAuditRepository{}
 
 	service := NewService(Service{
+		Users:                    &fakeUserRepository{},
 		Authorization:            testPlatformAuthorizer(t),
 		Work:                     work,
 		TemplateRuns:             runs,
@@ -1829,7 +1937,7 @@ func TestApproveRunAuditsSuccessfulApproval(t *testing.T) {
 		Audit:                    audit,
 	})
 
-	err := service.ApproveRun(ctx, ApproveRunCommand{
+	_, err := service.ApproveRun(ctx, ApproveRunCommand{
 		TenantID: domain.TenantID("tenant_123"),
 		RunID:    domain.TemplateRunID("run_123"),
 	})
@@ -2696,6 +2804,37 @@ func (repository *recordingTemplateRunRepository) ApproveTemplateRun(_ context.C
 	return nil
 }
 
+// readTrackingTemplateRunRepository counts the run reads that happen after the
+// approval is written, and can fail the executions lookup.
+type readTrackingTemplateRunRepository struct {
+	*recordingTemplateRunRepository
+	executionsErr      error
+	approved           bool
+	readsAfterApproval int
+}
+
+func (repository *readTrackingTemplateRunRepository) GetTemplateRun(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) (domain.TemplateRun, error) {
+	if repository.approved {
+		repository.readsAfterApproval++
+	}
+	return repository.recordingTemplateRunRepository.GetTemplateRun(ctx, tenantID, runID)
+}
+
+func (repository *readTrackingTemplateRunRepository) ListTemplateRunExecutions(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) ([]domain.TemplateRunWorkflowExecution, error) {
+	if repository.approved {
+		repository.readsAfterApproval++
+	}
+	if repository.executionsErr != nil {
+		return nil, repository.executionsErr
+	}
+	return repository.recordingTemplateRunRepository.ListTemplateRunExecutions(ctx, tenantID, runID)
+}
+
+func (repository *readTrackingTemplateRunRepository) ApproveTemplateRun(ctx context.Context, approval domain.TemplateRunApproval) error {
+	repository.approved = true
+	return repository.recordingTemplateRunRepository.ApproveTemplateRun(ctx, approval)
+}
+
 // DiscardTemplateRun discards only a run waiting for approval or approved, as
 // the real store does.
 func (repository *recordingTemplateRunRepository) DiscardTemplateRun(_ context.Context, discard domain.TemplateRunDiscard) (bool, error) {
@@ -3102,6 +3241,7 @@ func TestApproveRunPairsApprovalAuditAndApplyIntentInTransaction(t *testing.T) {
 	work := &recordingUnitOfWork{templateRuns: runs}
 	workflows := &recordingWorkflowDispatcher{}
 	service := NewService(Service{
+		Users:                    &fakeUserRepository{},
 		Work:                     work,
 		Authorization:            testPlatformAuthorizer(t),
 		TemplateRuns:             runs,
@@ -3111,7 +3251,7 @@ func TestApproveRunPairsApprovalAuditAndApplyIntentInTransaction(t *testing.T) {
 		Clock:                    fixedClock{now: time.Date(2026, 8, 11, 10, 0, 0, 0, time.UTC)},
 	})
 
-	if err := service.ApproveRun(authenticatedContext(), ApproveRunCommand{TenantID: "tenant_123", RunID: "run_123"}); err != nil {
+	if _, err := service.ApproveRun(authenticatedContext(), ApproveRunCommand{TenantID: "tenant_123", RunID: "run_123"}); err != nil {
 		t.Fatalf("ApproveRun returned error: %v", err)
 	}
 	if work.inTxCalls != 1 || runs.approval.RunID != "run_123" || len(work.audits) != 1 {
