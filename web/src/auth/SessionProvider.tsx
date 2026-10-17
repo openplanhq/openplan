@@ -93,9 +93,9 @@ export default function SessionProvider() {
   // browser believes, so clock skew or a suspended laptop degrades to the 401
   // path rather than to unauthorised access.
   useEffect(() => {
-    if (!me?.sessionExpiresAt) return;
+    if (!me?.session_expires_at) return;
 
-    const expiresAt = new Date(me.sessionExpiresAt).getTime();
+    const expiresAt = new Date(me.session_expires_at).getTime();
     const fireAt = expiresAt - REAUTH_LEAD_MS;
     if (Number.isNaN(fireAt)) return;
 
@@ -159,14 +159,14 @@ export default function SessionProvider() {
       deferringSince = null;
       // The snapshot that armed this timer can be stale: the server slides
       // the idle bound on every authenticated request, and this tab has made
-      // some since, so sessionExpiresAt from the last render may already be
+      // some since, so session_expires_at from the last render may already be
       // well behind the server's own bound. Refetch and trust that instead of
       // navigating an active user (and the browser's one round trip to the
       // IdP) away from a session that has not actually ended.
       const { data: refreshed } = await refetchMe();
       if (cancelled) return;
-      const nextFireAt = refreshed?.sessionExpiresAt
-        ? new Date(refreshed.sessionExpiresAt).getTime() - REAUTH_LEAD_MS
+      const nextFireAt = refreshed?.session_expires_at
+        ? new Date(refreshed.session_expires_at).getTime() - REAUTH_LEAD_MS
         : NaN;
       if (!Number.isNaN(nextFireAt) && nextFireAt > Date.now()) {
         timer = setTimeout(attempt, nextFireAt - Date.now());
@@ -179,7 +179,7 @@ export default function SessionProvider() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [me?.sessionExpiresAt, login, refetchMe]);
+  }, [me?.session_expires_at, login, refetchMe]);
 
   if (status === "loop") {
     return (

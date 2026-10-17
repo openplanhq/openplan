@@ -79,12 +79,12 @@ export const routeConfig: RouteObject[] = [
           { path: "stacks/attention", element: <StackAttentionScreen />, handle: canvas },
           {
             path: "stacks/new",
-            element: <RequireCapability capability="canCreateStack" mode="route" />,
+            element: <RequireCapability capability="can_create_stack" mode="route" />,
             children: [{ index: true, element: <CreateStackScreen /> }]
           },
           {
             path: "stacks/:stackId",
-            element: <RequireCapability capability="canView" mode="route" />,
+            element: <RequireCapability capability="can_view" mode="route" />,
             children: [
               // The stack's one page: its templates, and the selected one's
               // panel, which every route below draws into.
@@ -97,7 +97,7 @@ export const routeConfig: RouteObject[] = [
                   { path: "templates", loader: ({ params }) => redirect(`/stacks/${params.stackId}`) },
                   {
                     path: "templates/new",
-                    element: <RequireCapability capability="canOperate" mode="route" />,
+                    element: <RequireCapability capability="can_operate" mode="route" />,
                     children: [{ index: true, element: <AddStackTemplateScreen /> }]
                   },
                   // A run nests under runs/ so Runs stays lit while reading
@@ -113,13 +113,13 @@ export const routeConfig: RouteObject[] = [
                       { path: "variables", element: <TemplateVariablesTab /> },
                       {
                         path: "credentials",
-                        element: <RequireCapability capability="canManageAccess" mode="route" />,
+                        element: <RequireCapability capability="can_manage_access" mode="route" />,
                         children: [{ index: true, element: <TemplateCredentialsTab /> }]
                       },
                       { path: "settings", element: <TemplateSettingsTab /> },
                       {
                         path: "upgrade",
-                        element: <RequireCapability capability="canOperate" mode="route" />,
+                        element: <RequireCapability capability="can_operate" mode="route" />,
                         children: [{ index: true, element: <UpgradeStackTemplateScreen /> }]
                       }
                     ]
@@ -132,12 +132,12 @@ export const routeConfig: RouteObject[] = [
                 children: [
                   {
                     path: "environment",
-                    element: <RequireCapability capability="canManageAccess" mode="route" />,
+                    element: <RequireCapability capability="can_manage_access" mode="route" />,
                     children: [{ index: true, element: <EnvironmentScreen /> }]
                   },
                   {
                     path: "access",
-                    element: <RequireCapability capability="canManageAccess" mode="route" />,
+                    element: <RequireCapability capability="can_manage_access" mode="route" />,
                     children: [{ index: true, element: <StackAccessScreen /> }]
                   }
                 ]
@@ -155,7 +155,7 @@ export const routeConfig: RouteObject[] = [
               { index: true, element: <TemplatesIndexPanel /> },
               {
                 path: "new",
-                element: <RequireCapability capability="canPublishTemplate" mode="route" />,
+                element: <RequireCapability capability="can_publish_template" mode="route" />,
                 children: [{ index: true, element: <RegisterTemplatePanel /> }]
               },
               {

@@ -49,7 +49,7 @@ function testQueryClient(items?: AttentionItem[]): QueryClient {
 }
 
 const auth: AuthContextValue = {
-  me: { sub: "user_1", tenantID: TENANT, displayName: "Test User", globalCapabilities: { canCreateStack: false, canPublishTemplate: false } },
+  me: { sub: "user_1", tenant_id: TENANT, display_name: "Test User", global_capabilities: { can_create_stack: false, can_publish_template: false } },
   status: "authenticated",
   login: () => {},
   logout: () => {}

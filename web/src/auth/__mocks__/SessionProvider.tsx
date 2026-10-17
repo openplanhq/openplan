@@ -7,11 +7,11 @@ export default function SessionProvider() {
       value={{
         me: {
           sub: "test",
-          displayName: "Test",
+          display_name: "Test",
           email: "test@example.com",
-          tenantID: "tenant_123",
-          globalCapabilities: { canCreateStack: true, canPublishTemplate: true },
-          sessionExpiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          tenant_id: "tenant_123",
+          global_capabilities: { can_create_stack: true, can_publish_template: true },
+          session_expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
         },
         status: "authenticated" as const,
         login: () => {},

@@ -29,14 +29,14 @@ info:
 
     A session ends at the earlier of its idle and absolute bounds, both of
     which openplan owns independently of the provider's token lifetimes.
-    `GET /v1/me` returns `sessionExpiresAt` so a client can re-authenticate at
+    `GET /v1/me` returns `session_expires_at` so a client can re-authenticate at
     a quiet moment instead of being interrupted by a `401`.
 
     ## Tenancy
 
     Every tenant-scoped path takes a `{tenant_id}`. A deployment serves exactly
     one configured tenant; any other value returns `404`, not `403`. Read the
-    one you are allowed to use from `GET /v1/me` (`tenantID`).
+    one you are allowed to use from `GET /v1/me` (`tenant_id`).
 
     ## Request bodies
 
@@ -444,7 +444,7 @@ paths:
       summary: List stacks
       description: |
         Only the stacks the caller may view. Each carries its
-        `effectiveCapabilities`, so a client renders the controls a person
+        `effective_capabilities`, so a client renders the controls a person
         actually has rather than probing for them.
       operationId: listStacks
       responses:
@@ -1390,18 +1390,18 @@ components:
         sub:
           type: string
           description: The subject identifier, stable across sign-ins.
-        displayName: { type: string }
+        display_name: { type: string }
         email: { type: string, format: email }
-        globalCapabilities:
+        global_capabilities:
           type: object
           properties:
-            canCreateStack: { type: boolean }
-            canPublishTemplate: { type: boolean }
-          required: [canCreateStack, canPublishTemplate]
-        tenantID:
+            can_create_stack: { type: boolean }
+            can_publish_template: { type: boolean }
+          required: [can_create_stack, can_publish_template]
+        tenant_id:
           type: string
           description: The tenant this deployment serves. Use it in every tenant-scoped path.
-        sessionExpiresAt:
+        session_expires_at:
           type: string
           format: date-time
           description: |
@@ -1410,15 +1410,15 @@ components:
             re-authenticate at a quiet moment instead of being interrupted by
             a `401`. It is not a control — the API rejects an expired session
             regardless of what the browser believes.
-      required: [sub, displayName, globalCapabilities, tenantID]
+      required: [sub, display_name, global_capabilities, tenant_id]
 
     UserProfile:
       type: object
       properties:
         sub: { type: string }
-        displayName: { type: string }
+        display_name: { type: string }
         email: { type: string, format: email }
-      required: [sub, displayName, email]
+      required: [sub, display_name, email]
 
     RegisterTemplateRevisionRequest:
       type: object
@@ -1592,11 +1592,11 @@ components:
           items: { type: string }
         created_by: { type: string }
         created_at: { type: string, format: date-time }
-        effectiveCapabilities:
+        effective_capabilities:
           $ref: "#/components/schemas/StackCapabilities"
       required:
         [id, tenant_id, name, slug, status, tags, default_credential_ids,
-         created_by, created_at, effectiveCapabilities]
+         created_by, created_at, effective_capabilities]
 
     StackListItem:
       description: A stack as the stacks index lists it.
@@ -1665,17 +1665,17 @@ components:
         controls from these rather than inferring them from a role — the
         mapping from roles to capabilities is the server's to own.
       properties:
-        canView: { type: boolean }
-        canOperate:
+        can_view: { type: boolean }
+        can_operate:
           type: boolean
           description: May start plans, applies and destroys.
-        canApprove:
+        can_approve:
           type: boolean
           description: May approve a run — though never one they started themselves.
-        canManageAccess:
+        can_manage_access:
           type: boolean
           description: May grant and revoke roles on this stack.
-      required: [canView, canOperate, canApprove, canManageAccess]
+      required: [can_view, can_operate, can_approve, can_manage_access]
 
     StackView:
       type: object
@@ -2150,11 +2150,11 @@ components:
       type: object
       description: One person's role on a stack, with the identity resolved for display.
       properties:
-        userSub: { type: string }
+        user_sub: { type: string }
         role: { $ref: "#/components/schemas/StackRole" }
-        displayName: { type: string }
+        display_name: { type: string }
         email: { type: string, format: email }
-      required: [userSub, role, displayName, email]
+      required: [user_sub, role, display_name, email]
 
     QueueItem:
       type: object

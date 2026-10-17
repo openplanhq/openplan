@@ -59,7 +59,7 @@ export default function TemplateRunActions({ stackId, stackTemplate }: TemplateR
         <div className="flex flex-wrap items-center gap-2">
           {/* Auto apply is an approval given in advance, so it is offered
               only to someone who could approve a plan. */}
-          <RequireCapability capability="canApprove" stackId={stackId}>
+          <RequireCapability capability="can_approve" stackId={stackId}>
             <label
               className="flex h-8 cursor-pointer items-center gap-2 px-1 text-meta whitespace-nowrap pointer-coarse:h-11"
               data-testid="template-run-auto-approve"

@@ -44,7 +44,7 @@ export default function StacksListScreen() {
   // fails the stacks still show, without the summary line and chips.
   const attention = useAttentionQuery(tenantID).data ?? [];
   const boundary = useQueryErrorBoundary(error);
-  const canCreateStack = useAuth().me?.globalCapabilities.canCreateStack === true;
+  const canCreateStack = useAuth().me?.global_capabilities.can_create_stack === true;
   const [searchParams] = useSearchParams();
   const [filter, setFilter] = useState("");
 
@@ -55,7 +55,7 @@ export default function StacksListScreen() {
       title="Stacks"
       count={count}
       action={
-        <RequireCapability capability="canCreateStack">
+        <RequireCapability capability="can_create_stack">
           {/* A link that looks like the page's primary action. Full width
               on a phone, where the header stacks. */}
           <Link

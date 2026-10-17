@@ -11,7 +11,7 @@ import type { TemplateTab } from "./templateSelection";
 // capabilities load, it stays hidden, as RequireCapability would keep it.
 export default function TemplateTabs({ stackId, stackTemplateId }: { stackId: string; stackTemplateId: string }) {
   const current = templateTabOf(useLocation().pathname);
-  const canManageAccess = useStackCapabilities(stackId)?.canManageAccess === true;
+  const canManageAccess = useStackCapabilities(stackId)?.can_manage_access === true;
   const tabs: [TemplateTab, string][] = [
     ["runs", "Runs"],
     ["variables", "Variables"],

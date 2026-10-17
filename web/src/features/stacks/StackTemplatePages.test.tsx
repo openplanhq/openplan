@@ -20,7 +20,7 @@ import TemplateVariablesTab from "./TemplateVariablesTab";
 // shape as router.tsx so tab links and the index redirect are exercised the
 // way the app uses them. The stack's page around it has its own tests.
 
-const allAllowed: StackCapabilities = { canView: true, canOperate: true, canApprove: true, canManageAccess: true };
+const allAllowed: StackCapabilities = { can_view: true, can_operate: true, can_approve: true, can_manage_access: true };
 
 function stackView(capabilities: StackCapabilities, templates: StackTemplate[]): StackView {
   return {
@@ -33,7 +33,7 @@ function stackView(capabilities: StackCapabilities, templates: StackTemplate[]):
       default_credential_ids: [],
       created_by: "user_123",
       created_at: "2026-07-19T00:00:00Z",
-      effectiveCapabilities: capabilities
+      effective_capabilities: capabilities
     },
     templates
   };
@@ -122,7 +122,7 @@ function precedes(first: HTMLElement, second: HTMLElement): boolean {
 
 function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
   return {
-    me: { sub: "user_1", tenantID: "tenant_123", displayName: "Test User", globalCapabilities: { canCreateStack: false, canPublishTemplate: false } },
+    me: { sub: "user_1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_publish_template: false } },
     status: "authenticated",
     login: () => {},
     logout: () => {},
@@ -168,7 +168,7 @@ function renderAt(queryClient: QueryClient, initialEntry: string, auth?: AuthCon
               <Route path="runs" element={<TemplateRunsTab />} />
               <Route path="runs/:runNumber" element={<RunDetailScreen />} />
               <Route path="variables" element={<TemplateVariablesTab />} />
-              <Route path="credentials" element={<RequireCapability capability="canManageAccess" mode="route" />}>
+              <Route path="credentials" element={<RequireCapability capability="can_manage_access" mode="route" />}>
                 <Route index element={<TemplateCredentialsTab />} />
               </Route>
               <Route path="settings" element={<TemplateSettingsTab />} />
@@ -211,9 +211,9 @@ describe("TemplatePanel", () => {
     expect(screen.getByTestId("stack-template-missing")).toBeTruthy();
   });
 
-  it("hides the Credentials tab without canManageAccess", async () => {
+  it("hides the Credentials tab without can_manage_access", async () => {
     const queryClient = testQueryClient();
-    seedDefaultData(queryClient, { ...allAllowed, canManageAccess: false });
+    seedDefaultData(queryClient, { ...allAllowed, can_manage_access: false });
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/runs");
 
@@ -405,7 +405,7 @@ describe("TemplateVariablesTab", () => {
 
   it("locks configuration when canOperate is denied", async () => {
     const queryClient = testQueryClient();
-    seedDefaultData(queryClient, { ...allAllowed, canOperate: false });
+    seedDefaultData(queryClient, { ...allAllowed, can_operate: false });
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/variables");
 
@@ -565,9 +565,9 @@ describe("TemplateCredentialsTab", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("denies the tab itself without canManageAccess", async () => {
+  it("denies the tab itself without can_manage_access", async () => {
     const queryClient = testQueryClient();
-    seedDefaultData(queryClient, { ...allAllowed, canManageAccess: false });
+    seedDefaultData(queryClient, { ...allAllowed, can_manage_access: false });
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/credentials");
 
@@ -623,7 +623,7 @@ describe("TemplateSettingsTab", () => {
   // and its section says why.
   it("shows both settings to a viewer without operator access, each disabled with why", async () => {
     const queryClient = testQueryClient();
-    seedDefaultData(queryClient, { ...allAllowed, canOperate: false });
+    seedDefaultData(queryClient, { ...allAllowed, can_operate: false });
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/settings");
 

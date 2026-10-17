@@ -304,7 +304,7 @@ Two independent bounds decide whether a session is live (`Session.IsLive`):
 | Idle | `OPENPLAN_SESSION_IDLE_TTL` | `1h` | Slides on activity, but the row is written back at most once every 5 minutes (`SessionTouchInterval`), not on every request |
 
 The session's effective expiry is the earlier of the two (`Session.ExpiresAt`),
-which is what `/v1/me` reports as `sessionExpiresAt` so the SPA can
+which is what `/v1/me` reports as `session_expires_at` so the SPA can
 re-authenticate proactively rather than being surprised by a `401` mid-action.
 That proactive path is deliberately one-sided: asking `/v1/me` again is itself
 a request and would slide the very bound it is checking, so the SPA only

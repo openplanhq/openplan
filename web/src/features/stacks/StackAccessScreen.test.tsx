@@ -32,15 +32,15 @@ const emptyGrants: ListGrantsResponse = { grants: [] };
 const twoGrants: ListGrantsResponse = {
   grants: [
     {
-      userSub: "u1",
+      user_sub: "u1",
       role: "owner",
-      displayName: "Alice",
+      display_name: "Alice",
       email: "alice@example.com"
     },
     {
-      userSub: "u2",
+      user_sub: "u2",
       role: "viewer",
-      displayName: "Bob",
+      display_name: "Bob",
       email: "bob@example.com"
     }
   ]
@@ -50,7 +50,7 @@ const searchResults: SearchUsersResponse = {
   users: [
     {
       sub: "u3",
-      displayName: "Charlie Brown",
+      display_name: "Charlie Brown",
       email: "charlie@example.com"
     }
   ],
@@ -59,10 +59,10 @@ const searchResults: SearchUsersResponse = {
 };
 
 const charlie = searchResults.users[0];
-const chad: UserProfile = { sub: "u4", displayName: "Chad", email: "chad@example.com" };
-const dave: UserProfile = { sub: "u6", displayName: "Dave Grohl", email: "dave@example.com" };
+const chad: UserProfile = { sub: "u4", display_name: "Chad", email: "chad@example.com" };
+const dave: UserProfile = { sub: "u6", display_name: "Dave Grohl", email: "dave@example.com" };
 // Matched by email: there is no "ch" in her name.
-const dorothy: UserProfile = { sub: "u5", displayName: "Dorothy Vaughan", email: "dvaughan@chem.example.com" };
+const dorothy: UserProfile = { sub: "u5", display_name: "Dorothy Vaughan", email: "dvaughan@chem.example.com" };
 
 interface Sent {
   method: string;
@@ -92,7 +92,7 @@ function serve({
       return json({ users, first: 0, max: 20 });
     }
     if (method === "POST") {
-      return assign ? assign() : json({ userSub: body?.user_sub, role: body?.role, displayName: "", email: "" });
+      return assign ? assign() : json({ user_sub: body?.user_sub, role: body?.role, display_name: "", email: "" });
     }
     return json({ grants });
   });
@@ -117,7 +117,7 @@ const setupUser = () =>
 
 async function renderWithGrants(grants: GrantView[] = []) {
   render(<StackAccessScreen />, { wrapper: wrapper() });
-  await screen.findByText(grants.length === 0 ? /No users have been assigned/ : grants[0].displayName);
+  await screen.findByText(grants.length === 0 ? /No users have been assigned/ : grants[0].display_name);
 }
 
 async function typeInSearch(text: string) {
@@ -312,9 +312,9 @@ describe("StackAccessScreen", () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            userSub: "u3",
+            user_sub: "u3",
             role: "viewer",
-            displayName: "Charlie Brown"
+            display_name: "Charlie Brown"
           }),
           {
             status: 200,
@@ -327,9 +327,9 @@ describe("StackAccessScreen", () => {
           JSON.stringify({
             grants: [
               {
-                userSub: "u3",
+                user_sub: "u3",
                 role: "viewer",
-                displayName: "Charlie Brown",
+                display_name: "Charlie Brown",
                 email: "charlie@example.com"
               }
             ]
@@ -611,7 +611,7 @@ describe("StackAccessScreen", () => {
 
     it("shows a user who already holds a role with it, and won't pick them", async () => {
       const alice = twoGrants.grants[0];
-      serve({ grants: [alice], users: [{ sub: alice.userSub, displayName: alice.displayName, email: alice.email }] });
+      serve({ grants: [alice], users: [{ sub: alice.user_sub, display_name: alice.display_name, email: alice.email }] });
       await renderWithGrants([alice]);
 
       const { user, input } = await typeInSearch("ali");
@@ -697,7 +697,7 @@ describe("StackAccessScreen", () => {
 
     await user.type(input, "da", { initialSelectionStart: 0, initialSelectionEnd: input.value.length });
     await user.click(await screen.findByRole("option", { name: /Dave Grohl/ }));
-    finish(new Response(JSON.stringify({ userSub: "u3", role: "viewer" }), { status: 200, headers: { "content-type": "application/json" } }));
+    finish(new Response(JSON.stringify({ user_sub: "u3", role: "viewer" }), { status: 200, headers: { "content-type": "application/json" } }));
     await waitFor(() => expect(screen.getByText("Assign Role", { selector: "button" })).toBeDefined());
     expect(input.value).toBe("Dave Grohl");
   });
@@ -728,7 +728,7 @@ describe("StackAccessScreen", () => {
     it("cuts a long name or email short and shows it whole on hover", async () => {
       const name = "Bartholomew Montgomery-Fitzwilliam the Third, Platform Operations";
       const email = "bartholomew.montgomery-fitzwilliam@platform-operations.example.com";
-      serve({ grants: [{ userSub: "u9", role: "viewer", displayName: name, email }] });
+      serve({ grants: [{ user_sub: "u9", role: "viewer", display_name: name, email }] });
       render(<StackAccessScreen />, { wrapper: wrapper() });
 
       for (const text of [name, email]) {

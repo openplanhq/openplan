@@ -12,7 +12,7 @@ describe("useAuth", () => {
 
   it("returns the value supplied by the nearest AuthContext.Provider", () => {
     const value: AuthContextValue = {
-      me: { sub: "s1", tenantID: "tenant_123", displayName: "Test User", globalCapabilities: { canCreateStack: false, canPublishTemplate: false } },
+      me: { sub: "s1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_publish_template: false } },
       status: "authenticated",
       login: () => {},
       logout: () => {}

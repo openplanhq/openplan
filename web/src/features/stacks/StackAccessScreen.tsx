@@ -60,7 +60,7 @@ export default function StackAccessScreen() {
   const revokeMutation = useRevokeStackRoleMutation(tenantID, stackId);
   const undoTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const grantsBySub = new Map((grants.data?.grants ?? []).map((g) => [g.userSub, g]));
+  const grantsBySub = new Map((grants.data?.grants ?? []).map((g) => [g.user_sub, g]));
   const replacing = selectedUser !== null && grantsBySub.has(selectedUser.sub);
   // The list opens on the user's intent, a search of two or more characters,
   // and says "Searching..." until that search answers, so Base UI never opens
@@ -72,7 +72,7 @@ export default function StackAccessScreen() {
   const listOpen = searchOpen && searching;
   // Who gets the role is who the input shows: typing over a pick holds Assign
   // until the user picks again or leaves, which puts the pick back.
-  const pickShown = selectedUser !== null && inputText === selectedUser.displayName;
+  const pickShown = selectedUser !== null && inputText === selectedUser.display_name;
 
   const handleAssign = useCallback(async () => {
     if (!selectedUser) return;
@@ -87,7 +87,7 @@ export default function StackAccessScreen() {
       // The search stays usable while the request is out. Clear only what
       // still holds what was sent, so a newer pick or query stays.
       setSelectedUser((current) => (current?.sub === sentUser.sub ? null : current));
-      setInputText((current) => (current === sentUser.displayName ? "" : current));
+      setInputText((current) => (current === sentUser.display_name ? "" : current));
       setSearch((current) => (current === sentSearch ? "" : current));
     } catch (err) {
       setMutationError(err instanceof Error ? err.message : "Failed to assign role");
@@ -99,11 +99,11 @@ export default function StackAccessScreen() {
       setMutationError("");
       setConfirmRevoke(null);
       try {
-        await revokeMutation.mutateAsync(grant.userSub);
+        await revokeMutation.mutateAsync(grant.user_sub);
         setUndoEntry({
-          userSub: grant.userSub,
+          userSub: grant.user_sub,
           role: grant.role,
-          displayName: grant.displayName
+          displayName: grant.display_name
         });
       } catch (err) {
         setMutationError(err instanceof Error ? err.message : "Failed to revoke role");
@@ -175,10 +175,10 @@ export default function StackAccessScreen() {
           {grants.data && grants.data.grants.length > 0 && (
             <ul className="divide-y rounded-lg border">
               {grants.data.grants.map((grant) => (
-                <li key={grant.userSub} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
+                <li key={grant.user_sub} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
                   <div className="grid min-w-0 grow basis-32 gap-0.5">
-                    <span className="truncate" title={grant.displayName}>
-                      {grant.displayName}
+                    <span className="truncate" title={grant.display_name}>
+                      {grant.display_name}
                     </span>
                     {grant.email && (
                       <span className="truncate text-xs text-muted-foreground" title={grant.email}>
@@ -188,7 +188,7 @@ export default function StackAccessScreen() {
                   </div>
                   <RoleBadge stackRole={grant.role} />
                   <div className="ml-auto flex items-center gap-2">
-                    {confirmRevoke === grant.userSub ? (
+                    {confirmRevoke === grant.user_sub ? (
                       <>
                         <span>Remove access?</span>
                         <Button variant="destructive" className="pointer-coarse:h-11" onClick={() => handleRevoke(grant)}>
@@ -203,8 +203,8 @@ export default function StackAccessScreen() {
                         variant="ghost"
                         size="icon"
                         className="pointer-coarse:size-11"
-                        onClick={() => setConfirmRevoke(grant.userSub)}
-                        aria-label={`Revoke ${grant.displayName}'s ${grant.role} role`}
+                        onClick={() => setConfirmRevoke(grant.user_sub)}
+                        aria-label={`Revoke ${grant.display_name}'s ${grant.role} role`}
                       >
                         <Trash2 aria-hidden="true" />
                       </Button>
@@ -246,7 +246,7 @@ export default function StackAccessScreen() {
               // empty the input, and end the search. Other closes, such as
               // Enter with nothing highlighted, keep what was typed.
               if (!open && (reason === "focus-out" || reason === "outside-press" || reason === "escape-key")) {
-                setInputText(selectedUser?.displayName ?? "");
+                setInputText(selectedUser?.display_name ?? "");
                 setSearch("");
               }
             }}
@@ -269,7 +269,7 @@ export default function StackAccessScreen() {
                 setSearch("");
               }
             }}
-            itemToStringLabel={(user) => user.displayName}
+            itemToStringLabel={(user) => user.display_name}
             isItemEqualToValue={(a, b) => a.sub === b.sub}
           >
             <ComboboxInput
@@ -285,7 +285,7 @@ export default function StackAccessScreen() {
                   // Or a query still in its debounce would open the list
                   // once it lands, on a field the user has left.
                   setSearchOpen(false);
-                  setInputText(selectedUser?.displayName ?? "");
+                  setInputText(selectedUser?.display_name ?? "");
                   setSearch("");
                 }
               }}
@@ -309,7 +309,7 @@ export default function StackAccessScreen() {
                   return (
                     <ComboboxItem key={user.sub} value={user} disabled={grant !== undefined} className="pointer-coarse:min-h-11">
                       <div className="grid min-w-0 flex-1">
-                        <span className="truncate">{user.displayName}</span>
+                        <span className="truncate">{user.display_name}</span>
                         <span className="truncate font-mono text-xs text-muted-foreground">
                           {user.email || user.sub}
                           {grant && ` — ${grant.role}`}

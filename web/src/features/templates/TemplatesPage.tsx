@@ -76,7 +76,7 @@ export default function TemplatesPage() {
         title="Templates"
         count={count}
         action={
-          <RequireCapability capability="canPublishTemplate">
+          <RequireCapability capability="can_publish_template">
             <Link to="/templates/new" className={registerLinkClass} data-testid="register-template-link">
               <Plus data-icon="inline-start" aria-hidden="true" />
               Register template

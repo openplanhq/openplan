@@ -17,7 +17,7 @@ import TemplatePanel from "./TemplatePanel";
 // list, the selection and the phone layout. The tabs have their own tests.
 
 const TENANT = "tenant_123";
-const allAllowed: StackCapabilities = { canView: true, canOperate: true, canApprove: true, canManageAccess: true };
+const allAllowed: StackCapabilities = { can_view: true, can_operate: true, can_approve: true, can_manage_access: true };
 
 function template(id: string, overrides: Partial<StackTemplate> = {}): StackTemplate {
   return {
@@ -57,7 +57,7 @@ function view(templates: StackTemplate[], capabilities: StackCapabilities = allA
       default_credential_ids: [],
       created_by: "user_1",
       created_at: "2026-07-19T00:00:00Z",
-      effectiveCapabilities: capabilities
+      effective_capabilities: capabilities
     },
     templates
   };
@@ -83,7 +83,7 @@ function seed(templates: StackTemplate[], capabilities: StackCapabilities = allA
 
 function authValue(): AuthContextValue {
   return {
-    me: { sub: "user_1", tenantID: TENANT, displayName: "Test User", globalCapabilities: { canCreateStack: false, canPublishTemplate: false } },
+    me: { sub: "user_1", tenant_id: TENANT, display_name: "Test User", global_capabilities: { can_create_stack: false, can_publish_template: false } },
     status: "authenticated",
     login: () => {},
     logout: () => {}
@@ -152,7 +152,7 @@ describe("StackPage header", () => {
     expect(screen.getByRole("link", { name: "Access" }).getAttribute("href")).toBe("/stacks/stack_1/access");
     cleanup();
 
-    renderPage(seed([network], { ...allAllowed, canManageAccess: false }), "/stacks/stack_1");
+    renderPage(seed([network], { ...allAllowed, can_manage_access: false }), "/stacks/stack_1");
     expect(screen.queryByRole("link", { name: "Environment" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Access" })).toBeNull();
   });
@@ -300,7 +300,7 @@ describe("StackPage list", () => {
     expect(screen.getByTestId("stack-template-link-network").getAttribute("aria-current")).toBeNull();
     cleanup();
 
-    renderPage(seed([network], { ...allAllowed, canOperate: false }), "/stacks/stack_1");
+    renderPage(seed([network], { ...allAllowed, can_operate: false }), "/stacks/stack_1");
     expect(screen.queryByTestId("add-stack-template-link")).toBeNull();
   });
 
