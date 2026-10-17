@@ -23,6 +23,7 @@ import (
 	"github.com/vishu42/openplan/internal/authentication"
 
 	"github.com/vishu42/openplan/internal/activities"
+	"github.com/vishu42/openplan/internal/api"
 	"github.com/vishu42/openplan/internal/authorization"
 	"github.com/vishu42/openplan/internal/config"
 	"github.com/vishu42/openplan/internal/domain"
@@ -210,6 +211,20 @@ func TestRunWiresControlPlane(t *testing.T) {
 	}
 	if err := deps.liveLogs.Ping(context.Background()).Err(); !errors.Is(err, redis.ErrClosed) {
 		t.Fatalf("live log client ping = %v, want it closed on shutdown", err)
+	}
+	// The registry's tailers pin connections; on the control plane's client
+	// they could starve the activity that ends each log's stream.
+	if deps.liveLogReaderURL != "redis://localhost:6379" {
+		t.Fatalf("dialLiveLogReaders got %q, want VALKEY_URL", deps.liveLogReaderURL)
+	}
+	if deps.subscriberReader != livelog.Reader(deps.liveLogReaders) {
+		t.Fatal("the live log registry did not get the client dialLiveLogReaders returned")
+	}
+	if deps.liveLogReaders == deps.liveLogs {
+		t.Fatal("the live log registry shares the control plane's client")
+	}
+	if err := deps.liveLogReaders.Ping(context.Background()).Err(); !errors.Is(err, redis.ErrClosed) {
+		t.Fatalf("live log reader client ping = %v, want it closed on shutdown", err)
 	}
 	if deps.queueControllerStore != controlStore(deps.store) {
 		t.Fatal("queue controller was not wired with the store")
@@ -495,6 +510,7 @@ func TestRunMigratesRealPostgresWhenDSNIsSet(t *testing.T) {
 	deps.dialLiveLogs = func(context.Context, string) (*redis.Client, error) {
 		return redis.NewClient(&redis.Options{Addr: liveLogServer.Addr()}), nil
 	}
+	deps.dialLiveLogReaders = deps.dialLiveLogs
 	deps.newWorker = func(client.Client, string, temporalworker.Options) temporalWorker {
 		return &recordingControlWorker{}
 	}
@@ -648,6 +664,12 @@ type recordingAPIDependencies struct {
 	liveLogs    *redis.Client
 	liveLogsErr error
 	liveLogURL  string
+	// liveLogReaders is what dialLiveLogReaders returns, and
+	// liveLogReaderURL what it was given; subscriberReader is what the
+	// registry was built on.
+	liveLogReaders   *redis.Client
+	liveLogReaderURL string
+	subscriberReader livelog.Reader
 }
 
 func newRecordingAPIDependencies(t *testing.T) *recordingAPIDependencies {
@@ -663,6 +685,8 @@ func newRecordingAPIDependencies(t *testing.T) *recordingAPIDependencies {
 	server := miniredis.RunT(t)
 	deps.liveLogs = redis.NewClient(&redis.Options{Addr: server.Addr()})
 	t.Cleanup(func() { _ = deps.liveLogs.Close() })
+	deps.liveLogReaders = redis.NewClient(&redis.Options{Addr: server.Addr()})
+	t.Cleanup(func() { _ = deps.liveLogReaders.Close() })
 	deps.apiDependencies = apiDependencies{
 		newPostgresPool: func(_ context.Context, databaseURL string) (postgresPool, error) {
 			deps.pool.databaseURL = databaseURL
@@ -717,6 +741,14 @@ func newRecordingAPIDependencies(t *testing.T) *recordingAPIDependencies {
 				return nil, deps.liveLogsErr
 			}
 			return deps.liveLogs, nil
+		},
+		dialLiveLogReaders: func(_ context.Context, url string) (*redis.Client, error) {
+			deps.liveLogReaderURL = url
+			return deps.liveLogReaders, nil
+		},
+		newLiveLogSubscriber: func(reader livelog.Reader) api.LiveLogSubscriber {
+			deps.subscriberReader = reader
+			return livelog.NewRegistry(reader)
 		},
 		dialTemporal: func(_ context.Context, cfg temporal.Config) (client.Client, error) {
 			deps.temporalDialed = true

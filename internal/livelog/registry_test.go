@@ -283,6 +283,10 @@ func (blockingReader) XRange(context.Context, string, string, string) *redis.XMe
 	return redis.NewXMessageSliceCmdResult(nil, nil)
 }
 
+func (blockingReader) XRevRangeN(context.Context, string, string, string, int64) *redis.XMessageSliceCmd {
+	return redis.NewXMessageSliceCmdResult(nil, nil)
+}
+
 func TestSubscribeRefusesBeyondMaxTailers(t *testing.T) {
 	t.Parallel()
 	reg := NewRegistry(blockingReader{})
@@ -298,5 +302,126 @@ func TestSubscribeRefusesBeyondMaxTailers(t *testing.T) {
 	}
 	if _, err := reg.Subscribe(t.Context(), "runlog:{run_new}:plan-1", ""); !errors.Is(err, ErrTooManyTailers) {
 		t.Fatalf("Subscribe beyond MaxTailers = %v, want ErrTooManyTailers", err)
+	}
+}
+
+// lingeringReader is go-redis's blocking read as the tailer meets it: an
+// XREAD ignores its context and holds its connection until released. It
+// counts the reads in flight, which is the connections tailers hold.
+type lingeringReader struct {
+	blockingReader
+
+	release chan struct{}
+
+	mu          sync.Mutex
+	inFlight    int
+	maxInFlight int
+}
+
+func (r *lingeringReader) XRead(context.Context, *redis.XReadArgs) *redis.XStreamSliceCmd {
+	r.mu.Lock()
+	r.inFlight++
+	r.maxInFlight = max(r.maxInFlight, r.inFlight)
+	r.mu.Unlock()
+	<-r.release
+	r.mu.Lock()
+	r.inFlight--
+	r.mu.Unlock()
+	return redis.NewXStreamSliceCmdResult(nil, redis.Nil)
+}
+
+// A viewer that opens and closes the stream in a loop leaves each stopped
+// tailer's read in flight. Those still count, so the reads one replica
+// holds stay within MaxTailers however fast the loop runs.
+func TestSubscribeCountsStoppedTailersStillReading(t *testing.T) {
+	t.Parallel()
+	reader := &lingeringReader{release: make(chan struct{})}
+	reg := NewRegistry(reader)
+
+	refused := false
+	for range MaxTailers + 10 {
+		ctx, cancel := context.WithCancel(t.Context())
+		entries, err := reg.Subscribe(ctx, registryTestKey, "")
+		if errors.Is(err, ErrTooManyTailers) {
+			refused = true
+			cancel()
+			continue
+		}
+		if err != nil {
+			t.Fatalf("Subscribe: %v", err)
+		}
+		cancel()
+		waitClosed(t, entries)
+	}
+	if !refused {
+		t.Fatal("never refused, though every stopped tailer's read was still in flight")
+	}
+	reader.mu.Lock()
+	maxInFlight := reader.maxInFlight
+	reader.mu.Unlock()
+	if maxInFlight > MaxTailers {
+		t.Fatalf("%d reads in flight at once, want at most %d", maxInFlight, MaxTailers)
+	}
+
+	// Once the reads return, their slots are free again.
+	close(reader.release)
+	deadline := time.Now().Add(recvTimeout)
+	for {
+		ctx, cancel := context.WithCancel(t.Context())
+		_, err := reg.Subscribe(ctx, registryTestKey, "")
+		cancel()
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, ErrTooManyTailers) || time.Now().After(deadline) {
+			t.Fatalf("Subscribe after the reads returned: %v", err)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// The first subscriber's Last-Event-ID must not decide where the shared
+// tailer reads from: one far past the stream would leave every other viewer
+// waiting for entries no generated id ever reaches.
+func TestSubscribeIgnoresAnAfterIDPastTheStream(t *testing.T) {
+	t.Parallel()
+	reg, client := newTestRegistry(t)
+	first := addPiece(t, client, 0, "hello\n")
+
+	if _, err := reg.Subscribe(t.Context(), registryTestKey, "99999999999999-0"); err != nil {
+		t.Fatalf("Subscribe past the stream: %v", err)
+	}
+	entries, err := reg.Subscribe(t.Context(), registryTestKey, "")
+	if err != nil {
+		t.Fatalf("Subscribe: %v", err)
+	}
+	if got := recv(t, entries); got.ID != first {
+		t.Fatalf("backlog entry = %+v, want %s", got, first)
+	}
+	second := addPiece(t, client, 6, "world\n")
+	if got := recv(t, entries); got.ID != second {
+		t.Fatalf("live entry = %+v, want %s", got, second)
+	}
+	addEntry(t, client, Entry{Kind: KindEnd, State: domain.TemplateRunLogComplete})
+	if got := recv(t, entries); got.Kind != KindEnd {
+		t.Fatalf("entry = %+v, want the end", got)
+	}
+	waitClosed(t, entries)
+}
+
+func TestSubscribeIgnoresAnAfterIDPastAMissingStream(t *testing.T) {
+	t.Parallel()
+	reg, client := newTestRegistry(t)
+
+	if _, err := reg.Subscribe(t.Context(), registryTestKey, "99999999999999-0"); err != nil {
+		t.Fatalf("Subscribe past the stream: %v", err)
+	}
+	entries, err := reg.Subscribe(t.Context(), registryTestKey, "")
+	if err != nil {
+		t.Fatalf("Subscribe: %v", err)
+	}
+	id := addPiece(t, client, 0, "hello\n")
+	if got := recv(t, entries); got.ID != id {
+		t.Fatalf("entry = %+v, want %s", got, id)
 	}
 }

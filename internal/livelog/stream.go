@@ -129,6 +129,9 @@ type Stream interface {
 type Reader interface {
 	XRead(ctx context.Context, a *redis.XReadArgs) *redis.XStreamSliceCmd
 	XRange(ctx context.Context, stream, start, stop string) *redis.XMessageSliceCmd
+	// XRevRangeN reads the stream's last entry, which bounds where a
+	// tailer may start.
+	XRevRangeN(ctx context.Context, stream, start, stop string, count int64) *redis.XMessageSliceCmd
 }
 
 var (

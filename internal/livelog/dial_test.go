@@ -41,3 +41,26 @@ func TestDialPingsTheServer(t *testing.T) {
 		t.Fatalf("Dial to a closed port: error = %v, want a ping error", err)
 	}
 }
+
+// The registry's client holds a connection per tailer, plus the backlog
+// reads of subscribers joining them.
+func TestDialReadersSizesThePoolForEveryTailer(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	server := miniredis.RunT(t)
+	client, err := DialReaders(ctx, "redis://"+server.Addr())
+	if err != nil {
+		t.Fatalf("DialReaders: %v", err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+
+	if got, want := client.Options().PoolSize, MaxTailers+readerPoolHeadroom; got != want {
+		t.Fatalf("PoolSize = %d, want %d", got, want)
+	}
+	if got := client.Options().PoolTimeout; got != readerPoolTimeout {
+		t.Fatalf("PoolTimeout = %v, want %v", got, readerPoolTimeout)
+	}
+}

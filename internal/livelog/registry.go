@@ -14,9 +14,11 @@ import (
 )
 
 const (
-	// MaxTailers caps the logs one replica follows at once. Each tailer
-	// holds a Valkey connection in a blocking read, so the cap bounds how
-	// many connections viewers can tie up, however many there are.
+	// MaxTailers caps the tailers one replica runs at once, counting a
+	// stopped one whose last read is still in flight. Each holds a Valkey
+	// connection in a blocking read, so the cap bounds the connections
+	// viewers can tie up, however many there are or however fast they come
+	// and go.
 	MaxTailers = 256
 	// subscriberBuffer is how far a subscriber may fall behind its tailer.
 	// Past it the subscriber is dropped rather than slowing the tailer down
@@ -37,11 +39,16 @@ var ErrTooManyTailers = errors.New("too many live log tailers")
 type Registry struct {
 	reader Reader
 
-	// mu guards tailers and every tailer's subscribers and closed. One lock
-	// for all of it keeps the hand-offs between a tailer, its subscribers
-	// and the map obvious; nothing slow happens under it.
+	// mu guards tailers, slots, and every tailer's subscribers, closed and
+	// started. One lock for all of it keeps the hand-offs between a tailer,
+	// its subscribers and the map obvious; nothing slow happens under it.
 	mu      sync.Mutex
 	tailers map[string]*tailer
+	// slots counts tailers that hold or will hold a connection: from
+	// creation until their read loop returns, or until teardown for one
+	// that never started. A torn-down tailer leaves the map at once, but
+	// go-redis keeps its read, and the connection, for up to tailBlock.
+	slots int
 }
 
 // tailer follows one stream and fans each entry out to its subscribers.
@@ -60,6 +67,9 @@ type tailer struct {
 	// closed is set once the tailer has left the registry: it ended, failed,
 	// or lost its last subscriber. Nothing is fanned out after it.
 	closed bool
+	// started is set once the read loop runs; from then on the loop, not
+	// teardown, gives back the tailer's slot.
+	started bool
 }
 
 // subscriber is one Subscribe call's view of its tailer. The registry closes
@@ -101,6 +111,11 @@ func (reg *Registry) Subscribe(ctx context.Context, key, afterID string) (<-chan
 	}
 
 	backlog, err := reg.backlog(ctx, key, afterID)
+	var from string
+	var ended bool
+	if err == nil && created {
+		from, ended, err = reg.position(ctx, key, backlog, afterID)
+	}
 	if err != nil {
 		if created {
 			reg.mu.Lock()
@@ -113,7 +128,7 @@ func (reg *Registry) Subscribe(ctx context.Context, key, afterID string) (<-chan
 		return nil, err
 	}
 	if created {
-		reg.start(t, backlog, afterID)
+		reg.start(t, from, ended)
 	}
 
 	// Inbox entries at or before last are already in the backlog: the
@@ -134,9 +149,10 @@ func (reg *Registry) join(key string) (*tailer, *subscriber, bool, error) {
 	defer reg.mu.Unlock()
 	t, ok := reg.tailers[key]
 	if !ok {
-		if len(reg.tailers) >= MaxTailers {
+		if reg.slots >= MaxTailers {
 			return nil, nil, false, ErrTooManyTailers
 		}
+		reg.slots++
 		// Not the creating request's context: the tailer outlives that
 		// request when others have joined it.
 		ctx, stop := context.WithCancel(context.Background())
@@ -148,22 +164,43 @@ func (reg *Registry) join(key string) (*tailer, *subscriber, bool, error) {
 	return t, sub, !ok, nil
 }
 
-// start sets the tailer reading from the end of its creator's backlog, then
-// lets joiners in. A backlog that already holds the end needs no tailer.
-func (reg *Registry) start(t *tailer, backlog []Entry, afterID string) {
-	from := afterID
-	if from == "" {
-		from = "0-0"
-	}
-	ended := false
+// position says where the tailer starts: after the creator's backlog, so
+// the two meet with no gap. ended says the stream already holds its end, so
+// no tailer is needed.
+func (reg *Registry) position(ctx context.Context, key string, backlog []Entry, afterID string) (string, bool, error) {
 	if len(backlog) > 0 {
 		last := backlog[len(backlog)-1]
-		from, ended = last.ID, last.Kind == KindEnd
+		return last.ID, last.Kind == KindEnd, nil
 	}
+	if afterID == "" {
+		return "0-0", false, nil
+	}
+	// An empty backlog leaves only the client's afterID, which every viewer
+	// of the log then shares. Past the stream's last entry it would park the
+	// tailer where no generated id ever arrives, so it is clamped to that
+	// entry.
+	messages, err := reg.reader.XRevRangeN(ctx, key, "+", "-", 1).Result()
+	if err != nil {
+		return "", false, fmt.Errorf("read last entry of %s: %w", key, err)
+	}
+	if len(messages) == 0 {
+		return "0-0", false, nil
+	}
+	last := messages[0]
+	if !idAfter(afterID, last.ID) {
+		return afterID, false, nil
+	}
+	entry, err := ParseEntry(last)
+	return last.ID, err == nil && entry.Kind == KindEnd, nil
+}
+
+// start sets the tailer reading after from, then lets joiners in.
+func (reg *Registry) start(t *tailer, from string, ended bool) {
 	reg.mu.Lock()
 	if ended {
 		reg.teardown(t)
 	} else if !t.closed {
+		t.started = true
 		go reg.tail(t, from)
 	}
 	reg.mu.Unlock()
@@ -202,6 +239,11 @@ func (reg *Registry) backlog(ctx context.Context, key, afterID string) ([]Entry,
 // tail reads t's stream from the entry after from until the end entry, a
 // read error, or the last subscriber leaving.
 func (reg *Registry) tail(t *tailer, from string) {
+	defer func() {
+		reg.mu.Lock()
+		reg.slots--
+		reg.mu.Unlock()
+	}()
 	for {
 		// A missing key is not an error: XREAD blocks until the first
 		// piece creates the stream, which is the first viewer's usual case.
@@ -331,6 +373,9 @@ func (reg *Registry) teardown(t *tailer) {
 	}
 	if reg.tailers[t.key] == t {
 		delete(reg.tailers, t.key)
+	}
+	if !t.started {
+		reg.slots--
 	}
 	t.stop()
 }

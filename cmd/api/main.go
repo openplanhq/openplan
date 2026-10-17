@@ -98,9 +98,14 @@ type apiDependencies struct {
 	newAuthorization     func(context.Context, postgresPool, string) (*authorization.Authorization, error)
 	listenAndServe       func(context.Context, string, http.Handler) error
 	// dialLiveLogs connects to the Valkey the executor publishes commands'
-	// output to: the API ends each finished log's stream there, and follows
-	// a running one's for its viewers.
+	// output to: the API ends each finished log's stream there.
 	dialLiveLogs func(ctx context.Context, url string) (*redis.Client, error)
+	// dialLiveLogReaders connects the client the live log registry reads
+	// with, kept apart from dialLiveLogs' so tailers' blocking reads cannot
+	// starve the writes that end each stream.
+	dialLiveLogReaders func(ctx context.Context, url string) (*redis.Client, error)
+	// newLiveLogSubscriber builds what the events route follows logs with.
+	newLiveLogSubscriber func(livelog.Reader) api.LiveLogSubscriber
 
 	dialTemporal       func(context.Context, temporal.Config) (client.Client, error)
 	newWorker          func(client.Client, string, temporalworker.Options) temporalWorker
@@ -221,9 +226,13 @@ func defaultAPIDependencies() apiDependencies {
 			}
 			return authorization.New(ctx, concrete, storeName)
 		},
-		listenAndServe: listenAndServe,
-		dialLiveLogs:   livelog.Dial,
-		dialTemporal:   temporal.Dial,
+		listenAndServe:     listenAndServe,
+		dialLiveLogs:       livelog.Dial,
+		dialLiveLogReaders: livelog.DialReaders,
+		newLiveLogSubscriber: func(reader livelog.Reader) api.LiveLogSubscriber {
+			return livelog.NewRegistry(reader)
+		},
+		dialTemporal: temporal.Dial,
 		newWorker: func(temporalClient client.Client, taskQueue string, options temporalworker.Options) temporalWorker {
 			return temporalworker.New(temporalClient, taskQueue, options)
 		},
@@ -389,6 +398,11 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 		return fmt.Errorf("live logs: %w", err)
 	}
 	defer liveLogs.Close()
+	liveLogReaders, err := deps.dialLiveLogReaders(ctx, cfg.LiveLogURL)
+	if err != nil {
+		return fmt.Errorf("live log readers: %w", err)
+	}
+	defer liveLogReaders.Close()
 	service, err := deps.newService(app.Service{
 		Authorization:            auth,
 		Work:                     store,
@@ -426,7 +440,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 
 	handler := api.NewAuthenticatedServer(service, cfg.Security.TenantID, cfg.Debug,
 		api.WithQueueReader(store),
-		api.WithLiveLogs(livelog.NewRegistry(liveLogs)),
+		api.WithLiveLogs(deps.newLiveLogSubscriber(liveLogReaders)),
 		api.WithAuth(api.AuthConfig{
 			Flow:                flow,
 			Verifier:            verifier,
