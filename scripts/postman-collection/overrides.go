@@ -144,7 +144,7 @@ var overrides = map[string]override{
 		note: "In a collection run this re-sends itself until the plan has finished.",
 	},
 	"listTemplateRunLogs": {
-		test: "const logs = pm.response.json();\nif (logs.length) { pm.environment.set('name', logs[0].phase); }",
+		test: "const logs = pm.response.json();\nif (logs.length) { pm.environment.set('name', logs[0].name); }",
 		note: "Saves the first log's name, which the log-body request reads by.",
 	},
 	"getTemplateRunLog": {

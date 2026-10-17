@@ -225,14 +225,9 @@ export interface TemplateRun {
   tenant_id: string;
   stack_template_id: string;
   template_revision_id: string;
-  source_template_id: string;
   operation: Operation;
   selected_ref: string;
   resolved_commit_sha: string;
-  workspace_name: string;
-  config_json: Record<string, unknown>;
-  backend_type: string;
-  backend_config_hash: string;
   status: TemplateRunStatus;
   // The latest step of the workflow that started last. Empty until that
   // workflow starts a step, so also between an apply's claim and its first
@@ -292,14 +287,13 @@ export interface TemplateRunLog {
   run_id: string;
   // The log's name, unique within the run: the key it is read under, not a
   // label. Show command_line under its run_phase instead.
-  phase: string;
+  name: string;
   run_phase: RunPhase;
   // Its place among the phase's logs, from 1. The list arrives in run order.
   seq: number;
   command: string;
   // What ran, for people to read: "tofu init", "tofu plan -destroy".
   command_line: string;
-  object_key: string;
   content_type: string;
   size_bytes: number;
   uploaded_at: string;

@@ -471,7 +471,7 @@ func (server *Server) handleRegisterTemplate(response http.ResponseWriter, reque
 	}
 
 	setLocation(response, request, "template-registrations", string(registration.ID))
-	writeJSON(response, http.StatusAccepted, registration)
+	writeJSON(response, http.StatusAccepted, newTemplateRegistrationResponse(registration))
 }
 
 func (server *Server) handleListTemplateRevisions(response http.ResponseWriter, request *http.Request) {
@@ -483,7 +483,11 @@ func (server *Server) handleListTemplateRevisions(response http.ResponseWriter, 
 		return
 	}
 
-	writeJSON(response, http.StatusOK, templateRevisions)
+	body := make([]templateRevisionResponse, 0, len(templateRevisions))
+	for _, templateRevision := range templateRevisions {
+		body = append(body, newTemplateRevisionResponse(templateRevision))
+	}
+	writeJSON(response, http.StatusOK, body)
 }
 
 func (server *Server) handleGetTemplateRegistration(response http.ResponseWriter, request *http.Request) {
@@ -496,7 +500,7 @@ func (server *Server) handleGetTemplateRegistration(response http.ResponseWriter
 		return
 	}
 
-	writeJSON(response, http.StatusOK, registration)
+	writeJSON(response, http.StatusOK, newTemplateRegistrationResponse(registration))
 }
 
 func (server *Server) handleGetTemplateRevisionVariables(response http.ResponseWriter, request *http.Request) {
@@ -814,7 +818,7 @@ func (server *Server) handleStartTemplateRun(response http.ResponseWriter, reque
 	}
 
 	setLocation(response, request, "template-runs", string(run.ID))
-	writeJSON(response, http.StatusAccepted, run)
+	writeJSON(response, http.StatusAccepted, newTemplateRunResponse(run))
 }
 
 func (server *Server) handleGetTemplateRun(response http.ResponseWriter, request *http.Request) {
@@ -827,7 +831,7 @@ func (server *Server) handleGetTemplateRun(response http.ResponseWriter, request
 		return
 	}
 
-	writeJSON(response, http.StatusOK, run)
+	writeJSON(response, http.StatusOK, newTemplateRunResponse(run))
 }
 
 func (server *Server) handleListTemplateRuns(response http.ResponseWriter, request *http.Request) {
@@ -840,7 +844,7 @@ func (server *Server) handleListTemplateRuns(response http.ResponseWriter, reque
 		return
 	}
 
-	writeJSON(response, http.StatusOK, runs)
+	writeJSON(response, http.StatusOK, newTemplateRunResponses(runs))
 }
 
 func (server *Server) handleGetTemplateRunLog(response http.ResponseWriter, request *http.Request) {
@@ -869,7 +873,11 @@ func (server *Server) handleListTemplateRunLogs(response http.ResponseWriter, re
 		return
 	}
 
-	writeJSON(response, http.StatusOK, logs)
+	body := make([]templateRunLogResponse, 0, len(logs))
+	for _, log := range logs {
+		body = append(body, newTemplateRunLogResponse(log))
+	}
+	writeJSON(response, http.StatusOK, body)
 }
 
 func (server *Server) handleApproveRun(response http.ResponseWriter, request *http.Request) {
@@ -889,7 +897,7 @@ func (server *Server) handleApproveRun(response http.ResponseWriter, request *ht
 
 	// The apply is queued, not done: the client follows it at the run.
 	setLocation(response, request, "template-runs", string(run.ID))
-	writeJSON(response, http.StatusAccepted, run)
+	writeJSON(response, http.StatusAccepted, newTemplateRunResponse(run))
 }
 
 func (server *Server) handleDiscardRun(response http.ResponseWriter, request *http.Request) {
@@ -1019,7 +1027,7 @@ type attentionItemResponse struct {
 	StackTemplate attentionStackTemplateResponse `json:"stack_template"`
 	// Run is the plan waiting for approval or the destroy that failed; null
 	// for a failed template with no destroy run on record.
-	Run *domain.TemplateRun `json:"run"`
+	Run *templateRunResponse `json:"run"`
 }
 
 type attentionStackResponse struct {
@@ -1049,7 +1057,10 @@ func newAttentionItemResponse(item app.AttentionItem) attentionItemResponse {
 			WorkspaceName: item.StackTemplate.WorkspaceName,
 			DisplayName:   item.StackTemplate.DisplayName,
 		},
-		Run: item.Run,
+	}
+	if item.Run != nil {
+		run := newTemplateRunResponse(*item.Run)
+		response.Run = &run
 	}
 	if !item.At.IsZero() {
 		response.At = item.At.Format(time.RFC3339Nano)

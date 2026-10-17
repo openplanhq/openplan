@@ -13,6 +13,6 @@ scripts:
     code: |-
       pm.test('status is 200', () => pm.response.to.have.status(200));
       const logs = pm.response.json();
-      if (logs.length) { pm.environment.set('name', logs[0].phase); }
+      if (logs.length) { pm.environment.set('name', logs[0].name); }
     language: text/javascript
 order: 4000

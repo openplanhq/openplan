@@ -29,7 +29,7 @@ interface RunLogsPanelProps {
 export default function RunLogsPanel({ runId, logs, executions, failed, finished }: RunLogsPanelProps) {
   const headingId = useId();
   const [open, setOpen] = useState<Record<string, boolean>>({});
-  const latestPhase = logs?.[logs.length - 1]?.phase ?? "";
+  const latestPhase = logs?.[logs.length - 1]?.name ?? "";
   if (latestPhase !== "" && !(latestPhase in open)) {
     setOpen({ ...open, [latestPhase]: true });
   }
@@ -46,11 +46,11 @@ export default function RunLogsPanel({ runId, logs, executions, failed, finished
           <LogPhase key={group.phase} title={PHASE_TITLES[group.phase]} detail={phaseDetail(group.phase, executions)}>
             {group.logs.map((log) => (
               <LogStep
-                key={log.phase}
-                name={log.phase}
+                key={log.name}
+                name={log.name}
                 label={log.command_line}
-                open={open[log.phase] ?? false}
-                onOpenChange={(isOpen) => setOpen((current) => ({ ...current, [log.phase]: isOpen }))}
+                open={open[log.name] ?? false}
+                onOpenChange={(isOpen) => setOpen((current) => ({ ...current, [log.name]: isOpen }))}
               >
                 <RunLogBody runId={runId} log={log} />
               </LogStep>
@@ -110,7 +110,7 @@ function phaseDetail(phase: RunPhase, executions: TemplateRunExecution[] | undef
 }
 
 function RunLogBody({ runId, log }: { runId: string; log: TemplateRunLog }) {
-  const logQuery = useTemplateRunLogQuery(tenantID, runId, log.phase, log.uploaded_at);
+  const logQuery = useTemplateRunLogQuery(tenantID, runId, log.name, log.uploaded_at);
   if (logQuery.data !== undefined) {
     return <>{logQuery.data || "No log body"}</>;
   }
