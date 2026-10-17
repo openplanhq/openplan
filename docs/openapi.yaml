@@ -338,7 +338,6 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "413": { $ref: "#/components/responses/RequestTooLarge" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
     get:
       tags: [Templates]
       summary: List registered template revisions
@@ -355,7 +354,6 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
 
   /v1/tenants/{tenant_id}/template-registrations/{registration_id}:
     parameters:
@@ -379,7 +377,6 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
 
   /v1/tenants/{tenant_id}/template-revisions/{template_revision_id}/variables:
     parameters:
@@ -409,7 +406,6 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
 
   /v1/tenants/{tenant_id}/stacks:
     parameters:
@@ -454,7 +450,6 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "413": { $ref: "#/components/responses/RequestTooLarge" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
     get:
       tags: [Stacks]
       summary: List stacks
@@ -475,7 +470,6 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
 
   /v1/tenants/{tenant_id}/attention:
     parameters:
@@ -501,7 +495,6 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
 
   /v1/tenants/{tenant_id}/stacks/{stack_id}:
     parameters:
@@ -521,7 +514,6 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
 
   /v1/tenants/{tenant_id}/stacks/{stack_id}/templates:
     parameters:
@@ -563,7 +555,6 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "413": { $ref: "#/components/responses/RequestTooLarge" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
 
   /v1/tenants/{tenant_id}/stacks/{stack_id}/credentials:
     parameters:
@@ -667,7 +658,6 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
     post:
       tags: [Access]
       summary: Assign a role on a stack
@@ -718,7 +708,6 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "413": { $ref: "#/components/responses/RequestTooLarge" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
 
   /v1/tenants/{tenant_id}/stacks/{stack_id}/grants/{user_sub}:
     parameters:
@@ -745,7 +734,6 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
 
   /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/config:
     parameters:
@@ -796,7 +784,6 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "413": { $ref: "#/components/responses/RequestTooLarge" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
 
   /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/upgrade:
     parameters:
@@ -839,7 +826,6 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "413": { $ref: "#/components/responses/RequestTooLarge" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
 
   /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/credentials:
     parameters:
@@ -976,7 +962,6 @@ paths:
                   value: { error: plan_stale, message: the plan is stale; re-plan before applying }
         "413": { $ref: "#/components/responses/RequestTooLarge" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
     get:
       tags: [Runs]
       summary: List a component's runs
@@ -994,7 +979,6 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
 
   /v1/tenants/{tenant_id}/template-runs/{run_id}:
     parameters:
@@ -1015,7 +999,6 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
 
   /v1/tenants/{tenant_id}/template-runs/{run_id}/logs:
     parameters:
@@ -1041,7 +1024,6 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
 
   /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{phase}:
     parameters:
@@ -1074,7 +1056,6 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
 
   /v1/tenants/{tenant_id}/template-runs/{run_id}/approval:
     parameters:
@@ -1118,7 +1099,6 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "413": { $ref: "#/components/responses/RequestTooLarge" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
 
   /v1/tenants/{tenant_id}/template-runs/{run_id}/discard:
     parameters:
@@ -1155,7 +1135,6 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "413": { $ref: "#/components/responses/RequestTooLarge" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
 
   /v1/tenants/{tenant_id}/users/search:
     parameters:
@@ -1225,7 +1204,6 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
 
   /v1/tenants/{tenant_id}/queue:
     parameters:
@@ -1353,17 +1331,6 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
           example: { error: internal_error, message: internal server error }
-    AuthorizationUnavailable:
-      description: |
-        The authorization service could not answer. `authorization_unavailable`
-        for a timeout or outage; `authorization_write_unconfirmed` when a grant
-        write may or may not have landed — re-read before retrying.
-      content:
-        application/json:
-          schema: { $ref: "#/components/schemas/Error" }
-          example:
-            error: authorization_unavailable
-            message: authorization service unavailable
     CredentialEncryptionUnavailable:
       description: |
         No credential encryption key is configured on this deployment
@@ -1404,8 +1371,6 @@ components:
             - conflict
             - credential_encryption_unavailable
             - queue_unavailable
-            - authorization_unavailable
-            - authorization_write_unconfirmed
             - internal_error
         message:
           type: string
@@ -1421,9 +1386,8 @@ components:
     Me:
       type: object
       description: |
-        Note the camelCase field names. They predate the move off IdP role
-        claims and are kept because they are the web client's contract;
-        only the source of the answers changed.
+        Who the caller is, what they may do platform-wide, and the tenant this
+        deployment serves.
       properties:
         sub:
           type: string
