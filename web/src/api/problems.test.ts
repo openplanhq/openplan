@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ApiRequestError } from "./client";
-import { apiErrorMessage, fieldErrors } from "./problems";
+import { apiErrorMessage, fieldErrors, fieldsShown } from "./problems";
 import type { ApiProblem } from "./types";
 
 function problem(overrides: Partial<ApiProblem>): ApiRequestError {
@@ -48,14 +48,35 @@ describe("apiErrorMessage", () => {
       ]
     });
 
-    expect(apiErrorMessage(error, "Request failed", "#/config/")).toBe("template_revision_id is required");
+    expect(apiErrorMessage(error, "Request failed", fieldsShown("#/config/", ["region"]))).toBe("template_revision_id is required");
     expect(apiErrorMessage(error, "Request failed")).toBe("region is required; template_revision_id is required");
   });
 
   it("is empty when every field error is drawn inline", () => {
     const error = problem({ errors: [{ pointer: "#/config/region", issue: "required", detail: "region is required" }] });
 
-    expect(apiErrorMessage(error, "Request failed", "#/config/")).toBe("");
+    expect(apiErrorMessage(error, "Request failed", fieldsShown("#/config/", ["region"]))).toBe("");
+  });
+
+  // A key the form draws no input for, such as a variable the revision no
+  // longer declares, has nowhere else to show, so it stays in the line.
+  it("keeps errors on keys the form doesn't render", () => {
+    const error = problem({
+      errors: [
+        { pointer: "#/config/region", issue: "required", detail: "region is required" },
+        { pointer: "#/config/old_var", issue: "unknown", detail: "old_var is not a variable of this template" }
+      ]
+    });
+
+    expect(apiErrorMessage(error, "Request failed", fieldsShown("#/config/", ["region"]))).toBe("old_var is not a variable of this template");
+  });
+
+  it("matches rendered keys after undoing the pointer's escapes", () => {
+    const shown = fieldsShown("#/config/", ["a/b c"]);
+
+    expect(shown("#/config/a~1b%20c")).toBe(true);
+    expect(shown("#/config/a")).toBe(false);
+    expect(shown("#/name")).toBe(false);
   });
 
   it("names the request id for a server fault", () => {

@@ -20,7 +20,7 @@ import { configFromVariableValues } from "./stackWorkflow";
 import { stackTemplatePath } from "./templateSelection";
 import TemplateSearch, { TemplateChoiceState, TemplateSource } from "./TemplateSearch";
 import VariableFields from "./VariableFields";
-import { apiErrorMessage } from "../../api/problems";
+import { apiErrorMessage, fieldsShown } from "../../api/problems";
 import { useFieldErrors } from "../../shared/useFieldErrors";
 import RequestIdNote from "../../shared/RequestIdNote";
 import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty";
@@ -142,7 +142,7 @@ export default function AddStackTemplateScreen() {
     } catch (error) {
       // Each refused variable shows under its own input; the line says the rest.
       variableErrors.show(error);
-      setErrorMessage(apiErrorMessage(error, "Request failed", "#/config/"));
+      setErrorMessage(apiErrorMessage(error, "Request failed", fieldsShown("#/config/", variables.map((variable) => variable.name))));
     }
   }
 

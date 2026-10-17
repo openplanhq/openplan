@@ -31,18 +31,27 @@ function decodePointerSegment(segment: string): string {
   return decoded.replace(/~1/g, "/").replace(/~0/g, "~");
 }
 
+// fieldsShown says which pointers a form draws on a field: those under prefix
+// whose key is one the form renders an input for. An error on any other key,
+// such as a variable the form doesn't show, must stay in the summary line or
+// it would show nowhere.
+export function fieldsShown(prefix: string, keys: readonly string[]): (pointer: string) => boolean {
+  const rendered = new Set(keys);
+  return (pointer) => pointer.startsWith(prefix) && rendered.has(decodePointerSegment(pointer.slice(prefix.length)));
+}
+
 // apiErrorMessage is the one line a screen shows for a failed request.
-// - Field errors the screen draws on their fields (those under inlinePrefix)
+// - Field errors the screen draws on their fields (those shownInline accepts)
 //   are left out; the rest are listed, since a summary like "2 fields need
 //   attention" says nothing about which. With every one drawn inline it is "".
 // - A server fault carries the request id, so a person can quote it.
-export function apiErrorMessage(error: unknown, fallback: string, inlinePrefix?: string): string {
+export function apiErrorMessage(error: unknown, fallback: string, shownInline?: (pointer: string) => boolean): string {
   if (!(error instanceof ApiRequestError)) {
     return error instanceof Error && error.message !== "" ? error.message : fallback;
   }
   if (error.errors.length > 0) {
     return error.errors
-      .filter((entry) => inlinePrefix === undefined || entry.pointer === undefined || !entry.pointer.startsWith(inlinePrefix))
+      .filter((entry) => entry.pointer === undefined || shownInline === undefined || !shownInline(entry.pointer))
       .map((entry) => entry.detail)
       // Details start with the field's name, which is case-sensitive, so
       // they are joined as they are rather than capitalized into sentences.

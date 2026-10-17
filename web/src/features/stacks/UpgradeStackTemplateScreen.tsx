@@ -19,7 +19,7 @@ import {
 } from "./stackWorkflow";
 import { stackTemplatePath } from "./templateSelection";
 import VariableFields from "./VariableFields";
-import { apiErrorMessage } from "../../api/problems";
+import { apiErrorMessage, fieldsShown } from "../../api/problems";
 import { useFieldErrors } from "../../shared/useFieldErrors";
 import RequestIdNote from "../../shared/RequestIdNote";
 import { Label } from "@/components/ui/label";
@@ -94,7 +94,7 @@ export default function UpgradeStackTemplateScreen() {
       navigate(stackTemplatePath(stackId, stackTemplate.id, "runs"));
     } catch (error) {
       variableErrors.show(error);
-      setErrorMessage(apiErrorMessage(error, "Request failed", "#/config/"));
+      setErrorMessage(apiErrorMessage(error, "Request failed", fieldsShown("#/config/", targetVariables.map((variable) => variable.name))));
     }
   }
 

@@ -1,7 +1,7 @@
 import { CircleAlert, Loader2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiErrorMessage } from "../../api/problems";
+import { apiErrorMessage, fieldsShown } from "../../api/problems";
 import { useCreateStackMutation } from "../../api/queries";
 import { tenantID } from "../../config";
 import Breadcrumb from "../../shared/Breadcrumb";
@@ -31,10 +31,10 @@ export default function CreateStackScreen() {
       const result = await mutation.mutateAsync({ name: trimmed, slug: "", tags: {}, default_credential_ids: [] });
       navigate(`/stacks/${result.id}`);
     } catch (err) {
-      // The name's own problem shows under it; the alert says the rest, such
-      // as a slug, derived from the name, that another stack already has.
+      // The name's own problems show under it, including a clash on the slug
+      // the server made from it; the alert says anything else.
       nameErrors.show(err);
-      setErrorMessage(apiErrorMessage(err, "Failed to create stack", "#/name"));
+      setErrorMessage(apiErrorMessage(err, "Failed to create stack", fieldsShown("#/", ["name"])));
     }
   };
 

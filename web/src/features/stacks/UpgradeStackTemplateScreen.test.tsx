@@ -448,6 +448,37 @@ describe("UpgradeStackTemplateScreen", () => {
     await waitFor(() => expect(screen.getByTestId("upgrade-stack-template-error")).toBeTruthy());
   });
 
+  // The target revision's variables are the only inputs on screen, so an
+  // error on one shows under it, and an error on any other key, such as a
+  // variable only the current revision had, stays in the form line.
+  it("puts errors on the target's variables and says the rest in the form line", async () => {
+    const queryClient = testQueryClient();
+    seedUpgradeable(queryClient);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          type: "https://openplan.run/problems/validation-failed",
+          title: "The request has invalid fields",
+          status: 422,
+          detail: "2 fields need attention.",
+          errors: [
+            { pointer: "#/config/new_var", issue: "required", detail: "new_var is required" },
+            { pointer: "#/config/retired_var", issue: "unknown", detail: "retired_var is not a variable of this template" }
+          ]
+        }),
+        { status: 422, headers: { "content-type": "application/problem+json" } }
+      )
+    );
+
+    renderScreen(queryClient);
+
+    fireEvent.click(screen.getByRole("button", { name: /Change revision/ }));
+
+    await waitFor(() => expect(screen.getByTestId("upgrade-stack-template-error").textContent).toBe("retired_var is not a variable of this template"));
+    expect(screen.getByLabelText(/new_var/).getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getByText("new_var is required")).toBeTruthy();
+  });
+
   // Without the marker, SessionProvider's proactive re-auth timer sees no
   // in-flight mutation and no unsaved work, and full-page-navigates to the IdP
   // mid-edit — taking every value typed here with it.

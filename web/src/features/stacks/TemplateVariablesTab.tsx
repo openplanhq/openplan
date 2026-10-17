@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import { useTemplateRevisionVariablesQuery, useUpdateStackTemplateConfigMutation } from "../../api/queries";
-import { apiErrorMessage } from "../../api/problems";
+import { apiErrorMessage, fieldsShown } from "../../api/problems";
 import { tenantID } from "../../config";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
@@ -57,7 +57,7 @@ export default function TemplateVariablesTab() {
       setEditedValues({});
     } catch (error) {
       variableErrors.show(error);
-      setErrorMessage(apiErrorMessage(error, "Request failed", "#/config/"));
+      setErrorMessage(apiErrorMessage(error, "Request failed", fieldsShown("#/config/", variables.map((variable) => variable.name))));
     }
   }
 

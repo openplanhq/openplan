@@ -115,8 +115,33 @@ describe("CreateStackScreen", () => {
     });
   });
 
-  // The form has no slug field, so a clash on the slug derived from the name
-  // is said in the alert rather than on a field.
+  // The form sends no slug, so the server makes it from the name and points a
+  // clash at the name, the field the person can change.
+  it("puts a clash on the slug made from the name under the name field", async () => {
+    const detail = 'Another stack already uses the slug "my-stack", made from this name. Choose another name.';
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse(
+        {
+          type: "https://openplan.run/problems/duplicate-slug",
+          title: "The slug is taken",
+          detail,
+          errors: [{ pointer: "#/name", issue: "duplicate", detail }]
+        },
+        409
+      )
+    );
+
+    renderScreen();
+
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "My Stack" } });
+    fireEvent.click(screen.getByRole("button", { name: /create stack/i }));
+
+    await waitFor(() => expect(screen.getByLabelText("Name").getAttribute("aria-invalid")).toBe("true"));
+    expect(document.getElementById("create-stack-name-error")?.textContent).toBe(detail);
+    expect(screen.queryByTestId("create-stack-error")).toBeNull();
+  });
+
+  // An error on a field the form doesn't draw has nowhere else to show.
   it("shows an error message when the mutation fails", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse(
