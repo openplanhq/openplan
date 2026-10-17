@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import StackAccessScreen from "./StackAccessScreen";
-import type { GrantView, ListGrantsResponse, SearchUsersResponse, UserProfile } from "../../api/types";
+import type { GrantView, ListPage, UserProfile } from "../../api/types";
 
 function wrapper(initialRoute = "/stacks/stack_123/access") {
   const queryClient = new QueryClient({
@@ -27,10 +27,11 @@ function wrapper(initialRoute = "/stacks/stack_123/access") {
   };
 }
 
-const emptyGrants: ListGrantsResponse = { grants: [] };
+const emptyGrants: ListPage<GrantView> = { items: [], next_cursor: null };
 
-const twoGrants: ListGrantsResponse = {
-  grants: [
+const twoGrants: ListPage<GrantView> = {
+  next_cursor: null,
+  items: [
     {
       user_sub: "u1",
       role: "owner",
@@ -46,19 +47,18 @@ const twoGrants: ListGrantsResponse = {
   ]
 };
 
-const searchResults: SearchUsersResponse = {
-  users: [
+const searchResults: ListPage<UserProfile> = {
+  items: [
     {
       sub: "u3",
       display_name: "Charlie Brown",
       email: "charlie@example.com"
     }
   ],
-  first: 0,
-  max: 20
+  next_cursor: null
 };
 
-const charlie = searchResults.users[0];
+const charlie = searchResults.items[0];
 const chad: UserProfile = { sub: "u4", display_name: "Chad", email: "chad@example.com" };
 const dave: UserProfile = { sub: "u6", display_name: "Dave Grohl", email: "dave@example.com" };
 // Matched by email: there is no "ch" in her name.
@@ -89,13 +89,13 @@ function serve({
     sent.push({ method, url, body });
     if (url.includes("/users/search")) {
       await new Promise((resolve) => setTimeout(resolve, searchDelay));
-      return json({ users, first: 0, max: 20 });
+      return json({ items: users, next_cursor: null });
     }
     if (method === "PUT") {
       const userSub = decodeURIComponent(url.slice(url.lastIndexOf("/") + 1));
       return assign ? assign() : json({ user_sub: userSub, role: body?.role, display_name: "", email: "" });
     }
-    return json({ grants });
+    return json({ items: grants, next_cursor: null });
   });
   return sent;
 }
@@ -231,7 +231,7 @@ describe("StackAccessScreen", () => {
         })
       )
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ grants: [twoGrants.grants[0]] }), {
+        new Response(JSON.stringify({ items: [twoGrants.items[0]], next_cursor: null }), {
           status: 200,
           headers: { "content-type": "application/json" }
         })
@@ -612,7 +612,7 @@ describe("StackAccessScreen", () => {
     });
 
     it("shows a user who already holds a role with it, and won't pick them", async () => {
-      const alice = twoGrants.grants[0];
+      const alice = twoGrants.items[0];
       serve({ grants: [alice], users: [{ sub: alice.user_sub, display_name: alice.display_name, email: alice.email }] });
       await renderWithGrants([alice]);
 
@@ -719,8 +719,8 @@ describe("StackAccessScreen", () => {
   });
   describe("current grants", () => {
     it("shows each grant's role as a RoleBadge", async () => {
-      serve({ grants: twoGrants.grants });
-      await renderWithGrants(twoGrants.grants);
+      serve({ grants: twoGrants.items });
+      await renderWithGrants(twoGrants.items);
 
       const owner = screen.getByText("owner");
       expect(owner.getAttribute("data-slot")).toBe("badge");
@@ -761,8 +761,8 @@ describe("StackAccessScreen", () => {
     // Screen readers announce a change to a live region that is already in
     // the page; one mounted together with its text often goes unread.
     it("keeps the undo status region in the page before it has anything to say", async () => {
-      serve({ grants: twoGrants.grants });
-      await renderWithGrants(twoGrants.grants);
+      serve({ grants: twoGrants.items });
+      await renderWithGrants(twoGrants.items);
 
       const status = screen.getByRole("status");
       expect(status.textContent).toBe("");
@@ -773,8 +773,8 @@ describe("StackAccessScreen", () => {
     });
 
     it("disables Undo while it restores the role, and leaves Assign alone", async () => {
-      serve({ grants: twoGrants.grants, assign: () => new Promise<Response>(() => {}) });
-      await renderWithGrants(twoGrants.grants);
+      serve({ grants: twoGrants.items, assign: () => new Promise<Response>(() => {}) });
+      await renderWithGrants(twoGrants.items);
       const user = userEvent.setup();
 
       await user.click(screen.getByRole("button", { name: "Revoke Bob's viewer role" }));
@@ -786,8 +786,8 @@ describe("StackAccessScreen", () => {
     });
 
     it("offers Undo in a status banner after a revoke, and Undo restores the role", async () => {
-      const sent = serve({ grants: twoGrants.grants });
-      await renderWithGrants(twoGrants.grants);
+      const sent = serve({ grants: twoGrants.items });
+      await renderWithGrants(twoGrants.items);
       const user = userEvent.setup();
 
       await user.click(screen.getByRole("button", { name: "Revoke Bob's viewer role" }));

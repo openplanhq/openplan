@@ -590,12 +590,14 @@ visibility is never an authorization boundary.
 | `GET /v1/tenants/{tenant_id}/template-registrations/{registration_id}` | Global `platform-admin` or `stack-creator` |
 | `GET /v1/tenants/{tenant_id}/template-revisions/{template_revision_id}/variables` | Global `platform-admin` or `stack-creator` |
 | `POST /v1/tenants/{tenant_id}/stacks` | Global `platform-admin` or `stack-creator` |
-| `GET /v1/tenants/{tenant_id}/stacks` | Complete tenant stack scan with bounded OpenFGA `BatchCheck(can_view)` calls; `platform-admin` bypasses the ordinary stack list check |
+| `GET /v1/tenants/{tenant_id}/stacks` | Tenant stack scan with bounded OpenFGA `BatchCheck(can_view)` calls, stopping once the page is full; `platform-admin` bypasses the ordinary stack list check |
 | `GET /v1/tenants/{tenant_id}/stacks/{stack_id}` | `can_view` |
 | `POST /v1/tenants/{tenant_id}/stacks/{stack_id}/templates` | `can_operate` |
 | `PUT /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/config` | Owning stack `can_operate` |
 | `POST /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/upgrade` | Owning stack `can_operate` |
 | `POST /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/runs` | Owning stack `can_operate` |
+| `GET /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/runs` | Owning stack `can_view` |
+| `GET /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/runs/{run_number}` | Owning stack `can_view` |
 | `GET /v1/tenants/{tenant_id}/template-runs/{run_id}` | Owning stack `can_view` |
 | `GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs` | Owning stack `can_view` |
 | `GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{name}` | Owning stack `can_view` |
@@ -607,12 +609,14 @@ visibility is never an authorization boundary.
 
 Stack templates, runs, logs, log artifacts, and credential identifiers returned
 with a stack inherit the owning stack decision. Non-administrator stack lists
-read tenant stacks from Postgres in stable `(created_at, id)` keyset pages of at
-most 50 candidates and authorize each page through `BatchCheck(can_view)`. The
-API returns only after every page succeeds. A timeout, a result count mismatch,
-or a later-page failure discards all earlier results and returns `500`; a
-partial list is never returned, because it would tell the caller they have
-access to less than they do.
+read tenant stacks from Postgres in stable `(created_at, id)` keyset batches of
+at most 50 candidates and authorize each batch through `BatchCheck(can_view)`,
+until the requested page holds `limit` visible stacks plus one that proves a
+next page exists, or the tenant runs out. The next page resumes after the last
+stack returned. A timeout, a result count mismatch, or a later-batch failure
+discards the page and returns `500`; a short page is never returned in its
+place, because it would tell the caller they have access to less than they
+do.
 
 Missing and inaccessible inherited reads both return `404 not_found`. Missing
 and inaccessible inherited mutation targets both return `403 forbidden`, so

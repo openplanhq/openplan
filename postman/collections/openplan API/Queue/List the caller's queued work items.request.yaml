@@ -2,10 +2,16 @@ $kind: http-request
 description: |-
   The asynchronous work the caller queued — template registration,
   template runs. Scoped by actor alone, so no new permission concept is
-  involved: a caller only ever sees their own items. Capped at the 50
-  most recent.
+  involved: a caller only ever sees their own items. Newest first, a
+  page at a time.
 method: GET
-url: '{{base_url}}/v1/tenants/{{tenant_id}}/queue'
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/queue?limit=50'
+queryParams:
+  - key: limit
+    value: "50"
+    description: |-
+      At most how many items the page holds. Out of range is a `422`; not an
+      integer, a `400` (`invalid-query`).
 scripts:
   - type: afterResponse
     code: pm.test('status is 200', () => pm.response.to.have.status(200));

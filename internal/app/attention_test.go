@@ -226,7 +226,8 @@ func TestListStackSummariesCountsTemplatesOnVisibleStacks(t *testing.T) {
 
 	fixture := newAttentionFixture(t)
 
-	summaries, err := fixture.service.ListStackSummaries(fixture.ctx, ListStacksCommand{TenantID: "tenant_123"})
+	summaryPage, err := fixture.service.ListStackSummaries(fixture.ctx, ListStacksCommand{TenantID: "tenant_123", Page: FirstPage()})
+	summaries := summaryPage.Items
 	if err != nil {
 		t.Fatalf("ListStackSummaries() error = %v", err)
 	}
@@ -252,7 +253,7 @@ func TestListStackSummariesReportsTemplateReadFailure(t *testing.T) {
 	fixture := newAttentionFixture(t)
 	fixture.overview.templatesErr = errors.New("database unavailable")
 
-	if _, err := fixture.service.ListStackSummaries(fixture.ctx, ListStacksCommand{TenantID: "tenant_123"}); err == nil {
+	if _, err := fixture.service.ListStackSummaries(fixture.ctx, ListStacksCommand{TenantID: "tenant_123", Page: FirstPage()}); err == nil {
 		t.Fatal("ListStackSummaries() error = nil, want the template read failure")
 	}
 }

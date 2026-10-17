@@ -24,6 +24,8 @@ import Chip from "../../shared/Chip";
 import { listItemClass } from "../../shared/listItemClass";
 import SearchField from "../../shared/SearchField";
 import RequestIdNote from "../../shared/RequestIdNote";
+import LoadMoreButton from "../../shared/LoadMoreButton";
+import { useDebounce } from "../../shared/useDebounce";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from "@/components/ui/empty";
 import { cn } from "@/lib/utils";
 
@@ -34,20 +36,35 @@ import { cn } from "@/lib/utils";
 // access itself.
 //
 // The selection lives in the URL (?stack=<id>), so a refresh or a shared link
-// keeps it; without one, the first stack is selected.
+// keeps it; without one, the first stack is selected. A stack beyond the
+// loaded pages can't be selected from a link yet: issue 404 on
+// openplanhq/openplan.
+//
+// The list comes a page at a time, newest first, with Load more under it. The
+// filter goes to the server as q, so it finds a stack on a page not loaded.
 //
 // Built to openplan UI: PageHeader, AttentionSummary and SplitView below, with
 // the shared SearchField, ListItem and Chip; PreviewPanel in StackPreview.
 
+// How long the filter waits for typing to pause before it asks the server.
+const FILTER_DEBOUNCE_MS = 250;
+
 export default function StacksListScreen() {
-  const { data: stacks, status, error, refetch } = useStacksQuery(tenantID);
+  const [filter, setFilter] = useState("");
+  const query = useDebounce(filter.trim(), FILTER_DEBOUNCE_MS);
+  const stacksQuery = useStacksQuery(tenantID, query);
+  const { data: stacks, status, error, refetch } = stacksQuery;
+  // The header counts every stack, which only the unfiltered list knows, and
+  // only once all its pages are in: there is no total to ask for, since a
+  // count of the stacks someone can see means checking every one.
+  const allStacks = useStacksQuery(tenantID);
+  const count = allStacks.data !== undefined && !allStacks.hasNextPage ? allStacks.data.length : undefined;
   // The attention list only decorates this page, so while it loads or if it
   // fails the stacks still show, without the summary line and chips.
   const attention = useAttentionQuery(tenantID).data ?? [];
   const boundary = useQueryErrorBoundary(error);
   const canCreateStack = useAuth().me?.global_capabilities.can_create_stack === true;
   const [searchParams] = useSearchParams();
-  const [filter, setFilter] = useState("");
 
   // The header stands while the stacks load and when they fail, so the page
   // keeps its title and its one action, and only the panel below waits.
@@ -85,7 +102,9 @@ export default function StacksListScreen() {
     );
   }
 
-  if (status === "error") {
+  // A page after the first that fails leaves the stacks already shown; only a
+  // list with nothing to show is replaced by the error.
+  if (status === "error" && stacks === undefined) {
     if (boundary !== null) {
       return <>{boundary}</>;
     }
@@ -110,17 +129,21 @@ export default function StacksListScreen() {
     );
   }
 
-  const query = filter.trim().toLowerCase();
-  const visible = query === "" ? stacks : stacks.filter((stack) => stack.name.toLowerCase().includes(query) || stack.slug.toLowerCase().includes(query));
+  if (stacks === undefined) {
+    return null;
+  }
   // Chosen from the filtered list, so the preview never shows a stack the
   // list has hidden; with nothing left to show, there is no preview.
-  const selected: StackListItem | undefined = visible.find((stack) => stack.id === searchParams.get("stack")) ?? visible[0];
+  const selected: StackListItem | undefined = stacks.find((stack) => stack.id === searchParams.get("stack")) ?? stacks[0];
   const byStack = attentionByStack(attention);
+  // While a new filter loads, the last one's stacks stay on screen, so only an
+  // empty answer to no filter at all means the tenant has no stacks.
+  const noStacks = stacks.length === 0 && query === "" && !stacksQuery.isPlaceholderData;
 
   return (
     <section>
-      {header(stacks.length)}
-      {stacks.length === 0 ? (
+      {header(count)}
+      {noStacks ? (
         // openplan UI's page-level EmptyState: a card, its one icon plain
         // rather than on a tile. It is the first screen of a new install, so
         // it says what a stack is for and offers the action that makes one;
@@ -153,18 +176,28 @@ export default function StacksListScreen() {
             <div className="border-b border-divider p-3">
               <SearchField label="Filter stacks" value={filter} onChange={setFilter} testId="stacks-filter" />
             </div>
-            {visible.length === 0 ? (
+            {stacks.length === 0 ? (
               <p className="px-5 py-4 text-meta text-muted-foreground" data-testid="stacks-filter-empty">
                 No stacks match this filter.
               </p>
             ) : (
               <ul className="flex flex-col gap-0.5 p-2" aria-label="Stacks">
-                {visible.map((stack) => (
+                {stacks.map((stack) => (
                   <li key={stack.id}>
                     <StackRow stack={stack} selected={stack.id === selected?.id} attention={byStack.get(stack.id)} />
                   </li>
                 ))}
               </ul>
+            )}
+            {stacksQuery.hasNextPage && (
+              <LoadMoreButton
+                className="px-2 pb-3"
+                noun="stacks"
+                loading={stacksQuery.isFetchingNextPage}
+                failed={stacksQuery.isFetchNextPageError}
+                onClick={() => void stacksQuery.fetchNextPage()}
+                testId="stacks-load-more"
+              />
             )}
           </div>
           <div className="min-w-0 flex-1 md:sticky md:top-16 md:self-start">

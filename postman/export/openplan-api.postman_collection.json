@@ -134,7 +134,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status is 200', () =\u003e pm.response.to.have.status(200));",
-                  "const revisions = pm.response.json();",
+                  "const revisions = pm.response.json().items;",
                   "if (!pm.environment.get('template_revision_id') \u0026\u0026 revisions.length) { pm.environment.set('template_revision_id', revisions[0].id); }"
                 ]
               }
@@ -144,7 +144,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/template-revisions",
+              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/template-revisions?limit=50",
               "host": [
                 "{{base_url}}"
               ],
@@ -153,8 +153,16 @@
                 "tenants",
                 "{{tenant_id}}",
                 "template-revisions"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "At most how many items the page holds. Out of range is a `422`; not an\ninteger, a `400` (`invalid-query`)."
+                }
               ]
-            }
+            },
+            "description": "Newest first, a page at a time."
           }
         },
         {
@@ -301,7 +309,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/stacks",
+              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/stacks?limit=50",
               "host": [
                 "{{base_url}}"
               ],
@@ -310,9 +318,16 @@
                 "tenants",
                 "{{tenant_id}}",
                 "stacks"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "At most how many items the page holds. Out of range is a `422`; not an\ninteger, a `400` (`invalid-query`)."
+                }
               ]
             },
-            "description": "Only the stacks the caller may view. Each carries its\n`effective_capabilities`, so a client renders the controls a person\nactually has rather than probing for them."
+            "description": "Only the stacks the caller may view, newest first, a page at a time.\nEach carries its `effective_capabilities`, so a client renders the\ncontrols a person actually has rather than probing for them.\n\nA page holds `limit` stacks the caller can view, however sparse they\nare among the tenant's, unless it is the last."
           }
         },
         {
@@ -768,7 +783,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status is 202', () =\u003e pm.response.to.have.status(202));",
-                  "if (pm.response.code \u003c 300) { pm.environment.set('run_id', pm.response.json().id); }"
+                  "if (pm.response.code \u003c 300) { pm.environment.set('run_id', pm.response.json().id); }",
+                  "if (pm.response.code \u003c 300) { pm.environment.set('run_number', String(pm.response.json().run_number)); }"
                 ]
               }
             }
@@ -857,7 +873,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/stack-templates/{{stack_template_id}}/runs",
+              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/stack-templates/{{stack_template_id}}/runs?limit=50",
               "host": [
                 "{{base_url}}"
               ],
@@ -868,9 +884,50 @@
                 "stack-templates",
                 "{{stack_template_id}}",
                 "runs"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "At most how many items the page holds. Out of range is a `422`; not an\ninteger, a `400` (`invalid-query`)."
+                }
               ]
             },
-            "description": "Most recent first."
+            "description": "Most recent first, a page at a time."
+          }
+        },
+        {
+          "name": "Read a run by its number",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () =\u003e pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/stack-templates/{{stack_template_id}}/runs/{{run_number}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "{{tenant_id}}",
+                "stack-templates",
+                "{{stack_template_id}}",
+                "runs",
+                "{{run_number}}"
+              ]
+            },
+            "description": "The same run `GET /v1/tenants/{tenant_id}/template-runs/{run_id}`\nreturns, executions included, found by the number people see and a\nrun's page is addressed by, so a run beyond the first page of the\nlist can be opened directly. A number with no run, or one that isn't\na positive integer, returns `404`."
           }
         },
         {
@@ -923,7 +980,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status is 200', () =\u003e pm.response.to.have.status(200));",
-                  "const logs = pm.response.json();",
+                  "const logs = pm.response.json().items;",
                   "if (logs.length) { pm.environment.set('name', logs[0].name); }"
                 ]
               }
@@ -946,7 +1003,7 @@
                 "logs"
               ]
             },
-            "description": "Metadata for each Terraform command that has finished, in the order\nthey ran: the plan's logs, then the apply's, each by `seq` — not the\noutput itself. Fetch a body from the per-log endpoint by the log's name,\nits `phase` field.\n\nSaves the first log's name, which the log-body request reads by."
+            "description": "Metadata for each Terraform command that has finished, in the order\nthey ran: the plan's logs, then the apply's, each by `seq` — not the\noutput itself. Fetch a body from the per-log endpoint by the log's\n`name`.\n\nSaves the first log's name, which the log-body request reads by."
           }
         },
         {
@@ -1079,7 +1136,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status is 200', () =\u003e pm.response.to.have.status(200));",
-                  "const others = pm.response.json().users.filter((user) =\u003e user.sub !== pm.environment.get('my_sub'));",
+                  "const others = pm.response.json().items.filter((user) =\u003e user.sub !== pm.environment.get('my_sub'));",
                   "if (others.length) { pm.environment.set('user_sub', others[0].sub); }"
                 ]
               }
@@ -1089,7 +1146,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/users/search?q={{user_search}}\u0026first=0\u0026max=20",
+              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/users/search?q={{user_search}}\u0026limit=50",
               "host": [
                 "{{base_url}}"
               ],
@@ -1107,68 +1164,14 @@
                   "description": "The search term."
                 },
                 {
-                  "key": "first",
-                  "value": "0",
-                  "description": "Zero-based offset."
-                },
-                {
-                  "key": "max",
-                  "value": "20",
-                  "description": "Page size."
+                  "key": "limit",
+                  "value": "50",
+                  "description": "At most how many items the page holds. Out of range is a `422`; not an\ninteger, a `400` (`invalid-query`)."
                 }
               ]
             },
-            "description": "Matches display name or email, case-insensitively.\n\nThis is not a directory lookup. It searches openplan's projection of\nidentities it has actually verified, so a person who has never signed\nin will not appear — and cannot be granted a role. That is the same\nlimitation `PUT .../grants/{user_sub}` enforces as `not_signed_in`.\n\nThe response echoes the `first` and `max` actually applied, so a client\npaginates from what the server used rather than from what it sent.\n\nSaves the first match who is not you, for the grant requests."
-          },
-          "response": [
-            {
-              "name": "400 Bad Request",
-              "originalRequest": {
-                "header": [],
-                "method": "GET",
-                "url": {
-                  "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/users/search?q={{user_search}}\u0026first=0\u0026max=20",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "v1",
-                    "tenants",
-                    "{{tenant_id}}",
-                    "users",
-                    "search"
-                  ],
-                  "query": [
-                    {
-                      "key": "q",
-                      "value": "{{user_search}}",
-                      "description": "The search term."
-                    },
-                    {
-                      "key": "first",
-                      "value": "0",
-                      "description": "Zero-based offset."
-                    },
-                    {
-                      "key": "max",
-                      "value": "20",
-                      "description": "Page size."
-                    }
-                  ]
-                }
-              },
-              "status": "Bad Request",
-              "code": 400,
-              "_postman_previewlanguage": "json",
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/problem+json"
-                }
-              ],
-              "body": "{\n  \"type\": \"https://openplan.run/problems/invalid-query\",\n  \"title\": \"The query string can't be read\",\n  \"status\": 400,\n  \"detail\": \"A query parameter isn't an integer.\",\n  \"request_id\": \"3f1c2b9a8d7e6f5a4b3c2d1e0f9a8b7c\",\n  \"errors\": [\n    {\n      \"parameter\": \"max\",\n      \"issue\": \"invalid_format\",\n      \"detail\": \"max must be an integer\"\n    }\n  ]\n}"
-            }
-          ]
+            "description": "Matches display name or email, case-insensitively.\n\nThis is not a directory lookup. It searches openplan's projection of\nidentities it has actually verified, so a person who has never signed\nin will not appear — and cannot be granted a role. That is the same\nlimitation `PUT .../grants/{user_sub}` enforces as `not_signed_in`.\n\nOrdered by display name, a page at a time. The cursor is a position in\nthat order, so one kept across a changed `q` resumes after the same\nname.\n\nSaves the first match who is not you, for the grant requests."
+          }
         }
       ]
     },
@@ -1312,7 +1315,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/queue",
+              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/queue?limit=50",
               "host": [
                 "{{base_url}}"
               ],
@@ -1321,9 +1324,16 @@
                 "tenants",
                 "{{tenant_id}}",
                 "queue"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "At most how many items the page holds. Out of range is a `422`; not an\ninteger, a `400` (`invalid-query`)."
+                }
               ]
             },
-            "description": "The asynchronous work the caller queued — template registration,\ntemplate runs. Scoped by actor alone, so no new permission concept is\ninvolved: a caller only ever sees their own items. Capped at the 50\nmost recent."
+            "description": "The asynchronous work the caller queued — template registration,\ntemplate runs. Scoped by actor alone, so no new permission concept is\ninvolved: a caller only ever sees their own items. Newest first, a\npage at a time."
           }
         }
       ]

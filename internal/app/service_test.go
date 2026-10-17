@@ -382,9 +382,11 @@ func TestListStacksPassesTenantAndNormalizesNilStacks(t *testing.T) {
 	service := NewService(Service{Stacks: stacks, Authorization: newTestAuthorization(t)})
 	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: oidcSubject})
 
-	got, err := service.ListStacks(ctx, ListStacksCommand{
+	page, err := service.ListStacks(ctx, ListStacksCommand{
 		TenantID: domain.TenantID("tenant_123"),
+		Page:     FirstPage(),
 	})
+	got := page.Items
 	if err != nil {
 		t.Fatalf("ListStacks returned error: %v", err)
 	}
@@ -406,9 +408,11 @@ func TestListTemplateRevisionsPassesTenantAndNormalizesNilTemplateRevisions(t *t
 	templates := &recordingTemplateRepository{templates: nil}
 	service := NewService(Service{TemplateRevisions: templates, Authorization: testPlatformAuthorizer(t)})
 
-	got, err := service.ListTemplateRevisions(authenticatedContext(), ListTemplateRevisionsCommand{
+	page, err := service.ListTemplateRevisions(authenticatedContext(), ListTemplateRevisionsCommand{
 		TenantID: domain.TenantID("tenant_123"),
+		Page:     FirstPage(),
 	})
+	got := page.Items
 	if err != nil {
 		t.Fatalf("ListTemplateRevisions returned error: %v", err)
 	}
@@ -2059,10 +2063,12 @@ func TestListTemplateRunsReturnsRunsScopedToStackTemplate(t *testing.T) {
 	})
 	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: oidcSubject})
 
-	got, err := service.ListTemplateRuns(ctx, ListTemplateRunsCommand{
+	page, err := service.ListTemplateRuns(ctx, ListTemplateRunsCommand{
 		TenantID:        domain.TenantID("tenant_123"),
 		StackTemplateID: domain.StackTemplateID("stack_template_123"),
+		Page:            FirstPage(),
 	})
+	got := page.Items
 	if err != nil {
 		t.Fatalf("ListTemplateRuns returned error: %v", err)
 	}
@@ -2097,10 +2103,12 @@ func TestListTemplateRunsLabelsEachTriggerActor(t *testing.T) {
 		Users:          &fakeUserRepository{users: []UserProfile{{Sub: "sub_ada", DisplayName: "Ada Lovelace"}}},
 	})
 
-	got, err := service.ListTemplateRuns(authenticatedContext(), ListTemplateRunsCommand{
+	page, err := service.ListTemplateRuns(authenticatedContext(), ListTemplateRunsCommand{
 		TenantID:        "tenant_123",
 		StackTemplateID: "stack_template_123",
+		Page:            FirstPage(),
 	})
+	got := page.Items
 	if err != nil {
 		t.Fatalf("ListTemplateRuns returned error: %v", err)
 	}
@@ -2144,10 +2152,12 @@ func TestListTemplateRunsNormalizesNilAndRequiresStackTemplateID(t *testing.T) {
 	})
 	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: oidcSubject})
 
-	got, err := service.ListTemplateRuns(ctx, ListTemplateRunsCommand{
+	page, err := service.ListTemplateRuns(ctx, ListTemplateRunsCommand{
 		TenantID:        domain.TenantID("tenant_123"),
 		StackTemplateID: domain.StackTemplateID("stack_template_123"),
+		Page:            FirstPage(),
 	})
+	got := page.Items
 	if err != nil {
 		t.Fatalf("ListTemplateRuns returned error: %v", err)
 	}
@@ -2158,7 +2168,7 @@ func TestListTemplateRunsNormalizesNilAndRequiresStackTemplateID(t *testing.T) {
 		t.Fatalf("len(runs) = %d, want 0", len(got))
 	}
 
-	_, err = service.ListTemplateRuns(ctx, ListTemplateRunsCommand{TenantID: domain.TenantID("tenant_123")})
+	_, err = service.ListTemplateRuns(ctx, ListTemplateRunsCommand{TenantID: domain.TenantID("tenant_123"), Page: FirstPage()})
 	if !errors.Is(err, ErrInvalidCommand) {
 		t.Fatalf("error = %v, want ErrInvalidCommand", err)
 	}
@@ -2733,22 +2743,23 @@ func (repository *recordingStackRepository) ListStacks(_ context.Context, tenant
 	return repository.list, nil
 }
 
-func (repository *recordingStackRepository) ListStacksPage(_ context.Context, tenantID domain.TenantID, after *StackPageCursor, limit int) ([]domain.Stack, error) {
+func (repository *recordingStackRepository) ListStacksPage(_ context.Context, tenantID domain.TenantID, after *StackPageCursor, limit int, query string) ([]domain.Stack, error) {
 	repository.gotListTenantID = tenantID
 	if repository.listErr != nil {
 		return nil, repository.listErr
 	}
+	stacks := matchingStacks(repository.list, query)
 	start := 0
 	if after != nil {
-		for i, stack := range repository.list {
+		for i, stack := range stacks {
 			if stack.ID == after.ID && stack.CreatedAt.Equal(after.CreatedAt) {
 				start = i + 1
 				break
 			}
 		}
 	}
-	end := min(start+limit, len(repository.list))
-	return append([]domain.Stack(nil), repository.list[start:end]...), nil
+	end := min(start+limit, len(stacks))
+	return append([]domain.Stack(nil), stacks[start:end]...), nil
 }
 
 type recordingTemplateRunRepository struct {
@@ -2794,6 +2805,31 @@ func (repository *recordingTemplateRunRepository) ListTemplateRuns(_ context.Con
 	repository.gotListTenantID = tenantID
 	repository.gotListStackTemplateID = stackTemplateID
 	return repository.list, nil
+}
+
+// ListTemplateRunsPage pages list, which tests give newest first, as the
+// store does by run number.
+func (repository *recordingTemplateRunRepository) ListTemplateRunsPage(_ context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID, beforeRunNumber, limit int) ([]domain.TemplateRun, error) {
+	repository.gotListTenantID = tenantID
+	repository.gotListStackTemplateID = stackTemplateID
+	runs := []domain.TemplateRun{}
+	for _, run := range repository.list {
+		if (beforeRunNumber == 0 || run.RunNumber < beforeRunNumber) && len(runs) < limit {
+			runs = append(runs, run)
+		}
+	}
+	return runs, nil
+}
+
+func (repository *recordingTemplateRunRepository) GetTemplateRunByNumber(_ context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID, runNumber int) (domain.TemplateRun, error) {
+	repository.gotListTenantID = tenantID
+	repository.gotListStackTemplateID = stackTemplateID
+	for _, run := range repository.list {
+		if run.StackTemplateID == stackTemplateID && run.RunNumber == runNumber {
+			return run, nil
+		}
+	}
+	return domain.TemplateRun{}, ErrNotFound
 }
 
 func (repository *recordingTemplateRunRepository) ApproveTemplateRun(_ context.Context, approval domain.TemplateRunApproval) error {
@@ -2989,6 +3025,25 @@ func (repository *recordingTemplateRepository) ListTemplateRevisions(_ context.C
 		return nil, repository.listErr
 	}
 	return repository.templates, nil
+}
+
+// ListTemplateRevisionsPage pages templates, which tests give newest first.
+func (repository *recordingTemplateRepository) ListTemplateRevisionsPage(_ context.Context, tenantID domain.TenantID, after *TemplateRevisionCursor, limit int) ([]domain.TemplateRevision, error) {
+	repository.gotListTenantID = tenantID
+	if repository.listErr != nil {
+		return nil, repository.listErr
+	}
+	start := 0
+	if after != nil {
+		for i, revision := range repository.templates {
+			if revision.ID == after.ID {
+				start = i + 1
+				break
+			}
+		}
+	}
+	end := min(start+limit, len(repository.templates))
+	return append([]domain.TemplateRevision{}, repository.templates[start:end]...), nil
 }
 
 func (repository *recordingTemplateRepository) GetTemplateRevisionVariables(_ context.Context, tenantID domain.TenantID, templateRevisionID domain.TemplateRevisionID) ([]domain.TemplateVariable, error) {

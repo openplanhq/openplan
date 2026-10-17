@@ -11,6 +11,7 @@ import { queryKeys } from "../../api/queryKeys";
 import type { StackTemplate, TemplateRevision, TemplateVariable } from "../../api/types";
 import { AuthContext } from "../../auth/AuthContext";
 import type { AuthContextValue } from "../../auth/AuthContext";
+import { asListBody } from "../../api/listTestSupport";
 
 function templateRevision(overrides: Partial<TemplateRevision> = {}): TemplateRevision {
   return {
@@ -72,7 +73,7 @@ function LocationProbe() {
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  return new Response(JSON.stringify(asListBody(body)), { status, headers: { "content-type": "application/json" } });
 }
 
 function installedTemplate(id: string): StackTemplate {

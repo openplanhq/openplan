@@ -1,3 +1,4 @@
+import { pagesOf } from "../api/listTestSupport";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, Outlet, RouterProvider } from "react-router-dom";
@@ -162,7 +163,7 @@ describe("routeConfig", () => {
     // must never let TanStack Query's default refetch-on-mount fire a real,
     // unmocked fetch() for stale data — see useStackCapabilities.test.tsx.
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-    queryClient.setQueryData(queryKeys.stacks("tenant_123"), [
+    queryClient.setQueryData(queryKeys.stackList("tenant_123", ""), pagesOf([
       {
         id: "stack_1",
         tenant_id: "tenant_123",
@@ -174,7 +175,7 @@ describe("routeConfig", () => {
         created_at: "2026-07-19T00:00:00Z",
         effective_capabilities: { can_view: true, can_operate: false, can_approve: false, can_manage_access: false }
       }
-    ]);
+    ]));
 
     const testRouter = createMemoryRouter(routeConfig, { initialEntries: ["/stacks"] });
     const markup = renderToStaticMarkup(

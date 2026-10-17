@@ -7,6 +7,7 @@ import { queryKeys } from "../../api/queryKeys";
 import type { TemplateRun } from "../../api/types";
 import { AuthContext } from "../../auth/AuthContext";
 import TemplateRunHistory from "./TemplateRunHistory";
+import { asListBody, pagesOf } from "../../api/listTestSupport";
 
 function run(overrides: Partial<TemplateRun> = {}): TemplateRun {
   return {
@@ -35,7 +36,7 @@ function testQueryClient(): QueryClient {
 }
 
 function seedRuns(queryClient: QueryClient, runs: TemplateRun[]) {
-  queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "stpl_1"), runs);
+  queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "stpl_1"), pagesOf(runs));
 }
 
 function renderHistory(queryClient: QueryClient) {
@@ -150,6 +151,27 @@ describe("TemplateRunHistory", () => {
     expect(screen.queryByTestId("template-run-history-error")).toBeNull();
   });
 
+  // Runs come a page at a time, newest first; Load more appends the older
+  // ones, and goes once the oldest is in.
+  it("loads older runs under the table", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "stpl_1"), {
+      pages: [{ items: [run({ id: "run_2", run_number: 2, status: "completed" })], next_cursor: "older" }],
+      pageParams: [undefined]
+    });
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(jsonResponse({ items: [run({ id: "run_1", run_number: 1, status: "completed" })], next_cursor: null }));
+
+    renderHistory(queryClient);
+    fireEvent.click(screen.getByTestId("template-run-history-load-more"));
+
+    expect(await screen.findByTestId("template-run-row-run_1")).toBeTruthy();
+    expect(screen.getByTestId("template-run-row-run_2")).toBeTruthy();
+    expect(screen.queryByTestId("template-run-history-load-more")).toBeNull();
+    expect(String(fetchMock.mock.calls[0][0])).toBe("/v1/tenants/tenant_123/stack-templates/stpl_1/runs?cursor=older");
+  });
+
   it("says the runs failed to load, in place of the empty state, and retries", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
@@ -170,5 +192,5 @@ describe("TemplateRunHistory", () => {
 });
 
 function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  return new Response(JSON.stringify(asListBody(body)), { status, headers: { "content-type": "application/json" } });
 }

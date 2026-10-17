@@ -36,16 +36,20 @@ func (store *Store) UpsertUser(ctx context.Context, profile app.UserProfile, see
 // "%" or "_" would be writing pattern syntax rather than searching for the
 // character they typed, and "%" alone would return the whole table regardless
 // of what the caller meant.
-func (store *Store) SearchUsers(ctx context.Context, query string, first, limit int) ([]app.UserProfile, error) {
+func (store *Store) SearchUsers(ctx context.Context, query string, after *app.UserCursor, limit int) ([]app.UserProfile, error) {
 	pattern := "%" + escapeLikePattern(query) + "%"
+	var afterName, afterSub any
+	if after != nil {
+		afterName, afterSub = after.DisplayName, after.Sub
+	}
 	rows, err := store.pool.Query(ctx, `
 		select sub, display_name, email
 		from users
-		where display_name ilike $1 escape '\' or email ilike $1 escape '\'
+		where (display_name ilike $1 escape '\' or email ilike $1 escape '\')
+			and ($2::text is null or (display_name, sub) > ($2, $3::text))
 		order by display_name, sub
-		offset $2
-		limit $3
-	`, pattern, first, limit)
+		limit $4
+	`, pattern, afterName, afterSub, limit)
 	if err != nil {
 		return nil, fmt.Errorf("search users: %w", err)
 	}

@@ -9,6 +9,7 @@ import type { StackCapabilities } from "../../auth/types";
 import { queryKeys } from "../../api/queryKeys";
 import type { StackTemplate, TemplateRun } from "../../api/types";
 import TemplateDestroyPanel from "./TemplateDestroyPanel";
+import { asListBody, pagesOf } from "../../api/listTestSupport";
 
 function stackTemplate(overrides: Partial<StackTemplate> = {}): StackTemplate {
   return {
@@ -87,7 +88,7 @@ function seedCapabilities(queryClient: QueryClient, capabilities: StackCapabilit
 }
 
 function seedRuns(queryClient: QueryClient, runs: TemplateRun[]) {
-  queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "stpl_1"), runs);
+  queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "stpl_1"), pagesOf(runs));
 }
 
 function renderPanel(queryClient: QueryClient, overrides: Partial<StackTemplate> = {}) {
@@ -108,7 +109,7 @@ function LocationProbe() {
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  return new Response(JSON.stringify(asListBody(body)), { status, headers: { "content-type": "application/json" } });
 }
 
 function isDisabled(element: HTMLElement): boolean {

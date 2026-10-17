@@ -1,13 +1,29 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { InfiniteData, QueryClient } from "@tanstack/react-query";
 import * as client from "./client";
 import { queryKeys } from "./queryKeys";
 import { isTerminalRegistrationStatus, isTerminalRunStatus } from "./polling";
-import type { TemplateRegistration, TemplateRegistrationStatus, TemplateRun, TemplateRunStatus } from "./types";
+import type { ListPage, TemplateRegistration, TemplateRegistrationStatus, TemplateRun, TemplateRunStatus } from "./types";
 
-export function useStacksQuery(tenantID: string) {
-  return useQuery({
-    queryKey: queryKeys.stacks(tenantID),
-    queryFn: () => client.listStacks(tenantID)
+// What getNextPageParam gives back: the next page's cursor, or undefined on
+// the last page, which is how TanStack Query knows there is no next page.
+function nextCursor<T>(page: ListPage<T>): string | undefined {
+  return page.next_cursor ?? undefined;
+}
+
+/**
+ * The stacks the caller can view, a page at a time, newest first. q filters
+ * on the server, so a stack beyond the loaded pages is still found. Each q is
+ * its own list; the previous one stays on screen while the next loads.
+ */
+export function useStacksQuery(tenantID: string, q = "") {
+  return useInfiniteQuery({
+    queryKey: queryKeys.stackList(tenantID, q),
+    queryFn: ({ pageParam }) => client.listStacks(tenantID, { cursor: pageParam, q }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: nextCursor,
+    select: (data) => data.pages.flatMap((page) => page.items),
+    placeholderData: keepPreviousData
   });
 }
 
@@ -127,6 +143,7 @@ export const SETTLED_RUNS_POLL_INTERVAL_MS = 30_000;
 // "failed" for as long as the page is open. Once it has loaded, a failed poll
 // keeps polling under the runs already on screen.
 export function runsRefetchInterval(state: { data?: TemplateRun[]; fetchFailureCount: number }): number | false {
+  // (state.data is every run loaded so far, across the pages read.)
   if (state.data === undefined) {
     return state.fetchFailureCount > 0 ? false : POLL_INTERVAL_MS;
   }
@@ -139,12 +156,49 @@ function isMovingRun(run: TemplateRun): boolean {
   return run.status !== "waiting_approval" && !isTerminalRunStatus(run.status);
 }
 
+type RunPages = InfiniteData<ListPage<TemplateRun>, string | undefined>;
+
+function runsOf(data: RunPages | undefined): TemplateRun[] | undefined {
+  return data?.pages.flatMap((page) => page.items);
+}
+
+/**
+ * A template's runs, newest first: the first page, and older pages as the
+ * history asks for them. Every reader shares the one list. Lock state,
+ * notices and refresh need only the first page: at most one run is in flight
+ * per template, and it is always the newest.
+ *
+ * A poll refetches each loaded page in turn from the first, so a run started
+ * since shifts the pages rather than leaving a gap between them.
+ */
 export function useTemplateRunsQuery(tenantID: string, stackTemplateID: string) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: queryKeys.templateRuns(tenantID, stackTemplateID),
-    queryFn: () => client.listTemplateRuns(tenantID, stackTemplateID),
+    queryFn: ({ pageParam }) => client.listTemplateRuns(tenantID, stackTemplateID, { cursor: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: nextCursor,
+    select: runsOf,
     enabled: stackTemplateID !== "",
-    refetchInterval: (query) => runsRefetchInterval(query.state)
+    refetchInterval: (query) => runsRefetchInterval({ data: runsOf(query.state.data), fetchFailureCount: query.state.fetchFailureCount })
+  });
+}
+
+/** The runs in the cache right now, for a check made at click time. */
+export function cachedTemplateRuns(queryClient: QueryClient, tenantID: string, stackTemplateID: string): TemplateRun[] | undefined {
+  return runsOf(queryClient.getQueryData<RunPages>(queryKeys.templateRuns(tenantID, stackTemplateID)));
+}
+
+/**
+ * One run by its number, for a run's page when the loaded runs don't hold it.
+ * Only its id is used from here on: a number names one run for good, so this
+ * is read once, and the run itself is followed by id.
+ */
+export function useTemplateRunByNumberQuery(tenantID: string, stackTemplateID: string, runNumber: string, options: { enabled: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.templateRunByNumber(tenantID, stackTemplateID, runNumber),
+    queryFn: () => client.getTemplateRunByNumber(tenantID, stackTemplateID, runNumber),
+    enabled: options.enabled && stackTemplateID !== "" && runNumber !== "",
+    staleTime: Infinity
   });
 }
 
@@ -279,7 +333,7 @@ export function useStackGrantsQuery(tenantID: string, stackID: string) {
 export function useSearchUsersQuery(tenantID: string, query: string) {
   return useQuery({
     queryKey: queryKeys.userSearch(tenantID, query),
-    queryFn: () => client.searchUsers(tenantID, query, 0, 20),
+    queryFn: async () => (await client.searchUsers(tenantID, query, { limit: 20 })).items,
     enabled: query.length >= 2,
     // The last answer stays while the next query loads, so the stack-access
     // search list doesn't close, and blink, on every keystroke. Only for a

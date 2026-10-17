@@ -5,8 +5,8 @@ import { useNavigate } from "react-router-dom";
 import { isTerminalRunStatus } from "../../api/polling";
 import { apiErrorMessage } from "../../api/problems";
 import { queryKeys } from "../../api/queryKeys";
-import { useStartTemplateRunMutation } from "../../api/queries";
-import type { StackTemplate, TemplateRun } from "../../api/types";
+import { cachedTemplateRuns, useStartTemplateRunMutation } from "../../api/queries";
+import type { StackTemplate } from "../../api/types";
 import { tenantID } from "../../config";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
@@ -39,7 +39,7 @@ export default function TemplateDestroyPanel({ stackId, stackTemplate }: Templat
 
   async function handleDestroy() {
     // Re-read the runs at click time: a run may have started since render.
-    const currentRuns = queryClient.getQueryData<TemplateRun[]>(queryKeys.templateRuns(tenantID, stackTemplate.id));
+    const currentRuns = cachedTemplateRuns(queryClient, tenantID, stackTemplate.id);
     const currentRunActive = currentRuns?.some((candidate) => !isTerminalRunStatus(candidate.status)) ?? true;
     if (reason !== "" || currentRunActive) {
       return;

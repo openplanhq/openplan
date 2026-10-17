@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -61,7 +62,8 @@ func TestListStacksBatchesCompleteTenantScan(t *testing.T) {
 	service := NewService(Service{Authorization: auth, Stacks: repository})
 	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: "user_123"})
 
-	stacks, err := service.ListStacks(ctx, ListStacksCommand{TenantID: "tenant_123"})
+	stackPage, err := service.ListStacks(ctx, ListStacksCommand{TenantID: "tenant_123", Page: FirstPage()})
+	stacks := stackPage.Items
 	if err != nil {
 		t.Fatalf("ListStacks() error = %v", err)
 	}
@@ -89,7 +91,8 @@ func TestListStacksSkipsAuthorizationForEmptyTenant(t *testing.T) {
 	service := NewService(Service{Authorization: auth, Stacks: &pagedStackRepository{}})
 	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: "user_123"})
 
-	stacks, err := service.ListStacks(ctx, ListStacksCommand{TenantID: "tenant_123"})
+	stackPage, err := service.ListStacks(ctx, ListStacksCommand{TenantID: "tenant_123", Page: FirstPage()})
+	stacks := stackPage.Items
 	if err != nil {
 		t.Fatalf("ListStacks() error = %v", err)
 	}
@@ -111,7 +114,7 @@ func TestListStacksRejectsNonAdvancingPage(t *testing.T) {
 	})
 	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: "user_123"})
 
-	_, err := service.ListStacks(ctx, ListStacksCommand{TenantID: "tenant_123"})
+	_, err := service.ListStacks(ctx, ListStacksCommand{TenantID: "tenant_123", Page: FirstPage()})
 	if err == nil {
 		t.Fatal("error")
 	}
@@ -127,7 +130,7 @@ func TestListStacksRejectsOversizedPage(t *testing.T) {
 	service := NewService(Service{Authorization: newTestAuthorization(t), Stacks: &pagedStackRepository{stacks: all, ignoreLimit: true}})
 	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: "user_123"})
 
-	_, err := service.ListStacks(ctx, ListStacksCommand{TenantID: "tenant_123"})
+	_, err := service.ListStacks(ctx, ListStacksCommand{TenantID: "tenant_123", Page: FirstPage()})
 	if err == nil {
 		t.Fatal("error")
 	}
@@ -143,7 +146,7 @@ func TestListStacksRejectsOutOfOrderPage(t *testing.T) {
 	service := NewService(Service{Authorization: newTestAuthorization(t), Stacks: &pagedStackRepository{stacks: stacks}})
 	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: "user_123"})
 
-	_, err := service.ListStacks(ctx, ListStacksCommand{TenantID: "tenant_123"})
+	_, err := service.ListStacks(ctx, ListStacksCommand{TenantID: "tenant_123", Page: FirstPage()})
 	if err == nil {
 		t.Fatal("error")
 	}
@@ -155,7 +158,7 @@ func TestListStacksRejectsMalformedCandidateIDAsDependencyFailure(t *testing.T) 
 	service := NewService(Service{Authorization: newTestAuthorization(t), Stacks: &pagedStackRepository{stacks: []domain.Stack{{ID: "bad:id"}}}})
 	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: "user_123"})
 
-	_, err := service.ListStacks(ctx, ListStacksCommand{TenantID: "tenant_123"})
+	_, err := service.ListStacks(ctx, ListStacksCommand{TenantID: "tenant_123", Page: FirstPage()})
 	if err == nil {
 		t.Fatal("error")
 	}
@@ -374,6 +377,7 @@ type pagedStackRepository struct {
 	pageCalls   int
 	repeatPage  bool
 	ignoreLimit bool
+	gotQuery    string
 }
 
 func (*pagedStackRepository) CreateStack(context.Context, domain.Stack) error { return nil }
@@ -386,20 +390,38 @@ func (*pagedStackRepository) GetStackWithTemplates(context.Context, domain.Tenan
 func (repository *pagedStackRepository) ListStacks(context.Context, domain.TenantID) ([]domain.Stack, error) {
 	return repository.stacks, nil
 }
-func (repository *pagedStackRepository) ListStacksPage(_ context.Context, _ domain.TenantID, after *StackPageCursor, limit int) ([]domain.Stack, error) {
+func (repository *pagedStackRepository) ListStacksPage(_ context.Context, _ domain.TenantID, after *StackPageCursor, limit int, query string) ([]domain.Stack, error) {
 	repository.pageCalls++
+	repository.gotQuery = query
+	stacks := matchingStacks(repository.stacks, query)
 	start := 0
 	if after != nil && !repository.repeatPage {
-		for i, stack := range repository.stacks {
-			if stack.ID == after.ID && stack.CreatedAt.Equal(after.CreatedAt) {
-				start = i + 1
+		start = len(stacks)
+		for i, stack := range stacks {
+			if stackPageOrderBefore(domain.Stack{ID: after.ID, CreatedAt: after.CreatedAt}, stack) {
+				start = i
 				break
 			}
 		}
 	}
-	end := len(repository.stacks)
+	end := len(stacks)
 	if !repository.ignoreLimit {
 		end = min(start+limit, end)
 	}
-	return append([]domain.Stack(nil), repository.stacks[start:end]...), nil
+	return append([]domain.Stack(nil), stacks[start:end]...), nil
+}
+
+// matchingStacks is the store's name-or-slug filter, for fakes.
+func matchingStacks(stacks []domain.Stack, query string) []domain.Stack {
+	if query == "" {
+		return stacks
+	}
+	query = strings.ToLower(query)
+	var matched []domain.Stack
+	for _, stack := range stacks {
+		if strings.Contains(strings.ToLower(stack.Name), query) || strings.Contains(strings.ToLower(stack.Slug), query) {
+			matched = append(matched, stack)
+		}
+	}
+	return matched
 }

@@ -218,17 +218,23 @@ func (store *Store) Prune(ctx context.Context, retention time.Duration) (int64, 
 // Attempts and LastError are surfaced deliberately. Retry is forever, so a
 // stuck item stays pending indefinitely and those fields are the only way to
 // tell "queued two seconds ago" from "failing for an hour".
-func (store *Store) ListByActor(ctx context.Context, tenantID, actorSubject string, limit int) ([]queue.Status, error) {
+func (store *Store) ListByActor(ctx context.Context, tenantID, actorSubject string, after *queue.Cursor, limit int) ([]queue.Status, error) {
 	if limit <= 0 {
-		limit = 50
+		return nil, fmt.Errorf("work page limit must be positive")
+	}
+	var afterCreatedAt any
+	var afterID int64
+	if after != nil {
+		afterCreatedAt, afterID = after.CreatedAt, after.ID
 	}
 	rows, err := store.pool.Query(ctx, `
-		select kind, attempts, last_error, created_at, processed_at
+		select id, kind, attempts, last_error, created_at, processed_at
 		  from work_queue
 		 where tenant_id = $1 and actor_subject = $2
-		 order by created_at desc
-		 limit $3
-	`, tenantID, actorSubject, limit)
+		   and ($3::timestamptz is null or (created_at, id) < ($3, $4))
+		 order by created_at desc, id desc
+		 limit $5
+	`, tenantID, actorSubject, afterCreatedAt, afterID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list work by actor: %w", err)
 	}
@@ -239,7 +245,7 @@ func (store *Store) ListByActor(ctx context.Context, tenantID, actorSubject stri
 		var status queue.Status
 		var kind string
 		var processedAt *time.Time
-		if err := rows.Scan(&kind, &status.Attempts, &status.LastError, &status.CreatedAt, &processedAt); err != nil {
+		if err := rows.Scan(&status.ID, &kind, &status.Attempts, &status.LastError, &status.CreatedAt, &processedAt); err != nil {
 			return nil, fmt.Errorf("scan work status: %w", err)
 		}
 		status.Kind = queue.Kind(kind)

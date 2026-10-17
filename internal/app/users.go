@@ -38,8 +38,9 @@ type UserRepository interface {
 	// UpsertUser projects one verified identity. It is called on every
 	// sign-in, so it refreshes a changed name or email naturally.
 	UpsertUser(ctx context.Context, profile UserProfile, seenAt time.Time) error
-	// SearchUsers matches display name or email, case-insensitively.
-	SearchUsers(ctx context.Context, query string, first, limit int) ([]UserProfile, error)
+	// SearchUsers matches display name or email, case-insensitively, and
+	// returns up to limit matches after the cursor, ordered by display name.
+	SearchUsers(ctx context.Context, query string, after *UserCursor, limit int) ([]UserProfile, error)
 	// UsersBySubs resolves many subjects in one round trip, keyed by sub.
 	// Subjects with no projected row are absent from the map rather than
 	// present and empty, so the caller can tell the difference.
@@ -57,3 +58,15 @@ func (service *Service) requireUserRepository() error {
 	}
 	return nil
 }
+
+// UserCursor is a position in a user search, which is ordered by display name
+// and then sub, the one stable key, so equal names still have an order.
+type UserCursor struct {
+	DisplayName string `json:"display_name"`
+	Sub         string `json:"sub"`
+}
+
+func (cursor UserCursor) Valid() bool { return cursor.Sub != "" }
+
+// usersList names a user search's cursors.
+const usersList = "users"

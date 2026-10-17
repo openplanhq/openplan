@@ -174,14 +174,6 @@ func newPlanSummaryResponse(summary *domain.PlanSummary) *planSummaryResponse {
 	return &planSummaryResponse{Add: summary.Add, Change: summary.Change, Destroy: summary.Destroy}
 }
 
-func newTemplateRunResponses(runs []domain.TemplateRun) []templateRunResponse {
-	responses := make([]templateRunResponse, 0, len(runs))
-	for _, run := range runs {
-		responses = append(responses, newTemplateRunResponse(run))
-	}
-	return responses
-}
-
 func newTemplateRunLogResponse(log domain.TemplateRunLog) templateRunLogResponse {
 	return templateRunLogResponse{
 		TenantID:    string(log.TenantID),

@@ -2,8 +2,8 @@ $kind: http-request
 description: |-
   Metadata for each Terraform command that has finished, in the order
   they ran: the plan's logs, then the apply's, each by `seq` — not the
-  output itself. Fetch a body from the per-log endpoint by the log's name,
-  its `phase` field.
+  output itself. Fetch a body from the per-log endpoint by the log's
+  `name`.
 
   Saves the first log's name, which the log-body request reads by.
 method: GET
@@ -12,7 +12,7 @@ scripts:
   - type: afterResponse
     code: |-
       pm.test('status is 200', () => pm.response.to.have.status(200));
-      const logs = pm.response.json();
+      const logs = pm.response.json().items;
       if (logs.length) { pm.environment.set('name', logs[0].name); }
     language: text/javascript
-order: 4000
+order: 5000

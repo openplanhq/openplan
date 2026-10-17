@@ -174,9 +174,9 @@ func TestAssignStackRoleReportsRoleAndSubTogether(t *testing.T) {
 func TestSearchUsersReportsEveryParameter(t *testing.T) {
 	t.Parallel()
 
-	err := validateSearchUsersCommand(SearchUsersCommand{TenantID: "t", Query: strings.Repeat("a", 201), First: -1, Max: 0})
-	assertFieldIssues(t, err, "?q too_long", "?first out_of_range", "?max out_of_range")
-	assertFieldIssues(t, validateSearchUsersCommand(SearchUsersCommand{TenantID: "t", Query: "  ", Max: 51}), "?q required", "?max out_of_range")
+	err := validateSearchUsersCommand(SearchUsersCommand{TenantID: "t", Query: strings.Repeat("a", 201), Page: PageRequest{Limit: 0}})
+	assertFieldIssues(t, err, "?q too_long", "?limit out_of_range")
+	assertFieldIssues(t, validateSearchUsersCommand(SearchUsersCommand{TenantID: "t", Query: "  ", Page: PageRequest{Limit: 101}}), "?q required", "?limit out_of_range")
 }
 
 // A bad query is the caller's to fix whoever they are, so it is reported
@@ -185,6 +185,6 @@ func TestSearchUsersValidatesBeforeAuthorizing(t *testing.T) {
 	t.Parallel()
 
 	service := NewService(Service{Users: &fakeUserRepository{users: []UserProfile{}}, Authorization: testPlatformAuthorizer(t)})
-	_, err := service.SearchUsers(contextWithOrdinaryUser(), SearchUsersCommand{TenantID: "tenant_1", Query: "", Max: 20})
+	_, err := service.SearchUsers(contextWithOrdinaryUser(), SearchUsersCommand{TenantID: "tenant_1", Query: "", Page: FirstPage()})
 	assertFieldIssues(t, err, "?q required")
 }

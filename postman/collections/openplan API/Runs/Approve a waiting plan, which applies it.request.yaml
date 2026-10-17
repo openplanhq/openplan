@@ -21,4 +21,4 @@ scripts:
   - type: afterResponse
     code: pm.test('status is one of 202, 409', () => pm.expect(pm.response.code).to.be.oneOf([202, 409]));
     language: text/javascript
-order: 6000
+order: 7000

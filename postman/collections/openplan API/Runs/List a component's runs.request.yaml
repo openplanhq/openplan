@@ -1,7 +1,13 @@
 $kind: http-request
-description: Most recent first.
+description: Most recent first, a page at a time.
 method: GET
-url: '{{base_url}}/v1/tenants/{{tenant_id}}/stack-templates/{{stack_template_id}}/runs'
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/stack-templates/{{stack_template_id}}/runs?limit=50'
+queryParams:
+  - key: limit
+    value: "50"
+    description: |-
+      At most how many items the page holds. Out of range is a `422`; not an
+      integer, a `400` (`invalid-query`).
 scripts:
   - type: afterResponse
     code: pm.test('status is 200', () => pm.response.to.have.status(200));

@@ -306,9 +306,6 @@ export interface GrantView {
   email: string;
 }
 
-export interface ListGrantsResponse {
-  grants: GrantView[];
-}
 
 // A row of the local identity projection: what the user's ID token asserted at
 // their last sign-in. `sub` is the only stable key and the value a grant is
@@ -319,8 +316,11 @@ export interface UserProfile {
   email: string;
 }
 
-export interface SearchUsersResponse {
-  users: UserProfile[];
-  first: number;
-  max: number;
+// Every list endpoint answers this. A paged list sends next_cursor until its
+// last page, where it is null; send it back as ?cursor= for the next page.
+// The small lists (a run's logs, a stack's grants and credentials, attention,
+// a revision's variables) are one page, with next_cursor always null.
+export interface ListPage<T> {
+  items: T[];
+  next_cursor: string | null;
 }

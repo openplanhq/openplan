@@ -68,11 +68,11 @@ describe("TemplatesIndexPanel", () => {
     expect(within(empty).queryByRole("link")).toBeNull();
   });
   // Regression: a template registered without tags is served with
-  // "tags": null, and a revision with no variables may be served as null.
-  // Through the API client, not the cache, so its reading is what is tested.
-  it("draws templates the API serves with null tags and null variables, and filters them", async () => {
+  // "tags": null. Through the API client, not the cache, so its reading is
+  // what is tested.
+  it("draws templates the API serves with null tags, and filters them", async () => {
     vi.mocked(globalThis.fetch).mockImplementation(async (input) => {
-      if (String(input).endsWith("/variables")) return jsonResponse(null);
+      if (String(input).endsWith("/variables")) return jsonResponse([]);
       return jsonResponse([
         { ...revision(), tags: null },
         { ...revision({ id: "rev_net", source_template_id: "tpl_net", name: "network", root_path: "aws/network" }), tags: null }

@@ -185,30 +185,30 @@ func (service *Service) failedDestroyItems(
 	return items, nil
 }
 
-// ListStackSummaries lists the stacks ListStacks lists, each with how many
-// templates it has installed.
-func (service *Service) ListStackSummaries(ctx context.Context, command ListStacksCommand) ([]StackSummary, error) {
+// ListStackSummaries lists the page of stacks ListStacks lists, each with how
+// many templates it has installed.
+func (service *Service) ListStackSummaries(ctx context.Context, command ListStacksCommand) (Page[StackSummary], error) {
 	stacks, err := service.ListStacks(ctx, command)
 	if err != nil {
-		return nil, err
+		return Page[StackSummary]{}, err
 	}
-	summaries := make([]StackSummary, 0, len(stacks))
-	if len(stacks) == 0 {
-		return summaries, nil
+	page := Page[StackSummary]{Items: make([]StackSummary, 0, len(stacks.Items)), NextCursor: stacks.NextCursor}
+	if len(stacks.Items) == 0 {
+		return page, nil
 	}
 
 	templates, err := service.StackOverview.ListTenantStackTemplates(ctx, command.TenantID)
 	if err != nil {
-		return nil, fmt.Errorf("list stacks: list templates: %w", err)
+		return Page[StackSummary]{}, fmt.Errorf("list stacks: list templates: %w", err)
 	}
-	counts := make(map[domain.StackID]int, len(stacks))
+	counts := make(map[domain.StackID]int, len(stacks.Items))
 	for _, stackTemplate := range templates {
 		counts[stackTemplate.StackID]++
 	}
-	for _, stack := range stacks {
-		summaries = append(summaries, StackSummary{Stack: stack, TemplateCount: counts[stack.ID]})
+	for _, stack := range stacks.Items {
+		page.Items = append(page.Items, StackSummary{Stack: stack, TemplateCount: counts[stack.ID]})
 	}
-	return summaries, nil
+	return page, nil
 }
 
 // visibleStackTemplates returns the stacks the caller can view, by ID, and

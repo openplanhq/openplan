@@ -88,7 +88,7 @@ func TestPlatformCapabilitiesComeFromOpenFGANotRealmRoles(t *testing.T) {
 		Users:         &fakeUserRepository{users: []UserProfile{}},
 		Authorization: newPlatformAuthorizer(t, platformAdmin("granted-subject")),
 	})
-	command := SearchUsersCommand{TenantID: domain.TenantID("tenant_1"), Query: "a", Max: 20}
+	command := SearchUsersCommand{TenantID: domain.TenantID("tenant_1"), Query: "a", Page: FirstPage()}
 
 	ungranted := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{
 		Subject: "ungranted-subject",
@@ -115,7 +115,7 @@ func TestPlatformViewerReadsTheCatalogButCannotPublishToIt(t *testing.T) {
 	})
 	ctx := platformContext("viewer-subject")
 
-	if _, err := service.ListTemplateRevisions(ctx, ListTemplateRevisionsCommand{TenantID: domain.TenantID("tenant_1")}); err != nil {
+	if _, err := service.ListTemplateRevisions(ctx, ListTemplateRevisionsCommand{TenantID: domain.TenantID("tenant_1"), Page: FirstPage()}); err != nil {
 		t.Fatalf("ListTemplateRevisions error = %v, want nil", err)
 	}
 	_, err := service.RegisterTemplate(ctx, RegisterTemplateCommand{

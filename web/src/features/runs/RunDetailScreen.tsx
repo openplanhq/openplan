@@ -5,10 +5,12 @@ import { useParams } from "react-router-dom";
 import {
   useApproveRunMutation,
   useDiscardRunMutation,
+  useTemplateRunByNumberQuery,
   useTemplateRunLogsQuery,
   useTemplateRunQuery,
   useTemplateRunsQuery
 } from "../../api/queries";
+import { ApiRequestError } from "../../api/client";
 import { isTerminalRunStatus } from "../../api/polling";
 import { apiErrorMessage } from "../../api/problems";
 import { tenantID } from "../../config";
@@ -30,9 +32,10 @@ import RequestIdNote from "../../shared/RequestIdNote";
 // detail with per-phase logs, inside the template's panel under a trail back
 // to its Runs tab. The URL carries the
 // run's number within its template, which is what people see; the run's id,
-// which every run endpoint takes, comes from the template's runs list. That
-// list is the one the Runs tab already loaded, so arriving from there costs no
-// extra request. The run's logs stack in the order their commands ran.
+// which every run endpoint takes, comes from the template's runs list when the
+// pages loaded so far hold it, as they do arriving from the Runs tab, at no
+// extra request. A run beyond them, or one started since, is read by number.
+// The run's logs stack in the order their commands ran.
 export default function RunDetailScreen() {
   const {
     stackId = "",
@@ -42,10 +45,17 @@ export default function RunDetailScreen() {
   const [errorMessage, setErrorMessage] = useState("");
 
   const runsQuery = useTemplateRunsQuery(tenantID, stackTemplateId);
-  const runId = runsQuery.data?.find((candidate) => String(candidate.run_number) === runNumber)?.id ?? "";
+  const listedId = runsQuery.data?.find((candidate) => String(candidate.run_number) === runNumber)?.id;
+  const byNumberQuery = useTemplateRunByNumberQuery(tenantID, stackTemplateId, runNumber, {
+    enabled: runsQuery.status !== "pending" && listedId === undefined
+  });
+  const runId = listedId ?? byNumberQuery.data?.id ?? "";
+  // A number with no run is this page's own answer, not the app's not-found page.
+  const missing = byNumberQuery.error instanceof ApiRequestError && byNumberQuery.error.status === 404;
+  const lookupError = missing ? null : byNumberQuery.error;
 
   const runQuery = useTemplateRunQuery(tenantID, runId, { poll: true });
-  const boundary = useQueryErrorBoundary(runsQuery.error ?? runQuery.error);
+  const boundary = useQueryErrorBoundary(lookupError ?? runQuery.error);
   const run = runQuery.data ?? null;
 
   const progressTag = run ? runProgressTag(run) : "";
@@ -83,9 +93,7 @@ export default function RunDetailScreen() {
     <PanelTrail name="Run" parent={{ label: "Runs", to: stackTemplatePath(stackId, stackTemplateId, "runs") }} current={`Run #${runNumber}`} />
   );
 
-  // A cached list can predate a run that was just started, so a number it
-  // lacks only means "no such run" once a refetch has confirmed it.
-  if (runsQuery.status === "success" && !runsQuery.isFetching && runId === "") {
+  if (missing) {
     return (
       <section className="flex min-w-0 flex-col gap-5" data-testid="run-detail-missing">
         {trail}
@@ -94,7 +102,7 @@ export default function RunDetailScreen() {
     );
   }
 
-  if (runsQuery.status === "error" || runQuery.status === "error") {
+  if (lookupError || runQuery.status === "error") {
     if (boundary !== null) {
       return <>{boundary}</>;
     }
@@ -102,12 +110,12 @@ export default function RunDetailScreen() {
       <section className="flex min-w-0 flex-col gap-5" data-testid="run-detail-error">
         {trail}
         <ErrorLine live={false}>Something went wrong while loading the run.</ErrorLine>
-        <RequestIdNote error={runsQuery.error ?? runQuery.error} />
+        <RequestIdNote error={lookupError ?? runQuery.error} />
         <button
           type="button"
           className={cn(buttonClass("outline"), "self-start pointer-coarse:h-11")}
           data-testid="run-detail-retry"
-          onClick={() => (runsQuery.status === "error" ? runsQuery.refetch() : runQuery.refetch())}
+          onClick={() => (lookupError ? byNumberQuery.refetch() : runQuery.refetch())}
         >
           <RefreshCw data-icon="inline-start" aria-hidden="true" />
           Retry

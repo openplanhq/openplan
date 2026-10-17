@@ -99,7 +99,7 @@ var overrides = map[string]override{
 		note: "In a collection run this re-sends itself until the registration ends, and saves its revision.",
 	},
 	"listTemplateRevisions": {
-		test: "const revisions = pm.response.json();\n" +
+		test: "const revisions = pm.response.json().items;\n" +
 			"if (!pm.environment.get('template_revision_id') && revisions.length) { pm.environment.set('template_revision_id', revisions[0].id); }",
 	},
 	"createStack": {
@@ -136,7 +136,7 @@ var overrides = map[string]override{
 	},
 	"startTemplateRun": {
 		jsonBody: `{ "operation": "apply", "auto_approve": false }`,
-		test:     save("run_id", "pm.response.json().id"),
+		test:     save("run_id", "pm.response.json().id") + "\n" + save("run_number", "String(pm.response.json().run_number)"),
 		note:     "An apply, so that its plan waits for approval and the approval request has something to approve.",
 	},
 	"getTemplateRun": {
@@ -144,7 +144,7 @@ var overrides = map[string]override{
 		note: "In a collection run this re-sends itself until the plan has finished.",
 	},
 	"listTemplateRunLogs": {
-		test: "const logs = pm.response.json();\nif (logs.length) { pm.environment.set('name', logs[0].name); }",
+		test: "const logs = pm.response.json().items;\nif (logs.length) { pm.environment.set('name', logs[0].name); }",
 		note: "Saves the first log's name, which the log-body request reads by.",
 	},
 	"getTemplateRunLog": {
@@ -162,7 +162,7 @@ var overrides = map[string]override{
 	},
 	"searchUsers": {
 		query: map[string]string{"q": "{{user_search}}"},
-		test: "const others = pm.response.json().users.filter((user) => user.sub !== pm.environment.get('my_sub'));\n" +
+		test: "const others = pm.response.json().items.filter((user) => user.sub !== pm.environment.get('my_sub'));\n" +
 			"if (others.length) { pm.environment.set('user_sub', others[0].sub); }",
 		note: "Saves the first match who is not you, for the grant requests.",
 	},
