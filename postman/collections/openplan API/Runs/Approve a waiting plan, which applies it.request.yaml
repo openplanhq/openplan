@@ -16,7 +16,7 @@ description: |-
 
   `409` when the plan had no changes, so there is nothing to approve.
 method: POST
-url: '{{base_url}}/v1/tenants/{{tenant_id}}/template-runs/{{run_id}}/approval'
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/template-runs/{{run_id}}/approve'
 scripts:
   - type: afterResponse
     code: pm.test('status is one of 202, 409', () => pm.expect(pm.response.code).to.be.oneOf([202, 409]));

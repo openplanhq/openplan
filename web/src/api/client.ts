@@ -179,7 +179,7 @@ export function addTemplateToStack(tenantID: string, stackID: string, body: AddT
 
 export function updateStackTemplateConfig(tenantID: string, stackTemplateID: string, body: UpdateStackTemplateConfigRequest): Promise<StackTemplate> {
   return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/stack-templates/${encodeURIComponent(stackTemplateID)}/config`, {
-    method: "PATCH",
+    method: "PUT",
     body: JSON.stringify(body)
   });
 }
@@ -210,14 +210,16 @@ export function listTemplateRunLogs(tenantID: string, runID: string): Promise<Te
   return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/template-runs/${encodeURIComponent(runID)}/logs`);
 }
 
-export function getTemplateRunLog(tenantID: string, runID: string, phase: string): Promise<string> {
-  return requestText(`/v1/tenants/${encodeURIComponent(tenantID)}/template-runs/${encodeURIComponent(runID)}/logs/${encodeURIComponent(phase)}`);
+// name is the log's name from the run's log list, such as "plan-1", not a
+// run phase: one phase can write several logs.
+export function getTemplateRunLog(tenantID: string, runID: string, name: string): Promise<string> {
+  return requestText(`/v1/tenants/${encodeURIComponent(tenantID)}/template-runs/${encodeURIComponent(runID)}/logs/${encodeURIComponent(name)}`);
 }
 
 // approveRun answers with the run, already approved, while its apply waits for
 // an executor.
 export function approveRun(tenantID: string, runID: string): Promise<TemplateRun> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/template-runs/${encodeURIComponent(runID)}/approval`, {
+  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/template-runs/${encodeURIComponent(runID)}/approve`, {
     method: "POST",
     body: JSON.stringify({})
   });
@@ -233,7 +235,6 @@ export function discardRun(tenantID: string, runID: string, body: DiscardRunRequ
 }
 
 interface AssignStackRoleBody {
-  user_sub: string;
   role: string;
 }
 
@@ -241,9 +242,11 @@ export function listStackGrants(tenantID: string, stackID: string): Promise<List
   return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/stacks/${encodeURIComponent(stackID)}/grants`);
 }
 
-export function assignStackRole(tenantID: string, stackID: string, body: AssignStackRoleBody): Promise<GrantView> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/stacks/${encodeURIComponent(stackID)}/grants`, {
-    method: "POST",
+// assignStackRole sets userSub's role on the stack, creating the grant or
+// replacing the role they hold.
+export function assignStackRole(tenantID: string, stackID: string, userSub: string, body: AssignStackRoleBody): Promise<GrantView> {
+  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/stacks/${encodeURIComponent(stackID)}/grants/${encodeURIComponent(userSub)}`, {
+    method: "PUT",
     body: JSON.stringify(body)
   });
 }

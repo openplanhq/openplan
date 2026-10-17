@@ -60,7 +60,7 @@ values:
     value: ""
     enabled: true
     type: default
-  - key: phase
+  - key: name
     value: ""
     enabled: true
     type: default

@@ -5,7 +5,7 @@ description: |-
   This is not a directory lookup. It searches openplan's projection of
   identities it has actually verified, so a person who has never signed
   in will not appear — and cannot be granted a role. That is the same
-  limitation `POST .../grants` enforces as `not_signed_in`.
+  limitation `PUT .../grants/{user_sub}` enforces as `not_signed_in`.
 
   The response echoes the `first` and `max` actually applied, so a client
   paginates from what the server used rather than from what it sent.

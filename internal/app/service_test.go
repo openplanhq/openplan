@@ -2269,7 +2269,7 @@ func TestGetTemplateRunLogChecksRunOwnershipBeforeReadingLog(t *testing.T) {
 	content, err := service.GetTemplateRunLog(authenticatedContext(), GetTemplateRunLogCommand{
 		TenantID: domain.TenantID("tenant_123"),
 		RunID:    domain.TemplateRunID("run_123"),
-		Phase:    "plan",
+		Name:     "plan",
 	})
 	if err != nil {
 		t.Fatalf("GetTemplateRunLog returned error: %v", err)
@@ -2313,7 +2313,7 @@ func TestGetTemplateRunLogDoesNotReadLogWhenRunIsMissing(t *testing.T) {
 	_, err := service.GetTemplateRunLog(authenticatedContext(), GetTemplateRunLogCommand{
 		TenantID: domain.TenantID("tenant_123"),
 		RunID:    domain.TemplateRunID("run_123"),
-		Phase:    "plan",
+		Name:     "plan",
 	})
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatalf("error = %v, want ErrNotFound", err)
@@ -2347,7 +2347,7 @@ func TestGetTemplateRunLogDoesNotReadObjectWhenMetadataIsMissing(t *testing.T) {
 	_, err := service.GetTemplateRunLog(ctx, GetTemplateRunLogCommand{
 		TenantID: domain.TenantID("tenant_123"),
 		RunID:    domain.TemplateRunID("run_123"),
-		Phase:    "plan",
+		Name:     "plan",
 	})
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatalf("error = %v, want ErrNotFound", err)
@@ -2387,14 +2387,14 @@ func TestGetTemplateRunLogMapsMissingLogToNotFound(t *testing.T) {
 	_, err := service.GetTemplateRunLog(authenticatedContext(), GetTemplateRunLogCommand{
 		TenantID: domain.TenantID("tenant_123"),
 		RunID:    domain.TemplateRunID("run_123"),
-		Phase:    "plan",
+		Name:     "plan",
 	})
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatalf("error = %v, want ErrNotFound", err)
 	}
 }
 
-func TestGetTemplateRunLogRejectsUnsafePhase(t *testing.T) {
+func TestGetTemplateRunLogRejectsUnsafeName(t *testing.T) {
 	t.Parallel()
 
 	service := NewService(Service{
@@ -2406,7 +2406,7 @@ func TestGetTemplateRunLogRejectsUnsafePhase(t *testing.T) {
 	_, err := service.GetTemplateRunLog(context.Background(), GetTemplateRunLogCommand{
 		TenantID: domain.TenantID("tenant_123"),
 		RunID:    domain.TemplateRunID("run_123"),
-		Phase:    "../plan",
+		Name:     "../plan",
 	})
 	// A name of the wrong shape names a log that can't exist.
 	if !errors.Is(err, ErrNotFound) {
@@ -3284,7 +3284,7 @@ func TestAssignStackRoleWritesTheGrantInTheSameTransaction(t *testing.T) {
 	users := &fakeUserRepository{users: []UserProfile{{Sub: "user_456", DisplayName: "Casey Jones", Email: "casey@example.com"}}}
 	service := NewService(Service{Work: work, Authorization: authorizer, Users: users, Clock: fixedClock{now: time.Now()}})
 
-	view, err := service.AssignStackRole(adminContext(), AssignStackRoleCommand{
+	result, err := service.AssignStackRole(adminContext(), AssignStackRoleCommand{
 		TenantID: domain.TenantID("tenant_123"),
 		StackID:  domain.StackID("stack_abc"),
 		UserSub:  "user_456",
@@ -3293,8 +3293,12 @@ func TestAssignStackRoleWritesTheGrantInTheSameTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AssignStackRole returned error: %v", err)
 	}
-	if view.Role != "operator" || view.UserSub != "user_456" {
+	if view := result.Grant; view.Role != "operator" || view.UserSub != "user_456" {
 		t.Fatalf("view = %#v", view)
+	}
+	// The API answers 201 on this, so a first grant must say so.
+	if !result.Created {
+		t.Fatal("Created = false for a person who held no role on the stack")
 	}
 	if len(work.requests) != 0 {
 		t.Fatalf("enqueued %d requests, want 0 -- the grant is part of the commit", len(work.requests))
@@ -3321,13 +3325,17 @@ func TestAssignStackRoleIsIdempotentForAHeldRole(t *testing.T) {
 	users := &fakeUserRepository{users: []UserProfile{{Sub: "user_456", DisplayName: "Casey Jones", Email: "casey@example.com"}}}
 	service := NewService(Service{Work: work, Authorization: authorizer, Users: users, Clock: fixedClock{now: time.Now()}})
 
-	if _, err := service.AssignStackRole(adminContext(), AssignStackRoleCommand{
+	result, err := service.AssignStackRole(adminContext(), AssignStackRoleCommand{
 		TenantID: domain.TenantID("tenant_123"),
 		StackID:  domain.StackID("stack_abc"),
 		UserSub:  "user_456",
 		Role:     "operator",
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("AssignStackRole returned error: %v", err)
+	}
+	if result.Created {
+		t.Fatal("Created = true for a role the person already held")
 	}
 
 	grants, err := authorizer.ListGrants(context.Background(), mustStackObject(t, "stack_abc"))
@@ -3348,13 +3356,18 @@ func TestAssignStackRoleReplacesAStaleRole(t *testing.T) {
 	users := &fakeUserRepository{users: []UserProfile{{Sub: "user_456", DisplayName: "Casey Jones", Email: "casey@example.com"}}}
 	service := NewService(Service{Work: newRecordingWork(nil), Authorization: authorizer, Users: users, Clock: fixedClock{now: time.Now()}})
 
-	if _, err := service.AssignStackRole(adminContext(), AssignStackRoleCommand{
+	result, err := service.AssignStackRole(adminContext(), AssignStackRoleCommand{
 		TenantID: domain.TenantID("tenant_123"),
 		StackID:  domain.StackID("stack_abc"),
 		UserSub:  "user_456",
 		Role:     "viewer",
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("AssignStackRole returned error: %v", err)
+	}
+	// A change of role is not a new grant.
+	if result.Created {
+		t.Fatal("Created = true for a person who already held another role")
 	}
 
 	grants, err := authorizer.ListGrants(context.Background(), mustStackObject(t, "stack_abc"))

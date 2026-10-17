@@ -219,6 +219,14 @@ type AssignStackRoleCommand struct {
 	Role     string
 }
 
+// AssignStackRoleResult is the grant as it stands after the call. Created
+// says whether the person held no role on the stack before, which is what
+// separates making a grant from changing one.
+type AssignStackRoleResult struct {
+	Grant   GrantView
+	Created bool
+}
+
 type RevokeStackRoleCommand struct {
 	TenantID domain.TenantID
 	StackID  domain.StackID
@@ -472,11 +480,13 @@ type ListTemplateRunsCommand struct {
 	StackTemplateID domain.StackTemplateID
 }
 
-// GetTemplateRunLogCommand asks the app to read one tenant-owned run phase log.
+// GetTemplateRunLogCommand asks the app to read one tenant-owned run log.
 type GetTemplateRunLogCommand struct {
 	TenantID domain.TenantID
 	RunID    domain.TemplateRunID
-	Phase    string
+	// Name is the log's name within its run, such as "plan-1": a run phase
+	// writes several logs, so it can't name one.
+	Name string
 }
 
 // ListTemplateRunLogsCommand asks the app to list tenant-owned run log metadata.
@@ -1372,13 +1382,13 @@ func (service *Service) listGrantsForStack(ctx context.Context, object authoriza
 }
 
 //nolint:gocognit // Authorization logic; split it only as a reviewed refactor.
-func (service *Service) AssignStackRole(ctx context.Context, command AssignStackRoleCommand) (GrantView, error) {
+func (service *Service) AssignStackRole(ctx context.Context, command AssignStackRoleCommand) (AssignStackRoleResult, error) {
 	principal, err := requirePrincipal(ctx)
 	if err != nil {
-		return GrantView{}, err
+		return AssignStackRoleResult{}, err
 	}
 	if err := authorizeStack(ctx, service.Authorization, command.StackID, authorization.RelationCanManageAccess); err != nil {
-		return GrantView{}, err
+		return AssignStackRoleResult{}, err
 	}
 
 	// Reject an unknown role here rather than letting the handler retry it
@@ -1394,14 +1404,14 @@ func (service *Service) AssignStackRole(ctx context.Context, command AssignStack
 		problems = append(problems, fieldError(ErrInvalidCommand, IssueInvalidFormat, "user_sub is not a valid subject", "user_sub"))
 	}
 	if len(problems) > 0 {
-		return GrantView{}, errors.Join(problems...)
+		return AssignStackRoleResult{}, errors.Join(problems...)
 	}
 
 	if service.Work == nil {
-		return GrantView{}, fmt.Errorf("unit of work not configured")
+		return AssignStackRoleResult{}, fmt.Errorf("unit of work not configured")
 	}
 	if err := service.requireUserRepository(); err != nil {
-		return GrantView{}, err
+		return AssignStackRoleResult{}, err
 	}
 
 	// The projection is the only place openplan knows a person exists, so this
@@ -1411,17 +1421,17 @@ func (service *Service) AssignStackRole(ctx context.Context, command AssignStack
 	// made "can this user be granted?" depend on deployment wiring.
 	profiles, err := service.Users.UsersBySubs(ctx, []string{command.UserSub})
 	if err != nil {
-		return GrantView{}, err
+		return AssignStackRoleResult{}, err
 	}
 	target, known := profiles[command.UserSub]
 	if !known {
-		return GrantView{}, fieldError(ErrUserNotProvisioned, IssueNotSignedIn,
+		return AssignStackRoleResult{}, fieldError(ErrUserNotProvisioned, IssueNotSignedIn,
 			"that person hasn't signed in to openplan yet; they need to sign in once before a role can be granted", "user_sub")
 	}
 
 	object, err := authorization.ObjectFromID(authorization.TypeStack, string(command.StackID))
 	if err != nil {
-		return GrantView{}, fmt.Errorf("assign role stack: %w", err)
+		return AssignStackRoleResult{}, fmt.Errorf("assign role stack: %w", err)
 	}
 
 	// Everything below runs inside the transaction, including the read the
@@ -1494,18 +1504,23 @@ func (service *Service) AssignStackRole(ctx context.Context, command AssignStack
 		})
 	}); err != nil {
 		if errors.Is(err, ErrLastOwner) {
-			return GrantView{}, err
+			return AssignStackRoleResult{}, err
 		}
-		return GrantView{}, fmt.Errorf("assign stack role: %w", err)
+		return AssignStackRoleResult{}, fmt.Errorf("assign stack role: %w", err)
 	}
 
 	// The display fields come from the lookup already done above, so the
 	// caller can render the new row without re-reading the grants list.
-	return GrantView{
-		UserSub:     command.UserSub,
-		Role:        command.Role,
-		DisplayName: strval.FirstNonEmpty(target.DisplayName, command.UserSub),
-		Email:       target.Email,
+	return AssignStackRoleResult{
+		Grant: GrantView{
+			UserSub:     command.UserSub,
+			Role:        command.Role,
+			DisplayName: strval.FirstNonEmpty(target.DisplayName, command.UserSub),
+			Email:       target.Email,
+		},
+		// From the same in-transaction read the last-owner guard uses, not a
+		// second look after the write.
+		Created: currentRole == "",
 	}, nil
 }
 
@@ -1837,7 +1852,7 @@ func (service *Service) labelTriggerActors(ctx context.Context, runs ...*domain.
 	return nil
 }
 
-// GetTemplateRunLog returns one phase log after checking that the run belongs to the tenant.
+// GetTemplateRunLog returns one log after checking that the run belongs to the tenant.
 func (service *Service) GetTemplateRunLog(ctx context.Context, command GetTemplateRunLogCommand) ([]byte, error) {
 	if err := validateGetTemplateRunLogCommand(command); err != nil {
 		return nil, err
@@ -1846,7 +1861,7 @@ func (service *Service) GetTemplateRunLog(ctx context.Context, command GetTempla
 	if _, err := service.authorizedTemplateRun(ctx, command.TenantID, command.RunID, authorization.RelationCanView); err != nil {
 		return nil, err
 	}
-	log, err := service.TemplateRunLogMetadata.GetTemplateRunLog(ctx, command.TenantID, command.RunID, command.Phase)
+	log, err := service.TemplateRunLogMetadata.GetTemplateRunLog(ctx, command.TenantID, command.RunID, command.Name)
 	if err != nil {
 		return nil, fmt.Errorf("get template run log metadata: %w", err)
 	}
@@ -2141,8 +2156,8 @@ func validateGetTemplateRunLogCommand(command GetTemplateRunLogCommand) error {
 	// Only the name's shape is checked: which logs a run has is the
 	// workflow's business, and an unknown name is simply not found. A name of
 	// the wrong shape is not found either: it names a log that can't exist.
-	if !domain.ValidLogName(command.Phase) {
-		return fmt.Errorf("%w: log phase is unsupported", ErrNotFound)
+	if !domain.ValidLogName(command.Name) {
+		return fmt.Errorf("%w: log name is unsupported", ErrNotFound)
 	}
 	return nil
 }

@@ -160,14 +160,14 @@ export function useTemplateRunLogsQuery(tenantID: string, runID: string, statusT
   });
 }
 
-// A phase's log is recorded once its command exits and is replaced only by a
-// new upload, which moves uploadedAt. So one upload's body never changes, and
-// is fetched once.
-export function useTemplateRunLogQuery(tenantID: string, runID: string, phase: string, uploadedAt: string) {
+// A log is recorded once its command exits and is replaced only by a new
+// upload, which moves uploadedAt. So one upload's body never changes, and is
+// fetched once.
+export function useTemplateRunLogQuery(tenantID: string, runID: string, name: string, uploadedAt: string) {
   return useQuery({
-    queryKey: queryKeys.templateRunLog(tenantID, runID, phase, uploadedAt),
-    queryFn: () => client.getTemplateRunLog(tenantID, runID, phase),
-    enabled: runID !== "" && phase !== "",
+    queryKey: queryKeys.templateRunLog(tenantID, runID, name, uploadedAt),
+    queryFn: () => client.getTemplateRunLog(tenantID, runID, name),
+    enabled: runID !== "" && name !== "",
     staleTime: Infinity,
     placeholderData: keepPreviousData
   });
@@ -294,7 +294,7 @@ export function useSearchUsersQuery(tenantID: string, query: string) {
 export function useAssignStackRoleMutation(tenantID: string, stackID: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: Parameters<typeof client.assignStackRole>[2]) => client.assignStackRole(tenantID, stackID, body),
+    mutationFn: ({ userSub, role }: { userSub: string; role: string }) => client.assignStackRole(tenantID, stackID, userSub, { role }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.stackGrants(tenantID, stackID) });
     }

@@ -161,8 +161,8 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	server.handleTenantRoute("DELETE /v1/tenants/{tenant_id}/stacks/{stack_id}/credentials/{credential_id}", server.handleDeleteStackCredential)
 	// Installs a registered template into a stack.
 	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/stacks/{stack_id}/templates", server.handleAddTemplateToStack)
-	// Edits desired config for an installed stack template.
-	server.handleTenantRoute("PATCH /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/config", server.handleUpdateStackTemplateConfig)
+	// Replaces the whole desired config for an installed stack template.
+	server.handleTenantRoute("PUT /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/config", server.handleUpdateStackTemplateConfig)
 	// Stages an installed stack template to a newer template revision.
 	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/upgrade", server.handleUpgradeStackTemplate)
 
@@ -178,8 +178,8 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/template-runs/{run_id}", server.handleGetTemplateRun)
 	// Lists persisted log metadata for all phases of a template run.
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs", server.handleListTemplateRunLogs)
-	// Reads the persisted log body for one template run phase.
-	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{phase}", server.handleGetTemplateRunLog)
+	// Reads one persisted log body by the log's name, such as plan-1.
+	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{name}", server.handleGetTemplateRunLog)
 
 	// User search routes.
 	// Searches signed-in users by display name or email.
@@ -192,14 +192,14 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	// Stack grant routes.
 	// Lists grants for a stack.
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/stacks/{stack_id}/grants", server.handleListStackGrants)
-	// Assigns a role on a stack.
-	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/stacks/{stack_id}/grants", server.handleAssignStackRole)
+	// Sets one person's role on a stack, creating or replacing their grant.
+	server.handleTenantRoute("PUT /v1/tenants/{tenant_id}/stacks/{stack_id}/grants/{user_sub}", server.handleAssignStackRole)
 	// Revokes a role from a stack.
 	server.handleTenantRoute("DELETE /v1/tenants/{tenant_id}/stacks/{stack_id}/grants/{user_sub}", server.handleRevokeStackRole)
 
 	// Template run decision routes.
 	// Records approval for a waiting template run.
-	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/template-runs/{run_id}/approval", server.handleApproveRun)
+	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/template-runs/{run_id}/approve", server.handleApproveRun)
 	// Discards a template run's plan waiting for approval.
 	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/template-runs/{run_id}/discard", server.handleDiscardRun)
 	server.handler = withErrorEnvelope(server.mux)
@@ -847,7 +847,7 @@ func (server *Server) handleGetTemplateRunLog(response http.ResponseWriter, requ
 	content, err := server.service.GetTemplateRunLog(request.Context(), app.GetTemplateRunLogCommand{
 		TenantID: domain.TenantID(request.PathValue("tenant_id")),
 		RunID:    domain.TemplateRunID(request.PathValue("run_id")),
-		Phase:    request.PathValue("phase"),
+		Name:     request.PathValue("name"),
 	})
 	if err != nil {
 		writeAppError(response, err)
@@ -1205,10 +1205,10 @@ func (server *Server) handleAssignStackRole(response http.ResponseWriter, reques
 		return
 	}
 
-	grant, err := server.service.AssignStackRole(request.Context(), app.AssignStackRoleCommand{
+	result, err := server.service.AssignStackRole(request.Context(), app.AssignStackRoleCommand{
 		TenantID: domain.TenantID(request.PathValue("tenant_id")),
 		StackID:  domain.StackID(request.PathValue("stack_id")),
-		UserSub:  body.UserSub,
+		UserSub:  request.PathValue("user_sub"),
 		Role:     body.Role,
 	})
 	if err != nil {
@@ -1216,12 +1216,18 @@ func (server *Server) handleAssignStackRole(response http.ResponseWriter, reques
 		return
 	}
 
-	writeJSON(response, http.StatusOK, grant)
+	// No Location: the grant's URL is the one just requested.
+	status := http.StatusOK
+	if result.Created {
+		status = http.StatusCreated
+	}
+	writeJSON(response, status, result.Grant)
 }
 
+// The person is named by the path alone, so the body has no user_sub to
+// disagree with it, and one that sends it is refused as an unknown field.
 type assignStackRoleRequest struct {
-	UserSub string `json:"user_sub"`
-	Role    string `json:"role"`
+	Role string `json:"role"`
 }
 
 func (server *Server) handleRevokeStackRole(response http.ResponseWriter, request *http.Request) {

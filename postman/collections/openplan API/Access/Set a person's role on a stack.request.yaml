@@ -1,0 +1,34 @@
+$kind: http-request
+description: |-
+  Creates the person's grant, or replaces whatever role they already
+  held — one person has at most one role on a stack. Answers `201` when
+  the person held no role before, and `200` when the call changed or
+  kept the role they had. The person is named by the path only; a body
+  that also sends `user_sub` is refused as an unknown field (`400
+  malformed-body`).
+
+  The person must have signed in to openplan at least once. openplan is
+  not a directory: a person exists here only once a verified token has
+  projected them. Granting to a subject it has never seen returns `422
+  validation-failed` with an `errors` entry on `#/user_sub` whose issue
+  is `not_signed_in`. Use `GET /v1/tenants/{tenant_id}/users/search` to
+  find one.
+
+  The response is the grant, rendered from the identity lookup the
+  request already performed. The role is written in the request's own
+  transaction, so it is in effect when the response arrives.
+
+  Grants a role to the person the search saved. Needs a second person who has signed in once; without one there is nobody to grant a role to.
+method: PUT
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/stacks/{{stack_id}}/grants/{{user_sub}}'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: '{ "role": "viewer" }'
+scripts:
+  - type: afterResponse
+    code: pm.test('status is one of 201, 200', () => pm.expect(pm.response.code).to.be.oneOf([201, 200]));
+    language: text/javascript
+order: 2000

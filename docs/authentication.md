@@ -262,10 +262,10 @@ obviously misconfigured cookie.
 
 `Lax` still stops CSRF on every mutating route in this API, because `Lax`
 withholds the cookie from a cross-site request unless it is a top-level GET
-navigation. A forged cross-site form or script can `POST`, `PATCH`, or
+navigation. A forged cross-site form or script can `POST`, `PUT`, or
 `DELETE` all it wants; the browser will not attach `openplan_session` to any of
 it, so the request arrives unauthenticated. This holds only because every
-mutating route in the API is `POST`, `PATCH`, or `DELETE` — a mutating `GET`
+mutating route in the API is `POST`, `PUT`, or `DELETE` — a mutating `GET`
 would defeat it, so there is not one, and there is no separate CSRF token.
 
 `openplan_session` needs no encryption: it carries no claims to protect, only 32
@@ -505,8 +505,8 @@ time that person signs in.
 ### Accepted limitation: a user must sign in before they can be granted a role
 
 A person who has never signed in is not in the projection, does not appear in
-the search box, and cannot be granted a role — `POST .../grants` answers
-`400 unknown_user`. They sign in once, which lands them in the projection, and
+the search box, and cannot be granted a role — `PUT .../grants/{user_sub}`
+answers `422 validation-failed` with a `not_signed_in` issue on `#/user_sub`. They sign in once, which lands them in the projection, and
 are grantable from then on.
 
 This is deliberate, and it has an ordering consequence worth knowing before you
@@ -593,16 +593,18 @@ visibility is never an authorization boundary.
 | `GET /v1/tenants/{tenant_id}/stacks` | Complete tenant stack scan with bounded OpenFGA `BatchCheck(can_view)` calls; `platform-admin` bypasses the ordinary stack list check |
 | `GET /v1/tenants/{tenant_id}/stacks/{stack_id}` | `can_view` |
 | `POST /v1/tenants/{tenant_id}/stacks/{stack_id}/templates` | `can_operate` |
-| `PATCH /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/config` | Owning stack `can_operate` |
+| `PUT /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/config` | Owning stack `can_operate` |
 | `POST /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/upgrade` | Owning stack `can_operate` |
 | `POST /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/runs` | Owning stack `can_operate` |
 | `GET /v1/tenants/{tenant_id}/template-runs/{run_id}` | Owning stack `can_view` |
 | `GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs` | Owning stack `can_view` |
-| `GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{phase}` | Owning stack `can_view` |
-| `POST /v1/tenants/{tenant_id}/template-runs/{run_id}/approval` | Owning stack `can_approve` |
+| `GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{name}` | Owning stack `can_view` |
+| `POST /v1/tenants/{tenant_id}/template-runs/{run_id}/approve` | Owning stack `can_approve` |
 | `POST /v1/tenants/{tenant_id}/template-runs/{run_id}/cancellation` | Owning stack `can_operate` |
+| `GET /v1/tenants/{tenant_id}/stacks/{stack_id}/grants` | `can_manage_access` |
+| `PUT /v1/tenants/{tenant_id}/stacks/{stack_id}/grants/{user_sub}` | `can_manage_access` |
+| `DELETE /v1/tenants/{tenant_id}/stacks/{stack_id}/grants/{user_sub}` | `can_manage_access` |
 
-`can_manage_access` has no current route; the access-management API will use it.
 Stack templates, runs, logs, log artifacts, and credential identifiers returned
 with a stack inherit the owning stack decision. Non-administrator stack lists
 read tenant stacks from Postgres in stable `(created_at, id)` keyset pages of at

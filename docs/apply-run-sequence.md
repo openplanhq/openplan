@@ -91,7 +91,7 @@ sequenceDiagram
     CW->>PG: FinishPlan: plan execution and its last step succeeded with its counts, run waiting_approval, template's pending plan
     Note over CW: TemplatePlanWorkflow completes. Nothing waits on a person.
 
-    UI->>API: POST /approval
+    UI->>API: POST /approve
     API->>PG: approved + audit + work_queue row, one transaction
     Note over API: queue loop claims the row
     API->>T: StartWorkflow TemplateApplyWorkflow ("…/apply")

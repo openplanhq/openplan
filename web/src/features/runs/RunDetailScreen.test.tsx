@@ -580,7 +580,7 @@ describe("RunDetailScreen", () => {
     await user.click(within(reopenedDialog).getByRole("button", { name: /Confirm destroy/ }));
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining("/template-runs/run_1/approval"),
+        expect.stringContaining("/template-runs/run_1/approve"),
         expect.objectContaining({ method: "POST" })
       )
     );
