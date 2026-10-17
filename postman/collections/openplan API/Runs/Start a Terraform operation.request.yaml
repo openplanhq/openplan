@@ -1,0 +1,40 @@
+$kind: http-request
+description: |-
+  Runs are durably orchestrated: a plan or apply survives a process
+  restart rather than being lost halfway.
+
+  Operations work the way the Terraform CLI's do. `plan` only plans the
+  desired config: the run records what would change and completes,
+  keeping no plan. `apply` plans the desired config and saves the plan;
+  `destroy` plans the destruction of everything the component manages
+  and saves that. For either, a plan with no changes completes the run,
+  and a plan with changes waits in `waiting_approval`, where approving it
+  applies exactly that saved plan (see the approval endpoint).
+
+  `auto_approve` is allowed on `apply` only. The run then applies
+  straight away, with no saved plan and nothing to approve, and records
+  the counts the apply reports. It takes approve permission on the stack
+  as well as operate permission.
+
+  One component runs one operation at a time, and a plan waiting for
+  approval counts. Starting a second while one is in flight returns `409
+  run_in_flight` — the competing run is visible through the list
+  endpoint, so a client can wait for it, or approve or discard it.
+
+  An apply, so that its plan waits for approval and the approval request has something to approve.
+method: POST
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/stack-templates/{{stack_template_id}}/runs'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: '{ "operation": "apply", "auto_approve": false }'
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('status is 201', () => pm.response.to.have.status(201));
+      if (pm.response.code < 300) { pm.environment.set('run_id', pm.response.json().id); }
+    language: text/javascript
+examples: ./.resources/Start a Terraform operation.resources/examples
+order: 1000

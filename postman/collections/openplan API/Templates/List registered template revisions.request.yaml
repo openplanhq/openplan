@@ -1,0 +1,11 @@
+$kind: http-request
+method: GET
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/template-revisions'
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('status is 200', () => pm.response.to.have.status(200));
+      const revisions = pm.response.json();
+      if (!pm.environment.get('template_revision_id') && revisions.length) { pm.environment.set('template_revision_id', revisions[0].id); }
+    language: text/javascript
+order: 2000

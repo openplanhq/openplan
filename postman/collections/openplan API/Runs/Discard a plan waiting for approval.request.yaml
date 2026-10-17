@@ -1,0 +1,23 @@
+$kind: http-request
+description: |-
+  Throws away a run's saved plan while it waits for approval (or is
+  approved and not yet applying). The run ends `canceled` straight away
+  and its plan can never be applied. A run that is planning or applying
+  cannot be stopped.
+
+  The body is optional: send no body to discard without a reason.
+
+  Discards the approved plan if its apply has not started yet; `409` once it has.
+method: POST
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/template-runs/{{run_id}}/discard'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: '{ "reason": "Discarded from Postman" }'
+scripts:
+  - type: afterResponse
+    code: pm.test('status is one of 204, 409', () => pm.expect(pm.response.code).to.be.oneOf([204, 409]));
+    language: text/javascript
+order: 7000

@@ -1,0 +1,31 @@
+$kind: http-request
+description: |-
+  Assigning replaces whatever role the subject already held — one person
+  has at most one role on a stack.
+
+  The subject must have signed in to openplan at least once. openplan is not
+  a directory: a person exists here only once a verified token has
+  projected them. Granting to a subject it has never seen returns `400
+  unknown_user`. Use `GET /v1/tenants/{tenant_id}/users/search` to find
+  one.
+
+  The response is the intended grant, rendered from the identity
+  lookup the request already performed. The authorization write
+  itself is queued and reconciled asynchronously, so a permission
+  check made immediately afterwards may still answer from the old
+  state.
+
+  Needs a second person who has signed in once; without one there is nobody to grant a role to.
+method: POST
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/stacks/{{stack_id}}/grants'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: '{ "user_sub": "{{user_sub}}", "role": "viewer" }'
+scripts:
+  - type: afterResponse
+    code: pm.test('status is 200', () => pm.response.to.have.status(200));
+    language: text/javascript
+order: 2000

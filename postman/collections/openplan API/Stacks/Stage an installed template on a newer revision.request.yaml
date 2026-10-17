@@ -1,0 +1,23 @@
+$kind: http-request
+description: |-
+  Moves the component's *desired* revision. Nothing is applied here —
+  upgrading is a deliberate, reviewable step, so the new revision takes
+  effect only when a subsequent apply succeeds. Until then
+  `desired_template_revision_id` and `last_applied_template_revision_id`
+  differ and `live_state` reads `differs`.
+
+  Omit `config` to carry the current one forward; supply it when the new
+  revision's variables changed.
+method: POST
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/stack-templates/{{stack_template_id}}/upgrade'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: '{ "target_template_revision_id": "{{template_revision_id}}" }'
+scripts:
+  - type: afterResponse
+    code: pm.test('status is 200', () => pm.response.to.have.status(200));
+    language: text/javascript
+order: 7000

@@ -1,0 +1,3 @@
+$kind: collection
+description: Registering Terraform sources as immutable, reusable revisions.
+order: 3000

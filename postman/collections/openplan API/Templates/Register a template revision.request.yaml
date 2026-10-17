@@ -1,0 +1,31 @@
+$kind: http-request
+description: |-
+  Points openplan at a GitHub repository and a revision, and starts an
+  asynchronous registration: resolve the ref to a commit, fetch the
+  source, and infer the root module's input variables.
+
+  Returns `202` with a registration record, not a revision. Poll
+  `GET /v1/tenants/{tenant_id}/template-registrations/{registration_id}`
+  until its `status` is terminal; on `completed` it carries the
+  `template_revision_id` the rest of the API takes.
+method: POST
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/template-revisions'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "repo_owner": "{{template_repo_owner}}",
+      "repo_name": "{{template_repo_name}}",
+      "source_ref": "{{template_source_ref}}",
+      "root_path": "{{template_root_path}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('status is 202', () => pm.response.to.have.status(202));
+      if (pm.response.code < 300) { pm.environment.set('registration_id', pm.response.json().id); }
+    language: text/javascript
+order: 1000

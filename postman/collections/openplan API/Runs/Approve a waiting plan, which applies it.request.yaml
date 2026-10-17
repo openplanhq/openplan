@@ -1,0 +1,22 @@
+$kind: http-request
+description: |-
+  Valid only while the run's `status` is `waiting_approval`. Approving
+  starts the apply of the plan the run saved: the same file, applied
+  with `tofu apply` on whichever executor picks it up, so what was
+  reviewed is exactly what runs. If the state has moved on since the
+  plan was made, tofu refuses the plan and the run fails; plan again.
+
+  Refused with `409 plan_stale` if the plan no longer describes the
+  component's desired config and revision. Those cannot change while
+  the plan waits, so this is a backstop.
+
+  Takes no fields: send `{}` or no body at all.
+
+  `409` when the plan had no changes, so there is nothing to approve.
+method: POST
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/template-runs/{{run_id}}/approval'
+scripts:
+  - type: afterResponse
+    code: pm.test('status is one of 204, 409', () => pm.expect(pm.response.code).to.be.oneOf([204, 409]));
+    language: text/javascript
+order: 6000

@@ -1,0 +1,11 @@
+$kind: http-request
+method: GET
+url: '{{base_url}}/healthz'
+scripts:
+  - type: beforeRequest
+    code: 'pm.request.headers.upsert({ key: ''X-Request-Id'', value: ''postman-check-1'' });'
+    language: text/javascript
+  - type: afterResponse
+    code: pm.test('the id comes back', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.eql('postman-check-1'));
+    language: text/javascript
+order: 11000

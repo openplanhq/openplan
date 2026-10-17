@@ -1,0 +1,13 @@
+$kind: http-request
+description: |-
+  Plans waiting for approval and destroys that failed, on every stack
+  the caller may view: waiting plans first, then failed destroys, each
+  newest first. Viewing a stack is enough to see its items; approving
+  is checked when someone approves.
+method: GET
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/attention'
+scripts:
+  - type: afterResponse
+    code: pm.test('status is 200', () => pm.response.to.have.status(200));
+    language: text/javascript
+order: 3000

@@ -1,0 +1,3 @@
+$kind: collection
+description: Negative cases that pin down status codes and the error envelope.
+order: 10000

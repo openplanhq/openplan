@@ -1,0 +1,13 @@
+$kind: http-request
+description: |-
+  The asynchronous work the caller queued — template registration,
+  template runs. Scoped by actor alone, so no new permission concept is
+  involved: a caller only ever sees their own items. Capped at the 50
+  most recent.
+method: GET
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/queue'
+scripts:
+  - type: afterResponse
+    code: pm.test('status is 200', () => pm.response.to.have.status(200));
+    language: text/javascript
+order: 1000

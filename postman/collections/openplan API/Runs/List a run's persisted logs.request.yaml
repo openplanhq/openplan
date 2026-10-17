@@ -1,0 +1,15 @@
+$kind: http-request
+description: |-
+  Metadata for each Terraform command that has finished, in the order
+  they ran: the plan's logs, then the apply's, each by `seq` — not the
+  output itself. Fetch a body from the per-log endpoint by its `phase`.
+method: GET
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/template-runs/{{run_id}}/logs'
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('status is 200', () => pm.response.to.have.status(200));
+      const logs = pm.response.json();
+      if (logs.length) { pm.environment.set('phase', logs[0].phase); }
+    language: text/javascript
+order: 4000

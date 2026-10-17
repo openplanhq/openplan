@@ -1,0 +1,15 @@
+$kind: http-request
+method: GET
+url: '{{base_url}}/v1/me'
+scripts:
+  - type: beforeRequest
+    code: |-
+      // Sent without a session, as a browser reaches this route.
+      pm.request.headers.remove('Cookie');
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('status is 401', () => pm.response.to.have.status(401));
+      pm.test('error code is unauthorized', () => pm.expect(pm.response.json().error).to.eql('unauthorized'));
+    language: text/javascript
+order: 4000

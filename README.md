@@ -248,6 +248,7 @@ An MVP baseline, and honest about it. What that means in practice:
 - [Authentication and authorization](docs/authentication.md)
 - [Authentication and authorization security architecture](docs/security-architecture.md)
 - [API reference](docs/openapi.yaml)
+- [Postman collection](postman/export/openplan-api.postman_collection.json), generated from the API reference: import it with its [environment](postman/export/openplan-local.postman_environment.json)
 
 ## Contributing
 

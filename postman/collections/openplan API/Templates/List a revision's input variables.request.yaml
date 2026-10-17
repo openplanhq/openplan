@@ -1,0 +1,13 @@
+$kind: http-request
+description: |-
+  The variables inferred from the revision's Terraform root module. A
+  revision is immutable, so this answer never changes for a given id.
+
+  This is the schema a stack template's `config` is validated against.
+method: GET
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/template-revisions/{{template_revision_id}}/variables'
+scripts:
+  - type: afterResponse
+    code: pm.test('status is 200', () => pm.response.to.have.status(200));
+    language: text/javascript
+order: 4000

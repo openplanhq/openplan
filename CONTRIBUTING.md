@@ -67,6 +67,10 @@ npm run build
 
 `make lint` downloads golangci-lint on first run and caches it after that.
 
+If you changed `docs/openapi.yaml`, run `make postman-collection` too. The
+Postman collection in `postman/` is generated from the spec, and `go test ./...`
+fails while the two disagree.
+
 ### The authorization differential test
 
 `internal/authorization/write.go` is a transcription of OpenFGA's own write path

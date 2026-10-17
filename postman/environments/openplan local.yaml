@@ -1,0 +1,70 @@
+name: openplan local
+values:
+  - key: base_url
+    value: http://localhost:8081
+    enabled: true
+    type: default
+  - key: tenant_id
+    value: tenant_123
+    enabled: true
+    type: default
+  - key: session_cookie
+    value: ""
+    enabled: true
+    type: secret
+  - key: template_repo_owner
+    value: openplanhq
+    enabled: true
+    type: default
+  - key: template_repo_name
+    value: demo-templates
+    enabled: true
+    type: default
+  - key: template_source_ref
+    value: main
+    enabled: true
+    type: default
+  - key: template_root_path
+    value: modules/random-id
+    enabled: true
+    type: default
+  - key: user_search
+    value: a
+    enabled: true
+    type: default
+  - key: my_sub
+    value: ""
+    enabled: true
+    type: default
+  - key: registration_id
+    value: ""
+    enabled: true
+    type: default
+  - key: template_revision_id
+    value: ""
+    enabled: true
+    type: default
+  - key: stack_id
+    value: ""
+    enabled: true
+    type: default
+  - key: stack_template_id
+    value: ""
+    enabled: true
+    type: default
+  - key: credential_id
+    value: ""
+    enabled: true
+    type: default
+  - key: run_id
+    value: ""
+    enabled: true
+    type: default
+  - key: phase
+    value: ""
+    enabled: true
+    type: default
+  - key: user_sub
+    value: ""
+    enabled: true
+    type: default
