@@ -98,7 +98,7 @@ func NewTemplateRunActivities(runner sandbox.Runner, workspaces sandbox.Workspac
 }
 
 // WithLiveLogs publishes each command's output live to stream. A nil stream
-// leaves live logs off; only tests pass one, since the executor will not start
+// leaves live logs off; only tests pass nil, since the executor will not start
 // without its Valkey.
 func (activities *TemplateRunActivities) WithLiveLogs(stream livelog.Stream) *TemplateRunActivities {
 	activities.live = stream
@@ -229,12 +229,13 @@ func (activities *TemplateRunActivities) RunTerraform(ctx context.Context, input
 		},
 		Mounts: []sandbox.Mount{{Path: workspace}},
 	}, spool)
-	stopHeartbeat()
 	closeErr := spool.Close()
 	// The final flush comes before the command's error is looked at, so a
 	// failed command's last lines, usually the ones that say why, are
-	// published too.
+	// published too; and before the heartbeat stops, so the seconds it may
+	// spend on a slow Valkey cannot time the activity out.
 	stopLive()
+	stopHeartbeat()
 	if closeErr != nil && runErr == nil {
 		return domain.RunTerraformActivityOutput{}, fmt.Errorf("close terraform log: %w", closeErr)
 	}

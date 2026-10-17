@@ -115,7 +115,7 @@ func TestFlusherSplitsALargeFlushIntoPieces(t *testing.T) {
 	assertPiece(t, got[2], 8, "89")
 }
 
-func TestFlusherSetsTheInitialExpiryOnce(t *testing.T) {
+func TestFlusherResetsExpiryOnARecreatedStream(t *testing.T) {
 	t.Parallel()
 
 	f, server, _, path := newTestFlusher(t)
@@ -133,6 +133,103 @@ func TestFlusherSetsTheInitialExpiryOnce(t *testing.T) {
 	if ttl := server.TTL(flusherTestKey); ttl != InitialTTL-time.Hour {
 		t.Fatalf("TTL after a later flush = %v, want %v", ttl, InitialTTL-time.Hour)
 	}
+
+	// Valkey restarted empty: the next piece recreates the stream, which
+	// must not be left without an expiry.
+	server.FlushAll()
+	appendFile(t, path, "ghi")
+	flush(t, f)
+	if ttl := server.TTL(flusherTestKey); ttl != InitialTTL {
+		t.Fatalf("TTL of the recreated stream = %v, want %v", ttl, InitialTTL)
+	}
+}
+
+// failingExpiryStream fails its first failures ExpireNX calls.
+type failingExpiryStream struct {
+	Stream
+	failures int
+}
+
+func (s *failingExpiryStream) ExpireNX(ctx context.Context, key string, ttl time.Duration) *redis.BoolCmd {
+	if s.failures > 0 {
+		s.failures--
+		cmd := redis.NewBoolCmd(ctx)
+		cmd.SetErr(errors.New("i/o timeout"))
+		return cmd
+	}
+	return s.Stream.ExpireNX(ctx, key, ttl)
+}
+
+// A failed expiry is retried by the next pass even when it has nothing new
+// to append, or a stream whose writer then died would never expire.
+func TestFlusherRetriesAFailedExpiry(t *testing.T) {
+	t.Parallel()
+
+	_, server, client, path := newTestFlusher(t)
+	f := NewFlusher(&failingExpiryStream{Stream: client, failures: 1}, flusherTestKey, path)
+	appendFile(t, path, "abc")
+	if err := f.Flush(context.Background()); err == nil {
+		t.Fatal("Flush with a failing expiry returned nil")
+	}
+	flush(t, f)
+	if ttl := server.TTL(flusherTestKey); ttl != InitialTTL {
+		t.Fatalf("TTL after the retry = %v, want %v", ttl, InitialTTL)
+	}
+}
+
+// A piece must decode as text on its own, so a pass that ends inside a
+// multi-byte rune leaves the rune's start for the next pass.
+func TestFlusherHoldsBackAnIncompleteRune(t *testing.T) {
+	t.Parallel()
+
+	f, _, client, path := newTestFlusher(t)
+	// "─" is E2 94 80.
+	appendFile(t, path, "a\xe2\x94")
+	flush(t, f)
+	got := entries(t, client)
+	if len(got) != 1 {
+		t.Fatalf("stream holds %d entries, want the one piece before the rune", len(got))
+	}
+	assertPiece(t, got[0], 0, "a")
+
+	appendFile(t, path, "\x80")
+	flush(t, f)
+	got = entries(t, client)
+	if len(got) != 2 {
+		t.Fatalf("stream holds %d entries after the rune completed, want 2", len(got))
+	}
+	assertPiece(t, got[1], 1, "─")
+
+	// The final flush has no later pass to wait for: a rune the command
+	// never finished goes out as it is.
+	f.Interval = time.Hour
+	stop := f.Start(context.Background())
+	appendFile(t, path, "\xe2")
+	stop()
+	got = entries(t, client)
+	if len(got) != 3 {
+		t.Fatalf("stream holds %d entries after the final flush, want 3", len(got))
+	}
+	assertPiece(t, got[2], 4, "\xe2")
+}
+
+// A piece cut by PieceSize also ends on a rune boundary: the rune starts the
+// next piece.
+func TestFlusherSplitsPiecesOnRuneBoundaries(t *testing.T) {
+	t.Parallel()
+
+	f, _, client, path := newTestFlusher(t)
+	f.PieceSize = 4
+	appendFile(t, path, "ab──")
+	flush(t, f)
+
+	got := entries(t, client)
+	if len(got) != 3 {
+		t.Fatalf("stream holds %d entries, want 3", len(got))
+	}
+	assertPiece(t, got[0], 0, "ab")
+	assertPiece(t, got[1], 2, "─")
+	assertPiece(t, got[2], 5, "─")
 }
 
 func TestFlusherStopsAtTheLimit(t *testing.T) {
@@ -243,4 +340,57 @@ func TestStartFlushesOnceMoreOnStop(t *testing.T) {
 		t.Fatalf("stream holds %d entries, want the final flush's piece", len(got))
 	}
 	assertPiece(t, got[0], 0, "last words\n")
+}
+
+// A cancelled command's last lines are the ones that say why it stopped, so
+// the final flush outlives the context RunTerraform started the flusher on.
+func TestStartFinalFlushSurvivesACancelledContext(t *testing.T) {
+	t.Parallel()
+
+	f, _, client, path := newTestFlusher(t)
+	f.Interval = time.Hour
+	ctx, cancel := context.WithCancel(context.Background())
+	stop := f.Start(ctx)
+	cancel()
+	appendFile(t, path, "interrupted\n")
+	stop()
+
+	got := entries(t, client)
+	if len(got) != 1 {
+		t.Fatalf("stream holds %d entries, want the final flush's piece", len(got))
+	}
+	assertPiece(t, got[0], 0, "interrupted\n")
+}
+
+// blockingStream answers no XAdd until its context ends, as a Valkey that
+// accepted the connection and then stopped responding would.
+type blockingStream struct {
+	Stream
+}
+
+func (s blockingStream) XAdd(ctx context.Context, _ *redis.XAddArgs) *redis.StringCmd {
+	<-ctx.Done()
+	cmd := redis.NewStringCmd(ctx)
+	cmd.SetErr(ctx.Err())
+	return cmd
+}
+
+func TestFlushPassIsBounded(t *testing.T) {
+	t.Parallel()
+
+	_, _, client, path := newTestFlusher(t)
+	f := NewFlusher(blockingStream{Stream: client}, flusherTestKey, path)
+	f.Interval = 50 * time.Millisecond
+	appendFile(t, path, "abc")
+
+	began := time.Now()
+	err := f.Flush(context.Background())
+	elapsed := time.Since(began)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Flush against a stalled stream = %v, want a deadline error", err)
+	}
+	// Twice Interval, with room for a slow test machine.
+	if elapsed > 10*f.Interval {
+		t.Fatalf("Flush against a stalled stream took %v, want about %v", elapsed, 2*f.Interval)
+	}
 }

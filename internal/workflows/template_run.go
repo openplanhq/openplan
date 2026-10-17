@@ -639,6 +639,14 @@ func (s *session) saveLog(name string, seq int, command domain.TerraformCommandT
 		if s.executorGone(runErr) {
 			log.LostReason = domain.LogLostExecutorGone
 		}
+	} else if uploaded.ContentType == "" || uploaded.UploadedAt.IsZero() {
+		// The control plane refuses a complete row that does not describe
+		// its object, which would leave the row live for good; an object
+		// the row cannot describe is as good as lost.
+		logger.Warn("upload run log returned an incomplete result", "log", name,
+			"content_type", uploaded.ContentType, "uploaded_at", uploaded.UploadedAt)
+		log.State = domain.TemplateRunLogLost
+		log.LostReason = domain.LogLostUploadFailed
 	} else {
 		// Only what describes the object is taken from the executor; the
 		// row's identity and key are the workflow's and the control plane's.

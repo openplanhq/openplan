@@ -310,6 +310,50 @@ func TestTemplatePlanWorkflowRecordsALostLogWhenTheUploadFails(t *testing.T) {
 	}
 }
 
+// An upload whose result does not describe its object (no content type, no
+// upload time) cannot make a complete row, which the control plane would
+// refuse and leave live for good, so it is recorded as lost.
+func TestTemplatePlanWorkflowRecordsLostWhenTheUploadResultIsIncomplete(t *testing.T) {
+	t.Parallel()
+
+	env := newTemplateRunWorkflowTestEnvironment(t)
+	var recorded []string
+	mockPrepareWorkspace(t, env)
+	mockFetchSource(t, env)
+	env.OnActivity(domain.RunTerraformActivityName, mock.Anything, mock.Anything).
+		Return(domain.RunTerraformActivityOutput{}, nil)
+	uploads := 0
+	env.OnActivity(domain.UploadLogActivityName, mock.Anything, mock.Anything).
+		Return(func(context.Context, domain.UploadLogActivityInput) (domain.TemplateRunLog, error) {
+			uploads++
+			switch uploads {
+			case 1:
+				return domain.TemplateRunLog{SizeBytes: 3, UploadedAt: time.Unix(1, 0)}, nil
+			case 2:
+				return domain.TemplateRunLog{SizeBytes: 3, ContentType: "text/plain; charset=utf-8"}, nil
+			}
+			return domain.TemplateRunLog{SizeBytes: 3, ContentType: "text/plain; charset=utf-8", UploadedAt: time.Unix(1, 0)}, nil
+		})
+	env.OnActivity(domain.RecordTemplateRunLogActivityName, mock.Anything, mock.Anything).
+		Return(func(_ context.Context, log domain.TemplateRunLog) error {
+			recorded = append(recorded, log.Phase+":"+string(log.State)+":"+string(log.LostReason))
+			return nil
+		})
+	env.OnActivity(domain.RecordTemplateRunStatusActivityName, mock.Anything, mock.Anything).Return(nil)
+
+	env.ExecuteWorkflow(TemplatePlanWorkflow, templateRunWorkflowInput(domain.OperationPlan))
+
+	assertWorkflowCompleted(t, env)
+	want := []string{
+		"plan-1:live:", "plan-1:lost:upload_failed",
+		"plan-2:live:", "plan-2:lost:upload_failed",
+		"plan-3:live:", "plan-3:complete:",
+	}
+	if !reflect.DeepEqual(recorded, want) {
+		t.Fatalf("recorded logs = %#v, want %#v", recorded, want)
+	}
+}
+
 // A command whose heartbeat stopped had no executor left to upload its log, so
 // the log is lost to the executor, not to the store. The run still fails with
 // the command's own error: the log's fate never replaces it.

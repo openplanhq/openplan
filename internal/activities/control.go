@@ -150,6 +150,8 @@ func validateLogState(log domain.TemplateRunLog) error {
 		if log.LostReason == "" {
 			return fmt.Errorf("lost log %s/%d has no reason", log.RunPhase, log.Seq)
 		}
+	case domain.TemplateRunLogLive:
+		// A live log has no upload yet and no reason to be lost.
 	}
 	return nil
 }

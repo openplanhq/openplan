@@ -76,6 +76,8 @@ func (e Entry) Values() map[string]any {
 	case KindPiece:
 		values[fieldOffset] = strconv.FormatInt(e.Offset, 10)
 		values[fieldData] = string(e.Data)
+	case KindTruncated:
+		// The kind is all a truncated entry says.
 	case KindEnd:
 		values[fieldState] = string(e.State)
 	}
@@ -123,6 +125,7 @@ func stringValue(values map[string]any, field string) string {
 type Stream interface {
 	XAdd(ctx context.Context, a *redis.XAddArgs) *redis.StringCmd
 	Expire(ctx context.Context, key string, ttl time.Duration) *redis.BoolCmd
+	ExpireNX(ctx context.Context, key string, ttl time.Duration) *redis.BoolCmd
 }
 
 // Reader is what the api's tailer needs; *redis.Client satisfies it.

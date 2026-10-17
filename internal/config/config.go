@@ -55,6 +55,11 @@ type APIConfig struct {
 // ExecutorConfig is the whole of the executor's configuration. It runs next to
 // tenant Terraform, so it carries no database URL and no key: anything added
 // here is readable by every template that runs.
+//
+// LiveLogURL is a credential all the same, and acceptable here because what
+// it grants is small: its Valkey user may only append to and expire runlog:*
+// streams, never read one or touch another key. And tofu's environment is
+// built from scratch, so the URL is not in a template's process to begin with.
 type ExecutorConfig struct {
 	TemporalAddress   string
 	TemporalNamespace string
