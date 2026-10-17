@@ -811,6 +811,14 @@ func (service *Service) StartTemplateRun(ctx context.Context, command StartTempl
 			TenantID:     string(run.TenantID),
 		})
 	}); err != nil {
+		// The store's index refuses the insert without saying which run won.
+		// Looking it up lets the caller be told which run to wait for; if it
+		// has already finished, the bare refusal still stands.
+		if errors.Is(err, ErrTemplateRunInFlight) {
+			if blocker := service.requireNoRunInFlight(ctx, command.TenantID, command.StackTemplateID); errors.Is(blocker, ErrTemplateRunInFlight) {
+				return domain.TemplateRun{}, fmt.Errorf("create template run: %w", blocker)
+			}
+		}
 		return domain.TemplateRun{}, fmt.Errorf("create template run: %w", err)
 	}
 
@@ -1578,7 +1586,7 @@ func (service *Service) ApproveRun(ctx context.Context, command ApproveRunComman
 		return fmt.Errorf("get stack template: %w", err)
 	}
 	if stackTemplate.PendingPlanRunID != run.ID || stackTemplate.PlanState() != domain.PlanMatches {
-		return fmt.Errorf("%w: plan state is %q", ErrStackTemplatePlanStale, stackTemplate.PlanState())
+		return &PlanStaleError{RunNumber: run.RunNumber, PlanState: stackTemplate.PlanState()}
 	}
 	templateRevision, err := service.TemplateRevisionMetadata.GetTemplateRevision(ctx, command.TenantID, run.TemplateRevisionID)
 	if err != nil {
@@ -1634,7 +1642,7 @@ func (service *Service) requireNoRunInFlight(ctx context.Context, tenantID domai
 	}
 	for _, run := range runs {
 		if !run.Status.Terminal() {
-			return fmt.Errorf("%w: run #%d is %s", ErrTemplateRunInFlight, run.RunNumber, run.Status)
+			return &RunInFlightError{RunNumber: run.RunNumber, Status: run.Status}
 		}
 	}
 	return nil

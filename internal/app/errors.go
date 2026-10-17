@@ -1,5 +1,11 @@
 package app
 
+import (
+	"fmt"
+
+	"github.com/vishu42/openplan/internal/domain"
+)
+
 // Issue says what is wrong with one field. The API sends it to clients as a
 // stable code, so a value is never renamed or reused.
 type Issue string
@@ -73,6 +79,33 @@ func FieldErrors(err error) []*FieldError {
 	}
 	return found
 }
+
+// RunInFlightError names the unfinished run that blocks a change, so a
+// person can be told which run to wait for or discard. It wraps
+// ErrTemplateRunInFlight, which stays the cause to match on.
+type RunInFlightError struct {
+	RunNumber int
+	Status    domain.TemplateRunStatus
+}
+
+func (e *RunInFlightError) Error() string {
+	return fmt.Sprintf("%v: run #%d is %s", ErrTemplateRunInFlight, e.RunNumber, e.Status)
+}
+
+func (e *RunInFlightError) Unwrap() error { return ErrTemplateRunInFlight }
+
+// PlanStaleError names the run whose plan no longer describes the template's
+// desired state. It wraps ErrStackTemplatePlanStale.
+type PlanStaleError struct {
+	RunNumber int
+	PlanState domain.PlanState
+}
+
+func (e *PlanStaleError) Error() string {
+	return fmt.Sprintf("%v: run #%d, plan state is %q", ErrStackTemplatePlanStale, e.RunNumber, e.PlanState)
+}
+
+func (e *PlanStaleError) Unwrap() error { return ErrStackTemplatePlanStale }
 
 // Sentinels lists every exported error of this package. The API's test
 // checks that each has a problem type, so a new sentinel can't reach a client

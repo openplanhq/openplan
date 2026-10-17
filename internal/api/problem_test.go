@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/vishu42/openplan/internal/app"
+	"github.com/vishu42/openplan/internal/domain"
 )
 
 // An app sentinel with no row reaches a client as an unexplained 500, the bug
@@ -178,5 +179,39 @@ func TestFieldErrorWinsOverItsSentinelsRow(t *testing.T) {
 	})
 	if invalid.Status != http.StatusUnprocessableEntity || invalid.Errors[0].Issue != app.IssueDifferentTemplate {
 		t.Fatalf("mismatch case = %+v, want 422 different_template", invalid)
+	}
+}
+
+// The detail names the run in the way, as the spec's example does; the
+// error's own text never reaches the body.
+func TestRunInFlightDetailNamesTheRun(t *testing.T) {
+	t.Parallel()
+
+	for status, want := range map[domain.TemplateRunStatus]string{
+		domain.TemplateRunRunning:         "Run #4 is still running. Wait for it to finish or discard it.",
+		domain.TemplateRunWaitingApproval: "Run #4 has a plan waiting for approval. Approve or discard it first.",
+		domain.TemplateRunQueued:          "Run #4 is queued. Wait for it to finish or discard it.",
+		domain.TemplateRunApproved:        "Run #4 is applying. Wait for it to finish.",
+	} {
+		err := fmt.Errorf("update stack template config: %w", &app.RunInFlightError{RunNumber: 4, Status: status})
+		response, problem := renderAppError(t, err)
+		if response.Code != http.StatusConflict || problem.Type != problemTypeURI("run-in-flight") || problem.Detail != want {
+			t.Errorf("%s: status = %d, problem = %+v, want detail %q", status, response.Code, problem, want)
+		}
+	}
+
+	// The store's bare refusal has no run to name; the table's detail stands.
+	if _, problem := renderAppError(t, app.ErrTemplateRunInFlight); problem.Detail == "" || strings.Contains(problem.Detail, "#") {
+		t.Fatalf("bare detail = %q, want the generic sentence", problem.Detail)
+	}
+}
+
+func TestPlanStaleDetailNamesTheRun(t *testing.T) {
+	t.Parallel()
+
+	_, problem := renderAppError(t, fmt.Errorf("approve: %w", &app.PlanStaleError{RunNumber: 7, PlanState: domain.PlanStale}))
+	want := "Run #7's plan no longer matches the template's configuration or revision. Plan again, then apply."
+	if problem.Type != problemTypeURI("plan-stale") || problem.Detail != want {
+		t.Fatalf("problem = %+v, want plan-stale with detail %q", problem, want)
 	}
 }

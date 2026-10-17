@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/vishu42/openplan/internal/app"
+	"github.com/vishu42/openplan/internal/domain"
 )
 
 // Every error the API writes is an RFC 9457 problem document. Clients branch
@@ -74,6 +75,10 @@ type problemType struct {
 	// field is set on the duplicate types: the one body field the clash is
 	// about, reported as an errors entry so a form marks it like a 422.
 	field string
+	// occurrence, when set, words detail from data the error carries about
+	// this occurrence, such as which run is in the way. It reports false when
+	// the error carries none, and detail stands.
+	occurrence func(err error) (string, bool)
 }
 
 // problemTypes maps every app sentinel to its problem. Rows are tried in
@@ -86,13 +91,15 @@ var problemTypes = []problemType{
 
 	{
 		sentinel: app.ErrTemplateRunInFlight, status: http.StatusConflict, slug: "run-in-flight",
-		title:  "Another run is in progress",
-		detail: "Another run on this template is still in progress. Wait for it to finish or discard it.",
+		title:      "Another run is in progress",
+		detail:     "Another run on this template is still in progress. Wait for it to finish or discard it.",
+		occurrence: runInFlightDetail,
 	},
 	{
 		sentinel: app.ErrStackTemplatePlanStale, status: http.StatusConflict, slug: "plan-stale",
-		title:  "The plan is out of date",
-		detail: "The template changed after this plan was made. Plan again, then apply.",
+		title:      "The plan is out of date",
+		detail:     "The template changed after this plan was made. Plan again, then apply.",
+		occurrence: planStaleDetail,
 	},
 	{
 		sentinel: app.ErrRunNotApprovable, status: http.StatusConflict, slug: "run-not-approvable",
@@ -180,7 +187,7 @@ func writeAppError(response http.ResponseWriter, err error) {
 	}
 	for _, row := range problemTypes {
 		if errors.Is(err, row.sentinel) {
-			writeProblem(response, row.problem())
+			writeProblem(response, row.problem(err))
 			return
 		}
 	}
@@ -195,17 +202,54 @@ func writeAppError(response http.ResponseWriter, err error) {
 		"Something went wrong on the server. Quote the request ID when you report it."))
 }
 
-func (row problemType) problem() problemDocument {
-	if row.slug == "" {
-		return blankProblem(row.status, row.detail)
+func (row problemType) problem(err error) problemDocument {
+	detail := row.detail
+	if row.occurrence != nil {
+		if said, ok := row.occurrence(err); ok {
+			detail = said
+		}
 	}
-	problem := problemDocument{Type: problemTypeURI(row.slug), Title: row.title, Status: row.status, Detail: row.detail}
+	if row.slug == "" {
+		return blankProblem(row.status, detail)
+	}
+	problem := problemDocument{Type: problemTypeURI(row.slug), Title: row.title, Status: row.status, Detail: detail}
 	if row.field != "" {
 		problem.Errors = []problemFieldError{{
 			Pointer: jsonPointer([]string{row.field}), Issue: app.IssueDuplicate, Detail: row.detail,
 		}}
 	}
 	return problem
+}
+
+// runInFlightDetail names the run in the way and what to do about it, from
+// what the app knows about it; the spec's own example is "Run #4 is still
+// planning. Wait for it to finish or discard it."
+func runInFlightDetail(err error) (string, bool) {
+	inFlight, ok := errors.AsType[*app.RunInFlightError](err)
+	if !ok {
+		return "", false
+	}
+	run := fmt.Sprintf("Run #%d", inFlight.RunNumber)
+	switch inFlight.Status {
+	case domain.TemplateRunQueued:
+		return run + " is queued. Wait for it to finish or discard it.", true
+	case domain.TemplateRunRunning:
+		return run + " is still running. Wait for it to finish or discard it.", true
+	case domain.TemplateRunWaitingApproval:
+		return run + " has a plan waiting for approval. Approve or discard it first.", true
+	case domain.TemplateRunApproved:
+		return run + " is applying. Wait for it to finish.", true
+	default:
+		return run + " hasn't finished. Wait for it to finish or discard it.", true
+	}
+}
+
+func planStaleDetail(err error) (string, bool) {
+	stale, ok := errors.AsType[*app.PlanStaleError](err)
+	if !ok {
+		return "", false
+	}
+	return fmt.Sprintf("Run #%d's plan no longer matches the template's configuration or revision. Plan again, then apply.", stale.RunNumber), true
 }
 
 // validationProblem is the 422 for content that parses but breaks a rule.
