@@ -10,16 +10,16 @@ import (
 // meResponse is the identity envelope returned by GET /v1/me.
 type meResponse struct {
 	Sub                string             `json:"sub"`
-	DisplayName        string             `json:"displayName"`
+	DisplayName        string             `json:"display_name"`
 	Email              string             `json:"email,omitempty"`
-	GlobalCapabilities globalCapabilities `json:"globalCapabilities"`
-	TenantID           string             `json:"tenantID"`
+	GlobalCapabilities globalCapabilities `json:"global_capabilities"`
+	TenantID           string             `json:"tenant_id"`
 	// SessionExpiresAt is when this session ends: the earlier of its idle and
 	// absolute bounds, both of which openplan owns. It lets the web client
 	// re-authenticate at a quiet moment instead of being interrupted by a 401.
 	// It is not a control: the API rejects an expired session regardless of
 	// what the browser believes.
-	SessionExpiresAt string `json:"sessionExpiresAt,omitempty"`
+	SessionExpiresAt string `json:"session_expires_at,omitempty"`
 }
 
 // globalCapabilities encodes coarse-grained permissions answered by OpenFGA.
@@ -32,11 +32,11 @@ type meResponse struct {
 // stackCapabilitiesResponse does. Fields name actions, not roles: the client
 // gates on what the caller may do, never on who they are.
 type globalCapabilities struct {
-	CanCreateStack bool `json:"canCreateStack"`
+	CanCreateStack bool `json:"can_create_stack"`
 	// CanPublishTemplate gates registering a template, which is also what the
 	// template detail screen's Sync button posts — so the button is hidden
 	// rather than left to earn a 403.
-	CanPublishTemplate bool `json:"canPublishTemplate"`
+	CanPublishTemplate bool `json:"can_publish_template"`
 }
 
 // meFromPrincipal maps the authenticated principal and its resolved platform

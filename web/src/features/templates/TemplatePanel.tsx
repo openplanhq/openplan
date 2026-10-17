@@ -73,7 +73,7 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
                   {description}
                 </p>
               ) : (
-                <RequireCapability capability="canPublishTemplate">
+                <RequireCapability capability="can_publish_template">
                   <p className="max-w-170 text-meta text-muted-foreground" data-testid="template-no-description">
                     No description. Add a <span className="font-mono text-code-foreground">template.yaml</span> beside the module with a name, a
                     description and tags.
@@ -93,7 +93,7 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
             {/* Hidden rather than disabled without the capability: the POST
                 would be refused, so there is nothing anyone could do to make
                 it work. Keyed on the template, so a sync stays with it. */}
-            <RequireCapability capability="canPublishTemplate">
+            <RequireCapability capability="can_publish_template">
               <TemplateSync key={id} />
             </RequireCapability>
           </div>

@@ -58,7 +58,7 @@ function testQueryClient(): QueryClient {
 // case change.
 function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
   return {
-    me: { sub: "user_1", tenantID: "tenant_123", displayName: "Test User", globalCapabilities: { canCreateStack: false, canPublishTemplate: false } },
+    me: { sub: "user_1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_publish_template: false } },
     status: "authenticated",
     login: () => {},
     logout: () => {},
@@ -107,7 +107,7 @@ function stackView(templates: StackTemplate[]) {
       default_credential_ids: [],
       created_by: "user_123",
       created_at: "2026-07-19T00:00:00Z",
-      effectiveCapabilities: { canView: true, canOperate: true, canApprove: true, canManageAccess: true }
+      effective_capabilities: { can_view: true, can_operate: true, can_approve: true, can_manage_access: true }
     },
     templates
   };

@@ -939,7 +939,7 @@ type stackResponse struct {
 	DefaultCredentialIDs  []string                  `json:"default_credential_ids"`
 	CreatedBy             string                    `json:"created_by"`
 	CreatedAt             string                    `json:"created_at"`
-	EffectiveCapabilities stackCapabilitiesResponse `json:"effectiveCapabilities"`
+	EffectiveCapabilities stackCapabilitiesResponse `json:"effective_capabilities"`
 }
 
 // stackListItemResponse is a stack as the stacks index lists it: the stack,
@@ -998,10 +998,10 @@ func newAttentionItemResponse(item app.AttentionItem) attentionItemResponse {
 }
 
 type stackCapabilitiesResponse struct {
-	CanView         bool `json:"canView"`
-	CanOperate      bool `json:"canOperate"`
-	CanApprove      bool `json:"canApprove"`
-	CanManageAccess bool `json:"canManageAccess"`
+	CanView         bool `json:"can_view"`
+	CanOperate      bool `json:"can_operate"`
+	CanApprove      bool `json:"can_approve"`
+	CanManageAccess bool `json:"can_manage_access"`
 }
 
 type stackTemplateResponse struct {

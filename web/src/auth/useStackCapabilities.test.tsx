@@ -31,7 +31,7 @@ function stackView(overrides: Partial<StackView["stack"]> = {}): StackView {
       default_credential_ids: [],
       created_by: "user_123",
       created_at: "2026-07-19T00:00:00Z",
-      effectiveCapabilities: { canView: true, canOperate: false, canApprove: false, canManageAccess: false },
+      effective_capabilities: { can_view: true, can_operate: false, can_approve: false, can_manage_access: false },
       ...overrides
     },
     templates: []
@@ -49,14 +49,14 @@ describe("useStackCapabilities", () => {
     expect(result.current).toBeUndefined();
   });
 
-  it("returns the cached effectiveCapabilities once the stack query resolves, without a second fetch", async () => {
+  it("returns the cached effective_capabilities once the stack query resolves, without a second fetch", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify(stackView()), { status: 200, headers: { "content-type": "application/json" } })
     );
     const { result } = renderHook(() => useStackCapabilities("stack_1"), { wrapper: wrapper(testQueryClient()) });
 
     await waitFor(() =>
-      expect(result.current).toEqual({ canView: true, canOperate: false, canApprove: false, canManageAccess: false })
+      expect(result.current).toEqual({ can_view: true, can_operate: false, can_approve: false, can_manage_access: false })
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -64,11 +64,11 @@ describe("useStackCapabilities", () => {
   it("reads an already-cached stack query without triggering a fetch", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch");
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView({ canView: true } as never));
+    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView({ can_view: true } as never));
 
     const { result } = renderHook(() => useStackCapabilities("stack_1"), { wrapper: wrapper(queryClient) });
 
-    expect(result.current).toEqual({ canView: true, canOperate: false, canApprove: false, canManageAccess: false });
+    expect(result.current).toEqual({ can_view: true, can_operate: false, can_approve: false, can_manage_access: false });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

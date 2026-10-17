@@ -66,7 +66,7 @@ export default function StackTemplateList({
             ))}
           </ul>
         )}
-        <RequireCapability capability="canOperate" stackId={stackId}>
+        <RequireCapability capability="can_operate" stackId={stackId}>
           <Link
             to={`/stacks/${stackId}/templates/new`}
             aria-current={adding ? "true" : undefined}

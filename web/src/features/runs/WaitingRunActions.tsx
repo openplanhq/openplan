@@ -35,13 +35,13 @@ export default function WaitingRunActions({ run, stackId, approveBusy, discardBu
 
   return (
     <>
-      <RequireCapability capability="canOperate" stackId={stackId}>
+      <RequireCapability capability="can_operate" stackId={stackId}>
         <button type="button" className={cn(buttonClass("outline"), "pointer-coarse:h-11")} disabled={discardBusy} onClick={onDiscard}>
           {discardBusy && <Loader2 data-icon="inline-start" aria-hidden="true" className="animate-spin" />}
           Discard
         </button>
       </RequireCapability>
-      <RequireCapability capability="canApprove" stackId={stackId}>
+      <RequireCapability capability="can_approve" stackId={stackId}>
         {run.operation === "destroy" ? (
           <AlertDialog>
             <AlertDialogTrigger
