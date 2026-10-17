@@ -18,6 +18,8 @@
 # values before the first run: `openssl rand -hex 32`, and keep them, because
 # losing the credential key makes every stored Terraform credential unreadable.
 # With OPENPLAN_ENVIRONMENT=production the api refuses to start on these.
+# Valkey's two passwords are throwaways too; set VALKEY_API_PASSWORD and
+# VALKEY_EXECUTOR_PASSWORD in the environment to replace them.
 #
 # Written against v0.2.0. `latest` moves as releases land, so pin the tag to keep
 # a stack reproducible.
@@ -112,6 +114,56 @@ services:
       retries: 12
       start_period: 20s
 
+  # Carries a running command's output from the executor to the api.
+  # Required: neither starts without it. Memory only, because nothing stored is
+  # rebuilt from it; noeviction, because an evicted stream would look like a
+  # log that never ends.
+  #
+  # Each process signs in as its own user, defined here rather than in an ACL
+  # file so this file needs nothing beside it and the passwords come from the
+  # same variables as the URLs below. The executor's user can only append; the
+  # default user is off. A password must not contain spaces: it is one word of
+  # a rule.
+  valkey:
+    image: valkey/valkey:8.1.10-alpine
+    command:
+      - valkey-server
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - noeviction
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --user
+      - default
+      - "off"
+      - --user
+      - api
+      - "on"
+      - ">${VALKEY_API_PASSWORD:-api-local-only}"
+      - "~runlog:*"
+      - +@connection
+      - +xread
+      - +xrange
+      - +xrevrange
+      - +xadd
+      - +expire
+      - --user
+      - executor
+      - "on"
+      - ">${VALKEY_EXECUTOR_PASSWORD:-executor-local-only}"
+      - "~runlog:*"
+      - +@connection
+      - +xadd
+      - +expire
+    healthcheck:
+      test: ["CMD", "valkey-cli", "--user", "api", "--pass", "${VALKEY_API_PASSWORD:-api-local-only}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   api:
     image: ghcr.io/openplanhq/openplan-api:v0.2.0
     pull_policy: missing
@@ -124,9 +176,12 @@ services:
       # issuer is a boot failure.
       dex:
         condition: service_healthy
+      valkey:
+        condition: service_healthy
     environment:
       HTTP_ADDRESS: ":8081"
       DATABASE_URL: postgres://openplan:openplan@postgres:5432/openplan?sslmode=disable
+      VALKEY_URL: redis://api:${VALKEY_API_PASSWORD:-api-local-only}@valkey:6379/0
       TEMPORAL_ADDRESS: temporal:7233
       OPENPLAN_ENVIRONMENT: development
       OPENPLAN_TENANT_ID: tenant_123
@@ -170,8 +225,13 @@ services:
     depends_on:
       temporal:
         condition: service_healthy
+      valkey:
+        condition: service_healthy
     environment:
       TEMPORAL_ADDRESS: temporal:7233
+      # Its one route outside Temporal, for live output only, as a user that
+      # can only append. tofu's sandbox never sees this variable.
+      VALKEY_URL: redis://executor:${VALKEY_EXECUTOR_PASSWORD:-executor-local-only}@valkey:6379/0
       ARTIFACT_STORE_KIND: filesystem
       ARTIFACT_STORE_FILESYSTEM_ROOT: /var/lib/openplan/artifacts
       EXECUTOR_RUN_ROOT: /var/lib/openplan/runs
