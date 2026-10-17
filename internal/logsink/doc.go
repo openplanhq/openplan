@@ -1,2 +1,2 @@
-// Package logsink contains log redaction, live publication, and persistence helpers.
+// Package logsink opens the spool file each command's output is written to.
 package logsink

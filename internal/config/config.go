@@ -145,6 +145,9 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 		if err := refusePublishedKey("CREDENTIAL_ENCRYPTION_KEY", credentialKey); err != nil {
 			return APIConfig{}, err
 		}
+		if err := refusePublishedValkeyPassword("VALKEY_URL", cfg.LiveLogURL); err != nil {
+			return APIConfig{}, err
+		}
 	}
 	cfg.CredentialEncryptionKey = credentialKey
 

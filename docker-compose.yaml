@@ -88,10 +88,15 @@ services:
   # XRANGE to catch up, XREVRANGE for a stream's last entry) and appends the end
   # entry. The default user is off, so nothing connects without a password.
   #
+  # Beyond signing in, each user may only PING (startup checks the server
+  # with it), not the rest of @connection: CLIENT KILL, SELECT and the like
+  # are no business of either process.
+  #
   # The users are defined here, one --user per rule with each word its own
   # argument, rather than in an ACL file, so their passwords come from the same
   # variables as the URLs below and cannot drift apart. The defaults are local
-  # throwaways. A password must not contain spaces: it is one word of a rule.
+  # throwaways. A password must avoid spaces, being one word of a rule, and the
+  # URL-reserved characters @ / : % #, being part of a URL.
   valkey:
     image: valkey/valkey:8-alpine
     command:
@@ -112,7 +117,7 @@ services:
       - "on"
       - ">${VALKEY_API_PASSWORD:-api-local-only}"
       - "~runlog:*"
-      - +@connection
+      - +ping
       - +xread
       - +xrange
       - +xrevrange
@@ -123,15 +128,18 @@ services:
       - "on"
       - ">${VALKEY_EXECUTOR_PASSWORD:-executor-local-only}"
       - "~runlog:*"
-      - +@connection
+      - +ping
       - +xadd
       - +expire
     # For an api or executor run on the host. 56379, not 6379, so a Valkey or
     # Redis already on the host keeps its port, as postgres does with 55432.
+    # Loopback only: the passwords are throwaways.
     ports:
-      - "56379:6379"
+      - "127.0.0.1:56379:6379"
     healthcheck:
-      test: ["CMD", "valkey-cli", "--user", "api", "--pass", "${VALKEY_API_PASSWORD:-api-local-only}", "ping"]
+      # --no-auth-warning keeps valkey-cli's warning about a password on the
+      # command line out of every health check's output.
+      test: ["CMD", "valkey-cli", "--no-auth-warning", "--user", "api", "--pass", "${VALKEY_API_PASSWORD:-api-local-only}", "ping"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -278,9 +286,9 @@ services:
         condition: service_healthy
     environment:
       TEMPORAL_ADDRESS: temporal:7233
-      # Its one route outside Temporal, for live output only. The user can
-      # append to log streams and nothing else, and tofu's sandbox never sees
-      # this variable.
+      # Its one new route outside Temporal, for live output only. The user can
+      # append to log streams and set their expiry, and cannot read one; tofu's
+      # sandbox never sees this variable.
       VALKEY_URL: redis://executor:${VALKEY_EXECUTOR_PASSWORD:-executor-local-only}@valkey:6379/0
       ARTIFACT_STORE_KIND: filesystem
       ARTIFACT_STORE_FILESYSTEM_ROOT: /var/lib/openplan/artifacts
