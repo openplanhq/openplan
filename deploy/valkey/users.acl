@@ -1,0 +1,3 @@
+user default off
+user api on >api-local-only ~runlog:* +@connection +xread +xrange +xrevrange +xadd +expire
+user executor on >executor-local-only ~runlog:* +@connection +xadd +expire
