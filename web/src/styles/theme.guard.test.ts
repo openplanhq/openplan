@@ -76,6 +76,9 @@ const TEXT_PAIRS: [string, string][] = [
   ["foreground", "primary-soft"],
   ["foreground", "primary-tint"],
   ["muted-foreground", "primary-soft"],
+  // A list row's template count on hover; an empty count stays subtle there.
+  ["muted-foreground", "primary-tint"],
+  ["subtle-foreground", "primary-tint"],
   ["warning", "warning-soft"],
   ["destructive", "destructive-soft"]
 ];

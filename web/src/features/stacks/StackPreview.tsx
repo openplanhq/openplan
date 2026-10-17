@@ -45,7 +45,11 @@ export default function StackPreview({
       <div className="flex flex-col gap-4 border-b border-divider px-7 py-6 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 flex-col gap-2">
           <h2 className="font-heading text-panel-title font-semibold tracking-title wrap-anywhere">{stack.name}</h2>
-          <StackMeta stack={stack} />
+          {/* A derived slug only repeats the name; with no tags either, the
+              line goes. */}
+          {(!stack.slug_is_derived || Object.keys(stack.tags).length > 0) && (
+            <StackMeta stack={stack} hideSlug={stack.slug_is_derived} />
+          )}
         </div>
         <Link
           to={base}

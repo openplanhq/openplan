@@ -1760,6 +1760,12 @@ components:
         tenant_id: { type: string }
         name: { type: string }
         slug: { type: string }
+        slug_is_derived:
+          type: boolean
+          description: |
+            True when the slug is the one the name gives (lower case, each run
+            of other characters one `-`), as it is for a stack created without
+            a slug. Screens show the slug only when this is false.
         status: { $ref: "#/components/schemas/StackStatus" }
         tags:
           type: object
@@ -1772,8 +1778,9 @@ components:
         effective_capabilities:
           $ref: "#/components/schemas/StackCapabilities"
       required:
-        [id, tenant_id, name, slug, status, tags, default_credential_ids,
-         created_by, created_at, effective_capabilities]
+        [id, tenant_id, name, slug, slug_is_derived, status, tags,
+         default_credential_ids, created_by, created_at,
+         effective_capabilities]
 
     StackListItem:
       description: A stack as the stacks index lists it.

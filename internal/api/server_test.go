@@ -776,6 +776,10 @@ func TestCreateStackCallsService(t *testing.T) {
 	if body.Tags["env"] != "prod" {
 		t.Fatalf("response tags = %#v", body.Tags)
 	}
+	// No slug in the request, so the response says the slug came from the name.
+	if !body.SlugIsDerived {
+		t.Fatalf("response slug_is_derived = false, want true")
+	}
 }
 
 func TestWriteAppErrorMapsAuthorizationDependencyFailure(t *testing.T) {

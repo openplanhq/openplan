@@ -40,6 +40,7 @@ function stackView(templates: StackTemplate[]): StackView {
       tenant_id: "tenant_123",
       name: "Payments",
       slug: "payments",
+      slug_is_derived: true,
       tags: {},
       default_credential_ids: [],
       created_by: "user_123",

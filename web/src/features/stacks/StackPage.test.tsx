@@ -53,6 +53,7 @@ function view(templates: StackTemplate[], capabilities: StackCapabilities = allA
       tenant_id: TENANT,
       name: "Payments",
       slug: "payments",
+      slug_is_derived: true,
       tags: { env: "production" },
       default_credential_ids: [],
       created_by: "user_1",

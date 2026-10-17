@@ -14,7 +14,7 @@ import {
   attentionByStackTemplate,
   attentionSummary,
   failedChipLabel,
-  templateCountLabel,
+  templateCountWord,
   waitingChipLabel
 } from "./attention";
 import type { StackAttention } from "./attention";
@@ -214,17 +214,28 @@ function StackRow({ stack, selected, attention }: { stack: StackListItem; select
       className={listItemClass(selected)}
       data-testid={`stack-row-${stack.id}`}
     >
-      <span className="flex min-w-0 flex-col gap-0.5">
-        <span className={cn("truncate text-sm leading-label font-medium", selected && "text-primary-strong")} title={stack.name}>
-          {stack.name}
-        </span>
-        <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="truncate font-mono">{stack.slug}</span>
-          <span aria-hidden="true" className="text-separator">
-            ·
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex min-w-0 items-baseline gap-2">
+          {/* The name never shrinks: it is only capped, short of the line
+              when a slug follows, so the slug is what gets cut. */}
+          <span
+            className={cn(
+              "shrink-0 truncate text-sm leading-label font-medium",
+              stack.slug_is_derived ? "max-w-full" : "max-w-beside-slug",
+              selected && "text-primary-strong"
+            )}
+            title={stack.name}
+          >
+            {stack.name}
           </span>
-          <span className="shrink-0">{templateCountLabel(stack.template_count)}</span>
+          {/* A slug the name already gives would only repeat it. */}
+          {!stack.slug_is_derived && (
+            <span className="min-w-0 truncate font-mono text-xs text-muted-foreground" title={stack.slug}>
+              {stack.slug}
+            </span>
+          )}
         </span>
+        <TemplateCount templates={stack.template_count} selected={selected} />
       </span>
       {attention && (
         <span className="flex shrink-0 flex-col items-end gap-1">
@@ -241,5 +252,27 @@ function StackRow({ stack, selected, attention }: { stack: StackListItem; select
         </span>
       )}
     </Link>
+  );
+}
+
+// A list row's second line: how many templates the stack holds, the number set
+// apart. An empty stack reads quieter, in subtle grey, except on the selected
+// row, where subtle grey on primary-soft would fall under 4.5:1.
+function TemplateCount({ templates, selected }: { templates: number; selected: boolean }) {
+  const empty = templates === 0;
+  return (
+    <span
+      className={cn("flex items-center gap-1.25 text-xs", empty && !selected ? "text-subtle-foreground" : "text-muted-foreground")}
+      data-testid="stack-row-templates"
+    >
+      <Layers aria-hidden="true" className="size-3 shrink-0" strokeWidth={2.25} />
+      {empty ? (
+        "No templates"
+      ) : (
+        <span>
+          <span className="font-medium text-foreground">{templates}</span> {templateCountWord(templates)}
+        </span>
+      )}
+    </span>
   );
 }

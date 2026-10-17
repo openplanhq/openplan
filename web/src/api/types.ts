@@ -153,6 +153,9 @@ export interface Stack {
   tenant_id: string;
   name: string;
   slug: string;
+  // True when the slug is the one the name gives, as for a stack created
+  // without one; screens show the slug only when someone chose it.
+  slug_is_derived: boolean;
   tags: Record<string, string>;
   default_credential_ids: string[];
   created_by: string;

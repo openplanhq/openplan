@@ -18,6 +18,7 @@ function stack(overrides: Partial<StackListItem> = {}): StackListItem {
     tenant_id: TENANT,
     name: "Payments",
     slug: "payments",
+    slug_is_derived: true,
     tags: {},
     default_credential_ids: [],
     created_by: "user_123",
@@ -157,7 +158,7 @@ describe("StacksListScreen", () => {
     expect(screen.getByTestId("page-count").textContent).toBe("2");
   });
 
-  it("lists each stack with its slug and template count, selecting it in place", () => {
+  it("lists each stack with its template count, selecting it in place", () => {
     const queryClient = testQueryClient();
     seed(queryClient, {
       stacks: [stack({ template_count: 4 }), stack({ id: "stack_2", name: "Billing", slug: "billing" })]
@@ -168,8 +169,40 @@ describe("StacksListScreen", () => {
     const list = within(screen.getByRole("list", { name: "Stacks" }));
     const rows = list.getAllByRole("link");
     expect(rows.map((row) => row.getAttribute("href"))).toEqual(["/stacks?stack=stack_1", "/stacks?stack=stack_2"]);
-    expect(rows[0].textContent).toContain("payments·4 templates");
-    expect(rows[1].textContent).toContain("billing·no templates");
+    const [first, second] = list.getAllByTestId("stack-row-templates");
+    expect(first.textContent).toBe("4 templates");
+    // The number stands apart from the word, in the foreground colour.
+    expect(within(first).getByText("4").className).toContain("text-foreground");
+    expect(second.textContent).toBe("No templates");
+  });
+
+  it("shows a slug only when someone chose it", () => {
+    const queryClient = testQueryClient();
+    seed(queryClient, {
+      stacks: [stack(), stack({ id: "stack_2", name: "Shared networking", slug: "net-core", slug_is_derived: false })]
+    });
+
+    renderScreen(queryClient);
+
+    // A slug the name gives would only repeat it.
+    expect(screen.getByTestId("stack-row-stack_1").textContent).not.toContain("payments");
+    const chosen = within(screen.getByTestId("stack-row-stack_2"));
+    expect(chosen.getByText("net-core").getAttribute("title")).toBe("net-core");
+    // With a slug after it the name stops short of the line, so the slug is cut first.
+    expect(chosen.getByText("Shared networking").className).toContain("max-w-beside-slug");
+    expect(within(screen.getByTestId("stack-row-stack_1")).getByText("Payments").className).toContain("max-w-full");
+  });
+
+  it("draws an empty count in subtle grey, but muted on the selected row", () => {
+    const queryClient = testQueryClient();
+    seed(queryClient, { stacks: [stack(), stack({ id: "stack_2", name: "Billing", slug: "billing" })] });
+
+    renderScreen(queryClient);
+
+    const [selected, other] = screen.getAllByTestId("stack-row-templates");
+    // Subtle grey on the selected row's fill would fall under 4.5:1.
+    expect(selected.className).toContain("text-muted-foreground");
+    expect(other.className).toContain("text-subtle-foreground");
   });
 
   it("selects the first stack when the URL names none", () => {
@@ -193,6 +226,32 @@ describe("StacksListScreen", () => {
 
     expect(screen.getByTestId("stack-row-stack_2").getAttribute("aria-current")).toBe("true");
     expect(within(screen.getByTestId("stack-preview")).getByRole("heading", { level: 2, name: "Billing" })).toBeTruthy();
+  });
+
+  it("shows the preview's slug only when someone chose it, and its tags either way", () => {
+    const queryClient = testQueryClient();
+    seed(queryClient, {
+      stacks: [
+        stack(),
+        stack({ id: "stack_2", name: "Billing", slug: "billing", tags: { env: "prod" } }),
+        stack({ id: "stack_3", name: "Shared networking", slug: "net-core", slug_is_derived: false })
+      ]
+    });
+
+    const first = renderScreen(queryClient);
+    // Neither a chosen slug nor tags: the line under the name goes.
+    const header = screen.getByRole("heading", { level: 2, name: "Payments" }).parentElement!;
+    expect(header.children).toHaveLength(1);
+    first.unmount();
+
+    renderScreen(queryClient, { path: "/stacks?stack=stack_2" });
+    const billing = within(screen.getByTestId("stack-preview"));
+    expect(billing.getByText("env: prod")).toBeTruthy();
+    expect(billing.queryByText("billing")).toBeNull();
+    cleanup();
+
+    renderScreen(queryClient, { path: "/stacks?stack=stack_3" });
+    expect(within(screen.getByTestId("stack-preview")).getByText("net-core")).toBeTruthy();
   });
 
   it("falls back to the first stack when the URL names one that is not listed", () => {
