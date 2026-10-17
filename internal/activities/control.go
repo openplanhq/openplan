@@ -6,6 +6,7 @@ import (
 
 	"github.com/vishu42/openplan/internal/artifacts"
 	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/livelog"
 	"github.com/vishu42/openplan/internal/runseal"
 )
 
@@ -51,12 +52,15 @@ type LogMetadataRecorder interface {
 type ControlActivities struct {
 	store  ControlStore
 	tokens GitHubTokenSource
+	live   livelog.Stream
 }
 
 // NewControlActivities wires the control activities. tokens may be nil, in
-// which case sources are fetched unauthenticated.
-func NewControlActivities(store ControlStore, tokens GitHubTokenSource) *ControlActivities {
-	return &ControlActivities{store: store, tokens: tokens}
+// which case sources are fetched unauthenticated. live is where a finished
+// log's end entry goes; nil skips it, which only tests that don't watch the
+// stream should do.
+func NewControlActivities(store ControlStore, tokens GitHubTokenSource, live livelog.Stream) *ControlActivities {
+	return &ControlActivities{store: store, tokens: tokens, live: live}
 }
 
 // RecordTemplateRunStatus records one workflow status transition.
@@ -87,9 +91,10 @@ func (activities *ControlActivities) RecordTemplateRunEvent(ctx context.Context,
 	return nil
 }
 
-// RecordTemplateRunLog records the metadata for a log the executor has
-// already uploaded. The row is keyed by run, phase and number, so a retry
-// upserts.
+// RecordTemplateRunLog records a log's row in its current state. The row is
+// keyed by run, phase and number, so a retry, or the same log moving from live
+// to complete or lost, upserts. A complete or lost log then gets the end entry
+// that tells its live viewers to stop.
 //
 // The object key is derived here from the run and the name rather than taken
 // from the executor's report: the key is what the API later reads, and an
@@ -98,6 +103,9 @@ func (activities *ControlActivities) RecordTemplateRunEvent(ctx context.Context,
 func (activities *ControlActivities) RecordTemplateRunLog(ctx context.Context, log domain.TemplateRunLog) error {
 	if !log.Command.Valid() {
 		return fmt.Errorf("log has unknown command %q", log.Command)
+	}
+	if err := validateLogState(log); err != nil {
+		return err
 	}
 	// The name is derived from the phase and number, as the database derives
 	// its own copy, so the key below is the one the row will be read by.
@@ -113,6 +121,35 @@ func (activities *ControlActivities) RecordTemplateRunLog(ctx context.Context, l
 	log.ObjectKey = key
 	if err := activities.store.RecordTemplateRunLog(ctx, log); err != nil {
 		return fmt.Errorf("record template run log metadata: %w", err)
+	}
+	// Only after the row: a viewer told the log ended reads the row next, so
+	// the row must already say so. A live log's stream is still the
+	// executor's to write.
+	if log.State == domain.TemplateRunLogLive || activities.live == nil {
+		return nil
+	}
+	if err := livelog.AppendEnd(ctx, activities.live, livelog.StreamKey(log.RunID, name), log.State); err != nil {
+		return fmt.Errorf("end live log: %w", err)
+	}
+	return nil
+}
+
+// validateLogState refuses a row that would contradict its own state. The
+// store persists what it is given, so a complete log with no upload would
+// read back as one anyone can open, at an empty content type from year 1.
+func validateLogState(log domain.TemplateRunLog) error {
+	if !log.State.Valid() {
+		return fmt.Errorf("log has unknown state %q", log.State)
+	}
+	switch log.State {
+	case domain.TemplateRunLogComplete:
+		if log.UploadedAt.IsZero() || log.ContentType == "" {
+			return fmt.Errorf("complete log %s/%d has no upload time or content type", log.RunPhase, log.Seq)
+		}
+	case domain.TemplateRunLogLost:
+		if log.LostReason == "" {
+			return fmt.Errorf("lost log %s/%d has no reason", log.RunPhase, log.Seq)
+		}
 	}
 	return nil
 }

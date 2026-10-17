@@ -51,7 +51,7 @@ func TestSavedPlanTravelsFromThePlanExecutorToTheApplyExecutor(t *testing.T) {
 
 	ctx := context.Background()
 	plans := newMemoryPlanStore()
-	control := NewControlActivities(&controlStoreStub{planKey: mustPlanKey(t)}, nil)
+	control := NewControlActivities(&controlStoreStub{planKey: mustPlanKey(t)}, nil, nil)
 
 	// Plan phase, on the first executor.
 	planExecutor, _ := newTestTemplateRunActivities(t, t.TempDir(), plans)
@@ -179,7 +179,7 @@ func TestCleanupWorkspaceRemovesTheRunWorkspaceAndOptionallyThePlan(t *testing.T
 func TestSealPlanKeyOnlyCreatesOnThePlanPhase(t *testing.T) {
 	t.Parallel()
 
-	control := NewControlActivities(&controlStoreStub{}, nil)
+	control := NewControlActivities(&controlStoreStub{}, nil, nil)
 	keys := runseal.NewKeyRing()
 	publicKey, err := keys.Generate("tenant_123/run_123")
 	if err != nil {
@@ -195,7 +195,7 @@ func TestFinishPlanReturnsTheStoresOutcome(t *testing.T) {
 	t.Parallel()
 
 	store := &controlStoreStub{outcome: domain.PlanOutcomeWaiting}
-	control := NewControlActivities(store, nil)
+	control := NewControlActivities(store, nil, nil)
 	input := domain.FinishPlanActivityInput{TenantID: "tenant_123", RunID: "run_123", Operation: domain.OperationApply, HasChanges: true, Summary: domain.PlanSummary{Add: 1}}
 
 	outcome, err := control.FinishPlan(context.Background(), input)
