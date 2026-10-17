@@ -1,4 +1,4 @@
-import { ArrowRight, KeyRound, Layers, Loader2, Users } from "lucide-react";
+import { ArrowRight, KeyRound, Loader2, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useStackQuery } from "../../api/queries";
 import type { AttentionItem, StackListItem } from "../../api/types";
@@ -14,8 +14,6 @@ import RequestIdNote from "../../shared/RequestIdNote";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
-const sectionLinkClass = cn(buttonClass("section"), "pointer-coarse:h-11");
-
 // openplan UI's ResourceRow as table cells: 8px of padding either side of a
 // column boundary makes the 16px between columns, and 16px at the row's ends.
 // Each column's width is its content's (status 190, time 170, action 100)
@@ -24,8 +22,13 @@ const sectionLinkClass = cn(buttonClass("section"), "pointer-coarse:h-11");
 // status and the action 1px below the name and the time.
 const cellClass = "px-2 py-2 text-meta first:pl-4 last:pr-4";
 
+// The header's buttons, as on the stack page.
+const headerLinkClass = cn(buttonClass("outline", "lg"), "pointer-coarse:h-11");
+
 // openplan UI's PreviewPanel: the right side of the stacks index, the
 // selected stack at a glance, with links into its sections and its own page.
+// The header's buttons are the stack page header's, Environment and Access,
+// then Open stack, so the preview and the page they lead to agree.
 // The header comes from the list row, so it shows at once; the templates wait
 // for the stack's own read.
 export default function StackPreview({
@@ -51,32 +54,24 @@ export default function StackPreview({
             <StackMeta stack={stack} hideSlug={stack.slug_is_derived} />
           )}
         </div>
-        <Link
-          to={base}
-          className={cn(buttonClass("outline", "lg"), "shrink-0 pointer-coarse:h-11")}
-          data-testid="stack-preview-open"
-        >
-          Open stack
-          <ArrowRight data-icon="inline-end" aria-hidden="true" />
-        </Link>
+        {/* The buttons hold their row: a long stack name wraps instead. */}
+        <div className="flex shrink-0 flex-wrap items-center gap-2" data-testid="stack-preview-actions">
+          <RequireCapability capability="can_manage_access" stackId={stack.id}>
+            <Link to={`${base}/environment`} className={headerLinkClass}>
+              <KeyRound data-icon="inline-start" aria-hidden="true" />
+              Environment
+            </Link>
+            <Link to={`${base}/access`} className={headerLinkClass}>
+              <Users data-icon="inline-start" aria-hidden="true" />
+              Access
+            </Link>
+          </RequireCapability>
+          <Link to={base} className={headerLinkClass} data-testid="stack-preview-open">
+            Open stack
+            <ArrowRight data-icon="inline-end" aria-hidden="true" />
+          </Link>
+        </div>
       </div>
-
-      <nav aria-label="Stack sections" className="flex flex-wrap items-center gap-2 px-7 pt-4">
-        <Link to={base} className={sectionLinkClass}>
-          <Layers data-icon="inline-start" aria-hidden="true" className="size-3.5" />
-          Templates
-        </Link>
-        <RequireCapability capability="can_manage_access" stackId={stack.id}>
-          <Link to={`${base}/environment`} className={sectionLinkClass}>
-            <KeyRound data-icon="inline-start" aria-hidden="true" className="size-3.5" />
-            Environment
-          </Link>
-          <Link to={`${base}/access`} className={sectionLinkClass}>
-            <Users data-icon="inline-start" aria-hidden="true" className="size-3.5" />
-            Access
-          </Link>
-        </RequireCapability>
-      </nav>
 
       <section aria-labelledby="stack-preview-templates" className="flex flex-col gap-3 px-7 pt-5 pb-7">
         <div className="flex items-center justify-between gap-3">

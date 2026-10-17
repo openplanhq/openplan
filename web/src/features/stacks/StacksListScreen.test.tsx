@@ -421,18 +421,27 @@ describe("StacksListScreen", () => {
     expect(screen.getByTestId("stack-preview-empty").textContent).toContain("No templates in this stack yet");
   });
 
-  it("links the preview to Environment and Access only for someone who manages access", () => {
+  it("puts Environment and Access in the preview's header only for someone who manages access", () => {
     const queryClient = testQueryClient();
     const viewer = stack();
     const manager = stack({ id: "stack_2", name: "Billing", slug: "billing", effective_capabilities: { can_view: true, can_operate: true, can_approve: true, can_manage_access: true } });
     seed(queryClient, { stacks: [viewer, manager], views: [{ stack: viewer, templates: [] }, { stack: manager, templates: [] }] });
 
     renderScreen(queryClient);
-    const sections = () => within(screen.getByRole("navigation", { name: "Stack sections" })).getAllByRole("link").map((link) => link.textContent);
-    expect(sections()).toEqual(["Templates"]);
+    const actions = () =>
+      within(screen.getByTestId("stack-preview-actions"))
+        .getAllByRole("link")
+        .map((link) => [link.textContent, link.getAttribute("href")]);
+    // No section nav: its Templates went where Open stack already goes.
+    expect(screen.queryByRole("navigation", { name: "Stack sections" })).toBeNull();
+    expect(actions()).toEqual([["Open stack", "/stacks/stack_1"]]);
 
     fireEvent.click(screen.getByTestId("stack-row-stack_2"));
-    expect(sections()).toEqual(["Templates", "Environment", "Access"]);
+    expect(actions()).toEqual([
+      ["Environment", "/stacks/stack_2/environment"],
+      ["Access", "/stacks/stack_2/access"],
+      ["Open stack", "/stacks/stack_2"]
+    ]);
   });
 
   it("says so, under a heading, when there are no stacks", () => {
