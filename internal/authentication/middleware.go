@@ -1,6 +1,7 @@
 package authentication
 
 import (
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -113,9 +114,16 @@ func authenticate(
 // writeUnauthorized answers in the API's one error envelope, the body
 // internal/api's writeError renders for the same code. It is spelled out here
 // because internal/api imports this package, not the other way round; a test
-// there keeps the two identical.
+// there keeps the two identical. The request id comes from the response
+// header internal/api sets before this middleware runs, and is left out when
+// nothing set one.
 func writeUnauthorized(response http.ResponseWriter) {
+	body, _ := json.Marshal(struct { //nolint:errchkjson // three strings always marshal
+		Error     string `json:"error"`
+		Message   string `json:"message"`
+		RequestID string `json:"request_id,omitempty"`
+	}{"unauthorized", "authentication required", response.Header().Get("X-Request-Id")})
 	response.Header().Set("Content-Type", "application/json")
 	response.WriteHeader(http.StatusUnauthorized)
-	_, _ = response.Write([]byte(`{"error":"unauthorized","message":"authentication required"}`))
+	_, _ = response.Write(body)
 }

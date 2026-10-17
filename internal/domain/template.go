@@ -122,8 +122,9 @@ type TemplateRegistration struct {
 	ResolvedCommitSHA  string                     `json:"resolved_commit_sha"`
 	RequestedBy        UserID                     `json:"requested_by"`
 	RequestedAt        time.Time                  `json:"requested_at"`
-	CompletedAt        time.Time                  `json:"completed_at"`
-	ErrorSummary       string                     `json:"error_summary"`
+	// CompletedAt is omitted from JSON until the registration ends.
+	CompletedAt  time.Time `json:"completed_at,omitzero"`
+	ErrorSummary string    `json:"error_summary"`
 }
 
 // TemplateVariable is inferred from Terraform root module variables.

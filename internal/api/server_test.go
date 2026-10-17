@@ -315,6 +315,9 @@ func TestStartTemplateRunCallsService(t *testing.T) {
 	if response.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusCreated, response.Body.String())
 	}
+	if got, want := response.Header().Get("Location"), "/v1/tenants/tenant_123/template-runs/run_123"; got != want {
+		t.Fatalf("Location = %q, want %q", got, want)
+	}
 	if deps.stackTemplates.gotTenantID != domain.TenantID("tenant_123") {
 		t.Fatalf("tenant id = %q", deps.stackTemplates.gotTenantID)
 	}
@@ -461,6 +464,69 @@ func TestStartTemplateRunMapsAnInFlightRunToConflictWithItsOwnCode(t *testing.T)
 	}
 }
 
+func TestAddTemplateToStackMapsDuplicateComponentKeyToConflictWithItsOwnCode(t *testing.T) {
+	t.Parallel()
+
+	deps := newAPITestDependencies(t)
+	deps.stacks.stack = domain.Stack{ID: domain.StackID("stack_123"), TenantID: domain.TenantID("tenant_123"), Slug: "acme-prod"}
+	deps.templates.template = domain.TemplateRevision{ID: domain.TemplateRevisionID("template_123"), TenantID: domain.TenantID("tenant_123"), Status: domain.TemplateRevisionActive}
+	deps.templates.variables = []domain.TemplateVariable{{Name: "region", Required: true}}
+	deps.stackTemplateID = domain.StackTemplateID("stack_template_a1b2c3d4")
+	// What the store returns when the stack already has a template under this
+	// component_key.
+	deps.stackTemplateInstaller.createErr = app.ErrDuplicateStackTemplateComponentKey
+	server := NewServer(deps.service(), configuredTenantID)
+	response := httptest.NewRecorder()
+	request := authenticatedRequest(
+		http.MethodPost,
+		"/v1/tenants/tenant_123/stacks/stack_123/templates",
+		strings.NewReader(`{"template_revision_id":"template_123","config":{"region":"us-east-1"}}`),
+	)
+
+	server.ServeHTTP(response, request)
+
+	if response.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusConflict, response.Body.String())
+	}
+	var body errorResponse
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	// Distinct from the generic "conflict" so the client can point at the
+	// component_key field instead of showing a generic failure.
+	if body.Error != "duplicate_component_key" {
+		t.Fatalf("error code = %q, want duplicate_component_key", body.Error)
+	}
+}
+
+func TestCreateCredentialWithoutEncryptionKeyReturnsServiceUnavailable(t *testing.T) {
+	t.Parallel()
+
+	// The test service wires no credential store or encryptor, which is how the
+	// API runs when no encryption key is configured.
+	deps := newAPITestDependencies(t)
+	server := NewServer(deps.service(), configuredTenantID)
+	response := httptest.NewRecorder()
+	request := authenticatedRequest(
+		http.MethodPost,
+		"/v1/tenants/tenant_123/stacks/stack_123/credentials",
+		strings.NewReader(`{"name":"AWS_ACCESS_KEY_ID","value":"secret"}`),
+	)
+
+	server.ServeHTTP(response, request)
+
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusServiceUnavailable, response.Body.String())
+	}
+	var body errorResponse
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.Error != "credential_encryption_unavailable" {
+		t.Fatalf("error code = %q, want credential_encryption_unavailable", body.Error)
+	}
+}
+
 func TestStackTemplateResponseCarriesDerivedStatesNotRawConfigs(t *testing.T) {
 	t.Parallel()
 
@@ -589,6 +655,10 @@ func TestRegisterTemplateCallsService(t *testing.T) {
 	if response.Code != http.StatusAccepted {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusAccepted, response.Body.String())
 	}
+	// The registration is read back at its own URL, not the one it was posted to.
+	if got, want := response.Header().Get("Location"), "/v1/tenants/tenant_123/template-registrations/template_registration_123"; got != want {
+		t.Fatalf("Location = %q, want %q", got, want)
+	}
 	if deps.registrations.created.TenantID != domain.TenantID("tenant_123") {
 		t.Fatalf("tenant id = %q", deps.registrations.created.TenantID)
 	}
@@ -675,6 +745,9 @@ func TestCreateStackCallsService(t *testing.T) {
 
 	if response.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusCreated, response.Body.String())
+	}
+	if got, want := response.Header().Get("Location"), "/v1/tenants/tenant_123/stacks/"+string(deps.createdStackID); got != want {
+		t.Fatalf("Location = %q, want %q", got, want)
 	}
 	if deps.stacks.created.TenantID != domain.TenantID("tenant_123") {
 		t.Fatalf("tenant id = %q, want tenant_123", deps.stacks.created.TenantID)
@@ -1002,7 +1075,10 @@ func TestAddTemplateToStackCallsService(t *testing.T) {
 
 	deps := newAPITestDependencies(t)
 	deps.stacks.stack = domain.Stack{ID: domain.StackID("stack_123"), TenantID: domain.TenantID("tenant_123"), Slug: "acme-prod"}
-	deps.templates.template = domain.TemplateRevision{ID: domain.TemplateRevisionID("template_123"), TenantID: domain.TenantID("tenant_123"), Status: domain.TemplateRevisionActive}
+	deps.templates.template = domain.TemplateRevision{
+		ID: domain.TemplateRevisionID("template_123"), TenantID: domain.TenantID("tenant_123"), Status: domain.TemplateRevisionActive,
+		RepoName: "infra", RootPath: "modules/vpc", SourceRef: "v1.2.0",
+	}
 	deps.templates.variables = []domain.TemplateVariable{{Name: "region", Required: true}}
 	deps.stackTemplateID = domain.StackTemplateID("stack_template_a1b2c3d4")
 	server := NewServer(deps.service(), configuredTenantID)
@@ -1042,6 +1118,11 @@ func TestAddTemplateToStackCallsService(t *testing.T) {
 	if !ok || config["region"] != "us-east-1" {
 		t.Fatalf("response config = %#v", body["config"])
 	}
+	// Labelled like a read of the stack, so a client caching this response
+	// does not show blanks.
+	if body["display_name"] != "vpc" || body["source_ref"] != "v1.2.0" {
+		t.Fatalf("display_name = %q, source_ref = %q, want vpc and v1.2.0", body["display_name"], body["source_ref"])
+	}
 }
 
 func TestUpdateStackTemplateConfigCallsService(t *testing.T) {
@@ -1053,6 +1134,10 @@ func TestUpdateStackTemplateConfigCallsService(t *testing.T) {
 		TenantID:                  domain.TenantID("tenant_123"),
 		DesiredTemplateRevisionID: domain.TemplateRevisionID("template_rev_1"),
 		Lifecycle:                 domain.StackTemplateActive,
+	}
+	deps.templates.template = domain.TemplateRevision{
+		ID: domain.TemplateRevisionID("template_rev_1"), TenantID: domain.TenantID("tenant_123"),
+		RepoName: "infra", RootPath: "modules/vpc", SourceRef: "v1.2.0",
 	}
 	deps.templates.variables = []domain.TemplateVariable{{Name: "region", Required: true}}
 	server := NewServer(deps.service(), configuredTenantID)
@@ -1079,6 +1164,40 @@ func TestUpdateStackTemplateConfigCallsService(t *testing.T) {
 	if body.Config["region"] != "us-west-2" {
 		t.Fatalf("response config = %#v", body.Config)
 	}
+	if body.DisplayName != "vpc" || body.SourceRef != "v1.2.0" {
+		t.Fatalf("display_name = %q, source_ref = %q, want vpc and v1.2.0", body.DisplayName, body.SourceRef)
+	}
+}
+
+// The edit replaces the whole config, so leaving config out must not read as
+// "clear everything".
+func TestUpdateStackTemplateConfigRequiresConfig(t *testing.T) {
+	t.Parallel()
+
+	for _, requestBody := range []string{`{}`, `{"config":null}`} {
+		deps := newAPITestDependencies(t)
+		deps.stackTemplates.stackTemplate = domain.StackTemplate{
+			ID:                        domain.StackTemplateID("stack_template_123"),
+			TenantID:                  domain.TenantID("tenant_123"),
+			DesiredTemplateRevisionID: domain.TemplateRevisionID("template_rev_1"),
+			Lifecycle:                 domain.StackTemplateActive,
+		}
+		server := NewServer(deps.service(), configuredTenantID)
+		response := httptest.NewRecorder()
+
+		server.ServeHTTP(response, authenticatedRequest(
+			http.MethodPatch,
+			"/v1/tenants/tenant_123/stack-templates/stack_template_123/config",
+			strings.NewReader(requestBody),
+		))
+
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("%s: status = %d, want %d; body = %s", requestBody, response.Code, http.StatusBadRequest, response.Body.String())
+		}
+		if deps.stackTemplates.gotConfigJSON != nil {
+			t.Fatalf("%s: config updated to %s, want no update", requestBody, deps.stackTemplates.gotConfigJSON)
+		}
+	}
 }
 
 func TestUpgradeStackTemplateCallsService(t *testing.T) {
@@ -1098,6 +1217,9 @@ func TestUpgradeStackTemplateCallsService(t *testing.T) {
 		TenantID:         domain.TenantID("tenant_123"),
 		SourceTemplateID: domain.SourceTemplateID("source_template_vpc"),
 		Status:           domain.TemplateRevisionActive,
+		RepoName:         "infra",
+		RootPath:         "modules/vpc",
+		SourceRef:        "v2.0.0",
 	}
 	deps.templates.variables = []domain.TemplateVariable{{Name: "region", Required: true}}
 	server := NewServer(deps.service(), configuredTenantID)
@@ -1126,6 +1248,10 @@ func TestUpgradeStackTemplateCallsService(t *testing.T) {
 	}
 	if body.Config["region"] != "us-east-1" {
 		t.Fatalf("response config = %#v", body.Config)
+	}
+	// The target revision's ref, not the one the template had before.
+	if body.DisplayName != "vpc" || body.SourceRef != "v2.0.0" {
+		t.Fatalf("display_name = %q, source_ref = %q, want vpc and v2.0.0", body.DisplayName, body.SourceRef)
 	}
 }
 
@@ -1441,6 +1567,57 @@ func TestGetTemplateRunReturnsRun(t *testing.T) {
 	}
 }
 
+// An unfinished run leaves its end times out rather than sending Go's zero
+// time, which a client would otherwise have to recognise as "not yet".
+func TestGetTemplateRunOmitsEndTimesUntilTheyHappen(t *testing.T) {
+	t.Parallel()
+
+	deps := newAPITestDependencies(t)
+	deps.templateRuns.run = domain.TemplateRun{
+		ID:              domain.TemplateRunID("run_123"),
+		TenantID:        domain.TenantID("tenant_123"),
+		StackTemplateID: domain.StackTemplateID("stack_template_123"),
+		Operation:       domain.OperationPlan,
+		Status:          domain.TemplateRunRunning,
+	}
+	deps.templateRuns.executions = []domain.TemplateRunWorkflowExecution{{
+		Phase: domain.RunPhasePlan, Status: domain.TemplateRunExecutionRunning,
+		StartedAt: time.Date(2026, 7, 3, 11, 30, 0, 0, time.UTC),
+		Steps:     []domain.TemplateRunStepExecution{{Step: domain.TemplateRunStepPlanning, Status: domain.TemplateRunExecutionRunning}},
+	}}
+	server := NewServer(deps.service(), configuredTenantID)
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/template-runs/run_123", nil))
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	var body struct {
+		CompletedAt *string `json:"completed_at"`
+		Executions  []struct {
+			StartedAt  *string `json:"started_at"`
+			FinishedAt *string `json:"finished_at"`
+			Steps      []struct {
+				FinishedAt *string `json:"finished_at"`
+			} `json:"steps"`
+		} `json:"executions"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.CompletedAt != nil {
+		t.Fatalf("completed_at = %q, want it omitted", *body.CompletedAt)
+	}
+	execution := body.Executions[0]
+	if execution.StartedAt == nil {
+		t.Fatal("started_at omitted, want it sent")
+	}
+	if execution.FinishedAt != nil || execution.Steps[0].FinishedAt != nil {
+		t.Fatalf("finished_at sent for a running execution or step: %+v", execution)
+	}
+}
+
 // A single read always sends executions, as [] for a run no workflow has
 // carried yet; the run list never sends them.
 func TestTemplateRunExecutionsArePresentOnlyOnASingleRead(t *testing.T) {
@@ -1692,6 +1869,40 @@ func TestApproveRunCallsService(t *testing.T) {
 	}
 }
 
+// Approving carries no data, so a client may send no body at all; a body it
+// does send is still held to the schema.
+func TestApproveRunTakesAnEmptyBodyButNotAMalformedOne(t *testing.T) {
+	t.Parallel()
+
+	deps := newAPITestDependencies(t)
+	server := NewServer(deps.service(), configuredTenantID)
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, authenticatedRequest(http.MethodPost, "/v1/tenants/tenant_123/template-runs/run_123/approval", nil))
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("empty body: status = %d, want %d; body = %s", response.Code, http.StatusNoContent, response.Body.String())
+	}
+	if deps.templateRuns.approval.RunID != domain.TemplateRunID("run_123") {
+		t.Fatalf("empty body: approval was not recorded")
+	}
+
+	for _, requestBody := range []string{`{"unexpected":true}`, `[]`, `{`} {
+		deps := newAPITestDependencies(t)
+		server := NewServer(deps.service(), configuredTenantID)
+		response := httptest.NewRecorder()
+
+		server.ServeHTTP(response, authenticatedRequest(http.MethodPost, "/v1/tenants/tenant_123/template-runs/run_123/approval", strings.NewReader(requestBody)))
+
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("%s: status = %d, want %d", requestBody, response.Code, http.StatusBadRequest)
+		}
+		if deps.templateRuns.approval.RunID != "" {
+			t.Fatalf("%s: approval recorded, want none", requestBody)
+		}
+	}
+}
+
 func TestApproveRunAllowsSelfApproval(t *testing.T) {
 	t.Parallel()
 
@@ -1755,6 +1966,23 @@ func TestDiscardRunCallsService(t *testing.T) {
 	}
 	if len(deps.work.requests) != 0 {
 		t.Fatalf("queued requests = %#v, want none", deps.work.requests)
+	}
+}
+
+func TestDiscardRunTakesAnEmptyBody(t *testing.T) {
+	t.Parallel()
+
+	deps := newAPITestDependencies(t)
+	server := NewServer(deps.service(), configuredTenantID)
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, authenticatedRequest(http.MethodPost, "/v1/tenants/tenant_123/template-runs/run_123/discard", nil))
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusNoContent, response.Body.String())
+	}
+	if deps.templateRuns.discarded.RunID != domain.TemplateRunID("run_123") || deps.templateRuns.discarded.Reason != "" {
+		t.Fatalf("discard = %+v, want run_123 with no reason", deps.templateRuns.discarded)
 	}
 }
 
@@ -3826,6 +4054,30 @@ func TestListQueueReturnsOnlyCallerItems(t *testing.T) {
 	}
 }
 
+// A failing queue read answers like every other failure: the generic 500
+// envelope, with nothing of the underlying error in it.
+func TestListQueueFailureUsesTheGenericInternalError(t *testing.T) {
+	t.Parallel()
+
+	reader := &stubQueueReader{err: errors.New("pq: connection refused")}
+	deps := newAPITestDependencies(t)
+	server := NewServer(deps.service(), configuredTenantID, WithQueueReader(reader))
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/queue", nil))
+
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusInternalServerError)
+	}
+	var body errorResponse
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.Error != "internal_error" || body.Message != "internal server error" {
+		t.Fatalf("body = %+v, want the generic internal error", body)
+	}
+}
+
 // Still 503: an unconfigured queue reader is a genuinely unavailable
 // dependency, unlike authorization, which is now in-process.
 func TestListQueueWithoutReaderReturnsServiceUnavailable(t *testing.T) {
@@ -3950,10 +4202,73 @@ func TestUnauthenticatedRequestGetsTheErrorEnvelope(t *testing.T) {
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
 	}
+	requestID := response.Header().Get(RequestIDHeader)
+	if requestID == "" {
+		t.Fatal("middleware 401 has no request id")
+	}
 	rendered := httptest.NewRecorder()
+	rendered.Header().Set(RequestIDHeader, requestID)
 	writeError(rendered, http.StatusUnauthorized, "unauthorized", "authentication required")
 	if got, want := decodeErrorEnvelope(t, response), decodeErrorEnvelope(t, rendered); got != want {
 		t.Fatalf("middleware 401 = %+v, want %+v, what writeError renders", got, want)
+	}
+}
+
+// Every response carries a request id, and an error body repeats it, so a
+// person can quote it and an operator can find the matching log line.
+func TestResponsesCarryARequestID(t *testing.T) {
+	t.Parallel()
+
+	server := NewServer(newAPITestDependencies(t).service(), configuredTenantID)
+
+	ok := httptest.NewRecorder()
+	server.ServeHTTP(ok, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	if ok.Header().Get(RequestIDHeader) == "" {
+		t.Fatal("200 has no request id")
+	}
+
+	failed := httptest.NewRecorder()
+	server.ServeHTTP(failed, authenticatedRequest(http.MethodGet, "/v1/tenants/other_tenant/stacks", nil))
+	if failed.Code < 400 {
+		t.Fatalf("status = %d, want an error", failed.Code)
+	}
+	header := failed.Header().Get(RequestIDHeader)
+	if body := decodeErrorEnvelope(t, failed); header == "" || body.RequestID != header {
+		t.Fatalf("header request id = %q, body request_id = %q, want the same non-empty id", header, body.RequestID)
+	}
+	if header == ok.Header().Get(RequestIDHeader) {
+		t.Fatal("two requests got the same id")
+	}
+}
+
+// An id a proxy already assigned is kept, so its logs and ours line up; one
+// that could forge a log line is replaced.
+func TestInboundRequestIDIsReusedOnlyWhenPlain(t *testing.T) {
+	t.Parallel()
+
+	server := NewServer(newAPITestDependencies(t).service(), configuredTenantID)
+	for _, test := range []struct {
+		inbound string
+		kept    bool
+	}{
+		{inbound: "edge-7f3a.42_b", kept: true},
+		{inbound: "spoof\nlevel=error msg=forged", kept: false},
+		{inbound: "has space", kept: false},
+		{inbound: strings.Repeat("a", 129), kept: false},
+	} {
+		request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+		request.Header.Set(RequestIDHeader, test.inbound)
+		response := httptest.NewRecorder()
+
+		server.ServeHTTP(response, request)
+
+		got := response.Header().Get(RequestIDHeader)
+		if kept := got == test.inbound; kept != test.kept {
+			t.Fatalf("inbound %q: response id = %q, kept = %t, want %t", test.inbound, got, kept, test.kept)
+		}
+		if got == "" {
+			t.Fatalf("inbound %q: no request id", test.inbound)
+		}
 	}
 }
 

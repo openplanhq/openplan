@@ -476,7 +476,8 @@ describe("RunDetailScreen", () => {
     seedCapabilities(queryClient, allAllowed);
     queryClient.setQueryData(
       queryKeys.templateRun("tenant_123", "run_1"),
-      run({ status: "waiting_approval", completed_at: "0001-01-01T00:00:00Z", plan_summary: { add: 1, change: 0, destroy: 0 } })
+      // The API omits completed_at until the run ends.
+      run({ status: "waiting_approval", plan_summary: { add: 1, change: 0, destroy: 0 } })
     );
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([]));
 

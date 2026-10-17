@@ -707,15 +707,17 @@ func TestUpdateStackTemplateConfigValidatesDesiredRevisionVariables(t *testing.T
 		},
 	}
 	templates := &recordingTemplateRepository{
+		template: domain.TemplateRevision{ID: "template_rev_2", RepoName: "infra", RootPath: "modules/vpc", SourceRef: "v1.2.0"},
 		variables: []domain.TemplateVariable{
 			{Name: "region", Required: true},
 		},
 	}
 	service := NewService(Service{
-		TemplateRuns:      &recordingTemplateRunRepository{},
-		Authorization:     testPlatformAuthorizer(t),
-		StackTemplates:    stackTemplates,
-		TemplateRevisions: templates,
+		TemplateRuns:             &recordingTemplateRunRepository{},
+		Authorization:            testPlatformAuthorizer(t),
+		StackTemplates:           stackTemplates,
+		TemplateRevisions:        templates,
+		TemplateRevisionMetadata: templates,
 	})
 
 	updated, err := service.UpdateStackTemplateConfig(authenticatedContext(), UpdateStackTemplateConfigCommand{
@@ -735,6 +737,9 @@ func TestUpdateStackTemplateConfigValidatesDesiredRevisionVariables(t *testing.T
 	}
 	if string(updated.DesiredConfigJSON) != `{"region":"us-east-1"}` {
 		t.Fatalf("returned desired config = %s", updated.DesiredConfigJSON)
+	}
+	if updated.DisplayName != "vpc" || updated.SourceRef != "v1.2.0" {
+		t.Fatalf("labels = %q, %q, want vpc and v1.2.0", updated.DisplayName, updated.SourceRef)
 	}
 }
 
@@ -762,6 +767,42 @@ func TestUpdateStackTemplateConfigRejectsMissingDesiredRevision(t *testing.T) {
 	})
 	if !errors.Is(err, ErrStackTemplateConfigInvalid) {
 		t.Fatalf("error = %v, want ErrStackTemplateConfigInvalid", err)
+	}
+	if stackTemplates.gotConfigJSON != nil {
+		t.Fatalf("updated config = %s, want no update", stackTemplates.gotConfigJSON)
+	}
+}
+
+// A template being torn down cannot take a config edit, and says so in its
+// own terms rather than as a failed upgrade.
+func TestUpdateStackTemplateConfigRejectsAnInactiveTemplate(t *testing.T) {
+	t.Parallel()
+
+	stackTemplates := &recordingStackTemplateRepository{
+		stackTemplate: domain.StackTemplate{
+			ID:                        domain.StackTemplateID("stack_template_123"),
+			TenantID:                  domain.TenantID("tenant_123"),
+			DesiredTemplateRevisionID: domain.TemplateRevisionID("template_rev_1"),
+			Lifecycle:                 domain.StackTemplateDestroying,
+		},
+	}
+	service := NewService(Service{
+		TemplateRuns:      &recordingTemplateRunRepository{},
+		Authorization:     testPlatformAuthorizer(t),
+		StackTemplates:    stackTemplates,
+		TemplateRevisions: &recordingTemplateRepository{},
+	})
+
+	_, err := service.UpdateStackTemplateConfig(authenticatedContext(), UpdateStackTemplateConfigCommand{
+		TenantID:        domain.TenantID("tenant_123"),
+		StackTemplateID: domain.StackTemplateID("stack_template_123"),
+		ConfigJSON:      json.RawMessage(`{}`),
+	})
+	if !errors.Is(err, ErrStackTemplateNotEditable) {
+		t.Fatalf("error = %v, want ErrStackTemplateNotEditable", err)
+	}
+	if errors.Is(err, ErrStackTemplateUpgradeInvalid) {
+		t.Fatalf("error = %v, want it not to read as an upgrade failure", err)
 	}
 	if stackTemplates.gotConfigJSON != nil {
 		t.Fatalf("updated config = %s, want no update", stackTemplates.gotConfigJSON)

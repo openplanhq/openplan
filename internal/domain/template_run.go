@@ -236,9 +236,9 @@ type TemplateRunWorkflowExecution struct {
 	// labels the run's trigger actor.
 	ActorDisplayName string                     `json:"actor_display_name"`
 	Status           TemplateRunExecutionStatus `json:"status"`
-	// FinishedAt reads as the zero time while the execution runs.
+	// FinishedAt is omitted from JSON while the execution runs.
 	StartedAt    time.Time `json:"started_at"`
-	FinishedAt   time.Time `json:"finished_at"`
+	FinishedAt   time.Time `json:"finished_at,omitzero"`
 	ErrorSummary string    `json:"error_summary"`
 	// Summary is what a plan would change, or what an apply did. Nil for a
 	// plan with no changes, and until it is known.
@@ -249,10 +249,11 @@ type TemplateRunWorkflowExecution struct {
 // TemplateRunStepExecution is one step a workflow execution ran. A step runs
 // until the next one starts, or until its execution ends.
 type TemplateRunStepExecution struct {
-	Step       TemplateRunStep            `json:"step"`
-	Status     TemplateRunExecutionStatus `json:"status"`
-	StartedAt  time.Time                  `json:"started_at"`
-	FinishedAt time.Time                  `json:"finished_at"`
+	Step      TemplateRunStep            `json:"step"`
+	Status    TemplateRunExecutionStatus `json:"status"`
+	StartedAt time.Time                  `json:"started_at"`
+	// FinishedAt is omitted from JSON while the step runs.
+	FinishedAt time.Time `json:"finished_at,omitzero"`
 }
 
 // TemplateRun is one Terraform operation against a StackTemplate.
@@ -282,8 +283,10 @@ type TemplateRun struct {
 	TriggerActorDisplayName string `json:"trigger_actor_display_name"`
 	// CreatedAt is when the run was requested. When work started is its
 	// executions' StartedAt.
-	CreatedAt   time.Time `json:"created_at"`
-	CompletedAt time.Time `json:"completed_at"`
+	CreatedAt time.Time `json:"created_at"`
+	// CompletedAt is omitted from JSON until the run ends, rather than
+	// reading as the zero time.
+	CompletedAt time.Time `json:"completed_at,omitzero"`
 	// ErrorSummary is why the run failed: its failed workflow execution's
 	// error. Empty otherwise.
 	ErrorSummary string `json:"error_summary"`

@@ -1,13 +1,16 @@
 package api
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -183,9 +186,12 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	// Searches signed-in users by display name or email.
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/users/search", server.handleSearchUsers)
 
+	// Queue route.
+	// Lists the work items the caller queued.
+	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/queue", server.handleListQueue)
+
 	// Stack grant routes.
 	// Lists grants for a stack.
-	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/queue", server.handleListQueue)
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/stacks/{stack_id}/grants", server.handleListStackGrants)
 	// Assigns a role on a stack.
 	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/stacks/{stack_id}/grants", server.handleAssignStackRole)
@@ -293,7 +299,7 @@ func (server *Server) requireConfiguredTenant(next http.Handler) http.Handler {
 
 func (server *Server) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	server.debugf("%s %s", request.Method, request.URL.Path)
-	server.handler.ServeHTTP(response, request)
+	withRequestID(server.handler).ServeHTTP(response, request)
 }
 
 func (server *Server) now() time.Time {
@@ -343,6 +349,21 @@ func decodeRequestBody(response http.ResponseWriter, request *http.Request, dest
 		return false
 	}
 	return true
+}
+
+// decodeOptionalRequestBody is decodeRequestBody for an action whose body
+// carries nothing it needs: no body at all is accepted as {}, and anything
+// sent must still be one JSON object that matches destination.
+func decodeOptionalRequestBody(response http.ResponseWriter, request *http.Request, destination any) bool {
+	reader := bufio.NewReader(request.Body)
+	if _, err := reader.Peek(1); errors.Is(err, io.EOF) {
+		return true
+	}
+	request.Body = struct {
+		io.Reader
+		io.Closer
+	}{reader, request.Body}
+	return decodeRequestBody(response, request, destination)
 }
 
 // writeRequestTooLarge answers 413 when err is the body cap tripping, and
@@ -433,6 +454,7 @@ func (server *Server) handleRegisterTemplate(response http.ResponseWriter, reque
 		return
 	}
 
+	setLocation(response, request, "template-registrations", string(registration.ID))
 	writeJSON(response, http.StatusAccepted, registration)
 }
 
@@ -503,6 +525,7 @@ func (server *Server) handleCreateStack(response http.ResponseWriter, request *h
 		return
 	}
 
+	setLocation(response, request, "stacks", string(stack.ID))
 	writeJSON(response, http.StatusCreated, newStackResponse(stack, caps))
 }
 
@@ -695,12 +718,18 @@ func (server *Server) handleAddTemplateToStack(response http.ResponseWriter, req
 		return
 	}
 
-	writeJSON(response, http.StatusCreated, newStackTemplateResponse(app.StackTemplateView{StackTemplate: stackTemplate}))
+	writeJSON(response, http.StatusCreated, newStackTemplateResponse(stackTemplate))
 }
 
 func (server *Server) handleUpdateStackTemplateConfig(response http.ResponseWriter, request *http.Request) {
 	var body updateStackTemplateConfigRequest
 	if !decodeRequestBody(response, request, &body) {
+		return
+	}
+	// The edit replaces the whole config, so a missing one would wipe every
+	// value rather than leave them alone. Send {} to clear it on purpose.
+	if body.Config == nil {
+		writeError(response, http.StatusBadRequest, "invalid_request", "config is required")
 		return
 	}
 
@@ -719,7 +748,7 @@ func (server *Server) handleUpdateStackTemplateConfig(response http.ResponseWrit
 		return
 	}
 
-	writeJSON(response, http.StatusOK, newStackTemplateResponse(app.StackTemplateView{StackTemplate: stackTemplate}))
+	writeJSON(response, http.StatusOK, newStackTemplateResponse(stackTemplate))
 }
 
 func (server *Server) handleUpgradeStackTemplate(response http.ResponseWriter, request *http.Request) {
@@ -748,7 +777,7 @@ func (server *Server) handleUpgradeStackTemplate(response http.ResponseWriter, r
 		return
 	}
 
-	writeJSON(response, http.StatusOK, newStackTemplateResponse(app.StackTemplateView{StackTemplate: stackTemplate}))
+	writeJSON(response, http.StatusOK, newStackTemplateResponse(stackTemplate))
 }
 
 func (server *Server) handleStartTemplateRun(response http.ResponseWriter, request *http.Request) {
@@ -768,6 +797,7 @@ func (server *Server) handleStartTemplateRun(response http.ResponseWriter, reque
 		return
 	}
 
+	setLocation(response, request, "template-runs", string(run.ID))
 	writeJSON(response, http.StatusCreated, run)
 }
 
@@ -828,7 +858,7 @@ func (server *Server) handleListTemplateRunLogs(response http.ResponseWriter, re
 
 func (server *Server) handleApproveRun(response http.ResponseWriter, request *http.Request) {
 	var body approveRunRequest
-	if !decodeRequestBody(response, request, &body) {
+	if !decodeOptionalRequestBody(response, request, &body) {
 		return
 	}
 
@@ -846,7 +876,7 @@ func (server *Server) handleApproveRun(response http.ResponseWriter, request *ht
 
 func (server *Server) handleDiscardRun(response http.ResponseWriter, request *http.Request) {
 	var body discardRunRequest
-	if !decodeRequestBody(response, request, &body) {
+	if !decodeOptionalRequestBody(response, request, &body) {
 		return
 	}
 
@@ -861,6 +891,13 @@ func (server *Server) handleDiscardRun(response http.ResponseWriter, request *ht
 	}
 
 	response.WriteHeader(http.StatusNoContent)
+}
+
+// setLocation points a 201 or 202 at the URL that reads the new resource back,
+// under the request's tenant. An installed template and a credential have no
+// read of their own, so their responses carry none.
+func setLocation(response http.ResponseWriter, request *http.Request, collection, id string) {
+	response.Header().Set("Location", "/v1/tenants/"+url.PathEscape(request.PathValue("tenant_id"))+"/"+collection+"/"+url.PathEscape(id))
 }
 
 func stackTemplateConfigJSON(response http.ResponseWriter, config map[string]any) (json.RawMessage, bool) {
@@ -953,8 +990,8 @@ type stackListItemResponse struct {
 type attentionItemResponse struct {
 	// Kind is waiting_approval or destroy_failed.
 	Kind string `json:"kind"`
-	// At is when the item began to need a person; empty when unknown.
-	At            string                         `json:"at"`
+	// At is when the item began to need a person; omitted when unknown.
+	At            string                         `json:"at,omitempty"`
 	Stack         attentionStackResponse         `json:"stack"`
 	StackTemplate attentionStackTemplateResponse `json:"stack_template"`
 	// Run is the plan waiting for approval or the destroy that failed; null
@@ -1033,6 +1070,8 @@ type stackTemplateResponse struct {
 type errorResponse struct {
 	Error   string `json:"error"`
 	Message string `json:"message"`
+	// RequestID matches the response's X-Request-Id and the API's log lines.
+	RequestID string `json:"request_id,omitempty"`
 }
 
 func newStackViewResponse(view app.StackView) stackViewResponse {
@@ -1188,8 +1227,6 @@ func writeAppError(response http.ResponseWriter, err error) {
 		writeError(response, http.StatusUnauthorized, "unauthorized", "authentication required")
 	case errors.Is(err, app.ErrForbidden):
 		writeError(response, http.StatusForbidden, "forbidden", "forbidden")
-	case errors.Is(err, app.ErrSelfApprovalForbidden):
-		writeError(response, http.StatusForbidden, "self_approval_forbidden", "self-approval forbidden")
 	case errors.Is(err, app.ErrInvalidCommand):
 		writeError(response, http.StatusBadRequest, "invalid_request", err.Error())
 	case errors.Is(err, app.ErrNotFound):
@@ -1207,6 +1244,15 @@ func writeAppError(response http.ResponseWriter, err error) {
 	// the client its view of the run history is stale and worth refetching.
 	case errors.Is(err, app.ErrTemplateRunInFlight):
 		writeError(response, http.StatusConflict, "run_in_flight", err.Error())
+	// Its own code, because the fix is in the request: pick a component_key the
+	// stack does not already use, rather than retrying the same install.
+	case errors.Is(err, app.ErrDuplicateStackTemplateComponentKey):
+		writeError(response, http.StatusConflict, "duplicate_component_key", err.Error())
+	// 503 with its own code, because no request can succeed until an operator
+	// configures the encryption key: it is server setup, not a client error and
+	// not an unexplained failure.
+	case errors.Is(err, app.ErrCredentialEncryptionUnavailable):
+		writeError(response, http.StatusServiceUnavailable, "credential_encryption_unavailable", err.Error())
 	case errors.Is(err, app.ErrStackTemplateNotRunnable),
 		errors.Is(err, app.ErrRunNotApprovable),
 		errors.Is(err, app.ErrRunNotDiscardable),
@@ -1214,6 +1260,7 @@ func writeAppError(response http.ResponseWriter, err error) {
 		errors.Is(err, app.ErrTemplateNotInstallable),
 		errors.Is(err, app.ErrStackTemplateConfigInvalid),
 		errors.Is(err, app.ErrStackTemplateUpgradeInvalid),
+		errors.Is(err, app.ErrStackTemplateNotEditable),
 		errors.Is(err, app.ErrLastOwner),
 		errors.Is(err, app.ErrCredentialNameInvalid),
 		errors.Is(err, app.ErrDuplicateCredentialName):
@@ -1223,6 +1270,10 @@ func writeAppError(response http.ResponseWriter, err error) {
 		// authorization service to report as unavailable any more, and a denial
 		// never reaches this point: it is (false, nil) at the boundary and
 		// becomes ErrForbidden above, so a failure can never render as 403.
+		//
+		// The body says nothing about the cause, so the log is the only place
+		// it survives; the request id is how an operator finds this line.
+		log.Printf("api: internal error request_id=%s: %v", requestIDOf(response), err)
 		writeError(response, http.StatusInternalServerError, "internal_error", "internal server error")
 	}
 }
@@ -1236,8 +1287,9 @@ func writeJSON(response http.ResponseWriter, status int, body any) {
 
 func writeError(response http.ResponseWriter, status int, code string, message string) {
 	writeJSON(response, status, errorResponse{
-		Error:   code,
-		Message: message,
+		Error:     code,
+		Message:   message,
+		RequestID: requestIDOf(response),
 	})
 }
 
@@ -1267,7 +1319,7 @@ func (server *Server) handleListQueue(response http.ResponseWriter, request *htt
 
 	statuses, err := server.queue.ListByActor(request.Context(), request.PathValue("tenant_id"), principal.Subject, 50)
 	if err != nil {
-		writeError(response, http.StatusInternalServerError, "internal_error", "list queue failed")
+		writeAppError(response, fmt.Errorf("list queue: %w", err))
 		return
 	}
 
