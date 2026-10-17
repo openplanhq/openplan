@@ -12,6 +12,7 @@ import type { Me } from "./types";
 import type { StackCapabilities } from "./types";
 import NotFound from "../app/NotFound";
 import AccessDenied from "../app/AccessDenied";
+import RequestIdNote from "../shared/RequestIdNote";
 import { cn } from "@/lib/utils";
 
 type GlobalCapabilityKey = keyof Me["global_capabilities"];
@@ -116,6 +117,7 @@ function StackRoutePending({ stackId }: { stackId: string }) {
   return (
     <section className="flex flex-col items-start gap-3" data-testid="stack-route-error">
       <ErrorLine>Something went wrong while loading this stack.</ErrorLine>
+      <RequestIdNote error={stackQuery.error} />
       <button
         type="button"
         className={cn(buttonClass("outline"), "pointer-coarse:h-11")}

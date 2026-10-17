@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -141,11 +142,8 @@ func TestTenantScopedRoutesRejectOtherTenantBeforeHandler(t *testing.T) {
 			if response.Code != http.StatusNotFound {
 				t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusNotFound, response.Body.String())
 			}
-			var body errorResponse
-			if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
-				t.Fatalf("decode response: %v", err)
-			}
-			if body.Error != "not_found" || body.Message != "resource not found" {
+			body := decodeProblem(t, response)
+			if body.Type != blankType || body.Title != "Not Found" {
 				t.Fatalf("body = %#v", body)
 			}
 		})
@@ -412,14 +410,11 @@ func TestApproveRunMapsStalePlanToConflictWithItsOwnCode(t *testing.T) {
 	if response.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusConflict, response.Body.String())
 	}
-	var body errorResponse
-	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	// Distinct from the generic "conflict" so the client can tell the user to
+	body := decodeProblem(t, response)
+	// Its own type so the client can tell the user to
 	// re-plan rather than showing a generic failure.
-	if body.Error != "plan_stale" {
-		t.Fatalf("error code = %q, want plan_stale", body.Error)
+	if body.Type != problemTypeURI("plan-stale") {
+		t.Fatalf("type = %q, want %q", body.Type, problemTypeURI("plan-stale"))
 	}
 	if deps.templateRuns.created.ID != "" {
 		t.Fatalf("created run = %#v, want no persisted run", deps.templateRuns.created)
@@ -453,14 +448,11 @@ func TestStartTemplateRunMapsAnInFlightRunToConflictWithItsOwnCode(t *testing.T)
 	if response.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusConflict, response.Body.String())
 	}
-	var body errorResponse
-	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	// Distinct from the generic "conflict" so the client knows its run history is
+	body := decodeProblem(t, response)
+	// Its own type so the client knows its run history is
 	// stale and can refetch, rather than showing an unexplained failure.
-	if body.Error != "run_in_flight" {
-		t.Fatalf("error code = %q, want run_in_flight", body.Error)
+	if body.Type != problemTypeURI("run-in-flight") {
+		t.Fatalf("type = %q, want %q", body.Type, problemTypeURI("run-in-flight"))
 	}
 }
 
@@ -488,14 +480,11 @@ func TestAddTemplateToStackMapsDuplicateComponentKeyToConflictWithItsOwnCode(t *
 	if response.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusConflict, response.Body.String())
 	}
-	var body errorResponse
-	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	// Distinct from the generic "conflict" so the client can point at the
-	// component_key field instead of showing a generic failure.
-	if body.Error != "duplicate_component_key" {
-		t.Fatalf("error code = %q, want duplicate_component_key", body.Error)
+	body := decodeProblem(t, response)
+	// Its own type, and an errors entry on component_key, so the client can
+	// mark the field instead of showing a generic failure.
+	if body.Type != problemTypeURI("duplicate-component-key") {
+		t.Fatalf("type = %q, want %q", body.Type, problemTypeURI("duplicate-component-key"))
 	}
 }
 
@@ -518,12 +507,9 @@ func TestCreateCredentialWithoutEncryptionKeyReturnsServiceUnavailable(t *testin
 	if response.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusServiceUnavailable, response.Body.String())
 	}
-	var body errorResponse
-	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if body.Error != "credential_encryption_unavailable" {
-		t.Fatalf("error code = %q, want credential_encryption_unavailable", body.Error)
+	body := decodeProblem(t, response)
+	if body.Type != problemTypeURI("credential-encryption-unavailable") {
+		t.Fatalf("type = %q, want %q", body.Type, problemTypeURI("credential-encryption-unavailable"))
 	}
 }
 
@@ -597,7 +583,8 @@ func TestStartTemplateRunRejectsInvalidJSON(t *testing.T) {
 	}
 }
 
-func TestStartTemplateRunMapsInvalidCommandToBadRequest(t *testing.T) {
+// The body parses, but its content breaks a rule: 422, on the field.
+func TestStartTemplateRunMapsUnsupportedOperationToValidationFailed(t *testing.T) {
 	t.Parallel()
 
 	server := NewServer(newAPITestDependencies(t).service(), configuredTenantID)
@@ -610,8 +597,30 @@ func TestStartTemplateRunMapsInvalidCommandToBadRequest(t *testing.T) {
 
 	server.ServeHTTP(response, request)
 
-	if response.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
+	assertValidationFailed(t, response, "#/operation unsupported")
+}
+
+// assertValidationFailed checks a 422 validation-failed and its errors, each
+// written as "<pointer or parameter> <issue>", in order.
+func assertValidationFailed(t *testing.T, response *httptest.ResponseRecorder, want ...string) {
+	t.Helper()
+	if response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422; body = %s", response.Code, response.Body.String())
+	}
+	problem := decodeProblem(t, response)
+	if problem.Type != problemTypeURI("validation-failed") {
+		t.Fatalf("type = %q, want validation-failed", problem.Type)
+	}
+	got := make([]string, 0, len(problem.Errors))
+	for _, entry := range problem.Errors {
+		where := entry.Pointer
+		if entry.Parameter != "" {
+			where = entry.Parameter
+		}
+		got = append(got, where+" "+string(entry.Issue))
+	}
+	if strings.Join(got, ", ") != strings.Join(want, ", ") {
+		t.Fatalf("errors = %q, want %q", got, want)
 	}
 }
 
@@ -708,7 +717,7 @@ func TestRegisterTemplateRejectsInvalidJSON(t *testing.T) {
 	}
 }
 
-func TestRegisterTemplateMapsInvalidCommandToBadRequest(t *testing.T) {
+func TestRegisterTemplateMapsMissingSourceRefToValidationFailed(t *testing.T) {
 	t.Parallel()
 
 	server := NewServer(newAPITestDependencies(t).withPlatformTier("admin").service(), configuredTenantID)
@@ -721,9 +730,7 @@ func TestRegisterTemplateMapsInvalidCommandToBadRequest(t *testing.T) {
 
 	server.ServeHTTP(response, request)
 
-	if response.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
-	}
+	assertValidationFailed(t, response, "#/source_ref required")
 }
 
 func TestCreateStackCallsService(t *testing.T) {
@@ -780,12 +787,9 @@ func TestWriteAppErrorMapsAuthorizationDependencyFailure(t *testing.T) {
 	if response.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusInternalServerError)
 	}
-	var body errorResponse
-	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if body.Error != "internal_error" {
-		t.Fatalf("error = %q, want internal_error", body.Error)
+	body := decodeProblem(t, response)
+	if body.Type != blankType {
+		t.Fatalf("type = %q, want %q", body.Type, blankType)
 	}
 }
 
@@ -1191,9 +1195,7 @@ func TestUpdateStackTemplateConfigRequiresConfig(t *testing.T) {
 			strings.NewReader(requestBody),
 		))
 
-		if response.Code != http.StatusBadRequest {
-			t.Fatalf("%s: status = %d, want %d; body = %s", requestBody, response.Code, http.StatusBadRequest, response.Body.String())
-		}
+		assertValidationFailed(t, response, "#/config required")
 		if deps.stackTemplates.gotConfigJSON != nil {
 			t.Fatalf("%s: config updated to %s, want no update", requestBody, deps.stackTemplates.gotConfigJSON)
 		}
@@ -1255,7 +1257,7 @@ func TestUpgradeStackTemplateCallsService(t *testing.T) {
 	}
 }
 
-func TestUpgradeStackTemplateMapsMissingRequiredVariableToConflict(t *testing.T) {
+func TestUpgradeStackTemplateMapsMissingRequiredVariableToValidationFailed(t *testing.T) {
 	t.Parallel()
 
 	deps := newAPITestDependencies(t)
@@ -1287,12 +1289,12 @@ func TestUpgradeStackTemplateMapsMissingRequiredVariableToConflict(t *testing.T)
 
 	server.ServeHTTP(response, request)
 
-	if response.Code != http.StatusConflict {
-		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusConflict, response.Body.String())
-	}
+	// region carries forward from the current config; cidr_block is new and
+	// required, so it is the one the form has to mark.
+	assertValidationFailed(t, response, "#/config/cidr_block required")
 }
 
-func TestUpgradeStackTemplateMapsSourceMismatchToConflict(t *testing.T) {
+func TestUpgradeStackTemplateMapsSourceMismatchToValidationFailed(t *testing.T) {
 	t.Parallel()
 
 	deps := newAPITestDependencies(t)
@@ -1318,9 +1320,9 @@ func TestUpgradeStackTemplateMapsSourceMismatchToConflict(t *testing.T) {
 
 	server.ServeHTTP(response, request)
 
-	if response.Code != http.StatusConflict {
-		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusConflict, response.Body.String())
-	}
+	// The caller fixes this by picking another revision, so it is the
+	// field's problem, not the template's state.
+	assertValidationFailed(t, response, "#/target_template_revision_id different_template")
 }
 
 func TestStackTemplateEditRoutesHideMissingStackTemplateAsForbidden(t *testing.T) {
@@ -1778,7 +1780,8 @@ func TestListTemplateRunLogsReturnsEmptyArray(t *testing.T) {
 
 // Any well-formed name is looked up, since the workflow decides which logs a
 // run has; only a name that could not be one is refused outright.
-func TestGetTemplateRunLogMapsInvalidPhaseToBadRequest(t *testing.T) {
+// A log name of the wrong shape names a log that can't exist.
+func TestGetTemplateRunLogMapsInvalidPhaseToNotFound(t *testing.T) {
 	t.Parallel()
 
 	server := NewServer(newAPITestDependencies(t).service(), configuredTenantID)
@@ -1791,8 +1794,8 @@ func TestGetTemplateRunLogMapsInvalidPhaseToBadRequest(t *testing.T) {
 
 	server.ServeHTTP(response, request)
 
-	if response.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusNotFound)
 	}
 }
 
@@ -2164,6 +2167,9 @@ func TestDecodeRequestBodyRejectsNonObjectAndMultipleValues(t *testing.T) {
 		{name: "number", body: `42`},
 		{name: "boolean", body: `true`},
 		{name: "second value", body: `{"name":"accepted"} {"name":"extra"}`},
+		{name: "unknown field", body: `{"surname":"x"}`},
+		{name: "wrong type", body: `{"name":1}`},
+		{name: "truncated", body: `{"name":`},
 	}
 
 	for _, test := range tests {
@@ -2181,6 +2187,11 @@ func TestDecodeRequestBodyRejectsNonObjectAndMultipleValues(t *testing.T) {
 			}
 			if response.Code != http.StatusBadRequest {
 				t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusBadRequest, response.Body.String())
+			}
+			// Unparseable is a 400 of its own type, never the 422 a client
+			// shows on a form.
+			if problem := decodeProblem(t, response); problem.Type != problemTypeURI("malformed-body") {
+				t.Fatalf("type = %q, want malformed-body", problem.Type)
 			}
 		})
 	}
@@ -2218,12 +2229,9 @@ func TestDecodeRequestBodyRejectsOversizedBody(t *testing.T) {
 			if response.Code != http.StatusRequestEntityTooLarge {
 				t.Fatalf("status = %d, want %d", response.Code, http.StatusRequestEntityTooLarge)
 			}
-			var body errorResponse
-			if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
-				t.Fatalf("decode error body: %v", err)
-			}
-			if body.Error != "request_too_large" {
-				t.Fatalf("error = %q, want request_too_large", body.Error)
+			body := decodeProblem(t, response)
+			if body.Type != blankType {
+				t.Fatalf("type = %q, want %q", body.Type, blankType)
 			}
 		})
 	}
@@ -2265,12 +2273,9 @@ func TestMutationRequestsRejectMissingPrincipal(t *testing.T) {
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusUnauthorized, response.Body.String())
 	}
-	var body errorResponse
-	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if body.Error != "unauthorized" {
-		t.Fatalf("error code = %q, want unauthorized", body.Error)
+	body := decodeProblem(t, response)
+	if body.Type != blankType {
+		t.Fatalf("type = %q, want %q", body.Type, blankType)
 	}
 	if deps.stacks.created.ID != "" {
 		t.Fatalf("created stack ID = %q, want no mutation", deps.stacks.created.ID)
@@ -2671,12 +2676,9 @@ func TestAuthorizationDependencyFailureReturnsServiceUnavailable(t *testing.T) {
 	if response.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusInternalServerError, response.Body.String())
 	}
-	var body errorResponse
-	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if body.Error != "internal_error" {
-		t.Fatalf("error = %q, want internal_error", body.Error)
+	body := decodeProblem(t, response)
+	if body.Type != blankType {
+		t.Fatalf("type = %q, want %q", body.Type, blankType)
 	}
 }
 
@@ -2908,25 +2910,31 @@ func TestSearchUsersMissingQuery(t *testing.T) {
 
 			server.ServeHTTP(response, request)
 
-			if response.Code != http.StatusBadRequest {
-				t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusBadRequest, response.Body.String())
-			}
+			assertValidationFailed(t, response, "q required")
 		})
 	}
 }
 
+// A parameter that isn't an integer can't be parsed (400 invalid-query); one
+// that parses but is out of range breaks a rule (422). Either way, every bad
+// parameter is named.
 func TestSearchUsersInvalidPagination(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name string
-		url  string
+		name       string
+		url        string
+		status     int
+		problem    string
+		parameters string
 	}{
-		{name: "negative first", url: "/v1/tenants/tenant_123/users/search?q=test&first=-1"},
-		{name: "max=0", url: "/v1/tenants/tenant_123/users/search?q=test&max=0"},
-		{name: "max=51", url: "/v1/tenants/tenant_123/users/search?q=test&max=51"},
-		{name: "non-numeric first", url: "/v1/tenants/tenant_123/users/search?q=test&first=abc"},
-		{name: "non-numeric max", url: "/v1/tenants/tenant_123/users/search?q=test&max=abc"},
+		{name: "negative first", url: "/v1/tenants/tenant_123/users/search?q=test&first=-1", status: 422, problem: "validation-failed", parameters: "first out_of_range"},
+		{name: "max=0", url: "/v1/tenants/tenant_123/users/search?q=test&max=0", status: 422, problem: "validation-failed", parameters: "max out_of_range"},
+		{name: "max=51", url: "/v1/tenants/tenant_123/users/search?q=test&max=51", status: 422, problem: "validation-failed", parameters: "max out_of_range"},
+		{name: "both out of range", url: "/v1/tenants/tenant_123/users/search?q=&first=-1&max=99", status: 422, problem: "validation-failed", parameters: "q required, first out_of_range, max out_of_range"},
+		{name: "non-numeric first", url: "/v1/tenants/tenant_123/users/search?q=test&first=abc", status: 400, problem: "invalid-query", parameters: "first invalid_format"},
+		{name: "non-numeric max", url: "/v1/tenants/tenant_123/users/search?q=test&max=abc", status: 400, problem: "invalid-query", parameters: "max invalid_format"},
+		{name: "both non-numeric", url: "/v1/tenants/tenant_123/users/search?q=test&first=x&max=y", status: 400, problem: "invalid-query", parameters: "first invalid_format, max invalid_format"},
 	}
 
 	for _, test := range tests {
@@ -2940,8 +2948,22 @@ func TestSearchUsersInvalidPagination(t *testing.T) {
 
 			server.ServeHTTP(response, request)
 
-			if response.Code != http.StatusBadRequest {
-				t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusBadRequest, response.Body.String())
+			if response.Code != test.status {
+				t.Fatalf("status = %d, want %d; body = %s", response.Code, test.status, response.Body.String())
+			}
+			problem := decodeProblem(t, response)
+			if problem.Type != problemTypeURI(test.problem) {
+				t.Fatalf("type = %q, want %s", problem.Type, test.problem)
+			}
+			got := make([]string, 0, len(problem.Errors))
+			for _, entry := range problem.Errors {
+				if entry.Pointer != "" {
+					t.Fatalf("entry %+v has a pointer; a query problem names its parameter", entry)
+				}
+				got = append(got, entry.Parameter+" "+string(entry.Issue))
+			}
+			if strings.Join(got, ", ") != test.parameters {
+				t.Fatalf("errors = %q, want %q", got, test.parameters)
 			}
 		})
 	}
@@ -2964,12 +2986,9 @@ func TestSearchUsersRepositoryFailureIsInternalError(t *testing.T) {
 	if response.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusInternalServerError, response.Body.String())
 	}
-	var body errorResponse
-	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if body.Error != "internal_error" {
-		t.Fatalf("error = %q, want internal_error", body.Error)
+	body := decodeProblem(t, response)
+	if body.Type != blankType {
+		t.Fatalf("type = %q, want %q", body.Type, blankType)
 	}
 }
 
@@ -4069,11 +4088,8 @@ func TestListQueueFailureUsesTheGenericInternalError(t *testing.T) {
 	if response.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusInternalServerError)
 	}
-	var body errorResponse
-	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if body.Error != "internal_error" || body.Message != "internal server error" {
+	body := decodeProblem(t, response)
+	if body.Type != blankType || body.Title != "Internal Server Error" {
 		t.Fatalf("body = %+v, want the generic internal error", body)
 	}
 }
@@ -4172,27 +4188,28 @@ func newFailingAPIAuthorization(t *testing.T) *authorization.Authorization {
 	return auth
 }
 
-// decodeErrorEnvelope fails unless response is a JSON error in the API's one
-// envelope, and returns it.
-func decodeErrorEnvelope(t *testing.T, response *httptest.ResponseRecorder) errorResponse {
+// decodeProblem fails unless response is an RFC 9457 problem document with
+// exactly the members the API writes, and its status matches the response's.
+func decodeProblem(t *testing.T, response *httptest.ResponseRecorder) problemDocument {
 	t.Helper()
-	if contentType := response.Header().Get("Content-Type"); !strings.HasPrefix(contentType, "application/json") {
-		t.Fatalf("Content-Type = %q, want application/json; body = %s", contentType, response.Body.String())
+	if contentType := response.Header().Get("Content-Type"); contentType != problemContentType {
+		t.Fatalf("Content-Type = %q, want %s; body = %s", contentType, problemContentType, response.Body.String())
 	}
-	decoder := json.NewDecoder(response.Body)
+	decoder := json.NewDecoder(bytes.NewReader(response.Body.Bytes()))
 	decoder.DisallowUnknownFields()
-	var body errorResponse
+	var body problemDocument
 	if err := decoder.Decode(&body); err != nil {
-		t.Fatalf("body is not the error envelope: %v", err)
+		t.Fatalf("body is not a problem document: %v; body = %s", err, response.Body.String())
 	}
-	if body.Error == "" || body.Message == "" {
-		t.Fatalf("envelope = %+v, want both error and message", body)
+	if body.Type == "" || body.Title == "" || body.Status != response.Code {
+		t.Fatalf("problem = %+v, want type, title and status %d", body, response.Code)
 	}
 	return body
 }
 
 // The middleware answers 401 before any handler runs, so it is the one error
-// that never passes through writeError. It must still match it.
+// that never passes through writeProblem. It must still match it, content
+// type included.
 func TestUnauthenticatedRequestGetsTheErrorEnvelope(t *testing.T) {
 	server := NewAuthenticatedServer(app.NewService(app.Service{}), configuredTenantID, false)
 	response := httptest.NewRecorder()
@@ -4208,9 +4225,9 @@ func TestUnauthenticatedRequestGetsTheErrorEnvelope(t *testing.T) {
 	}
 	rendered := httptest.NewRecorder()
 	rendered.Header().Set(RequestIDHeader, requestID)
-	writeError(rendered, http.StatusUnauthorized, "unauthorized", "authentication required")
-	if got, want := decodeErrorEnvelope(t, response), decodeErrorEnvelope(t, rendered); got != want {
-		t.Fatalf("middleware 401 = %+v, want %+v, what writeError renders", got, want)
+	writeAppError(rendered, app.ErrUnauthenticated)
+	if got, want := decodeProblem(t, response), decodeProblem(t, rendered); fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("middleware 401 = %+v, want %+v, what writeAppError renders", got, want)
 	}
 }
 
@@ -4233,7 +4250,7 @@ func TestResponsesCarryARequestID(t *testing.T) {
 		t.Fatalf("status = %d, want an error", failed.Code)
 	}
 	header := failed.Header().Get(RequestIDHeader)
-	if body := decodeErrorEnvelope(t, failed); header == "" || body.RequestID != header {
+	if body := decodeProblem(t, failed); header == "" || body.RequestID != header {
 		t.Fatalf("header request id = %q, body request_id = %q, want the same non-empty id", header, body.RequestID)
 	}
 	if header == ok.Header().Get(RequestIDHeader) {
@@ -4274,7 +4291,7 @@ func TestInboundRequestIDIsReusedOnlyWhenPlain(t *testing.T) {
 
 // A request no route matches would otherwise get the mux's plain-text "404
 // page not found" or "Method Not Allowed".
-func TestUnroutedRequestsGetTheErrorEnvelope(t *testing.T) {
+func TestUnroutedRequestsAreProblems(t *testing.T) {
 	t.Parallel()
 
 	for _, test := range []struct {
@@ -4282,13 +4299,12 @@ func TestUnroutedRequestsGetTheErrorEnvelope(t *testing.T) {
 		method    string
 		path      string
 		status    int
-		code      string
 		wantAllow string
 	}{
-		{name: "unknown path", method: http.MethodGet, path: "/v1/no-such-route", status: http.StatusNotFound, code: "not_found"},
-		{name: "unknown path outside /v1", method: http.MethodGet, path: "/nothing-here", status: http.StatusNotFound, code: "not_found"},
+		{name: "unknown path", method: http.MethodGet, path: "/v1/no-such-route", status: http.StatusNotFound},
+		{name: "unknown path outside /v1", method: http.MethodGet, path: "/nothing-here", status: http.StatusNotFound},
 		// The mux's 405 names the allowed methods; that header survives.
-		{name: "wrong method", method: http.MethodDelete, path: "/v1/me", status: http.StatusMethodNotAllowed, code: "method_not_allowed", wantAllow: http.MethodGet},
+		{name: "wrong method", method: http.MethodDelete, path: "/v1/me", status: http.StatusMethodNotAllowed, wantAllow: http.MethodGet},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
@@ -4300,8 +4316,8 @@ func TestUnroutedRequestsGetTheErrorEnvelope(t *testing.T) {
 			if response.Code != test.status {
 				t.Fatalf("status = %d, want %d; body = %s", response.Code, test.status, response.Body.String())
 			}
-			if body := decodeErrorEnvelope(t, response); body.Error != test.code {
-				t.Fatalf("error = %q, want %q", body.Error, test.code)
+			if body := decodeProblem(t, response); body.Type != blankType || body.Title != http.StatusText(test.status) {
+				t.Fatalf("problem = %+v, want about:blank with the status text", body)
 			}
 			if test.wantAllow != "" && !strings.Contains(response.Header().Get("Allow"), test.wantAllow) {
 				t.Fatalf("Allow = %q, want it to include %s", response.Header().Get("Allow"), test.wantAllow)

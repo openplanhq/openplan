@@ -158,7 +158,7 @@ describe("TemplateRunHistory", () => {
   it("says the runs failed to load, in place of the empty state, and retries", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(jsonResponse({ error: "internal", message: "boom" }, 500))
+      .mockResolvedValueOnce(jsonResponse({ type: "about:blank", title: "Internal Server Error", detail: "boom" }, 500))
       .mockResolvedValueOnce(jsonResponse([run({ id: "run_plan_1", run_number: 1, status: "completed" })]));
 
     renderHistory(testQueryClient());

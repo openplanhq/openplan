@@ -18,6 +18,8 @@ import {
   updateStackTemplateConfig,
   upgradeStackTemplate
 } from "./client";
+import { isRunInFlightError } from "../features/runs/runErrors";
+import { problemTypes } from "./types";
 
 describe("api client", () => {
   afterEach(() => {
@@ -226,25 +228,69 @@ describe("api client", () => {
     );
   });
 
-  it("throws ApiRequestError with backend message", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ error: "invalid_request", message: "bad input" }, 400));
+  // The API serves every error as application/problem+json, which a check
+  // for application/json alone does not match.
+  it("throws ApiRequestError carrying the problem document", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      problemResponse({
+        type: "https://openplan.run/problems/validation-failed",
+        title: "The request has invalid fields",
+        status: 422,
+        detail: "name is required",
+        request_id: "req-1",
+        errors: [{ pointer: "#/name", issue: "required", detail: "name is required" }]
+      })
+    );
 
-    try {
-      await createStack("tenant_123", {
-        name: "",
-        slug: "",
-        tags: {},
-        default_credential_ids: []
-      });
-      throw new Error("expected createStack to fail");
-    } catch (error) {
-      expect(error).toBeInstanceOf(ApiRequestError);
-      expect(error).toMatchObject({
-        status: 400,
-        code: "invalid_request",
-        message: "bad input"
-      });
-    }
+    const error = await createStack("tenant_123", { name: "", slug: "", tags: {}, default_credential_ids: [] }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ApiRequestError);
+    expect(error).toMatchObject({
+      type: problemTypes.validationFailed,
+      status: 422,
+      title: "The request has invalid fields",
+      message: "name is required",
+      requestId: "req-1",
+      errors: [{ pointer: "#/name", issue: "required", detail: "name is required" }]
+    });
+  });
+
+  it("reads a run-in-flight conflict by its type", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      problemResponse({
+        type: "https://openplan.run/problems/run-in-flight",
+        title: "Another run is in progress",
+        status: 409,
+        detail: "Another run on this template is still in progress.",
+        request_id: "req-2"
+      })
+    );
+
+    const error = await listStacks("tenant_123").catch((caught: unknown) => caught);
+
+    expect(isRunInFlightError(error)).toBe(true);
+    expect(error).toMatchObject({ status: 409, requestId: "req-2", errors: [] });
+  });
+
+  // A proxy in front of the API can answer with its own page; the caller
+  // still gets an ApiRequestError for the status, not a JSON parse error.
+  it("turns a non-problem error body into an about:blank problem", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("<html>bad gateway</html>", { status: 502, statusText: "Bad Gateway", headers: { "content-type": "text/html" } })
+    );
+
+    const error = await listStacks("tenant_123").catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ApiRequestError);
+    expect(error).toMatchObject({ type: "about:blank", status: 502, message: "Bad Gateway", requestId: "" });
+  });
+
+  it("turns a JSON error that isn't a problem into an about:blank problem", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ error: "old_shape", message: "old" }, 400));
+
+    const error = await listStacks("tenant_123").catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({ type: "about:blank", status: 400 });
   });
 
   it("never includes actor identity fields in request bodies", async () => {
@@ -301,9 +347,9 @@ describe("api client — session cookie auth", () => {
   it("navigates to the login route on a 401, never fetches it", async () => {
     vi.stubGlobal("location", { assign, pathname: "/stacks", search: "?selected=st_1" });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ error: "unauthorized", message: "expired" }), {
+      new Response(JSON.stringify({ type: "about:blank", title: "Unauthorized", status: 401, detail: "Sign in to continue." }), {
         status: 401,
-        headers: { "content-type": "application/json" }
+        headers: { "content-type": "application/problem+json" }
       })
     );
 
@@ -321,9 +367,9 @@ describe("api client — session cookie auth", () => {
   it("does not navigate away from the sign-in screen on any 401", async () => {
     vi.stubGlobal("location", { assign, pathname: "/signin", search: "" });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ error: "unauthorized", message: "expired" }), {
+      new Response(JSON.stringify({ type: "about:blank", title: "Unauthorized", status: 401, detail: "Sign in to continue." }), {
         status: 401,
-        headers: { "content-type": "application/json" }
+        headers: { "content-type": "application/problem+json" }
       })
     );
 
@@ -363,6 +409,13 @@ describe("api client — logout()", () => {
     expect(submitMock).toHaveBeenCalledTimes(1);
   });
 });
+
+function problemResponse(problem: { status: number } & Record<string, unknown>): Response {
+  return new Response(JSON.stringify(problem), {
+    status: problem.status,
+    headers: { "content-type": "application/problem+json" }
+  });
+}
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

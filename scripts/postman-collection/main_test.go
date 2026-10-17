@@ -5,7 +5,10 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -119,3 +122,53 @@ func TestEveryOperationIsARequest(t *testing.T) {
 }
 
 func upper(s string) string { return string(bytes.ToUpper([]byte(s))) }
+
+// The collection test exempts routes from the problem-document check by
+// path. A route the spec documents with a non-problem error must be on that
+// list, and nothing else may be, or a regression to plain JSON would pass.
+func TestNonProblemErrorPathsMatchTheSpec(t *testing.T) {
+	spec, err := os.ReadFile(filepath.Join("..", "..", "docs", "openapi.yaml"))
+	if err != nil {
+		t.Fatalf("read spec: %v", err)
+	}
+	doc, err := parseSpec(spec)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	var documented []string
+	for _, pathEntry := range pairs(get(doc.root, "paths")) {
+		nonProblem := false
+		for _, opEntry := range pairs(pathEntry[1]) {
+			if !isMethod(strings.ToUpper(opEntry[0].Value)) {
+				continue
+			}
+			for _, response := range pairs(get(opEntry[1], "responses")) {
+				if status, err := strconv.Atoi(response[0].Value); err != nil || status < 400 {
+					continue
+				}
+				resolved, err := doc.resolve(response[1])
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, media := range pairs(get(resolved, "content")) {
+					if media[0].Value != "application/problem+json" {
+						nonProblem = true
+					}
+				}
+			}
+		}
+		if nonProblem {
+			documented = append(documented, pathEntry[0].Value)
+		}
+	}
+	exempt := slices.Sorted(slices.Values(nonProblemErrorPaths))
+	slices.Sort(documented)
+	if !slices.Equal(documented, exempt) {
+		t.Fatalf("spec documents non-problem errors on %v, but the collection test exempts %v", documented, exempt)
+	}
+	// The check must not be gated on the response's media type, or an error
+	// served as application/json would skip it.
+	if strings.Contains(collectionTest, "contentType.includes") {
+		t.Fatal("collection test gates the problem check on the content type")
+	}
+}

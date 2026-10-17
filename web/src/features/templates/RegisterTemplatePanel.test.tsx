@@ -184,7 +184,7 @@ describe("RegisterTemplatePanel", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       if (init?.method === "POST") return jsonResponse(registration({ status: "running", template_revision_id: "" }));
       if (String(input).includes("/template-registrations/")) return jsonResponse(registration({ template_revision_id: "rev_9" }));
-      return listFails ? jsonResponse({ error: "boom", message: "boom" }, 500) : jsonResponse([added, revision()]);
+      return listFails ? jsonResponse({ type: "about:blank", title: "Internal Server Error", detail: "boom" }, 500) : jsonResponse([added, revision()]);
     });
     renderInPage(seed());
     submit();
@@ -235,7 +235,17 @@ describe("RegisterTemplatePanel", () => {
 
   it("shows a refused request the same way", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) =>
-      init?.method === "POST" ? jsonResponse({ error: "invalid_request", message: "repo_name is required" }, 400) : jsonResponse([revision()])
+      init?.method === "POST"
+        ? jsonResponse(
+            {
+              type: "https://openplan.run/problems/validation-failed",
+              title: "The request has invalid fields",
+              detail: "repo_name is required",
+              errors: [{ pointer: "#/repo_name", issue: "required", detail: "repo_name is required" }]
+            },
+            422
+          )
+        : jsonResponse([revision()])
     );
     renderPanel(seed());
     submit();
@@ -251,7 +261,7 @@ describe("RegisterTemplatePanel", () => {
   it("stops and says why when the registration cannot be read", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       if (init?.method === "POST") return jsonResponse(registration({ status: "pending", template_revision_id: "" }));
-      if (String(input).includes("/template-registrations/")) return jsonResponse({ error: "forbidden", message: "forbidden" }, 403);
+      if (String(input).includes("/template-registrations/")) return jsonResponse({ type: "about:blank", title: "Forbidden", detail: "forbidden" }, 403);
       return jsonResponse([revision()]);
     });
     renderPanel(seed());

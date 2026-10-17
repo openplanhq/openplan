@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
+import { apiErrorMessage, fieldErrors } from "../../api/problems";
 import type { CredentialMetadata } from "../../api/types";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
@@ -34,8 +35,12 @@ export default function CredentialsPanel({ note, emptyTitle, emptyDescription, c
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
   const [error, setError] = useState("");
+  // The fields the server refused. The row keeps its one line of error, so
+  // a refused field is marked invalid and points at that line.
+  const [invalid, setInvalid] = useState<Record<string, string>>({});
   const nameId = useId();
   const valueId = useId();
+  const errorId = useId();
 
   /** Validates the form, sends the value once, then clears it from local state. */
   async function submit() {
@@ -44,6 +49,7 @@ export default function CredentialsPanel({ note, emptyTitle, emptyDescription, c
       return;
     }
     setError("");
+    setInvalid({});
     const sentName = name;
     const sentValue = value;
     try {
@@ -53,17 +59,19 @@ export default function CredentialsPanel({ note, emptyTitle, emptyDescription, c
       setName((current) => (current === sentName ? "" : current));
       setValue((current) => (current === sentValue ? "" : current));
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Request failed");
+      setInvalid(fieldErrors(nextError, "#/"));
+      setError(apiErrorMessage(nextError, "Request failed"));
     }
   }
 
   /** Deletes one credential, and says why in the same line when that fails. */
   async function remove(id: string) {
     setError("");
+    setInvalid({});
     try {
       await onDelete(id);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Request failed");
+      setError(apiErrorMessage(nextError, "Request failed"));
     }
   }
 
@@ -121,6 +129,8 @@ export default function CredentialsPanel({ note, emptyTitle, emptyDescription, c
             autoComplete="off"
             value={name}
             onChange={(event) => setName(event.target.value)}
+            aria-invalid={invalid.name ? true : undefined}
+            aria-describedby={invalid.name ? errorId : undefined}
             className={inputClass}
           />
         </div>
@@ -137,6 +147,8 @@ export default function CredentialsPanel({ note, emptyTitle, emptyDescription, c
             placeholder="Secret value"
             value={value}
             onChange={(event) => setValue(event.target.value)}
+            aria-invalid={invalid.value ? true : undefined}
+            aria-describedby={invalid.value ? errorId : undefined}
             className={inputClass}
           />
         </div>
@@ -144,7 +156,7 @@ export default function CredentialsPanel({ note, emptyTitle, emptyDescription, c
           Add credential
         </button>
       </div>
-      {error && <ErrorLine>{error}</ErrorLine>}
+      {error && <ErrorLine id={errorId}>{error}</ErrorLine>}
     </div>
   );
 }

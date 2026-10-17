@@ -152,6 +152,8 @@ func TestCreateStackReturnsDuplicateSlugConflict(t *testing.T) {
 	if !errors.Is(err, ErrDuplicateStackSlug) {
 		t.Fatalf("error = %v, want ErrDuplicateStackSlug", err)
 	}
+	// The slug was sent, so the clash is the slug field's.
+	assertFieldIssues(t, err, "slug duplicate")
 	// A rejected creation leaves no owner behind. Under a real transaction the
 	// rollback guarantees it; here the in-memory engine shows the same outcome
 	// because the grant is written after the row that failed.
@@ -161,6 +163,31 @@ func TestCreateStackReturnsDuplicateSlugConflict(t *testing.T) {
 	}
 	if len(grants) != 0 {
 		t.Fatalf("grants = %#v, want none after a rejected creation", grants)
+	}
+}
+
+// With no slug sent, the server made it from the name, so the name is the
+// field the caller can change; pointing at a slug field the form doesn't
+// have would leave nothing to mark.
+func TestCreateStackDuplicateDerivedSlugPointsAtTheName(t *testing.T) {
+	t.Parallel()
+
+	stacks := &recordingStackRepository{createErr: ErrDuplicateStackSlug}
+	service := NewService(Service{
+		Stacks:        stacks,
+		Work:          newRecordingWork(stacks),
+		Authorization: testPlatformAuthorizer(t),
+		StackIDs:      fixedStackIDGenerator{id: domain.StackID("stack_new")},
+		Clock:         fixedClock{now: time.Now()},
+	})
+
+	_, err := service.CreateStack(authenticatedContext(), CreateStackCommand{TenantID: "tenant_123", Name: "Acme Prod"})
+	if !errors.Is(err, ErrDuplicateStackSlug) {
+		t.Fatalf("error = %v, want ErrDuplicateStackSlug", err)
+	}
+	assertFieldIssues(t, err, "name duplicate")
+	if !strings.Contains(FieldErrors(err)[0].Message, `"acme-prod"`) {
+		t.Fatalf("message = %q, want it to name the derived slug", FieldErrors(err)[0].Message)
 	}
 }
 
@@ -765,8 +792,10 @@ func TestUpdateStackTemplateConfigRejectsMissingDesiredRevision(t *testing.T) {
 		StackTemplateID: domain.StackTemplateID("stack_template_123"),
 		ConfigJSON:      json.RawMessage(`{}`),
 	})
-	if !errors.Is(err, ErrStackTemplateConfigInvalid) {
-		t.Fatalf("error = %v, want ErrStackTemplateConfigInvalid", err)
+	// Nothing in the request can fix a missing desired revision, so it is a
+	// state conflict rather than invalid config.
+	if !errors.Is(err, ErrStackTemplateNotEditable) {
+		t.Fatalf("error = %v, want ErrStackTemplateNotEditable", err)
 	}
 	if stackTemplates.gotConfigJSON != nil {
 		t.Fatalf("updated config = %s, want no update", stackTemplates.gotConfigJSON)
@@ -897,6 +926,8 @@ func TestUpgradeStackTemplateRejectsDifferentSourceTemplate(t *testing.T) {
 	if !errors.Is(err, ErrStackTemplateUpgradeInvalid) {
 		t.Fatalf("error = %v, want ErrStackTemplateUpgradeInvalid", err)
 	}
+	// The fix is in the request, so it lands on the field the caller picked.
+	assertFieldIssues(t, err, "target_template_revision_id different_template")
 }
 
 func TestStartTemplateRunRejectsInvalidOperation(t *testing.T) {
@@ -1000,7 +1031,7 @@ func TestApproveRunRejectsAPlanThatNoLongerMatchesDesired(t *testing.T) {
 			stackTemplate.DesiredTemplateRevisionID = "template_123"
 			stackTemplate.DesiredConfigJSON = json.RawMessage(`{"region":"eu-west-1"}`)
 
-			runs := &recordingTemplateRunRepository{run: domain.TemplateRun{ID: "run_123", TenantID: "tenant_123", StackTemplateID: "stack_template_123", Status: domain.TemplateRunWaitingApproval}}
+			runs := &recordingTemplateRunRepository{run: domain.TemplateRun{ID: "run_123", RunNumber: 7, TenantID: "tenant_123", StackTemplateID: "stack_template_123", Status: domain.TemplateRunWaitingApproval}}
 			work := &recordingUnitOfWork{templateRuns: runs}
 			service := NewService(Service{
 				Authorization:            testPlatformAuthorizer(t),
@@ -1013,6 +1044,10 @@ func TestApproveRunRejectsAPlanThatNoLongerMatchesDesired(t *testing.T) {
 			err := service.ApproveRun(authenticatedContext(), ApproveRunCommand{TenantID: "tenant_123", RunID: "run_123"})
 			if !errors.Is(err, ErrStackTemplatePlanStale) {
 				t.Fatalf("error = %v, want ErrStackTemplatePlanStale", err)
+			}
+			// The run is named, so the person knows which plan to redo.
+			if stale, ok := errors.AsType[*PlanStaleError](err); !ok || stale.RunNumber != 7 {
+				t.Fatalf("error = %v, want a PlanStaleError for run #7", err)
 			}
 			if len(work.requests) != 0 || runs.approval.RunID != "" {
 				t.Fatalf("requests = %#v, approval = %#v; want nothing recorded", work.requests, runs.approval)
@@ -1141,6 +1176,9 @@ func TestConfigAndRevisionChangesWaitForTheRunInFlight(t *testing.T) {
 	if !errors.Is(err, ErrTemplateRunInFlight) {
 		t.Fatalf("config error = %v, want ErrTemplateRunInFlight", err)
 	}
+	if inFlight, ok := errors.AsType[*RunInFlightError](err); !ok || inFlight.RunNumber != 4 || inFlight.Status != domain.TemplateRunWaitingApproval {
+		t.Fatalf("config error = %v, want run #4 waiting for approval as a RunInFlightError", err)
+	}
 	_, err = service.UpgradeStackTemplate(authenticatedContext(), UpgradeStackTemplateCommand{TenantID: "tenant_123", StackTemplateID: "stack_template_123", TargetTemplateRevisionID: "template_124"})
 	if !errors.Is(err, ErrTemplateRunInFlight) {
 		t.Fatalf("upgrade error = %v, want ErrTemplateRunInFlight", err)
@@ -1173,6 +1211,45 @@ func TestDiscardRunDiscardsAWaitingPlan(t *testing.T) {
 }
 
 // The gate against concurrent runs is the template_runs_in_flight_idx unique
+// The store refuses the insert without naming the winner, so the service looks
+// it up: the person is then told which run to wait for or discard.
+func TestStartTemplateRunNamesTheRunThatWon(t *testing.T) {
+	t.Parallel()
+
+	runs := &recordingTemplateRunRepository{
+		createErr: ErrTemplateRunInFlight,
+		list:      []domain.TemplateRun{{RunNumber: 4, Status: domain.TemplateRunRunning}},
+	}
+	service := NewService(Service{
+		Users:         &fakeUserRepository{},
+		Work:          &recordingUnitOfWork{templateRuns: runs},
+		Authorization: testPlatformAuthorizer(t),
+		TemplateRuns:  runs,
+		StackTemplates: &recordingStackTemplateRepository{stackTemplate: domain.StackTemplate{
+			ID:                        domain.StackTemplateID("stack_template_123"),
+			DesiredTemplateRevisionID: domain.TemplateRevisionID("template_123"),
+			WorkspaceName:             "mtp_acme_prod_vpc_a13f9c",
+			Lifecycle:                 domain.StackTemplateActive,
+		}},
+		TemplateRevisionMetadata: &recordingTemplateRepository{
+			template: domain.TemplateRevision{ID: domain.TemplateRevisionID("template_123"), Status: domain.TemplateRevisionActive},
+		},
+		RunIDs: fixedTemplateRunIDGenerator{runID: domain.TemplateRunID("run_123")},
+		Clock:  fixedClock{now: time.Now()},
+	})
+
+	_, err := service.StartTemplateRun(authenticatedContext(), StartTemplateRunCommand{
+		TenantID: "tenant_123", StackTemplateID: "stack_template_123", Operation: domain.OperationPlan,
+	})
+	inFlight, ok := errors.AsType[*RunInFlightError](err)
+	if !ok || inFlight.RunNumber != 4 || inFlight.Status != domain.TemplateRunRunning {
+		t.Fatalf("error = %v, want run #4 running as a RunInFlightError", err)
+	}
+	if !errors.Is(err, ErrTemplateRunInFlight) {
+		t.Fatalf("error = %v, want it to still match ErrTemplateRunInFlight", err)
+	}
+}
+
 // index, not a check in this method, so the rejection arrives from the store
 // through the transaction rather than from a branch above it. What the service
 // owes is passage: the sentinel has to survive the InTx closure and the wrap
@@ -2223,8 +2300,9 @@ func TestGetTemplateRunLogRejectsUnsafePhase(t *testing.T) {
 		RunID:    domain.TemplateRunID("run_123"),
 		Phase:    "../plan",
 	})
-	if !errors.Is(err, ErrInvalidCommand) {
-		t.Fatalf("error = %v, want ErrInvalidCommand", err)
+	// A name of the wrong shape names a log that can't exist.
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("error = %v, want ErrNotFound", err)
 	}
 }
 

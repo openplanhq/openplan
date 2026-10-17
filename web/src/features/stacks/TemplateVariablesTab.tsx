@@ -1,14 +1,17 @@
 import { useState } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import { useTemplateRevisionVariablesQuery, useUpdateStackTemplateConfigMutation } from "../../api/queries";
+import { apiErrorMessage, fieldsShown } from "../../api/problems";
 import { tenantID } from "../../config";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
+import { useFieldErrors } from "../../shared/useFieldErrors";
 import { useLockState, variablesLockReason } from "../runs/lockReasons";
 import StackTemplateConfigPanel from "./StackTemplateConfigPanel";
 import { useStackTemplate } from "./stackTemplateContext";
 import { canSaveInstalledTemplateConfig, configFromVariableValues, variableValuesFromConfig } from "./stackWorkflow";
+import RequestIdNote from "../../shared/RequestIdNote";
 import { cn } from "@/lib/utils";
 
 // /stacks/:stackId/templates/:stackTemplateId/variables — the installed
@@ -18,6 +21,7 @@ export default function TemplateVariablesTab() {
   const { stackId, stackTemplate } = useStackTemplate();
   const [editedValues, setEditedValues] = useState<Record<string, string>>({});
   const [errorMessage, setErrorMessage] = useState("");
+  const variableErrors = useFieldErrors("#/config/");
 
   const variablesQuery = useTemplateRevisionVariablesQuery(tenantID, stackTemplate.desired_template_revision_id);
   const variables = variablesQuery.data ?? [];
@@ -44,6 +48,7 @@ export default function TemplateVariablesTab() {
       return;
     }
     setErrorMessage("");
+    variableErrors.clear();
     try {
       await updateStackTemplateConfigMutation.mutateAsync({
         stackTemplateID: stackTemplate.id,
@@ -51,7 +56,8 @@ export default function TemplateVariablesTab() {
       });
       setEditedValues({});
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Request failed");
+      variableErrors.show(error);
+      setErrorMessage(apiErrorMessage(error, "Request failed", fieldsShown("#/config/", variables.map((variable) => variable.name))));
     }
   }
 
@@ -70,6 +76,7 @@ export default function TemplateVariablesTab() {
     return (
       <div className="flex flex-col items-start gap-3" data-testid="template-variables-error">
         <ErrorLine live={false}>Something went wrong while loading the template's variables.</ErrorLine>
+        <RequestIdNote error={variablesQuery.error} />
         <button
           type="button"
           className={cn(buttonClass("outline"), "pointer-coarse:h-11")}
@@ -88,7 +95,11 @@ export default function TemplateVariablesTab() {
       <StackTemplateConfigPanel
         variables={variables}
         variableValues={variableValues}
-        onVariableValueChange={(name, value) => setEditedValues((current) => ({ ...current, [name]: value }))}
+        onVariableValueChange={(name, value) => {
+          setEditedValues((current) => ({ ...current, [name]: value }));
+          variableErrors.clear(name);
+        }}
+        errors={variableErrors.errors}
         canSave={canSaveConfig}
         onSave={() => void handleSave()}
         saveBusy={updateStackTemplateConfigMutation.isPending}

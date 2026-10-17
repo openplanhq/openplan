@@ -5,7 +5,7 @@ description: |-
   This is not a directory lookup. It searches openplan's projection of
   identities it has actually verified, so a person who has never signed
   in will not appear — and cannot be granted a role. That is the same
-  limitation `POST .../grants` enforces as `unknown_user`.
+  limitation `POST .../grants` enforces as `not_signed_in`.
 
   The response echoes the `first` and `max` actually applied, so a client
   paginates from what the server used rather than from what it sent.
@@ -30,4 +30,5 @@ scripts:
       const others = pm.response.json().users.filter((user) => user.sub !== pm.environment.get('my_sub'));
       if (others.length) { pm.environment.set('user_sub', others[0].sub); }
     language: text/javascript
+examples: ./.resources/Search people who have signed in.resources/examples
 order: 1000

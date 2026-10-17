@@ -1,9 +1,12 @@
 import { CircleAlert, Loader2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { apiErrorMessage, fieldsShown } from "../../api/problems";
 import { useCreateStackMutation } from "../../api/queries";
 import { tenantID } from "../../config";
 import Breadcrumb from "../../shared/Breadcrumb";
+import ErrorLine from "../../shared/ErrorLine";
+import { useFieldErrors } from "../../shared/useFieldErrors";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,6 +18,7 @@ export default function CreateStackScreen() {
   const mutation = useCreateStackMutation(tenantID);
   const [name, setName] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const nameErrors = useFieldErrors("#/");
 
   const trimmed = name.trim();
 
@@ -22,11 +26,15 @@ export default function CreateStackScreen() {
     event.preventDefault();
     if (trimmed === "") return;
     setErrorMessage("");
+    nameErrors.clear();
     try {
       const result = await mutation.mutateAsync({ name: trimmed, slug: "", tags: {}, default_credential_ids: [] });
       navigate(`/stacks/${result.id}`);
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : "Failed to create stack");
+      // The name's own problems show under it, including a clash on the slug
+      // the server made from it; the alert says anything else.
+      nameErrors.show(err);
+      setErrorMessage(apiErrorMessage(err, "Failed to create stack", fieldsShown("#/", ["name"])));
     }
   };
 
@@ -64,11 +72,21 @@ export default function CreateStackScreen() {
               <Input
                 id="create-stack-name"
                 value={name}
-                onChange={(event) => setName(event.target.value)}
+                onChange={(event) => {
+                  setName(event.target.value);
+                  nameErrors.clear("name");
+                }}
+                aria-invalid={nameErrors.errors.name ? true : undefined}
+                aria-describedby={nameErrors.errors.name ? "create-stack-name-error" : undefined}
                 placeholder="e.g. Production"
                 autoFocus
                 className="pointer-coarse:h-11"
               />
+              {nameErrors.errors.name && (
+                <ErrorLine id="create-stack-name-error" live={false}>
+                  {nameErrors.errors.name}
+                </ErrorLine>
+              )}
             </div>
             <Button
               type="submit"

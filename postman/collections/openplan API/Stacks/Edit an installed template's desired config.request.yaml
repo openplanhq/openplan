@@ -4,7 +4,7 @@ description: |-
   merge. The new config is validated against the desired revision's
   variables.
 
-  Refused with `409 run_in_flight` while the component has an unfinished
+  Refused with `409 run-in-flight` while the component has an unfinished
   run, a plan waiting for approval included: a run snapshots the config
   when it starts, and the plan being reviewed has to stay a plan of what
   the component says. Apply or discard the run first.

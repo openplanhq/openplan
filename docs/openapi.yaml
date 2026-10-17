@@ -41,30 +41,47 @@ info:
     ## Request bodies
 
     JSON request bodies must be exactly one JSON object, and unknown fields are
-    rejected with `400 invalid_json`. Approving and discarding a run need
+    rejected with `400 malformed-body`. Approving and discarding a run need
     nothing from the body, so they also accept no body at all; a body that is
     sent is still held to the schema.
 
     A JSON request body may be at most 1 MiB; a larger one is rejected with
-    `413 request_too_large` before any of it is acted on.
+    `413` before any of it is acted on.
 
     ## Errors
 
-    Every JSON error shares one envelope: an `error` code meant for code to
-    branch on, and a `message` meant for a person to read. See the `Error`
-    schema for the full set of codes. That includes the `401` for a missing
-    or expired session, and a request no route matches: `404 not_found` for
-    an unknown path, `405 method_not_allowed` (with an `Allow` header) for a
-    known path and the wrong method. The sign-in routes are the exception:
-    their failures are an HTML page for the browser, and back-channel logout
-    answers Dex in plain text.
+    Every error from `/v1` and `/healthz` is an RFC 9457 problem document,
+    served as `application/problem+json`. See the `Problem` schema.
 
-    Every response carries an `X-Request-Id` header, and every JSON error
-    repeats it as `request_id`. A `500` says nothing about its cause; the API
-    logs the cause under that id, so quote it when reporting one. An id a
-    proxy in front of the API already set is kept when it is plain (letters,
-    digits, `.`, `_` and `-`, at most 128 characters), so both logs share it;
-    any other is replaced.
+    - `type` is the contract: branch on it. Types are URIs under
+      `https://openplan.run/problems/`; they are never renamed or reused, and
+      they needn't resolve. A status whose meaning is the status alone (`401`,
+      `403`, `404`, `405`, `413` and the plain `500`) uses `about:blank`, and
+      a client branches on `status`.
+    - `title` is fixed per type. `detail` is one sentence about this
+      occurrence, for people; never parse it.
+    - `request_id` repeats the `X-Request-Id` header.
+    - `errors` lists field problems on `validation-failed`, `invalid-query`
+      and the `duplicate-*` types: a JSON Pointer into the body (`pointer`)
+      or a query `parameter`, a stable `issue` code, and a `detail`.
+
+    `400` means the request can't be parsed: malformed JSON, an unknown field
+    or a wrong type (`malformed-body`), or a query parameter that isn't an
+    integer (`invalid-query`). `422 validation-failed` means it parses but its
+    content breaks a rule; every problem with the request is in `errors`.
+    `409` means the request is valid but the object's current state doesn't
+    allow it, and each cause has its own type.
+
+    A request no route matches gets `404`, or `405` with an `Allow` header for
+    a known path and the wrong method. The sign-in routes are the exception
+    to all of this: their failures are an HTML page for the browser, and
+    back-channel logout answers Dex in plain text.
+
+    Every response carries an `X-Request-Id` header. A `500` says nothing
+    about its cause; the API logs the cause under that id, so quote it when
+    reporting one. An id a proxy in front of the API already set is kept when
+    it is plain (letters, digits, `.`, `_` and `-`, at most 128 characters),
+    so both logs share it; any other is replaced.
   license:
     name: Apache-2.0
     identifier: Apache-2.0
@@ -335,8 +352,8 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
-        "409": { $ref: "#/components/responses/Conflict" }
         "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
         "500": { $ref: "#/components/responses/InternalError" }
     get:
       tags: [Templates]
@@ -444,11 +461,15 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: The slug is already taken in this tenant (`conflict`).
+          description: |
+            The slug is already taken in this tenant (`duplicate-slug`). Its
+            `errors` entry points at `#/slug`, or at `#/name` when no slug was
+            sent and the server made it from the name.
           content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
         "500": { $ref: "#/components/responses/InternalError" }
     get:
       tags: [Stacks]
@@ -547,13 +568,15 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
           description: |
-            The revision is not installable, or the config does not satisfy its
-            variables (`conflict`); or `component_key` is already used on this
-            stack (`duplicate_component_key`).
+            The revision is still syncing or its sync failed
+            (`revision-not-installable`), or `component_key` is already used on
+            this stack (`duplicate-component-key`, with an `errors` entry on
+            `#/component_key`).
           content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
         "500": { $ref: "#/components/responses/InternalError" }
 
   /v1/tenants/{tenant_id}/stacks/{stack_id}/credentials:
@@ -589,12 +612,13 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
           description: |
-            The name is not a valid environment variable name, or is already
-            used in this scope (`conflict`).
+            The name is already used in this scope (`duplicate-credential-name`,
+            with an `errors` entry on `#/name`).
           content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/CredentialEncryptionUnavailable" }
     get:
@@ -667,8 +691,9 @@ paths:
 
         The subject must have signed in to openplan at least once. openplan is not
         a directory: a person exists here only once a verified token has
-        projected them. Granting to a subject it has never seen returns `400
-        unknown_user`. Use `GET /v1/tenants/{tenant_id}/users/search` to find
+        projected them. Granting to a subject it has never seen returns `422
+        validation-failed` with an `errors` entry on `#/user_sub` whose issue
+        is `not_signed_in`. Use `GET /v1/tenants/{tenant_id}/users/search` to find
         one.
 
         The response is the intended grant, rendered from the identity
@@ -691,22 +716,24 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Grant" }
-        "400":
-          description: |
-            An unknown role, a malformed subject, or — as `unknown_user` — a
-            person who has never signed in.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: The change would remove the stack's last owner (`conflict`).
+          description: The change would remove the stack's last owner (`last-owner`).
           content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "422":
+          description: |
+            An unknown role (`#/role`, `unsupported`), a malformed subject
+            (`#/user_sub`, `invalid_format`), or a person who has never signed
+            in (`#/user_sub`, `not_signed_in`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "500": { $ref: "#/components/responses/InternalError" }
 
   /v1/tenants/{tenant_id}/stacks/{stack_id}/grants/{user_sub}:
@@ -729,10 +756,10 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: This is the stack's last owner (`conflict`).
+          description: This is the stack's last owner (`last-owner`).
           content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "500": { $ref: "#/components/responses/InternalError" }
 
   /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/config:
@@ -747,7 +774,7 @@ paths:
         merge. The new config is validated against the desired revision's
         variables.
 
-        Refused with `409 run_in_flight` while the component has an unfinished
+        Refused with `409 run-in-flight` while the component has an unfinished
         run, a plan waiting for approval included: a run snapshots the config
         when it starts, and the plan being reviewed has to stay a plan of what
         the component says. Apply or discard the run first.
@@ -763,26 +790,29 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/StackTemplate" }
-        "400":
-          description: |
-            A malformed body, or no `config` (`invalid_request`). The edit
-            replaces the whole config, so a missing one is refused rather than
-            read as "clear everything"; send `{}` to clear it on purpose.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
           description: |
-            The config does not satisfy the revision's variables, or the
-            component is not active, so its config can no longer be edited
-            (`conflict`).
+            The component is being torn down, so its config can no longer be
+            edited (`template-not-editable`), or a run is unfinished
+            (`run-in-flight`).
           content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "422":
+          description: |
+            No `config` (`#/config`, `required`): the edit replaces the whole
+            config, so a missing one is refused rather than read as "clear
+            everything"; send `{}` to clear it on purpose. Or the config does
+            not satisfy the revision's variables: one entry per variable,
+            under `#/config/<name>`.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "500": { $ref: "#/components/responses/InternalError" }
 
   /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/upgrade:
@@ -819,12 +849,22 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
           description: |
-            The target revision is not a valid upgrade, or the config does not
-            satisfy its variables (`conflict`).
+            The component is being torn down (`template-not-upgradable`), the
+            target revision is still syncing or failed
+            (`revision-not-installable`), or a run is unfinished
+            (`run-in-flight`).
           content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "422":
+          description: |
+            The target is a revision of a different template
+            (`#/target_template_revision_id`, `different_template`), or the
+            config does not satisfy its variables (`#/config/<name>`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "500": { $ref: "#/components/responses/InternalError" }
 
   /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/credentials:
@@ -855,11 +895,14 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: Invalid or duplicate credential name (`conflict`).
+          description: |
+            The name is already used in this scope (`duplicate-credential-name`,
+            with an `errors` entry on `#/name`).
           content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/CredentialEncryptionUnavailable" }
     get:
@@ -925,7 +968,7 @@ paths:
 
         One component runs one operation at a time, and a plan waiting for
         approval counts. Starting a second while one is in flight returns `409
-        run_in_flight` — the competing run is visible through the list
+        run-in-flight` — the competing run is visible through the list
         endpoint, so a client can wait for it, or approve or discard it.
       operationId: startTemplateRun
       requestBody:
@@ -950,17 +993,29 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
           description: |
-            `run_in_flight` — another run is already active for this component.
-            `conflict` — the component is not in a runnable state.
+            `run-in-flight` — another run is already active for this component.
+            `template-not-runnable` — the component is being torn down, or has
+            no revision to run.
           content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
               examples:
                 runInFlight:
-                  value: { error: run_in_flight, message: a run is already in flight for this component }
-                planStale:
-                  value: { error: plan_stale, message: the plan is stale; re-plan before applying }
+                  value:
+                    type: https://openplan.run/problems/run-in-flight
+                    title: Another run is in progress
+                    status: 409
+                    detail: "Run #4 is still running. Wait for it to finish or discard it."
+                    request_id: d9f09fc4c32729cc73d7a3bd8042f2f4
         "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "422":
+          description: |
+            An unsupported `operation` (`#/operation`, `unsupported`), or
+            `auto_approve` on an operation other than `apply`
+            (`#/auto_approve`, `apply_only`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "500": { $ref: "#/components/responses/InternalError" }
     get:
       tags: [Runs]
@@ -1039,7 +1094,8 @@ paths:
       summary: Read one phase's log body
       description: |
         Returns the raw Terraform output as `text/plain`, not JSON. A phase
-        that has not produced output yet returns `404`.
+        that has not produced output yet, or a name that isn't a log name,
+        returns `404`.
       operationId: getTemplateRunLog
       responses:
         "200":
@@ -1047,11 +1103,6 @@ paths:
           content:
             text/plain:
               schema: { type: string }
-        "400":
-          description: The phase is not one of the supported values (`invalid_request`).
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -1071,7 +1122,7 @@ paths:
         reviewed is exactly what runs. If the state has moved on since the
         plan was made, tofu refuses the plan and the run fails; plan again.
 
-        Refused with `409 plan_stale` if the plan no longer describes the
+        Refused with `409 plan-stale` if the plan no longer describes the
         component's desired config and revision. Those cannot change while
         the plan waits, so this is a backstop.
 
@@ -1093,10 +1144,12 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: The run is not waiting for approval (`conflict`).
+          description: |
+            The run is not waiting for approval (`run-not-approvable`), or the
+            plan no longer matches the desired state (`plan-stale`).
           content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "413": { $ref: "#/components/responses/RequestTooLarge" }
         "500": { $ref: "#/components/responses/InternalError" }
 
@@ -1129,10 +1182,10 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: The run has no plan waiting to discard (`conflict`).
+          description: The run has no plan waiting to discard (`run-not-discardable`).
           content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "413": { $ref: "#/components/responses/RequestTooLarge" }
         "500": { $ref: "#/components/responses/InternalError" }
 
@@ -1148,7 +1201,7 @@ paths:
         This is not a directory lookup. It searches openplan's projection of
         identities it has actually verified, so a person who has never signed
         in will not appear — and cannot be granted a role. That is the same
-        limitation `POST .../grants` enforces as `unknown_user`.
+        limitation `POST .../grants` enforces as `not_signed_in`.
 
         The response echoes the `first` and `max` actually applied, so a client
         paginates from what the server used rather than from what it sent.
@@ -1195,11 +1248,27 @@ paths:
                 required: [users, first, max]
         "400":
           description: |
-            `q` missing or over 200 characters, or `first`/`max` out of range
-            (`invalid_request`).
+            `first` or `max` isn't an integer (`invalid-query`, with an
+            `errors` entry per parameter).
           content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+              example:
+                type: https://openplan.run/problems/invalid-query
+                title: The query string can't be read
+                status: 400
+                detail: A query parameter isn't an integer.
+                request_id: 3f1c2b9a8d7e6f5a4b3c2d1e0f9a8b7c
+                errors:
+                  - { parameter: max, issue: invalid_format, detail: max must be an integer }
+        "422":
+          description: |
+            `q` missing (`required`) or over 200 characters (`too_long`), or
+            `first`/`max` out of range (`out_of_range`). One `errors` entry per
+            parameter, with `parameter` set.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -1233,10 +1302,10 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503":
-          description: No queue is configured for this deployment (`queue_unavailable`).
+          description: No queue is configured for this deployment (`queue-unavailable`).
           content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
 
 components:
   securitySchemes:
@@ -1283,62 +1352,109 @@ components:
 
   responses:
     Unauthorized:
-      description: No valid session (`unauthorized`).
+      description: No live session (`about:blank`). Sign in again.
       content:
-        application/json:
-          schema: { $ref: "#/components/schemas/Error" }
-          example: { error: unauthorized, message: authentication required }
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example:
+            type: about:blank
+            title: Unauthorized
+            status: 401
+            detail: Sign in to continue.
+            request_id: 8cf6602cb5083bde8ff76e5dffded40d
     Forbidden:
-      description: The session is valid but lacks permission (`forbidden`).
+      description: The caller can see the object but may not do this to it (`about:blank`).
       content:
-        application/json:
-          schema: { $ref: "#/components/schemas/Error" }
-          example: { error: forbidden, message: forbidden }
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example:
+            type: about:blank
+            title: Forbidden
+            status: 403
+            detail: You don't have permission to do this.
+            request_id: 8cf6602cb5083bde8ff76e5dffded40d
     NotFound:
       description: |
-        No such resource (`not_found`). Also returned when `tenant_id` is not
-        the configured tenant.
+        No such resource, or one the caller can't see (`about:blank`). Also
+        returned when `tenant_id` is not the configured tenant.
       content:
-        application/json:
-          schema: { $ref: "#/components/schemas/Error" }
-          example: { error: not_found, message: resource not found }
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example:
+            type: about:blank
+            title: Not Found
+            status: 404
+            detail: The resource doesn't exist, or you can't see it.
+            request_id: 8cf6602cb5083bde8ff76e5dffded40d
     BadRequest:
       description: |
-        A malformed body (`invalid_json` — not one JSON object, or carrying
-        unknown fields) or an invalid field value (`invalid_request`).
+        The body can't be parsed (`malformed-body`): it isn't one JSON object,
+        has an unknown field or a wrong type, or has trailing data. A client
+        shouldn't send one; treat it as a bug.
       content:
-        application/json:
-          schema: { $ref: "#/components/schemas/Error" }
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
           example:
-            error: invalid_json
-            message: request body must match the expected JSON schema
-    Conflict:
-      description: The request cannot be applied to the resource's current state (`conflict`).
+            type: https://openplan.run/problems/malformed-body
+            title: The request body can't be read
+            status: 400
+            detail: "The request body doesn't match the expected schema: a field is unknown or has the wrong type."
+            request_id: 8cf6602cb5083bde8ff76e5dffded40d
+    ValidationFailed:
+      description: |
+        The body parses, but its content breaks a rule (`validation-failed`).
+        `errors` holds one entry per problem, each with a JSON Pointer into
+        the body.
       content:
-        application/json:
-          schema: { $ref: "#/components/schemas/Error" }
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example:
+            type: https://openplan.run/problems/validation-failed
+            title: The request has invalid fields
+            status: 422
+            detail: 2 fields need attention.
+            request_id: 8cf6602cb5083bde8ff76e5dffded40d
+            errors:
+              - { pointer: "#/config/region", issue: required, detail: region is required }
+              - { pointer: "#/config/size", issue: unknown, detail: size is not a variable of this template }
     RequestTooLarge:
-      description: The JSON request body is larger than 1 MiB (`request_too_large`).
+      description: The JSON request body is larger than 1 MiB (`about:blank`).
       content:
-        application/json:
-          schema: { $ref: "#/components/schemas/Error" }
-          example: { error: request_too_large, message: request body must not exceed 1 MiB }
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example:
+            type: about:blank
+            title: Request Entity Too Large
+            status: 413
+            detail: The request body must not exceed 1 MiB.
+            request_id: 8cf6602cb5083bde8ff76e5dffded40d
     InternalError:
       description: |
-        An unexpected failure (`internal_error`). The message is deliberately
-        generic; details are in the server log.
+        An unexpected failure (`about:blank`). The detail is deliberately
+        generic; the cause is in the server log under `request_id`.
       content:
-        application/json:
-          schema: { $ref: "#/components/schemas/Error" }
-          example: { error: internal_error, message: internal server error }
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example:
+            type: about:blank
+            title: Internal Server Error
+            status: 500
+            detail: Something went wrong on the server. Quote the request ID when you report it.
+            request_id: 8cf6602cb5083bde8ff76e5dffded40d
     CredentialEncryptionUnavailable:
       description: |
         No credential encryption key is configured on this deployment
-        (`credential_encryption_unavailable`). Nothing a client sends can fix
+        (`credential-encryption-unavailable`). Nothing a client sends can fix
         it; an operator has to configure the key.
       content:
-        application/json:
-          schema: { $ref: "#/components/schemas/Error" }
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example:
+            type: https://openplan.run/problems/credential-encryption-unavailable
+            title: Credential encryption isn't configured
+            status: 503
+            detail: No credential encryption key is configured. An operator has to set one.
+            request_id: 8cf6602cb5083bde8ff76e5dffded40d
     SignInFailedHTML:
       description: |
         Sign-in could not be completed. One identical page for every cause:
@@ -1349,39 +1465,100 @@ components:
           schema: { type: string }
 
   schemas:
-    Error:
+    Problem:
       type: object
-      description: The envelope every JSON error uses.
+      description: |
+        An RFC 9457 problem document, served as `application/problem+json`.
+        Every error the API writes is one.
       properties:
-        error:
+        type:
           type: string
-          description: A stable code to branch on.
-          enum:
-            - unauthorized
-            - forbidden
-            - not_found
-            - method_not_allowed
-            - invalid_request
-            - invalid_json
-            - request_too_large
-            - unknown_user
-            - plan_stale
-            - run_in_flight
-            - duplicate_component_key
-            - conflict
-            - credential_encryption_unavailable
-            - queue_unavailable
-            - internal_error
-        message:
+          format: uri
+          description: |
+            The contract: branch on it. `about:blank` when the status says it
+            all; otherwise one of the types below, under
+            `https://openplan.run/problems/`. Never renamed or reused.
+          examples:
+            - about:blank
+            - https://openplan.run/problems/malformed-body
+            - https://openplan.run/problems/invalid-query
+            - https://openplan.run/problems/validation-failed
+            - https://openplan.run/problems/run-in-flight
+            - https://openplan.run/problems/plan-stale
+            - https://openplan.run/problems/run-not-approvable
+            - https://openplan.run/problems/run-not-discardable
+            - https://openplan.run/problems/template-not-runnable
+            - https://openplan.run/problems/template-not-editable
+            - https://openplan.run/problems/template-not-upgradable
+            - https://openplan.run/problems/revision-not-installable
+            - https://openplan.run/problems/duplicate-slug
+            - https://openplan.run/problems/duplicate-component-key
+            - https://openplan.run/problems/duplicate-credential-name
+            - https://openplan.run/problems/last-owner
+            - https://openplan.run/problems/credential-encryption-unavailable
+            - https://openplan.run/problems/queue-unavailable
+        title:
           type: string
-          description: A human-readable explanation. Not a stable contract.
+          description: |
+            Fixed per type, for people. For `about:blank` it is the HTTP
+            reason phrase.
+        status:
+          type: integer
+          description: The HTTP status, repeated.
+        detail:
+          type: string
+          description: |
+            One sentence about this occurrence, for people. Never parse it;
+            for a `500` it is deliberately generic.
         request_id:
           type: string
           description: |
             The same id as the response's `X-Request-Id` header, which the
-            API's log lines carry too. Present on every error the API itself
-            writes.
-      required: [error, message]
+            API's log lines carry too.
+        errors:
+          type: array
+          description: |
+            One entry per field problem. Present on `validation-failed`,
+            `invalid-query` and the `duplicate-*` types.
+          items: { $ref: "#/components/schemas/ProblemFieldError" }
+      required: [type, title, status, request_id]
+
+    ProblemFieldError:
+      type: object
+      description: |
+        One problem with one field. Exactly one of `pointer` and `parameter`
+        is set.
+      properties:
+        pointer:
+          type: string
+          description: |
+            A JSON Pointer into the request body, in URI-fragment form, e.g.
+            `#/config/region`.
+        parameter:
+          type: string
+          description: A query parameter's name, e.g. `max`.
+        issue:
+          type: string
+          description: A stable code for what is wrong. Never renamed.
+          enum:
+            - required
+            - unknown
+            # Quoted, or YAML reads it as null rather than the code.
+            - "null"
+            - not_object
+            - invalid_format
+            - invalid
+            - unsupported
+            - apply_only
+            - different_template
+            - not_signed_in
+            - too_long
+            - out_of_range
+            - duplicate
+        detail:
+          type: string
+          description: One sentence for people, naming the field.
+      required: [issue, detail]
 
     Me:
       type: object
@@ -1786,7 +1963,7 @@ components:
       description: |
         Whether the plan waiting for approval still describes the desired
         config and revision. `none` — no plan is waiting. `stale` — it no
-        longer does; approving returns `409 plan_stale`. `matches` — it does.
+        longer does; approving returns `409 plan-stale`. `matches` — it does.
 
         Derived server-side on purpose. The snapshots it is computed from are
         deliberately not returned: a client re-deriving this comparison is the

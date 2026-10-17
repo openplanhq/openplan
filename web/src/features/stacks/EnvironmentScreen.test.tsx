@@ -166,7 +166,15 @@ describe("EnvironmentScreen", () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ error: "conflict", message: "A credential with that name already exists" }, 409)
+      jsonResponse(
+        {
+          type: "https://openplan.run/problems/duplicate-credential-name",
+          title: "The credential name is taken",
+          detail: "A credential with this name already exists here.",
+          errors: [{ pointer: "#/name", issue: "duplicate", detail: "A credential with this name already exists here." }]
+        },
+        409
+      )
     );
     renderScreen(queryClient);
     const user = userEvent.setup();
@@ -176,9 +184,15 @@ describe("EnvironmentScreen", () => {
     await user.click(screen.getByRole("button", { name: "Add credential" }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toContain("A credential with that name already exists");
+    expect(alert.textContent).toContain("A credential with this name already exists here.");
     expect(screen.getAllByRole("alert")).toHaveLength(1);
     expect(screen.getByLabelText<HTMLInputElement>("Value").value).toBe("secret-value");
+    // The clash is the name's, so the name is the field marked, and it
+    // points at the line that says why.
+    const name = screen.getByLabelText("Name");
+    expect(name.getAttribute("aria-invalid")).toBe("true");
+    expect(document.getElementById(name.getAttribute("aria-describedby")!)).toBe(alert);
+    expect(screen.getByLabelText("Value").getAttribute("aria-invalid")).toBeNull();
   });
 
   // The fields stay editable while an add is out. Clearing them when it lands
@@ -218,7 +232,7 @@ describe("EnvironmentScreen", () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), [credential]);
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ error: "conflict", message: "The credential is still in use" }, 409)
+      jsonResponse({ type: "about:blank", title: "Conflict", detail: "The credential is still in use" }, 409)
     );
     renderScreen(queryClient);
 
@@ -269,7 +283,7 @@ describe("EnvironmentScreen", () => {
   it("retries a failed load", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(jsonResponse({ error: "internal", message: "boom" }, 500))
+      .mockResolvedValueOnce(jsonResponse({ type: "about:blank", title: "Internal Server Error", detail: "boom" }, 500))
       .mockResolvedValueOnce(jsonResponse([credential]));
 
     renderScreen(testQueryClient());

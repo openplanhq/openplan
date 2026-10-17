@@ -7,6 +7,7 @@ import {
   useAssignStackRoleMutation,
   useRevokeStackRoleMutation
 } from "../../api/queries";
+import { apiErrorMessage } from "../../api/problems";
 import type { GrantView, UserProfile } from "../../api/types";
 import { tenantID } from "../../config";
 import RoleBadge from "../../shared/RoleBadge";
@@ -90,7 +91,7 @@ export default function StackAccessScreen() {
       setInputText((current) => (current === sentUser.display_name ? "" : current));
       setSearch((current) => (current === sentSearch ? "" : current));
     } catch (err) {
-      setMutationError(err instanceof Error ? err.message : "Failed to assign role");
+      setMutationError(apiErrorMessage(err, "Failed to assign role"));
     }
   }, [selectedUser, selectedRole, search, assignMutation]);
 
@@ -106,7 +107,7 @@ export default function StackAccessScreen() {
           displayName: grant.display_name
         });
       } catch (err) {
-        setMutationError(err instanceof Error ? err.message : "Failed to revoke role");
+        setMutationError(apiErrorMessage(err, "Failed to revoke role"));
       }
     },
     [revokeMutation]

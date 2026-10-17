@@ -115,9 +115,44 @@ describe("CreateStackScreen", () => {
     });
   });
 
+  // The form sends no slug, so the server makes it from the name and points a
+  // clash at the name, the field the person can change.
+  it("puts a clash on the slug made from the name under the name field", async () => {
+    const detail = 'Another stack already uses the slug "my-stack", made from this name. Choose another name.';
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse(
+        {
+          type: "https://openplan.run/problems/duplicate-slug",
+          title: "The slug is taken",
+          detail,
+          errors: [{ pointer: "#/name", issue: "duplicate", detail }]
+        },
+        409
+      )
+    );
+
+    renderScreen();
+
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "My Stack" } });
+    fireEvent.click(screen.getByRole("button", { name: /create stack/i }));
+
+    await waitFor(() => expect(screen.getByLabelText("Name").getAttribute("aria-invalid")).toBe("true"));
+    expect(document.getElementById("create-stack-name-error")?.textContent).toBe(detail);
+    expect(screen.queryByTestId("create-stack-error")).toBeNull();
+  });
+
+  // An error on a field the form doesn't draw has nowhere else to show.
   it("shows an error message when the mutation fails", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ error: "conflict", message: "A stack with that slug already exists" }, 409)
+      jsonResponse(
+        {
+          type: "https://openplan.run/problems/duplicate-slug",
+          title: "The slug is taken",
+          detail: "Another stack already uses this slug.",
+          errors: [{ pointer: "#/slug", issue: "duplicate", detail: "Another stack already uses this slug." }]
+        },
+        409
+      )
     );
 
     renderScreen();
@@ -127,8 +162,32 @@ describe("CreateStackScreen", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("create-stack-error")).toBeTruthy();
-      expect(screen.getByTestId("create-stack-error").textContent).toContain("A stack with that slug already exists");
+      expect(screen.getByTestId("create-stack-error").textContent).toContain("Another stack already uses this slug.");
     });
+    expect(screen.getByLabelText("Name").getAttribute("aria-invalid")).toBeNull();
+  });
+
+  it("puts a refused name's error under the name field", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse(
+        {
+          type: "https://openplan.run/problems/validation-failed",
+          title: "The request has invalid fields",
+          detail: "name is required",
+          errors: [{ pointer: "#/name", issue: "required", detail: "name is required" }]
+        },
+        422
+      )
+    );
+
+    renderScreen();
+
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "  x" } });
+    fireEvent.click(screen.getByRole("button", { name: /create stack/i }));
+
+    await waitFor(() => expect(screen.getByLabelText("Name").getAttribute("aria-invalid")).toBe("true"));
+    expect(document.getElementById("create-stack-name-error")?.textContent).toBe("name is required");
+    expect(screen.queryByTestId("create-stack-error")).toBeNull();
   });
 
   it("invalidates the stacks list query on success", async () => {
@@ -228,7 +287,7 @@ describe("CreateStackScreen", () => {
   // the screen must not add a second one.
   it("announces a failed create once", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ error: "conflict", message: "A stack with that slug already exists" }, 409)
+      jsonResponse({ type: "about:blank", title: "Conflict", detail: "A stack with that slug already exists" }, 409)
     );
     renderScreen();
 
@@ -257,7 +316,7 @@ describe("CreateStackScreen", () => {
 
   it("shows an inline error message for a handled API error status", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ error: "unavailable", message: "service unavailable" }, 503)
+      jsonResponse({ type: "about:blank", title: "Service Unavailable", detail: "service unavailable" }, 503)
     );
 
     renderScreen();

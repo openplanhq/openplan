@@ -78,7 +78,7 @@ describe("VariablesTab", () => {
   });
 
   it("offers a retry when the variables fail to load", async () => {
-    vi.mocked(globalThis.fetch).mockImplementation(async () => jsonResponse({ error: "boom", message: "boom" }, 500));
+    vi.mocked(globalThis.fetch).mockImplementation(async () => jsonResponse({ type: "about:blank", title: "Internal Server Error", detail: "boom" }, 500));
     renderTab(seed());
 
     await waitFor(() => expect(screen.getByTestId("template-variables-error")).toBeTruthy());

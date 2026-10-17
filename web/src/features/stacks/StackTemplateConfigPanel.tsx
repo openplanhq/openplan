@@ -14,6 +14,7 @@ interface StackTemplateConfigPanelProps {
   // When set, it leads the panel, and the inputs and the action are
   // disabled: the capability gate's denied-with-reason state (AUTH-020).
   disabledReason?: string;
+  errors?: Record<string, string>;
 }
 
 /**
@@ -28,7 +29,8 @@ export default function StackTemplateConfigPanel({
   canSave,
   onSave,
   saveBusy,
-  disabledReason
+  disabledReason,
+  errors
 }: StackTemplateConfigPanelProps) {
   const locked = Boolean(disabledReason);
   return (
@@ -44,6 +46,7 @@ export default function StackTemplateConfigPanel({
         onVariableValueChange={onVariableValueChange}
         disabled={locked}
         emptyMessage="This template declares no variables."
+        errors={errors}
       />
       <button
         type="button"

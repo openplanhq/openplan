@@ -210,9 +210,10 @@ Setup:
    next one needs, and the asynchronous ones (a registration, a plan) are
    polled until they finish.
 
-Every response is checked for a request id, and every JSON error for the
-{error, message, request_id} envelope. "Sign out" revokes the session, so it
-runs last.`
+Every response is checked for a request id, and every error for an RFC 9457
+problem document (application/problem+json with type, title, a status
+matching the response, and request_id). "Sign out" revokes the session, so
+it runs last.`
 
 const collectionPreRequest = `// The API authenticates by session cookie alone; there is no bearer token.
 const session = pm.environment.get('session_cookie');
@@ -220,47 +221,89 @@ if (session) {
   pm.request.headers.upsert({ key: 'Cookie', value: 'openplan_session=' + session });
 }`
 
-const collectionTest = `// Checks every response gets.
+// nonProblemErrorPaths are the routes whose errors are not problem documents,
+// by design: the sign-in routes answer a browser with HTML, and back-channel
+// logout answers Dex in plain text. The collection test exempts them by
+// request path, never by the response's content type, so an error that
+// regresses to another media type fails instead of skipping the check.
+// TestNonProblemErrorPathsMatchTheSpec keeps this list and the spec in step.
+var nonProblemErrorPaths = []string{"/v1/auth/login", "/v1/auth/callback", "/v1/auth/backchannel-logout"}
+
+var collectionTest = `// Checks every response gets.
 pm.test('no server error', () => pm.expect(pm.response.code).to.be.below(500));
 pm.test('carries a request id', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);
-const contentType = pm.response.headers.get('Content-Type') || '';
-if (pm.response.code >= 400 && contentType.includes('application/json')) {
-  pm.test('error body is the {error, message, request_id} envelope', () => {
+// Every other error must be a problem document. These routes are exempt by
+// design: sign-in answers in HTML, back-channel logout in plain text.
+const notProblemRoutes = ` + jsStringArray(nonProblemErrorPaths) + `;
+if (pm.response.code >= 400 && !notProblemRoutes.includes(pm.request.url.getPath())) {
+  pm.test('error body is an RFC 9457 problem document', () => {
+    pm.expect(pm.response.headers.get('Content-Type') || '', 'Content-Type').to.include('application/problem+json');
     const body = pm.response.json();
-    pm.expect(body.error, 'error').to.be.a('string').and.not.empty;
-    pm.expect(body.message, 'message').to.be.a('string');
+    pm.expect(body.type, 'type').to.be.a('string').and.not.empty;
+    pm.expect(body.title, 'title').to.be.a('string').and.not.empty;
+    pm.expect(body.status, 'status').to.eql(pm.response.code);
     pm.expect(body.request_id, 'request_id').to.be.a('string').and.eql(pm.response.headers.get('X-Request-Id'));
   });
 }`
 
+// jsStringArray renders strings as a JavaScript array literal.
+func jsStringArray(values []string) string {
+	quoted := make([]string, len(values))
+	for i, value := range values {
+		quoted[i] = "'" + value + "'"
+	}
+	return "[" + strings.Join(quoted, ", ") + "]"
+}
+
 // contractChecks are negative cases the spec documents but no operation's
-// success path reaches: they pin down status codes and the error envelope.
+// success path reaches: they pin down status codes and problem types.
 func contractChecks() folder {
 	tenant := "/v1/tenants/{{tenant_id}}"
-	expectError := func(status int, code string) string {
+	// expectProblem checks the status, the media type and the problem type;
+	// a slug is under https://openplan.run/problems/, "" means about:blank.
+	expectProblem := func(status int, slug string) string {
+		problemType := "about:blank"
+		if slug != "" {
+			problemType = "https://openplan.run/problems/" + slug
+		}
 		return fmt.Sprintf("pm.test('status is %d', () => pm.response.to.have.status(%d));\n"+
-			"pm.test('error code is %s', () => pm.expect(pm.response.json().error).to.eql('%s'));", status, status, code, code)
+			"pm.test('is a problem document', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json'));\n"+
+			"pm.test('type is %s', () => pm.expect(pm.response.json().type).to.eql('%s'));", status, status, problemType, problemType)
+	}
+	// firstError checks where the first errors entry points.
+	firstError := func(member, value string) string {
+		return fmt.Sprintf("\npm.test('first error is on %s', () => pm.expect(pm.response.json().errors[0].%s).to.eql('%s'));", value, member, value)
 	}
 	jsonBody := func(content string) *body { return &body{mode: bodyJSON, json: content} }
 	return folder{
 		name:        "Contract checks",
-		description: "Negative cases that pin down status codes and the error envelope.",
+		description: "Negative cases that pin down status codes and problem types.",
 		requests: []request{
-			{name: "Unknown route is 404", method: http.MethodGet, path: "/v1/does-not-exist", test: expectError(404, "not_found")},
+			{name: "Unknown route is 404", method: http.MethodGet, path: "/v1/does-not-exist", test: expectProblem(404, "")},
 			{
 				name: "Wrong method is 405", method: http.MethodDelete, path: "/healthz", preRequest: dropSession,
-				test: expectError(405, "method_not_allowed") + "\npm.test('Allow names GET', () => pm.expect(pm.response.headers.get('Allow')).to.include('GET'));",
+				test: expectProblem(405, "") + "\npm.test('Allow names GET', () => pm.expect(pm.response.headers.get('Allow')).to.include('GET'));",
 			},
-			{name: "Another tenant is 404", method: http.MethodGet, path: "/v1/tenants/not-this-tenant/stacks", test: expectError(404, "not_found")},
-			{name: "No session is 401", method: http.MethodGet, path: "/v1/me", preRequest: dropSession, test: expectError(401, "unauthorized")},
-			{name: "Unknown body field is 400", method: http.MethodPost, path: tenant + "/stacks", body: jsonBody(`{ "unknown_field": true }`), test: expectError(400, "invalid_json")},
-			{name: "Malformed JSON is 400", method: http.MethodPost, path: tenant + "/stacks", body: jsonBody(`{ "name": `), test: expectError(400, "invalid_json")},
-			{name: "Missing required field is 400", method: http.MethodPost, path: tenant + "/stacks", body: jsonBody(`{ "name": "" }`), test: expectError(400, "invalid_request")},
-			{name: "Search without q is 400", method: http.MethodGet, path: tenant + "/users/search", test: expectError(400, "invalid_request")},
-			{name: "Unknown run is 404", method: http.MethodGet, path: tenant + "/template-runs/run_does_not_exist", test: expectError(404, "not_found")},
+			{name: "Another tenant is 404", method: http.MethodGet, path: "/v1/tenants/not-this-tenant/stacks", test: expectProblem(404, "")},
+			{name: "No session is 401", method: http.MethodGet, path: "/v1/me", preRequest: dropSession, test: expectProblem(401, "")},
+			{name: "Unknown body field is 400", method: http.MethodPost, path: tenant + "/stacks", body: jsonBody(`{ "unknown_field": true }`), test: expectProblem(400, "malformed-body")},
+			{name: "Malformed JSON is 400", method: http.MethodPost, path: tenant + "/stacks", body: jsonBody(`{ "name": `), test: expectProblem(400, "malformed-body")},
 			{
-				name: "Config edit without config is 400", method: http.MethodPatch, path: tenant + "/stack-templates/{{stack_template_id}}/config",
-				body: jsonBody(`{}`), test: expectError(400, "invalid_request"),
+				name: "Missing required field is 422", method: http.MethodPost, path: tenant + "/stacks", body: jsonBody(`{ "name": "" }`),
+				test: expectProblem(422, "validation-failed") + firstError("pointer", "#/name"),
+			},
+			{
+				name: "Search without q is 422", method: http.MethodGet, path: tenant + "/users/search",
+				test: expectProblem(422, "validation-failed") + firstError("parameter", "q"),
+			},
+			{
+				name: "Non-integer max is 400", method: http.MethodGet, path: tenant + "/users/search", query: []queryParam{{key: "q", value: "a"}, {key: "max", value: "ten"}},
+				test: expectProblem(400, "invalid-query") + firstError("parameter", "max"),
+			},
+			{name: "Unknown run is 404", method: http.MethodGet, path: tenant + "/template-runs/run_does_not_exist", test: expectProblem(404, "")},
+			{
+				name: "Config edit without config is 422", method: http.MethodPatch, path: tenant + "/stack-templates/{{stack_template_id}}/config",
+				body: jsonBody(`{}`), test: expectProblem(422, "validation-failed") + firstError("pointer", "#/config"),
 			},
 			{
 				name: "A proxy's request id is kept", method: http.MethodGet, path: "/healthz",

@@ -209,7 +209,7 @@ describe("TemplatesPage loading and errors", () => {
   });
 
   it("offers a retry when the templates fail to load", async () => {
-    vi.mocked(globalThis.fetch).mockImplementation(async () => jsonResponse({ error: "boom", message: "boom" }, 500));
+    vi.mocked(globalThis.fetch).mockImplementation(async () => jsonResponse({ type: "about:blank", title: "Internal Server Error", detail: "boom" }, 500));
     renderPage(testQueryClient(), "/templates");
 
     await waitFor(() => expect(screen.getByTestId("templates-error")).toBeTruthy());
@@ -218,8 +218,18 @@ describe("TemplatesPage loading and errors", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  // A server fault's cause is only in the log, under the request id.
+  it("shows the request id when the templates fail with a server fault", async () => {
+    vi.mocked(globalThis.fetch).mockImplementation(async () =>
+      jsonResponse({ type: "about:blank", title: "Internal Server Error", detail: "boom", request_id: "8cf6602cb5083bde" }, 500)
+    );
+    renderPage(testQueryClient(), "/templates");
+
+    await waitFor(() => expect(screen.getByTestId("request-id").textContent).toBe("Request ID: 8cf6602cb5083bde"));
+  });
+
   it("hands a refused request to the shared boundary", async () => {
-    vi.mocked(globalThis.fetch).mockImplementation(async () => jsonResponse({ error: "forbidden", message: "forbidden" }, 403));
+    vi.mocked(globalThis.fetch).mockImplementation(async () => jsonResponse({ type: "about:blank", title: "Forbidden", detail: "forbidden" }, 403));
     renderPage(testQueryClient(), "/templates");
 
     await waitFor(() => expect(screen.getByTestId("route-access-denied")).toBeTruthy());

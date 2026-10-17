@@ -8,6 +8,7 @@ import {
 import { tenantID } from "../../config";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import CredentialsPanel from "./CredentialsPanel";
+import RequestIdNote from "../../shared/RequestIdNote";
 import { Button } from "@/components/ui/button";
 
 export default function EnvironmentScreen() {
@@ -32,6 +33,7 @@ export default function EnvironmentScreen() {
     return (
       <section className="grid justify-items-start gap-4" data-testid="environment-error">
         <p className="text-muted-foreground">Something went wrong while loading the environment.</p>
+        <RequestIdNote error={credentialsQuery.error} />
         <Button className="pointer-coarse:h-11" data-testid="environment-retry" onClick={() => credentialsQuery.refetch()}>
           <RefreshCw data-icon="inline-start" aria-hidden="true" />
           Retry

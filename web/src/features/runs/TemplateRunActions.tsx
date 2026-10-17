@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { FileSearch, Loader2, Play } from "lucide-react";
+import { apiErrorMessage } from "../../api/problems";
 import { queryKeys } from "../../api/queryKeys";
 import { useStartTemplateRunMutation } from "../../api/queries";
 import type { StackTemplate } from "../../api/types";
@@ -43,7 +44,7 @@ export default function TemplateRunActions({ stackId, stackTemplate }: TemplateR
       await startRunMutation.mutateAsync({ stackTemplateID: stackTemplate.id, body });
       await queryClient.invalidateQueries({ queryKey: queryKeys.templateRuns(tenantID, stackTemplate.id) });
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Request failed");
+      setErrorMessage(apiErrorMessage(error, "Request failed"));
       if (isRunInFlightError(error)) {
         await queryClient.invalidateQueries({ queryKey: queryKeys.templateRuns(tenantID, stackTemplate.id) });
       }

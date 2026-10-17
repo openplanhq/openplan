@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, RefreshCw } from "lucide-react";
 import { isTerminalRegistrationStatus } from "../../api/polling";
+import { apiErrorMessage } from "../../api/problems";
 import { queryKeys } from "../../api/queryKeys";
 import { useRegisterTemplateMutation, useTemplateRegistrationQuery } from "../../api/queries";
 import { tenantID } from "../../config";
@@ -41,9 +42,7 @@ export default function TemplateSync() {
   // without this the flow would read as busy forever.
   const pollError =
     registrationID !== "" && registrationQuery.isError
-      ? registrationQuery.error instanceof Error
-        ? registrationQuery.error.message
-        : "Request failed"
+      ? apiErrorMessage(registrationQuery.error, "Request failed")
       : "";
   const syncing = registerTemplateMutation.isPending || (registrationID !== "" && !settled && pollError === "");
   const syncedRevisionID = registration?.template_revision_id ?? "";
@@ -78,7 +77,7 @@ export default function TemplateSync() {
       });
       setRegistrationID(next.id);
     } catch (error) {
-      setRequestError(error instanceof Error ? error.message : "Request failed");
+      setRequestError(apiErrorMessage(error, "Request failed"));
     }
   }
 

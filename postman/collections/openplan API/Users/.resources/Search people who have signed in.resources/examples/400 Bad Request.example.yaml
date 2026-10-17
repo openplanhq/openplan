@@ -1,0 +1,28 @@
+$kind: http-example
+request:
+  url: '{{base_url}}/v1/tenants/{{tenant_id}}/users/search?q={{user_search}}&first=0&max=20'
+  method: GET
+response:
+  statusCode: 400
+  statusText: Bad Request
+  headers:
+    - key: Content-Type
+      value: application/problem+json
+  body:
+    type: json
+    content: |-
+      {
+        "type": "https://openplan.run/problems/invalid-query",
+        "title": "The query string can't be read",
+        "status": 400,
+        "detail": "A query parameter isn't an integer.",
+        "request_id": "3f1c2b9a8d7e6f5a4b3c2d1e0f9a8b7c",
+        "errors": [
+          {
+            "parameter": "max",
+            "issue": "invalid_format",
+            "detail": "max must be an integer"
+          }
+        ]
+      }
+order: 1000

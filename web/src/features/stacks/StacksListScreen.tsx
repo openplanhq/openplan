@@ -23,6 +23,7 @@ import { buttonClass } from "../../shared/buttonClass";
 import Chip from "../../shared/Chip";
 import { listItemClass } from "../../shared/listItemClass";
 import SearchField from "../../shared/SearchField";
+import RequestIdNote from "../../shared/RequestIdNote";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from "@/components/ui/empty";
 import { cn } from "@/lib/utils";
 
@@ -94,6 +95,7 @@ export default function StacksListScreen() {
         {header()}
         <div className="flex flex-col items-start gap-3" data-testid="stacks-list-error">
           <ErrorLine>Something went wrong while loading stacks.</ErrorLine>
+          <RequestIdNote error={error} />
           <button
             type="button"
             className={cn(buttonClass("outline"), "pointer-coarse:h-11")}

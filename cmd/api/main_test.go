@@ -306,15 +306,18 @@ func TestRunWiresConfiguredTenantBoundary(t *testing.T) {
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusNotFound, response.Body.String())
 	}
+	if contentType := response.Header().Get("Content-Type"); contentType != "application/problem+json" {
+		t.Fatalf("Content-Type = %q, want application/problem+json", contentType)
+	}
 	var body struct {
-		Error   string `json:"error"`
-		Message string `json:"message"`
+		Type   string `json:"type"`
+		Status int    `json:"status"`
 	}
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if body.Error != "not_found" || body.Message != "resource not found" {
-		t.Fatalf("body = %#v", body)
+	if body.Type != "about:blank" || body.Status != http.StatusNotFound {
+		t.Fatalf("body = %#v, want an about:blank 404 problem", body)
 	}
 }
 

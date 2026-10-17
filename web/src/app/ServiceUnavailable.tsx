@@ -5,8 +5,8 @@ export default function ServiceUnavailable() {
   return (
     <RouteMessage
       icon={ServerCrash}
-      title="Authorization service unavailable"
-      description="Authorization service unavailable — try again shortly."
+      title="Service unavailable"
+      description="openplan can't do this right now. Contact your operator."
       testId="route-service-unavailable"
     />
   );

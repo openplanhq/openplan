@@ -270,6 +270,8 @@ func TestAssignStackRoleRejectsUserThatNeverSignedIn(t *testing.T) {
 	if !errors.Is(err, ErrUserNotProvisioned) {
 		t.Fatalf("error = %v, want ErrUserNotProvisioned", err)
 	}
+	// To the grant form this is a problem with the person picked.
+	assertFieldIssues(t, err, "user_sub not_signed_in")
 }
 
 // The returned grant carries the display fields resolved by the check the

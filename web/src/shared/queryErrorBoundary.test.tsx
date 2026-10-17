@@ -29,11 +29,11 @@ function wrapper(auth: AuthContextValue) {
 
 describe("classifyQueryError", () => {
   it.each([401, 403, 404, 503] as const)("classifies a %d ApiRequestError", (status) => {
-    expect(classifyQueryError(new ApiRequestError(status, "code", "message"))).toBe(status);
+    expect(classifyQueryError(new ApiRequestError({ type: "about:blank", title: "code", status: status, detail: "message" }))).toBe(status);
   });
 
   it("returns null for an unhandled status", () => {
-    expect(classifyQueryError(new ApiRequestError(500, "server_error", "boom"))).toBeNull();
+    expect(classifyQueryError(new ApiRequestError({ type: "about:blank", title: "server_error", status: 500, detail: "boom" }))).toBeNull();
   });
 
   it("returns null for non-ApiRequestError values", () => {
@@ -54,7 +54,7 @@ describe("useQueryErrorBoundary", () => {
 
   it("renders AccessDenied for a 403 without calling logout", () => {
     const logout = vi.fn();
-    const { result } = renderHook(() => useQueryErrorBoundary(new ApiRequestError(403, "forbidden", "nope")), {
+    const { result } = renderHook(() => useQueryErrorBoundary(new ApiRequestError({ type: "about:blank", title: "forbidden", status: 403, detail: "nope" })), {
       wrapper: wrapper(authValue({ logout }))
     });
 
@@ -66,7 +66,7 @@ describe("useQueryErrorBoundary", () => {
   });
 
   it("renders NotFound for a 404", () => {
-    const { result } = renderHook(() => useQueryErrorBoundary(new ApiRequestError(404, "not_found", "nope")), {
+    const { result } = renderHook(() => useQueryErrorBoundary(new ApiRequestError({ type: "about:blank", title: "not_found", status: 404, detail: "nope" })), {
       wrapper: wrapper(authValue())
     });
 
@@ -74,7 +74,7 @@ describe("useQueryErrorBoundary", () => {
   });
 
   it("renders ServiceUnavailable for a 503", () => {
-    const { result } = renderHook(() => useQueryErrorBoundary(new ApiRequestError(503, "unavailable", "down")), {
+    const { result } = renderHook(() => useQueryErrorBoundary(new ApiRequestError({ type: "about:blank", title: "unavailable", status: 503, detail: "down" })), {
       wrapper: wrapper(authValue())
     });
 
@@ -83,7 +83,7 @@ describe("useQueryErrorBoundary", () => {
 
   it("returns null for an unrecognized status without calling logout", () => {
     const logout = vi.fn();
-    const { result } = renderHook(() => useQueryErrorBoundary(new ApiRequestError(500, "server_error", "boom")), {
+    const { result } = renderHook(() => useQueryErrorBoundary(new ApiRequestError({ type: "about:blank", title: "server_error", status: 500, detail: "boom" })), {
       wrapper: wrapper(authValue({ logout }))
     });
 
@@ -94,14 +94,14 @@ describe("useQueryErrorBoundary", () => {
   it("triggers logout exactly once for a 401, even across re-renders with the same error", async () => {
     const logout = vi.fn();
     const { result, rerender } = renderHook(({ error }: { error: unknown }) => useQueryErrorBoundary(error), {
-      initialProps: { error: new ApiRequestError(401, "unauthorized", "expired") as unknown },
+      initialProps: { error: new ApiRequestError({ type: "about:blank", title: "unauthorized", status: 401, detail: "expired" }) as unknown },
       wrapper: wrapper(authValue({ logout }))
     });
 
     await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
     expect(result.current).toBeNull();
 
-    rerender({ error: new ApiRequestError(401, "unauthorized", "expired") });
+    rerender({ error: new ApiRequestError({ type: "about:blank", title: "unauthorized", status: 401, detail: "expired" }) });
     expect(logout).toHaveBeenCalledTimes(1);
   });
 

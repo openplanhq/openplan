@@ -10,6 +10,7 @@ import ErrorLine from "../../shared/ErrorLine";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import CredentialsPanel from "./CredentialsPanel";
 import { useStackTemplate } from "./stackTemplateContext";
+import RequestIdNote from "../../shared/RequestIdNote";
 import { cn } from "@/lib/utils";
 
 // /stacks/:stackId/templates/:stackTemplateId/credentials — credentials that
@@ -33,6 +34,7 @@ export default function TemplateCredentialsTab() {
     return (
       <div className="flex flex-col items-start gap-3" data-testid="template-credentials-error">
         <ErrorLine live={false}>Something went wrong while loading this template's credentials.</ErrorLine>
+        <RequestIdNote error={credentialsQuery.error} />
         <button
           type="button"
           className={cn(buttonClass("outline"), "pointer-coarse:h-11")}

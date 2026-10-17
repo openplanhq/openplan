@@ -122,7 +122,7 @@ describe("TemplateSync", () => {
 
   it("shows a refused request rather than leaving the button spinning", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) =>
-      init?.method === "POST" ? jsonResponse({ error: "forbidden", message: "forbidden" }, 403) : jsonResponse([current, other])
+      init?.method === "POST" ? jsonResponse({ type: "about:blank", title: "Forbidden", detail: "forbidden" }, 403) : jsonResponse([current, other])
     );
     renderPanel(seed());
     fireEvent.click(syncButton());
@@ -134,7 +134,7 @@ describe("TemplateSync", () => {
   it("shows a failing poll rather than leaving the button spinning", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       if (init?.method === "POST") return jsonResponse(registration({ status: "pending", template_revision_id: "" }));
-      if (String(input).includes("/template-registrations/")) return jsonResponse({ error: "forbidden", message: "forbidden" }, 403);
+      if (String(input).includes("/template-registrations/")) return jsonResponse({ type: "about:blank", title: "Forbidden", detail: "forbidden" }, 403);
       return jsonResponse([current, other]);
     });
     renderPanel(seed());

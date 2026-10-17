@@ -40,7 +40,7 @@ func newRequestID() string {
 
 // requestIDOf reads the id withRequestID set on the response. The response
 // header is the one place every writer can reach without the request, which
-// writeError is not given.
+// writeProblem is not given.
 func requestIDOf(response http.ResponseWriter) string {
 	return response.Header().Get(RequestIDHeader)
 }

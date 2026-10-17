@@ -6,7 +6,7 @@ description: |-
   reviewed is exactly what runs. If the state has moved on since the
   plan was made, tofu refuses the plan and the run fails; plan again.
 
-  Refused with `409 plan_stale` if the plan no longer describes the
+  Refused with `409 plan-stale` if the plan no longer describes the
   component's desired config and revision. Those cannot change while
   the plan waits, so this is a backstop.
 

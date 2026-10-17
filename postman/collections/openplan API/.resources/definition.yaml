@@ -12,9 +12,10 @@ description: |-
      next one needs, and the asynchronous ones (a registration, a plan) are
      polled until they finish.
 
-  Every response is checked for a request id, and every JSON error for the
-  {error, message, request_id} envelope. "Sign out" revokes the session, so it
-  runs last.
+  Every response is checked for a request id, and every error for an RFC 9457
+  problem document (application/problem+json with type, title, a status
+  matching the response, and request_id). "Sign out" revokes the session, so
+  it runs last.
 scripts:
   - type: http:beforeRequest
     code: |-
@@ -29,12 +30,16 @@ scripts:
       // Checks every response gets.
       pm.test('no server error', () => pm.expect(pm.response.code).to.be.below(500));
       pm.test('carries a request id', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);
-      const contentType = pm.response.headers.get('Content-Type') || '';
-      if (pm.response.code >= 400 && contentType.includes('application/json')) {
-        pm.test('error body is the {error, message, request_id} envelope', () => {
+      // Every other error must be a problem document. These routes are exempt by
+      // design: sign-in answers in HTML, back-channel logout in plain text.
+      const notProblemRoutes = ['/v1/auth/login', '/v1/auth/callback', '/v1/auth/backchannel-logout'];
+      if (pm.response.code >= 400 && !notProblemRoutes.includes(pm.request.url.getPath())) {
+        pm.test('error body is an RFC 9457 problem document', () => {
+          pm.expect(pm.response.headers.get('Content-Type') || '', 'Content-Type').to.include('application/problem+json');
           const body = pm.response.json();
-          pm.expect(body.error, 'error').to.be.a('string').and.not.empty;
-          pm.expect(body.message, 'message').to.be.a('string');
+          pm.expect(body.type, 'type').to.be.a('string').and.not.empty;
+          pm.expect(body.title, 'title').to.be.a('string').and.not.empty;
+          pm.expect(body.status, 'status').to.eql(pm.response.code);
           pm.expect(body.request_id, 'request_id').to.be.a('string').and.eql(pm.response.headers.get('X-Request-Id'));
         });
       }

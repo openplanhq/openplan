@@ -12,6 +12,7 @@ import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import RunStatusLabel from "./RunStatusLabel";
+import RequestIdNote from "../../shared/RequestIdNote";
 
 // 8px either side of a column boundary makes the 16px between columns, and
 // 16px at the row's ends. Each column's width is its content's (run 64,
@@ -49,6 +50,7 @@ export default function TemplateRunHistory({ stackId, stackTemplateId }: Templat
     return (
       <div className="flex flex-col items-start gap-3" data-testid="template-run-history-error">
         <ErrorLine live={false}>Something went wrong while loading this template's runs.</ErrorLine>
+        <RequestIdNote error={runsQuery.error} />
         <button
           type="button"
           className={cn(buttonClass("outline"), "pointer-coarse:h-11")}
