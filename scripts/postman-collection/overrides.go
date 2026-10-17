@@ -221,14 +221,23 @@ if (session) {
   pm.request.headers.upsert({ key: 'Cookie', value: 'openplan_session=' + session });
 }`
 
-const collectionTest = `// Checks every response gets.
+// nonProblemErrorPaths are the routes whose errors are not problem documents,
+// by design: the sign-in routes answer a browser with HTML, and back-channel
+// logout answers Dex in plain text. The collection test exempts them by
+// request path, never by the response's content type, so an error that
+// regresses to another media type fails instead of skipping the check.
+// TestNonProblemErrorPathsMatchTheSpec keeps this list and the spec in step.
+var nonProblemErrorPaths = []string{"/v1/auth/login", "/v1/auth/callback", "/v1/auth/backchannel-logout"}
+
+var collectionTest = `// Checks every response gets.
 pm.test('no server error', () => pm.expect(pm.response.code).to.be.below(500));
 pm.test('carries a request id', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);
-const contentType = pm.response.headers.get('Content-Type') || '';
-// The sign-in routes answer in HTML and back-channel logout in plain text by
-// design; every other error is a problem document.
-if (pm.response.code >= 400 && contentType.includes('application/problem+json')) {
+// Every other error must be a problem document. These routes are exempt by
+// design: sign-in answers in HTML, back-channel logout in plain text.
+const notProblemRoutes = ` + jsStringArray(nonProblemErrorPaths) + `;
+if (pm.response.code >= 400 && !notProblemRoutes.includes(pm.request.url.getPath())) {
   pm.test('error body is an RFC 9457 problem document', () => {
+    pm.expect(pm.response.headers.get('Content-Type') || '', 'Content-Type').to.include('application/problem+json');
     const body = pm.response.json();
     pm.expect(body.type, 'type').to.be.a('string').and.not.empty;
     pm.expect(body.title, 'title').to.be.a('string').and.not.empty;
@@ -236,6 +245,15 @@ if (pm.response.code >= 400 && contentType.includes('application/problem+json'))
     pm.expect(body.request_id, 'request_id').to.be.a('string').and.eql(pm.response.headers.get('X-Request-Id'));
   });
 }`
+
+// jsStringArray renders strings as a JavaScript array literal.
+func jsStringArray(values []string) string {
+	quoted := make([]string, len(values))
+	for i, value := range values {
+		quoted[i] = "'" + value + "'"
+	}
+	return "[" + strings.Join(quoted, ", ") + "]"
+}
 
 // contractChecks are negative cases the spec documents but no operation's
 // success path reaches: they pin down status codes and problem types.

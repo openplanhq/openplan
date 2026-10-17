@@ -30,11 +30,12 @@ scripts:
       // Checks every response gets.
       pm.test('no server error', () => pm.expect(pm.response.code).to.be.below(500));
       pm.test('carries a request id', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);
-      const contentType = pm.response.headers.get('Content-Type') || '';
-      // The sign-in routes answer in HTML and back-channel logout in plain text by
-      // design; every other error is a problem document.
-      if (pm.response.code >= 400 && contentType.includes('application/problem+json')) {
+      // Every other error must be a problem document. These routes are exempt by
+      // design: sign-in answers in HTML, back-channel logout in plain text.
+      const notProblemRoutes = ['/v1/auth/login', '/v1/auth/callback', '/v1/auth/backchannel-logout'];
+      if (pm.response.code >= 400 && !notProblemRoutes.includes(pm.request.url.getPath())) {
         pm.test('error body is an RFC 9457 problem document', () => {
+          pm.expect(pm.response.headers.get('Content-Type') || '', 'Content-Type').to.include('application/problem+json');
           const body = pm.response.json();
           pm.expect(body.type, 'type').to.be.a('string').and.not.empty;
           pm.expect(body.title, 'title').to.be.a('string').and.not.empty;
