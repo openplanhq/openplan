@@ -294,6 +294,10 @@ func runInFlightDetail(err error) (string, bool) {
 		return run + " has a plan waiting for approval. Approve or discard it first.", true
 	case domain.TemplateRunApproved:
 		return run + " is applying. Wait for it to finish.", true
+	// A finished run is in nobody's way, so there is nothing true to say
+	// about it; the table's sentence stands.
+	case domain.TemplateRunCompleted, domain.TemplateRunFailed, domain.TemplateRunCanceled:
+		return "", false
 	default:
 		return run + " hasn't finished. Wait for it to finish or discard it.", true
 	}

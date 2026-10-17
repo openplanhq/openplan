@@ -162,7 +162,8 @@ func TestNonProblemErrorPathsMatchTheSpec(t *testing.T) {
 		}
 	}
 	exempt := slices.Sorted(slices.Values(nonProblemErrorPaths))
-	if slices.Sort(documented); !slices.Equal(documented, exempt) {
+	slices.Sort(documented)
+	if !slices.Equal(documented, exempt) {
 		t.Fatalf("spec documents non-problem errors on %v, but the collection test exempts %v", documented, exempt)
 	}
 	// The check must not be gated on the response's media type, or an error

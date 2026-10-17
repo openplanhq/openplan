@@ -203,6 +203,11 @@ func TestRunInFlightDetailNamesTheRun(t *testing.T) {
 		}
 	}
 
+	// A finished run can't be in the way, so nothing is said about it.
+	if _, problem := renderAppError(t, &app.RunInFlightError{RunNumber: 4, Status: domain.TemplateRunCompleted}); strings.Contains(problem.Detail, "#4") {
+		t.Fatalf("detail = %q, want the generic sentence for a finished run", problem.Detail)
+	}
+
 	// The store's bare refusal has no run to name; the table's detail stands.
 	if _, problem := renderAppError(t, app.ErrTemplateRunInFlight); problem.Detail == "" || strings.Contains(problem.Detail, "#") {
 		t.Fatalf("bare detail = %q, want the generic sentence", problem.Detail)
