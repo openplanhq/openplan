@@ -31,7 +31,7 @@ function testQueryClient(): QueryClient {
 
 function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
   return {
-    me: { sub: "user_1", tenantID: "tenant_123", displayName: "Test User", globalCapabilities: { isPlatformAdmin: false, canCreateStack: true, canPublishTemplate: true } },
+    me: { sub: "user_1", tenantID: "tenant_123", displayName: "Test User", globalCapabilities: { canCreateStack: true, canPublishTemplate: true } },
     status: "authenticated",
     login: () => {},
     logout: () => {},

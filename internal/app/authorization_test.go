@@ -308,7 +308,7 @@ func TestResolveStacksCapabilitiesMapsEachStackAndRelationPositionally(t *testin
 
 // Pins ResolvePlatformCapabilities the way the two stack tests pin theirs. The
 // platform pair had no such test, which is what let a reordering of its
-// relations silently return IsPlatformAdmin for can_create_stack.
+// relations silently return one capability's answer under another's name.
 func TestResolvePlatformCapabilitiesMapsEachRelationPositionally(t *testing.T) {
 	t.Parallel()
 
@@ -317,13 +317,13 @@ func TestResolvePlatformCapabilitiesMapsEachRelationPositionally(t *testing.T) {
 		want PlatformCapabilities
 	}{
 		// viewer reaches no capability; editor reaches can_create_stack and
-		// can_publish_template through can_edit; admin reaches all three
-		// through can_administer.
+		// can_publish_template through can_edit, and admin reaches both
+		// because can_administer satisfies can_edit.
 		{authorization.RelationViewer, PlatformCapabilities{}},
 		{authorization.RelationEditor, PlatformCapabilities{CanCreateStack: true, CanPublishTemplate: true}},
 		{
 			authorization.RelationAdmin,
-			PlatformCapabilities{IsPlatformAdmin: true, CanCreateStack: true, CanPublishTemplate: true},
+			PlatformCapabilities{CanCreateStack: true, CanPublishTemplate: true},
 		},
 	}
 

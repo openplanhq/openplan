@@ -1395,10 +1395,9 @@ components:
         globalCapabilities:
           type: object
           properties:
-            isPlatformAdmin: { type: boolean }
             canCreateStack: { type: boolean }
             canPublishTemplate: { type: boolean }
-          required: [isPlatformAdmin, canCreateStack, canPublishTemplate]
+          required: [canCreateStack, canPublishTemplate]
         tenantID:
           type: string
           description: The tenant this deployment serves. Use it in every tenant-scoped path.

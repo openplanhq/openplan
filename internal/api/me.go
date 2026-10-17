@@ -25,9 +25,14 @@ type meResponse struct {
 // globalCapabilities encodes coarse-grained permissions answered by OpenFGA.
 // The JSON names predate the move off IdP role claims and are kept: they
 // are the web client's contract, and only the source of the answers changed.
+//
+// Only actions that need no resource belong here, one per platform-level
+// feature, so the set grows with features and never with data. Anything asked
+// of a stack or template rides on that resource's response instead, as
+// stackCapabilitiesResponse does. Fields name actions, not roles: the client
+// gates on what the caller may do, never on who they are.
 type globalCapabilities struct {
-	IsPlatformAdmin bool `json:"isPlatformAdmin"`
-	CanCreateStack  bool `json:"canCreateStack"`
+	CanCreateStack bool `json:"canCreateStack"`
 	// CanPublishTemplate gates registering a template, which is also what the
 	// template detail screen's Sync button posts — so the button is hidden
 	// rather than left to earn a 403.

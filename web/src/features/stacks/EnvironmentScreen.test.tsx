@@ -11,7 +11,7 @@ import type { AuthContextValue } from "../../auth/AuthContext";
 
 function authValue(): AuthContextValue {
   return {
-    me: { sub: "user_1", tenantID: "tenant_123", displayName: "Test User", globalCapabilities: { isPlatformAdmin: false, canCreateStack: false, canPublishTemplate: false } },
+    me: { sub: "user_1", tenantID: "tenant_123", displayName: "Test User", globalCapabilities: { canCreateStack: false, canPublishTemplate: false } },
     status: "authenticated",
     login: () => {},
     logout: () => {}

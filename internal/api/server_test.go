@@ -3467,16 +3467,15 @@ func TestMeReturnsIdentityWithGlobalCapabilities(t *testing.T) {
 	tests := []struct {
 		name        string
 		tier        string
-		wantAdmin   bool
 		wantCreate  bool
 		wantPublish bool
 	}{
 		// An administrator holds can_create_stack and can_publish_template
 		// too: the model derives both from can_edit, which can_administer
 		// satisfies.
-		{name: "platform admin", tier: "admin", wantAdmin: true, wantCreate: true, wantPublish: true},
-		{name: "editor", tier: "editor", wantAdmin: false, wantCreate: true, wantPublish: true},
-		{name: "no tier", tier: "", wantAdmin: false, wantCreate: false, wantPublish: false},
+		{name: "platform admin", tier: "admin", wantCreate: true, wantPublish: true},
+		{name: "editor", tier: "editor", wantCreate: true, wantPublish: true},
+		{name: "no tier", tier: "", wantCreate: false, wantPublish: false},
 	}
 
 	for _, test := range tests {
@@ -3507,7 +3506,6 @@ func TestMeReturnsIdentityWithGlobalCapabilities(t *testing.T) {
 				DisplayName        string `json:"displayName"`
 				Email              string `json:"email"`
 				GlobalCapabilities struct {
-					IsPlatformAdmin    bool `json:"isPlatformAdmin"`
 					CanCreateStack     bool `json:"canCreateStack"`
 					CanPublishTemplate bool `json:"canPublishTemplate"`
 				} `json:"globalCapabilities"`
@@ -3525,9 +3523,6 @@ func TestMeReturnsIdentityWithGlobalCapabilities(t *testing.T) {
 			}
 			if body.Email != "test@example.com" {
 				t.Errorf("email = %q, want %q", body.Email, "test@example.com")
-			}
-			if body.GlobalCapabilities.IsPlatformAdmin != test.wantAdmin {
-				t.Errorf("isPlatformAdmin = %t, want %t", body.GlobalCapabilities.IsPlatformAdmin, test.wantAdmin)
 			}
 			if body.GlobalCapabilities.CanCreateStack != test.wantCreate {
 				t.Errorf("canCreateStack = %t, want %t", body.GlobalCapabilities.CanCreateStack, test.wantCreate)

@@ -48,7 +48,7 @@ function renderHistory(queryClient: QueryClient) {
     <QueryClientProvider client={queryClient}>
       <AuthContext.Provider
         value={{
-          me: { sub: "user_1", tenantID: "tenant_123", displayName: "Test User", globalCapabilities: { isPlatformAdmin: false, canCreateStack: false, canPublishTemplate: false } },
+          me: { sub: "user_1", tenantID: "tenant_123", displayName: "Test User", globalCapabilities: { canCreateStack: false, canPublishTemplate: false } },
           status: "authenticated",
           login: () => {},
           logout: () => {}
