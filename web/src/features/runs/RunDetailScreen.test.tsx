@@ -508,8 +508,8 @@ describe("RunDetailScreen", () => {
     expect(source.url).toBe("/v1/tenants/tenant_123/template-runs/run_1/logs/plan-3/events");
     expect(screen.getByText("Streaming…")).toBeTruthy();
 
-    act(() => source.dispatch("log", { offset: 0, data: "Planning...\n" }, "1-0"));
-    act(() => source.dispatch("log", { offset: 12, data: "Plan: 1 to add.\n" }, "2-0"));
+    act(() => source.dispatch("log", { offset: 0, end: 12, data: "Planning...\n" }, "1-0"));
+    act(() => source.dispatch("log", { offset: 12, end: 28, data: "Plan: 1 to add.\n" }, "2-0"));
     const panel = screen.getByTestId("log-scroll-area-plan-3");
     expect(panel.textContent).toContain("Planning...\nPlan: 1 to add.\n");
     expect(screen.getByText("Streaming…")).toBeTruthy();
@@ -519,6 +519,70 @@ describe("RunDetailScreen", () => {
 
     act(() => source.dispatch("log_end", { state: "complete" }));
     expect(source.closeCalls).toBe(1);
+    expect(screen.queryByText("Streaming…")).toBeNull();
+    expect(bodyFetches()).toBe(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Load the full log" }));
+    await waitFor(() => expect(screen.getByText("plan-3 full body")).toBeTruthy());
+    expect(bodyFetches()).toBe(1);
+  });
+
+  // The list refetches when the run moves, and can say a log has ended
+  // before its stream does. What streamed stays on screen either way.
+  function liveRowThatMovesOn(queryClient: QueryClient) {
+    FakeEventSource.instances = [];
+    vi.stubGlobal("EventSource", FakeEventSource);
+    seedCapabilities(queryClient, allAllowed);
+    let current = run({ status: "running", step: "planning" });
+    let logs = [runLog({ name: "plan-3", state: "live" })];
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), current);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/template-runs/run_1")) return jsonResponse(current);
+      if (url.endsWith("/logs")) return jsonResponse(logs);
+      if (url.endsWith("/logs/plan-3")) {
+        return new Response("plan-3 full body", { status: 200, headers: { "content-type": "text/plain" } });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    const moveOn = (next: TemplateRunLog) => {
+      logs = [next];
+      current = run({ status: "failed", step: "planning" });
+      act(() => queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), current));
+    };
+    const bodyFetches = () => fetchMock.mock.calls.filter(([reqInput]) => String(reqInput).endsWith("/logs/plan-3")).length;
+    return { moveOn, bodyFetches };
+  }
+
+  it("keeps a live log's output when its row turns lost, and says why", async () => {
+    const queryClient = testQueryClient();
+    const { moveOn, bodyFetches } = liveRowThatMovesOn(queryClient);
+
+    renderScreen(queryClient);
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+    act(() => FakeEventSource.instances[0].dispatch("log", { offset: 0, end: 12, data: "Planning...\n" }, "1-0"));
+
+    moveOn(runLog({ name: "plan-3", state: "lost", lost_reason: "executor_gone" }));
+
+    await waitFor(() => expect(screen.getByText("Log lost: the executor stopped")).toBeTruthy());
+    expect(screen.getByTestId("log-scroll-area-plan-3").textContent).toContain("Planning...\n");
+    expect(screen.queryByText("Streaming…")).toBeNull();
+    expect(FakeEventSource.instances).toHaveLength(1);
+    expect(bodyFetches()).toBe(0);
+  });
+
+  it("keeps a live log's output when its row turns complete, and offers the full log", async () => {
+    const queryClient = testQueryClient();
+    const { moveOn, bodyFetches } = liveRowThatMovesOn(queryClient);
+
+    renderScreen(queryClient);
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+    act(() => FakeEventSource.instances[0].dispatch("log", { offset: 0, end: 12, data: "Planning...\n" }, "1-0"));
+
+    moveOn(runLog({ name: "plan-3" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Load the full log" })).toBeTruthy());
+    expect(screen.getByTestId("log-scroll-area-plan-3").textContent).toContain("Planning...\n");
     expect(screen.queryByText("Streaming…")).toBeNull();
     expect(bodyFetches()).toBe(0);
 

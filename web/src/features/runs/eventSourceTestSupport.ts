@@ -39,6 +39,13 @@ export class FakeEventSource {
     this.emit(new MessageEvent(type, { data: JSON.stringify(data), lastEventId }));
   }
 
+  // Sends one server event whose data line is exactly data, which need not
+  // be JSON.
+  dispatchRaw(type: string, data: string) {
+    this.readyState = FakeEventSource.OPEN;
+    this.emit(new MessageEvent(type, { data }));
+  }
+
   // Reports a connection error. The browser leaves the source CONNECTING
   // when it will retry, and CLOSED when it has given up.
   fail(readyState: number) {

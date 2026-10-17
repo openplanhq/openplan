@@ -115,17 +115,26 @@ function phaseDetail(phase: RunPhase, executions: TemplateRunExecution[] | undef
 
 // A log reads by where its output is: still being written, stored, or never
 // to be stored. Each kind is its own component so a live row's stream and a
-// complete row's fetch start and stop with the row, and a row whose state
-// moves on swaps one for the other.
+// complete row's fetch start and stop with the row. A row that has streamed
+// in this mount keeps its live body when its state moves on: swapping it for
+// the stored copy or the lost notice would take away the output the reader
+// is looking at.
 function RunLogBody({ runId, log }: { runId: string; log: TemplateRunLog }) {
-  switch (log.state) {
-    case "live":
-      return <LiveRunLogBody runId={runId} log={log} />;
-    case "lost":
-      return <>{log.lost_reason ? `Log lost: ${LOST_REASONS[log.lost_reason]}` : "Log lost."}</>;
-    default:
-      return <CompleteRunLogBody runId={runId} log={log} />;
+  const [wasLive, setWasLive] = useState(log.state === "live");
+  if (log.state === "live" && !wasLive) {
+    setWasLive(true);
   }
+  if (wasLive) {
+    return <LiveRunLogBody runId={runId} log={log} />;
+  }
+  if (log.state === "lost") {
+    return <>{lostNotice(log)}</>;
+  }
+  return <CompleteRunLogBody runId={runId} log={log} />;
+}
+
+function lostNotice(log: TemplateRunLog): string {
+  return log.lost_reason ? `Log lost: ${LOST_REASONS[log.lost_reason]}` : "Log lost.";
 }
 
 const LOST_REASONS: Record<TemplateRunLogLostReason, string> = {
@@ -147,21 +156,25 @@ function CompleteRunLogBody({ runId, log }: { runId: string; log: TemplateRunLog
 // The output so far, in the same frame a stored log reads in, and under it
 // what is still to come. Once the command finishes, what streamed may be cut
 // short, so the stored body is offered rather than swapped in under the
-// reader; the list's next refetch makes the row complete either way.
+// reader. The command has finished once the stream ends or the row's state
+// moves on, whichever the page hears first; the row is the record, so it
+// decides when it has.
 function LiveRunLogBody({ runId, log }: { runId: string; log: TemplateRunLog }) {
   const live = useLiveTemplateRunLog(templateRunLogEventsURL(tenantID, runId, log.name));
   const [loadFull, setLoadFull] = useState(false);
   if (loadFull) {
     return <CompleteRunLogBody runId={runId} log={log} />;
   }
+  const outcome = log.state === "live" ? live.ended : log.state;
   return (
     <>
       {live.text}
-      {live.ended === null && <span className="block text-muted-foreground">{live.failed ? "Could not load this log." : "Streaming…"}</span>}
+      {outcome === null && <span className="block text-muted-foreground">{live.failed ? "Could not load this log." : "Streaming…"}</span>}
       {live.truncated && (
         <span className="block text-muted-foreground">Live output stops here; the full log loads when the command finishes.</span>
       )}
-      {live.ended === "complete" && (
+      {outcome === "lost" && <span className="block text-muted-foreground">{lostNotice(log)}</span>}
+      {outcome === "complete" && (
         <Button variant="outline" size="sm" className="mt-2 font-sans" onClick={() => setLoadFull(true)}>
           Load the full log
         </Button>

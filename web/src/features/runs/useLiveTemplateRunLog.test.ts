@@ -21,38 +21,51 @@ describe("useLiveTemplateRunLog", () => {
     vi.unstubAllGlobals();
   });
 
+  // The server sends nothing a client already holds, across reconnects, so
+  // the client appends what it is sent and counts nothing.
   it("opens the log's stream and appends its pieces in the order they arrive", () => {
     const { result } = renderHook(() => useLiveTemplateRunLog(URL));
     const source = onlySource();
     expect(source.url).toBe(URL);
     expect(result.current).toEqual({ text: "", truncated: false, ended: null, failed: false });
 
-    act(() => source.dispatch("log", { offset: 0, data: "Initializing...\n" }, "1-0"));
-    act(() => source.dispatch("log", { offset: 16, data: "Done.\n" }, "2-0"));
+    act(() => source.dispatch("log", { offset: 0, end: 16, data: "Initializing...\n" }, "1-0"));
+    act(() => source.dispatch("log", { offset: 16, end: 22, data: "Done.\n" }, "2-0"));
 
     expect(result.current.text).toBe("Initializing...\nDone.\n");
     expect(result.current.ended).toBeNull();
   });
 
-  // A reconnect replays from Last-Event-ID, which can repeat a piece already
-  // shown. Offsets are bytes, so a multi-byte character counts for more than one.
-  it("skips a piece whose offset is below the bytes already received", () => {
+  it("skips an event whose data is not JSON, and keeps following", () => {
     const { result } = renderHook(() => useLiveTemplateRunLog(URL));
     const source = onlySource();
 
-    act(() => source.dispatch("log", { offset: 0, data: "héllo" }, "1-0"));
-    act(() => source.dispatch("log", { offset: 0, data: "héllo" }, "1-0"));
-    act(() => source.dispatch("log", { offset: 5, data: "x" }, "2-0"));
-    act(() => source.dispatch("log", { offset: 6, data: "!" }, "3-0"));
+    act(() => source.dispatch("log", { offset: 0, end: 4, data: "one\n" }, "1-0"));
+    act(() => source.dispatchRaw("log", "{not json"));
+    act(() => source.dispatchRaw("log_end", "{not json"));
+    act(() => source.dispatch("log", { offset: 4, end: 8, data: "two\n" }, "2-0"));
 
-    expect(result.current.text).toBe("héllo!");
+    expect(result.current.text).toBe("one\ntwo\n");
+    expect(result.current.ended).toBeNull();
+    expect(source.closeCalls).toBe(0);
+  });
+
+  // A state a newer server might send is not a reason to stop following.
+  it("reads a log_end state it does not know as still live", () => {
+    const { result } = renderHook(() => useLiveTemplateRunLog(URL));
+    const source = onlySource();
+
+    act(() => source.dispatch("log_end", { state: "archived" }));
+
+    expect(result.current.ended).toBeNull();
+    expect(source.closeCalls).toBe(0);
   });
 
   it("ends, and closes the stream, on log_end", () => {
     const { result } = renderHook(() => useLiveTemplateRunLog(URL));
     const source = onlySource();
 
-    act(() => source.dispatch("log", { offset: 0, data: "out\n" }, "1-0"));
+    act(() => source.dispatch("log", { offset: 0, end: 4, data: "out\n" }, "1-0"));
     act(() => source.dispatch("log_end", { state: "complete" }));
 
     expect(result.current.ended).toBe("complete");
@@ -86,7 +99,7 @@ describe("useLiveTemplateRunLog", () => {
     const { result } = renderHook(() => useLiveTemplateRunLog(URL));
     const source = onlySource();
 
-    act(() => source.dispatch("log", { offset: 0, data: "a lot\n" }, "1-0"));
+    act(() => source.dispatch("log", { offset: 0, end: 6, data: "a lot\n" }, "1-0"));
     act(() => source.dispatch("log_truncated", {}));
 
     expect(result.current.truncated).toBe(true);
@@ -117,7 +130,7 @@ describe("useLiveTemplateRunLog", () => {
   it("closes the old stream and starts over when the URL changes", () => {
     const { result, rerender } = renderHook(({ url }: { url: string }) => useLiveTemplateRunLog(url), { initialProps: { url: URL } });
     const first = onlySource();
-    act(() => first.dispatch("log", { offset: 0, data: "first\n" }, "1-0"));
+    act(() => first.dispatch("log", { offset: 0, end: 6, data: "first\n" }, "1-0"));
 
     const next = URL.replace("plan-3", "apply-3");
     rerender({ url: next });
