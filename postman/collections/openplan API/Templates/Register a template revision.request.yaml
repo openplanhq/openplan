@@ -9,7 +9,7 @@ description: |-
   until its `status` is terminal; on `completed` it carries the
   `template_revision_id` the rest of the API takes.
 method: POST
-url: '{{base_url}}/v1/tenants/{{tenant_id}}/template-revisions'
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/template-registrations'
 headers:
   - key: Content-Type
     value: application/json

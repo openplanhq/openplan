@@ -111,7 +111,7 @@ func TestTenantScopedRoutesRejectOtherTenantBeforeHandler(t *testing.T) {
 		method string
 		path   string
 	}{
-		{name: "register template", method: http.MethodPost, path: "/v1/tenants/tenant_other/template-revisions"},
+		{name: "register template", method: http.MethodPost, path: "/v1/tenants/tenant_other/template-registrations"},
 		{name: "list template revisions", method: http.MethodGet, path: "/v1/tenants/tenant_other/template-revisions"},
 		{name: "get template registration", method: http.MethodGet, path: "/v1/tenants/tenant_other/template-registrations/registration_123"},
 		{name: "get template variables", method: http.MethodGet, path: "/v1/tenants/tenant_other/template-revisions/revision_123/variables"},
@@ -310,8 +310,8 @@ func TestStartTemplateRunCallsService(t *testing.T) {
 
 	server.ServeHTTP(response, request)
 
-	if response.Code != http.StatusCreated {
-		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusCreated, response.Body.String())
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusAccepted, response.Body.String())
 	}
 	if got, want := response.Header().Get("Location"), "/v1/tenants/tenant_123/template-runs/run_123"; got != want {
 		t.Fatalf("Location = %q, want %q", got, want)
@@ -366,8 +366,8 @@ func TestStartTemplateRunPassesAutoApproveThrough(t *testing.T) {
 
 	server.ServeHTTP(response, request)
 
-	if response.Code != http.StatusCreated {
-		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusCreated, response.Body.String())
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusAccepted, response.Body.String())
 	}
 	if !deps.templateRuns.created.AutoApprove {
 		t.Fatal("created run is not auto-approved")
@@ -656,7 +656,7 @@ func TestRegisterTemplateCallsService(t *testing.T) {
 	response := httptest.NewRecorder()
 	request := authenticatedRequest(
 		http.MethodPost,
-		"/v1/tenants/tenant_123/template-revisions",
+		"/v1/tenants/tenant_123/template-registrations",
 		strings.NewReader(`{"repo_owner":"acme","repo_name":"infra-templates","source_ref":"v0.0.1","root_path":"modules/vpc"}`),
 	)
 
@@ -665,7 +665,7 @@ func TestRegisterTemplateCallsService(t *testing.T) {
 	if response.Code != http.StatusAccepted {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusAccepted, response.Body.String())
 	}
-	// The registration is read back at its own URL, not the one it was posted to.
+	// The registration is read back by its id under the collection it was posted to.
 	if got, want := response.Header().Get("Location"), "/v1/tenants/tenant_123/template-registrations/template_registration_123"; got != want {
 		t.Fatalf("Location = %q, want %q", got, want)
 	}
@@ -707,7 +707,7 @@ func TestRegisterTemplateRejectsInvalidJSON(t *testing.T) {
 	response := httptest.NewRecorder()
 	request := authenticatedRequest(
 		http.MethodPost,
-		"/v1/tenants/tenant_123/template-revisions",
+		"/v1/tenants/tenant_123/template-registrations",
 		strings.NewReader(`{"repo_owner":`),
 	)
 
@@ -725,13 +725,41 @@ func TestRegisterTemplateMapsMissingSourceRefToValidationFailed(t *testing.T) {
 	response := httptest.NewRecorder()
 	request := authenticatedRequest(
 		http.MethodPost,
-		"/v1/tenants/tenant_123/template-revisions",
+		"/v1/tenants/tenant_123/template-registrations",
 		strings.NewReader(`{"repo_owner":"acme","repo_name":"infra-templates","root_path":"modules/vpc"}`),
 	)
 
 	server.ServeHTTP(response, request)
 
 	assertValidationFailed(t, response, "#/source_ref required")
+}
+
+// Registration was once POSTed to /template-revisions, which only lists
+// revisions now. With GET still routed there the mux answers 405, not 404,
+// and nothing is registered.
+func TestRegisterTemplateOnTheRevisionsPathIsMethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	deps := newAPITestDependencies(t).withPlatformTier("admin")
+	server := NewServer(deps.service(), configuredTenantID)
+	response := httptest.NewRecorder()
+	request := authenticatedRequest(
+		http.MethodPost,
+		"/v1/tenants/tenant_123/template-revisions",
+		strings.NewReader(`{"repo_owner":"acme","repo_name":"infra-templates","source_ref":"v0.0.1","root_path":"modules/vpc"}`),
+	)
+
+	server.ServeHTTP(response, request)
+
+	if response.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusMethodNotAllowed, response.Body.String())
+	}
+	if deps.registrations.created.ID != "" {
+		t.Fatalf("registration = %#v, want none", deps.registrations.created)
+	}
+	if len(deps.work.requests) != 0 {
+		t.Fatalf("queued requests = %#v, want none", deps.work.requests)
+	}
 }
 
 func TestCreateStackCallsService(t *testing.T) {
@@ -1860,8 +1888,8 @@ func TestApproveRunCallsService(t *testing.T) {
 
 	server.ServeHTTP(response, request)
 
-	if response.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusNoContent, response.Body.String())
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusAccepted, response.Body.String())
 	}
 	if deps.templateRuns.approval.TenantID != domain.TenantID("tenant_123") {
 		t.Fatalf("tenant id = %q", deps.templateRuns.approval.TenantID)
@@ -1874,6 +1902,21 @@ func TestApproveRunCallsService(t *testing.T) {
 	}
 	if len(deps.work.requests) != 1 || deps.work.requests[0].Kind != app.KindStartTemplateApply {
 		t.Fatalf("queued requests = %#v, want one start_template_apply request", deps.work.requests)
+	}
+	// The client follows the apply from here, so it gets the run, already off
+	// waiting_approval, and where to poll it.
+	if got, want := response.Header().Get("Location"), "/v1/tenants/tenant_123/template-runs/run_123"; got != want {
+		t.Fatalf("Location = %q, want %q", got, want)
+	}
+	var body domain.TemplateRun
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.ID != domain.TemplateRunID("run_123") {
+		t.Fatalf("id = %q, want run_123", body.ID)
+	}
+	if body.Status != domain.TemplateRunApproved {
+		t.Fatalf("status = %q, want %q", body.Status, domain.TemplateRunApproved)
 	}
 }
 
@@ -1888,8 +1931,8 @@ func TestApproveRunTakesAnEmptyBodyButNotAMalformedOne(t *testing.T) {
 
 	server.ServeHTTP(response, authenticatedRequest(http.MethodPost, "/v1/tenants/tenant_123/template-runs/run_123/approval", nil))
 
-	if response.Code != http.StatusNoContent {
-		t.Fatalf("empty body: status = %d, want %d; body = %s", response.Code, http.StatusNoContent, response.Body.String())
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("empty body: status = %d, want %d; body = %s", response.Code, http.StatusAccepted, response.Body.String())
 	}
 	if deps.templateRuns.approval.RunID != domain.TemplateRunID("run_123") {
 		t.Fatalf("empty body: approval was not recorded")
@@ -1932,8 +1975,8 @@ func TestApproveRunAllowsSelfApproval(t *testing.T) {
 
 	server.ServeHTTP(response, request)
 
-	if response.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusNoContent, response.Body.String())
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusAccepted, response.Body.String())
 	}
 	if deps.templateRuns.approval.RunID == "" {
 		t.Fatalf("approval was not recorded, want approval")
@@ -2137,7 +2180,7 @@ func TestMutationRequestsRejectIdentityOverrides(t *testing.T) {
 		assertNoEffects func(*testing.T, *apiTestDependencies)
 	}{
 		{name: "actor", path: "/v1/tenants/tenant_123/stacks", body: `{"name":"Acme","actor":"spoofed"}`, assertNoEffects: assertNoStackCreation},
-		{name: "requested by", path: "/v1/tenants/tenant_123/template-revisions", body: `{"repo_owner":"acme","repo_name":"infra","source_ref":"main","root_path":".","requested_by":"spoofed"}`, assertNoEffects: assertNoRegistration},
+		{name: "requested by", path: "/v1/tenants/tenant_123/template-registrations", body: `{"repo_owner":"acme","repo_name":"infra","source_ref":"main","root_path":".","requested_by":"spoofed"}`, assertNoEffects: assertNoRegistration},
 		{name: "trigger actor", path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/runs", body: `{"operation":"plan","trigger_actor":"spoofed"}`, assertNoEffects: assertNoRun},
 		{name: "approved by", path: "/v1/tenants/tenant_123/template-runs/run_123/approval", body: `{"approved_by":"spoofed"}`, assertNoEffects: assertNoApproval},
 		{name: "created by", path: "/v1/tenants/tenant_123/stacks", body: `{"name":"Acme","created_by":"spoofed"}`, assertNoEffects: assertNoStackCreation},
@@ -2310,7 +2353,7 @@ func TestTemplateCatalogRoutesRejectOrdinaryUser(t *testing.T) {
 		path   string
 		body   string
 	}{
-		{name: "register", method: http.MethodPost, path: "/v1/tenants/tenant_123/template-revisions", body: `{"repo_owner":"acme","repo_name":"infra","source_ref":"main","root_path":"."}`},
+		{name: "register", method: http.MethodPost, path: "/v1/tenants/tenant_123/template-registrations", body: `{"repo_owner":"acme","repo_name":"infra","source_ref":"main","root_path":"."}`},
 		{name: "list revisions", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-revisions"},
 		{name: "registration status", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-registrations/registration_123"},
 		{name: "revision variables", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-revisions/revision_123/variables"},
@@ -2346,7 +2389,7 @@ func TestTemplateCatalogRoutesAllowGlobalRoles(t *testing.T) {
 		body   string
 		status int
 	}{
-		{name: "register", method: http.MethodPost, path: "/v1/tenants/tenant_123/template-revisions", body: `{"repo_owner":"acme","repo_name":"infra","source_ref":"main","root_path":"."}`, status: http.StatusAccepted},
+		{name: "register", method: http.MethodPost, path: "/v1/tenants/tenant_123/template-registrations", body: `{"repo_owner":"acme","repo_name":"infra","source_ref":"main","root_path":"."}`, status: http.StatusAccepted},
 		{name: "list revisions", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-revisions", status: http.StatusOK},
 		{name: "registration status", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-registrations/registration_123", status: http.StatusOK},
 		{name: "revision variables", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-revisions/revision_123/variables", status: http.StatusOK},
@@ -2408,8 +2451,8 @@ func TestStackRoleRoutesUseInheritedPermissions(t *testing.T) {
 		{name: "operator installs template", role: authorization.RelationOperator, method: http.MethodPost, path: "/v1/tenants/tenant_123/stacks/stack_123/templates", body: `{"template_revision_id":"revision_123","config":{}}`, status: http.StatusCreated, permission: authorization.RelationCanOperate},
 		{name: "owner operates config", role: authorization.RelationOwner, method: http.MethodPatch, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/config", body: `{"config":{}}`, status: http.StatusOK, permission: authorization.RelationCanOperate},
 		{name: "operator upgrades template", role: authorization.RelationOperator, method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/upgrade", body: `{"target_template_revision_id":"revision_123"}`, status: http.StatusOK, permission: authorization.RelationCanOperate},
-		{name: "operator starts run", role: authorization.RelationOperator, method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/runs", body: `{"operation":"plan"}`, status: http.StatusCreated, permission: authorization.RelationCanOperate},
-		{name: "approver approves run", role: authorization.RelationApprover, method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/approval", body: `{}`, status: http.StatusNoContent, permission: authorization.RelationCanApprove},
+		{name: "operator starts run", role: authorization.RelationOperator, method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/runs", body: `{"operation":"plan"}`, status: http.StatusAccepted, permission: authorization.RelationCanOperate},
+		{name: "approver approves run", role: authorization.RelationApprover, method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/approval", body: `{}`, status: http.StatusAccepted, permission: authorization.RelationCanApprove},
 		{name: "owner discards run", role: authorization.RelationOwner, method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/discard", body: `{}`, status: http.StatusNoContent, permission: authorization.RelationCanOperate},
 		{name: "viewer reads run", role: authorization.RelationViewer, method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123", status: http.StatusOK, permission: authorization.RelationCanView},
 		{name: "approver lists run logs", role: authorization.RelationApprover, method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123/logs", status: http.StatusOK, permission: authorization.RelationCanView},

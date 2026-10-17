@@ -1,6 +1,6 @@
 $kind: http-request
 description: |-
-  Poll this after `POST /v1/tenants/{tenant_id}/template-revisions`.
+  Poll this after `POST /v1/tenants/{tenant_id}/template-registrations`.
 
   In a collection run this re-sends itself until the registration ends, and saves its revision.
 method: GET

@@ -57,7 +57,7 @@ describe("TemplateSync", () => {
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(true));
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
-    expect(String(post?.[0])).toContain("/v1/tenants/tenant_123/template-revisions");
+    expect(String(post?.[0])).toBe("/v1/tenants/tenant_123/template-registrations");
     expect(JSON.parse(String(post?.[1]?.body))).toEqual({ repo_owner: "acme", repo_name: "infra-modules", source_ref: "main", root_path: "aws/eks" });
   });
 

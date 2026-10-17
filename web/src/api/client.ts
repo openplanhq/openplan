@@ -93,7 +93,7 @@ export function getMe(): Promise<Me> {
 }
 
 export function registerTemplate(tenantID: string, body: RegisterTemplateRequest): Promise<TemplateRegistration> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/template-revisions`, {
+  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/template-registrations`, {
     method: "POST",
     body: JSON.stringify(body)
   });
@@ -214,8 +214,10 @@ export function getTemplateRunLog(tenantID: string, runID: string, phase: string
   return requestText(`/v1/tenants/${encodeURIComponent(tenantID)}/template-runs/${encodeURIComponent(runID)}/logs/${encodeURIComponent(phase)}`);
 }
 
-export function approveRun(tenantID: string, runID: string): Promise<void> {
-  return requestNoContent(`/v1/tenants/${encodeURIComponent(tenantID)}/template-runs/${encodeURIComponent(runID)}/approval`, {
+// approveRun answers with the run, already approved, while its apply waits for
+// an executor.
+export function approveRun(tenantID: string, runID: string): Promise<TemplateRun> {
+  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/template-runs/${encodeURIComponent(runID)}/approval`, {
     method: "POST",
     body: JSON.stringify({})
   });

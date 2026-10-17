@@ -33,7 +33,7 @@ body:
 scripts:
   - type: afterResponse
     code: |-
-      pm.test('status is 201', () => pm.response.to.have.status(201));
+      pm.test('status is 202', () => pm.response.to.have.status(202));
       if (pm.response.code < 300) { pm.environment.set('run_id', pm.response.json().id); }
     language: text/javascript
 examples: ./.resources/Start a Terraform operation.resources/examples

@@ -211,7 +211,7 @@ func TestInheritedResourceMissingMutationReturnsNotFound(t *testing.T) {
 
 	service := NewService(Service{Authorization: newPlatformAuthorizer(t, platformAdmin("user_123")), TemplateRuns: &recordingTemplateRunRepository{getErr: ErrNotFound}})
 
-	err := service.ApproveRun(authenticatedContext(), ApproveRunCommand{TenantID: "tenant_123", RunID: "missing_run"})
+	_, err := service.ApproveRun(authenticatedContext(), ApproveRunCommand{TenantID: "tenant_123", RunID: "missing_run"})
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatalf("error = %v, want ErrNotFound", err)
 	}

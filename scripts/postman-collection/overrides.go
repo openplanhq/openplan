@@ -85,7 +85,7 @@ var overrides = map[string]override{
 		test: save("my_sub", "pm.response.json().sub") + "\n" +
 			"pm.test('tenant matches the environment', () => pm.expect(pm.response.json().tenant_id).to.eql(pm.environment.get('tenant_id')));",
 	},
-	"registerTemplateRevision": {
+	"createTemplateRegistration": {
 		jsonBody: jsonObject([][2]string{
 			{"repo_owner", "{{template_repo_owner}}"}, {"repo_name", "{{template_repo_name}}"},
 			{"source_ref", "{{template_source_ref}}"}, {"root_path", "{{template_root_path}}"},
@@ -151,7 +151,7 @@ var overrides = map[string]override{
 	},
 	"approveRun": {
 		noBody: true,
-		expect: []int{204, 409},
+		expect: []int{202, 409},
 		note:   "`409` when the plan had no changes, so there is nothing to approve.",
 	},
 	"discardRun": {

@@ -10,13 +10,15 @@ description: |-
   component's desired config and revision. Those cannot change while
   the plan waits, so this is a backstop.
 
-  Takes no fields: send `{}` or no body at all.
+  Takes no fields: send `{}` or no body at all. Returns `202` with the
+  run, now `approved`, while its apply waits for an executor; poll the
+  run until its `status` is terminal.
 
   `409` when the plan had no changes, so there is nothing to approve.
 method: POST
 url: '{{base_url}}/v1/tenants/{{tenant_id}}/template-runs/{{run_id}}/approval'
 scripts:
   - type: afterResponse
-    code: pm.test('status is one of 204, 409', () => pm.expect(pm.response.code).to.be.oneOf([204, 409]));
+    code: pm.test('status is one of 202, 409', () => pm.expect(pm.response.code).to.be.oneOf([202, 409]));
     language: text/javascript
 order: 6000
