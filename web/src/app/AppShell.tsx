@@ -100,7 +100,6 @@ function DebugPanel() {
     ["User sub", "debug-user-sub", me?.sub ?? "-"],
     ["Display name", "debug-display-name", me?.displayName ?? "-"],
     ["Tenant", "debug-tenant", tenantID],
-    ["isPlatformAdmin", "debug-is-platform-admin", me?.globalCapabilities.isPlatformAdmin.toString() ?? "-"],
     ["canCreateStack", "debug-can-create-stack", me?.globalCapabilities.canCreateStack.toString() ?? "-"],
     ["canPublishTemplate", "debug-can-publish-template", me?.globalCapabilities.canPublishTemplate.toString() ?? "-"]
   ];

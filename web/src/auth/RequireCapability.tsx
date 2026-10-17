@@ -19,7 +19,6 @@ type StackCapabilityKey = keyof StackCapabilities;
 export type CapabilityKey = GlobalCapabilityKey | StackCapabilityKey;
 
 const GLOBAL_CAPABILITY_KEYS: readonly GlobalCapabilityKey[] = [
-  "isPlatformAdmin",
   "canCreateStack",
   "canPublishTemplate"
 ];

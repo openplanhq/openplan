@@ -9,7 +9,7 @@ vi.mock("../auth/SessionProvider");
 
 function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
   return {
-    me: { sub: "user_1", tenantID: "tenant_123", displayName: "Test User", globalCapabilities: { isPlatformAdmin: false, canCreateStack: false, canPublishTemplate: false } },
+    me: { sub: "user_1", tenantID: "tenant_123", displayName: "Test User", globalCapabilities: { canCreateStack: false, canPublishTemplate: false } },
     status: "authenticated",
     login: () => {},
     logout: () => {},
@@ -91,7 +91,7 @@ describe("routeConfig", () => {
       const testRouter = createMemoryRouter(routeConfig, { initialEntries: ["/stacks/new"] });
       const markup = renderToStaticMarkup(
         <QueryClientProvider client={new QueryClient()}>
-          <AuthContext.Provider value={authValue({ me: { ...authValue().me!, globalCapabilities: { isPlatformAdmin: false, canCreateStack: true, canPublishTemplate: true } } })}>
+          <AuthContext.Provider value={authValue({ me: { ...authValue().me!, globalCapabilities: { canCreateStack: true, canPublishTemplate: true } } })}>
             <RouterProvider router={testRouter} />
           </AuthContext.Provider>
         </QueryClientProvider>
@@ -244,7 +244,7 @@ describe("routeConfig", () => {
     vi.doMock("../auth/SessionProvider", async () => {
       const { AuthContext: RouterAuthContext } = await import("../auth/AuthContext");
       const signedIn = authValue({
-        me: { sub: "user_1", tenantID: "tenant_123", displayName: "Test User", globalCapabilities: { isPlatformAdmin: false, canCreateStack: false, canPublishTemplate } }
+        me: { sub: "user_1", tenantID: "tenant_123", displayName: "Test User", globalCapabilities: { canCreateStack: false, canPublishTemplate } }
       });
       return {
         default: () => (

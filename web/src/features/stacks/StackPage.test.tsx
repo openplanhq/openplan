@@ -83,7 +83,7 @@ function seed(templates: StackTemplate[], capabilities: StackCapabilities = allA
 
 function authValue(): AuthContextValue {
   return {
-    me: { sub: "user_1", tenantID: TENANT, displayName: "Test User", globalCapabilities: { isPlatformAdmin: false, canCreateStack: false, canPublishTemplate: false } },
+    me: { sub: "user_1", tenantID: TENANT, displayName: "Test User", globalCapabilities: { canCreateStack: false, canPublishTemplate: false } },
     status: "authenticated",
     login: () => {},
     logout: () => {}

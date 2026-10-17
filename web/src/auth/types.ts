@@ -9,7 +9,6 @@ export interface Me {
   email?: string;
   tenantID: string;
   globalCapabilities: {
-    isPlatformAdmin: boolean;
     canCreateStack: boolean;
     /** Registering a template — which is also what the detail screen's Sync
         button posts, so it gates that button too. */

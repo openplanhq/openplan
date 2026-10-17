@@ -17,7 +17,7 @@ function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue 
       sub: "user_1",
       tenantID: "tenant_123",
       displayName: "Otto Operator",
-      globalCapabilities: { isPlatformAdmin: false, canCreateStack: true, canPublishTemplate: true },
+      globalCapabilities: { canCreateStack: true, canPublishTemplate: true },
     },
     status: "authenticated",
     login: () => {},

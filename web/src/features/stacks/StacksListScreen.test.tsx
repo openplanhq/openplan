@@ -77,7 +77,7 @@ function seed(queryClient: QueryClient, data: { stacks?: StackListItem[]; attent
 
 function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
   return {
-    me: { sub: "user_1", tenantID: TENANT, displayName: "Test User", globalCapabilities: { isPlatformAdmin: false, canCreateStack: true, canPublishTemplate: true } },
+    me: { sub: "user_1", tenantID: TENANT, displayName: "Test User", globalCapabilities: { canCreateStack: true, canPublishTemplate: true } },
     status: "authenticated",
     login: () => {},
     logout: () => {},
@@ -409,7 +409,7 @@ describe("StacksListScreen", () => {
     seed(queryClient, { stacks: [] });
 
     renderScreen(queryClient, {
-      auth: authValue({ me: { sub: "user_1", tenantID: TENANT, displayName: "Test User", globalCapabilities: { isPlatformAdmin: false, canCreateStack: false, canPublishTemplate: false } } })
+      auth: authValue({ me: { sub: "user_1", tenantID: TENANT, displayName: "Test User", globalCapabilities: { canCreateStack: false, canPublishTemplate: false } } })
     });
 
     const empty = screen.getByTestId("stacks-list-empty");
@@ -517,7 +517,7 @@ describe("StacksListScreen", () => {
     seed(queryClient, { stacks: [stack()] });
 
     renderScreen(queryClient, {
-      auth: authValue({ me: { ...authValue().me!, globalCapabilities: { isPlatformAdmin: false, canCreateStack: false, canPublishTemplate: false } } })
+      auth: authValue({ me: { ...authValue().me!, globalCapabilities: { canCreateStack: false, canPublishTemplate: false } } })
     });
 
     expect(screen.getByTestId("stacks-list")).toBeTruthy();
