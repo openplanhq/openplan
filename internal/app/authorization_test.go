@@ -176,6 +176,8 @@ func TestInheritedAuthorizationRequiresPrincipalBeforeRepositoryRead(t *testing.
 	}
 }
 
+// A viewer can see the stack, so the refusal is ErrForbidden rather than the
+// ErrNotFound a caller with no access at all gets.
 func TestStartTemplateRunDenialReturnsForbiddenBeforeMutation(t *testing.T) {
 	t.Parallel()
 
@@ -184,8 +186,10 @@ func TestStartTemplateRunDenialReturnsForbiddenBeforeMutation(t *testing.T) {
 		TenantID: "tenant_123",
 		StackID:  "stack_123",
 	}}
+	auth := newTestAuthorization(t)
+	grantStack(t, auth, "user_123", "stack_123", authorization.RelationViewer)
 	service := NewService(Service{
-		Authorization:  newTestAuthorization(t),
+		Authorization:  auth,
 		StackTemplates: templates,
 	})
 	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: "user_123"})
@@ -200,14 +204,16 @@ func TestStartTemplateRunDenialReturnsForbiddenBeforeMutation(t *testing.T) {
 	}
 }
 
-func TestInheritedResourceMissingMutationReturnsForbidden(t *testing.T) {
+// A run that doesn't exist is ErrNotFound on a write, as it is on a read, so
+// the answer matches the one for a run the caller can't see.
+func TestInheritedResourceMissingMutationReturnsNotFound(t *testing.T) {
 	t.Parallel()
 
 	service := NewService(Service{Authorization: newPlatformAuthorizer(t, platformAdmin("user_123")), TemplateRuns: &recordingTemplateRunRepository{getErr: ErrNotFound}})
 
 	err := service.ApproveRun(authenticatedContext(), ApproveRunCommand{TenantID: "tenant_123", RunID: "missing_run"})
-	if !errors.Is(err, ErrForbidden) {
-		t.Fatalf("error = %v, want ErrForbidden", err)
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("error = %v, want ErrNotFound", err)
 	}
 }
 

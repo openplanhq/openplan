@@ -667,7 +667,7 @@ func (service *Service) AddTemplateToStack(ctx context.Context, command AddTempl
 		return StackTemplateView{}, err
 	}
 
-	if err := authorizeStack(ctx, service.Authorization, command.StackID, authorization.RelationCanOperate, ErrForbidden); err != nil {
+	if err := authorizeStack(ctx, service.Authorization, command.StackID, authorization.RelationCanOperate); err != nil {
 		service.auditFailedAccess(ctx, actor, command.TenantID, command.StackID)
 		return StackTemplateView{}, err
 	}
@@ -747,7 +747,7 @@ func (service *Service) StartTemplateRun(ctx context.Context, command StartTempl
 	// Auto-approve is an approval given in advance, so it takes the same
 	// access as approving a plan: operate alone is not enough.
 	if command.AutoApprove {
-		if err := authorizeStack(ctx, service.Authorization, stackTemplate.StackID, authorization.RelationCanApprove, ErrForbidden); err != nil {
+		if err := authorizeStack(ctx, service.Authorization, stackTemplate.StackID, authorization.RelationCanApprove); err != nil {
 			service.auditFailedAccess(ctx, actor, command.TenantID, stackTemplate.StackID)
 			return domain.TemplateRun{}, fmt.Errorf("auto-approve: %w", err)
 		}
@@ -852,7 +852,7 @@ func (service *Service) CreateCredential(ctx context.Context, command CreateCred
 	switch command.Scope {
 	case domain.CredentialScopeStack:
 		stackID = command.StackID
-		if err := authorizeStack(ctx, service.Authorization, stackID, authorization.RelationCanManageAccess, ErrForbidden); err != nil {
+		if err := authorizeStack(ctx, service.Authorization, stackID, authorization.RelationCanManageAccess); err != nil {
 			return CredentialMetadata{}, err
 		}
 	case domain.CredentialScopeStackTemplate:
@@ -862,7 +862,7 @@ func (service *Service) CreateCredential(ctx context.Context, command CreateCred
 			return CredentialMetadata{}, err
 		}
 		stackID = stackTemplate.StackID
-		if err := authorizeStack(ctx, service.Authorization, stackID, authorization.RelationCanManageAccess, ErrForbidden); err != nil {
+		if err := authorizeStack(ctx, service.Authorization, stackID, authorization.RelationCanManageAccess); err != nil {
 			return CredentialMetadata{}, err
 		}
 	default:
@@ -905,10 +905,10 @@ func (service *Service) ListCredentials(ctx context.Context, command ListCredent
 		if err != nil {
 			return nil, err
 		}
-		if err := authorizeStack(ctx, service.Authorization, stackTemplate.StackID, authorization.RelationCanManageAccess, ErrForbidden); err != nil {
+		if err := authorizeStack(ctx, service.Authorization, stackTemplate.StackID, authorization.RelationCanManageAccess); err != nil {
 			return nil, err
 		}
-	} else if err := authorizeStack(ctx, service.Authorization, command.StackID, authorization.RelationCanManageAccess, ErrForbidden); err != nil {
+	} else if err := authorizeStack(ctx, service.Authorization, command.StackID, authorization.RelationCanManageAccess); err != nil {
 		return nil, err
 	}
 	credentials, err := service.Credentials.ListCredentials(ctx, command.TenantID, command.Scope, ownerID)
@@ -946,7 +946,7 @@ func (service *Service) DeleteCredential(ctx context.Context, command DeleteCred
 	default:
 		return fmt.Errorf("%w: credential scope is required", ErrInvalidCommand)
 	}
-	if err := authorizeStack(ctx, service.Authorization, stackID, authorization.RelationCanManageAccess, ErrForbidden); err != nil {
+	if err := authorizeStack(ctx, service.Authorization, stackID, authorization.RelationCanManageAccess); err != nil {
 		return err
 	}
 	scope := domain.CredentialScopeStack
@@ -1095,7 +1095,7 @@ func (service *Service) GetStack(ctx context.Context, command GetStackCommand) (
 	if err := validateGetStackCommand(command); err != nil {
 		return StackView{}, err
 	}
-	if err := authorizeStack(ctx, service.Authorization, command.StackID, authorization.RelationCanView, ErrNotFound); err != nil {
+	if err := authorizeStack(ctx, service.Authorization, command.StackID, authorization.RelationCanView); err != nil {
 		return StackView{}, err
 	}
 
@@ -1311,7 +1311,7 @@ func (service *Service) ListStackGrants(ctx context.Context, command ListStackGr
 	if _, err := requirePrincipalAndAuthorizer(ctx, service.Authorization); err != nil {
 		return ListStackGrantsResult{}, err
 	}
-	if err := authorizeStack(ctx, service.Authorization, command.StackID, authorization.RelationCanManageAccess, ErrForbidden); err != nil {
+	if err := authorizeStack(ctx, service.Authorization, command.StackID, authorization.RelationCanManageAccess); err != nil {
 		return ListStackGrantsResult{}, err
 	}
 	if err := service.requireUserRepository(); err != nil {
@@ -1377,7 +1377,7 @@ func (service *Service) AssignStackRole(ctx context.Context, command AssignStack
 	if err != nil {
 		return GrantView{}, err
 	}
-	if err := authorizeStack(ctx, service.Authorization, command.StackID, authorization.RelationCanManageAccess, ErrForbidden); err != nil {
+	if err := authorizeStack(ctx, service.Authorization, command.StackID, authorization.RelationCanManageAccess); err != nil {
 		return GrantView{}, err
 	}
 
@@ -1514,7 +1514,7 @@ func (service *Service) RevokeStackRole(ctx context.Context, command RevokeStack
 	if err != nil {
 		return err
 	}
-	if err := authorizeStack(ctx, service.Authorization, command.StackID, authorization.RelationCanManageAccess, ErrForbidden); err != nil {
+	if err := authorizeStack(ctx, service.Authorization, command.StackID, authorization.RelationCanManageAccess); err != nil {
 		return err
 	}
 
@@ -1598,7 +1598,7 @@ func (service *Service) ApproveRun(ctx context.Context, command ApproveRunComman
 		return err
 	}
 
-	run, err := service.authorizedTemplateRun(ctx, command.TenantID, command.RunID, authorization.RelationCanApprove, ErrForbidden)
+	run, err := service.authorizedTemplateRun(ctx, command.TenantID, command.RunID, authorization.RelationCanApprove)
 	if err != nil {
 		return err
 	}
@@ -1707,7 +1707,7 @@ func (service *Service) DiscardRun(ctx context.Context, command DiscardRunComman
 		return err
 	}
 
-	if _, err := service.authorizedTemplateRun(ctx, command.TenantID, command.RunID, authorization.RelationCanOperate, ErrForbidden); err != nil {
+	if _, err := service.authorizedTemplateRun(ctx, command.TenantID, command.RunID, authorization.RelationCanOperate); err != nil {
 		return err
 	}
 	discard := domain.TemplateRunDiscard{
@@ -1741,7 +1741,7 @@ func (service *Service) GetTemplateRun(ctx context.Context, command GetTemplateR
 		return domain.TemplateRun{}, err
 	}
 
-	run, err := service.authorizedTemplateRun(ctx, command.TenantID, command.RunID, authorization.RelationCanView, ErrNotFound)
+	run, err := service.authorizedTemplateRun(ctx, command.TenantID, command.RunID, authorization.RelationCanView)
 	if err != nil {
 		return domain.TemplateRun{}, fmt.Errorf("get template run: %w", err)
 	}
@@ -1764,7 +1764,7 @@ func (service *Service) ListTemplateRuns(ctx context.Context, command ListTempla
 		return nil, err
 	}
 
-	if _, err := service.authorizedStackTemplate(ctx, command.TenantID, command.StackTemplateID, authorization.RelationCanView, ErrNotFound); err != nil {
+	if _, err := service.authorizedStackTemplate(ctx, command.TenantID, command.StackTemplateID, authorization.RelationCanView); err != nil {
 		return nil, fmt.Errorf("list template runs: %w", err)
 	}
 
@@ -1823,7 +1823,7 @@ func (service *Service) GetTemplateRunLog(ctx context.Context, command GetTempla
 		return nil, err
 	}
 
-	if _, err := service.authorizedTemplateRun(ctx, command.TenantID, command.RunID, authorization.RelationCanView, ErrNotFound); err != nil {
+	if _, err := service.authorizedTemplateRun(ctx, command.TenantID, command.RunID, authorization.RelationCanView); err != nil {
 		return nil, err
 	}
 	log, err := service.TemplateRunLogMetadata.GetTemplateRunLog(ctx, command.TenantID, command.RunID, command.Phase)
@@ -1848,7 +1848,7 @@ func (service *Service) ListTemplateRunLogs(ctx context.Context, command ListTem
 		return nil, err
 	}
 
-	if _, err := service.authorizedTemplateRun(ctx, command.TenantID, command.RunID, authorization.RelationCanView, ErrNotFound); err != nil {
+	if _, err := service.authorizedTemplateRun(ctx, command.TenantID, command.RunID, authorization.RelationCanView); err != nil {
 		return nil, err
 	}
 
