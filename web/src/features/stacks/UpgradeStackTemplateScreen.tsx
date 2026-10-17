@@ -19,6 +19,9 @@ import {
 } from "./stackWorkflow";
 import { stackTemplatePath } from "./templateSelection";
 import VariableFields from "./VariableFields";
+import { apiErrorMessage } from "../../api/problems";
+import { useFieldErrors } from "../../shared/useFieldErrors";
+import RequestIdNote from "../../shared/RequestIdNote";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -34,6 +37,7 @@ export default function UpgradeStackTemplateScreen() {
   const [chosenTargetID, setChosenTargetID] = useState("");
   const [editedValues, setEditedValues] = useState<Record<string, string>>({});
   const [errorMessage, setErrorMessage] = useState("");
+  const variableErrors = useFieldErrors("#/config/");
 
   const templateRevisionsQuery = useTemplateRevisionsQuery(tenantID);
   const candidates = upgradeCandidateRevisions(templateRevisionsQuery.data ?? [], stackTemplate);
@@ -78,6 +82,7 @@ export default function UpgradeStackTemplateScreen() {
       return;
     }
     setErrorMessage("");
+    variableErrors.clear();
     try {
       await upgradeStackTemplateMutation.mutateAsync({
         stackTemplateID: stackTemplate.id,
@@ -88,7 +93,8 @@ export default function UpgradeStackTemplateScreen() {
       });
       navigate(stackTemplatePath(stackId, stackTemplate.id, "runs"));
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Request failed");
+      variableErrors.show(error);
+      setErrorMessage(apiErrorMessage(error, "Request failed", "#/config/"));
     }
   }
 
@@ -119,6 +125,7 @@ export default function UpgradeStackTemplateScreen() {
       <section className="flex min-w-0 flex-col items-start gap-5" data-testid="upgrade-load-error">
         {trail}
         <ErrorLine live={false}>Something went wrong while loading revisions.</ErrorLine>
+        <RequestIdNote error={templateRevisionsQuery.error ?? currentVariablesQuery.error ?? targetVariablesQuery.error} />
         <button
           type="button"
           className={cn(buttonClass("outline"), "pointer-coarse:h-11")}
@@ -217,8 +224,12 @@ export default function UpgradeStackTemplateScreen() {
                 <VariableFields
                   variables={targetVariables}
                   variableValues={variableValues}
-                  onVariableValueChange={(name, value) => setEditedValues((current) => ({ ...current, [name]: value }))}
+                  onVariableValueChange={(name, value) => {
+                    setEditedValues((current) => ({ ...current, [name]: value }));
+                    variableErrors.clear(name);
+                  }}
                   emptyMessage="This revision declares no variables."
+                  errors={variableErrors.errors}
                 />
               </>
             )}

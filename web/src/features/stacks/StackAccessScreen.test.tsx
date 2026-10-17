@@ -267,8 +267,9 @@ describe("StackAccessScreen", () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            error: "last_owner",
-            message: "cannot remove the last owner"
+            type: "https://openplan.run/problems/last-owner",
+            title: "The stack needs an owner",
+            detail: "cannot remove the last owner"
           }),
           {
             status: 409,
@@ -743,7 +744,7 @@ describe("StackAccessScreen", () => {
       vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
         calls += 1;
         return calls === 1
-          ? new Response(JSON.stringify({ error: "internal", message: "boom" }), {
+          ? new Response(JSON.stringify({ type: "about:blank", title: "Internal Server Error", detail: "boom" }), {
               status: 500,
               headers: { "content-type": "application/json" }
             })

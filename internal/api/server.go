@@ -207,8 +207,8 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	return server
 }
 
-// withErrorEnvelope answers requests no route matches in the API's error
-// envelope. Left to itself the mux writes plain text: "404 page not found",
+// withErrorEnvelope answers requests no route matches with a problem
+// document. Left to itself the mux writes plain text: "404 page not found",
 // or "Method Not Allowed" with an Allow header.
 //
 // Only unrouted requests are touched. mux.Handler reports the pattern a
@@ -225,10 +225,10 @@ func withErrorEnvelope(mux *http.ServeMux) http.Handler {
 		unrouted := &unroutedResponse{header: response.Header()}
 		mux.ServeHTTP(unrouted, request)
 		if unrouted.status == http.StatusMethodNotAllowed {
-			writeError(response, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+			writeProblem(response, blankProblem(http.StatusMethodNotAllowed, "This route doesn't accept this method; Allow lists the ones it does."))
 			return
 		}
-		writeError(response, http.StatusNotFound, "not_found", "resource not found")
+		writeProblem(response, blankProblem(http.StatusNotFound, notFoundDetail))
 	})
 }
 
@@ -269,7 +269,7 @@ func NewAuthenticatedServer(service *app.Service, tenantID domain.TenantID, debu
 func (server *Server) handleMe(response http.ResponseWriter, request *http.Request) {
 	principal, ok := authentication.PrincipalFromContext(request.Context())
 	if !ok || principal.Subject == "" {
-		writeError(response, http.StatusUnauthorized, "unauthorized", "authentication required")
+		writeAppError(response, app.ErrUnauthenticated)
 		return
 	}
 	capabilities, err := server.service.PlatformCapabilities(request.Context())
@@ -290,7 +290,7 @@ func (server *Server) handleTenantRoute(pattern string, handler http.HandlerFunc
 func (server *Server) requireConfiguredTenant(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		if domain.TenantID(request.PathValue("tenant_id")) != server.tenantID {
-			writeError(response, http.StatusNotFound, "not_found", "resource not found")
+			writeProblem(response, blankProblem(http.StatusNotFound, notFoundDetail))
 			return
 		}
 		next.ServeHTTP(response, request)
@@ -326,29 +326,45 @@ func decodeRequestBody(response http.ResponseWriter, request *http.Request, dest
 	var raw json.RawMessage
 	if err := decoder.Decode(&raw); err != nil {
 		if !writeRequestTooLarge(response, err) {
-			writeError(response, http.StatusBadRequest, "invalid_json", "request body must match the expected JSON schema")
+			writeMalformedBody(response, schemaMismatch)
 		}
 		return false
 	}
 	if trimmed := bytes.TrimSpace(raw); len(trimmed) == 0 || trimmed[0] != '{' {
-		writeError(response, http.StatusBadRequest, "invalid_json", "request body must contain one JSON object")
+		writeMalformedBody(response, notOneObject)
 		return false
 	}
 	bodyDecoder := json.NewDecoder(bytes.NewReader(raw))
 	bodyDecoder.DisallowUnknownFields()
 	if err := bodyDecoder.Decode(destination); err != nil {
-		writeError(response, http.StatusBadRequest, "invalid_json", "request body must match the expected JSON schema")
+		writeMalformedBody(response, schemaMismatch)
 		return false
 	}
 	// Trailing bytes count toward the cap too, so this read can be the one
 	// that crosses it.
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		if !writeRequestTooLarge(response, err) {
-			writeError(response, http.StatusBadRequest, "invalid_json", "request body must contain one JSON object")
+			writeMalformedBody(response, notOneObject)
 		}
 		return false
 	}
 	return true
+}
+
+const (
+	schemaMismatch = "The request body doesn't match the expected schema: a field is unknown or has the wrong type."
+	notOneObject   = "The request body must be exactly one JSON object."
+	notFoundDetail = "The resource doesn't exist, or you can't see it."
+)
+
+// writeMalformedBody is the 400 for a body that can't be parsed, as opposed
+// to the 422 for one that parses but breaks a rule. A client shouldn't send
+// one, so the detail is for whoever is debugging it.
+func writeMalformedBody(response http.ResponseWriter, detail string) {
+	writeProblem(response, problemDocument{
+		Type: problemTypeURI("malformed-body"), Title: "The request body can't be read",
+		Status: http.StatusBadRequest, Detail: detail,
+	})
 }
 
 // decodeOptionalRequestBody is decodeRequestBody for an action whose body
@@ -372,7 +388,7 @@ func writeRequestTooLarge(response http.ResponseWriter, err error) bool {
 	if _, ok := errors.AsType[*http.MaxBytesError](err); !ok {
 		return false
 	}
-	writeError(response, http.StatusRequestEntityTooLarge, "request_too_large", "request body must not exceed 1 MiB")
+	writeProblem(response, blankProblem(http.StatusRequestEntityTooLarge, "The request body must not exceed 1 MiB."))
 	return true
 }
 
@@ -381,34 +397,57 @@ func (server *Server) handleHealth(response http.ResponseWriter, request *http.R
 }
 
 func (server *Server) handleSearchUsers(response http.ResponseWriter, request *http.Request) {
-	q := strings.TrimSpace(request.URL.Query().Get("q"))
-	if q == "" {
-		writeError(response, http.StatusBadRequest, "invalid_request", "q is required")
-		return
+	query := request.URL.Query()
+	q := strings.TrimSpace(query.Get("q"))
+	first, limit := 0, 20
+
+	// A parameter that isn't an integer can't be parsed, which is a 400; one
+	// that parses but is out of range breaks a rule, which is a 422. Each
+	// kind is collected whole, so one response names every bad parameter.
+	var unparsable []problemFieldError
+	parseInt := func(name string, into *int) {
+		raw := query.Get(name)
+		if raw == "" {
+			return
+		}
+		value, err := strconv.Atoi(raw)
+		if err != nil {
+			unparsable = append(unparsable, problemFieldError{
+				Parameter: name, Issue: app.IssueInvalidFormat, Detail: name + " must be an integer",
+			})
+			return
+		}
+		*into = value
 	}
-	if len(q) > 200 {
-		writeError(response, http.StatusBadRequest, "invalid_request", "q must be at most 200 characters")
+	parseInt("first", &first)
+	parseInt("max", &limit)
+	if len(unparsable) > 0 {
+		writeProblem(response, problemDocument{
+			Type: problemTypeURI("invalid-query"), Title: "The query string can't be read",
+			Status: http.StatusBadRequest, Detail: "A query parameter isn't an integer.", Errors: unparsable,
+		})
 		return
 	}
 
-	first := 0
-	if raw := request.URL.Query().Get("first"); raw != "" {
-		v, err := strconv.Atoi(raw)
-		if err != nil || v < 0 {
-			writeError(response, http.StatusBadRequest, "invalid_request", "first must be a non-negative integer")
-			return
-		}
-		first = v
+	var problems []error
+	queryProblem := func(name string, issue app.Issue, message string) {
+		problems = append(problems, &app.FieldError{Parameter: name, Issue: issue, Message: message, Err: app.ErrInvalidCommand})
 	}
-
-	limit := 20
-	if raw := request.URL.Query().Get("max"); raw != "" {
-		v, err := strconv.Atoi(raw)
-		if err != nil || v < 1 || v > 50 {
-			writeError(response, http.StatusBadRequest, "invalid_request", "max must be an integer between 1 and 50")
-			return
-		}
-		limit = v
+	switch {
+	case q == "":
+		queryProblem("q", app.IssueRequired, "q is required")
+	case len(q) > 200:
+		queryProblem("q", app.IssueTooLong, "q must be at most 200 characters")
+	}
+	if first < 0 {
+		queryProblem("first", app.IssueOutOfRange, "first must not be negative")
+	}
+	if limit < 1 || limit > 50 {
+		queryProblem("max", app.IssueOutOfRange, "max must be between 1 and 50")
+	}
+	if len(problems) > 0 {
+		writeAppError(response, errors.Join(problems...))
+		return
 	}
 
 	users, err := server.service.SearchUsers(request.Context(), app.SearchUsersCommand{
@@ -729,7 +768,9 @@ func (server *Server) handleUpdateStackTemplateConfig(response http.ResponseWrit
 	// The edit replaces the whole config, so a missing one would wipe every
 	// value rather than leave them alone. Send {} to clear it on purpose.
 	if body.Config == nil {
-		writeError(response, http.StatusBadRequest, "invalid_request", "config is required")
+		writeAppError(response, &app.FieldError{
+			Path: []string{"config"}, Issue: app.IssueRequired, Message: "config is required", Err: app.ErrInvalidCommand,
+		})
 		return
 	}
 
@@ -906,7 +947,9 @@ func stackTemplateConfigJSON(response http.ResponseWriter, config map[string]any
 	}
 	configJSON, err := json.Marshal(config)
 	if err != nil {
-		writeError(response, http.StatusBadRequest, "invalid_request", "config must be a JSON object")
+		writeAppError(response, &app.FieldError{
+			Path: []string{"config"}, Issue: app.IssueNotObject, Message: "config must be a JSON object", Err: app.ErrStackTemplateConfigInvalid,
+		})
 		return nil, false
 	}
 	return configJSON, true
@@ -1067,13 +1110,6 @@ type stackTemplateResponse struct {
 	Lifecycle string `json:"lifecycle"`
 }
 
-type errorResponse struct {
-	Error   string `json:"error"`
-	Message string `json:"message"`
-	// RequestID matches the response's X-Request-Id and the API's log lines.
-	RequestID string `json:"request_id,omitempty"`
-}
-
 func newStackViewResponse(view app.StackView) stackViewResponse {
 	templates := make([]stackTemplateResponse, 0, len(view.Templates))
 	for _, stackTemplate := range view.Templates {
@@ -1221,76 +1257,11 @@ func (server *Server) handleRevokeStackRole(response http.ResponseWriter, reques
 	response.WriteHeader(http.StatusNoContent)
 }
 
-func writeAppError(response http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, app.ErrUnauthenticated):
-		writeError(response, http.StatusUnauthorized, "unauthorized", "authentication required")
-	case errors.Is(err, app.ErrForbidden):
-		writeError(response, http.StatusForbidden, "forbidden", "forbidden")
-	case errors.Is(err, app.ErrInvalidCommand):
-		writeError(response, http.StatusBadRequest, "invalid_request", err.Error())
-	case errors.Is(err, app.ErrNotFound):
-		writeError(response, http.StatusNotFound, "not_found", err.Error())
-	// Its own code because it is not a malformed request: the caller named a
-	// real person openplan has simply never seen sign in.
-	case errors.Is(err, app.ErrUserNotProvisioned):
-		writeError(response, http.StatusBadRequest, "unknown_user",
-			"that user has not signed in to openplan yet - they need to sign in once before a role can be granted")
-	// Its own code, because the client can act on this one: re-plan, then apply.
-	case errors.Is(err, app.ErrStackTemplatePlanStale):
-		writeError(response, http.StatusConflict, "plan_stale", err.Error())
-	// Its own code, because the client can act on this one too: the run it is
-	// competing with is visible, so it can wait for it or discard it. It also tells
-	// the client its view of the run history is stale and worth refetching.
-	case errors.Is(err, app.ErrTemplateRunInFlight):
-		writeError(response, http.StatusConflict, "run_in_flight", err.Error())
-	// Its own code, because the fix is in the request: pick a component_key the
-	// stack does not already use, rather than retrying the same install.
-	case errors.Is(err, app.ErrDuplicateStackTemplateComponentKey):
-		writeError(response, http.StatusConflict, "duplicate_component_key", err.Error())
-	// 503 with its own code, because no request can succeed until an operator
-	// configures the encryption key: it is server setup, not a client error and
-	// not an unexplained failure.
-	case errors.Is(err, app.ErrCredentialEncryptionUnavailable):
-		writeError(response, http.StatusServiceUnavailable, "credential_encryption_unavailable", err.Error())
-	case errors.Is(err, app.ErrStackTemplateNotRunnable),
-		errors.Is(err, app.ErrRunNotApprovable),
-		errors.Is(err, app.ErrRunNotDiscardable),
-		errors.Is(err, app.ErrDuplicateStackSlug),
-		errors.Is(err, app.ErrTemplateNotInstallable),
-		errors.Is(err, app.ErrStackTemplateConfigInvalid),
-		errors.Is(err, app.ErrStackTemplateUpgradeInvalid),
-		errors.Is(err, app.ErrStackTemplateNotEditable),
-		errors.Is(err, app.ErrLastOwner),
-		errors.Is(err, app.ErrCredentialNameInvalid),
-		errors.Is(err, app.ErrDuplicateCredentialName):
-		writeError(response, http.StatusConflict, "conflict", err.Error())
-	default:
-		// Authorization failures land here, as 500. There is no separate
-		// authorization service to report as unavailable any more, and a denial
-		// never reaches this point: it is (false, nil) at the boundary and
-		// becomes ErrForbidden above, so a failure can never render as 403.
-		//
-		// The body says nothing about the cause, so the log is the only place
-		// it survives; the request id is how an operator finds this line.
-		log.Printf("api: internal error request_id=%s: %v", requestIDOf(response), err)
-		writeError(response, http.StatusInternalServerError, "internal_error", "internal server error")
-	}
-}
-
 func writeJSON(response http.ResponseWriter, status int, body any) {
 	response.Header().Set("Content-Type", "application/json")
 	response.WriteHeader(status)
 	// The status is already sent, so a failed encode has no one left to tell.
 	_ = json.NewEncoder(response).Encode(body) //nolint:errchkjson // see above
-}
-
-func writeError(response http.ResponseWriter, status int, code string, message string) {
-	writeJSON(response, status, errorResponse{
-		Error:     code,
-		Message:   message,
-		RequestID: requestIDOf(response),
-	})
 }
 
 type queueItemResponse struct {
@@ -1309,11 +1280,14 @@ type queueItemResponse struct {
 func (server *Server) handleListQueue(response http.ResponseWriter, request *http.Request) {
 	principal, ok := authentication.PrincipalFromContext(request.Context())
 	if !ok || principal.Subject == "" {
-		writeError(response, http.StatusUnauthorized, "unauthorized", "authentication required")
+		writeAppError(response, app.ErrUnauthenticated)
 		return
 	}
 	if server.queue == nil {
-		writeError(response, http.StatusServiceUnavailable, "queue_unavailable", "queue is not configured")
+		writeProblem(response, problemDocument{
+			Type: problemTypeURI("queue-unavailable"), Title: "The queue isn't configured",
+			Status: http.StatusServiceUnavailable, Detail: "The API was started without a queue reader. An operator has to configure one.",
+		})
 		return
 	}
 

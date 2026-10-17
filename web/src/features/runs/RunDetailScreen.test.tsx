@@ -172,7 +172,7 @@ describe("RunDetailScreen", () => {
   });
 
   it("renders the shared boundary screen for a handled API error status", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ error: "unavailable", message: "service unavailable" }, 503));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ type: "about:blank", title: "Service Unavailable", detail: "service unavailable" }, 503));
 
     renderScreen(testQueryClient());
 
@@ -184,7 +184,7 @@ describe("RunDetailScreen", () => {
     // globalThis.location.assign; stub it so jsdom does not attempt (and
     // warn about) a real navigation.
     vi.stubGlobal("location", { ...window.location, assign: vi.fn() });
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ error: "unauthorized", message: "unauthorized" }, 401));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ type: "about:blank", title: "Unauthorized", detail: "unauthorized" }, 401));
 
     renderScreen(testQueryClient());
 
@@ -192,7 +192,7 @@ describe("RunDetailScreen", () => {
   });
 
   it("renders AccessDenied when the API returns 403", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ error: "forbidden", message: "forbidden" }, 403));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ type: "about:blank", title: "Forbidden", detail: "forbidden" }, 403));
 
     renderScreen(testQueryClient());
 
@@ -200,7 +200,7 @@ describe("RunDetailScreen", () => {
   });
 
   it("renders NotFound when the API returns 404", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ error: "not_found", message: "not found" }, 404));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ type: "about:blank", title: "Not Found", detail: "not found" }, 404));
 
     renderScreen(testQueryClient());
 
@@ -423,7 +423,7 @@ describe("RunDetailScreen", () => {
     const queryClient = testQueryClient();
     seedCapabilities(queryClient, allAllowed);
     queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), run());
-    vi.spyOn(globalThis, "fetch").mockImplementation(async () => jsonResponse({ error: "internal", message: "boom" }, 500));
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => jsonResponse({ type: "about:blank", title: "Internal Server Error", detail: "boom" }, 500));
 
     renderScreen(queryClient);
 
@@ -451,7 +451,7 @@ describe("RunDetailScreen", () => {
     renderScreen(queryClient);
 
     await waitFor(() => expect(screen.getByText("Loading…")).toBeTruthy());
-    resolveLog?.(jsonResponse({ error: "internal", message: "boom" }, 500));
+    resolveLog?.(jsonResponse({ type: "about:blank", title: "Internal Server Error", detail: "boom" }, 500));
     await waitFor(() => expect(screen.getByText("Could not load this log.")).toBeTruthy());
   });
 

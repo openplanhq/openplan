@@ -765,8 +765,10 @@ func TestUpdateStackTemplateConfigRejectsMissingDesiredRevision(t *testing.T) {
 		StackTemplateID: domain.StackTemplateID("stack_template_123"),
 		ConfigJSON:      json.RawMessage(`{}`),
 	})
-	if !errors.Is(err, ErrStackTemplateConfigInvalid) {
-		t.Fatalf("error = %v, want ErrStackTemplateConfigInvalid", err)
+	// Nothing in the request can fix a missing desired revision, so it is a
+	// state conflict rather than invalid config.
+	if !errors.Is(err, ErrStackTemplateNotEditable) {
+		t.Fatalf("error = %v, want ErrStackTemplateNotEditable", err)
 	}
 	if stackTemplates.gotConfigJSON != nil {
 		t.Fatalf("updated config = %s, want no update", stackTemplates.gotConfigJSON)
@@ -897,6 +899,8 @@ func TestUpgradeStackTemplateRejectsDifferentSourceTemplate(t *testing.T) {
 	if !errors.Is(err, ErrStackTemplateUpgradeInvalid) {
 		t.Fatalf("error = %v, want ErrStackTemplateUpgradeInvalid", err)
 	}
+	// The fix is in the request, so it lands on the field the caller picked.
+	assertFieldIssues(t, err, "target_template_revision_id different_template")
 }
 
 func TestStartTemplateRunRejectsInvalidOperation(t *testing.T) {
@@ -2223,8 +2227,9 @@ func TestGetTemplateRunLogRejectsUnsafePhase(t *testing.T) {
 		RunID:    domain.TemplateRunID("run_123"),
 		Phase:    "../plan",
 	})
-	if !errors.Is(err, ErrInvalidCommand) {
-		t.Fatalf("error = %v, want ErrInvalidCommand", err)
+	// A name of the wrong shape names a log that can't exist.
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("error = %v, want ErrNotFound", err)
 	}
 }
 

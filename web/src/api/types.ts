@@ -40,9 +40,63 @@ export type TemplateRunStep =
 // plan or a destroy, and approving its plan is what applies it.
 export type Operation = "plan" | "apply" | "destroy";
 
-export interface ApiErrorBody {
-  error: string;
-  message: string;
+// Every API error is an RFC 9457 problem document. type is the contract:
+// branch on it, never on detail. These mirror the table in
+// internal/api/problem.go, and a status that says it all is "about:blank".
+const problemBase = "https://openplan.run/problems/";
+
+export const problemTypes = {
+  malformedBody: `${problemBase}malformed-body`,
+  invalidQuery: `${problemBase}invalid-query`,
+  validationFailed: `${problemBase}validation-failed`,
+  runInFlight: `${problemBase}run-in-flight`,
+  planStale: `${problemBase}plan-stale`,
+  runNotApprovable: `${problemBase}run-not-approvable`,
+  runNotDiscardable: `${problemBase}run-not-discardable`,
+  templateNotRunnable: `${problemBase}template-not-runnable`,
+  templateNotEditable: `${problemBase}template-not-editable`,
+  templateNotUpgradable: `${problemBase}template-not-upgradable`,
+  revisionNotInstallable: `${problemBase}revision-not-installable`,
+  duplicateSlug: `${problemBase}duplicate-slug`,
+  duplicateComponentKey: `${problemBase}duplicate-component-key`,
+  duplicateCredentialName: `${problemBase}duplicate-credential-name`,
+  lastOwner: `${problemBase}last-owner`,
+  credentialEncryptionUnavailable: `${problemBase}credential-encryption-unavailable`,
+  queueUnavailable: `${problemBase}queue-unavailable`
+} as const;
+
+// What is wrong with one field; stable codes, like the types.
+export type ProblemIssue =
+  | "required"
+  | "unknown"
+  | "null"
+  | "not_object"
+  | "invalid_format"
+  | "invalid"
+  | "unsupported"
+  | "apply_only"
+  | "different_template"
+  | "not_signed_in"
+  | "too_long"
+  | "out_of_range"
+  | "duplicate";
+
+export interface ProblemFieldError {
+  // A JSON Pointer into the request body, e.g. "#/config/region", or the
+  // name of a query parameter; never both.
+  pointer?: string;
+  parameter?: string;
+  issue: ProblemIssue;
+  detail: string;
+}
+
+export interface ApiProblem {
+  type: string;
+  title: string;
+  status: number;
+  detail?: string;
+  request_id?: string;
+  errors?: ProblemFieldError[];
 }
 
 // What a sync is doing, or, once it ended, what it was doing last. Nothing

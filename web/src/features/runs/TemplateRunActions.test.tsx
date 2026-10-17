@@ -361,7 +361,7 @@ describe("TemplateRunActions", () => {
       if (url.endsWith("/stack-templates/stpl_1/runs") && method === "POST") {
         // What the server knows: someone else's run is already going.
         runsState = [run({ id: "run_elsewhere", operation: "plan", status: "running" })];
-        return jsonResponse({ error: "run_in_flight", message: "create template run: a run is already in flight for this stack template" }, 409);
+        return jsonResponse({ type: "https://openplan.run/problems/run-in-flight", title: "Another run is in progress", detail: "create template run: a run is already in flight for this stack template" }, 409);
       }
       throw new Error(`unexpected fetch: ${url} ${method}`);
     });

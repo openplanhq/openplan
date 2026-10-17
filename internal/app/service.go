@@ -11,6 +11,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -987,9 +988,11 @@ func (service *Service) UpdateStackTemplateConfig(ctx context.Context, command U
 		return StackTemplateView{}, err
 	}
 
+	// Nothing the caller sends can fix a template with no desired revision,
+	// so it is a state conflict, not invalid config.
 	desiredTemplateRevisionID := stackTemplate.DesiredTemplateRevisionID
 	if desiredTemplateRevisionID == "" {
-		return StackTemplateView{}, fmt.Errorf("%w: desired template revision is required", ErrStackTemplateConfigInvalid)
+		return StackTemplateView{}, fmt.Errorf("%w: no desired template revision", ErrStackTemplateNotEditable)
 	}
 	// Read before the write so the response can be labelled like a read, and
 	// so a failed lookup stops the edit rather than failing after it landed.
@@ -1042,7 +1045,8 @@ func (service *Service) UpgradeStackTemplate(ctx context.Context, command Upgrad
 		return StackTemplateView{}, fmt.Errorf("%w: status is %q", ErrTemplateNotInstallable, targetRevision.Status)
 	}
 	if stackTemplate.SourceTemplateID != "" && targetRevision.SourceTemplateID != "" && stackTemplate.SourceTemplateID != targetRevision.SourceTemplateID {
-		return StackTemplateView{}, fmt.Errorf("%w: source template mismatch", ErrStackTemplateUpgradeInvalid)
+		return StackTemplateView{}, fieldError(ErrStackTemplateUpgradeInvalid, IssueDifferentTemplate,
+			"target_template_revision_id is a revision of a different template", "target_template_revision_id")
 	}
 
 	variables, err := service.TemplateRevisions.GetTemplateRevisionVariables(ctx, command.TenantID, command.TargetTemplateRevisionID)
@@ -1346,9 +1350,19 @@ func (service *Service) AssignStackRole(ctx context.Context, command AssignStack
 	}
 
 	// Reject an unknown role here rather than letting the handler retry it
-	// forever against a payload it can never parse.
-	if _, err := authorization.GrantRelation(command.Role); err != nil {
-		return GrantView{}, fmt.Errorf("%w: %w", ErrInvalidCommand, err)
+	// forever against a payload it can never parse. The sub's shape is checked
+	// with it, before the lookup, so one response reports both.
+	desired, roleErr := authorization.GrantRelation(command.Role)
+	subject, subErr := authorization.SubjectFromOIDCSub(command.UserSub)
+	var problems []error
+	if roleErr != nil {
+		problems = append(problems, fieldError(ErrInvalidCommand, IssueUnsupported, "role must be one a stack can grant", "role"))
+	}
+	if subErr != nil {
+		problems = append(problems, fieldError(ErrInvalidCommand, IssueInvalidFormat, "user_sub is not a valid subject", "user_sub"))
+	}
+	if len(problems) > 0 {
+		return GrantView{}, errors.Join(problems...)
 	}
 
 	if service.Work == nil {
@@ -1369,21 +1383,13 @@ func (service *Service) AssignStackRole(ctx context.Context, command AssignStack
 	}
 	target, known := profiles[command.UserSub]
 	if !known {
-		return GrantView{}, ErrUserNotProvisioned
+		return GrantView{}, fieldError(ErrUserNotProvisioned, IssueNotSignedIn,
+			"that person hasn't signed in to openplan yet; they need to sign in once before a role can be granted", "user_sub")
 	}
 
 	object, err := authorization.ObjectFromID(authorization.TypeStack, string(command.StackID))
 	if err != nil {
 		return GrantView{}, fmt.Errorf("assign role stack: %w", err)
-	}
-	subject, err := authorization.SubjectFromOIDCSub(command.UserSub)
-	if err != nil {
-		return GrantView{}, fmt.Errorf("%w: invalid user sub", ErrInvalidCommand)
-	}
-
-	desired, err := authorization.GrantRelation(command.Role)
-	if err != nil {
-		return GrantView{}, fmt.Errorf("%w: invalid role", ErrInvalidCommand)
 	}
 
 	// Everything below runs inside the transaction, including the read the
@@ -1828,23 +1834,35 @@ func (service *Service) ListTemplateRunLogs(ctx context.Context, command ListTem
 	return logs, nil
 }
 
+// Validators check path IDs first and return on the first, since a client
+// can't fix those from a form. Body fields are then checked together and
+// joined, so one response reports everything wrong with the body.
 func validateCreateStackCommand(command CreateStackCommand) error {
-	switch {
-	case command.TenantID == "":
+	if command.TenantID == "" {
 		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
-	case strings.TrimSpace(command.Name) == "":
-		return fmt.Errorf("%w: stack name is required", ErrInvalidCommand)
-	case strings.TrimSpace(command.Slug) != "" && !validStackSlug(command.Slug):
-		return fmt.Errorf("%w: stack slug is invalid", ErrInvalidCommand)
-	case strings.TrimSpace(command.Slug) == "" && slugFromName(command.Name) == "":
-		return fmt.Errorf("%w: stack slug is invalid", ErrInvalidCommand)
-	case !validStackTags(command.Tags):
-		return fmt.Errorf("%w: tags are invalid", ErrInvalidCommand)
-	case !validCredentialSetIDs(command.DefaultCredentialIDs):
-		return fmt.Errorf("%w: default credential ids are invalid", ErrInvalidCommand)
-	default:
-		return nil
 	}
+	var problems []error
+	nameBlank := strings.TrimSpace(command.Name) == ""
+	if nameBlank {
+		problems = append(problems, fieldError(ErrInvalidCommand, IssueRequired, "name is required", "name"))
+	}
+	switch {
+	case strings.TrimSpace(command.Slug) != "" && !validStackSlug(command.Slug):
+		problems = append(problems, fieldError(ErrInvalidCommand, IssueInvalidFormat,
+			"slug may contain only lowercase letters, digits and hyphens", "slug"))
+	// A slug derived from a blank name is already reported as the name.
+	case strings.TrimSpace(command.Slug) == "" && !nameBlank && slugFromName(command.Name) == "":
+		problems = append(problems, fieldError(ErrInvalidCommand, IssueInvalidFormat,
+			"slug can't be derived from this name; give one", "slug"))
+	}
+	if !validStackTags(command.Tags) {
+		problems = append(problems, fieldError(ErrInvalidCommand, IssueInvalidFormat, "tags are invalid", "tags"))
+	}
+	if !validCredentialSetIDs(command.DefaultCredentialIDs) {
+		problems = append(problems, fieldError(ErrInvalidCommand, IssueInvalid,
+			"default_credential_ids must not contain an empty id", "default_credential_ids"))
+	}
+	return errors.Join(problems...)
 }
 
 // validateCreateCredentialCommand checks required IDs, scope, variable name, and value before encryption.
@@ -1852,19 +1870,22 @@ func validateCreateCredentialCommand(command CreateCredentialCommand) error {
 	switch {
 	case command.TenantID == "":
 		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
-	case !validCredentialName(command.Name):
-		return ErrCredentialNameInvalid
-	case command.Value == "":
-		return fmt.Errorf("%w: credential value is required", ErrInvalidCommand)
 	case command.Scope == domain.CredentialScopeStack && command.StackID == "":
 		return fmt.Errorf("%w: stack id is required", ErrInvalidCommand)
 	case command.Scope == domain.CredentialScopeStackTemplate && command.StackTemplateID == "":
 		return fmt.Errorf("%w: stack template id is required", ErrInvalidCommand)
 	case command.Scope != domain.CredentialScopeStack && command.Scope != domain.CredentialScopeStackTemplate:
 		return fmt.Errorf("%w: credential scope is invalid", ErrInvalidCommand)
-	default:
-		return nil
 	}
+	var problems []error
+	if !validCredentialName(command.Name) {
+		problems = append(problems, fieldError(ErrCredentialNameInvalid, IssueInvalidFormat,
+			"name must be an environment variable name: letters, digits and underscores, not starting with a digit", "name"))
+	}
+	if command.Value == "" {
+		problems = append(problems, fieldError(ErrInvalidCommand, IssueRequired, "value is required", "value"))
+	}
+	return errors.Join(problems...)
 }
 
 // validateListCredentialsCommand checks the owner required to list one credential scope.
@@ -1916,7 +1937,7 @@ func validateAddTemplateToStackCommand(command AddTemplateToStackCommand) error 
 	case command.StackID == "":
 		return fmt.Errorf("%w: stack id is required", ErrInvalidCommand)
 	case command.TemplateRevisionID == "":
-		return fmt.Errorf("%w: template revision id is required", ErrInvalidCommand)
+		return fieldError(ErrInvalidCommand, IssueRequired, "template_revision_id is required", "template_revision_id")
 	default:
 		return nil
 	}
@@ -1928,10 +1949,12 @@ func validateStartTemplateRunCommand(command StartTemplateRunCommand) error {
 		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
 	case command.StackTemplateID == "":
 		return fmt.Errorf("%w: stack template id is required", ErrInvalidCommand)
+	// Whether auto_approve fits depends on the operation, so an unsupported
+	// operation is the only problem worth reporting.
 	case !command.Operation.Valid():
-		return fmt.Errorf("%w: operation is unsupported", ErrInvalidCommand)
+		return fieldError(ErrInvalidCommand, IssueUnsupported, "operation must be plan, apply or destroy", "operation")
 	case command.AutoApprove && command.Operation != domain.OperationApply:
-		return fmt.Errorf("%w: only an apply run can be auto-approved", ErrInvalidCommand)
+		return fieldError(ErrInvalidCommand, IssueApplyOnly, "only an apply run can be auto-approved", "auto_approve")
 	default:
 		return nil
 	}
@@ -1944,7 +1967,7 @@ func validateUpdateStackTemplateConfigCommand(command UpdateStackTemplateConfigC
 	case command.StackTemplateID == "":
 		return fmt.Errorf("%w: stack template id is required", ErrInvalidCommand)
 	case len(command.ConfigJSON) == 0:
-		return fmt.Errorf("%w: config is required", ErrInvalidCommand)
+		return fieldError(ErrInvalidCommand, IssueRequired, "config is required", "config")
 	default:
 		return nil
 	}
@@ -1957,27 +1980,37 @@ func validateUpgradeStackTemplateCommand(command UpgradeStackTemplateCommand) er
 	case command.StackTemplateID == "":
 		return fmt.Errorf("%w: stack template id is required", ErrInvalidCommand)
 	case command.TargetTemplateRevisionID == "":
-		return fmt.Errorf("%w: target template revision id is required", ErrInvalidCommand)
+		return fieldError(ErrInvalidCommand, IssueRequired, "target_template_revision_id is required", "target_template_revision_id")
 	default:
 		return nil
 	}
 }
 
 func validateRegisterTemplateCommand(command RegisterTemplateCommand) error {
-	switch {
-	case command.TenantID == "":
+	if command.TenantID == "" {
 		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
-	case !validGitHubPathComponent(command.RepoOwner):
-		return fmt.Errorf("%w: repo owner is required", ErrInvalidCommand)
-	case !validGitHubPathComponent(command.RepoName):
-		return fmt.Errorf("%w: repo name is required", ErrInvalidCommand)
-	case strings.TrimSpace(command.SourceRef) == "":
-		return fmt.Errorf("%w: source ref is required", ErrInvalidCommand)
-	case !validTemplateRootPath(command.RootPath):
-		return fmt.Errorf("%w: root path is invalid", ErrInvalidCommand)
-	default:
-		return nil
 	}
+	var problems []error
+	for _, component := range []struct{ field, value string }{
+		{"repo_owner", command.RepoOwner},
+		{"repo_name", command.RepoName},
+	} {
+		switch {
+		case strings.TrimSpace(component.value) == "":
+			problems = append(problems, fieldError(ErrInvalidCommand, IssueRequired, component.field+" is required", component.field))
+		case !validGitHubPathComponent(component.value):
+			problems = append(problems, fieldError(ErrInvalidCommand, IssueInvalidFormat,
+				component.field+" may contain only letters, digits, hyphens, underscores and dots", component.field))
+		}
+	}
+	if strings.TrimSpace(command.SourceRef) == "" {
+		problems = append(problems, fieldError(ErrInvalidCommand, IssueRequired, "source_ref is required", "source_ref"))
+	}
+	if !validTemplateRootPath(command.RootPath) {
+		problems = append(problems, fieldError(ErrInvalidCommand, IssueInvalidFormat,
+			"root_path must be a relative path inside the repository", "root_path"))
+	}
+	return errors.Join(problems...)
 }
 
 func validateApproveRunCommand(command ApproveRunCommand) error {
@@ -2054,24 +2087,25 @@ func validateGetTemplateRunLogCommand(command GetTemplateRunLogCommand) error {
 		return err
 	}
 	// Only the name's shape is checked: which logs a run has is the
-	// workflow's business, and an unknown name is simply not found.
+	// workflow's business, and an unknown name is simply not found. A name of
+	// the wrong shape is not found either: it names a log that can't exist.
 	if !domain.ValidLogName(command.Phase) {
-		return fmt.Errorf("%w: log phase is unsupported", ErrInvalidCommand)
+		return fmt.Errorf("%w: log phase is unsupported", ErrNotFound)
 	}
 	return nil
 }
 
+// validateTemplateConfig reports every variable that is wrong, not just the
+// first, so a form can mark all of them at once. The order is stable: unknown
+// and null values by name, then missing required ones in declared order.
 func validateTemplateConfig(raw json.RawMessage, variables []domain.TemplateVariable) (json.RawMessage, error) {
 	if len(raw) == 0 {
 		raw = json.RawMessage(`{}`)
 	}
 
 	var config map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &config); err != nil {
-		return nil, fmt.Errorf("%w: config must be a JSON object", ErrStackTemplateConfigInvalid)
-	}
-	if config == nil {
-		return nil, fmt.Errorf("%w: config must be a JSON object", ErrStackTemplateConfigInvalid)
+	if err := json.Unmarshal(raw, &config); err != nil || config == nil {
+		return nil, fieldError(ErrStackTemplateConfigInvalid, IssueNotObject, "config must be a JSON object", "config")
 	}
 
 	known := make(map[string]domain.TemplateVariable, len(variables))
@@ -2079,22 +2113,30 @@ func validateTemplateConfig(raw json.RawMessage, variables []domain.TemplateVari
 		known[variable.Name] = variable
 	}
 
-	for name, value := range config {
-		if _, ok := known[name]; !ok {
-			return nil, fmt.Errorf("%w: unknown variable %q", ErrStackTemplateConfigInvalid, name)
-		}
-		if string(value) == "null" {
-			return nil, fmt.Errorf("%w: variable %q must not be null", ErrStackTemplateConfigInvalid, name)
+	var problems []error
+	for _, name := range slices.Sorted(maps.Keys(config)) {
+		variable, ok := known[name]
+		switch {
+		case !ok:
+			problems = append(problems, fieldError(ErrStackTemplateConfigInvalid, IssueUnknown,
+				name+" is not a variable of this template", "config", name))
+		// A required variable's null is reported below, as missing.
+		case string(config[name]) == "null" && !variable.Required:
+			problems = append(problems, fieldError(ErrStackTemplateConfigInvalid, IssueNull,
+				name+" must not be null; leave it out to use its default", "config", name))
 		}
 	}
-
 	for _, variable := range variables {
 		if variable.Required {
 			value, ok := config[variable.Name]
 			if !ok || string(value) == "null" {
-				return nil, fmt.Errorf("%w: required variable %q is missing", ErrStackTemplateConfigInvalid, variable.Name)
+				problems = append(problems, fieldError(ErrStackTemplateConfigInvalid, IssueRequired,
+					variable.Name+" is required", "config", variable.Name))
 			}
 		}
+	}
+	if len(problems) > 0 {
+		return nil, errors.Join(problems...)
 	}
 
 	normalized, err := json.Marshal(config)
@@ -2115,9 +2157,11 @@ func carryForwardConfig(desiredConfigJSON json.RawMessage, variables []domain.Te
 		raw = json.RawMessage(`{}`)
 	}
 
+	// The stored config was validated on its way in, so one that won't parse
+	// is a corrupt row: a server fault, not something the caller sent.
 	var current map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &current); err != nil {
-		return nil, fmt.Errorf("%w: current config must be a JSON object", ErrStackTemplateConfigInvalid)
+		return nil, fmt.Errorf("stored config is not a JSON object: %w", err)
 	}
 	if current == nil {
 		current = map[string]json.RawMessage{}

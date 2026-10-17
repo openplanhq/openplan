@@ -248,7 +248,7 @@ describe("RequireCapability — a stack that does not load", () => {
     // A 401 sends client.ts's fetchWithAuth to the sign-in page through
     // location.assign; stub it so jsdom does not try to navigate.
     vi.stubGlobal("location", { ...window.location, assign: vi.fn() });
-    vi.spyOn(globalThis, "fetch").mockImplementation(async () => respond(401, { error: "unauthorized", message: "unauthorized" }));
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => respond(401, { type: "about:blank", title: "Unauthorized", detail: "unauthorized" }));
     const logout = vi.fn();
 
     renderStackRoute(testQueryClient(), authValue({ logout }));
@@ -261,7 +261,7 @@ describe("RequireCapability — a stack that does not load", () => {
   // The app retries a failed query three times; a 404 answers the same on
   // each, so the page says so after the first rather than after the last.
   it("says the page is not found on the first 404, without waiting out the retries", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(async () => respond(404, { error: "not_found", message: "not found" }));
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => respond(404, { type: "about:blank", title: "Not Found", detail: "not found" }));
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 3, retryDelay: 60_000 } } });
 
     renderStackRoute(queryClient);
@@ -270,7 +270,7 @@ describe("RequireCapability — a stack that does not load", () => {
   });
 
   it("answers a stack the person may not see as not found, never as not permitted", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(async () => respond(403, { error: "forbidden", message: "forbidden" }));
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => respond(403, { type: "about:blank", title: "Forbidden", detail: "forbidden" }));
 
     renderStackRoute(testQueryClient());
 
@@ -279,7 +279,7 @@ describe("RequireCapability — a stack that does not load", () => {
   });
 
   it("says the authorization service is unavailable on a 503", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(async () => respond(503, { error: "unavailable", message: "unavailable" }));
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => respond(503, { type: "about:blank", title: "Service Unavailable", detail: "unavailable" }));
 
     renderStackRoute(testQueryClient());
 
@@ -290,7 +290,7 @@ describe("RequireCapability — a stack that does not load", () => {
   it("says the stack failed to load, and loads it on Retry", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(respond(500, { error: "internal", message: "boom" }))
+      .mockResolvedValueOnce(respond(500, { type: "about:blank", title: "Internal Server Error", detail: "boom" }))
       .mockResolvedValueOnce(respond(200, stackView({ can_view: true })));
 
     renderStackRoute(testQueryClient());

@@ -12,7 +12,8 @@ import (
 //
 // It is its own sentinel rather than an ErrInvalidCommand, because this is the
 // user-visible face of a deliberate design limitation rather than a malformed
-// request, and the message reaches a person: the API renders it verbatim.
+// request. AssignStackRole returns it as a field error on user_sub, since to
+// the grant form it is a problem with the person picked.
 var ErrUserNotProvisioned = errors.New("user has not signed in to openplan yet")
 
 // UserProfile is what a verified token asserted about a person. It is display

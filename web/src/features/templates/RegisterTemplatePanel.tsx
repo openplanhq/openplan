@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { isTerminalRegistrationStatus } from "../../api/polling";
+import { apiErrorMessage } from "../../api/problems";
 import { queryKeys } from "../../api/queryKeys";
 import { useRegisterTemplateMutation, useTemplateRegistrationQuery, useTemplateRevisionsQuery } from "../../api/queries";
 import { tenantID } from "../../config";
@@ -45,9 +46,7 @@ export default function RegisterTemplatePanel() {
   const settled = status !== null && isTerminalRegistrationStatus(status);
   const pollError =
     registrationID !== "" && registrationQuery.isError
-      ? registrationQuery.error instanceof Error
-        ? registrationQuery.error.message
-        : "Request failed"
+      ? apiErrorMessage(registrationQuery.error, "Request failed")
       : "";
   const registeredRevisionID = status === "completed" ? registration?.template_revision_id ?? "" : "";
   const registered = registeredRevisionID === "" ? null : revisions.find((templateRevision) => templateRevision.id === registeredRevisionID) ?? null;
@@ -103,7 +102,7 @@ export default function RegisterTemplatePanel() {
       const next = await registerTemplateMutation.mutateAsync({ repo_owner: repoOwner, repo_name: repoName, source_ref: sourceRef, root_path: rootPath });
       setRegistrationID(next.id);
     } catch (error) {
-      setRequestError(error instanceof Error ? error.message : "Request failed");
+      setRequestError(apiErrorMessage(error, "Request failed"));
     }
   }
 

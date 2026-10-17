@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { cn } from "@/lib/utils";
 import { useTemplate } from "./templateContext";
 import { shortCommitSHA } from "./templateWorkflow";
+import RequestIdNote from "../../shared/RequestIdNote";
 
 // 8px either side of a column boundary makes the 16px between columns, and
 // 16px at the row's ends. Name 200, type 120 and value 90, plus that padding.
@@ -38,6 +39,7 @@ export default function VariablesTab() {
     return (
       <div className="flex flex-col items-start gap-3" data-testid="template-variables-error">
         <ErrorLine live={false}>Something went wrong while loading the template's variables.</ErrorLine>
+        <RequestIdNote error={variablesQuery.error} />
         <button
           type="button"
           className={cn(buttonClass("outline"), "pointer-coarse:h-11")}

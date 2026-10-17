@@ -18,7 +18,7 @@ description: |-
 
   One component runs one operation at a time, and a plan waiting for
   approval counts. Starting a second while one is in flight returns `409
-  run_in_flight` — the competing run is visible through the list
+  run-in-flight` — the competing run is visible through the list
   endpoint, so a client can wait for it, or approve or discard it.
 
   An apply, so that its plan waits for approval and the approval request has something to approve.

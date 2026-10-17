@@ -412,7 +412,7 @@ describe("AddStackTemplateScreen", () => {
     queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [templateRevision()]);
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [variable()]);
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ error: "conflict", message: "already installed" }), {
+      new Response(JSON.stringify({ type: "about:blank", title: "Conflict", detail: "already installed" }), {
         status: 409,
         headers: { "content-type": "application/json" }
       })
@@ -424,6 +424,54 @@ describe("AddStackTemplateScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add template" }));
 
     await waitFor(() => expect(screen.getByTestId("add-stack-template-error")).toBeTruthy());
+  });
+
+  // A 422 names every refused variable; each shows under its own input,
+  // so the person sees what to fix without a summary line to decode.
+  it("puts each refused variable's error under its input", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [templateRevision()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [
+      variable(),
+      variable({ name: "size", required: false })
+    ]);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          type: "https://openplan.run/problems/validation-failed",
+          title: "The request has invalid fields",
+          status: 422,
+          detail: "2 fields need attention.",
+          request_id: "req-1",
+          errors: [
+            { pointer: "#/config/region", issue: "required", detail: "region is required" },
+            { pointer: "#/config/size", issue: "null", detail: "size must not be null" }
+          ]
+        }),
+        { status: 422, headers: { "content-type": "application/problem+json" } }
+      )
+    );
+
+    renderScreen(queryClient);
+
+    const user = userEvent.setup();
+    await chooseTemplate(user, "vpc");
+    await user.click(screen.getByRole("button", { name: "Add template" }));
+
+    const region = await screen.findByLabelText(/^region/);
+    await waitFor(() => expect(region.getAttribute("aria-invalid")).toBe("true"));
+    const regionError = document.getElementById(region.getAttribute("aria-describedby")!.split(" ")[0]);
+    expect(regionError?.textContent).toBe("region is required");
+    expect(screen.getByLabelText(/^size/).getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getByText("size must not be null")).toBeTruthy();
+    // Every error is on its field, so there is no form-level line.
+    expect(screen.queryByTestId("add-stack-template-error")).toBeNull();
+
+    // Typing into a field clears its error; the other stays.
+    await user.type(region, "eu-west-1");
+    expect(region.getAttribute("aria-invalid")).toBeNull();
+    expect(screen.queryByText("region is required")).toBeNull();
+    expect(screen.getByText("size must not be null")).toBeTruthy();
   });
 
   it("disables Add template and hides the empty-variables message while the chosen revision's variables are loading", async () => {
@@ -480,7 +528,7 @@ describe("AddStackTemplateScreen", () => {
     // warn about) a real navigation.
     vi.stubGlobal("location", { ...window.location, assign: vi.fn() });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ error: "unauthorized", message: "unauthorized" }), {
+      new Response(JSON.stringify({ type: "about:blank", title: "Unauthorized", detail: "unauthorized" }), {
         status: 401,
         headers: { "content-type": "application/json" }
       })

@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import TemplateList from "./TemplateList";
 import type { TemplatesPageOutletContext } from "./templatesPageOutlet";
 import { groupTemplatesByRepository } from "./templateWorkflow";
+import RequestIdNote from "../../shared/RequestIdNote";
 
 const registerLinkClass = cn(buttonClass("primary", "lg"), "w-full pointer-coarse:h-11 md:w-auto");
 
@@ -48,6 +49,7 @@ export default function TemplatesPage() {
         <PageHeader title="Templates" />
         <div className="flex flex-col items-start gap-3">
           <ErrorLine live={false}>Something went wrong while loading templates.</ErrorLine>
+          <RequestIdNote error={templateRevisionsQuery.error} />
           <button
             type="button"
             className={cn(buttonClass("outline"), "pointer-coarse:h-11")}

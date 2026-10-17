@@ -20,6 +20,9 @@ import { configFromVariableValues } from "./stackWorkflow";
 import { stackTemplatePath } from "./templateSelection";
 import TemplateSearch, { TemplateChoiceState, TemplateSource } from "./TemplateSearch";
 import VariableFields from "./VariableFields";
+import { apiErrorMessage } from "../../api/problems";
+import { useFieldErrors } from "../../shared/useFieldErrors";
+import RequestIdNote from "../../shared/RequestIdNote";
 import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -38,6 +41,7 @@ export default function AddStackTemplateScreen() {
   const [chosenRevisionID, setChosenRevisionID] = useState("");
   const [values, setValues] = useState<Record<string, string>>({});
   const [errorMessage, setErrorMessage] = useState("");
+  const variableErrors = useFieldErrors("#/config/");
   // Change reopens the search over the chosen template, which stays until
   // another is picked.
   const [changingTemplate, setChangingTemplate] = useState(false);
@@ -75,6 +79,7 @@ export default function AddStackTemplateScreen() {
     setChosenRevisionID(revisionID);
     setValues({});
     setErrorMessage("");
+    variableErrors.clear();
   }
 
   // Where focus goes once the search has closed and unmounted, so it is never
@@ -127,6 +132,7 @@ export default function AddStackTemplateScreen() {
       return;
     }
     setErrorMessage("");
+    variableErrors.clear();
     try {
       const installed = await addTemplateToStackMutation.mutateAsync({
         template_revision_id: chosenRevision.id,
@@ -134,7 +140,9 @@ export default function AddStackTemplateScreen() {
       });
       navigate(stackTemplatePath(stackId, installed.id));
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Request failed");
+      // Each refused variable shows under its own input; the line says the rest.
+      variableErrors.show(error);
+      setErrorMessage(apiErrorMessage(error, "Request failed", "#/config/"));
     }
   }
 
@@ -160,6 +168,7 @@ export default function AddStackTemplateScreen() {
     content = (
       <div className="flex flex-col items-start gap-3" data-testid="add-stack-template-load-error">
         <ErrorLine live={false}>Something went wrong while loading templates.</ErrorLine>
+        <RequestIdNote error={templateRevisionsQuery.error} />
         <button
           type="button"
           className={cn(buttonClass("outline"), "pointer-coarse:h-11")}
@@ -275,8 +284,12 @@ export default function AddStackTemplateScreen() {
                 <VariableFields
                   variables={variables}
                   variableValues={values}
-                  onVariableValueChange={(name, value) => setValues((current) => ({ ...current, [name]: value }))}
+                  onVariableValueChange={(name, value) => {
+                    setValues((current) => ({ ...current, [name]: value }));
+                    variableErrors.clear(name);
+                  }}
                   emptyMessage="This template declares no variables."
+                  errors={variableErrors.errors}
                 />
               </div>
             )}

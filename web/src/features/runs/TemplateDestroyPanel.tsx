@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { isTerminalRunStatus } from "../../api/polling";
+import { apiErrorMessage } from "../../api/problems";
 import { queryKeys } from "../../api/queryKeys";
 import { useStartTemplateRunMutation } from "../../api/queries";
 import type { StackTemplate, TemplateRun } from "../../api/types";
@@ -50,7 +51,7 @@ export default function TemplateDestroyPanel({ stackId, stackTemplate }: Templat
       // The plan, and the button that destroys, are on the Runs tab.
       navigate(stackTemplatePath(stackId, stackTemplate.id, "runs"));
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Request failed");
+      setErrorMessage(apiErrorMessage(error, "Request failed"));
       if (isRunInFlightError(error)) {
         await queryClient.invalidateQueries({ queryKey: queryKeys.templateRuns(tenantID, stackTemplate.id) });
       }

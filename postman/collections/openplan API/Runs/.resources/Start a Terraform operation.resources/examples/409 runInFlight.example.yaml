@@ -7,12 +7,15 @@ response:
   statusText: Conflict
   headers:
     - key: Content-Type
-      value: application/json
+      value: application/problem+json
   body:
     type: json
     content: |-
       {
-        "error": "run_in_flight",
-        "message": "a run is already in flight for this component"
+        "type": "https://openplan.run/problems/run-in-flight",
+        "title": "Another run is in progress",
+        "status": 409,
+        "detail": "Another run on this template is still in progress. Wait for it to finish or discard it.",
+        "request_id": "d9f09fc4c32729cc73d7a3bd8042f2f4"
       }
 order: 1000

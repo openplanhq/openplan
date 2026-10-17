@@ -438,7 +438,7 @@ describe("StacksListScreen", () => {
   });
 
   it("renders the shared boundary screen for a handled API error status", async () => {
-    mockAPI({ "/stacks": () => Promise.resolve(jsonResponse({ error: "unavailable", message: "service unavailable" }, 503)) });
+    mockAPI({ "/stacks": () => Promise.resolve(jsonResponse({ type: "about:blank", title: "Service Unavailable", detail: "service unavailable" }, 503)) });
 
     renderScreen(testQueryClient());
 
@@ -450,7 +450,7 @@ describe("StacksListScreen", () => {
     // globalThis.location.assign; stub it so jsdom does not attempt (and
     // warn about) a real navigation.
     vi.stubGlobal("location", { ...window.location, assign: vi.fn() });
-    mockAPI({ "/stacks": () => Promise.resolve(jsonResponse({ error: "unauthorized", message: "unauthorized" }, 401)) });
+    mockAPI({ "/stacks": () => Promise.resolve(jsonResponse({ type: "about:blank", title: "Unauthorized", detail: "unauthorized" }, 401)) });
 
     renderScreen(testQueryClient());
 
@@ -458,7 +458,7 @@ describe("StacksListScreen", () => {
   });
 
   it("renders AccessDenied when the API returns 403", async () => {
-    mockAPI({ "/stacks": () => Promise.resolve(jsonResponse({ error: "forbidden", message: "forbidden" }, 403)) });
+    mockAPI({ "/stacks": () => Promise.resolve(jsonResponse({ type: "about:blank", title: "Forbidden", detail: "forbidden" }, 403)) });
 
     renderScreen(testQueryClient());
 
@@ -466,7 +466,7 @@ describe("StacksListScreen", () => {
   });
 
   it("renders NotFound when the API returns 404", async () => {
-    mockAPI({ "/stacks": () => Promise.resolve(jsonResponse({ error: "not_found", message: "not found" }, 404)) });
+    mockAPI({ "/stacks": () => Promise.resolve(jsonResponse({ type: "about:blank", title: "Not Found", detail: "not found" }, 404)) });
 
     renderScreen(testQueryClient());
 

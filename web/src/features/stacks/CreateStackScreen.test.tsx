@@ -115,9 +115,19 @@ describe("CreateStackScreen", () => {
     });
   });
 
+  // The form has no slug field, so a clash on the slug derived from the name
+  // is said in the alert rather than on a field.
   it("shows an error message when the mutation fails", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ error: "conflict", message: "A stack with that slug already exists" }, 409)
+      jsonResponse(
+        {
+          type: "https://openplan.run/problems/duplicate-slug",
+          title: "The slug is taken",
+          detail: "Another stack already uses this slug.",
+          errors: [{ pointer: "#/slug", issue: "duplicate", detail: "Another stack already uses this slug." }]
+        },
+        409
+      )
     );
 
     renderScreen();
@@ -127,8 +137,32 @@ describe("CreateStackScreen", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("create-stack-error")).toBeTruthy();
-      expect(screen.getByTestId("create-stack-error").textContent).toContain("A stack with that slug already exists");
+      expect(screen.getByTestId("create-stack-error").textContent).toContain("Another stack already uses this slug.");
     });
+    expect(screen.getByLabelText("Name").getAttribute("aria-invalid")).toBeNull();
+  });
+
+  it("puts a refused name's error under the name field", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse(
+        {
+          type: "https://openplan.run/problems/validation-failed",
+          title: "The request has invalid fields",
+          detail: "name is required",
+          errors: [{ pointer: "#/name", issue: "required", detail: "name is required" }]
+        },
+        422
+      )
+    );
+
+    renderScreen();
+
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "  x" } });
+    fireEvent.click(screen.getByRole("button", { name: /create stack/i }));
+
+    await waitFor(() => expect(screen.getByLabelText("Name").getAttribute("aria-invalid")).toBe("true"));
+    expect(document.getElementById("create-stack-name-error")?.textContent).toBe("name is required");
+    expect(screen.queryByTestId("create-stack-error")).toBeNull();
   });
 
   it("invalidates the stacks list query on success", async () => {
@@ -228,7 +262,7 @@ describe("CreateStackScreen", () => {
   // the screen must not add a second one.
   it("announces a failed create once", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ error: "conflict", message: "A stack with that slug already exists" }, 409)
+      jsonResponse({ type: "about:blank", title: "Conflict", detail: "A stack with that slug already exists" }, 409)
     );
     renderScreen();
 
@@ -257,7 +291,7 @@ describe("CreateStackScreen", () => {
 
   it("shows an inline error message for a handled API error status", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ error: "unavailable", message: "service unavailable" }, 503)
+      jsonResponse({ type: "about:blank", title: "Service Unavailable", detail: "service unavailable" }, 503)
     );
 
     renderScreen();

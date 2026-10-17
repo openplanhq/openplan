@@ -5,8 +5,9 @@ description: |-
 
   The subject must have signed in to openplan at least once. openplan is not
   a directory: a person exists here only once a verified token has
-  projected them. Granting to a subject it has never seen returns `400
-  unknown_user`. Use `GET /v1/tenants/{tenant_id}/users/search` to find
+  projected them. Granting to a subject it has never seen returns `422
+  validation-failed` with an `errors` entry on `#/user_sub` whose issue
+  is `not_signed_in`. Use `GET /v1/tenants/{tenant_id}/users/search` to find
   one.
 
   The response is the intended grant, rendered from the identity

@@ -10,6 +10,7 @@ scripts:
   - type: afterResponse
     code: |-
       pm.test('status is 401', () => pm.response.to.have.status(401));
-      pm.test('error code is unauthorized', () => pm.expect(pm.response.json().error).to.eql('unauthorized'));
+      pm.test('is a problem document', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json'));
+      pm.test('type is about:blank', () => pm.expect(pm.response.json().type).to.eql('about:blank'));
     language: text/javascript
 order: 4000

@@ -424,9 +424,12 @@ describe("TemplateVariablesTab", () => {
     await waitFor(() => expect(screen.getByTestId("stack-template-config")).toBeTruthy());
   });
 
-  function mockVariablesFailure(status: number, error: string) {
+  function mockVariablesFailure(status: number, title: string) {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ error, message: error }), { status, headers: { "content-type": "application/json" } })
+      new Response(JSON.stringify({ type: "about:blank", title, status, detail: title }), {
+        status,
+        headers: { "content-type": "application/problem+json" }
+      })
     );
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, [stackTemplate()]));
@@ -449,12 +452,12 @@ describe("TemplateVariablesTab", () => {
   });
 
   it("renders AccessDenied when the API returns 403", async () => {
-    mockVariablesFailure(403, "forbidden");
+    mockVariablesFailure(403, "Forbidden");
     await waitFor(() => expect(screen.getByTestId("route-access-denied")).toBeTruthy());
   });
 
   it("renders NotFound when the API returns 404", async () => {
-    mockVariablesFailure(404, "not_found");
+    mockVariablesFailure(404, "Not Found");
     await waitFor(() => expect(screen.getByTestId("route-not-found")).toBeTruthy());
   });
 
@@ -549,7 +552,7 @@ describe("TemplateCredentialsTab", () => {
       new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(respond({ error: "internal", message: "boom" }, 500))
+      .mockResolvedValueOnce(respond({ type: "about:blank", title: "Internal Server Error", detail: "boom" }, 500))
       .mockResolvedValueOnce(respond([{ id: "c1", name: "TEMPLATE_ONLY", scope: "stack_template", created_at: "2026-07-19T00:00:00Z" }], 200));
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/credentials");

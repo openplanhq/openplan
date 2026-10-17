@@ -1,12 +1,13 @@
 import { loginLoopDetected } from "../auth/loginAttempts";
 import type { Me } from "../auth/types";
 import type {
-  ApiErrorBody,
+  ApiProblem,
   AttentionItem,
   CredentialMetadata,
   GrantView,
   ListGrantsResponse,
   Operation,
+  ProblemFieldError,
   SearchUsersResponse,
   Stack,
   StackListItem,
@@ -19,14 +20,26 @@ import type {
   TemplateVariable
 } from "./types";
 
+// A failed request, carrying the server's problem document. message is the
+// problem's detail, so a screen that only shows text still says something
+// specific; a screen that acts on the failure reads type instead.
 export class ApiRequestError extends Error {
-  constructor(
-    public readonly status: number,
-    public readonly code: string,
-    message: string
-  ) {
-    super(message);
+  readonly type: string;
+  readonly status: number;
+  readonly title: string;
+  readonly detail: string;
+  readonly errors: ProblemFieldError[];
+  readonly requestId: string;
+
+  constructor(problem: ApiProblem) {
+    super(problem.detail || problem.title);
     this.name = "ApiRequestError";
+    this.type = problem.type;
+    this.status = problem.status;
+    this.title = problem.title;
+    this.detail = problem.detail ?? "";
+    this.errors = problem.errors ?? [];
+    this.requestId = problem.request_id ?? "";
   }
 }
 
@@ -342,9 +355,27 @@ async function throwForError(response: Response): Promise<void> {
     return;
   }
 
-  let body: ApiErrorBody = { error: "request_failed", message: response.statusText || "request failed" };
-  if (response.headers.get("content-type")?.includes("application/json")) {
-    body = (await response.json()) as ApiErrorBody;
+  throw new ApiRequestError(await readProblem(response));
+}
+
+// readProblem accepts application/problem+json, which is what the API sends,
+// and plain JSON. Anything else, such as a proxy's HTML 502, or a body that
+// isn't a problem, becomes an about:blank problem for the status, so the
+// caller always gets an ApiRequestError rather than a parse error.
+async function readProblem(response: Response): Promise<ApiProblem> {
+  const fallback: ApiProblem = { type: "about:blank", title: response.statusText || "Request failed", status: response.status };
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/problem+json") && !contentType.includes("application/json")) {
+    return fallback;
   }
-  throw new ApiRequestError(response.status, body.error, body.message);
+  try {
+    const body = (await response.json()) as Partial<ApiProblem> | null;
+    if (body === null || typeof body.type !== "string") {
+      return fallback;
+    }
+    // The response's status wins: it is what actually happened.
+    return { ...fallback, ...body, status: response.status } as ApiProblem;
+  } catch {
+    return fallback;
+  }
 }

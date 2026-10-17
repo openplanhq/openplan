@@ -10,6 +10,7 @@ import {
   useTemplateRunsQuery
 } from "../../api/queries";
 import { isTerminalRunStatus } from "../../api/polling";
+import { apiErrorMessage } from "../../api/problems";
 import { tenantID } from "../../config";
 import { formatDateTime } from "../../shared/formatTimestamp";
 import { buttonClass } from "../../shared/buttonClass";
@@ -23,6 +24,7 @@ import RunLogsPanel from "./RunLogsPanel";
 import { runProgressTag } from "./runIndicator";
 import RunStatusLabel from "./RunStatusLabel";
 import WaitingRunActions from "./WaitingRunActions";
+import RequestIdNote from "../../shared/RequestIdNote";
 
 // /stacks/:stackId/templates/:stackTemplateId/runs/:runNumber — plan/apply
 // detail with per-phase logs, inside the template's panel under a trail back
@@ -61,7 +63,7 @@ export default function RunDetailScreen() {
     try {
       await action();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Request failed");
+      setErrorMessage(apiErrorMessage(error, "Request failed"));
     }
   }
 
@@ -100,6 +102,7 @@ export default function RunDetailScreen() {
       <section className="flex min-w-0 flex-col gap-5" data-testid="run-detail-error">
         {trail}
         <ErrorLine live={false}>Something went wrong while loading the run.</ErrorLine>
+        <RequestIdNote error={runsQuery.error ?? runQuery.error} />
         <button
           type="button"
           className={cn(buttonClass("outline"), "self-start pointer-coarse:h-11")}

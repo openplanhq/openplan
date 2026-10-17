@@ -137,8 +137,11 @@ func TestRequireAuthentication(t *testing.T) {
 			}
 			switch {
 			case test.status == http.StatusUnauthorized:
-				if principal != nil || response.Body.String() != `{"error":"unauthorized","message":"authentication required"}` {
+				if principal != nil || response.Body.String() != `{"type":"about:blank","title":"Unauthorized","status":401,"detail":"Sign in to continue."}` {
 					t.Fatalf("handler ran = %t, body = %q", principal != nil, response.Body.String())
+				}
+				if contentType := response.Header().Get("Content-Type"); contentType != "application/problem+json" {
+					t.Fatalf("Content-Type = %q, want application/problem+json", contentType)
 				}
 			case test.path == "":
 				want := Principal{Subject: live.Subject, Name: live.Name, PreferredUsername: live.PreferredUsername, Email: live.Email, ExpiresAt: now.Add(time.Hour)}

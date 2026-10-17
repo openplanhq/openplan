@@ -83,7 +83,7 @@ describe("SessionProvider", () => {
   });
 
   it("navigates to the login route on a 401", async () => {
-    getMe.mockRejectedValue(new ApiRequestError(401, "unauthorized", "unauthorized"));
+    getMe.mockRejectedValue(new ApiRequestError({ type: "about:blank", title: "unauthorized", status: 401, detail: "unauthorized" }));
     renderProvider(<div data-testid="child">ready</div>);
     await waitFor(() => {
       expect(assign).toHaveBeenCalledWith("/signin?return_to=%2Fstacks");
@@ -252,7 +252,7 @@ describe("SessionProvider", () => {
   });
 
   it("renders an error state when /v1/me fails for a non-auth reason", async () => {
-    getMe.mockRejectedValue(new ApiRequestError(503, "unavailable", "unavailable"));
+    getMe.mockRejectedValue(new ApiRequestError({ type: "about:blank", title: "unavailable", status: 503, detail: "unavailable" }));
     renderProvider(<div data-testid="child">ready</div>);
     expect(await screen.findByTestId("auth-error")).toBeTruthy();
     expect(assign).not.toHaveBeenCalled();
@@ -264,7 +264,7 @@ describe("SessionProvider", () => {
   // so a trip to the IdP cannot help. Spending login attempts on it would trip
   // the loop guard and blame the user's cookie settings for a server fault.
   it("retries the request rather than the sign-in when /v1/me fails for a non-auth reason", async () => {
-    getMe.mockRejectedValue(new ApiRequestError(503, "unavailable", "unavailable"));
+    getMe.mockRejectedValue(new ApiRequestError({ type: "about:blank", title: "unavailable", status: 503, detail: "unavailable" }));
     renderProvider(<div data-testid="child">ready</div>);
 
     const retry = await screen.findByTestId("auth-retry-button");
@@ -284,7 +284,7 @@ describe("SessionProvider", () => {
   // when nothing has failed. The count is spent by SignInScreen, when it sends
   // the browser to the identity provider.
   it("does not spend a login attempt merely on being sent to sign in", async () => {
-    getMe.mockRejectedValue(new ApiRequestError(401, "unauthorized", "unauthorized"));
+    getMe.mockRejectedValue(new ApiRequestError({ type: "about:blank", title: "unauthorized", status: 401, detail: "unauthorized" }));
     renderProvider(<div data-testid="child">ready</div>);
     await waitFor(() => {
       expect(assign).toHaveBeenCalled();
@@ -294,7 +294,7 @@ describe("SessionProvider", () => {
 
   it("stops redirecting and explains once the attempts are spent", async () => {
     sessionStorage.setItem(attemptsKey, String(maxLoginAttempts));
-    getMe.mockRejectedValue(new ApiRequestError(401, "unauthorized", "unauthorized"));
+    getMe.mockRejectedValue(new ApiRequestError({ type: "about:blank", title: "unauthorized", status: 401, detail: "unauthorized" }));
     renderProvider(<div data-testid="child">ready</div>);
     expect(await screen.findByTestId("auth-loop-error")).toBeTruthy();
     expect(assign).not.toHaveBeenCalled();
@@ -306,7 +306,7 @@ describe("SessionProvider", () => {
   it("retries from the loop screen with a fresh count", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     sessionStorage.setItem(attemptsKey, String(maxLoginAttempts));
-    getMe.mockRejectedValue(new ApiRequestError(401, "unauthorized", "unauthorized"));
+    getMe.mockRejectedValue(new ApiRequestError({ type: "about:blank", title: "unauthorized", status: 401, detail: "unauthorized" }));
     renderProvider(<div data-testid="child">ready</div>);
     await user.click(await screen.findByTestId("auth-loop-retry-button"));
     expect(assign).toHaveBeenCalledWith("/signin?return_to=%2Fstacks");

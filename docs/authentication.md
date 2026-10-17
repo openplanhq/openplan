@@ -200,8 +200,9 @@ not a re-used ID token. None of those exist yet.
 `/healthz` and the four `/v1/auth/*` routes below remain public, and they are
 the only paths that do: every other path needs a session, inside `/v1` or not,
 so a route added under a new prefix is protected by default. A missing,
-unknown, expired, or revoked cookie receives `401` in the API's error envelope,
-`{"error":"unauthorized","message":"authentication required"}`; tokens,
+unknown, expired, or revoked cookie receives `401` as the API's RFC 9457
+problem document (`application/problem+json`, `"type": "about:blank"`,
+`"status": 401`); tokens,
 claims, and verifier details are never written to logs or responses.
 
 After authentication, the request context contains an `authentication.Principal` with

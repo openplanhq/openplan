@@ -54,7 +54,7 @@ describe("useMeQuery", () => {
     vi.stubGlobal("location", { ...window.location, assign: vi.fn() });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
-        JSON.stringify({ error: "unauthorized", message: "authentication required" }),
+        JSON.stringify({ type: "about:blank", title: "Unauthorized", detail: "authentication required" }),
         { status: 401, headers: { "content-type": "application/json" } }
       )
     );

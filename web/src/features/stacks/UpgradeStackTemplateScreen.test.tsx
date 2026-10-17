@@ -396,7 +396,7 @@ describe("UpgradeStackTemplateScreen", () => {
     // warn about) a real navigation.
     vi.stubGlobal("location", { ...window.location, assign: vi.fn() });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ error: "unauthorized", message: "unauthorized" }), {
+      new Response(JSON.stringify({ type: "about:blank", title: "Unauthorized", detail: "unauthorized" }), {
         status: 401,
         headers: { "content-type": "application/json" }
       })
@@ -418,7 +418,7 @@ describe("UpgradeStackTemplateScreen", () => {
     // warn about) a real navigation.
     vi.stubGlobal("location", { ...window.location, assign: vi.fn() });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ error: "unauthorized", message: "unauthorized" }), {
+      new Response(JSON.stringify({ type: "about:blank", title: "Unauthorized", detail: "unauthorized" }), {
         status: 401,
         headers: { "content-type": "application/json" }
       })
@@ -435,7 +435,7 @@ describe("UpgradeStackTemplateScreen", () => {
     const queryClient = testQueryClient();
     seedUpgradeable(queryClient);
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ error: "conflict", message: "run in progress" }), {
+      new Response(JSON.stringify({ type: "about:blank", title: "Conflict", detail: "run in progress" }), {
         status: 409,
         headers: { "content-type": "application/json" }
       })

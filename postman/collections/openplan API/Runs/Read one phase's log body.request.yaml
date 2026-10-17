@@ -1,7 +1,8 @@
 $kind: http-request
 description: |-
   Returns the raw Terraform output as `text/plain`, not JSON. A phase
-  that has not produced output yet returns `404`.
+  that has not produced output yet, or a name that isn't a log name,
+  returns `404`.
 method: GET
 url: '{{base_url}}/v1/tenants/{{tenant_id}}/template-runs/{{run_id}}/logs/{{phase}}'
 scripts:

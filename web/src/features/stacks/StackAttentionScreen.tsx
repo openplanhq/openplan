@@ -12,6 +12,7 @@ import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import { attentionRunPath } from "./attention";
 import { stackTemplateLabel } from "./stackWorkflow";
 import { buttonClass } from "../../shared/buttonClass";
+import RequestIdNote from "../../shared/RequestIdNote";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from "@/components/ui/empty";
 import { cn } from "@/lib/utils";
@@ -46,6 +47,7 @@ export default function StackAttentionScreen() {
       <section className="mx-auto grid max-w-260 justify-items-start gap-4" data-testid="attention-error">
         <PageHeader title="Needs attention" trail={trail} />
         <p className="text-muted-foreground">Something went wrong while loading what needs attention.</p>
+        <RequestIdNote error={error} />
         <Button className="pointer-coarse:h-11" data-testid="attention-retry" onClick={() => refetch()}>
           <RefreshCw data-icon="inline-start" aria-hidden="true" />
           Retry

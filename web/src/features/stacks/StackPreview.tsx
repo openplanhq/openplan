@@ -10,6 +10,7 @@ import StackMeta from "./StackMeta";
 import StackTemplateStatusLabel, { stackTemplateActivity } from "./StackTemplateStatusLabel";
 import { stackTemplateLabel } from "./stackWorkflow";
 import { buttonClass } from "../../shared/buttonClass";
+import RequestIdNote from "../../shared/RequestIdNote";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
@@ -89,9 +90,12 @@ export default function StackPreview({
             <Loader2 aria-hidden="true" className="size-4 animate-spin" /> Loading templates…
           </p>
         ) : stackQuery.status === "error" ? (
-          <p className="text-meta text-muted-foreground" data-testid="stack-preview-error">
-            Something went wrong while loading this stack's templates.
-          </p>
+          <div className="flex flex-col gap-1">
+            <p className="text-meta text-muted-foreground" data-testid="stack-preview-error">
+              Something went wrong while loading this stack's templates.
+            </p>
+            <RequestIdNote error={stackQuery.error} />
+          </div>
         ) : templates.length === 0 ? (
           <NoTemplatesState stackId={stack.id} heading="h4" testId="stack-preview-empty" />
         ) : (
