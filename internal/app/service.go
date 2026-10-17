@@ -1229,10 +1229,13 @@ func (service *Service) SearchUsers(ctx context.Context, command SearchUsersComm
 	if !ok || principal.Subject == "" {
 		return nil, ErrUnauthenticated
 	}
-	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanAdminister); err != nil {
+	command.Query = strings.TrimSpace(command.Query)
+	// Checked before authorization, as the other commands are: the query
+	// says nothing about anyone, and a bad one is the caller's to fix.
+	if err := validateSearchUsersCommand(command); err != nil {
 		return nil, err
 	}
-	if err := validateSearchUsersCommand(command); err != nil {
+	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanAdminister); err != nil {
 		return nil, err
 	}
 	if err := service.requireUserRepository(); err != nil {
@@ -1248,19 +1251,30 @@ func (service *Service) SearchUsers(ctx context.Context, command SearchUsersComm
 	return users, nil
 }
 
+// maxSearchQueryLength bounds q, which goes into a LIKE pattern.
+const maxSearchQueryLength = 200
+
+// validateSearchUsersCommand checks the query parameters; the handler only
+// parses them, so this is the one place their rules live.
 func validateSearchUsersCommand(command SearchUsersCommand) error {
-	switch {
-	case command.TenantID == "":
+	if command.TenantID == "" {
 		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
-	case strings.TrimSpace(command.Query) == "":
-		return fmt.Errorf("%w: query is required", ErrInvalidCommand)
-	case command.First < 0:
-		return fmt.Errorf("%w: first must be non-negative", ErrInvalidCommand)
-	case command.Max < 1 || command.Max > 50:
-		return fmt.Errorf("%w: max must be between 1 and 50", ErrInvalidCommand)
-	default:
-		return nil
 	}
+	var problems []error
+	switch query := strings.TrimSpace(command.Query); {
+	case query == "":
+		problems = append(problems, parameterError(ErrInvalidCommand, IssueRequired, "q is required", "q"))
+	case len(query) > maxSearchQueryLength:
+		problems = append(problems, parameterError(ErrInvalidCommand, IssueTooLong,
+			fmt.Sprintf("q must be at most %d characters", maxSearchQueryLength), "q"))
+	}
+	if command.First < 0 {
+		problems = append(problems, parameterError(ErrInvalidCommand, IssueOutOfRange, "first must not be negative", "first"))
+	}
+	if command.Max < 1 || command.Max > 50 {
+		problems = append(problems, parameterError(ErrInvalidCommand, IssueOutOfRange, "max must be between 1 and 50", "max"))
+	}
+	return errors.Join(problems...)
 }
 
 // GetTemplateRevisionVariables returns inferred variables for one tenant-owned template revision.

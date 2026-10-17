@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/vishu42/openplan/internal/app"
@@ -398,12 +397,11 @@ func (server *Server) handleHealth(response http.ResponseWriter, request *http.R
 
 func (server *Server) handleSearchUsers(response http.ResponseWriter, request *http.Request) {
 	query := request.URL.Query()
-	q := strings.TrimSpace(query.Get("q"))
 	first, limit := 0, 20
 
-	// A parameter that isn't an integer can't be parsed, which is a 400; one
-	// that parses but is out of range breaks a rule, which is a 422. Each
-	// kind is collected whole, so one response names every bad parameter.
+	// Only parsing happens here: a parameter that isn't an integer can't be
+	// parsed, which is a 400. Whether a parsed value is allowed is the app's
+	// rule (a 422), checked in validateSearchUsersCommand.
 	var unparsable []problemFieldError
 	parseInt := func(name string, into *int) {
 		raw := query.Get(name)
@@ -429,30 +427,9 @@ func (server *Server) handleSearchUsers(response http.ResponseWriter, request *h
 		return
 	}
 
-	var problems []error
-	queryProblem := func(name string, issue app.Issue, message string) {
-		problems = append(problems, &app.FieldError{Parameter: name, Issue: issue, Message: message, Err: app.ErrInvalidCommand})
-	}
-	switch {
-	case q == "":
-		queryProblem("q", app.IssueRequired, "q is required")
-	case len(q) > 200:
-		queryProblem("q", app.IssueTooLong, "q must be at most 200 characters")
-	}
-	if first < 0 {
-		queryProblem("first", app.IssueOutOfRange, "first must not be negative")
-	}
-	if limit < 1 || limit > 50 {
-		queryProblem("max", app.IssueOutOfRange, "max must be between 1 and 50")
-	}
-	if len(problems) > 0 {
-		writeAppError(response, errors.Join(problems...))
-		return
-	}
-
 	users, err := server.service.SearchUsers(request.Context(), app.SearchUsersCommand{
 		TenantID: domain.TenantID(request.PathValue("tenant_id")),
-		Query:    q,
+		Query:    query.Get("q"),
 		First:    first,
 		Max:      limit,
 	})
@@ -766,17 +743,15 @@ func (server *Server) handleUpdateStackTemplateConfig(response http.ResponseWrit
 		return
 	}
 	// The edit replaces the whole config, so a missing one would wipe every
-	// value rather than leave them alone. Send {} to clear it on purpose.
-	if body.Config == nil {
-		writeAppError(response, &app.FieldError{
-			Path: []string{"config"}, Issue: app.IssueRequired, Message: "config is required", Err: app.ErrInvalidCommand,
-		})
-		return
-	}
-
-	configJSON, ok := stackTemplateConfigJSON(response, body.Config)
-	if !ok {
-		return
+	// value rather than leave them alone; it is sent on as empty, and the
+	// app refuses it. Send {} to clear the config on purpose.
+	var configJSON json.RawMessage
+	if body.Config != nil {
+		var ok bool
+		configJSON, ok = stackTemplateConfigJSON(response, body.Config)
+		if !ok {
+			return
+		}
 	}
 
 	stackTemplate, err := server.service.UpdateStackTemplateConfig(request.Context(), app.UpdateStackTemplateConfigCommand{
@@ -945,11 +920,11 @@ func stackTemplateConfigJSON(response http.ResponseWriter, config map[string]any
 	if config == nil {
 		config = map[string]any{}
 	}
+	// config was decoded from JSON into a map, so encoding it again can't
+	// fail on anything the caller sent: a failure is the server's.
 	configJSON, err := json.Marshal(config)
 	if err != nil {
-		writeAppError(response, &app.FieldError{
-			Path: []string{"config"}, Issue: app.IssueNotObject, Message: "config must be a JSON object", Err: app.ErrStackTemplateConfigInvalid,
-		})
+		writeAppError(response, fmt.Errorf("encode stack template config: %w", err))
 		return nil, false
 	}
 	return configJSON, true

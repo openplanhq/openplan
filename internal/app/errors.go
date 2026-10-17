@@ -55,6 +55,11 @@ func fieldError(sentinel error, issue Issue, message string, path ...string) err
 	return &FieldError{Path: path, Issue: issue, Message: message, Err: sentinel}
 }
 
+// parameterError is a query-parameter problem, the counterpart of fieldError.
+func parameterError(sentinel error, issue Issue, message, parameter string) error {
+	return &FieldError{Parameter: parameter, Issue: issue, Message: message, Err: sentinel}
+}
+
 // FieldErrors returns every field error in err's tree, in the order they were
 // joined. errors.As would stop at the first.
 func FieldErrors(err error) []*FieldError {

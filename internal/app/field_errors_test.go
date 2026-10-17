@@ -168,3 +168,23 @@ func TestAssignStackRoleReportsRoleAndSubTogether(t *testing.T) {
 	}
 	assertFieldIssues(t, err, "role unsupported", "user_sub invalid_format")
 }
+
+// The search rules live here alone; the handler only parses integers. Every
+// bad parameter is named, as a parameter rather than a body pointer.
+func TestSearchUsersReportsEveryParameter(t *testing.T) {
+	t.Parallel()
+
+	err := validateSearchUsersCommand(SearchUsersCommand{TenantID: "t", Query: strings.Repeat("a", 201), First: -1, Max: 0})
+	assertFieldIssues(t, err, "?q too_long", "?first out_of_range", "?max out_of_range")
+	assertFieldIssues(t, validateSearchUsersCommand(SearchUsersCommand{TenantID: "t", Query: "  ", Max: 51}), "?q required", "?max out_of_range")
+}
+
+// A bad query is the caller's to fix whoever they are, so it is reported
+// before the platform check, as the handler did when it held these rules.
+func TestSearchUsersValidatesBeforeAuthorizing(t *testing.T) {
+	t.Parallel()
+
+	service := NewService(Service{Users: &fakeUserRepository{users: []UserProfile{}}, Authorization: testPlatformAuthorizer(t)})
+	_, err := service.SearchUsers(contextWithOrdinaryUser(), SearchUsersCommand{TenantID: "tenant_1", Query: "", Max: 20})
+	assertFieldIssues(t, err, "?q required")
+}
