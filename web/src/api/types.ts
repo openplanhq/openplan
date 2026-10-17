@@ -294,10 +294,21 @@ export interface TemplateRunLog {
   command: string;
   // What ran, for people to read: "tofu init", "tofu plan -destroy".
   command_line: string;
-  content_type: string;
-  size_bytes: number;
-  uploaded_at: string;
+  // A log has a row from the moment its command starts: live while it runs,
+  // then complete once its output is stored, or lost if it never will be.
+  state: TemplateRunLogState;
+  // Present only when state is "lost".
+  lost_reason?: TemplateRunLogLostReason;
+  // Present only when state is "complete": the API omits them otherwise, and
+  // omits size_bytes for an empty log, so read it as `?? 0`.
+  content_type?: string;
+  size_bytes?: number;
+  uploaded_at?: string;
 }
+
+export type TemplateRunLogState = "live" | "complete" | "lost";
+
+export type TemplateRunLogLostReason = "upload_failed" | "executor_gone" | "run_terminated";
 
 export interface GrantView {
   user_sub: string;

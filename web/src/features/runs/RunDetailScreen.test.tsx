@@ -11,6 +11,7 @@ import { queryKeys } from "../../api/queryKeys";
 import type { Stack, TemplateRun, TemplateRunLog } from "../../api/types";
 import RunDetailScreen from "./RunDetailScreen";
 import { asListBody, pagesOf } from "../../api/listTestSupport";
+import { FakeEventSource } from "./eventSourceTestSupport";
 
 function stack(capabilities: StackCapabilities): Stack {
   return {
@@ -60,16 +61,18 @@ const LOG_COMMANDS: Record<string, Pick<TemplateRunLog, "run_phase" | "seq" | "c
   "apply-3": { run_phase: "apply", seq: 3, command: "apply", command_line: "tofu apply" }
 };
 
+// A complete log unless a test says otherwise. The API sends the upload's
+// fields only for a complete log.
 function runLog(overrides: Partial<TemplateRunLog> = {}): TemplateRunLog {
   const name = overrides.name ?? "plan-3";
+  const state = overrides.state ?? "complete";
   return {
     tenant_id: "tenant_123",
     run_id: "run_1",
     name,
     ...(LOG_COMMANDS[name] ?? { run_phase: "plan", seq: 1, command: name, command_line: name }),
-    content_type: "text/plain",
-    size_bytes: 10,
-    uploaded_at: "2026-07-20T00:01:00Z",
+    state,
+    ...(state === "complete" ? { content_type: "text/plain", size_bytes: 10, uploaded_at: "2026-07-20T00:01:00Z" } : {}),
     ...overrides
   };
 }
@@ -476,6 +479,114 @@ describe("RunDetailScreen", () => {
     await waitFor(() => expect(screen.getByText("Loading…")).toBeTruthy());
     resolveLog?.(jsonResponse({ type: "about:blank", title: "Internal Server Error", detail: "boom" }, 500));
     await waitFor(() => expect(screen.getByText("Could not load this log.")).toBeTruthy());
+  });
+
+  // The command still running has a live row, which follows its output as it
+  // is written instead of asking for a body the API does not have yet.
+  it("tails a live log, and loads its full body once it completes", async () => {
+    FakeEventSource.instances = [];
+    vi.stubGlobal("EventSource", FakeEventSource);
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    const running = run({ status: "running", step: "planning" });
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), running);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/template-runs/run_1")) return jsonResponse(running);
+      if (url.endsWith("/logs")) return jsonResponse([runLog({ name: "plan-1" }), runLog({ name: "plan-3", state: "live" })]);
+      if (url.endsWith("/logs/plan-3")) {
+        return new Response("plan-3 full body", { status: 200, headers: { "content-type": "text/plain" } });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    const bodyFetches = () => fetchMock.mock.calls.filter(([reqInput]) => String(reqInput).endsWith("/logs/plan-3")).length;
+
+    renderScreen(queryClient);
+
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+    const source = FakeEventSource.instances[0];
+    expect(source.url).toBe("/v1/tenants/tenant_123/template-runs/run_1/logs/plan-3/events");
+    expect(screen.getByText("Streaming…")).toBeTruthy();
+
+    act(() => source.dispatch("log", { offset: 0, data: "Planning...\n" }, "1-0"));
+    act(() => source.dispatch("log", { offset: 12, data: "Plan: 1 to add.\n" }, "2-0"));
+    const panel = screen.getByTestId("log-scroll-area-plan-3");
+    expect(panel.textContent).toContain("Planning...\nPlan: 1 to add.\n");
+    expect(screen.getByText("Streaming…")).toBeTruthy();
+
+    act(() => source.dispatch("log_truncated", {}));
+    expect(screen.getByText("Live output stops here; the full log loads when the command finishes.")).toBeTruthy();
+
+    act(() => source.dispatch("log_end", { state: "complete" }));
+    expect(source.closeCalls).toBe(1);
+    expect(screen.queryByText("Streaming…")).toBeNull();
+    expect(bodyFetches()).toBe(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Load the full log" }));
+    await waitFor(() => expect(screen.getByText("plan-3 full body")).toBeTruthy());
+    expect(bodyFetches()).toBe(1);
+  });
+
+  it("closes a live log's stream when its row closes", async () => {
+    FakeEventSource.instances = [];
+    vi.stubGlobal("EventSource", FakeEventSource);
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    const running = run({ status: "running", step: "planning" });
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), running);
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/template-runs/run_1")) return jsonResponse(running);
+      if (url.endsWith("/logs")) return jsonResponse([runLog({ name: "plan-3", state: "live" })]);
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    renderScreen(queryClient);
+
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+    fireEvent.click(screen.getByRole("button", { name: "tofu plan" }));
+    expect(FakeEventSource.instances[0].closeCalls).toBe(1);
+  });
+
+  it("says why a lost log has no body, without asking for one", async () => {
+    FakeEventSource.instances = [];
+    vi.stubGlobal("EventSource", FakeEventSource);
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), run({ status: "failed" }));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/logs")) return jsonResponse([runLog({ name: "plan-3", state: "lost", lost_reason: "upload_failed" })]);
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    renderScreen(queryClient);
+
+    await waitFor(() => expect(screen.getByText("Log lost: the upload failed")).toBeTruthy());
+    expect(fetchMock.mock.calls.some(([reqInput]) => String(reqInput).includes("/logs/"))).toBe(false);
+    expect(FakeEventSource.instances).toHaveLength(0);
+  });
+
+  it("fetches a complete log's body once, and follows no stream for it", async () => {
+    FakeEventSource.instances = [];
+    vi.stubGlobal("EventSource", FakeEventSource);
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), run());
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/logs")) return jsonResponse([runLog({ name: "plan-3" })]);
+      if (url.endsWith("/logs/plan-3")) {
+        return new Response("plan-3 log body", { status: 200, headers: { "content-type": "text/plain" } });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    renderScreen(queryClient);
+
+    await waitFor(() => expect(screen.getByText("plan-3 log body")).toBeTruthy());
+    expect(fetchMock.mock.calls.filter(([reqInput]) => String(reqInput).endsWith("/logs/plan-3"))).toHaveLength(1);
+    expect(FakeEventSource.instances).toHaveLength(0);
   });
 
   // A subject from the identity provider is opaque (Dex's is base64 of a

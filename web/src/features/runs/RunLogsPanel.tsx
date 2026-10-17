@@ -1,11 +1,14 @@
 import { useId, useState } from "react";
 import type { ReactNode } from "react";
 import { SquareTerminal } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { templateRunLogEventsURL } from "../../api/client";
 import { useTemplateRunLogQuery } from "../../api/queries";
-import type { RunPhase, TemplateRunExecution, TemplateRunLog } from "../../api/types";
+import type { RunPhase, TemplateRunExecution, TemplateRunLog, TemplateRunLogLostReason } from "../../api/types";
 import { tenantID } from "../../config";
 import { formatDateTime } from "../../shared/formatTimestamp";
 import { LogPhase, LogStep } from "../../shared/LogSteps";
+import { useLiveTemplateRunLog } from "./useLiveTemplateRunLog";
 
 interface RunLogsPanelProps {
   runId: string;
@@ -22,10 +25,11 @@ interface RunLogsPanelProps {
 // A run's logs, one row per command in the order they ran, grouped under the
 // phase that ran them: a plan, then its apply. Each row reads the command that
 // ran ("tofu init"); the phase header, always shown, is what tells apart the
-// commands both phases run. A command's log is recorded once it exits, so the
-// command still running has no row yet. The latest log opens as it arrives;
-// after that every row stays as it is until someone toggles it, so a newer
-// log never closes one being read. Only open rows fetch their log.
+// commands both phases run. A command has its row from the moment it starts,
+// so the command still running is the live row at the end. The latest log
+// opens as it arrives; after that every row stays as it is until someone
+// toggles it, so a newer log never closes one being read. Only open rows
+// fetch or follow their log.
 export default function RunLogsPanel({ runId, logs, executions, failed, finished }: RunLogsPanelProps) {
   const headingId = useId();
   const [open, setOpen] = useState<Record<string, boolean>>({});
@@ -109,10 +113,59 @@ function phaseDetail(phase: RunPhase, executions: TemplateRunExecution[] | undef
   );
 }
 
+// A log reads by where its output is: still being written, stored, or never
+// to be stored. Each kind is its own component so a live row's stream and a
+// complete row's fetch start and stop with the row, and a row whose state
+// moves on swaps one for the other.
 function RunLogBody({ runId, log }: { runId: string; log: TemplateRunLog }) {
-  const logQuery = useTemplateRunLogQuery(tenantID, runId, log.name, log.uploaded_at);
+  switch (log.state) {
+    case "live":
+      return <LiveRunLogBody runId={runId} log={log} />;
+    case "lost":
+      return <>{log.lost_reason ? `Log lost: ${LOST_REASONS[log.lost_reason]}` : "Log lost."}</>;
+    default:
+      return <CompleteRunLogBody runId={runId} log={log} />;
+  }
+}
+
+const LOST_REASONS: Record<TemplateRunLogLostReason, string> = {
+  upload_failed: "the upload failed",
+  executor_gone: "the executor stopped",
+  run_terminated: "the run was terminated"
+};
+
+function CompleteRunLogBody({ runId, log }: { runId: string; log: TemplateRunLog }) {
+  // A log whose stream ended complete before the list says so has no
+  // uploaded_at yet; its body is keyed under "" until the list catches up.
+  const logQuery = useTemplateRunLogQuery(tenantID, runId, log.name, log.uploaded_at ?? "", { enabled: true });
   if (logQuery.data !== undefined) {
     return <>{logQuery.data || "No log body"}</>;
   }
   return <>{logQuery.isError ? "Could not load this log." : "Loading…"}</>;
+}
+
+// The output so far, in the same frame a stored log reads in, and under it
+// what is still to come. Once the command finishes, what streamed may be cut
+// short, so the stored body is offered rather than swapped in under the
+// reader; the list's next refetch makes the row complete either way.
+function LiveRunLogBody({ runId, log }: { runId: string; log: TemplateRunLog }) {
+  const live = useLiveTemplateRunLog(templateRunLogEventsURL(tenantID, runId, log.name));
+  const [loadFull, setLoadFull] = useState(false);
+  if (loadFull) {
+    return <CompleteRunLogBody runId={runId} log={log} />;
+  }
+  return (
+    <>
+      {live.text}
+      {live.ended === null && <span className="block text-muted-foreground">{live.failed ? "Could not load this log." : "Streaming…"}</span>}
+      {live.truncated && (
+        <span className="block text-muted-foreground">Live output stops here; the full log loads when the command finishes.</span>
+      )}
+      {live.ended === "complete" && (
+        <Button variant="outline" size="sm" className="mt-2 font-sans" onClick={() => setLoadFull(true)}>
+          Load the full log
+        </Button>
+      )}
+    </>
+  );
 }

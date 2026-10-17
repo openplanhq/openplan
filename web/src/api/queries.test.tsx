@@ -249,14 +249,14 @@ describe("polling-aware query hooks", () => {
     );
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result, rerender } = renderHook(
-      ({ uploadedAt }: { uploadedAt: string }) => useTemplateRunLogQuery("tenant_123", "run_1", "plan", uploadedAt),
+      ({ uploadedAt }: { uploadedAt: string }) => useTemplateRunLogQuery("tenant_123", "run_1", "plan", uploadedAt, { enabled: true }),
       { wrapper: wrapper(queryClient), initialProps: { uploadedAt: "2026-07-20T00:01:00Z" } }
     );
 
     await waitFor(() => expect(result.current.data).toBe("plan output\n"));
     // Opening the same upload again reads the cache, although the client's
     // default staleTime would refetch on mount.
-    const reopened = renderHook(() => useTemplateRunLogQuery("tenant_123", "run_1", "plan", "2026-07-20T00:01:00Z"), {
+    const reopened = renderHook(() => useTemplateRunLogQuery("tenant_123", "run_1", "plan", "2026-07-20T00:01:00Z", { enabled: true }), {
       wrapper: wrapper(queryClient)
     });
     expect(reopened.result.current.data).toBe("plan output\n");
@@ -264,6 +264,17 @@ describe("polling-aware query hooks", () => {
 
     rerender({ uploadedAt: "2026-07-20T00:02:00Z" });
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  });
+
+  // A live or lost log has no body; the API would refuse it.
+  it("leaves a log's body unfetched until it is enabled", () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const { result } = renderHook(() => useTemplateRunLogQuery("tenant_123", "run_1", "plan", "", { enabled: false }), {
+      wrapper: wrapper(testQueryClient())
+    });
+
+    expect(result.current.fetchStatus).toBe("idle");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 
