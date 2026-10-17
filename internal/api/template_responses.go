@@ -1,0 +1,241 @@
+package api
+
+import (
+	"time"
+
+	"github.com/vishu42/openplan/internal/domain"
+)
+
+// The response types below are the wire shape of runs, registrations,
+// revisions and logs. The domain structs they are built from also carry what
+// the executor and the store need, so they are never serialised as they are:
+// a field reaches a client only when one of these types names it.
+
+// templateRunResponse leaves out what only the executor reads: the config
+// snapshot (it can hold sensitive values), the state backend and its hash,
+// the Terraform workspace, and the source template, which the stack template
+// already names.
+type templateRunResponse struct {
+	ID                      string                         `json:"id"`
+	TenantID                string                         `json:"tenant_id"`
+	StackTemplateID         string                         `json:"stack_template_id"`
+	TemplateRevisionID      string                         `json:"template_revision_id"`
+	Operation               string                         `json:"operation"`
+	SelectedRef             string                         `json:"selected_ref"`
+	ResolvedCommitSHA       string                         `json:"resolved_commit_sha"`
+	Status                  string                         `json:"status"`
+	Step                    string                         `json:"step"`
+	TriggerActor            string                         `json:"trigger_actor"`
+	TriggerActorDisplayName string                         `json:"trigger_actor_display_name"`
+	CreatedAt               time.Time                      `json:"created_at"`
+	CompletedAt             time.Time                      `json:"completed_at,omitzero"`
+	ErrorSummary            string                         `json:"error_summary"`
+	RunNumber               int                            `json:"run_number"`
+	AutoApprove             bool                           `json:"auto_approve"`
+	PlanSummary             *planSummaryResponse           `json:"plan_summary"`
+	Executions              []templateRunExecutionResponse `json:"executions,omitzero"`
+}
+
+// templateRunExecutionResponse leaves out the Temporal workflow ID, which
+// names an internal system and is no use to a client.
+type templateRunExecutionResponse struct {
+	Phase            string                    `json:"phase"`
+	Actor            string                    `json:"actor"`
+	ActorDisplayName string                    `json:"actor_display_name"`
+	Status           string                    `json:"status"`
+	StartedAt        time.Time                 `json:"started_at"`
+	FinishedAt       time.Time                 `json:"finished_at,omitzero"`
+	ErrorSummary     string                    `json:"error_summary"`
+	Summary          *planSummaryResponse      `json:"summary"`
+	Steps            []templateRunStepResponse `json:"steps"`
+}
+
+type templateRunStepResponse struct {
+	Step       string    `json:"step"`
+	Status     string    `json:"status"`
+	StartedAt  time.Time `json:"started_at"`
+	FinishedAt time.Time `json:"finished_at,omitzero"`
+}
+
+type planSummaryResponse struct {
+	Add     int `json:"add"`
+	Change  int `json:"change"`
+	Destroy int `json:"destroy"`
+}
+
+// templateRunLogResponse leaves out the object-store key the log is kept
+// under. Name is the domain's Phase, sent under the name the log is read by
+// (GET .../logs/{name}): it is a key, not a run phase.
+type templateRunLogResponse struct {
+	TenantID    string    `json:"tenant_id"`
+	RunID       string    `json:"run_id"`
+	Name        string    `json:"name"`
+	RunPhase    string    `json:"run_phase"`
+	Seq         int       `json:"seq"`
+	Command     string    `json:"command"`
+	CommandLine string    `json:"command_line"`
+	ContentType string    `json:"content_type"`
+	SizeBytes   int64     `json:"size_bytes"`
+	UploadedAt  time.Time `json:"uploaded_at"`
+}
+
+type templateRegistrationResponse struct {
+	ID                 string    `json:"id"`
+	TenantID           string    `json:"tenant_id"`
+	RepoOwner          string    `json:"repo_owner"`
+	RepoName           string    `json:"repo_name"`
+	SourceRef          string    `json:"source_ref"`
+	RootPath           string    `json:"root_path"`
+	Status             string    `json:"status"`
+	Step               string    `json:"step"`
+	TemplateRevisionID string    `json:"template_revision_id"`
+	ResolvedCommitSHA  string    `json:"resolved_commit_sha"`
+	RequestedBy        string    `json:"requested_by"`
+	RequestedAt        time.Time `json:"requested_at"`
+	CompletedAt        time.Time `json:"completed_at,omitzero"`
+	ErrorSummary       string    `json:"error_summary"`
+}
+
+type templateRevisionResponse struct {
+	ID       string `json:"id"`
+	TenantID string `json:"tenant_id"`
+	// SourceTemplateID is what the web groups a template's revisions by.
+	SourceTemplateID  string    `json:"source_template_id"`
+	RepoOwner         string    `json:"repo_owner"`
+	RepoName          string    `json:"repo_name"`
+	SourceRef         string    `json:"source_ref"`
+	ResolvedCommitSHA string    `json:"resolved_commit_sha"`
+	RootPath          string    `json:"root_path"`
+	Name              string    `json:"name"`
+	Description       string    `json:"description"`
+	Tags              []string  `json:"tags"`
+	Status            string    `json:"status"`
+	CreatedAt         time.Time `json:"created_at"`
+}
+
+func newTemplateRunResponse(run domain.TemplateRun) templateRunResponse {
+	response := templateRunResponse{
+		ID:                      string(run.ID),
+		TenantID:                string(run.TenantID),
+		StackTemplateID:         string(run.StackTemplateID),
+		TemplateRevisionID:      string(run.TemplateRevisionID),
+		Operation:               string(run.Operation),
+		SelectedRef:             run.SelectedRef,
+		ResolvedCommitSHA:       run.ResolvedCommitSHA,
+		Status:                  string(run.Status),
+		Step:                    string(run.Step),
+		TriggerActor:            string(run.TriggerActor),
+		TriggerActorDisplayName: run.TriggerActorDisplayName,
+		CreatedAt:               run.CreatedAt,
+		CompletedAt:             run.CompletedAt,
+		ErrorSummary:            run.ErrorSummary,
+		RunNumber:               run.RunNumber,
+		AutoApprove:             run.AutoApprove,
+		PlanSummary:             newPlanSummaryResponse(run.PlanSummary),
+	}
+	// A list leaves executions nil, which omits the field; a read of one run
+	// fills them, an empty slice for a run no workflow has carried yet.
+	if run.Executions != nil {
+		response.Executions = make([]templateRunExecutionResponse, 0, len(run.Executions))
+		for _, execution := range run.Executions {
+			response.Executions = append(response.Executions, newTemplateRunExecutionResponse(execution))
+		}
+	}
+	return response
+}
+
+func newTemplateRunExecutionResponse(execution domain.TemplateRunWorkflowExecution) templateRunExecutionResponse {
+	steps := make([]templateRunStepResponse, 0, len(execution.Steps))
+	for _, step := range execution.Steps {
+		steps = append(steps, templateRunStepResponse{
+			Step:       string(step.Step),
+			Status:     string(step.Status),
+			StartedAt:  step.StartedAt,
+			FinishedAt: step.FinishedAt,
+		})
+	}
+	return templateRunExecutionResponse{
+		Phase:            string(execution.Phase),
+		Actor:            string(execution.Actor),
+		ActorDisplayName: execution.ActorDisplayName,
+		Status:           string(execution.Status),
+		StartedAt:        execution.StartedAt,
+		FinishedAt:       execution.FinishedAt,
+		ErrorSummary:     execution.ErrorSummary,
+		Summary:          newPlanSummaryResponse(execution.Summary),
+		Steps:            steps,
+	}
+}
+
+func newPlanSummaryResponse(summary *domain.PlanSummary) *planSummaryResponse {
+	if summary == nil {
+		return nil
+	}
+	return &planSummaryResponse{Add: summary.Add, Change: summary.Change, Destroy: summary.Destroy}
+}
+
+func newTemplateRunResponses(runs []domain.TemplateRun) []templateRunResponse {
+	responses := make([]templateRunResponse, 0, len(runs))
+	for _, run := range runs {
+		responses = append(responses, newTemplateRunResponse(run))
+	}
+	return responses
+}
+
+func newTemplateRunLogResponse(log domain.TemplateRunLog) templateRunLogResponse {
+	return templateRunLogResponse{
+		TenantID:    string(log.TenantID),
+		RunID:       string(log.RunID),
+		Name:        log.Phase,
+		RunPhase:    string(log.RunPhase),
+		Seq:         log.Seq,
+		Command:     string(log.Command),
+		CommandLine: log.CommandLine,
+		ContentType: log.ContentType,
+		SizeBytes:   log.SizeBytes,
+		UploadedAt:  log.UploadedAt,
+	}
+}
+
+func newTemplateRegistrationResponse(registration domain.TemplateRegistration) templateRegistrationResponse {
+	return templateRegistrationResponse{
+		ID:                 string(registration.ID),
+		TenantID:           string(registration.TenantID),
+		RepoOwner:          registration.RepoOwner,
+		RepoName:           registration.RepoName,
+		SourceRef:          registration.SourceRef,
+		RootPath:           registration.RootPath,
+		Status:             string(registration.Status),
+		Step:               string(registration.Step),
+		TemplateRevisionID: string(registration.TemplateRevisionID),
+		ResolvedCommitSHA:  registration.ResolvedCommitSHA,
+		RequestedBy:        string(registration.RequestedBy),
+		RequestedAt:        registration.RequestedAt,
+		CompletedAt:        registration.CompletedAt,
+		ErrorSummary:       registration.ErrorSummary,
+	}
+}
+
+func newTemplateRevisionResponse(revision domain.TemplateRevision) templateRevisionResponse {
+	// A revision stored without tags has a nil slice, which would go out as
+	// null; every client reads tags as a list.
+	tags := revision.Tags
+	if tags == nil {
+		tags = []string{}
+	}
+	return templateRevisionResponse{
+		ID:                string(revision.ID),
+		TenantID:          string(revision.TenantID),
+		SourceTemplateID:  string(revision.SourceTemplateID),
+		RepoOwner:         revision.RepoOwner,
+		RepoName:          revision.RepoName,
+		SourceRef:         revision.SourceRef,
+		ResolvedCommitSHA: revision.ResolvedCommitSHA,
+		RootPath:          revision.RootPath,
+		Name:              revision.Name,
+		Description:       revision.Description,
+		Tags:              tags,
+		Status:            string(revision.Status),
+		CreatedAt:         revision.CreatedAt,
+	}
+}

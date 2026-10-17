@@ -32,14 +32,9 @@ function run(overrides: Partial<TemplateRun> = {}): TemplateRun {
     tenant_id: "tenant_123",
     stack_template_id: "stpl_1",
     template_revision_id: "rev_1",
-    source_template_id: "tpl_1",
     operation: "plan",
     selected_ref: "main",
     resolved_commit_sha: "abcdef1234567890",
-    workspace_name: "acme-prod-primary",
-    config_json: {},
-    backend_type: "s3",
-    backend_config_hash: "hash",
     status: "completed",
     step: "",
     trigger_actor: "user_123",
@@ -65,13 +60,12 @@ const LOG_COMMANDS: Record<string, Pick<TemplateRunLog, "run_phase" | "seq" | "c
 };
 
 function runLog(overrides: Partial<TemplateRunLog> = {}): TemplateRunLog {
-  const phase = overrides.phase ?? "plan-3";
+  const name = overrides.name ?? "plan-3";
   return {
     tenant_id: "tenant_123",
     run_id: "run_1",
-    phase,
-    ...(LOG_COMMANDS[phase] ?? { run_phase: "plan", seq: 1, command: phase, command_line: phase }),
-    object_key: "key",
+    name,
+    ...(LOG_COMMANDS[name] ?? { run_phase: "plan", seq: 1, command: name, command_line: name }),
     content_type: "text/plain",
     size_bytes: 10,
     uploaded_at: "2026-07-20T00:01:00Z",
@@ -241,7 +235,7 @@ describe("RunDetailScreen", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
       if (url.endsWith("/logs")) {
-        return jsonResponse([runLog({ phase: "plan-1" }), runLog({ phase: "plan-3" })]);
+        return jsonResponse([runLog({ name: "plan-1" }), runLog({ name: "plan-3" })]);
       }
       if (url.endsWith("/logs/plan-3")) {
         return new Response("plan-3 log body", { status: 200, headers: { "content-type": "text/plain" } });
@@ -297,7 +291,7 @@ describe("RunDetailScreen", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
       if (url.endsWith("/logs")) {
-        return jsonResponse(["plan-1", "plan-2", "plan-3", "apply-1", "apply-2", "apply-3"].map((phase) => runLog({ phase })));
+        return jsonResponse(["plan-1", "plan-2", "plan-3", "apply-1", "apply-2", "apply-3"].map((name) => runLog({ name })));
       }
       return new Response("log body", { status: 200, headers: { "content-type": "text/plain" } });
     });
@@ -324,7 +318,7 @@ describe("RunDetailScreen", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
       if (url.endsWith("/logs")) {
-        return jsonResponse([runLog({ phase: "plan-1", command: "refresh", command_line: "" })]);
+        return jsonResponse([runLog({ name: "plan-1", command: "refresh", command_line: "" })]);
       }
       return new Response("log body", { status: 200, headers: { "content-type": "text/plain" } });
     });
@@ -347,7 +341,7 @@ describe("RunDetailScreen", () => {
         return jsonResponse(current);
       }
       if (url.endsWith("/logs")) {
-        return jsonResponse(phases.map((phase) => runLog({ phase })));
+        return jsonResponse(phases.map((name) => runLog({ name })));
       }
       const phase = url.split("/logs/")[1];
       if (phase) {
@@ -439,7 +433,7 @@ describe("RunDetailScreen", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
       const url = String(input);
       if (url.endsWith("/logs")) {
-        return Promise.resolve(jsonResponse([runLog({ phase: "plan-3" })]));
+        return Promise.resolve(jsonResponse([runLog({ name: "plan-3" })]));
       }
       if (url.endsWith("/logs/plan-3")) {
         return new Promise((resolve) => {

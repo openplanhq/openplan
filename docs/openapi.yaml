@@ -1110,10 +1110,10 @@ paths:
         in: path
         required: true
         description: |
-          The log's name, such as `plan-1`: the `phase` field of an entry in
+          The log's name, such as `plan-1`: the `name` field of an entry in
           the run's log list. Not the run phase (`run_phase`), which writes
           several logs.
-        schema: { $ref: "#/components/schemas/LogPhase" }
+        schema: { $ref: "#/components/schemas/LogName" }
     get:
       tags: [Runs]
       summary: Read one log's body
@@ -2107,17 +2107,9 @@ components:
           description: |
             The revision this run executed. Pinned when the run started, so
             history stays accurate after an upgrade.
-        source_template_id: { type: string }
         operation: { $ref: "#/components/schemas/OperationType" }
         selected_ref: { type: string }
         resolved_commit_sha: { type: string }
-        workspace_name: { type: string }
-        config_json:
-          type: object
-          additionalProperties: true
-          description: The config this run executed with, captured at start.
-        backend_type: { type: string }
-        backend_config_hash: { type: string }
         status: { $ref: "#/components/schemas/TemplateRunStatus" }
         step:
           allOf: [{ $ref: "#/components/schemas/TemplateRunStep" }]
@@ -2181,11 +2173,10 @@ components:
             `GET /v1/tenants/{tenant_id}/template-runs/{run_id}`.
           items: { $ref: "#/components/schemas/TemplateRunWorkflowExecution" }
       required:
-        [id, tenant_id, stack_template_id, template_revision_id,
-         source_template_id, operation, selected_ref, resolved_commit_sha,
-         workspace_name, backend_type, backend_config_hash, status, step,
-         trigger_actor, trigger_actor_display_name, created_at, error_summary,
-         run_number, auto_approve, plan_summary]
+        [id, tenant_id, stack_template_id, template_revision_id, operation,
+         selected_ref, resolved_commit_sha, status, step, trigger_actor,
+         trigger_actor_display_name, created_at, error_summary, run_number,
+         auto_approve, plan_summary]
 
     TemplateRunStatus:
       type: string
@@ -2235,7 +2226,6 @@ components:
       description: One workflow that carried a run.
       properties:
         phase: { type: string, enum: [plan, apply] }
-        workflow_id: { type: string, description: The Temporal workflow ID. }
         actor:
           type: string
           description: |
@@ -2267,7 +2257,7 @@ components:
           type: array
           description: The steps it ran, in the order they started.
           items: { $ref: "#/components/schemas/TemplateRunStepExecution" }
-      required: [phase, workflow_id, actor, actor_display_name, status, started_at, error_summary, summary, steps]
+      required: [phase, actor, actor_display_name, status, started_at, error_summary, summary, steps]
 
     TemplateRunStepExecution:
       type: object
@@ -2284,7 +2274,7 @@ components:
           description: Absent while the step runs.
       required: [step, status, started_at]
 
-    LogPhase:
+    LogName:
       type: string
       pattern: "^[a-z][a-z0-9-]{0,62}$"
       description: |
@@ -2297,11 +2287,11 @@ components:
       description: |
         Where one command's output is stored. Read the body from
         `GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{name}`,
-        with this entry's `phase` as the name.
+        with this entry's `name`.
       properties:
         tenant_id: { type: string }
         run_id: { type: string }
-        phase: { $ref: "#/components/schemas/LogPhase" }
+        name: { $ref: "#/components/schemas/LogName" }
         run_phase:
           type: string
           enum: [plan, apply]
@@ -2324,14 +2314,11 @@ components:
             `tofu plan -destroy`: the binary and subcommand that ran, without
             the arguments. A destroy's second step reads `tofu apply`, since
             it applies the saved destroy plan.
-        object_key:
-          type: string
-          description: The object-store key. Internal — not a URL a client can fetch.
         content_type: { type: string }
         size_bytes: { type: integer, format: int64 }
         uploaded_at: { type: string, format: date-time }
       required:
-        [tenant_id, run_id, phase, run_phase, seq, command, command_line, object_key,
+        [tenant_id, run_id, name, run_phase, seq, command, command_line,
          content_type, size_bytes, uploaded_at]
 
     TerraformCommand:

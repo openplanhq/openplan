@@ -330,14 +330,14 @@ func TestStartTemplateRunCallsService(t *testing.T) {
 		t.Fatalf("trigger actor = %q, want %q", deps.templateRuns.created.TriggerActor, apiOIDCSubject)
 	}
 
-	var body domain.TemplateRun
+	var body templateRunResponse
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if body.ID != domain.TemplateRunID("run_123") {
+	if body.ID != string(domain.TemplateRunID("run_123")) {
 		t.Fatalf("id = %q, want run_123", body.ID)
 	}
-	if body.Status != domain.TemplateRunQueued {
+	if body.Status != string(domain.TemplateRunQueued) {
 		t.Fatalf("status = %q, want queued", body.Status)
 	}
 	if !body.CreatedAt.Equal(startedAt) {
@@ -373,7 +373,7 @@ func TestStartTemplateRunPassesAutoApproveThrough(t *testing.T) {
 	if !deps.templateRuns.created.AutoApprove {
 		t.Fatal("created run is not auto-approved")
 	}
-	var body domain.TemplateRun
+	var body templateRunResponse
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
@@ -686,14 +686,14 @@ func TestRegisterTemplateCallsService(t *testing.T) {
 		t.Fatalf("queued requests = %#v, want one start_template_sync request", deps.work.requests)
 	}
 
-	var body domain.TemplateRegistration
+	var body templateRegistrationResponse
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if body.ID != domain.TemplateRegistrationID("template_registration_123") {
+	if body.ID != string(domain.TemplateRegistrationID("template_registration_123")) {
 		t.Fatalf("id = %q, want template_registration_123", body.ID)
 	}
-	if body.Status != domain.TemplateRegistrationPending {
+	if body.Status != string(domain.TemplateRegistrationPending) {
 		t.Fatalf("status = %q, want pending", body.Status)
 	}
 	if !body.RequestedAt.Equal(requestedAt) {
@@ -1423,11 +1423,11 @@ func TestGetTemplateRegistrationReturnsRegistration(t *testing.T) {
 		t.Fatalf("tenant id = %q, want tenant_123", deps.registrations.gotGetTenantID)
 	}
 
-	var body domain.TemplateRegistration
+	var body templateRegistrationResponse
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if body.ID != domain.TemplateRegistrationID("template_registration_123") {
+	if body.ID != string(domain.TemplateRegistrationID("template_registration_123")) {
 		t.Fatalf("id = %q, want template_registration_123", body.ID)
 	}
 }
@@ -1465,14 +1465,14 @@ func TestListTemplateRevisionsReturnsTenantTemplateRevisions(t *testing.T) {
 		t.Fatalf("tenant list lookup = %q, want tenant_123", deps.templates.gotListTenantID)
 	}
 
-	var body []domain.TemplateRevision
+	var body []templateRevisionResponse
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
 	if len(body) != 1 {
 		t.Fatalf("len(body) = %d, want 1", len(body))
 	}
-	if body[0].ID != domain.TemplateRevisionID("template_123") || body[0].Status != domain.TemplateRevisionActive {
+	if body[0].ID != string(domain.TemplateRevisionID("template_123")) || body[0].Status != string(domain.TemplateRevisionActive) {
 		t.Fatalf("template revision response = %#v", body[0])
 	}
 }
@@ -1511,11 +1511,11 @@ func TestListTemplateRunsReturnsRunsForStackTemplate(t *testing.T) {
 		t.Fatalf("stack template lookup = %q, want stack_template_123", deps.templateRuns.gotListStackTemplateID)
 	}
 
-	var body []domain.TemplateRun
+	var body []templateRunResponse
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if len(body) != 1 || body[0].ID != domain.TemplateRunID("run_apply_1") || body[0].Status != domain.TemplateRunWaitingApproval {
+	if len(body) != 1 || body[0].ID != string(domain.TemplateRunID("run_apply_1")) || body[0].Status != string(domain.TemplateRunWaitingApproval) {
 		t.Fatalf("runs = %#v", body)
 	}
 }
@@ -1588,18 +1588,50 @@ func TestGetTemplateRunReturnsRun(t *testing.T) {
 		t.Fatalf("run id = %q, want run_123", deps.templateRuns.gotGetRunID)
 	}
 
-	var body domain.TemplateRun
+	var body templateRunResponse
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if body.ID != domain.TemplateRunID("run_123") {
+	if body.ID != string(domain.TemplateRunID("run_123")) {
 		t.Fatalf("id = %q, want run_123", body.ID)
 	}
-	if body.Status != domain.TemplateRunCompleted {
+	if body.Status != string(domain.TemplateRunCompleted) {
 		t.Fatalf("status = %q, want completed", body.Status)
 	}
-	if len(body.Executions) != 1 || len(body.Executions[0].Steps) != 1 || body.Executions[0].Steps[0].Step != domain.TemplateRunStepPlanning {
+	if len(body.Executions) != 1 || len(body.Executions[0].Steps) != 1 || body.Executions[0].Steps[0].Step != string(domain.TemplateRunStepPlanning) {
 		t.Fatalf("executions = %#v, want the plan with its planning step", body.Executions)
+	}
+}
+
+// A run read goes out through its response type, so what only the executor
+// needs (the config snapshot, the state backend, the Temporal workflow) never
+// reaches a client, even when the store fills it.
+func TestGetTemplateRunOmitsInternals(t *testing.T) {
+	t.Parallel()
+
+	deps := newAPITestDependencies(t)
+	deps.templateRuns.run = domain.TemplateRun{
+		ID: "run_123", TenantID: "tenant_123", StackTemplateID: "stack_template_123",
+		Operation: domain.OperationPlan, Status: domain.TemplateRunCompleted,
+		ConfigJSON: json.RawMessage(`{"password":"hunter2"}`), BackendType: "s3",
+		BackendConfigHash: "hash", WorkspaceName: "workspace", SourceTemplateID: "source_123",
+	}
+	deps.templateRuns.executions = []domain.TemplateRunWorkflowExecution{{
+		Phase: domain.RunPhasePlan, WorkflowID: "template-run/tenant_123/run_123", Status: domain.TemplateRunExecutionSucceeded,
+	}}
+	server := NewServer(deps.service(), configuredTenantID)
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/template-runs/run_123", nil))
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	body := response.Body.String()
+	for _, internal := range []string{"config_json", "hunter2", "backend_type", "backend_config_hash", "workspace_name", "source_template_id", "workflow_id"} {
+		if strings.Contains(body, internal) {
+			t.Errorf("body = %s, want no %s", body, internal)
+		}
 	}
 }
 
@@ -1776,15 +1808,21 @@ func TestListTemplateRunLogsReturnsMetadata(t *testing.T) {
 		t.Fatalf("metadata run ID = %q, want run_123", deps.logMetadata.gotListRunID)
 	}
 
-	var body []domain.TemplateRunLog
-	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+	raw := response.Body.String()
+	var body []templateRunLogResponse
+	if err := json.Unmarshal([]byte(raw), &body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
 	if len(body) != 1 {
 		t.Fatalf("len(body) = %d, want 1", len(body))
 	}
-	if body[0].Phase != "init" {
-		t.Fatalf("phase = %q, want init", body[0].Phase)
+	// The log's name is what GET .../logs/{name} reads it under; where it is
+	// stored is the server's business.
+	if body[0].Name != "init" {
+		t.Fatalf("name = %q, want init", body[0].Name)
+	}
+	if strings.Contains(raw, "object_key") || strings.Contains(raw, `"phase"`) {
+		t.Fatalf("body = %s, want no object_key or phase", raw)
 	}
 	if body[0].SizeBytes != 12 {
 		t.Fatalf("size_bytes = %d, want 12", body[0].SizeBytes)
@@ -1910,14 +1948,14 @@ func TestApproveRunCallsService(t *testing.T) {
 	if got, want := response.Header().Get("Location"), "/v1/tenants/tenant_123/template-runs/run_123"; got != want {
 		t.Fatalf("Location = %q, want %q", got, want)
 	}
-	var body domain.TemplateRun
+	var body templateRunResponse
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if body.ID != domain.TemplateRunID("run_123") {
+	if body.ID != string(domain.TemplateRunID("run_123")) {
 		t.Fatalf("id = %q, want run_123", body.ID)
 	}
-	if body.Status != domain.TemplateRunApproved {
+	if body.Status != string(domain.TemplateRunApproved) {
 		t.Fatalf("status = %q, want %q", body.Status, domain.TemplateRunApproved)
 	}
 }
