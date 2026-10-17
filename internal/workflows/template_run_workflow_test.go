@@ -359,6 +359,68 @@ func TestTemplatePlanWorkflowRecordsExecutorGoneWhenTheCommandHeartbeatTimesOut(
 	}
 }
 
+// When an executor dies mid-command, its session's own heartbeat (20 s) times
+// out long before the command's (120 s): the session fails and cancels the
+// command, so the command's error is a cancellation, not a heartbeat timeout.
+// The log is still lost to the executor, not to the store. The session here
+// fails while the plan is running, with the error the SDK's creation activity
+// returns when its worker goes away. (A heartbeat timeout returned from a mock
+// is retried by the test environment, unlike the server's.)
+func TestTemplatePlanWorkflowRecordsExecutorGoneWhenTheSessionFails(t *testing.T) {
+	t.Parallel()
+
+	env := newTemplateRunWorkflowTestEnvironment(t)
+	planStarted := make(chan struct{})
+	// The plan never finishes on its own: a cancelled activity's goroutine is
+	// not stopped by the test environment, so it is released at cleanup.
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	env.OnActivity(sessionCreationActivityName, mock.Anything, mock.Anything).
+		Return(func(_ context.Context, sessionID string) error {
+			// What the SDK's own creation activity signals once the session
+			// is placed on a host.
+			env.SignalWorkflow(sessionID, struct{ Taskqueue, HostName, ResourceID string }{
+				Taskqueue: "executor-host-1", HostName: "executor-host-1", ResourceID: "executor-host-1",
+			})
+			<-planStarted
+			return temporal.NewNonRetryableApplicationError("session failed due to worker shutdown", "SessionWorkerShutdown", nil)
+		})
+	mockPrepareWorkspace(t, env)
+	mockFetchSource(t, env)
+	env.OnActivity(domain.RunTerraformActivityName, mock.Anything, mock.Anything).
+		Return(func(_ context.Context, input domain.RunTerraformActivityInput) (domain.RunTerraformActivityOutput, error) {
+			if input.Command == domain.TerraformCommandPlan {
+				close(planStarted)
+				<-release
+			}
+			return domain.RunTerraformActivityOutput{}, nil
+		})
+	var recorded []domain.TemplateRunLog
+	env.OnActivity(domain.RecordTemplateRunLogActivityName, mock.Anything, mock.Anything).
+		Return(func(_ context.Context, log domain.TemplateRunLog) error {
+			recorded = append(recorded, log)
+			return nil
+		})
+	env.OnActivity(domain.RecordTemplateRunStatusActivityName, mock.Anything, mock.Anything).Return(nil)
+
+	env.ExecuteWorkflow(TemplatePlanWorkflow, templateRunWorkflowInput(domain.OperationPlan))
+
+	if !env.IsWorkflowCompleted() {
+		t.Fatal("workflow did not complete")
+	}
+	var canceledErr *temporal.CanceledError
+	if err := env.GetWorkflowError(); !errors.As(err, &canceledErr) {
+		t.Fatalf("workflow error = %v, want the command cancelled with its session", err)
+	}
+	if len(recorded) == 0 {
+		t.Fatal("no log recorded")
+	}
+	last := recorded[len(recorded)-1]
+	if last.Phase != "plan-3" || last.State != domain.TemplateRunLogLost || last.LostReason != domain.LogLostExecutorGone {
+		t.Fatalf("last recorded log = %s %s/%s, want plan-3 lost/%s", last.Phase, last.State, last.LostReason, domain.LogLostExecutorGone)
+	}
+}
+
 // A log row that cannot be written is a gap in the run's history, not a
 // failure of the command it describes: the run completes, after the record
 // has had its own retries.
@@ -1229,6 +1291,10 @@ func newTemplateRunWorkflowTestEnvironment(t *testing.T) *testsuite.TestWorkflow
 	)
 	return env
 }
+
+// sessionCreationActivityName is the SDK's internal activity that holds an
+// executor session open, heartbeating, for as long as the session lives.
+const sessionCreationActivityName = "internalSessionCreationActivity"
 
 // uploadedLog is what an honest UploadLog returns for input: the object it
 // wrote, described as RecordTemplateRunLog needs a complete log to be.

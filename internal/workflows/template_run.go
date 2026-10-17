@@ -616,8 +616,8 @@ func (s *session) terraform(command domain.TerraformCommandType) (domain.RunTerr
 // as lost if the upload never succeeded. Its number and the command and phase
 // that wrote it are the workflow's, which the executor does not get to say.
 //
-// runErr is the command's own error, which says why an upload failed: a
-// command whose heartbeat stopped had no executor left to upload from.
+// runErr is the command's own error, which, with the session's state, says
+// why an upload failed: see executorGone.
 //
 // Nothing here fails the step. A log that is lost, or a row that cannot be
 // written, is logged; the run's outcome stays the command's.
@@ -636,8 +636,7 @@ func (s *session) saveLog(name string, seq int, command domain.TerraformCommandT
 		logger.Warn("upload run log", "log", name, "error", err)
 		log.State = domain.TemplateRunLogLost
 		log.LostReason = domain.LogLostUploadFailed
-		var timeoutErr *temporal.TimeoutError
-		if errors.As(runErr, &timeoutErr) && timeoutErr.TimeoutType() == enumspb.TIMEOUT_TYPE_HEARTBEAT {
+		if s.executorGone(runErr) {
 			log.LostReason = domain.LogLostExecutorGone
 		}
 	} else {
@@ -652,6 +651,22 @@ func (s *session) saveLog(name string, seq int, command domain.TerraformCommandT
 	if err := s.run.log(name, log); err != nil {
 		logger.Warn("record run log", "log", name, "state", log.State, "error", err)
 	}
+}
+
+// executorGone reports whether the session's executor died, given the
+// command's error. Either of two signs says so, because which one arrives
+// depends on how it died. A dead process stops heartbeating its session
+// (20 s) long before its command's own heartbeat timeout (120 s) fires, so
+// the session fails and cancels the command: runErr is then a cancellation,
+// and only the session's state tells. An executor whose worker stays up but
+// whose command hangs keeps the session alive, and the command's heartbeat
+// timeout is what tells.
+func (s *session) executorGone(runErr error) bool {
+	if info := workflow.GetSessionInfo(s.ctx); info != nil && info.SessionState == workflow.SessionStateFailed {
+		return true
+	}
+	var timeoutErr *temporal.TimeoutError
+	return errors.As(runErr, &timeoutErr) && timeoutErr.TimeoutType() == enumspb.TIMEOUT_TYPE_HEARTBEAT
 }
 
 // sealSourceToken resolves a token for the run's repository on the control
