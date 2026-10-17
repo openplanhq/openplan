@@ -41,8 +41,9 @@ info:
     ## Request bodies
 
     JSON request bodies must be exactly one JSON object, and unknown fields are
-    rejected with `400 invalid_json`. Endpoints that take no fields — such as
-    run approval — still require a body of `{}`.
+    rejected with `400 invalid_json`. Approving and discarding a run need
+    nothing from the body, so they also accept no body at all; a body that is
+    sent is still held to the schema.
 
     A JSON request body may be at most 1 MiB; a larger one is rejected with
     `413 request_too_large` before any of it is acted on.
@@ -57,6 +58,13 @@ info:
     known path and the wrong method. The sign-in routes are the exception:
     their failures are an HTML page for the browser, and back-channel logout
     answers Dex in plain text.
+
+    Every response carries an `X-Request-Id` header, and every JSON error
+    repeats it as `request_id`. A `500` says nothing about its cause; the API
+    logs the cause under that id, so quote it when reporting one. An id a
+    proxy in front of the API already set is kept when it is plain (letters,
+    digits, `.`, `_` and `-`, at most 128 characters), so both logs share it;
+    any other is replaced.
   license:
     name: Apache-2.0
     identifier: Apache-2.0
@@ -316,6 +324,10 @@ paths:
       responses:
         "202":
           description: Registration accepted and queued.
+          headers:
+            Location:
+              description: Where to poll it, `/v1/tenants/{tenant_id}/template-registrations/{registration_id}`.
+              schema: { type: string }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/TemplateRegistration" }
@@ -424,6 +436,10 @@ paths:
       responses:
         "201":
           description: The stack was created.
+          headers:
+            Location:
+              description: The stack's own URL, `/v1/tenants/{tenant_id}/stacks/{stack_id}`.
+              schema: { type: string }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Stack" }
@@ -540,7 +556,8 @@ paths:
         "409":
           description: |
             The revision is not installable, or the config does not satisfy its
-            variables (`conflict`).
+            variables (`conflict`); or `component_key` is already used on this
+            stack (`duplicate_component_key`).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -588,7 +605,7 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "413": { $ref: "#/components/responses/RequestTooLarge" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
+        "503": { $ref: "#/components/responses/CredentialEncryptionUnavailable" }
     get:
       tags: [Credentials]
       summary: List stack-scoped credentials
@@ -606,7 +623,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
+        "503": { $ref: "#/components/responses/CredentialEncryptionUnavailable" }
 
   /v1/tenants/{tenant_id}/stacks/{stack_id}/credentials/{credential_id}:
     parameters:
@@ -624,7 +641,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
+        "503": { $ref: "#/components/responses/CredentialEncryptionUnavailable" }
 
   /v1/tenants/{tenant_id}/stacks/{stack_id}/grants:
     parameters:
@@ -758,12 +775,22 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/StackTemplate" }
-        "400": { $ref: "#/components/responses/BadRequest" }
+        "400":
+          description: |
+            A malformed body, or no `config` (`invalid_request`). The edit
+            replaces the whole config, so a missing one is refused rather than
+            read as "clear everything"; send `{}` to clear it on purpose.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: The config does not satisfy the revision's variables (`conflict`).
+          description: |
+            The config does not satisfy the revision's variables, or the
+            component is not active, so its config can no longer be edited
+            (`conflict`).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -848,7 +875,7 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "413": { $ref: "#/components/responses/RequestTooLarge" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
+        "503": { $ref: "#/components/responses/CredentialEncryptionUnavailable" }
     get:
       tags: [Credentials]
       summary: List component-scoped credentials
@@ -866,7 +893,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
+        "503": { $ref: "#/components/responses/CredentialEncryptionUnavailable" }
 
   /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/credentials/{credential_id}:
     parameters:
@@ -884,7 +911,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
-        "503": { $ref: "#/components/responses/AuthorizationUnavailable" }
+        "503": { $ref: "#/components/responses/CredentialEncryptionUnavailable" }
 
   /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/runs:
     parameters:
@@ -924,6 +951,10 @@ paths:
       responses:
         "201":
           description: The run was created and queued.
+          headers:
+            Location:
+              description: Where to poll it, `/v1/tenants/{tenant_id}/template-runs/{run_id}`.
+              schema: { type: string }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/TemplateRun" }
@@ -1063,14 +1094,10 @@ paths:
         component's desired config and revision. Those cannot change while
         the plan waits, so this is a backstop.
 
-        The person who started a run cannot approve it: that returns `403
-        self_approval_forbidden`, which is its own code precisely so a client
-        can say why rather than showing a generic denial.
-
-        Takes no fields, but a body of `{}` is required.
+        Takes no fields: send `{}` or no body at all.
       operationId: approveRun
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
@@ -1082,13 +1109,7 @@ paths:
           description: Approved. The run proceeds.
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "403":
-          description: |
-            `forbidden` — the caller lacks approve permission on the stack.
-            `self_approval_forbidden` — the caller started this run.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
           description: The run is not waiting for approval (`conflict`).
@@ -1111,9 +1132,11 @@ paths:
         approved and not yet applying). The run ends `canceled` straight away
         and its plan can never be applied. A run that is planning or applying
         cannot be stopped.
+
+        The body is optional: send no body to discard without a reason.
       operationId: discardRun
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema: { $ref: "#/components/schemas/DiscardRunRequest" }
@@ -1341,6 +1364,14 @@ components:
           example:
             error: authorization_unavailable
             message: authorization service unavailable
+    CredentialEncryptionUnavailable:
+      description: |
+        No credential encryption key is configured on this deployment
+        (`credential_encryption_unavailable`). Nothing a client sends can fix
+        it; an operator has to configure the key.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
     SignInFailedHTML:
       description: |
         Sign-in could not be completed. One identical page for every cause:
@@ -1361,7 +1392,6 @@ components:
           enum:
             - unauthorized
             - forbidden
-            - self_approval_forbidden
             - not_found
             - method_not_allowed
             - invalid_request
@@ -1370,7 +1400,9 @@ components:
             - unknown_user
             - plan_stale
             - run_in_flight
+            - duplicate_component_key
             - conflict
+            - credential_encryption_unavailable
             - queue_unavailable
             - authorization_unavailable
             - authorization_write_unconfirmed
@@ -1378,6 +1410,12 @@ components:
         message:
           type: string
           description: A human-readable explanation. Not a stable contract.
+        request_id:
+          type: string
+          description: |
+            The same id as the response's `X-Request-Id` header, which the
+            API's log lines carry too. Present on every error the API itself
+            writes.
       required: [error, message]
 
     Me:
@@ -1465,9 +1503,7 @@ components:
         completed_at:
           type: string
           format: date-time
-          description: |
-            Always present. Reads as the zero time
-            (`0001-01-01T00:00:00Z`) while the registration is unfinished.
+          description: Absent until the registration ends.
         error_summary:
           type: string
           description: Why registration failed. Empty otherwise.
@@ -1625,7 +1661,7 @@ components:
           type: string
           description: |
             When the item began to need a person: when the plan finished, or
-            when the destroy stopped. An RFC 3339 timestamp, or empty when
+            when the destroy stopped. An RFC 3339 timestamp, absent when
             unknown.
         stack:
           type: object
@@ -1647,7 +1683,7 @@ components:
           oneOf:
             - $ref: "#/components/schemas/TemplateRun"
             - type: "null"
-      required: [kind, at, stack, stack_template, run]
+      required: [kind, stack, stack_template, run]
 
     StackStatus:
       type: string
@@ -1754,7 +1790,8 @@ components:
         display_name:
           type: string
           description: |
-            Resolved per read from the desired revision's metadata: the last
+            Resolved per response, on reads and writes alike, from the desired
+            revision's metadata: the last
             segment of its root path (`modules/network/vpc` is `vpc`), or the
             repository name for a template at the repository root.
         config:
@@ -1926,9 +1963,7 @@ components:
         completed_at:
           type: string
           format: date-time
-          description: |
-            Always present. Reads as the zero time
-            (`0001-01-01T00:00:00Z`) while the run is unfinished.
+          description: Absent until the run ends.
         error_summary:
           type: string
           description: Why the run failed, from its failed workflow execution. Empty otherwise.
@@ -2034,7 +2069,7 @@ components:
         finished_at:
           type: string
           format: date-time
-          description: Reads as the zero time (`0001-01-01T00:00:00Z`) while the execution runs.
+          description: Absent while the execution runs.
         error_summary: { type: string, description: Why it failed. Empty otherwise. }
         summary:
           type: [object, "null"]
@@ -2050,7 +2085,7 @@ components:
           type: array
           description: The steps it ran, in the order they started.
           items: { $ref: "#/components/schemas/TemplateRunStepExecution" }
-      required: [phase, workflow_id, actor, actor_display_name, status, started_at, finished_at, error_summary, summary, steps]
+      required: [phase, workflow_id, actor, actor_display_name, status, started_at, error_summary, summary, steps]
 
     TemplateRunStepExecution:
       type: object
@@ -2064,8 +2099,8 @@ components:
         finished_at:
           type: string
           format: date-time
-          description: Reads as the zero time while the step runs.
-      required: [step, status, started_at, finished_at]
+          description: Absent while the step runs.
+      required: [step, status, started_at]
 
     LogPhase:
       type: string
