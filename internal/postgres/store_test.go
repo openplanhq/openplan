@@ -2196,6 +2196,7 @@ func TestRecordTemplateRunLogUpsertsTenantScopedMetadata(t *testing.T) {
 		RunPhase:    domain.RunPhasePlan,
 		Seq:         1,
 		Command:     domain.TerraformCommandPlan,
+		State:       domain.TemplateRunLogComplete,
 		ObjectKey:   "tenants/tenant_123/runs/run_123/logs/plan-1.log",
 		ContentType: "text/plain; charset=utf-8",
 		SizeBytes:   18,
@@ -2219,6 +2220,114 @@ func TestRecordTemplateRunLogUpsertsTenantScopedMetadata(t *testing.T) {
 
 	if got != log {
 		t.Fatalf("log = %#v, want %#v", got, log)
+	}
+}
+
+// A log is recorded when its command starts, before there is any object to
+// describe, and the same row is completed once the output is uploaded.
+func TestRecordTemplateRunLogWritesALiveRowThenCompletesIt(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := NewStore(pool)
+	seedTemplateRun(t, ctx, pool, domain.TemplateRun{
+		ID:              domain.TemplateRunID("run_123"),
+		TenantID:        domain.TenantID("tenant_123"),
+		StackTemplateID: domain.StackTemplateID("stack_template_123"),
+		Operation:       domain.OperationPlan,
+		SelectedRef:     "main",
+		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
+		Status:          domain.TemplateRunRunning,
+		TriggerActor:    domain.UserID("user_123"),
+	})
+
+	live := domain.TemplateRunLog{
+		TenantID: "tenant_123",
+		RunID:    "run_123",
+		Phase:    "plan-1",
+		RunPhase: domain.RunPhasePlan,
+		Seq:      1,
+		Command:  domain.TerraformCommandPlan,
+		State:    domain.TemplateRunLogLive,
+	}
+	if err := store.RecordTemplateRunLog(ctx, live); err != nil {
+		t.Fatalf("RecordTemplateRunLog(live) returned error: %v", err)
+	}
+	got, err := store.GetTemplateRunLog(ctx, "tenant_123", "run_123", "plan-1")
+	if err != nil {
+		t.Fatalf("GetTemplateRunLog returned error: %v", err)
+	}
+	if got != live {
+		t.Fatalf("live log = %#v, want %#v", got, live)
+	}
+
+	complete := live
+	complete.State = domain.TemplateRunLogComplete
+	complete.ObjectKey = "tenants/tenant_123/runs/run_123/logs/plan-1.log"
+	complete.ContentType = "text/plain; charset=utf-8"
+	complete.SizeBytes = 18
+	complete.UploadedAt = time.Date(2026, 7, 6, 10, 15, 0, 123456000, time.UTC)
+	if err := store.RecordTemplateRunLog(ctx, complete); err != nil {
+		t.Fatalf("RecordTemplateRunLog(complete) returned error: %v", err)
+	}
+	got, err = store.GetTemplateRunLog(ctx, "tenant_123", "run_123", "plan-1")
+	if err != nil {
+		t.Fatalf("GetTemplateRunLog returned error: %v", err)
+	}
+	got.UploadedAt = got.UploadedAt.UTC()
+	if got != complete {
+		t.Fatalf("complete log = %#v, want %#v", got, complete)
+	}
+}
+
+// A lost log keeps why it was lost, and the table refuses one without a
+// reason: a lost log nobody can explain is a bug in whoever wrote it.
+func TestRecordTemplateRunLogWritesALostRowWithItsReason(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := NewStore(pool)
+	seedTemplateRun(t, ctx, pool, domain.TemplateRun{
+		ID:              domain.TemplateRunID("run_123"),
+		TenantID:        domain.TenantID("tenant_123"),
+		StackTemplateID: domain.StackTemplateID("stack_template_123"),
+		Operation:       domain.OperationPlan,
+		SelectedRef:     "main",
+		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
+		Status:          domain.TemplateRunRunning,
+		TriggerActor:    domain.UserID("user_123"),
+	})
+
+	lost := domain.TemplateRunLog{
+		TenantID:   "tenant_123",
+		RunID:      "run_123",
+		Phase:      "plan-1",
+		RunPhase:   domain.RunPhasePlan,
+		Seq:        1,
+		Command:    domain.TerraformCommandInit,
+		State:      domain.TemplateRunLogLost,
+		LostReason: domain.LogLostUploadFailed,
+	}
+	if err := store.RecordTemplateRunLog(ctx, lost); err != nil {
+		t.Fatalf("RecordTemplateRunLog(lost) returned error: %v", err)
+	}
+	got, err := store.GetTemplateRunLog(ctx, "tenant_123", "run_123", "plan-1")
+	if err != nil {
+		t.Fatalf("GetTemplateRunLog returned error: %v", err)
+	}
+	if got != lost {
+		t.Fatalf("lost log = %#v, want %#v", got, lost)
+	}
+
+	unexplained := lost
+	unexplained.Seq = 2
+	unexplained.Phase = "plan-2"
+	unexplained.LostReason = ""
+	err = store.RecordTemplateRunLog(ctx, unexplained)
+	if !violates(err, "23514", "template_run_logs_state_lost_reason_check") {
+		t.Fatalf("RecordTemplateRunLog(lost, no reason) error = %v, want the lost reason check", err)
 	}
 }
 
@@ -2265,6 +2374,7 @@ func TestRecordTemplateRunLogAcceptsEveryCommandInEitherPhase(t *testing.T) {
 				RunPhase:    runPhase,
 				Seq:         seq,
 				Command:     command,
+				State:       domain.TemplateRunLogComplete,
 				ObjectKey:   "tenants/tenant_123/runs/run_123/logs/" + fileName,
 				ContentType: "text/plain; charset=utf-8",
 				UploadedAt:  time.Now(),
@@ -2313,7 +2423,7 @@ func TestListTemplateRunLogsReturnsTenantScopedMetadataInRunOrder(t *testing.T) 
 		}
 		return domain.TemplateRunLog{
 			TenantID: domain.TenantID(tenant), RunID: domain.TemplateRunID(run), Phase: name, RunPhase: phase, Seq: seq, Command: command,
-			ObjectKey: "tenants/" + tenant + "/runs/" + run + "/logs/" + name + ".log", ContentType: "text/plain; charset=utf-8", SizeBytes: 9, UploadedAt: at,
+			State: domain.TemplateRunLogComplete, ObjectKey: "tenants/" + tenant + "/runs/" + run + "/logs/" + name + ".log", ContentType: "text/plain; charset=utf-8", SizeBytes: 9, UploadedAt: at,
 		}
 	}
 	for _, log := range []domain.TemplateRunLog{
@@ -2364,7 +2474,7 @@ func TestRecordTemplateRunLogKeepsARepeatedCommandsLogs(t *testing.T) {
 	for _, seq := range []int{1, 4} {
 		if err := store.RecordTemplateRunLog(ctx, domain.TemplateRunLog{
 			TenantID: "tenant_123", RunID: "run_123", RunPhase: domain.RunPhasePlan, Seq: seq, Command: domain.TerraformCommandInit,
-			ObjectKey: fmt.Sprintf("tenants/tenant_123/runs/run_123/logs/plan-%d.log", seq), ContentType: "text/plain; charset=utf-8",
+			State: domain.TemplateRunLogComplete, ObjectKey: fmt.Sprintf("tenants/tenant_123/runs/run_123/logs/plan-%d.log", seq), ContentType: "text/plain; charset=utf-8",
 			UploadedAt: time.Now(),
 		}); err != nil {
 			t.Fatalf("RecordTemplateRunLog(plan log %d) returned error: %v", seq, err)
@@ -2408,6 +2518,7 @@ func TestRecordTemplateRunLogReturnsNotFoundForOtherTenant(t *testing.T) {
 		RunPhase:    domain.RunPhasePlan,
 		Seq:         1,
 		Command:     domain.TerraformCommandPlan,
+		State:       domain.TemplateRunLogComplete,
 		ObjectKey:   "tenants/tenant_456/runs/run_123/logs/plan-1.log",
 		ContentType: "text/plain; charset=utf-8",
 		SizeBytes:   18,
@@ -3616,10 +3727,11 @@ func TestMigrationRenamesPlanPhaseSetupLogs(t *testing.T) {
 	ctx := context.Background()
 	pool := openTestPool(t, ctx)
 	// Stop the first migration short of 0024 by marking it applied, and hold
-	// back 0032 and 0033 too: their columns are not in the rows 0024 converts.
+	// back 0032, 0033 and 0035 too: their columns are not in the rows 0024
+	// converts.
 	if _, err := pool.Exec(ctx, `
 		create table schema_migrations (version text primary key, applied_at timestamptz not null default now());
-		insert into schema_migrations (version) values ('0024_run_phase_log_names'), ('0032_template_run_log_commands'), ('0033_template_run_log_names_derived');
+		insert into schema_migrations (version) values ('0024_run_phase_log_names'), ('0032_template_run_log_commands'), ('0033_template_run_log_names_derived'), ('0035_template_run_log_state');
 	`); err != nil {
 		t.Fatal(err)
 	}
