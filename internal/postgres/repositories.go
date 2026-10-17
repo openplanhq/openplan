@@ -412,7 +412,33 @@ func (store *Store) GetTemplateRevisionVariables(ctx context.Context, tenantID d
 	return variables, nil
 }
 
+// ListTemplateRevisions returns every revision of the tenant, newest first.
 func (store *Store) ListTemplateRevisions(ctx context.Context, tenantID domain.TenantID) ([]domain.TemplateRevision, error) {
+	return store.listTemplateRevisions(ctx, tenantID, nil, 0)
+}
+
+// ListTemplateRevisionsPage returns up to limit revisions after the cursor,
+// newest first.
+func (store *Store) ListTemplateRevisionsPage(ctx context.Context, tenantID domain.TenantID, after *app.TemplateRevisionCursor, limit int) ([]domain.TemplateRevision, error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("template revision page limit must be positive")
+	}
+	return store.listTemplateRevisions(ctx, tenantID, after, limit)
+}
+
+// listTemplateRevisions reads from after, newest first; limit 0 is no limit,
+// which Postgres spells "limit null".
+func (store *Store) listTemplateRevisions(ctx context.Context, tenantID domain.TenantID, after *app.TemplateRevisionCursor, limit int) ([]domain.TemplateRevision, error) {
+	var afterCreatedAt any
+	var afterID domain.TemplateRevisionID
+	if after != nil {
+		afterCreatedAt = after.CreatedAt
+		afterID = after.ID
+	}
+	var limitOrNull any
+	if limit > 0 {
+		limitOrNull = limit
+	}
 	rows, err := store.pool.Query(ctx, `
 		select
 			id,
@@ -430,8 +456,10 @@ func (store *Store) ListTemplateRevisions(ctx context.Context, tenantID domain.T
 			created_at
 		from template_revisions
 		where tenant_id = $1
+			and ($2::timestamptz is null or (created_at, id) < ($2, $3))
 		order by created_at desc, id desc
-	`, tenantID)
+		limit $4::integer
+	`, tenantID, afterCreatedAt, afterID, limitOrNull)
 	if err != nil {
 		return nil, fmt.Errorf("list template revisions: %w", err)
 	}
@@ -558,7 +586,7 @@ func (store *Store) ListStacks(ctx context.Context, tenantID domain.TenantID) ([
 	return stacks, nil
 }
 
-func (store *Store) ListStacksPage(ctx context.Context, tenantID domain.TenantID, after *app.StackPageCursor, limit int) ([]domain.Stack, error) {
+func (store *Store) ListStacksPage(ctx context.Context, tenantID domain.TenantID, after *app.StackPageCursor, limit int, query string) ([]domain.Stack, error) {
 	if limit <= 0 {
 		return nil, fmt.Errorf("stack page limit must be positive")
 	}
@@ -582,9 +610,10 @@ func (store *Store) ListStacksPage(ctx context.Context, tenantID domain.TenantID
 		from stacks
 		where tenant_id = $1
 			and ($2::timestamptz is null or (created_at, id) < ($2, $3))
+			and ($5::text = '' or name ilike $6 escape '\' or slug ilike $6 escape '\')
 		order by created_at desc, id desc
 		limit $4
-	`, tenantID, afterCreatedAt, afterID, limit)
+	`, tenantID, afterCreatedAt, afterID, limit, query, "%"+escapeLikePattern(query)+"%")
 	if err != nil {
 		return nil, fmt.Errorf("list stack page: %w", err)
 	}
@@ -1072,6 +1101,54 @@ func planSummary(add, change, destroy *int) *domain.PlanSummary {
 		return nil
 	}
 	return &domain.PlanSummary{Add: *add, Change: *change, Destroy: *destroy}
+}
+
+// GetTemplateRunByNumber reads a run by the number people see, which is
+// unique within its stack template.
+func (store *Store) GetTemplateRunByNumber(ctx context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID, runNumber int) (domain.TemplateRun, error) {
+	run, err := scanTemplateRun(store.pool.QueryRow(ctx, templateRunSelect+`
+		where r.tenant_id = $1 and r.stack_template_id = $2 and r.run_number = $3
+	`, tenantID, stackTemplateID, runNumber))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.TemplateRun{}, app.ErrNotFound
+	}
+	if err != nil {
+		return domain.TemplateRun{}, fmt.Errorf("get template run by number: %w", err)
+	}
+	return run, nil
+}
+
+// ListTemplateRunsPage returns up to limit runs numbered below
+// beforeRunNumber, newest first; 0 starts from the newest. run_number is the
+// key because it is unique per stack template (template_runs_run_number_idx)
+// and assigned in creation order, so it is that order with an index behind it.
+func (store *Store) ListTemplateRunsPage(ctx context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID, beforeRunNumber, limit int) ([]domain.TemplateRun, error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("template run page limit must be positive")
+	}
+	rows, err := store.pool.Query(ctx, templateRunSelect+`
+		where r.tenant_id = $1 and r.stack_template_id = $2
+			and ($3::integer = 0 or r.run_number < $3)
+		order by r.run_number desc
+		limit $4
+	`, tenantID, stackTemplateID, beforeRunNumber, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list template run page: %w", err)
+	}
+	defer rows.Close()
+
+	runs := []domain.TemplateRun{}
+	for rows.Next() {
+		run, err := scanTemplateRun(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan template run: %w", err)
+		}
+		runs = append(runs, run)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list template run page: %w", err)
+	}
+	return runs, nil
 }
 
 func (store *Store) ListTemplateRuns(ctx context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID) ([]domain.TemplateRun, error) {

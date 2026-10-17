@@ -1091,7 +1091,7 @@ func TestListStacksPageReturnsTenantStacksWithStableKeyset(t *testing.T) {
 		}
 	}
 
-	stacks, err := store.ListStacksPage(ctx, domain.TenantID("tenant_123"), nil, 1)
+	stacks, err := store.ListStacksPage(ctx, domain.TenantID("tenant_123"), nil, 1, "")
 	if err != nil {
 		t.Fatalf("ListStacksPage first page returned error: %v", err)
 	}
@@ -1099,7 +1099,7 @@ func TestListStacksPageReturnsTenantStacksWithStableKeyset(t *testing.T) {
 		t.Fatalf("first page = %#v, want newer stack", stacks)
 	}
 	cursor := &app.StackPageCursor{CreatedAt: stacks[0].CreatedAt, ID: stacks[0].ID}
-	stacks, err = store.ListStacksPage(ctx, domain.TenantID("tenant_123"), cursor, 1)
+	stacks, err = store.ListStacksPage(ctx, domain.TenantID("tenant_123"), cursor, 1, "")
 	if err != nil {
 		t.Fatalf("ListStacksPage second page returned error: %v", err)
 	}
@@ -1107,7 +1107,7 @@ func TestListStacksPageReturnsTenantStacksWithStableKeyset(t *testing.T) {
 		t.Fatalf("second page = %#v, want older stack", stacks)
 	}
 	cursor = &app.StackPageCursor{CreatedAt: stacks[0].CreatedAt, ID: stacks[0].ID}
-	stacks, err = store.ListStacksPage(ctx, domain.TenantID("tenant_123"), cursor, 1)
+	stacks, err = store.ListStacksPage(ctx, domain.TenantID("tenant_123"), cursor, 1, "")
 	if err != nil {
 		t.Fatalf("ListStacksPage final page returned error: %v", err)
 	}
@@ -1122,7 +1122,7 @@ func TestListStacksPageRejectsNonPositiveLimit(t *testing.T) {
 	ctx := context.Background()
 	pool := openMigratedTestPool(t, ctx)
 	store := NewStore(pool)
-	if _, err := store.ListStacksPage(ctx, domain.TenantID("tenant_123"), nil, 0); err == nil {
+	if _, err := store.ListStacksPage(ctx, domain.TenantID("tenant_123"), nil, 0, ""); err == nil {
 		t.Fatal("ListStacksPage() error = nil, want invalid limit error")
 	}
 }

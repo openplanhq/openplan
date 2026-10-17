@@ -7,28 +7,27 @@ description: |-
   in will not appear — and cannot be granted a role. That is the same
   limitation `PUT .../grants/{user_sub}` enforces as `not_signed_in`.
 
-  The response echoes the `first` and `max` actually applied, so a client
-  paginates from what the server used rather than from what it sent.
+  Ordered by display name, a page at a time. The cursor is a position in
+  that order, so one kept across a changed `q` resumes after the same
+  name.
 
   Saves the first match who is not you, for the grant requests.
 method: GET
-url: '{{base_url}}/v1/tenants/{{tenant_id}}/users/search?q={{user_search}}&first=0&max=20'
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/users/search?q={{user_search}}&limit=50'
 queryParams:
   - key: q
     value: '{{user_search}}'
     description: The search term.
-  - key: first
-    value: "0"
-    description: Zero-based offset.
-  - key: max
-    value: "20"
-    description: Page size.
+  - key: limit
+    value: "50"
+    description: |-
+      At most how many items the page holds. Out of range is a `422`; not an
+      integer, a `400` (`invalid-query`).
 scripts:
   - type: afterResponse
     code: |-
       pm.test('status is 200', () => pm.response.to.have.status(200));
-      const others = pm.response.json().users.filter((user) => user.sub !== pm.environment.get('my_sub'));
+      const others = pm.response.json().items.filter((user) => user.sub !== pm.environment.get('my_sub'));
       if (others.length) { pm.environment.set('user_sub', others[0].sub); }
     language: text/javascript
-examples: ./.resources/Search people who have signed in.resources/examples
 order: 1000

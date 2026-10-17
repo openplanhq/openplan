@@ -11,6 +11,7 @@ import type { StackTemplate, TemplateRun } from "../../api/types";
 import TemplateRunActions from "./TemplateRunActions";
 import TemplateRunHistory from "./TemplateRunHistory";
 import TemplateRunNotices from "./TemplateRunNotices";
+import { asListBody, pagesOf } from "../../api/listTestSupport";
 
 function stackTemplate(overrides: Partial<StackTemplate> = {}): StackTemplate {
   return {
@@ -89,7 +90,7 @@ function seedCapabilities(queryClient: QueryClient, capabilities: StackCapabilit
 }
 
 function seedRuns(queryClient: QueryClient, runs: TemplateRun[]) {
-  queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "stpl_1"), runs);
+  queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "stpl_1"), pagesOf(runs));
 }
 
 function actionsElement(queryClient: QueryClient, overrides: Partial<StackTemplate> = {}) {
@@ -113,7 +114,7 @@ function renderActions(queryClient: QueryClient, overrides: Partial<StackTemplat
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  return new Response(JSON.stringify(asListBody(body)), { status, headers: { "content-type": "application/json" } });
 }
 
 function isDisabled(element: HTMLElement): boolean {

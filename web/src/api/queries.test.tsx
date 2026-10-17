@@ -27,6 +27,7 @@ import {
   useUpgradeStackTemplateMutation
 } from "./queries";
 import { queryKeys } from "./queryKeys";
+import { asListBody } from "./listTestSupport";
 
 function wrapper(queryClient: QueryClient) {
   return function Wrapper({ children }: { children: ReactNode }) {
@@ -39,7 +40,7 @@ function testQueryClient(): QueryClient {
 }
 
 function jsonResponse(body: unknown): Response {
-  return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+  return new Response(JSON.stringify(asListBody(body)), { status: 200, headers: { "content-type": "application/json" } });
 }
 
 describe("read-only query hooks", () => {
@@ -62,7 +63,7 @@ describe("read-only query hooks", () => {
     // The client fills in tags a server leaves out.
     await waitFor(() => expect(result.current.data).toEqual([{ id: "rev_1", tags: [] }]));
     expect(fetch).toHaveBeenCalledWith(
-      "/v1/tenants/tenant_123/template-revisions",
+      "/v1/tenants/tenant_123/template-revisions?limit=100",
       expect.objectContaining({ method: "GET" })
     );
   });

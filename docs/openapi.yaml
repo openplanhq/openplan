@@ -75,8 +75,9 @@ info:
       or a query `parameter`, a stable `issue` code, and a `detail`.
 
     `400` means the request can't be parsed: malformed JSON, an unknown field
-    or a wrong type (`malformed-body`), or a query parameter that isn't an
-    integer (`invalid-query`). `422 validation-failed` means it parses but its
+    or a wrong type (`malformed-body`), or a query parameter that can't be
+    read, such as a `limit` that isn't an integer or a `cursor` the list
+    never gave out (`invalid-query`). `422 validation-failed` means it parses but its
     content breaks a rule; every problem with the request is in `errors`.
     `409` means the request is valid but the object's current state doesn't
     allow it, and each cause has its own type.
@@ -91,6 +92,23 @@ info:
     reporting one. An id a proxy in front of the API already set is kept when
     it is plain (letters, digits, `.`, `_` and `-`, at most 128 characters),
     so both logs share it; any other is replaced.
+
+    ## Lists
+
+    Every list answers one shape: `{"items": [...], "next_cursor": ...}`.
+
+    The lists that grow (stacks, template revisions, a component's runs, user
+    search and the queue) page by cursor. Ask for up to `limit` items (1 to
+    100, default 50); while `next_cursor` is a string, send it back as
+    `cursor` for the next page, and on the last page it is `null`. A cursor
+    is opaque, belongs to the list that gave it out, and is only a position:
+    a page resumes after the last item of the one before, so an item added
+    meanwhile neither repeats nor shifts what follows. There is no total and
+    no page number.
+
+    The small lists (a run's logs, a stack's grants and credentials, a
+    revision's variables, and attention) are always one page: they take no
+    `limit` or `cursor`, and `next_cursor` is always `null`.
   license:
     name: Apache-2.0
     identifier: Apache-2.0
@@ -371,15 +389,19 @@ paths:
     get:
       tags: [Templates]
       summary: List registered template revisions
+      description: Newest first, a page at a time.
       operationId: listTemplateRevisions
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
       responses:
         "200":
-          description: Every registered revision in the tenant.
+          description: A page of the tenant's registered revisions.
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/TemplateRevision" }
+              schema: { $ref: "#/components/schemas/TemplateRevisionList" }
+        "400": { $ref: "#/components/responses/InvalidQuery" }
+        "422": { $ref: "#/components/responses/InvalidPaging" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -429,9 +451,7 @@ paths:
           description: The revision's variables.
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/TemplateVariable" }
+              schema: { $ref: "#/components/schemas/TemplateVariableList" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -488,18 +508,32 @@ paths:
       tags: [Stacks]
       summary: List stacks
       description: |
-        Only the stacks the caller may view. Each carries its
-        `effective_capabilities`, so a client renders the controls a person
-        actually has rather than probing for them.
+        Only the stacks the caller may view, newest first, a page at a time.
+        Each carries its `effective_capabilities`, so a client renders the
+        controls a person actually has rather than probing for them.
+
+        A page holds `limit` stacks the caller can view, however sparse they
+        are among the tenant's, unless it is the last.
       operationId: listStacks
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: |
+            Only stacks whose name or slug contains this, case-insensitively,
+            as typed: `%` and `_` match themselves. Trimmed; at most 200
+            characters.
+          schema: { type: string, maxLength: 200 }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
       responses:
         "200":
-          description: The caller's visible stacks.
+          description: A page of the caller's visible stacks.
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/StackListItem" }
+              schema: { $ref: "#/components/schemas/StackListItemList" }
+        "400": { $ref: "#/components/responses/InvalidQuery" }
+        "422": { $ref: "#/components/responses/InvalidPaging" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -522,9 +556,7 @@ paths:
           description: The items, possibly none.
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/AttentionItem" }
+              schema: { $ref: "#/components/schemas/AttentionItemList" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -644,9 +676,7 @@ paths:
           description: The stack's credentials.
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/Credential" }
+              schema: { $ref: "#/components/schemas/CredentialList" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -684,13 +714,7 @@ paths:
           description: Who has a role on this stack.
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  grants:
-                    type: array
-                    items: { $ref: "#/components/schemas/Grant" }
-                required: [grants]
+              schema: { $ref: "#/components/schemas/GrantList" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -936,9 +960,7 @@ paths:
           description: The component's credentials.
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/Credential" }
+              schema: { $ref: "#/components/schemas/CredentialList" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -1041,16 +1063,49 @@ paths:
     get:
       tags: [Runs]
       summary: List a component's runs
-      description: Most recent first.
+      description: Most recent first, a page at a time.
       operationId: listTemplateRuns
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
       responses:
         "200":
-          description: The component's run history.
+          description: A page of the component's run history.
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/TemplateRun" }
+              schema: { $ref: "#/components/schemas/TemplateRunList" }
+        "400": { $ref: "#/components/responses/InvalidQuery" }
+        "422": { $ref: "#/components/responses/InvalidPaging" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/runs/{run_number}:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/StackTemplateID"
+      - name: run_number
+        in: path
+        required: true
+        description: The run's `run_number`, its number within the component, from 1.
+        schema: { type: integer, minimum: 1 }
+    get:
+      tags: [Runs]
+      summary: Read a run by its number
+      description: |
+        The same run `GET /v1/tenants/{tenant_id}/template-runs/{run_id}`
+        returns, executions included, found by the number people see and a
+        run's page is addressed by, so a run beyond the first page of the
+        list can be opened directly. A number with no run, or one that isn't
+        a positive integer, returns `404`.
+      operationId: getTemplateRunByNumber
+      responses:
+        "200":
+          description: The run.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TemplateRun" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -1086,17 +1141,15 @@ paths:
       description: |
         Metadata for each Terraform command that has finished, in the order
         they ran: the plan's logs, then the apply's, each by `seq` — not the
-        output itself. Fetch a body from the per-log endpoint by the log's name,
-        its `phase` field.
+        output itself. Fetch a body from the per-log endpoint by the log's
+        `name`.
       operationId: listTemplateRunLogs
       responses:
         "200":
           description: One entry per finished command.
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/TemplateRunLog" }
+              schema: { $ref: "#/components/schemas/TemplateRunLogList" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -1237,8 +1290,9 @@ paths:
         in will not appear — and cannot be granted a role. That is the same
         limitation `PUT .../grants/{user_sub}` enforces as `not_signed_in`.
 
-        The response echoes the `first` and `max` actually applied, so a client
-        paginates from what the server used rather than from what it sent.
+        Ordered by display name, a page at a time. The cursor is a position in
+        that order, so one kept across a changed `q` resumes after the same
+        name.
       operationId: searchUsers
       parameters:
         - name: q
@@ -1249,56 +1303,19 @@ paths:
             type: string
             minLength: 1
             maxLength: 200
-        - name: first
-          in: query
-          required: false
-          description: Zero-based offset.
-          schema:
-            type: integer
-            minimum: 0
-            default: 0
-        - name: max
-          in: query
-          required: false
-          description: Page size.
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 50
-            default: 20
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
       responses:
         "200":
-          description: Matching people, with the paging actually applied.
+          description: A page of matching people.
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  users:
-                    type: array
-                    items: { $ref: "#/components/schemas/UserProfile" }
-                  first: { type: integer }
-                  max: { type: integer }
-                required: [users, first, max]
-        "400":
-          description: |
-            `first` or `max` isn't an integer (`invalid-query`, with an
-            `errors` entry per parameter).
-          content:
-            application/problem+json:
-              schema: { $ref: "#/components/schemas/Problem" }
-              example:
-                type: https://openplan.run/problems/invalid-query
-                title: The query string can't be read
-                status: 400
-                detail: A query parameter isn't an integer.
-                request_id: 3f1c2b9a8d7e6f5a4b3c2d1e0f9a8b7c
-                errors:
-                  - { parameter: max, issue: invalid_format, detail: max must be an integer }
+              schema: { $ref: "#/components/schemas/UserProfileList" }
+        "400": { $ref: "#/components/responses/InvalidQuery" }
         "422":
           description: |
             `q` missing (`required`) or over 200 characters (`too_long`), or
-            `first`/`max` out of range (`out_of_range`). One `errors` entry per
+            `limit` out of range (`out_of_range`). One `errors` entry per
             parameter, with `parameter` set.
           content:
             application/problem+json:
@@ -1317,21 +1334,20 @@ paths:
       description: |
         The asynchronous work the caller queued — template registration,
         template runs. Scoped by actor alone, so no new permission concept is
-        involved: a caller only ever sees their own items. Capped at the 50
-        most recent.
+        involved: a caller only ever sees their own items. Newest first, a
+        page at a time.
       operationId: listQueue
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
       responses:
         "200":
           description: The caller's work items.
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  items:
-                    type: array
-                    items: { $ref: "#/components/schemas/QueueItem" }
-                required: [items]
+              schema: { $ref: "#/components/schemas/QueueItemList" }
+        "400": { $ref: "#/components/responses/InvalidQuery" }
+        "422": { $ref: "#/components/responses/InvalidPaging" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
@@ -1382,6 +1398,23 @@ components:
       name: run_id
       in: path
       required: true
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: |
+        At most how many items the page holds. Out of range is a `422`; not an
+        integer, a `400` (`invalid-query`).
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: |
+        The previous page's `next_cursor`, for the page after it; leave it out
+        for the first page. Opaque. One this list didn't give out is a `400`
+        (`invalid-query`).
       schema: { type: string }
 
   responses:
@@ -1434,6 +1467,38 @@ components:
             status: 400
             detail: "The request body doesn't match the expected schema: a field is unknown or has the wrong type."
             request_id: 8cf6602cb5083bde8ff76e5dffded40d
+    InvalidQuery:
+      description: |
+        A query parameter can't be read (`invalid-query`): a `limit` that
+        isn't an integer, or a `cursor` this list never gave out. One `errors`
+        entry per parameter.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example:
+            type: https://openplan.run/problems/invalid-query
+            title: The query string can't be read
+            status: 400
+            detail: cursor isn't one this list gave out; start again from the first page
+            request_id: 3f1c2b9a8d7e6f5a4b3c2d1e0f9a8b7c
+            errors:
+              - { parameter: cursor, issue: invalid_format, detail: "cursor isn't one this list gave out; start again from the first page" }
+    InvalidPaging:
+      description: |
+        A paging parameter reads but breaks a rule (`validation-failed`): a
+        `limit` outside 1 to 100 (`out_of_range`), or a `q` over 200
+        characters (`too_long`).
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example:
+            type: https://openplan.run/problems/validation-failed
+            title: The request has invalid fields
+            status: 422
+            detail: limit must be between 1 and 100
+            request_id: 3f1c2b9a8d7e6f5a4b3c2d1e0f9a8b7c
+            errors:
+              - { parameter: limit, issue: out_of_range, detail: limit must be between 1 and 100 }
     ValidationFailed:
       description: |
         The body parses, but its content breaks a rule (`validation-failed`).
@@ -1499,6 +1564,101 @@ components:
           schema: { type: string }
 
   schemas:
+    NextCursor:
+      type: [string, "null"]
+      description: |
+        Send it back as `cursor` for the next page. `null` on the last page,
+        and always on a list that is one page.
+    TemplateRevisionList:
+      type: object
+      description: One page of registered template revisions, newest first.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TemplateRevision" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
+    TemplateVariableList:
+      type: object
+      description: One page of a revision's variables; always one page.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TemplateVariable" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
+    StackListItemList:
+      type: object
+      description: One page of stacks the caller can view, newest first.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/StackListItem" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
+    AttentionItemList:
+      type: object
+      description: One page of what needs a person; always one page.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AttentionItem" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
+    CredentialList:
+      type: object
+      description: One page of credentials; always one page.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Credential" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
+    GrantList:
+      type: object
+      description: One page of role grants on a stack; always one page.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Grant" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
+    TemplateRunList:
+      type: object
+      description: One page of a component's runs, newest first.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TemplateRun" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
+    TemplateRunLogList:
+      type: object
+      description: One page of a run's logs, in the order they ran; always one page.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TemplateRunLog" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
+    UserProfileList:
+      type: object
+      description: One page of people matching a search, by display name.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/UserProfile" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
+    QueueItemList:
+      type: object
+      description: One page of the caller's work items, newest first.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/QueueItem" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
     Problem:
       type: object
       description: |

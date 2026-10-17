@@ -1,6 +1,8 @@
 export const queryKeys = {
   me: ["me"] as const,
   stacks: (tenantID: string) => ["stacks", tenantID] as const,
+  // One filter's pages of the stacks list; invalidating stacks() reaches every one.
+  stackList: (tenantID: string, q: string) => ["stacks", tenantID, q] as const,
   attention: (tenantID: string) => ["attention", tenantID] as const,
   templateRevisions: (tenantID: string) => ["templateRevisions", tenantID] as const,
   stack: (tenantID: string, stackID: string) => ["stack", tenantID, stackID] as const,
@@ -12,6 +14,8 @@ export const queryKeys = {
     ["templateRevisionVariables", tenantID, templateRevisionID] as const,
   templateRun: (tenantID: string, runID: string) => ["templateRun", tenantID, runID] as const,
   templateRuns: (tenantID: string, stackTemplateID: string) => ["templateRuns", tenantID, stackTemplateID] as const,
+  templateRunByNumber: (tenantID: string, stackTemplateID: string, runNumber: string) =>
+    ["templateRunByNumber", tenantID, stackTemplateID, runNumber] as const,
   templateRunLogs: (tenantID: string, runID: string, statusTag: string) =>
     ["templateRunLogs", tenantID, runID, statusTag] as const,
   templateRunLog: (tenantID: string, runID: string, name: string, uploadedAt: string) =>

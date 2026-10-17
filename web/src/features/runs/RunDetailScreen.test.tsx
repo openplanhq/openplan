@@ -10,6 +10,7 @@ import type { StackCapabilities } from "../../auth/types";
 import { queryKeys } from "../../api/queryKeys";
 import type { Stack, TemplateRun, TemplateRunLog } from "../../api/types";
 import RunDetailScreen from "./RunDetailScreen";
+import { asListBody, pagesOf } from "../../api/listTestSupport";
 
 function stack(capabilities: StackCapabilities): Stack {
   return {
@@ -93,11 +94,12 @@ function seedCapabilities(queryClient: QueryClient, capabilities: StackCapabilit
 }
 
 // The URL names the run by number; the screen finds its id in the template's
-// runs list. Every test here is about the run itself, so the list is seeded
-// with run #1 unless a test has already put something else there.
+// runs list when the loaded pages hold it, and reads it by number when they
+// don't. Every test here is about the run itself, so the list is seeded with
+// run #1 unless a test has already put something else there.
 function renderScreen(queryClient: QueryClient, auth?: AuthContextValue, runNumber = "1") {
   if (queryClient.getQueryData(queryKeys.templateRuns("tenant_123", "stpl_1")) === undefined) {
-    queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "stpl_1"), [run()]);
+    queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "stpl_1"), pagesOf([run()]));
   }
   return render(
     <QueryClientProvider client={queryClient}>
@@ -113,7 +115,7 @@ function renderScreen(queryClient: QueryClient, auth?: AuthContextValue, runNumb
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  return new Response(JSON.stringify(asListBody(body)), { status, headers: { "content-type": "application/json" } });
 }
 
 function isDisabled(element: HTMLElement): boolean {
@@ -130,10 +132,10 @@ describe("RunDetailScreen", () => {
   it("finds the run by its number within the template", async () => {
     const queryClient = testQueryClient();
     seedCapabilities(queryClient, allAllowed);
-    queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "stpl_1"), [
+    queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "stpl_1"), pagesOf([
       run({ id: "run_newer", run_number: 2 }),
       run({ id: "run_older", run_number: 1 })
-    ]);
+    ]));
     queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_older"), run({ id: "run_older", run_number: 1, status: "failed", error_summary: "the older one" }));
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       if (String(input).includes("/template-runs/run_older/logs")) {
@@ -149,13 +151,39 @@ describe("RunDetailScreen", () => {
     expect(screen.getByText("the older one")).toBeTruthy();
   });
 
-  it("says so when the template has no run with that number", () => {
+  it("says so when the template has no run with that number", async () => {
     const queryClient = testQueryClient();
     seedCapabilities(queryClient, allAllowed);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input).endsWith("/stack-templates/stpl_1/runs/9")) {
+        return jsonResponse({ type: "about:blank", title: "Not Found", status: 404 }, 404);
+      }
+      throw new Error(`unexpected fetch: ${String(input)}`);
+    });
 
     renderScreen(queryClient, undefined, "9");
 
-    expect(screen.getByTestId("run-detail-missing").textContent).toContain("#9");
+    expect((await screen.findByTestId("run-detail-missing")).textContent).toContain("#9");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  // The runs list loads a page at a time, so an old run's link can name one
+  // the loaded pages don't hold. It is read by its number instead.
+  it("opens a run beyond the loaded pages by its number", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    const older = run({ id: "run_old", run_number: 3, status: "completed", error_summary: "" });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/stack-templates/stpl_1/runs/3")) return jsonResponse(older);
+      if (url.endsWith("/template-runs/run_old")) return jsonResponse(older);
+      if (url.includes("/template-runs/run_old/logs")) return jsonResponse([]);
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    renderScreen(queryClient, undefined, "3");
+
+    expect((await screen.findByTestId("run-detail-screen")).textContent).toContain("Run #3");
   });
 
   it("shows a loading state while the run query is pending", () => {

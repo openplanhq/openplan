@@ -212,10 +212,7 @@ func TestAuthenticatedServerAllowsConfiguredTenantToReachService(t *testing.T) {
 	if deps.stacks.gotListTenantID != configuredTenantID {
 		t.Fatalf("tenant list lookup = %q, want %q", deps.stacks.gotListTenantID, configuredTenantID)
 	}
-	var body []stackResponse
-	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
+	body := decodeItems[stackResponse](t, response)
 	if len(body) != 1 || body[0].ID != "stack_123" || body[0].Slug != "acme-prod" {
 		t.Fatalf("stack response = %#v", body)
 	}
@@ -945,10 +942,7 @@ func TestListStacksReturnsTenantStacks(t *testing.T) {
 		t.Fatalf("tenant list lookup = %q, want tenant_123", deps.stacks.gotListTenantID)
 	}
 
-	var body []stackListItemResponse
-	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
+	body := decodeItems[stackListItemResponse](t, response)
 	if len(body) != 1 {
 		t.Fatalf("len(body) = %d, want 1", len(body))
 	}
@@ -994,7 +988,7 @@ func TestListAttentionReturnsWaitingPlans(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
 	}
-	var body []struct {
+	type attentionItem struct {
 		Kind  string `json:"kind"`
 		At    string `json:"at"`
 		Stack struct {
@@ -1013,9 +1007,7 @@ func TestListAttentionReturnsWaitingPlans(t *testing.T) {
 			PlanSummary domain.PlanSummary `json:"plan_summary"`
 		} `json:"run"`
 	}
-	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
+	body := decodeItems[attentionItem](t, response)
 	if len(body) != 1 {
 		t.Fatalf("len(body) = %d, want 1", len(body))
 	}
@@ -1046,8 +1038,8 @@ func TestListAttentionReturnsAnEmptyList(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
 	}
-	if got := strings.TrimSpace(response.Body.String()); got != "[]" {
-		t.Fatalf("body = %s, want []", got)
+	if got := strings.TrimSpace(response.Body.String()); got != `{"items":[],"next_cursor":null}` {
+		t.Fatalf("body = %s, want an empty list", got)
 	}
 }
 
@@ -1465,10 +1457,7 @@ func TestListTemplateRevisionsReturnsTenantTemplateRevisions(t *testing.T) {
 		t.Fatalf("tenant list lookup = %q, want tenant_123", deps.templates.gotListTenantID)
 	}
 
-	var body []templateRevisionResponse
-	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
+	body := decodeItems[templateRevisionResponse](t, response)
 	if len(body) != 1 {
 		t.Fatalf("len(body) = %d, want 1", len(body))
 	}
@@ -1511,10 +1500,7 @@ func TestListTemplateRunsReturnsRunsForStackTemplate(t *testing.T) {
 		t.Fatalf("stack template lookup = %q, want stack_template_123", deps.templateRuns.gotListStackTemplateID)
 	}
 
-	var body []templateRunResponse
-	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
+	body := decodeItems[templateRunResponse](t, response)
 	if len(body) != 1 || body[0].ID != string(domain.TemplateRunID("run_apply_1")) || body[0].Status != string(domain.TemplateRunWaitingApproval) {
 		t.Fatalf("runs = %#v", body)
 	}
@@ -1545,10 +1531,7 @@ func TestGetTemplateRevisionVariablesReturnsVariables(t *testing.T) {
 		t.Fatalf("template revision id = %q, want template_123", deps.templates.gotVariablesTemplateRevisionID)
 	}
 
-	var body []domain.TemplateVariable
-	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
+	body := decodeItems[domain.TemplateVariable](t, response)
 	if len(body) != 1 {
 		t.Fatalf("len(body) = %d, want 1", len(body))
 	}
@@ -1727,10 +1710,7 @@ func TestTemplateRunExecutionsArePresentOnlyOnASingleRead(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("list status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
 	}
-	var listed []map[string]json.RawMessage
-	if err := json.NewDecoder(response.Body).Decode(&listed); err != nil {
-		t.Fatalf("decode runs: %v", err)
-	}
+	listed := decodeItems[map[string]json.RawMessage](t, response)
 	if len(listed) != 1 {
 		t.Fatalf("runs = %d, want 1", len(listed))
 	}
@@ -1809,10 +1789,7 @@ func TestListTemplateRunLogsReturnsMetadata(t *testing.T) {
 	}
 
 	raw := response.Body.String()
-	var body []templateRunLogResponse
-	if err := json.Unmarshal([]byte(raw), &body); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
+	body := decodeItems[templateRunLogResponse](t, response)
 	if len(body) != 1 {
 		t.Fatalf("len(body) = %d, want 1", len(body))
 	}
@@ -1846,8 +1823,8 @@ func TestListTemplateRunLogsReturnsEmptyArray(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
 	}
-	if strings.TrimSpace(response.Body.String()) != "[]" {
-		t.Fatalf("body = %q, want []", response.Body.String())
+	if strings.TrimSpace(response.Body.String()) != `{"items":[],"next_cursor":null}` {
+		t.Fatalf("body = %q, want an empty list", response.Body.String())
 	}
 }
 
@@ -2580,10 +2557,7 @@ func TestStackRoleRoutesDenyInsufficientRoles(t *testing.T) {
 				t.Fatal("denied mutation updated state or signaled a workflow")
 			}
 			if test.name == "unassigned list is empty" {
-				var stacks []stackResponse
-				if err := json.NewDecoder(response.Body).Decode(&stacks); err != nil {
-					t.Fatalf("decode stack list: %v", err)
-				}
+				stacks := decodeItems[stackResponse](t, response)
 				if len(stacks) != 0 {
 					t.Fatalf("stacks = %#v, want empty", stacks)
 				}
@@ -2610,10 +2584,7 @@ func TestStackListFiltersMixedDecisions(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
 	}
-	var stacks []stackResponse
-	if err := json.NewDecoder(response.Body).Decode(&stacks); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
+	stacks := decodeItems[stackResponse](t, response)
 	if len(stacks) != 1 || stacks[0].ID != "stack_allowed" {
 		t.Fatalf("stacks = %#v, want only stack_allowed", stacks)
 	}
@@ -2947,21 +2918,18 @@ func TestSearchUsersPlatformAdminAllowed(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
 	}
-	var body searchUsersResponse
+	var body listResponse[app.UserProfile]
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if len(body.Users) != 2 {
-		t.Fatalf("users = %d, want 2", len(body.Users))
+	if len(body.Items) != 2 {
+		t.Fatalf("users = %d, want 2", len(body.Items))
 	}
-	if body.Users[0].DisplayName != "Alice Smith" {
-		t.Fatalf("first user = %q, want Alice Smith", body.Users[0].DisplayName)
+	if body.Items[0].DisplayName != "Alice Smith" {
+		t.Fatalf("first user = %q, want Alice Smith", body.Items[0].DisplayName)
 	}
-	if body.First != 0 {
-		t.Fatalf("first = %d, want 0", body.First)
-	}
-	if body.Max != 20 {
-		t.Fatalf("max = %d, want 20", body.Max)
+	if body.NextCursor != nil {
+		t.Fatalf("next_cursor = %q, want null on the only page", *body.NextCursor)
 	}
 }
 
@@ -3008,12 +2976,13 @@ func TestSearchUsersMissingQuery(t *testing.T) {
 	}
 }
 
-// A parameter that isn't an integer can't be parsed (400 invalid-query); one
-// that parses but is out of range breaks a rule (422). Either way, every bad
-// parameter is named.
-func TestSearchUsersInvalidPagination(t *testing.T) {
+// A parameter that can't be read is a 400 invalid-query: a limit that isn't an
+// integer, or a cursor this API never gave out. One that reads but is out of
+// range breaks a rule, a 422. Either way, every bad parameter is named.
+func TestSearchUsersInvalidPaging(t *testing.T) {
 	t.Parallel()
 
+	runsCursor := app.EncodeCursor("template-runs", app.StackPageCursor{CreatedAt: time.Now(), ID: "s"})
 	tests := []struct {
 		name       string
 		url        string
@@ -3021,13 +2990,12 @@ func TestSearchUsersInvalidPagination(t *testing.T) {
 		problem    string
 		parameters string
 	}{
-		{name: "negative first", url: "/v1/tenants/tenant_123/users/search?q=test&first=-1", status: 422, problem: "validation-failed", parameters: "first out_of_range"},
-		{name: "max=0", url: "/v1/tenants/tenant_123/users/search?q=test&max=0", status: 422, problem: "validation-failed", parameters: "max out_of_range"},
-		{name: "max=51", url: "/v1/tenants/tenant_123/users/search?q=test&max=51", status: 422, problem: "validation-failed", parameters: "max out_of_range"},
-		{name: "both out of range", url: "/v1/tenants/tenant_123/users/search?q=&first=-1&max=99", status: 422, problem: "validation-failed", parameters: "q required, first out_of_range, max out_of_range"},
-		{name: "non-numeric first", url: "/v1/tenants/tenant_123/users/search?q=test&first=abc", status: 400, problem: "invalid-query", parameters: "first invalid_format"},
-		{name: "non-numeric max", url: "/v1/tenants/tenant_123/users/search?q=test&max=abc", status: 400, problem: "invalid-query", parameters: "max invalid_format"},
-		{name: "both non-numeric", url: "/v1/tenants/tenant_123/users/search?q=test&first=x&max=y", status: 400, problem: "invalid-query", parameters: "first invalid_format, max invalid_format"},
+		{name: "limit=0", url: "/v1/tenants/tenant_123/users/search?q=test&limit=0", status: 422, problem: "validation-failed", parameters: "limit out_of_range"},
+		{name: "limit=101", url: "/v1/tenants/tenant_123/users/search?q=test&limit=101", status: 422, problem: "validation-failed", parameters: "limit out_of_range"},
+		{name: "both out of range", url: "/v1/tenants/tenant_123/users/search?q=&limit=999", status: 422, problem: "validation-failed", parameters: "q required, limit out_of_range"},
+		{name: "non-numeric limit", url: "/v1/tenants/tenant_123/users/search?q=test&limit=abc", status: 400, problem: "invalid-query", parameters: "limit invalid_format"},
+		{name: "garbage cursor", url: "/v1/tenants/tenant_123/users/search?q=test&cursor=%25%25", status: 400, problem: "invalid-query", parameters: "cursor invalid_format"},
+		{name: "another list's cursor", url: "/v1/tenants/tenant_123/users/search?q=test&cursor=" + runsCursor, status: 400, problem: "invalid-query", parameters: "cursor invalid_format"},
 	}
 
 	for _, test := range tests {
@@ -3384,6 +3352,7 @@ func (unit *apiUnitOfWork) Enqueue(_ context.Context, requests ...queue.Request)
 
 type recordingStackRepository struct {
 	created         domain.Stack
+	gotQuery        string
 	stack           domain.Stack
 	list            []domain.Stack
 	view            app.StackView
@@ -3430,22 +3399,29 @@ func (repository *recordingStackRepository) ListStacks(_ context.Context, tenant
 	return repository.list, nil
 }
 
-func (repository *recordingStackRepository) ListStacksPage(_ context.Context, tenantID domain.TenantID, after *app.StackPageCursor, limit int) ([]domain.Stack, error) {
+func (repository *recordingStackRepository) ListStacksPage(_ context.Context, tenantID domain.TenantID, after *app.StackPageCursor, limit int, query string) ([]domain.Stack, error) {
 	repository.gotListTenantID = tenantID
+	repository.gotQuery = query
 	if repository.listErr != nil {
 		return nil, repository.listErr
 	}
+	var stacks []domain.Stack
+	for _, stack := range repository.list {
+		if query == "" || strings.Contains(strings.ToLower(stack.Name+" "+stack.Slug), strings.ToLower(query)) {
+			stacks = append(stacks, stack)
+		}
+	}
 	start := 0
 	if after != nil {
-		for i, stack := range repository.list {
+		for i, stack := range stacks {
 			if stack.ID == after.ID && stack.CreatedAt.Equal(after.CreatedAt) {
 				start = i + 1
 				break
 			}
 		}
 	}
-	end := min(start+limit, len(repository.list))
-	return append([]domain.Stack(nil), repository.list[start:end]...), nil
+	end := min(start+limit, len(stacks))
+	return append([]domain.Stack(nil), stacks[start:end]...), nil
 }
 
 type recordingStackTemplateRepository struct {
@@ -3537,6 +3513,30 @@ func (repository *recordingTemplateRunRepository) ListTemplateRuns(_ context.Con
 	repository.gotListTenantID = tenantID
 	repository.gotListStackTemplateID = stackTemplateID
 	return repository.list, nil
+}
+
+// ListTemplateRunsPage pages list, which tests give newest first.
+func (repository *recordingTemplateRunRepository) ListTemplateRunsPage(_ context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID, beforeRunNumber, limit int) ([]domain.TemplateRun, error) {
+	repository.gotListTenantID = tenantID
+	repository.gotListStackTemplateID = stackTemplateID
+	runs := []domain.TemplateRun{}
+	for _, run := range repository.list {
+		if (beforeRunNumber == 0 || run.RunNumber < beforeRunNumber) && len(runs) < limit {
+			runs = append(runs, run)
+		}
+	}
+	return runs, nil
+}
+
+func (repository *recordingTemplateRunRepository) GetTemplateRunByNumber(_ context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID, runNumber int) (domain.TemplateRun, error) {
+	repository.gotListTenantID = tenantID
+	repository.gotListStackTemplateID = stackTemplateID
+	for _, run := range repository.list {
+		if run.RunNumber == runNumber {
+			return run, nil
+		}
+	}
+	return domain.TemplateRun{}, app.ErrNotFound
 }
 
 func (repository *recordingTemplateRunRepository) GetTemplateRun(_ context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) (domain.TemplateRun, error) {
@@ -3695,6 +3695,24 @@ func (repository *recordingTemplateRepository) ListTemplateRevisions(_ context.C
 	return repository.templates, nil
 }
 
+func (repository *recordingTemplateRepository) ListTemplateRevisionsPage(_ context.Context, tenantID domain.TenantID, after *app.TemplateRevisionCursor, limit int) ([]domain.TemplateRevision, error) {
+	repository.gotListTenantID = tenantID
+	if repository.listErr != nil {
+		return nil, repository.listErr
+	}
+	start := 0
+	if after != nil {
+		for i, revision := range repository.templates {
+			if revision.ID == after.ID {
+				start = i + 1
+				break
+			}
+		}
+	}
+	end := min(start+limit, len(repository.templates))
+	return append([]domain.TemplateRevision{}, repository.templates[start:end]...), nil
+}
+
 func (repository *recordingTemplateRepository) GetTemplateRevisionVariables(_ context.Context, tenantID domain.TenantID, templateID domain.TemplateRevisionID) ([]domain.TemplateVariable, error) {
 	repository.gotVariablesTenantID = tenantID
 	repository.gotVariablesTemplateRevisionID = templateID
@@ -3780,8 +3798,17 @@ func (f *apiFakeUserRepository) UpsertUser(_ context.Context, profile app.UserPr
 	return nil
 }
 
-func (f *apiFakeUserRepository) SearchUsers(_ context.Context, _ string, _, _ int) ([]app.UserProfile, error) {
-	return f.users, f.searchErr
+func (f *apiFakeUserRepository) SearchUsers(_ context.Context, _ string, after *app.UserCursor, limit int) ([]app.UserProfile, error) {
+	start := 0
+	if after != nil {
+		for i, user := range f.users {
+			if user.Sub == after.Sub {
+				start = i + 1
+				break
+			}
+		}
+	}
+	return f.users[start:min(start+limit, len(f.users))], f.searchErr
 }
 
 func (f *apiFakeUserRepository) UsersBySubs(_ context.Context, subs []string) (map[string]app.UserProfile, error) {
@@ -3932,18 +3959,18 @@ func TestListStackGrantsListsGrants(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
 	}
-	var body listStackGrantsResponse
+	var body listResponse[app.GrantView]
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if len(body.Grants) != 1 {
-		t.Fatalf("len(grants) = %d, want 1", len(body.Grants))
+	if len(body.Items) != 1 {
+		t.Fatalf("len(grants) = %d, want 1", len(body.Items))
 	}
-	if body.Grants[0].UserSub != "user-1" || body.Grants[0].Role != "owner" {
-		t.Fatalf("grant = %#v", body.Grants[0])
+	if body.Items[0].UserSub != "user-1" || body.Items[0].Role != "owner" {
+		t.Fatalf("grant = %#v", body.Items[0])
 	}
-	if body.Grants[0].DisplayName != "Alice" {
-		t.Fatalf("display name = %q, want Alice", body.Grants[0].DisplayName)
+	if body.Items[0].DisplayName != "Alice" {
+		t.Fatalf("display name = %q, want Alice", body.Items[0].DisplayName)
 	}
 }
 
@@ -3960,12 +3987,12 @@ func TestListStackGrantsReturnsEmptyOnNoGrants(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
 	}
-	var body listStackGrantsResponse
+	var body listResponse[app.GrantView]
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if len(body.Grants) != 0 {
-		t.Fatalf("len(grants) = %d, want 0", len(body.Grants))
+	if len(body.Items) != 0 {
+		t.Fatalf("len(grants) = %d, want 0", len(body.Items))
 	}
 }
 
@@ -4191,12 +4218,24 @@ type stubQueueReader struct {
 	tenantID     string
 	actorSubject string
 	err          error
+	gotAfter     *queue.Cursor
+	gotLimit     int
 }
 
-func (reader *stubQueueReader) ListByActor(_ context.Context, tenantID, actorSubject string, _ int) ([]queue.Status, error) {
+func (reader *stubQueueReader) ListByActor(_ context.Context, tenantID, actorSubject string, after *queue.Cursor, limit int) ([]queue.Status, error) {
 	reader.tenantID = tenantID
 	reader.actorSubject = actorSubject
-	return reader.statuses, reader.err
+	reader.gotAfter, reader.gotLimit = after, limit
+	start := 0
+	if after != nil {
+		for i, status := range reader.statuses {
+			if status.ID == after.ID {
+				start = i + 1
+				break
+			}
+		}
+	}
+	return reader.statuses[start:min(start+limit, len(reader.statuses))], reader.err
 }
 
 func TestListQueueReturnsOnlyCallerItems(t *testing.T) {
@@ -4516,4 +4555,26 @@ func TestNonCanonicalPathStillRedirects(t *testing.T) {
 	if location := response.Header().Get("Location"); location != "/v1/me" {
 		t.Fatalf("Location = %q, want /v1/me", location)
 	}
+}
+
+// decodeItems reads a list response: an object holding items and a
+// next_cursor, which is how every list answers. It fails the test on a bare
+// array or a missing field, so each list's test also pins the envelope.
+func decodeItems[T any](t *testing.T, response *httptest.ResponseRecorder) []T {
+	t.Helper()
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(response.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode list: %v; body = %s", err, response.Body.String())
+	}
+	if _, ok := envelope["next_cursor"]; !ok || len(envelope) != 2 {
+		t.Fatalf("list = %s, want exactly items and next_cursor", response.Body.String())
+	}
+	var items []T
+	if err := json.Unmarshal(envelope["items"], &items); err != nil {
+		t.Fatalf("decode items: %v", err)
+	}
+	if items == nil {
+		t.Fatalf("items = null, want a list")
+	}
+	return items
 }

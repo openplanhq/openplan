@@ -8,7 +8,9 @@ import {
   discardRun,
   createStack,
   getTemplateRevisionVariables,
+  getTemplateRunByNumber,
   getTemplateRunLog,
+  listAll,
   listStacks,
   listTemplateRevisions,
   listTemplateRuns,
@@ -75,38 +77,62 @@ describe("api client", () => {
     );
   });
 
-  it("lists tenant stacks and template revisions", async () => {
+  it("lists a page of stacks, asking for the next with the cursor and filter", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(jsonResponse([{ id: "stack_123" }]))
-      .mockResolvedValueOnce(jsonResponse([{ id: "template_123" }]));
+      .mockResolvedValueOnce(jsonResponse({ items: [{ id: "stack_1" }], next_cursor: "c2" }))
+      .mockResolvedValueOnce(jsonResponse({ items: [{ id: "stack_2" }], next_cursor: null }));
 
-    const stacks = await listStacks("tenant_123");
-    const templateRevisions = await listTemplateRevisions("tenant_123");
+    const first = await listStacks("tenant_123");
+    const next = await listStacks("tenant_123", { cursor: "c2", q: "pay ments", limit: 20 });
 
-    expect(stacks).toEqual([{ id: "stack_123" }]);
-    expect(templateRevisions).toEqual([{ id: "template_123", tags: [] }]);
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      1,
-      "/v1/tenants/tenant_123/stacks",
-      expect.objectContaining({ method: "GET" })
-    );
+    expect(first).toEqual({ items: [{ id: "stack_1" }], next_cursor: "c2" });
+    expect(next.next_cursor).toBeNull();
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/v1/tenants/tenant_123/stacks", expect.objectContaining({ method: "GET" }));
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      "/v1/tenants/tenant_123/template-revisions",
+      "/v1/tenants/tenant_123/stacks?q=pay+ments&limit=20&cursor=c2",
       expect.objectContaining({ method: "GET" })
     );
+  });
+
+  // Screens group revisions and look them up by id, so the client reads every
+  // page, at the largest size the API serves.
+  it("reads every page of template revisions", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ items: [{ id: "rev_1", tags: [] }], next_cursor: "c2" }))
+      .mockResolvedValueOnce(jsonResponse({ items: [{ id: "rev_2", tags: [] }], next_cursor: null }));
+
+    const templateRevisions = await listTemplateRevisions("tenant_123");
+
+    expect(templateRevisions.map((revision) => revision.id)).toEqual(["rev_1", "rev_2"]);
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/v1/tenants/tenant_123/template-revisions?limit=100", expect.anything());
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/v1/tenants/tenant_123/template-revisions?limit=100&cursor=c2", expect.anything());
+  });
+
+  it("follows next_cursor to the last page", async () => {
+    const pages: Record<string, { items: number[]; next_cursor: string | null }> = {
+      start: { items: [1, 2], next_cursor: "b" },
+      b: { items: [3], next_cursor: "c" },
+      c: { items: [], next_cursor: null }
+    };
+    const asked: (string | undefined)[] = [];
+
+    const items = await listAll(async (cursor) => {
+      asked.push(cursor);
+      return pages[cursor ?? "start"];
+    });
+
+    expect(items).toEqual([1, 2, 3]);
+    expect(asked).toEqual([undefined, "b", "c"]);
   });
 
   // A template registered without tags has been stored, and served, with
   // "tags": null; every screen reads tags as a list.
   it("reads a template revision's null or missing tags as no tags", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse([
-        { id: "rev_1", tags: null },
-        { id: "rev_2" },
-        { id: "rev_3", tags: ["aws"] }
-      ])
+      jsonResponse({ items: [{ id: "rev_1", tags: null }, { id: "rev_2" }, { id: "rev_3", tags: ["aws"] }], next_cursor: null })
     );
 
     const templateRevisions = await listTemplateRevisions("tenant_123");
@@ -114,29 +140,35 @@ describe("api client", () => {
     expect(templateRevisions.map((templateRevision) => templateRevision.tags)).toEqual([[], [], ["aws"]]);
   });
 
-  it("reads a null template revision list as no revisions", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(null));
+  // The small lists are one page; the client hands screens their items.
+  it("reads a one-page list's items", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ items: [{ name: "region" }], next_cursor: null }));
 
-    expect(await listTemplateRevisions("tenant_123")).toEqual([]);
-  });
-
-  it("reads a null variables body as no variables", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(null));
-
-    expect(await getTemplateRevisionVariables("tenant_123", "rev_1")).toEqual([]);
+    expect(await getTemplateRevisionVariables("tenant_123", "rev_1")).toEqual([{ name: "region" }]);
     expect(fetchMock).toHaveBeenCalledWith("/v1/tenants/tenant_123/template-revisions/rev_1/variables", expect.objectContaining({ method: "GET" }));
   });
 
-  it("lists runs for a stack template", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([{ id: "run_1", status: "waiting_approval" }]));
+  it("lists runs for a stack template a page at a time", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(jsonResponse({ items: [{ id: "run_1", status: "waiting_approval" }], next_cursor: null }));
 
-    const runs = await listTemplateRuns("tenant_123", "stpl_1");
+    const runs = await listTemplateRuns("tenant_123", "stpl_1", { cursor: "c2" });
 
-    expect(runs).toEqual([{ id: "run_1", status: "waiting_approval" }]);
+    expect(runs.items).toEqual([{ id: "run_1", status: "waiting_approval" }]);
     expect(fetchMock).toHaveBeenCalledWith(
-      "/v1/tenants/tenant_123/stack-templates/stpl_1/runs",
+      "/v1/tenants/tenant_123/stack-templates/stpl_1/runs?cursor=c2",
       expect.objectContaining({ method: "GET" })
     );
+  });
+
+  it("reads a run by its number within the template", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: "run_7", run_number: 7 }));
+
+    const run = await getTemplateRunByNumber("tenant_123", "stpl_1", "7");
+
+    expect(run.id).toBe("run_7");
+    expect(fetchMock).toHaveBeenCalledWith("/v1/tenants/tenant_123/stack-templates/stpl_1/runs/7", expect.objectContaining({ method: "GET" }));
   });
 
   it("posts template install config", async () => {

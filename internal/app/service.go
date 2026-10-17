@@ -54,10 +54,24 @@ func authenticatedActor(ctx context.Context) (domain.UserID, error) {
 // ErrForbidden indicates an authenticated actor lacks permission for an operation.
 var ErrForbidden = errors.New("forbidden")
 
-// StackRepository persists and reads tenant-owned stacks.
+// StackPageCursor is a position in the stacks list, newest first: the
+// created_at and id of the last stack a page held.
 type StackPageCursor struct {
-	CreatedAt time.Time
-	ID        domain.StackID
+	CreatedAt time.Time      `json:"created_at"`
+	ID        domain.StackID `json:"id"`
+}
+
+func (cursor StackPageCursor) Valid() bool { return !cursor.CreatedAt.IsZero() && cursor.ID != "" }
+
+// TemplateRevisionCursor is a position in the template revisions list,
+// newest first.
+type TemplateRevisionCursor struct {
+	CreatedAt time.Time                 `json:"created_at"`
+	ID        domain.TemplateRevisionID `json:"id"`
+}
+
+func (cursor TemplateRevisionCursor) Valid() bool {
+	return !cursor.CreatedAt.IsZero() && cursor.ID != ""
 }
 
 // TxRepo is the transaction-scoped repository surface handed to a unit of
@@ -80,12 +94,16 @@ type UnitOfWork interface {
 	InTx(ctx context.Context, fn func(context.Context, TxRepo, queue.Enqueuer) error) error
 }
 
+// StackRepository persists and reads tenant-owned stacks.
 type StackRepository interface {
 	CreateStack(ctx context.Context, stack domain.Stack) error
 	GetStack(ctx context.Context, tenantID domain.TenantID, stackID domain.StackID) (domain.Stack, error)
 	GetStackWithTemplates(ctx context.Context, tenantID domain.TenantID, stackID domain.StackID) (StackView, error)
 	ListStacks(ctx context.Context, tenantID domain.TenantID) ([]domain.Stack, error)
-	ListStacksPage(ctx context.Context, tenantID domain.TenantID, after *StackPageCursor, limit int) ([]domain.Stack, error)
+	// ListStacksPage returns up to limit stacks after the cursor, newest
+	// first. A non-empty query keeps only stacks whose name or slug contains
+	// it, case-insensitively.
+	ListStacksPage(ctx context.Context, tenantID domain.TenantID, after *StackPageCursor, limit int, query string) ([]domain.Stack, error)
 }
 
 // StackTemplateRepository reads installed template state for use cases.
@@ -114,6 +132,11 @@ type TemplateRunRepository interface {
 	GetTemplateRun(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) (domain.TemplateRun, error)
 	// ListTemplateRuns returns tenant-owned runs for one stack template, most recent first.
 	ListTemplateRuns(ctx context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID) ([]domain.TemplateRun, error)
+	// ListTemplateRunsPage returns up to limit runs numbered below
+	// beforeRunNumber, newest first; 0 starts from the newest.
+	ListTemplateRunsPage(ctx context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID, beforeRunNumber, limit int) ([]domain.TemplateRun, error)
+	// GetTemplateRunByNumber reads a run by its number within its stack template.
+	GetTemplateRunByNumber(ctx context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID, runNumber int) (domain.TemplateRun, error)
 	// ApproveTemplateRun records approval only when the tenant-owned run is waiting for approval.
 	ApproveTemplateRun(ctx context.Context, approval domain.TemplateRunApproval) error
 	// ListTemplateRunExecutions returns the workflow executions that carried a
@@ -132,6 +155,9 @@ type TemplateRegistrationRepository interface {
 type TemplateRevisionRepository interface {
 	UpsertTemplateRevisionWithVariables(ctx context.Context, templateRevision domain.TemplateRevision, variables []domain.TemplateVariable) (domain.TemplateRevision, error)
 	ListTemplateRevisions(ctx context.Context, tenantID domain.TenantID) ([]domain.TemplateRevision, error)
+	// ListTemplateRevisionsPage returns up to limit revisions after the
+	// cursor, newest first.
+	ListTemplateRevisionsPage(ctx context.Context, tenantID domain.TenantID, after *TemplateRevisionCursor, limit int) ([]domain.TemplateRevision, error)
 	GetTemplateRevisionVariables(ctx context.Context, tenantID domain.TenantID, templateRevisionID domain.TemplateRevisionID) ([]domain.TemplateVariable, error)
 }
 
@@ -454,18 +480,21 @@ type GetStackCommand struct {
 type SearchUsersCommand struct {
 	TenantID domain.TenantID
 	Query    string
-	First    int
-	Max      int
+	Page     PageRequest
 }
 
 // ListStacksCommand asks the app to list tenant-owned stacks.
 type ListStacksCommand struct {
 	TenantID domain.TenantID
+	Page     PageRequest
+	// Query narrows the list to stacks whose name or slug contains it.
+	Query string
 }
 
 // ListTemplateRevisionsCommand asks the app to list tenant-owned registered template revisions.
 type ListTemplateRevisionsCommand struct {
 	TenantID domain.TenantID
+	Page     PageRequest
 }
 
 // GetTemplateRunCommand asks the app to read one tenant-owned run.
@@ -478,7 +507,26 @@ type GetTemplateRunCommand struct {
 type ListTemplateRunsCommand struct {
 	TenantID        domain.TenantID
 	StackTemplateID domain.StackTemplateID
+	Page            PageRequest
 }
+
+// GetTemplateRunByNumberCommand asks for one run by the number people see,
+// which is how a run's page is addressed.
+type GetTemplateRunByNumberCommand struct {
+	TenantID        domain.TenantID
+	StackTemplateID domain.StackTemplateID
+	RunNumber       int
+}
+
+// templateRunCursor is a position in a stack template's runs, newest first.
+type templateRunCursor struct {
+	RunNumber int `json:"run_number"`
+}
+
+func (cursor templateRunCursor) Valid() bool { return cursor.RunNumber > 0 }
+
+// templateRunsList names the runs list's cursors.
+const templateRunsList = "template-runs"
 
 // GetTemplateRunLogCommand asks the app to read one tenant-owned run log.
 type GetTemplateRunLogCommand struct {
@@ -1169,39 +1217,44 @@ func stackTemplateView(stackTemplate domain.StackTemplate, revision domain.Templ
 	}
 }
 
-// ListStacks returns tenant-owned stacks ordered for UI selection.
-func (service *Service) ListStacks(ctx context.Context, command ListStacksCommand) ([]domain.Stack, error) {
+// ListStacks returns one page of the stacks the caller can view, newest first.
+func (service *Service) ListStacks(ctx context.Context, command ListStacksCommand) (Page[domain.Stack], error) {
+	command.Query = strings.TrimSpace(command.Query)
 	if err := validateListStacksCommand(command); err != nil {
-		return nil, err
+		return Page[domain.Stack]{}, err
 	}
 
-	stacks, err := listAccessibleStacks(ctx, service.Authorization, service.Stacks, command.TenantID)
+	page, err := listAccessibleStacksPage(ctx, service.Authorization, service.Stacks, command.TenantID, command.Page, command.Query)
 	if err != nil {
-		return nil, fmt.Errorf("list stacks: %w", err)
+		return Page[domain.Stack]{}, fmt.Errorf("list stacks: %w", err)
 	}
-	if stacks == nil {
-		return []domain.Stack{}, nil
-	}
-	return stacks, nil
+	return page, nil
 }
 
-// ListTemplateRevisions returns tenant-owned registered template revisions ordered for UI selection.
-func (service *Service) ListTemplateRevisions(ctx context.Context, command ListTemplateRevisionsCommand) ([]domain.TemplateRevision, error) {
+// templateRevisionsList names the template revisions list's cursors.
+const templateRevisionsList = "template-revisions"
+
+// ListTemplateRevisions returns one page of the tenant's registered template
+// revisions, newest first.
+func (service *Service) ListTemplateRevisions(ctx context.Context, command ListTemplateRevisionsCommand) (Page[domain.TemplateRevision], error) {
 	if err := validateListTemplateRevisionsCommand(command); err != nil {
-		return nil, err
+		return Page[domain.TemplateRevision]{}, err
+	}
+	after, err := DecodeCursor[TemplateRevisionCursor](templateRevisionsList, command.Page.Cursor)
+	if err != nil {
+		return Page[domain.TemplateRevision]{}, err
 	}
 	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanReadTemplate); err != nil {
-		return nil, err
+		return Page[domain.TemplateRevision]{}, err
 	}
 
-	templateRevisions, err := service.TemplateRevisions.ListTemplateRevisions(ctx, command.TenantID)
+	templateRevisions, err := service.TemplateRevisions.ListTemplateRevisionsPage(ctx, command.TenantID, after, command.Page.Limit+1)
 	if err != nil {
-		return nil, fmt.Errorf("list template revisions: %w", err)
+		return Page[domain.TemplateRevision]{}, fmt.Errorf("list template revisions: %w", err)
 	}
-	if templateRevisions == nil {
-		return []domain.TemplateRevision{}, nil
-	}
-	return templateRevisions, nil
+	return pageFrom(templateRevisions, command.Page.Limit, templateRevisionsList, func(revision domain.TemplateRevision) cursorKey {
+		return TemplateRevisionCursor{CreatedAt: revision.CreatedAt, ID: revision.ID}
+	}), nil
 }
 
 // GetTemplateRegistration returns one tenant-owned registration attempt.
@@ -1244,31 +1297,36 @@ func (service *Service) RecordSignIn(ctx context.Context, profile UserProfile) e
 }
 
 // SearchUsers matches projected users against the given criteria.
-func (service *Service) SearchUsers(ctx context.Context, command SearchUsersCommand) ([]UserProfile, error) {
+func (service *Service) SearchUsers(ctx context.Context, command SearchUsersCommand) (Page[UserProfile], error) {
 	principal, ok := authentication.PrincipalFromContext(ctx)
 	if !ok || principal.Subject == "" {
-		return nil, ErrUnauthenticated
+		return Page[UserProfile]{}, ErrUnauthenticated
 	}
 	command.Query = strings.TrimSpace(command.Query)
 	// Checked before authorization, as the other commands are: the query
 	// says nothing about anyone, and a bad one is the caller's to fix.
 	if err := validateSearchUsersCommand(command); err != nil {
-		return nil, err
+		return Page[UserProfile]{}, err
+	}
+	// The cursor is only a position in the order, so one kept across a
+	// changed q still reads: it resumes after that name in the new matches.
+	after, err := DecodeCursor[UserCursor](usersList, command.Page.Cursor)
+	if err != nil {
+		return Page[UserProfile]{}, err
 	}
 	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanAdminister); err != nil {
-		return nil, err
+		return Page[UserProfile]{}, err
 	}
 	if err := service.requireUserRepository(); err != nil {
-		return nil, err
+		return Page[UserProfile]{}, err
 	}
-	users, err := service.Users.SearchUsers(ctx, command.Query, command.First, command.Max)
+	users, err := service.Users.SearchUsers(ctx, command.Query, after, command.Page.Limit+1)
 	if err != nil {
-		return nil, err
+		return Page[UserProfile]{}, err
 	}
-	if users == nil {
-		return []UserProfile{}, nil
-	}
-	return users, nil
+	return pageFrom(users, command.Page.Limit, usersList, func(user UserProfile) cursorKey {
+		return UserCursor{DisplayName: user.DisplayName, Sub: user.Sub}
+	}), nil
 }
 
 // maxSearchQueryLength bounds q, which goes into a LIKE pattern.
@@ -1288,11 +1346,8 @@ func validateSearchUsersCommand(command SearchUsersCommand) error {
 		problems = append(problems, parameterError(ErrInvalidCommand, IssueTooLong,
 			fmt.Sprintf("q must be at most %d characters", maxSearchQueryLength), "q"))
 	}
-	if command.First < 0 {
-		problems = append(problems, parameterError(ErrInvalidCommand, IssueOutOfRange, "first must not be negative", "first"))
-	}
-	if command.Max < 1 || command.Max > 50 {
-		problems = append(problems, parameterError(ErrInvalidCommand, IssueOutOfRange, "max must be between 1 and 50", "max"))
+	if err := validatePageRequest(command.Page); err != nil {
+		problems = append(problems, err)
 	}
 	return errors.Join(problems...)
 }
@@ -1794,31 +1849,68 @@ func (service *Service) describeTemplateRun(ctx context.Context, run *domain.Tem
 
 // ListTemplateRuns returns tenant-owned runs for one stack template, most recent first,
 // visible to anyone who can view the owning stack.
-func (service *Service) ListTemplateRuns(ctx context.Context, command ListTemplateRunsCommand) ([]domain.TemplateRun, error) {
+func (service *Service) ListTemplateRuns(ctx context.Context, command ListTemplateRunsCommand) (Page[domain.TemplateRun], error) {
 	if err := validateListTemplateRunsCommand(command); err != nil {
-		return nil, err
+		return Page[domain.TemplateRun]{}, err
+	}
+	before, err := DecodeCursor[templateRunCursor](templateRunsList, command.Page.Cursor)
+	if err != nil {
+		return Page[domain.TemplateRun]{}, err
 	}
 
 	if _, err := service.authorizedStackTemplate(ctx, command.TenantID, command.StackTemplateID, authorization.RelationCanView); err != nil {
-		return nil, fmt.Errorf("list template runs: %w", err)
+		return Page[domain.TemplateRun]{}, fmt.Errorf("list template runs: %w", err)
 	}
 
-	runs, err := service.TemplateRuns.ListTemplateRuns(ctx, command.TenantID, command.StackTemplateID)
+	beforeRunNumber := 0
+	if before != nil {
+		beforeRunNumber = before.RunNumber
+	}
+	runs, err := service.TemplateRuns.ListTemplateRunsPage(ctx, command.TenantID, command.StackTemplateID, beforeRunNumber, command.Page.Limit+1)
 	if err != nil {
-		return nil, fmt.Errorf("list template runs: %w", err)
+		return Page[domain.TemplateRun]{}, fmt.Errorf("list template runs: %w", err)
 	}
-	if runs == nil {
-		return []domain.TemplateRun{}, nil
+	page := pageFrom(runs, command.Page.Limit, templateRunsList, func(run domain.TemplateRun) cursorKey {
+		return templateRunCursor{RunNumber: run.RunNumber}
+	})
+	if len(page.Items) == 0 {
+		return page, nil
 	}
-	labelled := make([]*domain.TemplateRun, len(runs))
-	for i := range runs {
-		labelled[i] = &runs[i]
+	labelled := make([]*domain.TemplateRun, len(page.Items))
+	for i := range page.Items {
+		labelled[i] = &page.Items[i]
 	}
 	if err := service.labelTriggerActors(ctx, labelled...); err != nil {
-		return nil, fmt.Errorf("list template runs: %w", err)
+		return Page[domain.TemplateRun]{}, fmt.Errorf("list template runs: %w", err)
 	}
 
-	return runs, nil
+	return page, nil
+}
+
+// GetTemplateRunByNumber returns one run of a stack template by its number,
+// with its workflow executions, as GetTemplateRun does by ID. Anyone who can
+// view the owning stack can read it; a number with no run is not found.
+func (service *Service) GetTemplateRunByNumber(ctx context.Context, command GetTemplateRunByNumberCommand) (domain.TemplateRun, error) {
+	switch {
+	case command.TenantID == "":
+		return domain.TemplateRun{}, fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
+	case command.StackTemplateID == "":
+		return domain.TemplateRun{}, fmt.Errorf("%w: stack template id is required", ErrInvalidCommand)
+	case command.RunNumber < 1:
+		// Run numbers start at 1, so this one names no run.
+		return domain.TemplateRun{}, ErrNotFound
+	}
+	if _, err := service.authorizedStackTemplate(ctx, command.TenantID, command.StackTemplateID, authorization.RelationCanView); err != nil {
+		return domain.TemplateRun{}, fmt.Errorf("get template run by number: %w", err)
+	}
+	run, err := service.TemplateRuns.GetTemplateRunByNumber(ctx, command.TenantID, command.StackTemplateID, command.RunNumber)
+	if err != nil {
+		return domain.TemplateRun{}, fmt.Errorf("get template run by number: %w", err)
+	}
+	if err := service.describeTemplateRun(ctx, &run); err != nil {
+		return domain.TemplateRun{}, fmt.Errorf("get template run by number: %w", err)
+	}
+	return run, nil
 }
 
 // labelTriggerActors fills each run's TriggerActorDisplayName, and each of its
@@ -1987,14 +2079,22 @@ func validateListStacksCommand(command ListStacksCommand) error {
 	if command.TenantID == "" {
 		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
 	}
-	return nil
+	var problems []error
+	if err := validatePageRequest(command.Page); err != nil {
+		problems = append(problems, err)
+	}
+	if len(command.Query) > maxSearchQueryLength {
+		problems = append(problems, parameterError(ErrInvalidCommand, IssueTooLong,
+			fmt.Sprintf("q must be at most %d characters", maxSearchQueryLength), "q"))
+	}
+	return errors.Join(problems...)
 }
 
 func validateListTemplateRevisionsCommand(command ListTemplateRevisionsCommand) error {
 	if command.TenantID == "" {
 		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
 	}
-	return nil
+	return validatePageRequest(command.Page)
 }
 
 func validateAddTemplateToStackCommand(command AddTemplateToStackCommand) error {
@@ -2142,7 +2242,7 @@ func validateListTemplateRunsCommand(command ListTemplateRunsCommand) error {
 	case command.StackTemplateID == "":
 		return fmt.Errorf("%w: stack template id is required", ErrInvalidCommand)
 	default:
-		return nil
+		return validatePageRequest(command.Page)
 	}
 }
 

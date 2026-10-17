@@ -172,8 +172,11 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/credentials", server.handleCreateStackTemplateCredential)
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/credentials", server.handleListStackTemplateCredentials)
 	server.handleTenantRoute("DELETE /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/credentials/{credential_id}", server.handleDeleteStackTemplateCredential)
-	// Lists runs for an installed stack template, most recent first.
+	// Lists runs for an installed stack template, most recent first, a page at a time.
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/runs", server.handleListTemplateRuns)
+	// Reads one run by its number within the stack template, which is how a
+	// run's page is addressed.
+	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/runs/{run_number}", server.handleGetTemplateRunByNumber)
 	// Reads the current state of a template run.
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/template-runs/{run_id}", server.handleGetTemplateRun)
 	// Lists persisted log metadata for all phases of a template run.
@@ -396,42 +399,15 @@ func (server *Server) handleHealth(response http.ResponseWriter, request *http.R
 }
 
 func (server *Server) handleSearchUsers(response http.ResponseWriter, request *http.Request) {
-	query := request.URL.Query()
-	first, limit := 0, 20
-
-	// Only parsing happens here: a parameter that isn't an integer can't be
-	// parsed, which is a 400. Whether a parsed value is allowed is the app's
-	// rule (a 422), checked in validateSearchUsersCommand.
-	var unparsable []problemFieldError
-	parseInt := func(name string, into *int) {
-		raw := query.Get(name)
-		if raw == "" {
-			return
-		}
-		value, err := strconv.Atoi(raw)
-		if err != nil {
-			unparsable = append(unparsable, problemFieldError{
-				Parameter: name, Issue: app.IssueInvalidFormat, Detail: name + " must be an integer",
-			})
-			return
-		}
-		*into = value
-	}
-	parseInt("first", &first)
-	parseInt("max", &limit)
-	if len(unparsable) > 0 {
-		writeProblem(response, problemDocument{
-			Type: problemTypeURI("invalid-query"), Title: "The query string can't be read",
-			Status: http.StatusBadRequest, Detail: "A query parameter isn't an integer.", Errors: unparsable,
-		})
+	page, ok := readPageRequest(response, request)
+	if !ok {
 		return
 	}
 
 	users, err := server.service.SearchUsers(request.Context(), app.SearchUsersCommand{
 		TenantID: domain.TenantID(request.PathValue("tenant_id")),
-		Query:    query.Get("q"),
-		First:    first,
-		Max:      limit,
+		Query:    request.URL.Query().Get("q"),
+		Page:     page,
 	})
 	if err != nil {
 		server.debugf("handleSearchUsers error: %v", err)
@@ -439,17 +415,7 @@ func (server *Server) handleSearchUsers(response http.ResponseWriter, request *h
 		return
 	}
 
-	writeJSON(response, http.StatusOK, searchUsersResponse{
-		Users: users,
-		First: first,
-		Max:   limit,
-	})
-}
-
-type searchUsersResponse struct {
-	Users []app.UserProfile `json:"users"`
-	First int               `json:"first"`
-	Max   int               `json:"max"`
+	writeJSON(response, http.StatusOK, newListResponse(users.Items, users.NextCursor))
 }
 
 func (server *Server) handleRegisterTemplate(response http.ResponseWriter, request *http.Request) {
@@ -475,19 +441,20 @@ func (server *Server) handleRegisterTemplate(response http.ResponseWriter, reque
 }
 
 func (server *Server) handleListTemplateRevisions(response http.ResponseWriter, request *http.Request) {
+	page, ok := readPageRequest(response, request)
+	if !ok {
+		return
+	}
 	templateRevisions, err := server.service.ListTemplateRevisions(request.Context(), app.ListTemplateRevisionsCommand{
 		TenantID: domain.TenantID(request.PathValue("tenant_id")),
+		Page:     page,
 	})
 	if err != nil {
 		writeAppError(response, err)
 		return
 	}
 
-	body := make([]templateRevisionResponse, 0, len(templateRevisions))
-	for _, templateRevision := range templateRevisions {
-		body = append(body, newTemplateRevisionResponse(templateRevision))
-	}
-	writeJSON(response, http.StatusOK, body)
+	writeJSON(response, http.StatusOK, newListResponse(mapItems(templateRevisions.Items, newTemplateRevisionResponse), templateRevisions.NextCursor))
 }
 
 func (server *Server) handleGetTemplateRegistration(response http.ResponseWriter, request *http.Request) {
@@ -513,7 +480,8 @@ func (server *Server) handleGetTemplateRevisionVariables(response http.ResponseW
 		return
 	}
 
-	writeJSON(response, http.StatusOK, variables)
+	// Not paged: a revision's variables are fixed, and a form needs all of them.
+	writeJSON(response, http.StatusOK, newListResponse(variables, ""))
 }
 
 func (server *Server) handleCreateStack(response http.ResponseWriter, request *http.Request) {
@@ -550,16 +518,22 @@ func (server *Server) handleCreateStack(response http.ResponseWriter, request *h
 }
 
 func (server *Server) handleListStacks(response http.ResponseWriter, request *http.Request) {
+	page, ok := readPageRequest(response, request)
+	if !ok {
+		return
+	}
 	summaries, err := server.service.ListStackSummaries(request.Context(), app.ListStacksCommand{
 		TenantID: domain.TenantID(request.PathValue("tenant_id")),
+		Page:     page,
+		Query:    request.URL.Query().Get("q"),
 	})
 	if err != nil {
 		writeAppError(response, err)
 		return
 	}
 
-	stacks := make([]domain.Stack, 0, len(summaries))
-	for _, summary := range summaries {
+	stacks := make([]domain.Stack, 0, len(summaries.Items))
+	for _, summary := range summaries.Items {
 		stacks = append(stacks, summary.Stack)
 	}
 	capsByID, err := app.ResolveStacksCapabilities(request.Context(), server.service.Authorization, stacks)
@@ -568,14 +542,14 @@ func (server *Server) handleListStacks(response http.ResponseWriter, request *ht
 		return
 	}
 
-	body := make([]stackListItemResponse, 0, len(summaries))
-	for _, summary := range summaries {
+	body := make([]stackListItemResponse, 0, len(summaries.Items))
+	for _, summary := range summaries.Items {
 		body = append(body, stackListItemResponse{
 			stackResponse: newStackResponse(summary.Stack, capsByID[summary.Stack.ID]),
 			TemplateCount: summary.TemplateCount,
 		})
 	}
-	writeJSON(response, http.StatusOK, body)
+	writeJSON(response, http.StatusOK, newListResponse(body, summaries.NextCursor))
 }
 
 func (server *Server) handleListAttention(response http.ResponseWriter, request *http.Request) {
@@ -587,11 +561,9 @@ func (server *Server) handleListAttention(response http.ResponseWriter, request 
 		return
 	}
 
-	body := make([]attentionItemResponse, 0, len(items))
-	for _, item := range items {
-		body = append(body, newAttentionItemResponse(item))
-	}
-	writeJSON(response, http.StatusOK, body)
+	// Not paged: it is computed in memory from every visible template, and
+	// every screen that reads it needs all of it.
+	writeJSON(response, http.StatusOK, newListResponse(mapItems(items, newAttentionItemResponse), ""))
 }
 
 func (server *Server) handleGetStack(response http.ResponseWriter, request *http.Request) {
@@ -640,7 +612,7 @@ func (server *Server) handleListStackCredentials(response http.ResponseWriter, r
 		return
 	}
 	server.debugf("credential list succeeded scope=stack tenant_id=%s stack_id=%s count=%d", request.PathValue("tenant_id"), request.PathValue("stack_id"), len(credentials))
-	writeJSON(response, http.StatusOK, credentials)
+	writeJSON(response, http.StatusOK, newListResponse(credentials, ""))
 }
 
 // handleDeleteStackCredential deletes one Stack-scoped credential after authorization.
@@ -694,7 +666,7 @@ func (server *Server) handleListStackTemplateCredentials(response http.ResponseW
 		return
 	}
 	server.debugf("credential list succeeded scope=stack_template tenant_id=%s stack_template_id=%s count=%d", request.PathValue("tenant_id"), request.PathValue("stack_template_id"), len(credentials))
-	writeJSON(response, http.StatusOK, credentials)
+	writeJSON(response, http.StatusOK, newListResponse(credentials, ""))
 }
 
 // handleDeleteStackTemplateCredential deletes one StackTemplate-scoped credential after authorization.
@@ -835,16 +807,44 @@ func (server *Server) handleGetTemplateRun(response http.ResponseWriter, request
 }
 
 func (server *Server) handleListTemplateRuns(response http.ResponseWriter, request *http.Request) {
+	page, ok := readPageRequest(response, request)
+	if !ok {
+		return
+	}
 	runs, err := server.service.ListTemplateRuns(request.Context(), app.ListTemplateRunsCommand{
 		TenantID:        domain.TenantID(request.PathValue("tenant_id")),
 		StackTemplateID: domain.StackTemplateID(request.PathValue("stack_template_id")),
+		Page:            page,
 	})
 	if err != nil {
 		writeAppError(response, err)
 		return
 	}
 
-	writeJSON(response, http.StatusOK, newTemplateRunResponses(runs))
+	writeJSON(response, http.StatusOK, newListResponse(mapItems(runs.Items, newTemplateRunResponse), runs.NextCursor))
+}
+
+// handleGetTemplateRunByNumber reads a run by the number its page is
+// addressed by, so a run beyond the first page of the list can still be
+// opened. A number that isn't one names no run, which is a 404, as an unknown
+// log name is.
+func (server *Server) handleGetTemplateRunByNumber(response http.ResponseWriter, request *http.Request) {
+	runNumber, err := strconv.Atoi(request.PathValue("run_number"))
+	if err != nil {
+		writeAppError(response, app.ErrNotFound)
+		return
+	}
+	run, err := server.service.GetTemplateRunByNumber(request.Context(), app.GetTemplateRunByNumberCommand{
+		TenantID:        domain.TenantID(request.PathValue("tenant_id")),
+		StackTemplateID: domain.StackTemplateID(request.PathValue("stack_template_id")),
+		RunNumber:       runNumber,
+	})
+	if err != nil {
+		writeAppError(response, err)
+		return
+	}
+
+	writeJSON(response, http.StatusOK, newTemplateRunResponse(run))
 }
 
 func (server *Server) handleGetTemplateRunLog(response http.ResponseWriter, request *http.Request) {
@@ -873,11 +873,7 @@ func (server *Server) handleListTemplateRunLogs(response http.ResponseWriter, re
 		return
 	}
 
-	body := make([]templateRunLogResponse, 0, len(logs))
-	for _, log := range logs {
-		body = append(body, newTemplateRunLogResponse(log))
-	}
-	writeJSON(response, http.StatusOK, body)
+	writeJSON(response, http.StatusOK, newListResponse(mapItems(logs, newTemplateRunLogResponse), ""))
 }
 
 func (server *Server) handleApproveRun(response http.ResponseWriter, request *http.Request) {
@@ -1201,13 +1197,7 @@ func (server *Server) handleListStackGrants(response http.ResponseWriter, reques
 		return
 	}
 
-	writeJSON(response, http.StatusOK, listStackGrantsResponse{
-		Grants: result.Grants,
-	})
-}
-
-type listStackGrantsResponse struct {
-	Grants []app.GrantView `json:"grants"`
+	writeJSON(response, http.StatusOK, newListResponse(result.Grants, ""))
 }
 
 func (server *Server) handleAssignStackRole(response http.ResponseWriter, request *http.Request) {
@@ -1289,10 +1279,31 @@ func (server *Server) handleListQueue(response http.ResponseWriter, request *htt
 		return
 	}
 
-	statuses, err := server.queue.ListByActor(request.Context(), request.PathValue("tenant_id"), principal.Subject, 50)
+	page, ok := readPageRequest(response, request)
+	if !ok {
+		return
+	}
+	if err := page.Validate(); err != nil {
+		writeAppError(response, err)
+		return
+	}
+	after, err := app.DecodeCursor[queue.Cursor](queueList, page.Cursor)
+	if err != nil {
+		writeAppError(response, err)
+		return
+	}
+
+	// One more than the page, which only proves a next page exists.
+	statuses, err := server.queue.ListByActor(request.Context(), request.PathValue("tenant_id"), principal.Subject, after, page.Limit+1)
 	if err != nil {
 		writeAppError(response, fmt.Errorf("list queue: %w", err))
 		return
+	}
+	nextCursor := ""
+	if len(statuses) > page.Limit {
+		statuses = statuses[:page.Limit]
+		last := statuses[len(statuses)-1]
+		nextCursor = app.EncodeCursor(queueList, queue.Cursor{CreatedAt: last.CreatedAt, ID: last.ID})
 	}
 
 	items := make([]queueItemResponse, 0, len(statuses))
@@ -1311,5 +1322,8 @@ func (server *Server) handleListQueue(response http.ResponseWriter, request *htt
 			DeliveredAt: status.DeliveredAt,
 		})
 	}
-	writeJSON(response, http.StatusOK, map[string]any{"items": items})
+	writeJSON(response, http.StatusOK, newListResponse(items, nextCursor))
 }
+
+// queueList names the queue list's cursors.
+const queueList = "queue"

@@ -27,6 +27,8 @@ type fakeUserRepository struct {
 	searchErr error
 	lookupErr error
 	upserted  []UserProfile
+	gotAfter  *UserCursor
+	gotLimit  int
 }
 
 func (f *fakeUserRepository) UpsertUser(_ context.Context, profile UserProfile, _ time.Time) error {
@@ -34,11 +36,21 @@ func (f *fakeUserRepository) UpsertUser(_ context.Context, profile UserProfile, 
 	return nil
 }
 
-func (f *fakeUserRepository) SearchUsers(_ context.Context, _ string, _, _ int) ([]UserProfile, error) {
+func (f *fakeUserRepository) SearchUsers(_ context.Context, _ string, after *UserCursor, limit int) ([]UserProfile, error) {
 	if f.searchErr != nil {
 		return nil, f.searchErr
 	}
-	return f.users, nil
+	f.gotAfter, f.gotLimit = after, limit
+	start := 0
+	if after != nil {
+		for i, user := range f.users {
+			if user.Sub == after.Sub {
+				start = i + 1
+				break
+			}
+		}
+	}
+	return f.users[start:min(start+limit, len(f.users))], nil
 }
 
 func (f *fakeUserRepository) UsersBySubs(_ context.Context, subs []string) (map[string]UserProfile, error) {
@@ -73,17 +85,16 @@ func TestSearchUsersReturnsResults(t *testing.T) {
 	users, err := service.SearchUsers(contextWithPlatformAdmin(), SearchUsersCommand{
 		TenantID: domain.TenantID("tenant_1"),
 		Query:    "ali",
-		First:    0,
-		Max:      20,
+		Page:     PageRequest{Limit: 20},
 	})
 	if err != nil {
 		t.Fatalf("SearchUsers returned error: %v", err)
 	}
-	if len(users) != 2 {
-		t.Fatalf("got %d users, want 2", len(users))
+	if len(users.Items) != 2 {
+		t.Fatalf("got %d users, want 2", len(users.Items))
 	}
-	if users[0].DisplayName != "Alice Smith" {
-		t.Fatalf("first user display name = %q, want Alice Smith", users[0].DisplayName)
+	if users.Items[0].DisplayName != "Alice Smith" {
+		t.Fatalf("first user display name = %q, want Alice Smith", users.Items[0].DisplayName)
 	}
 }
 
@@ -98,8 +109,7 @@ func TestSearchUsersRequiresPlatformAdmin(t *testing.T) {
 	_, err := service.SearchUsers(contextWithOrdinaryUser(), SearchUsersCommand{
 		TenantID: domain.TenantID("tenant_1"),
 		Query:    "test",
-		First:    0,
-		Max:      20,
+		Page:     PageRequest{Limit: 20},
 	})
 	if !errors.Is(err, ErrForbidden) {
 		t.Fatalf("error = %v, want ErrForbidden", err)
@@ -117,8 +127,7 @@ func TestSearchUsersRequiresAuthentication(t *testing.T) {
 	_, err := service.SearchUsers(context.Background(), SearchUsersCommand{
 		TenantID: domain.TenantID("tenant_1"),
 		Query:    "test",
-		First:    0,
-		Max:      20,
+		Page:     PageRequest{Limit: 20},
 	})
 	if !errors.Is(err, ErrUnauthenticated) {
 		t.Fatalf("error = %v, want ErrUnauthenticated", err)
@@ -136,25 +145,22 @@ func TestSearchUsersRejectsEmptyQuery(t *testing.T) {
 	_, err := service.SearchUsers(contextWithPlatformAdmin(), SearchUsersCommand{
 		TenantID: domain.TenantID("tenant_1"),
 		Query:    "",
-		First:    0,
-		Max:      20,
+		Page:     PageRequest{Limit: 20},
 	})
 	if !errors.Is(err, ErrInvalidCommand) {
 		t.Fatalf("error = %v, want ErrInvalidCommand", err)
 	}
 }
 
-func TestSearchUsersRejectsInvalidPagination(t *testing.T) {
+func TestSearchUsersRejectsInvalidLimit(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name  string
-		first int
-		max   int
+		limit int
 	}{
-		{name: "negative first", first: -1, max: 20},
-		{name: "zero max", first: 0, max: 0},
-		{name: "max exceeds 50", first: 0, max: 51},
+		{name: "zero limit", limit: 0},
+		{name: "limit exceeds 100", limit: 101},
 	}
 
 	for _, test := range tests {
@@ -169,8 +175,7 @@ func TestSearchUsersRejectsInvalidPagination(t *testing.T) {
 			_, err := service.SearchUsers(contextWithPlatformAdmin(), SearchUsersCommand{
 				TenantID: domain.TenantID("tenant_1"),
 				Query:    "test",
-				First:    test.first,
-				Max:      test.max,
+				Page:     PageRequest{Limit: test.limit},
 			})
 			if !errors.Is(err, ErrInvalidCommand) {
 				t.Fatalf("error = %v, want ErrInvalidCommand", err)
@@ -191,8 +196,7 @@ func TestSearchUsersRepositoryError(t *testing.T) {
 	_, err := service.SearchUsers(contextWithPlatformAdmin(), SearchUsersCommand{
 		TenantID: domain.TenantID("tenant_1"),
 		Query:    "test",
-		First:    0,
-		Max:      20,
+		Page:     PageRequest{Limit: 20},
 	})
 	if !errors.Is(err, searchErr) {
 		t.Fatalf("error = %v, want %v", err, searchErr)
@@ -210,14 +214,13 @@ func TestSearchUsersEmptyResults(t *testing.T) {
 	users, err := service.SearchUsers(contextWithPlatformAdmin(), SearchUsersCommand{
 		TenantID: domain.TenantID("tenant_1"),
 		Query:    "noone",
-		First:    0,
-		Max:      20,
+		Page:     PageRequest{Limit: 20},
 	})
 	if err != nil {
 		t.Fatalf("SearchUsers returned error: %v", err)
 	}
-	if len(users) != 0 {
-		t.Fatalf("got %d users, want 0", len(users))
+	if len(users.Items) != 0 {
+		t.Fatalf("got %d users, want 0", len(users.Items))
 	}
 }
 
@@ -325,7 +328,7 @@ func TestUserProjectionEntryPointsRequireARepository(t *testing.T) {
 			_, err := service.SearchUsers(contextWithPlatformAdmin(), SearchUsersCommand{
 				TenantID: domain.TenantID("tenant_123"),
 				Query:    "ali",
-				Max:      20,
+				Page:     PageRequest{Limit: 20},
 			})
 			return err
 		},

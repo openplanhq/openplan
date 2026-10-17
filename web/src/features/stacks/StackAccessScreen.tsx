@@ -1,3 +1,4 @@
+import { useDebounce } from "../../shared/useDebounce";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { CircleAlert, Loader2, RefreshCw, Search, Shield, Trash2 } from "lucide-react";
@@ -61,7 +62,7 @@ export default function StackAccessScreen() {
   const revokeMutation = useRevokeStackRoleMutation(tenantID, stackId);
   const undoTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const grantsBySub = new Map((grants.data?.grants ?? []).map((g) => [g.user_sub, g]));
+  const grantsBySub = new Map((grants.data ?? []).map((g) => [g.user_sub, g]));
   const replacing = selectedUser !== null && grantsBySub.has(selectedUser.sub);
   // The list opens on the user's intent, a search of two or more characters,
   // and says "Searching..." until that search answers, so Base UI never opens
@@ -69,7 +70,7 @@ export default function StackAccessScreen() {
   // last answer while a query that narrows it loads, so refining a search
   // doesn't blink back to "Searching...".
   const searching = debouncedSearch.length >= 2;
-  const results = searching ? searchResults.data?.users : undefined;
+  const results = searching ? searchResults.data : undefined;
   const listOpen = searchOpen && searching;
   // Who gets the role is who the input shows: typing over a pick holds Assign
   // until the user picks again or leaves, which puts the pick back.
@@ -168,14 +169,14 @@ export default function StackAccessScreen() {
               </Button>
             </div>
           )}
-          {grants.data && grants.data.grants.length === 0 && (
+          {grants.data && grants.data.length === 0 && (
             <p className="text-muted-foreground">
               No users have been assigned access yet. Use the panel on the right to add the first grant.
             </p>
           )}
-          {grants.data && grants.data.grants.length > 0 && (
+          {grants.data && grants.data.length > 0 && (
             <ul className="divide-y rounded-lg border">
-              {grants.data.grants.map((grant) => (
+              {grants.data.map((grant) => (
                 <li key={grant.user_sub} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
                   <div className="grid min-w-0 grow basis-32 gap-0.5">
                     <span className="truncate" title={grant.display_name}>
@@ -380,13 +381,4 @@ export default function StackAccessScreen() {
       </div>
     </section>
   );
-}
-
-function useDebounce<T>(value: T, delay: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(timer);
-  }, [value, delay]);
-  return debounced;
 }

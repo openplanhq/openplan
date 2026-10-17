@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { pagesOf } from "../../api/listTestSupport";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createMemoryRouter, redirect, RouterProvider } from "react-router-dom";
@@ -77,7 +78,7 @@ function seed(templates: StackTemplate[], capabilities: StackCapabilities = allA
   queryClient.setQueryData(queryKeys.stack(TENANT, "stack_1"), view(templates, capabilities));
   queryClient.setQueryData(queryKeys.attention(TENANT), [failedItem]);
   for (const stackTemplate of templates) {
-    queryClient.setQueryData(queryKeys.templateRuns(TENANT, stackTemplate.id), []);
+    queryClient.setQueryData(queryKeys.templateRuns(TENANT, stackTemplate.id), pagesOf([]));
   }
   return queryClient;
 }

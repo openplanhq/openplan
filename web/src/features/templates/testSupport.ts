@@ -1,6 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { AuthContextValue } from "../../auth/AuthContext";
 import type { TemplateRegistration, TemplateRevision, TemplateVariable } from "../../api/types";
+import { asListBody } from "../../api/listTestSupport";
 
 // Fixtures for the templates tests. Not a test file itself, so it carries no
 // assertions and imports nothing from Vitest.
@@ -80,5 +81,5 @@ export function authValue(canPublishTemplate = true): AuthContextValue {
 }
 
 export function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  return new Response(JSON.stringify(asListBody(body)), { status, headers: { "content-type": "application/json" } });
 }

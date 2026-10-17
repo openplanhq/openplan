@@ -115,6 +115,7 @@ func TestSentinelsListsEveryExportedError(t *testing.T) {
 var sentinelNames = map[error]string{
 	ErrUnauthenticated:                    "ErrUnauthenticated",
 	ErrInvalidCommand:                     "ErrInvalidCommand",
+	ErrInvalidQuery:                       "ErrInvalidQuery",
 	ErrDuplicateStackSlug:                 "ErrDuplicateStackSlug",
 	ErrDuplicateStackTemplateComponentKey: "ErrDuplicateStackTemplateComponentKey",
 	ErrNotFound:                           "ErrNotFound",

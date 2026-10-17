@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -92,7 +93,7 @@ func TestSearchUsersMatchesNameAndEmailCaseInsensitively(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			users, err := store.SearchUsers(ctx, test.query, 0, 50)
+			users, err := store.SearchUsers(ctx, test.query, nil, 50)
 			if err != nil {
 				t.Fatalf("SearchUsers: %v", err)
 			}
@@ -120,7 +121,7 @@ func TestSearchUsersTreatsLikeMetacharactersAsLiterals(t *testing.T) {
 		app.UserProfile{Sub: "sub-2", DisplayName: "100% Cotton", Email: "cotton@example.com"},
 	)
 
-	users, err := store.SearchUsers(ctx, "%", 0, 50)
+	users, err := store.SearchUsers(ctx, "%", nil, 50)
 	if err != nil {
 		t.Fatalf("SearchUsers: %v", err)
 	}
@@ -128,7 +129,7 @@ func TestSearchUsersTreatsLikeMetacharactersAsLiterals(t *testing.T) {
 		t.Fatalf("users = %v, want only sub-2 — %% must not act as a wildcard", subsOf(users))
 	}
 
-	users, err = store.SearchUsers(ctx, "_", 0, 50)
+	users, err = store.SearchUsers(ctx, "_", nil, 50)
 	if err != nil {
 		t.Fatalf("SearchUsers: %v", err)
 	}
@@ -137,23 +138,33 @@ func TestSearchUsersTreatsLikeMetacharactersAsLiterals(t *testing.T) {
 	}
 }
 
-func TestSearchUsersAppliesOffsetAndLimit(t *testing.T) {
+// A search resumes after the cursor's (display name, sub): equal names are
+// ordered by sub, so none is skipped or repeated across pages.
+func TestSearchUsersResumesAfterCursor(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	store := NewStore(openMigratedTestPool(t, ctx))
 	seedUsers(t, ctx, store,
 		app.UserProfile{Sub: "sub-1", DisplayName: "User A", Email: "a@example.com"},
+		app.UserProfile{Sub: "sub-3", DisplayName: "User B", Email: "b2@example.com"},
 		app.UserProfile{Sub: "sub-2", DisplayName: "User B", Email: "b@example.com"},
-		app.UserProfile{Sub: "sub-3", DisplayName: "User C", Email: "c@example.com"},
+		app.UserProfile{Sub: "sub-4", DisplayName: "User C", Email: "c@example.com"},
 	)
 
-	users, err := store.SearchUsers(ctx, "User", 1, 1)
+	users, err := store.SearchUsers(ctx, "User", nil, 2)
 	if err != nil {
 		t.Fatalf("SearchUsers: %v", err)
 	}
-	if len(users) != 1 || users[0].Sub != "sub-2" {
-		t.Fatalf("users = %v, want just sub-2 at offset 1", subsOf(users))
+	if got := subsOf(users); fmt.Sprint(got) != "[sub-1 sub-2]" {
+		t.Fatalf("first page = %v, want [sub-1 sub-2]", got)
+	}
+	users, err = store.SearchUsers(ctx, "User", &app.UserCursor{DisplayName: "User B", Sub: "sub-2"}, 2)
+	if err != nil {
+		t.Fatalf("SearchUsers: %v", err)
+	}
+	if got := subsOf(users); fmt.Sprint(got) != "[sub-3 sub-4]" {
+		t.Fatalf("next page = %v, want [sub-3 sub-4]", got)
 	}
 }
 

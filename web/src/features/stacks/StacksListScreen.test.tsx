@@ -9,6 +9,7 @@ import StacksListScreen from "./StacksListScreen";
 import { formatDateTime, formatTimestamp } from "../../shared/formatTimestamp";
 import { queryKeys } from "../../api/queryKeys";
 import type { AttentionItem, StackListItem, StackTemplate, StackView, TemplateRun } from "../../api/types";
+import { asListBody, pagesOf } from "../../api/listTestSupport";
 
 const TENANT = "tenant_123";
 
@@ -69,7 +70,7 @@ function testQueryClient(): QueryClient {
 }
 
 function seed(queryClient: QueryClient, data: { stacks?: StackListItem[]; attention?: AttentionItem[]; views?: StackView[] }) {
-  if (data.stacks) queryClient.setQueryData(queryKeys.stacks(TENANT), data.stacks);
+  if (data.stacks) queryClient.setQueryData(queryKeys.stackList(TENANT, ""), pagesOf(data.stacks));
   queryClient.setQueryData(queryKeys.attention(TENANT), data.attention ?? []);
   for (const view of data.views ?? []) {
     queryClient.setQueryData(queryKeys.stack(TENANT, view.stack.id), view);
@@ -99,7 +100,7 @@ function renderScreen(queryClient: QueryClient, options: { auth?: AuthContextVal
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  return new Response(JSON.stringify(asListBody(body)), { status, headers: { "content-type": "application/json" } });
 }
 
 /** Answers each API path with its own response; anything else never settles. */
@@ -274,35 +275,106 @@ describe("StacksListScreen", () => {
     expect(within(screen.getByTestId("stack-preview")).getByRole("heading", { level: 2, name: "Billing" })).toBeTruthy();
   });
 
-  it("filters the list by name or slug as the person types", () => {
+  // The filter goes to the server as q, once typing pauses, so it finds a
+  // stack on a page not yet loaded.
+  it("filters the list on the server by what the person types", async () => {
     const queryClient = testQueryClient();
     seed(queryClient, { stacks: [stack(), stack({ id: "stack_2", name: "Billing", slug: "billing-eu" })] });
+    const fetchMock = mockAPI({
+      "/stacks": async () => jsonResponse([stack({ id: "stack_2", name: "Billing", slug: "billing-eu" })])
+    });
 
     renderScreen(queryClient);
-    fireEvent.change(screen.getByRole("searchbox", { name: "Filter stacks" }), { target: { value: "EU" } });
+    fireEvent.change(screen.getByRole("searchbox", { name: "Filter stacks" }), { target: { value: " EU " } });
 
-    expect(screen.queryByTestId("stack-row-stack_1")).toBeNull();
+    await waitFor(() => expect(screen.queryByTestId("stack-row-stack_1")).toBeNull());
     expect(screen.getByTestId("stack-row-stack_2")).toBeTruthy();
-
-    fireEvent.change(screen.getByRole("searchbox", { name: "Filter stacks" }), { target: { value: "nothing" } });
-    expect(screen.getByTestId("stacks-filter-empty").textContent).toBe("No stacks match this filter.");
+    const asked = fetchMock.mock.calls.map(([input]) => new URL(String(input), "http://localhost"));
+    expect(asked.find((url) => url.pathname.endsWith("/stacks"))?.searchParams.get("q")).toBe("EU");
   });
 
-  it("previews a stack the filter shows, never one it hides", () => {
+  it("says when nothing matches the filter, and previews nothing", async () => {
+    const queryClient = testQueryClient();
+    seed(queryClient, { stacks: [stack()] });
+    queryClient.setQueryData(queryKeys.stackList(TENANT, "nothing"), pagesOf([]));
+
+    renderScreen(queryClient);
+    fireEvent.change(screen.getByRole("searchbox", { name: "Filter stacks" }), { target: { value: "nothing" } });
+
+    expect((await screen.findByTestId("stacks-filter-empty")).textContent).toBe("No stacks match this filter.");
+    expect(screen.queryByTestId("stack-preview")).toBeNull();
+    // Not the first-install empty state: the tenant has stacks.
+    expect(screen.queryByTestId("stacks-list-empty")).toBeNull();
+  });
+
+  it("previews a stack the filter shows, never one it hides", async () => {
     const queryClient = testQueryClient();
     seed(queryClient, { stacks: [stack(), stack({ id: "stack_2", name: "Edge CDN", slug: "edge" })] });
+    queryClient.setQueryData(queryKeys.stackList(TENANT, "edge"), pagesOf([stack({ id: "stack_2", name: "Edge CDN", slug: "edge" })]));
 
     renderScreen(queryClient, { path: "/stacks?stack=stack_1" });
     fireEvent.change(screen.getByRole("searchbox", { name: "Filter stacks" }), { target: { value: "edge" } });
 
-    expect(screen.getByTestId("stack-row-stack_2").getAttribute("aria-current")).toBe("true");
+    await waitFor(() => expect(screen.getByTestId("stack-row-stack_2").getAttribute("aria-current")).toBe("true"));
     expect(within(screen.getByTestId("stack-preview")).getByRole("heading", { level: 2, name: "Edge CDN" })).toBeTruthy();
 
-    fireEvent.change(screen.getByRole("searchbox", { name: "Filter stacks" }), { target: { value: "nothing" } });
-    expect(screen.queryByTestId("stack-preview")).toBeNull();
-
     fireEvent.change(screen.getByRole("searchbox", { name: "Filter stacks" }), { target: { value: "" } });
-    expect(screen.getByTestId("stack-row-stack_1").getAttribute("aria-current")).toBe("true");
+    await waitFor(() => expect(screen.getByTestId("stack-row-stack_1").getAttribute("aria-current")).toBe("true"));
+  });
+
+  // The list comes a page at a time; Load more appends the next, and goes
+  // once the last is in.
+  it("loads the next page of stacks under the list", async () => {
+    const queryClient = testQueryClient();
+    const fetchMock = mockAPI({
+      "/stacks": async () => jsonResponse({ items: [stack({ id: "stack_2", name: "Billing", slug: "billing" })], next_cursor: null })
+    });
+    queryClient.setQueryData(queryKeys.stackList(TENANT, ""), {
+      pages: [{ items: [stack()], next_cursor: "page-2" }],
+      pageParams: [undefined]
+    });
+
+    renderScreen(queryClient);
+    fireEvent.click(screen.getByTestId("stacks-load-more"));
+
+    expect(await screen.findByTestId("stack-row-stack_2")).toBeTruthy();
+    expect(screen.getByTestId("stack-row-stack_1")).toBeTruthy();
+    expect(screen.queryByTestId("stacks-load-more")).toBeNull();
+    const asked = fetchMock.mock.calls.map(([input]) => new URL(String(input), "http://localhost")).filter((url) => url.pathname.endsWith("/stacks"));
+    expect(asked.map((url) => url.searchParams.get("cursor"))).toEqual(["page-2"]);
+  });
+
+  // There is no total to ask for, so the header counts the stacks only once
+  // every page is in, rather than counting the ones loaded so far.
+  it("counts the stacks in the header only once every page is loaded", async () => {
+    const queryClient = testQueryClient();
+    mockAPI({ "/stacks": async () => jsonResponse({ items: [stack({ id: "stack_2", name: "Billing", slug: "billing" })], next_cursor: null }) });
+    queryClient.setQueryData(queryKeys.stackList(TENANT, ""), {
+      pages: [{ items: [stack()], next_cursor: "page-2" }],
+      pageParams: [undefined]
+    });
+
+    renderScreen(queryClient);
+    expect(screen.queryByTestId("page-count")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("stacks-load-more"));
+    await waitFor(() => expect(screen.getByTestId("page-count").textContent).toBe("2"));
+  });
+
+  it("keeps the stacks shown when the next page fails, and offers to try again", async () => {
+    const queryClient = testQueryClient();
+    mockAPI({ "/stacks": async () => jsonResponse({ type: "about:blank", title: "Internal Server Error", status: 500 }, 500) });
+    queryClient.setQueryData(queryKeys.stackList(TENANT, ""), {
+      pages: [{ items: [stack()], next_cursor: "page-2" }],
+      pageParams: [undefined]
+    });
+
+    renderScreen(queryClient);
+    fireEvent.click(screen.getByTestId("stacks-load-more"));
+
+    expect(await screen.findByText("More stacks couldn't be loaded.")).toBeTruthy();
+    expect(screen.getByTestId("stack-row-stack_1")).toBeTruthy();
+    expect(screen.getByTestId("stacks-load-more").textContent).toBe("Try again");
   });
 
   it("says what needs attention in one line that links to the attention page", () => {

@@ -60,6 +60,10 @@ values:
     value: ""
     enabled: true
     type: default
+  - key: run_number
+    value: ""
+    enabled: true
+    type: default
   - key: name
     value: ""
     enabled: true

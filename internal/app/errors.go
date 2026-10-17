@@ -119,6 +119,8 @@ func Sentinels() []error {
 	return []error{
 		ErrUnauthenticated,
 		ErrInvalidCommand,
+		ErrInvalidQuery,
+		ErrInvalidQuery,
 		ErrDuplicateStackSlug,
 		ErrDuplicateStackTemplateComponentKey,
 		ErrNotFound,

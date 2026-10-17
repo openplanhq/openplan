@@ -120,8 +120,48 @@ func authorizeStack(ctx context.Context, auth *authorization.Authorization, stac
 	return nil
 }
 
-//nolint:gocognit // Authorization logic; split it only as a reviewed refactor.
+// listAccessibleStacks is every stack the caller can view, newest first, for
+// callers that need the whole set, such as attention.
 func listAccessibleStacks(ctx context.Context, auth *authorization.Authorization, repository StackRepository, tenantID domain.TenantID) ([]domain.Stack, error) {
+	return accessibleStacks(ctx, auth, repository, tenantID, nil, "", 0)
+}
+
+// stacksList names the stacks list's cursors.
+const stacksList = "stacks"
+
+// listAccessibleStacksPage is one page of the stacks the caller can view.
+// Unlike listAccessibleStacks it stops walking the table once the page is
+// full, plus one stack to prove a next page exists, so a request costs the
+// BatchChecks its page needs rather than one per 50 stacks in the tenant.
+func listAccessibleStacksPage(ctx context.Context, auth *authorization.Authorization, repository StackRepository, tenantID domain.TenantID, page PageRequest, query string) (Page[domain.Stack], error) {
+	after, err := DecodeCursor[StackPageCursor](stacksList, page.Cursor)
+	if err != nil {
+		return Page[domain.Stack]{}, err
+	}
+	stacks, err := accessibleStacks(ctx, auth, repository, tenantID, after, query, page.Limit+1)
+	if err != nil {
+		return Page[domain.Stack]{}, err
+	}
+	return pageFrom(stacks, page.Limit, stacksList, func(stack domain.Stack) cursorKey {
+		return StackPageCursor{CreatedAt: stack.CreatedAt, ID: stack.ID}
+	}), nil
+}
+
+// accessibleStacks walks the tenant's stacks newest first from after, keeping
+// those the caller can view, until it holds want of them or the table ends;
+// want <= 0 keeps going to the end. query, when set, narrows the walk to
+// stacks whose name or slug contains it.
+//
+//nolint:gocognit // Authorization logic; split it only as a reviewed refactor.
+func accessibleStacks(
+	ctx context.Context,
+	auth *authorization.Authorization,
+	repository StackRepository,
+	tenantID domain.TenantID,
+	after *StackPageCursor,
+	query string,
+	want int,
+) ([]domain.Stack, error) {
 	principal, err := requirePrincipalAndAuthorizer(ctx, auth)
 	if err != nil {
 		return nil, err
@@ -134,13 +174,21 @@ func listAccessibleStacks(ctx context.Context, auth *authorization.Authorization
 		return nil, err
 	}
 	if administrator {
-		return repository.ListStacks(ctx, tenantID)
+		if want <= 0 && after == nil && query == "" {
+			return repository.ListStacks(ctx, tenantID)
+		}
+		if want > 0 {
+			return repository.ListStacksPage(ctx, tenantID, after, want, query)
+		}
 	}
+	// Candidates are read 50 at a time whatever the page size, to keep each
+	// BatchCheck a sane size. An administrator only gets here to drain a
+	// filtered or resumed walk, and every candidate is visible to them.
 	const pageSize = 50
-	var cursor *StackPageCursor
+	cursor := after
 	var accessible []domain.Stack
 	for {
-		candidates, err := repository.ListStacksPage(ctx, tenantID, cursor, pageSize)
+		candidates, err := repository.ListStacksPage(ctx, tenantID, cursor, pageSize, query)
 		if err != nil {
 			return nil, fmt.Errorf("list stack candidates: %w", err)
 		}
@@ -159,28 +207,19 @@ func listAccessibleStacks(ctx context.Context, auth *authorization.Authorization
 			}
 		}
 
-		checks := make([]authorization.Check, len(candidates))
-		for i, candidate := range candidates {
-			object, err := authorization.ObjectFromID(authorization.TypeStack, string(candidate.ID))
-			if errors.Is(err, authorization.ErrInvalidInput) {
-				return nil, fmt.Errorf("stack candidate has invalid ID")
-			}
-			if err != nil {
-				return nil, err
-			}
-			checks[i] = authorization.Check{Relation: authorization.RelationCanView, Object: object}
-		}
-		allowed, err := auth.CanAll(ctx, principal.Subject, checks)
+		allowed, err := visibleStackCandidates(ctx, auth, principal.Subject, candidates, administrator)
 		if err != nil {
 			return nil, err
-		}
-		if len(allowed) != len(candidates) {
-			return nil, fmt.Errorf("batch result count does not match stack candidates")
 		}
 		for i, visible := range allowed {
 			if visible {
 				accessible = append(accessible, candidates[i])
 			}
+		}
+		// Stopping mid-batch is safe: the next page resumes after the last
+		// stack returned, so the unreturned candidates are read again.
+		if want > 0 && len(accessible) >= want {
+			return accessible[:want], nil
 		}
 		if len(candidates) < pageSize {
 			return accessible, nil
@@ -188,6 +227,37 @@ func listAccessibleStacks(ctx context.Context, auth *authorization.Authorization
 		last := candidates[len(candidates)-1]
 		cursor = &StackPageCursor{CreatedAt: last.CreatedAt, ID: last.ID}
 	}
+}
+
+// visibleStackCandidates answers can_view for each candidate in one
+// BatchCheck. An administrator can view every stack, so needs none.
+func visibleStackCandidates(ctx context.Context, auth *authorization.Authorization, subject string, candidates []domain.Stack, administrator bool) ([]bool, error) {
+	if administrator {
+		allowed := make([]bool, len(candidates))
+		for i := range allowed {
+			allowed[i] = true
+		}
+		return allowed, nil
+	}
+	checks := make([]authorization.Check, len(candidates))
+	for i, candidate := range candidates {
+		object, err := authorization.ObjectFromID(authorization.TypeStack, string(candidate.ID))
+		if errors.Is(err, authorization.ErrInvalidInput) {
+			return nil, fmt.Errorf("stack candidate has invalid ID")
+		}
+		if err != nil {
+			return nil, err
+		}
+		checks[i] = authorization.Check{Relation: authorization.RelationCanView, Object: object}
+	}
+	allowed, err := auth.CanAll(ctx, subject, checks)
+	if err != nil {
+		return nil, err
+	}
+	if len(allowed) != len(candidates) {
+		return nil, fmt.Errorf("batch result count does not match stack candidates")
+	}
+	return allowed, nil
 }
 
 func stackPageOrderBefore(left, right domain.Stack) bool {

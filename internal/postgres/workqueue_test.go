@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -364,7 +365,7 @@ func TestListByActorReturnsOnlyCallerItems(t *testing.T) {
 		t.Fatalf("Enqueue returned error: %v", err)
 	}
 
-	statuses, err := store.ListByActor(ctx, "t1", "user:me", 50)
+	statuses, err := store.ListByActor(ctx, "t1", "user:me", nil, 50)
 	if err != nil {
 		t.Fatalf("ListByActor returned error: %v", err)
 	}
@@ -419,5 +420,49 @@ func TestPruneSkipsWhenAnotherWorkerHoldsTheLock(t *testing.T) {
 	}
 	if pruned != 1 {
 		t.Fatalf("pruned = %d, want 1 once the lock is free", pruned)
+	}
+}
+
+// Items queued in one statement share created_at, so the id is what orders
+// them: paging through them returns each once, newest first.
+func TestListByActorPagesThroughTies(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store, _ := newQueueStore(t, ctx)
+	var requests []queue.Request
+	for i := range 5 {
+		requests = append(requests, queue.Request{
+			Kind: "reconcile", Payload: json.RawMessage(fmt.Sprintf(`{"key":"k%d"}`, i)),
+			TenantID: "t1", ActorSubject: "user:me",
+		})
+	}
+	if err := store.Enqueue(ctx, requests...); err != nil {
+		t.Fatalf("Enqueue returned error: %v", err)
+	}
+
+	var ids []int64
+	var after *queue.Cursor
+	for range 5 {
+		statuses, err := store.ListByActor(ctx, "t1", "user:me", after, 2)
+		if err != nil {
+			t.Fatalf("ListByActor returned error: %v", err)
+		}
+		if len(statuses) == 0 {
+			break
+		}
+		for _, status := range statuses {
+			ids = append(ids, status.ID)
+		}
+		last := statuses[len(statuses)-1]
+		after = &queue.Cursor{CreatedAt: last.CreatedAt, ID: last.ID}
+	}
+	if len(ids) != 5 {
+		t.Fatalf("paged ids = %v, want all 5 once", ids)
+	}
+	for i := 1; i < len(ids); i++ {
+		if ids[i] >= ids[i-1] {
+			t.Fatalf("ids = %v, want strictly newest first", ids)
+		}
 	}
 }

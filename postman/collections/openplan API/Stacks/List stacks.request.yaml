@@ -1,10 +1,19 @@
 $kind: http-request
 description: |-
-  Only the stacks the caller may view. Each carries its
-  `effective_capabilities`, so a client renders the controls a person
-  actually has rather than probing for them.
+  Only the stacks the caller may view, newest first, a page at a time.
+  Each carries its `effective_capabilities`, so a client renders the
+  controls a person actually has rather than probing for them.
+
+  A page holds `limit` stacks the caller can view, however sparse they
+  are among the tenant's, unless it is the last.
 method: GET
-url: '{{base_url}}/v1/tenants/{{tenant_id}}/stacks'
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/stacks?limit=50'
+queryParams:
+  - key: limit
+    value: "50"
+    description: |-
+      At most how many items the page holds. Out of range is a `422`; not an
+      integer, a `400` (`invalid-query`).
 scripts:
   - type: afterResponse
     code: pm.test('status is 200', () => pm.response.to.have.status(200));

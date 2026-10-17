@@ -13,7 +13,7 @@ import { tenantID } from "../../config";
 export function useRefreshStackOnRunChange(stackId: string, stackTemplateId: string): void {
   const queryClient = useQueryClient();
   const runsQuery = useTemplateRunsQuery(tenantID, stackTemplateId);
-  const latestRun = runsQuery.status === "success" ? runsQuery.data[0] ?? null : null;
+  const latestRun = runsQuery.status === "success" ? runsQuery.data?.[0] ?? null : null;
   const settledRun = latestRun && isTerminalRunStatus(latestRun.status) ? `${latestRun.id}:${latestRun.status}` : "";
   const waitingRun = latestRun?.status === "waiting_approval" ? latestRun.id : "";
 

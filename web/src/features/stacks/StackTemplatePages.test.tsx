@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { pagesOf } from "../../api/listTestSupport";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { Navigate, MemoryRouter, Route, Routes } from "react-router-dom";
@@ -112,8 +113,8 @@ function seedDefaultData(queryClient: QueryClient, capabilities: StackCapabiliti
   queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_2"), [variable()]);
   // The inline run sections query runs for whichever template is selected;
   // seeding both keeps these tests off the network.
-  queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_1"), []);
-  queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_2"), []);
+  queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_1"), pagesOf([]));
+  queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_2"), pagesOf([]));
 }
 
 /** True when `first` appears before `second` in document order. */
@@ -222,7 +223,7 @@ describe("TemplatePanel", () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);
     const run = runFor("st_1", { run_number: 3 });
-    queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_1"), [run]);
+    queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_1"), pagesOf([run]));
     queryClient.setQueryData(queryKeys.templateRun("tenant_123", run.id), run);
     queryClient.setQueryData(queryKeys.templateRunLogs("tenant_123", run.id, "completed"), []);
 
@@ -285,7 +286,7 @@ describe("TemplatePanel", () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);
     const run = runFor("st_1", { operation: "destroy", status: "running", run_number: 4, plan_summary: { add: 0, change: 0, destroy: 2 } });
-    queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_1"), [run]);
+    queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_1"), pagesOf([run]));
     queryClient.setQueryData(queryKeys.templateRun("tenant_123", run.id), run);
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/runs/4");
@@ -303,7 +304,7 @@ describe("TemplatePanel", () => {
   it("refreshes the stack when the template's latest run settles, on any tab", async () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);
-    queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_1"), [runFor("st_1", { status: "completed" })]);
+    queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_1"), pagesOf([runFor("st_1", { status: "completed" })]));
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockImplementation(
@@ -325,7 +326,7 @@ describe("TemplateRunsTab", () => {
       queryKeys.stack("tenant_123", "stack_1"),
       stackView(allAllowed, [stackTemplate(), stackTemplate({ id: "st_2", desired_template_revision_id: "rev_2" })])
     );
-    queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_2"), [runFor("st_2")]);
+    queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_2"), pagesOf([runFor("st_2")]));
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_2/runs");
 
@@ -477,7 +478,7 @@ describe("TemplateVariablesTab", () => {
     fireEvent.change(screen.getByLabelText(/region/), { target: { value: "eu-west-1" } });
 
     act(() => {
-      queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_1"), [runFor("st_1", { status: "waiting_approval", run_number: 7 })]);
+      queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_1"), pagesOf([runFor("st_1", { status: "waiting_approval", run_number: 7 })]));
     });
 
     await waitFor(() => expect(screen.getByTestId("variables-disabled-reason").textContent).toBe("Apply or discard run #7 before changing the config."));
@@ -495,7 +496,7 @@ describe("editing while a run is in flight", () => {
   it("locks the config and the revision behind the waiting plan", async () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);
-    queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_1"), [runFor("st_1", { status: "waiting_approval", run_number: 7 })]);
+    queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_1"), pagesOf([runFor("st_1", { status: "waiting_approval", run_number: 7 })]));
 
     const variables = renderAt(queryClient, "/stacks/stack_1/templates/st_1/variables");
     await waitFor(() => expect(screen.getByTestId("variables-disabled-reason").textContent).toBe("Apply or discard run #7 before changing the config."));
@@ -549,7 +550,9 @@ describe("TemplateCredentialsTab", () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(respond({ type: "about:blank", title: "Internal Server Error", detail: "boom" }, 500))
-      .mockResolvedValueOnce(respond([{ id: "c1", name: "TEMPLATE_ONLY", scope: "stack_template", created_at: "2026-07-19T00:00:00Z" }], 200));
+      .mockResolvedValueOnce(
+        respond({ items: [{ id: "c1", name: "TEMPLATE_ONLY", scope: "stack_template", created_at: "2026-07-19T00:00:00Z" }], next_cursor: null }, 200)
+      );
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/credentials");
 

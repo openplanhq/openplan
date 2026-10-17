@@ -773,7 +773,7 @@ func (recordingStore) ListTemplateRunsByStatus(context.Context, domain.TenantID,
 	return nil, nil
 }
 
-func (recordingStore) ListStacksPage(context.Context, domain.TenantID, *app.StackPageCursor, int) ([]domain.Stack, error) {
+func (recordingStore) ListStacksPage(context.Context, domain.TenantID, *app.StackPageCursor, int, string) ([]domain.Stack, error) {
 	return nil, nil
 }
 
@@ -802,6 +802,10 @@ func (recordingStore) GetTemplateRevision(context.Context, domain.TenantID, doma
 }
 
 func (recordingStore) ListTemplateRevisions(context.Context, domain.TenantID) ([]domain.TemplateRevision, error) {
+	return nil, nil
+}
+
+func (recordingStore) ListTemplateRevisionsPage(context.Context, domain.TenantID, *app.TemplateRevisionCursor, int) ([]domain.TemplateRevision, error) {
 	return nil, nil
 }
 
@@ -849,6 +853,14 @@ func (recordingStore) ListTemplateRuns(context.Context, domain.TenantID, domain.
 	return nil, nil
 }
 
+func (recordingStore) ListTemplateRunsPage(context.Context, domain.TenantID, domain.StackTemplateID, int, int) ([]domain.TemplateRun, error) {
+	return nil, nil
+}
+
+func (recordingStore) GetTemplateRunByNumber(context.Context, domain.TenantID, domain.StackTemplateID, int) (domain.TemplateRun, error) {
+	return domain.TemplateRun{}, nil
+}
+
 func (recordingStore) GetTemplateRunLog(context.Context, domain.TenantID, domain.TemplateRunID, string) (domain.TemplateRunLog, error) {
 	return domain.TemplateRunLog{}, nil
 }
@@ -894,7 +906,7 @@ func (recordingStore) UpsertUser(context.Context, app.UserProfile, time.Time) er
 	return nil
 }
 
-func (recordingStore) SearchUsers(context.Context, string, int, int) ([]app.UserProfile, error) {
+func (recordingStore) SearchUsers(context.Context, string, *app.UserCursor, int) ([]app.UserProfile, error) {
 	return nil, nil
 }
 
@@ -965,7 +977,7 @@ func (store *recordingStore) InTx(ctx context.Context, fn func(context.Context, 
 
 func (store *recordingStore) Enqueue(context.Context, ...queue.Request) error { return nil }
 
-func (store *recordingStore) ListByActor(context.Context, string, string, int) ([]queue.Status, error) {
+func (store *recordingStore) ListByActor(context.Context, string, string, *queue.Cursor, int) ([]queue.Status, error) {
 	return nil, nil
 }
 

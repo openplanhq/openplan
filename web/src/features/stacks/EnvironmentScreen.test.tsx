@@ -8,6 +8,7 @@ import EnvironmentScreen from "./EnvironmentScreen";
 import { queryKeys } from "../../api/queryKeys";
 import { AuthContext } from "../../auth/AuthContext";
 import type { AuthContextValue } from "../../auth/AuthContext";
+import { asListBody } from "../../api/listTestSupport";
 
 function authValue(): AuthContextValue {
   return {
@@ -25,7 +26,7 @@ function testQueryClient(): QueryClient {
 const credential = { id: "credential_1", name: "TF_VAR_TEST", scope: "stack" as const, created_at: "2026-07-19T00:00:00Z" };
 
 function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  return new Response(JSON.stringify(asListBody(body)), { status, headers: { "content-type": "application/json" } });
 }
 
 function renderScreen(queryClient: QueryClient) {

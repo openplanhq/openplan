@@ -179,6 +179,6 @@ func (repository *authorizationStackRepository) GetStackWithTemplates(context.Co
 func (repository *authorizationStackRepository) ListStacks(context.Context, domain.TenantID) ([]domain.Stack, error) {
 	return nil, nil
 }
-func (repository *authorizationStackRepository) ListStacksPage(context.Context, domain.TenantID, *StackPageCursor, int) ([]domain.Stack, error) {
+func (repository *authorizationStackRepository) ListStacksPage(context.Context, domain.TenantID, *StackPageCursor, int, string) ([]domain.Stack, error) {
 	return nil, nil
 }

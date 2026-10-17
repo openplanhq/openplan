@@ -9,6 +9,7 @@ import type { AuthContextValue } from "../../auth/AuthContext";
 import CreateStackScreen from "./CreateStackScreen";
 import { queryKeys } from "../../api/queryKeys";
 import type { Stack } from "../../api/types";
+import { asListBody } from "../../api/listTestSupport";
 
 function stack(overrides: Partial<Stack> = {}): Stack {
   return {
@@ -53,7 +54,7 @@ function renderScreen(queryClient?: QueryClient) {
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  return new Response(JSON.stringify(asListBody(body)), { status, headers: { "content-type": "application/json" } });
 }
 
 describe("CreateStackScreen", () => {

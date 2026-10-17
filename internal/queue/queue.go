@@ -60,6 +60,9 @@ type Item struct {
 
 // Status is one row of the caller's own queue history.
 type Status struct {
+	// ID is the row's identity, which a listing pages by; it is not sent to
+	// clients.
+	ID          int64
 	Kind        Kind
 	State       State
 	Summary     string
@@ -150,5 +153,16 @@ type Backend interface {
 
 // Reader serves the queue read API.
 type Reader interface {
-	ListByActor(ctx context.Context, tenantID, actorSubject string, limit int) ([]Status, error)
+	// ListByActor returns up to limit of the actor's items after the cursor,
+	// newest first; a nil cursor starts from the newest.
+	ListByActor(ctx context.Context, tenantID, actorSubject string, after *Cursor, limit int) ([]Status, error)
 }
+
+// Cursor is a position in an actor's items, newest first. id breaks the tie
+// between items queued in the same instant.
+type Cursor struct {
+	CreatedAt time.Time `json:"created_at"`
+	ID        int64     `json:"id"`
+}
+
+func (cursor Cursor) Valid() bool { return !cursor.CreatedAt.IsZero() && cursor.ID > 0 }

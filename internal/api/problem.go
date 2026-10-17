@@ -165,6 +165,13 @@ var problemTypes = []problemType{
 		detail: "No credential encryption key is configured. An operator has to set one.",
 	},
 
+	// Always arrives as a parameter error (a cursor this API never gave out);
+	// the row covers one returned bare.
+	{
+		sentinel: app.ErrInvalidQuery, status: http.StatusBadRequest, slug: invalidQuerySlug,
+		title: invalidQueryTitle, detail: "A query parameter can't be read.",
+	},
+
 	// Last: the specific sentinels above may be joined with it. Left here, it
 	// is a check the router or handler makes unreachable over HTTP, such as a
 	// missing path id, so there is no field to point at.
@@ -174,6 +181,8 @@ var problemTypes = []problemType{
 const (
 	validationFailedSlug  = "validation-failed"
 	validationFailedTitle = "The request has invalid fields"
+	invalidQuerySlug      = "invalid-query"
+	invalidQueryTitle     = "The query string can't be read"
 )
 
 // writeAppError renders an error from the app layer. Field errors come first,
@@ -218,9 +227,14 @@ func writeInternalError(response http.ResponseWriter, err error) {
 
 // fieldProblem renders field errors. A clash with existing data (the
 // duplicate types) stays its 409, carrying the field the app says caused it,
-// so a slug derived from the name points at the name; anything else is the
-// 422 for content that breaks a rule.
+// so a slug derived from the name points at the name. A query parameter that
+// can't be read at all is the 400, even beside one that breaks a rule: the
+// request has to be rewritten before its rules mean anything. Anything else is
+// the 422 for content that breaks a rule.
 func fieldProblem(err error, fieldErrs []*app.FieldError) problemDocument {
+	if errors.Is(err, app.ErrInvalidQuery) {
+		return invalidQueryProblem(problemFieldErrors(fieldErrs))
+	}
 	for _, row := range problemTypes {
 		if row.field != "" && errors.Is(err, row.sentinel) {
 			problem := row.problem(err)
@@ -309,6 +323,18 @@ func planStaleDetail(err error) (string, bool) {
 		return "", false
 	}
 	return fmt.Sprintf("Run #%d's plan no longer matches the template's configuration or revision. Plan again, then apply.", stale.RunNumber), true
+}
+
+// invalidQueryProblem is the 400 for query parameters that can't be read.
+func invalidQueryProblem(entries []problemFieldError) problemDocument {
+	problem := problemDocument{
+		Type: problemTypeURI(invalidQuerySlug), Title: invalidQueryTitle,
+		Status: http.StatusBadRequest, Detail: "A query parameter can't be read.", Errors: entries,
+	}
+	if len(entries) == 1 {
+		problem.Detail = entries[0].Detail
+	}
+	return problem
 }
 
 // validationProblem is the 422 for content that parses but breaks a rule.

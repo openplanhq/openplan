@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { cn } from "@/lib/utils";
 import RunStatusLabel from "./RunStatusLabel";
 import RequestIdNote from "../../shared/RequestIdNote";
+import LoadMoreButton from "../../shared/LoadMoreButton";
 
 // 8px either side of a column boundary makes the 16px between columns, and
 // 16px at the row's ends. Each column's width is its content's (run 64,
@@ -26,7 +27,8 @@ interface TemplateRunHistoryProps {
   stackTemplateId: string;
 }
 
-// Every run recorded for a template, newest first: its number (the link to
+// Every run recorded for a template, newest first, a page at a time with
+// Load more under the table: its number (the link to
 // it), where it is, what its plan would change, who started it and when. The
 // rows take no actions: a plan is approved or discarded on its run, after
 // someone has read it, and a run planning or applying cannot be stopped.
@@ -101,6 +103,16 @@ export default function TemplateRunHistory({ stackId, stackTemplateId }: Templat
             </TableBody>
           </Table>
         </div>
+      )}
+      {runsQuery.hasNextPage && (
+        <LoadMoreButton
+          className="mt-3"
+          noun="runs"
+          loading={runsQuery.isFetchingNextPage}
+          failed={runsQuery.isFetchNextPageError}
+          onClick={() => void runsQuery.fetchNextPage()}
+          testId="template-run-history-load-more"
+        />
       )}
     </div>
   );

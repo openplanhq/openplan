@@ -1,0 +1,14 @@
+$kind: http-request
+description: |-
+  The same run `GET /v1/tenants/{tenant_id}/template-runs/{run_id}`
+  returns, executions included, found by the number people see and a
+  run's page is addressed by, so a run beyond the first page of the
+  list can be opened directly. A number with no run, or one that isn't
+  a positive integer, returns `404`.
+method: GET
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/stack-templates/{{stack_template_id}}/runs/{{run_number}}'
+scripts:
+  - type: afterResponse
+    code: pm.test('status is 200', () => pm.response.to.have.status(200));
+    language: text/javascript
+order: 3000

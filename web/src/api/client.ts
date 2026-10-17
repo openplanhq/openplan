@@ -5,10 +5,9 @@ import type {
   AttentionItem,
   CredentialMetadata,
   GrantView,
-  ListGrantsResponse,
+  ListPage,
   Operation,
   ProblemFieldError,
-  SearchUsersResponse,
   Stack,
   StackListItem,
   StackTemplate,
@@ -17,7 +16,8 @@ import type {
   TemplateRevision,
   TemplateRun,
   TemplateRunLog,
-  TemplateVariable
+  TemplateVariable,
+  UserProfile
 } from "./types";
 
 // A failed request, carrying the server's problem document. message is the
@@ -104,20 +104,70 @@ export function getTemplateRegistration(tenantID: string, registrationID: string
 }
 
 // A Go nil slice is JSON null. Servers before the fix store and serve a
-// template registered without tags as "tags": null, and could serve a list
-// with nothing in it as null; every screen reads them as lists.
+// template registered without tags as "tags": null; every screen reads them
+// as a list.
 type TemplateRevisionResponse = Omit<TemplateRevision, "tags"> & { tags?: string[] | null };
 
 export async function getTemplateRevisionVariables(tenantID: string, templateRevisionID: string): Promise<TemplateVariable[]> {
-  const variables = await requestJSON<TemplateVariable[] | null>(
+  return listItems<TemplateVariable>(
     `/v1/tenants/${encodeURIComponent(tenantID)}/template-revisions/${encodeURIComponent(templateRevisionID)}/variables`
   );
-  return variables ?? [];
 }
 
+// Where a list starts and how much of it to read. cursor is the previous
+// page's next_cursor; without one, the first page.
+export interface PageOptions {
+  cursor?: string;
+  limit?: number;
+}
+
+function pageQuery(options: PageOptions & { q?: string }): string {
+  const params = new URLSearchParams();
+  if (options.q) {
+    params.set("q", options.q);
+  }
+  if (options.limit !== undefined) {
+    params.set("limit", String(options.limit));
+  }
+  if (options.cursor) {
+    params.set("cursor", options.cursor);
+  }
+  const query = params.toString();
+  return query === "" ? "" : `?${query}`;
+}
+
+// The largest page the API serves, for a caller that reads every page.
+const MAX_PAGE_LIMIT = 100;
+
+/** Follows next_cursor from the first page to the last and returns every item. */
+export async function listAll<T>(fetchPage: (cursor: string | undefined) => Promise<ListPage<T>>): Promise<T[]> {
+  const items: T[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await fetchPage(cursor);
+    items.push(...page.items);
+    cursor = page.next_cursor ?? undefined;
+  } while (cursor !== undefined);
+  return items;
+}
+
+// A list that is always one page: its items, never null.
+async function listItems<T>(path: string): Promise<T[]> {
+  const page = await requestJSON<ListPage<T>>(path);
+  return page.items ?? [];
+}
+
+// Every revision, read a page at a time. Screens group revisions by source
+// template and look them up by id, which needs the whole set; a
+// source-templates endpoint would let each ask for what it shows (issue 405
+// on openplanhq/openplan).
 export async function listTemplateRevisions(tenantID: string): Promise<TemplateRevision[]> {
-  const templateRevisions = await requestJSON<TemplateRevisionResponse[] | null>(`/v1/tenants/${encodeURIComponent(tenantID)}/template-revisions`);
-  return (templateRevisions ?? []).map((templateRevision) => ({ ...templateRevision, tags: templateRevision.tags ?? [] }));
+  const templateRevisions = await listAll((cursor) =>
+    requestJSON<ListPage<TemplateRevisionResponse>>(
+      `/v1/tenants/${encodeURIComponent(tenantID)}/template-revisions${pageQuery({ cursor, limit: MAX_PAGE_LIMIT })}`
+    )
+  );
+  return templateRevisions.map((templateRevision) => ({ ...templateRevision, tags: templateRevision.tags ?? [] }));
 }
 
 export function createStack(tenantID: string, body: CreateStackRequest): Promise<Stack> {
@@ -127,13 +177,14 @@ export function createStack(tenantID: string, body: CreateStackRequest): Promise
   });
 }
 
-export function listStacks(tenantID: string): Promise<StackListItem[]> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/stacks`);
+/** One page of the stacks the caller can view, newest first; q matches name or slug. */
+export function listStacks(tenantID: string, options: PageOptions & { q?: string } = {}): Promise<ListPage<StackListItem>> {
+  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/stacks${pageQuery(options)}`);
 }
 
 /** Lists plans waiting for approval and failed destroys on every visible stack. */
 export function listAttention(tenantID: string): Promise<AttentionItem[]> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/attention`);
+  return listItems(`/v1/tenants/${encodeURIComponent(tenantID)}/attention`);
 }
 
 export function getStack(tenantID: string, stackID: string): Promise<StackView> {
@@ -142,7 +193,7 @@ export function getStack(tenantID: string, stackID: string): Promise<StackView> 
 
 /** Lists Stack credential names and metadata; secret values are never returned. */
 export function listStackCredentials(tenantID: string, stackID: string): Promise<CredentialMetadata[]> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/stacks/${encodeURIComponent(stackID)}/credentials`);
+  return listItems(`/v1/tenants/${encodeURIComponent(tenantID)}/stacks/${encodeURIComponent(stackID)}/credentials`);
 }
 
 /** Stores one Stack-scoped credential and returns write-only metadata. */
@@ -157,7 +208,7 @@ export function deleteStackCredential(tenantID: string, stackID: string, credent
 
 /** Lists StackTemplate credential names and metadata without secret values. */
 export function listStackTemplateCredentials(tenantID: string, stackTemplateID: string): Promise<CredentialMetadata[]> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/stack-templates/${encodeURIComponent(stackTemplateID)}/credentials`);
+  return listItems(`/v1/tenants/${encodeURIComponent(tenantID)}/stack-templates/${encodeURIComponent(stackTemplateID)}/credentials`);
 }
 
 /** Stores one StackTemplate-scoped credential and returns write-only metadata. */
@@ -202,12 +253,21 @@ export function getTemplateRun(tenantID: string, runID: string): Promise<Templat
   return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/template-runs/${encodeURIComponent(runID)}`);
 }
 
-export function listTemplateRuns(tenantID: string, stackTemplateID: string): Promise<TemplateRun[]> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/stack-templates/${encodeURIComponent(stackTemplateID)}/runs`);
+/** One page of a template's runs, newest first. */
+export function listTemplateRuns(tenantID: string, stackTemplateID: string, options: PageOptions = {}): Promise<ListPage<TemplateRun>> {
+  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/stack-templates/${encodeURIComponent(stackTemplateID)}/runs${pageQuery(options)}`);
+}
+
+// A run's page is addressed by its number, which the runs list may not reach
+// on its first page, so the run is read by number rather than found in it.
+export function getTemplateRunByNumber(tenantID: string, stackTemplateID: string, runNumber: string): Promise<TemplateRun> {
+  return requestJSON(
+    `/v1/tenants/${encodeURIComponent(tenantID)}/stack-templates/${encodeURIComponent(stackTemplateID)}/runs/${encodeURIComponent(runNumber)}`
+  );
 }
 
 export function listTemplateRunLogs(tenantID: string, runID: string): Promise<TemplateRunLog[]> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/template-runs/${encodeURIComponent(runID)}/logs`);
+  return listItems(`/v1/tenants/${encodeURIComponent(tenantID)}/template-runs/${encodeURIComponent(runID)}/logs`);
 }
 
 // name is the log's name from the run's log list, such as "plan-1", not a
@@ -238,8 +298,8 @@ interface AssignStackRoleBody {
   role: string;
 }
 
-export function listStackGrants(tenantID: string, stackID: string): Promise<ListGrantsResponse> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/stacks/${encodeURIComponent(stackID)}/grants`);
+export function listStackGrants(tenantID: string, stackID: string): Promise<GrantView[]> {
+  return listItems(`/v1/tenants/${encodeURIComponent(tenantID)}/stacks/${encodeURIComponent(stackID)}/grants`);
 }
 
 // assignStackRole sets userSub's role on the stack, creating the grant or
@@ -257,13 +317,9 @@ export function revokeStackRole(tenantID: string, stackID: string, userSub: stri
   });
 }
 
-export function searchUsers(tenantID: string, q: string, first: number, max: number): Promise<SearchUsersResponse> {
-  const params = new URLSearchParams({ q });
-  if (first > 0) {
-    params.set("first", String(first));
-  }
-  params.set("max", String(max));
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/users/search?${params.toString()}`);
+/** One page of the people whose name or email matches q, ordered by name. */
+export function searchUsers(tenantID: string, q: string, options: PageOptions = {}): Promise<ListPage<UserProfile>> {
+  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/users/search${pageQuery({ ...options, q })}`);
 }
 
 // The app's own sign-in screen. Not a server route: it is a page with one
