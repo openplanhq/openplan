@@ -26,6 +26,7 @@ func productionAPIValues() map[string]string {
 	values["OIDC_ISSUER_URL"] = "https://id.example.com/realms/openplan"
 	values["DATABASE_URL"] = "postgres://user:pass@localhost:5432/db?sslmode=disable"
 	values["TEMPORAL_ADDRESS"] = "localhost:7233"
+	values["VALKEY_URL"] = "redis://localhost:6379"
 	values["SESSION_ENCRYPTION_KEY"] = freshKey
 	values["CREDENTIAL_ENCRYPTION_KEY"] = freshKey
 	return values

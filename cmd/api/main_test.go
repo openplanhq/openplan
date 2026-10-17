@@ -549,6 +549,7 @@ func apiTestValues() map[string]string {
 		"DATABASE_URL":                   "postgres://user:pass@localhost:5432/db?sslmode=disable",
 		"HTTP_ADDRESS":                   ":9090",
 		"TEMPORAL_ADDRESS":               "localhost:7233",
+		"VALKEY_URL":                     "redis://localhost:6379",
 		"TEMPORAL_NAMESPACE":             "openplan",
 		"ARTIFACT_STORE_KIND":            "filesystem",
 		"ARTIFACT_STORE_FILESYSTEM_ROOT": "/var/lib/openplan/artifacts",

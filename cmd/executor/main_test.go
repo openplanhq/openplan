@@ -171,6 +171,8 @@ func executorTestEnv(key string) string {
 	switch key {
 	case "TEMPORAL_ADDRESS":
 		return "localhost:7233"
+	case "VALKEY_URL":
+		return "redis://localhost:6379"
 	case "TEMPORAL_NAMESPACE":
 		return "openplan"
 	case "EXECUTOR_RUN_ROOT":

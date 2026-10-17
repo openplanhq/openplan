@@ -39,6 +39,9 @@ type APIConfig struct {
 	ArtifactStore           ArtifactStoreConfig
 	Security                SecurityConfig
 	CredentialEncryptionKey Secret
+	// LiveLogURL is the Valkey, as a redis:// or rediss:// URL, that the api
+	// tails running commands' output from.
+	LiveLogURL string
 	// GitHubApp mints installation tokens for template sync, which runs on the
 	// control plane.
 	GitHubApp GitHubAppConfig
@@ -58,6 +61,9 @@ type ExecutorConfig struct {
 	// RunRoot is where each run's workspace is checked out.
 	RunRoot       string
 	ArtifactStore ArtifactStoreConfig
+	// LiveLogURL is the Valkey, as a redis:// or rediss:// URL, that the
+	// executor streams running commands' output to.
+	LiveLogURL string
 	// MaxSessions caps the sessions, and so the runs, this executor holds at
 	// once. Each runs its activities in sandboxes of their own.
 	MaxSessions int
@@ -119,6 +125,7 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 		TemporalAddress:   strings.TrimSpace(getenv("TEMPORAL_ADDRESS")),
 		TemporalNamespace: strings.TrimSpace(getenv("TEMPORAL_NAMESPACE")),
 		ArtifactStore:     artifactStore,
+		LiveLogURL:        strings.TrimSpace(getenv("VALKEY_URL")),
 		Security:          security,
 	}
 	if cfg.HTTPAddress == "" {
@@ -154,6 +161,9 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	if cfg.TemporalAddress == "" {
 		return APIConfig{}, fmt.Errorf("%w: TEMPORAL_ADDRESS is required", ErrInvalidConfig)
 	}
+	if cfg.LiveLogURL == "" {
+		return APIConfig{}, fmt.Errorf("%w: VALKEY_URL is required", ErrInvalidConfig)
+	}
 
 	return cfg, nil
 }
@@ -169,6 +179,7 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 		TemporalNamespace: strings.TrimSpace(getenv("TEMPORAL_NAMESPACE")),
 		RunRoot:           strings.TrimSpace(getenv("EXECUTOR_RUN_ROOT")),
 		ArtifactStore:     artifactStore,
+		LiveLogURL:        strings.TrimSpace(getenv("VALKEY_URL")),
 	}
 	if cfg.RunRoot == "" {
 		cfg.RunRoot = DefaultExecutorRunRoot
@@ -226,6 +237,9 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 	}
 	if cfg.TemporalAddress == "" {
 		return ExecutorConfig{}, fmt.Errorf("%w: TEMPORAL_ADDRESS is required", ErrInvalidConfig)
+	}
+	if cfg.LiveLogURL == "" {
+		return ExecutorConfig{}, fmt.Errorf("%w: VALKEY_URL is required", ErrInvalidConfig)
 	}
 
 	return cfg, nil
