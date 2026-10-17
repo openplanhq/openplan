@@ -1,10 +1,13 @@
 package api
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -109,7 +112,7 @@ func TestWrappedFieldErrorIsNotA500(t *testing.T) {
 	t.Parallel()
 
 	fieldErr := &app.FieldError{Path: []string{"name"}, Issue: app.IssueRequired, Message: "name is required", Err: app.ErrInvalidCommand}
-	err := errors.Join(fmt.Errorf("create stack: %w", fieldErr), errors.New("audit write failed"))
+	err := errors.Join(fmt.Errorf("create stack: %w", fieldErr), fmt.Errorf("validate: %w", app.ErrInvalidCommand))
 	response, problem := renderAppError(t, err)
 	if response.Code != http.StatusUnprocessableEntity || len(problem.Errors) != 1 || problem.Errors[0].Pointer != "#/name" {
 		t.Fatalf("status = %d, problem = %+v, want a 422 on #/name", response.Code, problem)
@@ -213,5 +216,57 @@ func TestPlanStaleDetailNamesTheRun(t *testing.T) {
 	want := "Run #7's plan no longer matches the template's configuration or revision. Plan again, then apply."
 	if problem.Type != problemTypeURI("plan-stale") || problem.Detail != want {
 		t.Fatalf("problem = %+v, want plan-stale with detail %q", problem, want)
+	}
+}
+
+// A field error joined with a failure that isn't one must not answer 422:
+// that would blame the request and hide the failure from the log.
+func TestFieldErrorJoinedWithAFailureIsALogged500(t *testing.T) { // not parallel: it swaps the log output
+	var logged bytes.Buffer
+	log.SetOutput(&logged)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+	fieldErr := &app.FieldError{Path: []string{"name"}, Issue: app.IssueRequired, Message: "name is required", Err: app.ErrInvalidCommand}
+	err := errors.Join(fieldErr, fmt.Errorf("append audit event: %w", errors.New("pq: connection reset")))
+	response, problem := renderAppError(t, err)
+
+	if response.Code != http.StatusInternalServerError || problem.Type != blankType || len(problem.Errors) != 0 {
+		t.Fatalf("status = %d, problem = %+v, want a bare 500", response.Code, problem)
+	}
+	if !strings.Contains(logged.String(), "pq: connection reset") || !strings.Contains(logged.String(), "request-1") {
+		t.Fatalf("log = %q, want the cause under the request id", logged.String())
+	}
+}
+
+// Wrapped sentinels and the app's own error types are known causes, so field
+// errors joined with them still answer 422.
+func TestFieldErrorsWithKnownCausesStay422(t *testing.T) {
+	t.Parallel()
+
+	fieldErr := &app.FieldError{Path: []string{"name"}, Issue: app.IssueRequired, Message: "name is required", Err: app.ErrInvalidCommand}
+	err := errors.Join(fmt.Errorf("create stack: %w", fieldErr), fmt.Errorf("check: %w", app.ErrInvalidCommand))
+	if response, _ := renderAppError(t, err); response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422", response.Code)
+	}
+}
+
+// A duplicate the app reports on a field stays a 409 of its type and points
+// at the field the app named: the name, when the slug was made from it.
+func TestDuplicateFieldErrorIsItsConflict(t *testing.T) {
+	t.Parallel()
+
+	err := fmt.Errorf("create stack: %w", &app.FieldError{
+		Path: []string{"name"}, Issue: app.IssueDuplicate,
+		Message: `Another stack already uses the slug "acme-prod", made from this name. Choose another name.`, Err: app.ErrDuplicateStackSlug,
+	})
+	response, problem := renderAppError(t, err)
+	if response.Code != http.StatusConflict || problem.Type != problemTypeURI("duplicate-slug") {
+		t.Fatalf("status = %d, problem = %+v, want 409 duplicate-slug", response.Code, problem)
+	}
+	if len(problem.Errors) != 1 || problem.Errors[0].Pointer != "#/name" || problem.Errors[0].Issue != app.IssueDuplicate {
+		t.Fatalf("errors = %+v, want one duplicate on #/name", problem.Errors)
+	}
+	if !strings.Contains(problem.Detail, `"acme-prod"`) {
+		t.Fatalf("detail = %q, want the field error's sentence", problem.Detail)
 	}
 }

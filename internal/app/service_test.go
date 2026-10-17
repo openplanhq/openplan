@@ -152,6 +152,8 @@ func TestCreateStackReturnsDuplicateSlugConflict(t *testing.T) {
 	if !errors.Is(err, ErrDuplicateStackSlug) {
 		t.Fatalf("error = %v, want ErrDuplicateStackSlug", err)
 	}
+	// The slug was sent, so the clash is the slug field's.
+	assertFieldIssues(t, err, "slug duplicate")
 	// A rejected creation leaves no owner behind. Under a real transaction the
 	// rollback guarantees it; here the in-memory engine shows the same outcome
 	// because the grant is written after the row that failed.
@@ -161,6 +163,31 @@ func TestCreateStackReturnsDuplicateSlugConflict(t *testing.T) {
 	}
 	if len(grants) != 0 {
 		t.Fatalf("grants = %#v, want none after a rejected creation", grants)
+	}
+}
+
+// With no slug sent, the server made it from the name, so the name is the
+// field the caller can change; pointing at a slug field the form doesn't
+// have would leave nothing to mark.
+func TestCreateStackDuplicateDerivedSlugPointsAtTheName(t *testing.T) {
+	t.Parallel()
+
+	stacks := &recordingStackRepository{createErr: ErrDuplicateStackSlug}
+	service := NewService(Service{
+		Stacks:        stacks,
+		Work:          newRecordingWork(stacks),
+		Authorization: testPlatformAuthorizer(t),
+		StackIDs:      fixedStackIDGenerator{id: domain.StackID("stack_new")},
+		Clock:         fixedClock{now: time.Now()},
+	})
+
+	_, err := service.CreateStack(authenticatedContext(), CreateStackCommand{TenantID: "tenant_123", Name: "Acme Prod"})
+	if !errors.Is(err, ErrDuplicateStackSlug) {
+		t.Fatalf("error = %v, want ErrDuplicateStackSlug", err)
+	}
+	assertFieldIssues(t, err, "name duplicate")
+	if !strings.Contains(FieldErrors(err)[0].Message, `"acme-prod"`) {
+		t.Fatalf("message = %q, want it to name the derived slug", FieldErrors(err)[0].Message)
 	}
 }
 

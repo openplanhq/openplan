@@ -641,6 +641,16 @@ func (service *Service) CreateStack(ctx context.Context, command CreateStackComm
 		}
 		return service.Authorization.Grant(ctx, owner, parent)
 	}); err != nil {
+		// The store knows only that the slug clashed. Which field made the
+		// slug is known here: when none was sent it came from the name, and
+		// the name is what the caller has to change.
+		if errors.Is(err, ErrDuplicateStackSlug) {
+			if strings.TrimSpace(command.Slug) == "" {
+				return domain.Stack{}, fieldError(ErrDuplicateStackSlug, IssueDuplicate,
+					fmt.Sprintf("Another stack already uses the slug %q, made from this name. Choose another name.", slug), "name")
+			}
+			return domain.Stack{}, fieldError(ErrDuplicateStackSlug, IssueDuplicate, "Another stack already uses this slug.", "slug")
+		}
 		return domain.Stack{}, fmt.Errorf("create stack: %w", err)
 	}
 

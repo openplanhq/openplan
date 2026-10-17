@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/vishu42/openplan/internal/app"
@@ -182,7 +183,16 @@ const (
 // comes from err.Error(), which is a Go error chain naming call sites.
 func writeAppError(response http.ResponseWriter, err error) {
 	if fieldErrs := app.FieldErrors(err); len(fieldErrs) > 0 {
-		writeProblem(response, validationProblem(fieldErrs))
+		// A field error joined with a failure that is neither a field error
+		// nor a known cause, such as a database error, is the server's
+		// failure: answering 422 would blame the request and drop the cause
+		// from the log. Matching the table would do the same through the
+		// field errors' own sentinels, so it is the logged 500.
+		if !onlyKnownCauses(err) {
+			writeInternalError(response, err)
+			return
+		}
+		writeProblem(response, fieldProblem(err, fieldErrs))
 		return
 	}
 	for _, row := range problemTypes {
@@ -191,15 +201,60 @@ func writeAppError(response http.ResponseWriter, err error) {
 			return
 		}
 	}
-	// Authorization failures land here, as 500. A denial never does: it is
-	// (false, nil) at the boundary and becomes ErrForbidden, so a failure can
-	// never render as 403.
-	//
-	// The body says nothing about the cause, so the log is the only place it
-	// survives; the request id is how an operator finds this line.
+	writeInternalError(response, err)
+}
+
+// writeInternalError is the 500 for anything unmapped. Authorization failures
+// land here: a denial never does, since it is (false, nil) at the boundary and
+// becomes ErrForbidden, so a failure can never render as 403.
+//
+// The body says nothing about the cause, so the log is the only place it
+// survives; the request id is how an operator finds this line.
+func writeInternalError(response http.ResponseWriter, err error) {
 	log.Printf("api: internal error request_id=%s: %v", requestIDOf(response), err)
 	writeProblem(response, blankProblem(http.StatusInternalServerError,
 		"Something went wrong on the server. Quote the request ID when you report it."))
+}
+
+// fieldProblem renders field errors. A clash with existing data (the
+// duplicate types) stays its 409, carrying the field the app says caused it,
+// so a slug derived from the name points at the name; anything else is the
+// 422 for content that breaks a rule.
+func fieldProblem(err error, fieldErrs []*app.FieldError) problemDocument {
+	for _, row := range problemTypes {
+		if row.field != "" && errors.Is(err, row.sentinel) {
+			problem := row.problem(err)
+			problem.Errors = problemFieldErrors(fieldErrs)
+			if len(fieldErrs) == 1 {
+				problem.Detail = fieldErrs[0].Message
+			}
+			return problem
+		}
+	}
+	return validationProblem(fieldErrs)
+}
+
+// onlyKnownCauses reports whether every leaf of err's tree is a field error
+// or an app sentinel, so nothing in it is a failure the response would hide.
+// Wrapping (fmt.Errorf with %w, the app's own error types) is looked through.
+func onlyKnownCauses(err error) bool {
+	if _, ok := err.(*app.FieldError); ok { //nolint:errorlint // a field error is a leaf here; its sentinel is known
+		return true
+	}
+	switch wrapped := err.(type) { //nolint:errorlint // walking the tree by hand is the point
+	case interface{ Unwrap() []error }:
+		for _, inner := range wrapped.Unwrap() {
+			if !onlyKnownCauses(inner) {
+				return false
+			}
+		}
+		return true
+	case interface{ Unwrap() error }:
+		if inner := wrapped.Unwrap(); inner != nil {
+			return onlyKnownCauses(inner)
+		}
+	}
+	return slices.Contains(app.Sentinels(), err)
 }
 
 func (row problemType) problem(err error) problemDocument {

@@ -462,8 +462,9 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
           description: |
-            The slug is already taken in this tenant (`duplicate-slug`, with an
-            `errors` entry on `#/slug`).
+            The slug is already taken in this tenant (`duplicate-slug`). Its
+            `errors` entry points at `#/slug`, or at `#/name` when no slug was
+            sent and the server made it from the name.
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
