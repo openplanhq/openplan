@@ -14,8 +14,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
+
 	"github.com/vishu42/openplan/internal/domain"
 	"github.com/vishu42/openplan/internal/githubapp"
+	"github.com/vishu42/openplan/internal/livelog"
 	gitrunner "github.com/vishu42/openplan/internal/runner"
 	"github.com/vishu42/openplan/internal/runseal"
 )
@@ -345,6 +349,66 @@ func TestRunTerraformWritesCommandLogFile(t *testing.T) {
 	}
 	if !reflect.DeepEqual(executor.env, []string{"TF_VAR_region=us-east-1"}) {
 		t.Fatalf("env = %#v, want TF_VAR_region", executor.env)
+	}
+}
+
+// A failed command is published too: its last lines are usually the ones
+// that say why it failed.
+func TestRunTerraformPublishesTheSpoolLive(t *testing.T) {
+	t.Parallel()
+
+	for name, commandErr := range map[string]error{
+		"succeeded": nil,
+		"failed":    errors.New("exit status 1"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			server := miniredis.RunT(t)
+			client := redis.NewClient(&redis.Options{Addr: server.Addr()})
+			t.Cleanup(func() { _ = client.Close() })
+			activities, workspace := newTestTerraform(t, &recordingCommandExecutor{stdout: "hello\n", err: commandErr})
+			activities.WithLiveLogs(client)
+			input := planInput(workspace)
+			input.LogName = "plan-1"
+
+			if _, err := activities.RunTerraform(context.Background(), input); (err != nil) != (commandErr != nil) {
+				t.Fatalf("RunTerraform error = %v, want one only if the command failed", err)
+			}
+
+			// The command ends well inside a flush interval: what is in the
+			// stream is the final flush's, made before RunTerraform returned.
+			messages, err := client.XRange(context.Background(), "runlog:{run_123}:plan-1", "-", "+").Result()
+			if err != nil {
+				t.Fatalf("XRANGE: %v", err)
+			}
+			if len(messages) != 1 {
+				t.Fatalf("stream holds %d entries, want 1", len(messages))
+			}
+			entry, err := livelog.ParseEntry(messages[0])
+			if err != nil {
+				t.Fatalf("ParseEntry: %v", err)
+			}
+			if entry.Kind != livelog.KindPiece || entry.Offset != 0 || string(entry.Data) != "hello\n" {
+				t.Fatalf("entry = %+v, want a piece at 0 of %q", entry, "hello\n")
+			}
+		})
+	}
+}
+
+func TestRunTerraformWithoutLiveLogsStillSpools(t *testing.T) {
+	t.Parallel()
+
+	activities, workspace := newTestTerraform(t, &recordingCommandExecutor{stdout: "hello\n"})
+	activities.WithLiveLogs(nil)
+	input := planInput(workspace)
+	input.LogName = "plan-1"
+
+	if _, err := activities.RunTerraform(context.Background(), input); err != nil {
+		t.Fatalf("RunTerraform returned error: %v", err)
+	}
+	if got := runLog(t, workspace, "plan-1.log"); got != "hello\n" {
+		t.Fatalf("plan-1 log = %q, want %q", got, "hello\n")
 	}
 }
 

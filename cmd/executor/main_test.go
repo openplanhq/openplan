@@ -8,6 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
+
 	"github.com/vishu42/openplan/internal/activities"
 	"github.com/vishu42/openplan/internal/config"
 	"github.com/vishu42/openplan/internal/domain"
@@ -54,8 +57,14 @@ func TestRunWiresTemporalWorker(t *testing.T) {
 	if deps.workerOptions.MaxConcurrentSessionExecutionSize != config.DefaultExecutorMaxSessions {
 		t.Fatalf("max concurrent sessions = %d, want %d", deps.workerOptions.MaxConcurrentSessionExecutionSize, config.DefaultExecutorMaxSessions)
 	}
-	if !reflect.DeepEqual(deps.calls, []string{"newSandbox", "dialTemporal"}) {
-		t.Fatalf("startup order = %v, want the sandbox readied before dialing Temporal", deps.calls)
+	if !reflect.DeepEqual(deps.calls, []string{"newSandbox", "dialLiveLogs", "dialTemporal"}) {
+		t.Fatalf("startup order = %v, want the sandbox readied and Valkey dialed before Temporal", deps.calls)
+	}
+	if deps.liveLogURL != "redis://localhost:6379" {
+		t.Fatalf("dialLiveLogs got %q, want VALKEY_URL", deps.liveLogURL)
+	}
+	if deps.execution.live != deps.liveLogs {
+		t.Fatal("activities did not get the client dialLiveLogs returned")
 	}
 	if deps.sandboxConfig.Runsc != config.DefaultExecutorSandboxRunsc {
 		t.Fatalf("newSandbox got runsc %q, want %q", deps.sandboxConfig.Runsc, config.DefaultExecutorSandboxRunsc)
@@ -89,6 +98,9 @@ func TestRunWiresTemporalWorker(t *testing.T) {
 	}
 	if !deps.temporalClient.closed {
 		t.Fatal("temporal client was not closed")
+	}
+	if err := deps.liveLogs.Ping(context.Background()).Err(); !errors.Is(err, redis.ErrClosed) {
+		t.Fatalf("live log client ping after run = %v, want it closed", err)
 	}
 }
 
@@ -129,6 +141,24 @@ func TestRunStopsWhenItCannotSandbox(t *testing.T) {
 	err := runWithDependencies(context.Background(), executorTestEnv, deps.executorDependencies)
 	if !errors.Is(err, checkErr) || !strings.Contains(err.Error(), "sandbox") {
 		t.Fatalf("error = %v, want checkErr wrapped as sandbox", err)
+	}
+	if slices.Contains(deps.calls, "dialTemporal") {
+		t.Fatalf("calls = %v, want no Temporal dial", deps.calls)
+	}
+}
+
+// An executor that cannot publish live output would run commands whose output
+// nobody sees until they end, so it does not start at all.
+func TestRunFailsWhenValkeyIsUnreachable(t *testing.T) {
+	t.Parallel()
+
+	dialErr := errors.New("ping live log server localhost:6379: connection refused")
+	deps := newRecordingExecutorDependencies(t)
+	deps.liveLogsErr = dialErr
+
+	err := runWithDependencies(context.Background(), executorTestEnv, deps.executorDependencies)
+	if !errors.Is(err, dialErr) || !strings.Contains(err.Error(), "live logs") {
+		t.Fatalf("error = %v, want dialErr wrapped as live logs", err)
 	}
 	if slices.Contains(deps.calls, "dialTemporal") {
 		t.Fatalf("calls = %v, want no Temporal dial", deps.calls)
@@ -203,6 +233,11 @@ type recordingExecutorDependencies struct {
 	sandboxErr     error
 	sandboxConfig  config.SandboxConfig
 	sandboxRunRoot string
+	// liveLogs and liveLogsErr are what dialLiveLogs returns, and
+	// liveLogURL what it was given.
+	liveLogs    *redis.Client
+	liveLogsErr error
+	liveLogURL  string
 	// calls records the startup steps in the order they ran.
 	calls []string
 }
@@ -216,6 +251,9 @@ func newRecordingExecutorDependencies(t *testing.T) *recordingExecutorDependenci
 		// A pointer, so the test can compare it: InProcess holds a map.
 		runner: &sandbox.InProcess{},
 	}
+	server := miniredis.RunT(t)
+	deps.liveLogs = redis.NewClient(&redis.Options{Addr: server.Addr()})
+	t.Cleanup(func() { _ = deps.liveLogs.Close() })
 	deps.executorDependencies = executorDependencies{
 		dialTemporal: func(_ context.Context, cfg temporal.Config) (client.Client, error) {
 			deps.calls = append(deps.calls, "dialTemporal")
@@ -248,6 +286,14 @@ func newRecordingExecutorDependencies(t *testing.T) *recordingExecutorDependenci
 			ch := make(chan any)
 			close(ch)
 			return ch
+		},
+		dialLiveLogs: func(_ context.Context, url string) (*redis.Client, error) {
+			deps.calls = append(deps.calls, "dialLiveLogs")
+			deps.liveLogURL = url
+			if deps.liveLogsErr != nil {
+				return nil, deps.liveLogsErr
+			}
+			return deps.liveLogs, nil
 		},
 		newSandbox: func(cfg config.SandboxConfig, runRoot string) (sandbox.Runner, error) {
 			deps.calls = append(deps.calls, "newSandbox")

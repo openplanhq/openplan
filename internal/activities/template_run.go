@@ -14,6 +14,7 @@ import (
 
 	"github.com/vishu42/openplan/internal/config"
 	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/livelog"
 	"github.com/vishu42/openplan/internal/logsink"
 	"github.com/vishu42/openplan/internal/runseal"
 	"github.com/vishu42/openplan/internal/sandbox"
@@ -81,6 +82,10 @@ type TemplateRunActivities struct {
 	// heartbeatInterval overrides domain.TerraformHeartbeatInterval in tests
 	// that cannot wait twenty seconds for a tick.
 	heartbeatInterval time.Duration
+	// live is where RunTerraform publishes each command's spool as it grows,
+	// from this process: the sandbox never holds the Valkey credential. Nil
+	// leaves live logs off.
+	live livelog.Stream
 }
 
 // NewTemplateRunActivities constructs the execution activities. A nil keys
@@ -90,6 +95,14 @@ func NewTemplateRunActivities(runner sandbox.Runner, workspaces sandbox.Workspac
 		keys = runseal.NewKeyRing()
 	}
 	return &TemplateRunActivities{sandbox: runner, workspaces: workspaces, store: store, plans: plans, keys: keys}
+}
+
+// WithLiveLogs publishes each command's output live to stream. A nil stream
+// leaves live logs off; only tests pass one, since the executor will not start
+// without its Valkey.
+func (activities *TemplateRunActivities) WithLiveLogs(stream livelog.Stream) *TemplateRunActivities {
+	activities.live = stream
+	return activities
 }
 
 // PrepareWorkspace lays out the run's directory and makes the run's sealing
@@ -167,7 +180,8 @@ func (activities *TemplateRunActivities) FetchSource(ctx context.Context, input 
 
 // RunTerraform runs one Terraform command in a sandbox with only the run's
 // cloud credentials, spooling its output, redacted and capped, to the run's
-// logs/, which no tofu sandbox mounts. UploadLog uploads it afterwards,
+// logs/, which no tofu sandbox mounts. With live logs on, the spool is also
+// published to its stream as it grows. UploadLog uploads it afterwards,
 // whether or not the command succeeded.
 func (activities *TemplateRunActivities) RunTerraform(ctx context.Context, input domain.RunTerraformActivityInput) (domain.RunTerraformActivityOutput, error) {
 	var environment map[string]string
@@ -196,6 +210,15 @@ func (activities *TemplateRunActivities) RunTerraform(ctx context.Context, input
 		return domain.RunTerraformActivityOutput{}, fmt.Errorf("open terraform log: %w", err)
 	}
 	spool := newRedactingWriter(newCappedWriter(file, spoolLimit), credentialValues(environment))
+	// The flusher tails the spool file, not the writer, so the command's
+	// output never waits on Valkey, and what it publishes is already
+	// redacted and capped.
+	stopLive := func() {}
+	if activities.live != nil {
+		flusher := livelog.NewFlusher(activities.live, livelog.StreamKey(input.RunID, input.LogName),
+			filepath.Join(logsDir, logsink.FileName(input.LogName)))
+		stopLive = flusher.Start(ctx)
+	}
 
 	stopHeartbeat := activities.startHeartbeat(ctx)
 	data, runErr := activities.sandbox.Run(ctx, sandbox.Job{
@@ -207,8 +230,13 @@ func (activities *TemplateRunActivities) RunTerraform(ctx context.Context, input
 		Mounts: []sandbox.Mount{{Path: workspace}},
 	}, spool)
 	stopHeartbeat()
-	if err := spool.Close(); err != nil && runErr == nil {
-		return domain.RunTerraformActivityOutput{}, fmt.Errorf("close terraform log: %w", err)
+	closeErr := spool.Close()
+	// The final flush comes before the command's error is looked at, so a
+	// failed command's last lines, usually the ones that say why, are
+	// published too.
+	stopLive()
+	if closeErr != nil && runErr == nil {
+		return domain.RunTerraformActivityOutput{}, fmt.Errorf("close terraform log: %w", closeErr)
 	}
 	if runErr != nil {
 		return domain.RunTerraformActivityOutput{}, fmt.Errorf("run terraform: %w", runErr)
