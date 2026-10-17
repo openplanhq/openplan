@@ -1,0 +1,18 @@
+$kind: http-example
+request:
+  url: '{{base_url}}/v1/tenants/{{tenant_id}}/stack-templates/{{stack_template_id}}/runs'
+  method: POST
+response:
+  statusCode: 409
+  statusText: Conflict
+  headers:
+    - key: Content-Type
+      value: application/json
+  body:
+    type: json
+    content: |-
+      {
+        "error": "run_in_flight",
+        "message": "a run is already in flight for this component"
+      }
+order: 1000

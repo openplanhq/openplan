@@ -1,0 +1,11 @@
+$kind: http-request
+method: GET
+url: '{{base_url}}/v1/me'
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('status is 200', () => pm.response.to.have.status(200));
+      if (pm.response.code < 300) { pm.environment.set('my_sub', pm.response.json().sub); }
+      pm.test('tenant matches the environment', () => pm.expect(pm.response.json().tenant_id).to.eql(pm.environment.get('tenant_id')));
+    language: text/javascript
+order: 1000

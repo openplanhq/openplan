@@ -35,7 +35,7 @@ GOVULNCHECK := go run golang.org/x/vuln/cmd/govulncheck@v1.1.4
 
 .DEFAULT_GOAL := help
 
-.PHONY: help api-docs-preview api-docs-lint lint vulncheck differential-test sandbox-test
+.PHONY: help api-docs-preview api-docs-lint postman-collection lint vulncheck differential-test sandbox-test
 
 help: ## List the available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -46,6 +46,11 @@ api-docs-preview: ## Serve the API reference (docs/openapi.yaml) with live reloa
 
 api-docs-lint: ## Validate docs/openapi.yaml against the OpenAPI spec
 	npx $(REDOCLY_LINT) lint $(SPEC)
+
+# The collection is generated, never edited by hand: TestCollectionMatchesSpec
+# fails CI when postman/ and the spec disagree, and this is the fix.
+postman-collection: ## Regenerate the Postman collection in postman/ from docs/openapi.yaml
+	go run ./scripts/postman-collection -spec $(SPEC) -out postman
 
 lint: ## Lint the Go code with golangci-lint
 	$(GOLANGCI_LINT) run ./...

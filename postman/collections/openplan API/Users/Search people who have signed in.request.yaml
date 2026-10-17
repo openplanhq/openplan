@@ -1,0 +1,33 @@
+$kind: http-request
+description: |-
+  Matches display name or email, case-insensitively.
+
+  This is not a directory lookup. It searches openplan's projection of
+  identities it has actually verified, so a person who has never signed
+  in will not appear — and cannot be granted a role. That is the same
+  limitation `POST .../grants` enforces as `unknown_user`.
+
+  The response echoes the `first` and `max` actually applied, so a client
+  paginates from what the server used rather than from what it sent.
+
+  Saves the first match who is not you, for the grant requests.
+method: GET
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/users/search?q={{user_search}}&first=0&max=20'
+queryParams:
+  - key: q
+    value: '{{user_search}}'
+    description: The search term.
+  - key: first
+    value: "0"
+    description: Zero-based offset.
+  - key: max
+    value: "20"
+    description: Page size.
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('status is 200', () => pm.response.to.have.status(200));
+      const others = pm.response.json().users.filter((user) => user.sub !== pm.environment.get('my_sub'));
+      if (others.length) { pm.environment.set('user_sub', others[0].sub); }
+    language: text/javascript
+order: 1000

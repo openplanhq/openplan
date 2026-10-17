@@ -1,0 +1,3 @@
+$kind: collection
+description: Starting, watching, approving and discarding Terraform operations.
+order: 6000

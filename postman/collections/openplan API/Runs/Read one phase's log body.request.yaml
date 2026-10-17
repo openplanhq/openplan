@@ -1,0 +1,13 @@
+$kind: http-request
+description: |-
+  Returns the raw Terraform output as `text/plain`, not JSON. A phase
+  that has not produced output yet returns `404`.
+method: GET
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/template-runs/{{run_id}}/logs/{{phase}}'
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('status is 200', () => pm.response.to.have.status(200));
+      pm.test('body is plain text', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('text/plain'));
+    language: text/javascript
+order: 5000

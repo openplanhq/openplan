@@ -1,0 +1,16 @@
+$kind: http-request
+method: POST
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/stacks'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: '{ "unknown_field": true }'
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('status is 400', () => pm.response.to.have.status(400));
+      pm.test('error code is invalid_json', () => pm.expect(pm.response.json().error).to.eql('invalid_json'));
+    language: text/javascript
+order: 5000

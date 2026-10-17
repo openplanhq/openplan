@@ -1,0 +1,22 @@
+$kind: http-request
+description: |-
+  Poll this to follow a run. `status` moves through the `TemplateRunStatus` values.
+
+  In a collection run this re-sends itself until the plan has finished.
+method: GET
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/template-runs/{{run_id}}'
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('status is 200', () => pm.response.to.have.status(200));
+      const run = pm.response.json();
+      const tries = Number(pm.environment.get('poll_tries') || 0);
+      if (!(!['queued', 'running'].includes(run.status)) && tries < 30) {
+        pm.environment.set('poll_tries', String(tries + 1));
+        setTimeout(() => {}, 2000);
+        pm.execution.setNextRequest(pm.info.requestName);
+      } else {
+        pm.environment.unset('poll_tries');
+      }
+    language: text/javascript
+order: 3000
