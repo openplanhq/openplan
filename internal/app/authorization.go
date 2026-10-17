@@ -234,7 +234,6 @@ func (service *Service) operableStackTemplate(
 // field names keep the wire contract the web client already reads; what
 // changed is where the answers come from.
 type PlatformCapabilities struct {
-	IsPlatformAdmin    bool
 	CanCreateStack     bool
 	CanPublishTemplate bool
 }
@@ -244,16 +243,14 @@ type PlatformCapabilities struct {
 // positional and must agree, so they are kept adjacent rather than written out
 // separately at the point of use.
 var platformCapabilityRelations = []authorization.Relation{
-	authorization.RelationCanAdminister,
 	authorization.RelationCanCreateStack,
 	authorization.RelationCanPublishTemplate,
 }
 
 func platformCapabilitiesFrom(results []bool) PlatformCapabilities {
 	return PlatformCapabilities{
-		IsPlatformAdmin:    results[0],
-		CanCreateStack:     results[1],
-		CanPublishTemplate: results[2],
+		CanCreateStack:     results[0],
+		CanPublishTemplate: results[1],
 	}
 }
 

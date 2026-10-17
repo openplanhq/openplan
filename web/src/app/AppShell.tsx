@@ -60,7 +60,7 @@ export default function AppShell() {
             {me && (
               <>
                 <span className="min-w-0 wrap-anywhere" data-testid="identity-display-name">
-                  {me.displayName}
+                  {me.display_name}
                 </span>
                 <Button
                   variant="outline"
@@ -98,11 +98,10 @@ function DebugPanel() {
   const rows: [label: string, testId: string, value: string][] = [
     ["Auth status", "debug-auth-status", status],
     ["User sub", "debug-user-sub", me?.sub ?? "-"],
-    ["Display name", "debug-display-name", me?.displayName ?? "-"],
+    ["Display name", "debug-display-name", me?.display_name ?? "-"],
     ["Tenant", "debug-tenant", tenantID],
-    ["isPlatformAdmin", "debug-is-platform-admin", me?.globalCapabilities.isPlatformAdmin.toString() ?? "-"],
-    ["canCreateStack", "debug-can-create-stack", me?.globalCapabilities.canCreateStack.toString() ?? "-"],
-    ["canPublishTemplate", "debug-can-publish-template", me?.globalCapabilities.canPublishTemplate.toString() ?? "-"]
+    ["can_create_stack", "debug-can-create-stack", me?.global_capabilities.can_create_stack.toString() ?? "-"],
+    ["can_publish_template", "debug-can-publish-template", me?.global_capabilities.can_publish_template.toString() ?? "-"]
   ];
 
   return (

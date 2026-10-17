@@ -14,14 +14,13 @@ import NotFound from "../app/NotFound";
 import AccessDenied from "../app/AccessDenied";
 import { cn } from "@/lib/utils";
 
-type GlobalCapabilityKey = keyof Me["globalCapabilities"];
+type GlobalCapabilityKey = keyof Me["global_capabilities"];
 type StackCapabilityKey = keyof StackCapabilities;
 export type CapabilityKey = GlobalCapabilityKey | StackCapabilityKey;
 
 const GLOBAL_CAPABILITY_KEYS: readonly GlobalCapabilityKey[] = [
-  "isPlatformAdmin",
-  "canCreateStack",
-  "canPublishTemplate"
+  "can_create_stack",
+  "can_publish_template"
 ];
 
 function isGlobalCapability(capability: CapabilityKey): capability is GlobalCapabilityKey {
@@ -48,7 +47,7 @@ function useCapabilityState(capability: CapabilityKey, stackId: string | undefin
     if (status === "loading") {
       return "loading";
     }
-    return me?.globalCapabilities[capability] ? "allowed" : "denied";
+    return me?.global_capabilities[capability] ? "allowed" : "denied";
   }
 
   if (resolvedStackId === "" || stackCapabilities === undefined) {
@@ -79,7 +78,7 @@ export default function RequireCapability({ capability, stackId, mode = "gate", 
 
   if (mode === "route") {
     if (state === "denied") {
-      return capability === "canView" ? <NotFound /> : <AccessDenied />;
+      return capability === "can_view" ? <NotFound /> : <AccessDenied />;
     }
     return <Outlet context={outletContext} />;
   }

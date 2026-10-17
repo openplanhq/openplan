@@ -22,7 +22,7 @@ function stack(overrides: Partial<StackListItem> = {}): StackListItem {
     default_credential_ids: [],
     created_by: "user_123",
     created_at: "2026-07-19T00:00:00Z",
-    effectiveCapabilities: { canView: true, canOperate: false, canApprove: false, canManageAccess: false },
+    effective_capabilities: { can_view: true, can_operate: false, can_approve: false, can_manage_access: false },
     template_count: 0,
     ...overrides
   };
@@ -77,7 +77,7 @@ function seed(queryClient: QueryClient, data: { stacks?: StackListItem[]; attent
 
 function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
   return {
-    me: { sub: "user_1", tenantID: TENANT, displayName: "Test User", globalCapabilities: { isPlatformAdmin: false, canCreateStack: true, canPublishTemplate: true } },
+    me: { sub: "user_1", tenant_id: TENANT, display_name: "Test User", global_capabilities: { can_create_stack: true, can_publish_template: true } },
     status: "authenticated",
     login: () => {},
     logout: () => {},
@@ -365,7 +365,7 @@ describe("StacksListScreen", () => {
   it("links the preview to Environment and Access only for someone who manages access", () => {
     const queryClient = testQueryClient();
     const viewer = stack();
-    const manager = stack({ id: "stack_2", name: "Billing", slug: "billing", effectiveCapabilities: { canView: true, canOperate: true, canApprove: true, canManageAccess: true } });
+    const manager = stack({ id: "stack_2", name: "Billing", slug: "billing", effective_capabilities: { can_view: true, can_operate: true, can_approve: true, can_manage_access: true } });
     seed(queryClient, { stacks: [viewer, manager], views: [{ stack: viewer, templates: [] }, { stack: manager, templates: [] }] });
 
     renderScreen(queryClient);
@@ -409,7 +409,7 @@ describe("StacksListScreen", () => {
     seed(queryClient, { stacks: [] });
 
     renderScreen(queryClient, {
-      auth: authValue({ me: { sub: "user_1", tenantID: TENANT, displayName: "Test User", globalCapabilities: { isPlatformAdmin: false, canCreateStack: false, canPublishTemplate: false } } })
+      auth: authValue({ me: { sub: "user_1", tenant_id: TENANT, display_name: "Test User", global_capabilities: { can_create_stack: false, can_publish_template: false } } })
     });
 
     const empty = screen.getByTestId("stacks-list-empty");
@@ -503,7 +503,7 @@ describe("StacksListScreen", () => {
     expect(screen.queryByTestId("attention-summary")).toBeNull();
   });
 
-  it("shows the create-stack action for a role with canCreateStack", () => {
+  it("shows the create-stack action for a role with can_create_stack", () => {
     const queryClient = testQueryClient();
     seed(queryClient, { stacks: [stack()] });
 
@@ -512,12 +512,12 @@ describe("StacksListScreen", () => {
     expect(screen.getByTestId("create-stack-link").getAttribute("href")).toBe("/stacks/new");
   });
 
-  it("hides the create-stack action for a role without canCreateStack", () => {
+  it("hides the create-stack action for a role without can_create_stack", () => {
     const queryClient = testQueryClient();
     seed(queryClient, { stacks: [stack()] });
 
     renderScreen(queryClient, {
-      auth: authValue({ me: { ...authValue().me!, globalCapabilities: { isPlatformAdmin: false, canCreateStack: false, canPublishTemplate: false } } })
+      auth: authValue({ me: { ...authValue().me!, global_capabilities: { can_create_stack: false, can_publish_template: false } } })
     });
 
     expect(screen.getByTestId("stacks-list")).toBeTruthy();

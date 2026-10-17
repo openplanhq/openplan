@@ -14,7 +14,7 @@ export default function NoTemplatesState({ stackId, heading: Heading, testId }: 
         <Heading className="text-sm font-medium">No templates in this stack yet</Heading>
         <EmptyDescription className="text-meta">Add a template to plan and apply its infrastructure here.</EmptyDescription>
       </EmptyHeader>
-      <RequireCapability capability="canOperate" stackId={stackId}>
+      <RequireCapability capability="can_operate" stackId={stackId}>
         <Link to={`/stacks/${stackId}/templates/new`} className={cn(buttonClass("primary"), "pointer-coarse:h-11")}>
           <Plus data-icon="inline-start" aria-hidden="true" />
           Add template

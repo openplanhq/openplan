@@ -20,7 +20,7 @@ function stack(overrides: Partial<Stack> = {}): Stack {
     default_credential_ids: [],
     created_by: "user_1",
     created_at: "2026-07-20T00:00:00Z",
-    effectiveCapabilities: { canView: true, canOperate: false, canApprove: false, canManageAccess: false },
+    effective_capabilities: { can_view: true, can_operate: false, can_approve: false, can_manage_access: false },
     ...overrides
   };
 }
@@ -31,7 +31,7 @@ function testQueryClient(): QueryClient {
 
 function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
   return {
-    me: { sub: "user_1", tenantID: "tenant_123", displayName: "Test User", globalCapabilities: { isPlatformAdmin: false, canCreateStack: true, canPublishTemplate: true } },
+    me: { sub: "user_1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: true, can_publish_template: true } },
     status: "authenticated",
     login: () => {},
     logout: () => {},

@@ -201,9 +201,9 @@ type ListStackGrantsCommand struct {
 }
 
 type GrantView struct {
-	UserSub     string `json:"userSub"`
+	UserSub     string `json:"user_sub"`
 	Role        string `json:"role"`
-	DisplayName string `json:"displayName"`
+	DisplayName string `json:"display_name"`
 	Email       string `json:"email"`
 }
 

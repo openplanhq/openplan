@@ -46,11 +46,11 @@ function renderProvider(children: ReactNode) {
 
 const me = {
   sub: "user-123",
-  displayName: "Ada",
+  display_name: "Ada",
   email: "ada@example.test",
-  tenantID: "tenant_123",
-  globalCapabilities: { isPlatformAdmin: false, canCreateStack: true, canPublishTemplate: true },
-  sessionExpiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString()
+  tenant_id: "tenant_123",
+  global_capabilities: { can_create_stack: true, can_publish_template: true },
+  session_expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString()
 };
 
 describe("SessionProvider", () => {
@@ -91,7 +91,7 @@ describe("SessionProvider", () => {
   });
 
   it("re-authenticates sixty seconds before the session expires", async () => {
-    getMe.mockResolvedValue({ ...me, sessionExpiresAt: new Date(Date.now() + 120 * 1000).toISOString() });
+    getMe.mockResolvedValue({ ...me, session_expires_at: new Date(Date.now() + 120 * 1000).toISOString() });
     renderProvider(<div data-testid="child">ready</div>);
     await screen.findByTestId("child");
     recordApiRequest();
@@ -106,7 +106,7 @@ describe("SessionProvider", () => {
   // renew an unattended tab forever, putting OPENPLAN_SESSION_IDLE_TTL out of
   // reach. A tab that has said nothing says nothing here either.
   it("stays quiet at the re-auth moment when the tab has made no other request", async () => {
-    getMe.mockResolvedValue({ ...me, sessionExpiresAt: new Date(Date.now() + 61 * 1000).toISOString() });
+    getMe.mockResolvedValue({ ...me, session_expires_at: new Date(Date.now() + 61 * 1000).toISOString() });
 
     renderProvider(<div data-testid="child">ready</div>);
     await screen.findByTestId("child");
@@ -121,8 +121,8 @@ describe("SessionProvider", () => {
   it("takes the proactive path when a quiet tab becomes active inside the lead window", async () => {
     const nearExpiry = new Date(Date.now() + 61 * 1000).toISOString();
     const slidExpiry = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-    getMe.mockResolvedValueOnce({ ...me, sessionExpiresAt: nearExpiry });
-    getMe.mockResolvedValue({ ...me, sessionExpiresAt: slidExpiry });
+    getMe.mockResolvedValueOnce({ ...me, session_expires_at: nearExpiry });
+    getMe.mockResolvedValue({ ...me, session_expires_at: slidExpiry });
 
     renderProvider(<div data-testid="child">ready</div>);
     await screen.findByTestId("child");
@@ -146,8 +146,8 @@ describe("SessionProvider", () => {
     // refetch that the re-auth attempt triggers reports it was slid forward
     // in the meantime, as a server-side touch would do for a session that is
     // still active.
-    getMe.mockResolvedValueOnce({ ...me, sessionExpiresAt: nearExpiry });
-    getMe.mockResolvedValue({ ...me, sessionExpiresAt: slidExpiry });
+    getMe.mockResolvedValueOnce({ ...me, session_expires_at: nearExpiry });
+    getMe.mockResolvedValue({ ...me, session_expires_at: slidExpiry });
 
     renderProvider(<div data-testid="child">ready</div>);
     await screen.findByTestId("child");
@@ -165,7 +165,7 @@ describe("SessionProvider", () => {
 
   it("does not navigate after unmount while the triggering refetch is still pending", async () => {
     const nearExpiry = new Date(Date.now() + 61 * 1000).toISOString();
-    getMe.mockResolvedValueOnce({ ...me, sessionExpiresAt: nearExpiry });
+    getMe.mockResolvedValueOnce({ ...me, session_expires_at: nearExpiry });
     let resolveRefetch: ((value: typeof me) => void) | undefined;
     getMe.mockImplementationOnce(
       () =>
@@ -184,7 +184,7 @@ describe("SessionProvider", () => {
     expect(getMe).toHaveBeenCalledTimes(2);
 
     unmount();
-    resolveRefetch?.({ ...me, sessionExpiresAt: nearExpiry });
+    resolveRefetch?.({ ...me, session_expires_at: nearExpiry });
     // Flush the microtask queue so the suspended continuation, if any, runs.
     await vi.advanceTimersByTimeAsync(0);
 
@@ -196,7 +196,7 @@ describe("SessionProvider", () => {
     // Every call returns the same fixed bound, so the refetch the re-auth
     // attempt triggers finds nothing moved — the session genuinely is near
     // its end.
-    getMe.mockResolvedValue({ ...me, sessionExpiresAt: nearExpiry });
+    getMe.mockResolvedValue({ ...me, session_expires_at: nearExpiry });
 
     renderProvider(<div data-testid="child">ready</div>);
     await screen.findByTestId("child");
@@ -208,7 +208,7 @@ describe("SessionProvider", () => {
   });
 
   it("stops deferring re-authentication once the deferral limit is reached", async () => {
-    getMe.mockResolvedValue({ ...me, sessionExpiresAt: new Date(Date.now() + 61 * 1000).toISOString() });
+    getMe.mockResolvedValue({ ...me, session_expires_at: new Date(Date.now() + 61 * 1000).toISOString() });
 
     // A form that never stops claiming unsaved work.
     const guard = document.createElement("div");
@@ -227,7 +227,7 @@ describe("SessionProvider", () => {
   });
 
   it("keeps deferring re-authentication while unsaved work is present and the limit has not been reached", async () => {
-    getMe.mockResolvedValue({ ...me, sessionExpiresAt: new Date(Date.now() + 61 * 1000).toISOString() });
+    getMe.mockResolvedValue({ ...me, session_expires_at: new Date(Date.now() + 61 * 1000).toISOString() });
 
     const guard = document.createElement("div");
     guard.setAttribute("data-unsaved", "true");
@@ -244,7 +244,7 @@ describe("SessionProvider", () => {
   });
 
   it("navigates immediately when the session has already expired", async () => {
-    getMe.mockResolvedValue({ ...me, sessionExpiresAt: new Date(Date.now() - 1000).toISOString() });
+    getMe.mockResolvedValue({ ...me, session_expires_at: new Date(Date.now() - 1000).toISOString() });
     renderProvider(<div data-testid="child">ready</div>);
     await waitFor(() => {
       expect(assign).toHaveBeenCalledWith("/signin?return_to=%2Fstacks");

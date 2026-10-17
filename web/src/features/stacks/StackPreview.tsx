@@ -61,7 +61,7 @@ export default function StackPreview({
           <Layers data-icon="inline-start" aria-hidden="true" className="size-3.5" />
           Templates
         </Link>
-        <RequireCapability capability="canManageAccess" stackId={stack.id}>
+        <RequireCapability capability="can_manage_access" stackId={stack.id}>
           <Link to={`${base}/environment`} className={sectionLinkClass}>
             <KeyRound data-icon="inline-start" aria-hidden="true" className="size-3.5" />
             Environment
@@ -78,7 +78,7 @@ export default function StackPreview({
           <h3 id="stack-preview-templates" className="text-sm font-semibold">
             Templates
           </h3>
-          <RequireCapability capability="canOperate" stackId={stack.id}>
+          <RequireCapability capability="can_operate" stackId={stack.id}>
             <Link to={`${base}/templates/new`} className="text-meta font-medium text-primary hover:underline">
               Add template
             </Link>

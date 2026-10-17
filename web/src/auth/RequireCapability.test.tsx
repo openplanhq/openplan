@@ -15,9 +15,9 @@ function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue 
   return {
     me: {
       sub: "user_1",
-      tenantID: "tenant_123",
-      displayName: "Test User",
-      globalCapabilities: { isPlatformAdmin: false, canCreateStack: false, canPublishTemplate: false }
+      tenant_id: "tenant_123",
+      display_name: "Test User",
+      global_capabilities: { can_create_stack: false, can_publish_template: false }
     },
     status: "authenticated",
     login: () => {},
@@ -33,7 +33,7 @@ function testQueryClient(): QueryClient {
   return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
 }
 
-function stackView(capabilities: Partial<StackView["stack"]["effectiveCapabilities"]>): StackView {
+function stackView(capabilities: Partial<StackView["stack"]["effective_capabilities"]>): StackView {
   return {
     stack: {
       id: "stack_1",
@@ -44,13 +44,13 @@ function stackView(capabilities: Partial<StackView["stack"]["effectiveCapabiliti
       default_credential_ids: [],
       created_by: "user_123",
       created_at: "2026-07-19T00:00:00Z",
-      effectiveCapabilities: { canView: false, canOperate: false, canApprove: false, canManageAccess: false, ...capabilities }
+      effective_capabilities: { can_view: false, can_operate: false, can_approve: false, can_manage_access: false, ...capabilities }
     },
     templates: []
   };
 }
 
-function seededClient(stackId: string, capabilities: Partial<StackView["stack"]["effectiveCapabilities"]>): QueryClient {
+function seededClient(stackId: string, capabilities: Partial<StackView["stack"]["effective_capabilities"]>): QueryClient {
   const queryClient = testQueryClient();
   queryClient.setQueryData(queryKeys.stack("tenant_123", stackId), stackView(capabilities));
   return queryClient;
@@ -72,10 +72,10 @@ function renderGate(
 describe("RequireCapability — gate mode (component-level)", () => {
   it("renders children when the global capability is allowed", () => {
     const markup = renderGate(
-      <RequireCapability capability="canCreateStack">
+      <RequireCapability capability="can_create_stack">
         <span data-testid="protected">shown</span>
       </RequireCapability>,
-      { auth: authValue({ me: { ...authValue().me!, globalCapabilities: { isPlatformAdmin: false, canCreateStack: true, canPublishTemplate: true } } }) }
+      { auth: authValue({ me: { ...authValue().me!, global_capabilities: { can_create_stack: true, can_publish_template: true } } }) }
     );
 
     expect(markup).toContain('data-testid="protected"');
@@ -83,7 +83,7 @@ describe("RequireCapability — gate mode (component-level)", () => {
 
   it("fails closed (renders nothing) when denied and no fallback is given", () => {
     const markup = renderGate(
-      <RequireCapability capability="canCreateStack">
+      <RequireCapability capability="can_create_stack">
         <span data-testid="protected">shown</span>
       </RequireCapability>
     );
@@ -93,7 +93,7 @@ describe("RequireCapability — gate mode (component-level)", () => {
 
   it("renders the fallback when denied and a fallback is given", () => {
     const markup = renderGate(
-      <RequireCapability capability="canCreateStack" fallback={<span data-testid="reason">Requires operator role</span>}>
+      <RequireCapability capability="can_create_stack" fallback={<span data-testid="reason">Requires operator role</span>}>
         <span data-testid="protected">shown</span>
       </RequireCapability>
     );
@@ -104,7 +104,7 @@ describe("RequireCapability — gate mode (component-level)", () => {
 
   it("renders nothing while the global capability is loading", () => {
     const markup = renderGate(
-      <RequireCapability capability="canCreateStack" fallback={<span data-testid="reason">shown</span>}>
+      <RequireCapability capability="can_create_stack" fallback={<span data-testid="reason">shown</span>}>
         <span data-testid="protected">shown</span>
       </RequireCapability>,
       { auth: authValue({ status: "loading", me: null }) }
@@ -115,10 +115,10 @@ describe("RequireCapability — gate mode (component-level)", () => {
 
   it("reads a stack capability from the query cache using an explicit stackId, with no fetch", () => {
     const markup = renderGate(
-      <RequireCapability capability="canOperate" stackId="stack_1">
+      <RequireCapability capability="can_operate" stackId="stack_1">
         <span data-testid="protected">shown</span>
       </RequireCapability>,
-      { queryClient: seededClient("stack_1", { canOperate: true }) }
+      { queryClient: seededClient("stack_1", { can_operate: true }) }
     );
 
     expect(markup).toContain('data-testid="protected"');
@@ -130,7 +130,7 @@ describe("RequireCapability — gate mode (component-level)", () => {
         {
           path: "/stacks/:stackId",
           element: (
-            <RequireCapability capability="canOperate">
+            <RequireCapability capability="can_operate">
               <span data-testid="protected">shown</span>
             </RequireCapability>
           )
@@ -139,7 +139,7 @@ describe("RequireCapability — gate mode (component-level)", () => {
       { initialEntries: ["/stacks/stack_1"] }
     );
     const markup = renderToStaticMarkup(
-      <QueryClientProvider client={seededClient("stack_1", { canOperate: true })}>
+      <QueryClientProvider client={seededClient("stack_1", { can_operate: true })}>
         <AuthContext.Provider value={authValue()}>
           <RouterProvider router={testRouter} />
         </AuthContext.Provider>
@@ -151,7 +151,7 @@ describe("RequireCapability — gate mode (component-level)", () => {
 
   it("renders nothing while a stack capability is loading (no cached data yet)", () => {
     const markup = renderGate(
-      <RequireCapability capability="canOperate" stackId="stack_1">
+      <RequireCapability capability="can_operate" stackId="stack_1">
         <span data-testid="protected">shown</span>
       </RequireCapability>
     );
@@ -162,7 +162,7 @@ describe("RequireCapability — gate mode (component-level)", () => {
 
 describe("RequireCapability — route mode", () => {
   function renderRoute(
-    capability: "canView" | "canManageAccess" | "canCreateStack",
+    capability: "can_view" | "can_manage_access" | "can_create_stack",
     { auth = authValue(), queryClient = testQueryClient() }: { auth?: AuthContextValue; queryClient?: QueryClient } = {}
   ): string {
     const testRouter = createMemoryRouter(
@@ -185,27 +185,27 @@ describe("RequireCapability — route mode", () => {
   }
 
   it("renders the routed content when allowed", () => {
-    const markup = renderRoute("canView", { queryClient: seededClient("stack_1", { canView: true }) });
+    const markup = renderRoute("can_view", { queryClient: seededClient("stack_1", { can_view: true }) });
 
     expect(markup).toContain('data-testid="protected-route"');
   });
 
   it("renders NotFound, identical to a real 404, when canView is denied", () => {
-    const markup = renderRoute("canView", { queryClient: seededClient("stack_1", { canView: false }) });
+    const markup = renderRoute("can_view", { queryClient: seededClient("stack_1", { can_view: false }) });
 
     expect(markup).toContain('data-testid="route-not-found"');
     expect(markup).not.toContain('data-testid="route-access-denied"');
   });
 
-  it("renders AccessDenied, not NotFound, when a non-canView capability is denied", () => {
-    const markup = renderRoute("canManageAccess", { queryClient: seededClient("stack_1", { canView: true, canManageAccess: false }) });
+  it("renders AccessDenied, not NotFound, when a non-can_view capability is denied", () => {
+    const markup = renderRoute("can_manage_access", { queryClient: seededClient("stack_1", { can_view: true, can_manage_access: false }) });
 
     expect(markup).toContain('data-testid="route-access-denied"');
     expect(markup).not.toContain('data-testid="route-not-found"');
   });
 
   it("renders nothing while loading (no cached stack data yet)", () => {
-    const markup = renderRoute("canView");
+    const markup = renderRoute("can_view");
 
     expect(markup).toBe("");
   });
@@ -229,7 +229,7 @@ describe("RequireCapability — a stack that does not load", () => {
       [
         {
           path: "/stacks/:stackId",
-          element: <RequireCapability capability="canView" mode="route" />,
+          element: <RequireCapability capability="can_view" mode="route" />,
           children: [{ index: true, element: <span data-testid="protected-route">shown</span> }]
         }
       ],
@@ -291,7 +291,7 @@ describe("RequireCapability — a stack that does not load", () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(respond(500, { error: "internal", message: "boom" }))
-      .mockResolvedValueOnce(respond(200, stackView({ canView: true })));
+      .mockResolvedValueOnce(respond(200, stackView({ can_view: true })));
 
     renderStackRoute(testQueryClient());
 

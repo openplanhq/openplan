@@ -5,24 +5,23 @@
 // GET /v1/me
 export interface Me {
   sub: string;
-  displayName: string;
+  display_name: string;
   email?: string;
-  tenantID: string;
-  globalCapabilities: {
-    isPlatformAdmin: boolean;
-    canCreateStack: boolean;
+  tenant_id: string;
+  global_capabilities: {
+    can_create_stack: boolean;
     /** Registering a template — which is also what the detail screen's Sync
         button posts, so it gates that button too. */
-    canPublishTemplate: boolean;
+    can_publish_template: boolean;
   };
   /** RFC 3339. When the session's ID token expires. */
-  sessionExpiresAt?: string;
+  session_expires_at?: string;
 }
 
-// Attached to every stack resource (list + detail) as `effectiveCapabilities`.
+// Attached to every stack resource (list + detail) as `effective_capabilities`.
 export interface StackCapabilities {
-  canView: boolean;
-  canOperate: boolean;
-  canApprove: boolean;
-  canManageAccess: boolean;
+  can_view: boolean;
+  can_operate: boolean;
+  can_approve: boolean;
+  can_manage_access: boolean;
 }

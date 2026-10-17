@@ -25,10 +25,10 @@ describe("useMeQuery", () => {
       new Response(
         JSON.stringify({
           sub: "user_1",
-          displayName: "Alice",
+          display_name: "Alice",
           email: "alice@example.com",
-          globalCapabilities: { isPlatformAdmin: true, canCreateStack: false, canPublishTemplate: false },
-          tenantID: "tenant_123",
+          global_capabilities: { can_create_stack: false, can_publish_template: false },
+          tenant_id: "tenant_123",
         }),
         { status: 200, headers: { "content-type": "application/json" } }
       )
@@ -40,10 +40,10 @@ describe("useMeQuery", () => {
 
     expect(result.current.data).toEqual({
       sub: "user_1",
-      displayName: "Alice",
+      display_name: "Alice",
       email: "alice@example.com",
-      globalCapabilities: { isPlatformAdmin: true, canCreateStack: false, canPublishTemplate: false },
-      tenantID: "tenant_123",
+      global_capabilities: { can_create_stack: false, can_publish_template: false },
+      tenant_id: "tenant_123",
     });
   });
 

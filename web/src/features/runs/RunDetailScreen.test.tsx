@@ -21,7 +21,7 @@ function stack(capabilities: StackCapabilities): Stack {
     default_credential_ids: [],
     created_by: "user_123",
     created_at: "2026-07-19T00:00:00Z",
-    effectiveCapabilities: capabilities
+    effective_capabilities: capabilities
   };
 }
 
@@ -78,7 +78,7 @@ function runLog(overrides: Partial<TemplateRunLog> = {}): TemplateRunLog {
   };
 }
 
-const allAllowed: StackCapabilities = { canView: true, canOperate: true, canApprove: true, canManageAccess: true };
+const allAllowed: StackCapabilities = { can_view: true, can_operate: true, can_approve: true, can_manage_access: true };
 
 function testQueryClient(): QueryClient {
   return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
@@ -86,7 +86,7 @@ function testQueryClient(): QueryClient {
 
 function authValue(): AuthContextValue {
   return {
-    me: { sub: "user_1", tenantID: "tenant_123", displayName: "Test User", globalCapabilities: { isPlatformAdmin: false, canCreateStack: false, canPublishTemplate: false } },
+    me: { sub: "user_1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_publish_template: false } },
     status: "authenticated",
     login: () => {},
     logout: () => {}
@@ -588,7 +588,7 @@ describe("RunDetailScreen", () => {
 
   it("hides Approve when canApprove is denied", async () => {
     const queryClient = testQueryClient();
-    seedCapabilities(queryClient, { ...allAllowed, canApprove: false });
+    seedCapabilities(queryClient, { ...allAllowed, can_approve: false });
     queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), run({ status: "waiting_approval" }));
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([]));
 

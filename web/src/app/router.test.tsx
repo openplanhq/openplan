@@ -9,7 +9,7 @@ vi.mock("../auth/SessionProvider");
 
 function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
   return {
-    me: { sub: "user_1", tenantID: "tenant_123", displayName: "Test User", globalCapabilities: { isPlatformAdmin: false, canCreateStack: false, canPublishTemplate: false } },
+    me: { sub: "user_1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_publish_template: false } },
     status: "authenticated",
     login: () => {},
     logout: () => {},
@@ -17,12 +17,12 @@ function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue 
   };
 }
 
-// The stack every stack-route test below seeds: canView-gated routes resolve
-// once the stack query cache has effectiveCapabilities. retry: false +
+// The stack every stack-route test below seeds: can_view-gated routes resolve
+// once the stack query cache has effective_capabilities. retry: false +
 // staleTime: Infinity, so seeded data never triggers a real fetch().
 function stackQueryClient(
   queryKeys: typeof import("../api/queryKeys").queryKeys,
-  options: { capabilities?: { canView: boolean; canOperate: boolean; canApprove: boolean; canManageAccess: boolean }; templates?: unknown[] } = {}
+  options: { capabilities?: { can_view: boolean; can_operate: boolean; can_approve: boolean; can_manage_access: boolean }; templates?: unknown[] } = {}
 ): QueryClient {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), {
@@ -35,7 +35,7 @@ function stackQueryClient(
       default_credential_ids: [],
       created_by: "user_123",
       created_at: "2026-07-19T00:00:00Z",
-      effectiveCapabilities: options.capabilities ?? { canView: true, canOperate: true, canApprove: true, canManageAccess: true }
+      effective_capabilities: options.capabilities ?? { can_view: true, can_operate: true, can_approve: true, can_manage_access: true }
     },
     templates: options.templates ?? []
   });
@@ -91,7 +91,7 @@ describe("routeConfig", () => {
       const testRouter = createMemoryRouter(routeConfig, { initialEntries: ["/stacks/new"] });
       const markup = renderToStaticMarkup(
         <QueryClientProvider client={new QueryClient()}>
-          <AuthContext.Provider value={authValue({ me: { ...authValue().me!, globalCapabilities: { isPlatformAdmin: false, canCreateStack: true, canPublishTemplate: true } } })}>
+          <AuthContext.Provider value={authValue({ me: { ...authValue().me!, global_capabilities: { can_create_stack: true, can_publish_template: true } } })}>
             <RouterProvider router={testRouter} />
           </AuthContext.Provider>
         </QueryClientProvider>
@@ -172,7 +172,7 @@ describe("routeConfig", () => {
         default_credential_ids: [],
         created_by: "user_123",
         created_at: "2026-07-19T00:00:00Z",
-        effectiveCapabilities: { canView: true, canOperate: false, canApprove: false, canManageAccess: false }
+        effective_capabilities: { can_view: true, can_operate: false, can_approve: false, can_manage_access: false }
       }
     ]);
 
@@ -244,7 +244,7 @@ describe("routeConfig", () => {
     vi.doMock("../auth/SessionProvider", async () => {
       const { AuthContext: RouterAuthContext } = await import("../auth/AuthContext");
       const signedIn = authValue({
-        me: { sub: "user_1", tenantID: "tenant_123", displayName: "Test User", globalCapabilities: { isPlatformAdmin: false, canCreateStack: false, canPublishTemplate } }
+        me: { sub: "user_1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_publish_template: canPublishTemplate } }
       });
       return {
         default: () => (
@@ -335,7 +335,7 @@ describe("routeConfig", () => {
         default_credential_ids: [],
         created_by: "user_123",
         created_at: "2026-07-19T00:00:00Z",
-        effectiveCapabilities: { canView: false, canOperate: false, canApprove: false, canManageAccess: false }
+        effective_capabilities: { can_view: false, can_operate: false, can_approve: false, can_manage_access: false }
       },
       templates: []
     });
@@ -374,7 +374,7 @@ describe("routeConfig", () => {
         default_credential_ids: [],
         created_by: "user_123",
         created_at: "2026-07-19T00:00:00Z",
-        effectiveCapabilities: { canView: true, canOperate: false, canApprove: false, canManageAccess: false }
+        effective_capabilities: { can_view: true, can_operate: false, can_approve: false, can_manage_access: false }
       },
       templates: []
     });
@@ -464,7 +464,7 @@ describe("routeConfig", () => {
         default_credential_ids: [],
         created_by: "user_123",
         created_at: "2026-07-19T00:00:00Z",
-        effectiveCapabilities: { canView: true, canOperate: true, canApprove: true, canManageAccess: true }
+        effective_capabilities: { can_view: true, can_operate: true, can_approve: true, can_manage_access: true }
       },
       templates: []
     });
@@ -523,7 +523,7 @@ describe("routeConfig", () => {
         default_credential_ids: [],
         created_by: "user_123",
         created_at: "2026-07-19T00:00:00Z",
-        effectiveCapabilities: { canView: true, canOperate: false, canApprove: false, canManageAccess: false }
+        effective_capabilities: { can_view: true, can_operate: false, can_approve: false, can_manage_access: false }
       },
       templates: []
     });
@@ -545,7 +545,7 @@ describe("routeConfig", () => {
     const { routeConfig } = await import("./router");
     const { queryKeys } = await import("../api/queryKeys");
     const queryClient = stackQueryClient(queryKeys, {
-      capabilities: { canView: true, canOperate: false, canApprove: false, canManageAccess: false },
+      capabilities: { can_view: true, can_operate: false, can_approve: false, can_manage_access: false },
       templates: [installedTemplate]
     });
 

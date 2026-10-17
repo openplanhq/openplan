@@ -3695,16 +3695,15 @@ func TestMeReturnsIdentityWithGlobalCapabilities(t *testing.T) {
 	tests := []struct {
 		name        string
 		tier        string
-		wantAdmin   bool
 		wantCreate  bool
 		wantPublish bool
 	}{
 		// An administrator holds can_create_stack and can_publish_template
 		// too: the model derives both from can_edit, which can_administer
 		// satisfies.
-		{name: "platform admin", tier: "admin", wantAdmin: true, wantCreate: true, wantPublish: true},
-		{name: "editor", tier: "editor", wantAdmin: false, wantCreate: true, wantPublish: true},
-		{name: "no tier", tier: "", wantAdmin: false, wantCreate: false, wantPublish: false},
+		{name: "platform admin", tier: "admin", wantCreate: true, wantPublish: true},
+		{name: "editor", tier: "editor", wantCreate: true, wantPublish: true},
+		{name: "no tier", tier: "", wantCreate: false, wantPublish: false},
 	}
 
 	for _, test := range tests {
@@ -3732,14 +3731,13 @@ func TestMeReturnsIdentityWithGlobalCapabilities(t *testing.T) {
 
 			var body struct {
 				Sub                string `json:"sub"`
-				DisplayName        string `json:"displayName"`
+				DisplayName        string `json:"display_name"`
 				Email              string `json:"email"`
 				GlobalCapabilities struct {
-					IsPlatformAdmin    bool `json:"isPlatformAdmin"`
-					CanCreateStack     bool `json:"canCreateStack"`
-					CanPublishTemplate bool `json:"canPublishTemplate"`
-				} `json:"globalCapabilities"`
-				TenantID string `json:"tenantID"`
+					CanCreateStack     bool `json:"can_create_stack"`
+					CanPublishTemplate bool `json:"can_publish_template"`
+				} `json:"global_capabilities"`
+				TenantID string `json:"tenant_id"`
 			}
 			if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 				t.Fatalf("decode response: %v", err)
@@ -3749,24 +3747,21 @@ func TestMeReturnsIdentityWithGlobalCapabilities(t *testing.T) {
 				t.Errorf("sub = %q, want %q", body.Sub, apiOIDCSubject)
 			}
 			if body.DisplayName != "Test User" {
-				t.Errorf("displayName = %q, want %q", body.DisplayName, "Test User")
+				t.Errorf("display_name = %q, want %q", body.DisplayName, "Test User")
 			}
 			if body.Email != "test@example.com" {
 				t.Errorf("email = %q, want %q", body.Email, "test@example.com")
 			}
-			if body.GlobalCapabilities.IsPlatformAdmin != test.wantAdmin {
-				t.Errorf("isPlatformAdmin = %t, want %t", body.GlobalCapabilities.IsPlatformAdmin, test.wantAdmin)
-			}
 			if body.GlobalCapabilities.CanCreateStack != test.wantCreate {
-				t.Errorf("canCreateStack = %t, want %t", body.GlobalCapabilities.CanCreateStack, test.wantCreate)
+				t.Errorf("can_create_stack = %t, want %t", body.GlobalCapabilities.CanCreateStack, test.wantCreate)
 			}
 			// The Sync button on the template detail screen is gated on this,
 			// and RegisterTemplate is the route it would call.
 			if body.GlobalCapabilities.CanPublishTemplate != test.wantPublish {
-				t.Errorf("canPublishTemplate = %t, want %t", body.GlobalCapabilities.CanPublishTemplate, test.wantPublish)
+				t.Errorf("can_publish_template = %t, want %t", body.GlobalCapabilities.CanPublishTemplate, test.wantPublish)
 			}
 			if body.TenantID != string(configuredTenantID) {
-				t.Errorf("tenantID = %q, want %q", body.TenantID, string(configuredTenantID))
+				t.Errorf("tenant_id = %q, want %q", body.TenantID, string(configuredTenantID))
 			}
 		})
 	}

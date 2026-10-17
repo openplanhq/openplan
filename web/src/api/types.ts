@@ -104,7 +104,7 @@ export interface Stack {
   created_by: string;
   created_at: string;
   // Per-stack authorization booleans resolved by the backend for AUTH-017; see auth/types.ts.
-  effectiveCapabilities: StackCapabilities;
+  effective_capabilities: StackCapabilities;
 }
 
 // A stack as the stacks index lists it.
@@ -249,9 +249,9 @@ export interface TemplateRunLog {
 }
 
 export interface GrantView {
-  userSub: string;
+  user_sub: string;
   role: string;
-  displayName: string;
+  display_name: string;
   email: string;
 }
 
@@ -264,7 +264,7 @@ export interface ListGrantsResponse {
 // written against; the other two are display data.
 export interface UserProfile {
   sub: string;
-  displayName: string;
+  display_name: string;
   email: string;
 }
 

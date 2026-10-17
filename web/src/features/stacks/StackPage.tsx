@@ -62,7 +62,7 @@ export default function StackPage() {
         title={stack.name}
         trail={[{ label: "Stacks", to: "/stacks" }]}
         action={
-          <RequireCapability capability="canManageAccess" stackId={stackId}>
+          <RequireCapability capability="can_manage_access" stackId={stackId}>
             {/* The buttons hold their row: a long stack name wraps instead,
                 rather than squeezing them into a ragged column. */}
             <div className="flex shrink-0 flex-wrap items-center gap-2">

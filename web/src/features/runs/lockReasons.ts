@@ -18,7 +18,7 @@ export interface LockState {
 // discarded, nothing may change the config or the revision, and no other run
 // may start. The server refuses; the controls say why before anyone tries.
 export function useLockState(stackId: string, stackTemplate: Pick<StackTemplate, "id" | "lifecycle">): LockState {
-  const canOperate = useStackCapabilities(stackId)?.canOperate === true;
+  const canOperate = useStackCapabilities(stackId)?.can_operate === true;
   const runsQuery = useTemplateRunsQuery(tenantID, stackTemplate.id);
   // A failed refetch keeps the runs it had, so a run known to be in flight
   // still locks, and the runs still count as known.

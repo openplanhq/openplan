@@ -23,7 +23,7 @@ var ErrUserNotProvisioned = errors.New("user has not signed in to openplan yet")
 // same three things about the caller.
 type UserProfile struct {
 	Sub         string `json:"sub"`
-	DisplayName string `json:"displayName"`
+	DisplayName string `json:"display_name"`
 	Email       string `json:"email"`
 }
 

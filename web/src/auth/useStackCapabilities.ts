@@ -3,5 +3,5 @@ import { tenantID } from "../config";
 import type { StackCapabilities } from "./types";
 
 export function useStackCapabilities(stackId: string): StackCapabilities | undefined {
-  return useStackQuery(tenantID, stackId).data?.stack.effectiveCapabilities;
+  return useStackQuery(tenantID, stackId).data?.stack.effective_capabilities;
 }
