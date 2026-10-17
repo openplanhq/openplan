@@ -144,7 +144,8 @@ var overrides = map[string]override{
 		note: "In a collection run this re-sends itself until the plan has finished.",
 	},
 	"listTemplateRunLogs": {
-		test: "const logs = pm.response.json();\nif (logs.length) { pm.environment.set('phase', logs[0].phase); }",
+		test: "const logs = pm.response.json();\nif (logs.length) { pm.environment.set('name', logs[0].phase); }",
+		note: "Saves the first log's name, which the log-body request reads by.",
 	},
 	"getTemplateRunLog": {
 		test: "pm.test('body is plain text', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('text/plain'));",
@@ -166,8 +167,10 @@ var overrides = map[string]override{
 		note: "Saves the first match who is not you, for the grant requests.",
 	},
 	"assignStackRole": {
-		jsonBody: `{ "user_sub": "{{user_sub}}", "role": "viewer" }`,
-		note:     "Needs a second person who has signed in once; without one there is nobody to grant a role to.",
+		jsonBody: `{ "role": "viewer" }`,
+		// 201 the first time the person is granted, 200 on every re-run.
+		expect: []int{201, 200},
+		note:   "Grants a role to the person the search saved. Needs a second person who has signed in once; without one there is nobody to grant a role to.",
 	},
 }
 
@@ -302,7 +305,7 @@ func contractChecks() folder {
 			},
 			{name: "Unknown run is 404", method: http.MethodGet, path: tenant + "/template-runs/run_does_not_exist", test: expectProblem(404, "")},
 			{
-				name: "Config edit without config is 422", method: http.MethodPatch, path: tenant + "/stack-templates/{{stack_template_id}}/config",
+				name: "Config edit without config is 422", method: http.MethodPut, path: tenant + "/stack-templates/{{stack_template_id}}/config",
 				body: jsonBody(`{}`), test: expectProblem(422, "validation-failed") + firstError("pointer", "#/config"),
 			},
 			{

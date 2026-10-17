@@ -82,7 +82,7 @@ export default function StackAccessScreen() {
     const sentSearch = search;
     try {
       await assignMutation.mutateAsync({
-        user_sub: sentUser.sub,
+        userSub: sentUser.sub,
         role: selectedRole
       });
       // The search stays usable while the request is out. Clear only what
@@ -118,7 +118,7 @@ export default function StackAccessScreen() {
     setMutationError("");
     try {
       await undoMutation.mutateAsync({
-        user_sub: undoEntry.userSub,
+        userSub: undoEntry.userSub,
         role: undoEntry.role
       });
     } catch {

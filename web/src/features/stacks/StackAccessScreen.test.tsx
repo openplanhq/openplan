@@ -71,7 +71,7 @@ interface Sent {
 }
 
 // Answers each request by its URL, so a test can count and inspect what the
-// screen sent. A search gets `users`, after `searchDelay` ms; a POST gets
+// screen sent. A search gets `users`, after `searchDelay` ms; a PUT gets
 // `assign` (or the grant it asked for); anything else gets the grants list.
 function serve({
   grants = [],
@@ -91,8 +91,9 @@ function serve({
       await new Promise((resolve) => setTimeout(resolve, searchDelay));
       return json({ users, first: 0, max: 20 });
     }
-    if (method === "POST") {
-      return assign ? assign() : json({ user_sub: body?.user_sub, role: body?.role, display_name: "", email: "" });
+    if (method === "PUT") {
+      const userSub = decodeURIComponent(url.slice(url.lastIndexOf("/") + 1));
+      return assign ? assign() : json({ user_sub: userSub, role: body?.role, display_name: "", email: "" });
     }
     return json({ grants });
   });
@@ -671,7 +672,7 @@ describe("StackAccessScreen", () => {
 
       await user.click(assignButton());
       await waitFor(() =>
-        expect(sent.find(({ method }) => method === "POST")?.body).toEqual({ user_sub: "u3", role: "approver" })
+        expect(sent.find(({ method }) => method === "PUT")).toMatchObject({ url: expect.stringMatching(/\/grants\/u3$/), body: { role: "approver" } })
       );
     });
   });
@@ -714,7 +715,7 @@ describe("StackAccessScreen", () => {
     expect(assign.textContent).toBe("Assigning...");
     expect(assign.disabled).toBe(true);
     await user.click(assign);
-    expect(sent.filter(({ method }) => method === "POST")).toHaveLength(1);
+    expect(sent.filter(({ method }) => method === "PUT")).toHaveLength(1);
   });
   describe("current grants", () => {
     it("shows each grant's role as a RoleBadge", async () => {
@@ -796,7 +797,7 @@ describe("StackAccessScreen", () => {
 
       await user.click(within(banner as HTMLElement).getByRole("button", { name: "Undo" }));
       await waitFor(() =>
-        expect(sent.find(({ method }) => method === "POST")?.body).toEqual({ user_sub: "u2", role: "viewer" })
+        expect(sent.find(({ method }) => method === "PUT")).toMatchObject({ url: expect.stringMatching(/\/grants\/u2$/), body: { role: "viewer" } })
       );
     });
   });

@@ -695,25 +695,39 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
-    post:
-      tags: [Access]
-      summary: Assign a role on a stack
-      description: |
-        Assigning replaces whatever role the subject already held — one person
-        has at most one role on a stack.
 
-        The subject must have signed in to openplan at least once. openplan is not
-        a directory: a person exists here only once a verified token has
+  /v1/tenants/{tenant_id}/stacks/{stack_id}/grants/{user_sub}:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/StackID"
+      - name: user_sub
+        in: path
+        required: true
+        description: |
+          The person's subject identifier, as returned by
+          `GET /v1/tenants/{tenant_id}/users/search`.
+        schema: { type: string }
+    put:
+      tags: [Access]
+      summary: Set a person's role on a stack
+      description: |
+        Creates the person's grant, or replaces whatever role they already
+        held — one person has at most one role on a stack. Answers `201` when
+        the person held no role before, and `200` when the call changed or
+        kept the role they had. The person is named by the path only; a body
+        that also sends `user_sub` is refused as an unknown field (`400
+        malformed-body`).
+
+        The person must have signed in to openplan at least once. openplan is
+        not a directory: a person exists here only once a verified token has
         projected them. Granting to a subject it has never seen returns `422
         validation-failed` with an `errors` entry on `#/user_sub` whose issue
-        is `not_signed_in`. Use `GET /v1/tenants/{tenant_id}/users/search` to find
-        one.
+        is `not_signed_in`. Use `GET /v1/tenants/{tenant_id}/users/search` to
+        find one.
 
-        The response is the intended grant, rendered from the identity
-        lookup the request already performed. The authorization write
-        itself is queued and reconciled asynchronously, so a permission
-        check made immediately afterwards may still answer from the old
-        state.
+        The response is the grant, rendered from the identity lookup the
+        request already performed. The role is written in the request's own
+        transaction, so it is in effect when the response arrives.
       operationId: assignStackRole
       requestBody:
         required: true
@@ -721,11 +735,15 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/AssignStackRoleRequest" }
             example:
-              user_sub: 9f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f
               role: operator
       responses:
         "200":
-          description: The resulting grant.
+          description: The person's role was changed or already held.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Grant" }
+        "201":
+          description: The person had no role on the stack; this created it.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Grant" }
@@ -741,23 +759,13 @@ paths:
         "413": { $ref: "#/components/responses/RequestTooLarge" }
         "422":
           description: |
-            An unknown role (`#/role`, `unsupported`), a malformed subject
-            (`#/user_sub`, `invalid_format`), or a person who has never signed
-            in (`#/user_sub`, `not_signed_in`).
+            An unknown role (`#/role`, `unsupported`), a malformed subject in
+            the path (`#/user_sub`, `invalid_format`), or a person who has
+            never signed in (`#/user_sub`, `not_signed_in`).
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
         "500": { $ref: "#/components/responses/InternalError" }
-
-  /v1/tenants/{tenant_id}/stacks/{stack_id}/grants/{user_sub}:
-    parameters:
-      - $ref: "#/components/parameters/TenantID"
-      - $ref: "#/components/parameters/StackID"
-      - name: user_sub
-        in: path
-        required: true
-        description: The subject identifier whose grant is being revoked.
-        schema: { type: string }
     delete:
       tags: [Access]
       summary: Revoke a role on a stack
@@ -779,9 +787,9 @@ paths:
     parameters:
       - $ref: "#/components/parameters/TenantID"
       - $ref: "#/components/parameters/StackTemplateID"
-    patch:
+    put:
       tags: [Stacks]
-      summary: Edit an installed template's desired config
+      summary: Replace an installed template's desired config
       description: |
         Replaces the desired config wholesale — this is not a field-level
         merge. The new config is validated against the desired revision's
@@ -1078,7 +1086,8 @@ paths:
       description: |
         Metadata for each Terraform command that has finished, in the order
         they ran: the plan's logs, then the apply's, each by `seq` — not the
-        output itself. Fetch a body from the per-log endpoint by its `phase`.
+        output itself. Fetch a body from the per-log endpoint by the log's name,
+        its `phase` field.
       operationId: listTemplateRunLogs
       responses:
         "200":
@@ -1093,26 +1102,29 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
 
-  /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{phase}:
+  /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{name}:
     parameters:
       - $ref: "#/components/parameters/TenantID"
       - $ref: "#/components/parameters/RunID"
-      - name: phase
+      - name: name
         in: path
         required: true
-        description: Which phase's output to read.
+        description: |
+          The log's name, such as `plan-1`: the `phase` field of an entry in
+          the run's log list. Not the run phase (`run_phase`), which writes
+          several logs.
         schema: { $ref: "#/components/schemas/LogPhase" }
     get:
       tags: [Runs]
-      summary: Read one phase's log body
+      summary: Read one log's body
       description: |
-        Returns the raw Terraform output as `text/plain`, not JSON. A phase
-        that has not produced output yet, or a name that isn't a log name,
+        Returns the raw Terraform output as `text/plain`, not JSON. A log
+        that has not been recorded yet, or a name that isn't a log name,
         returns `404`.
       operationId: getTemplateRunLog
       responses:
         "200":
-          description: The phase's output.
+          description: The command's output.
           content:
             text/plain:
               schema: { type: string }
@@ -1121,7 +1133,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
 
-  /v1/tenants/{tenant_id}/template-runs/{run_id}/approval:
+  /v1/tenants/{tenant_id}/template-runs/{run_id}/approve:
     parameters:
       - $ref: "#/components/parameters/TenantID"
       - $ref: "#/components/parameters/RunID"
@@ -1223,7 +1235,7 @@ paths:
         This is not a directory lookup. It searches openplan's projection of
         identities it has actually verified, so a person who has never signed
         in will not appear — and cannot be granted a role. That is the same
-        limitation `POST .../grants` enforces as `not_signed_in`.
+        limitation `PUT .../grants/{user_sub}` enforces as `not_signed_in`.
 
         The response echoes the `first` and `max` actually applied, so a client
         paginates from what the server used rather than from what it sent.
@@ -2183,7 +2195,7 @@ components:
         plan ends; anything else means the run is still in flight.
 
         `waiting_approval` is the one that needs a person — post to the run's
-        approval endpoint to release it. What a `running` run is doing is its
+        `approve` endpoint to release it. What a `running` run is doing is its
         `step`.
       enum:
         - queued
@@ -2283,8 +2295,9 @@ components:
     TemplateRunLog:
       type: object
       description: |
-        Where one phase's output is stored. Read the body from
-        `GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{phase}`.
+        Where one command's output is stored. Read the body from
+        `GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{name}`,
+        with this entry's `phase` as the name.
       properties:
         tenant_id: { type: string }
         run_id: { type: string }
@@ -2332,14 +2345,10 @@ components:
     AssignStackRoleRequest:
       type: object
       additionalProperties: false
+      description: The person is named by the path, so the body holds only the role.
       properties:
-        user_sub:
-          type: string
-          description: |
-            The subject identifier, as returned by
-            `GET /v1/tenants/{tenant_id}/users/search`.
         role: { $ref: "#/components/schemas/StackRole" }
-      required: [user_sub, role]
+      required: [role]
 
     StackRole:
       type: string

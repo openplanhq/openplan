@@ -426,7 +426,7 @@
           }
         },
         {
-          "name": "Edit an installed template's desired config",
+          "name": "Replace an installed template's desired config",
           "event": [
             {
               "listen": "test",
@@ -439,7 +439,7 @@
             }
           ],
           "request": {
-            "method": "PATCH",
+            "method": "PUT",
             "header": [
               {
                 "key": "Content-Type",
@@ -924,7 +924,7 @@
                 "exec": [
                   "pm.test('status is 200', () =\u003e pm.response.to.have.status(200));",
                   "const logs = pm.response.json();",
-                  "if (logs.length) { pm.environment.set('phase', logs[0].phase); }"
+                  "if (logs.length) { pm.environment.set('name', logs[0].phase); }"
                 ]
               }
             }
@@ -946,11 +946,11 @@
                 "logs"
               ]
             },
-            "description": "Metadata for each Terraform command that has finished, in the order\nthey ran: the plan's logs, then the apply's, each by `seq` — not the\noutput itself. Fetch a body from the per-log endpoint by its `phase`."
+            "description": "Metadata for each Terraform command that has finished, in the order\nthey ran: the plan's logs, then the apply's, each by `seq` — not the\noutput itself. Fetch a body from the per-log endpoint by the log's name,\nits `phase` field.\n\nSaves the first log's name, which the log-body request reads by."
           }
         },
         {
-          "name": "Read one phase's log body",
+          "name": "Read one log's body",
           "event": [
             {
               "listen": "test",
@@ -967,7 +967,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/template-runs/{{run_id}}/logs/{{phase}}",
+              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/template-runs/{{run_id}}/logs/{{name}}",
               "host": [
                 "{{base_url}}"
               ],
@@ -978,10 +978,10 @@
                 "template-runs",
                 "{{run_id}}",
                 "logs",
-                "{{phase}}"
+                "{{name}}"
               ]
             },
-            "description": "Returns the raw Terraform output as `text/plain`, not JSON. A phase\nthat has not produced output yet, or a name that isn't a log name,\nreturns `404`."
+            "description": "Returns the raw Terraform output as `text/plain`, not JSON. A log\nthat has not been recorded yet, or a name that isn't a log name,\nreturns `404`."
           }
         },
         {
@@ -1001,7 +1001,7 @@
             "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/template-runs/{{run_id}}/approval",
+              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/template-runs/{{run_id}}/approve",
               "host": [
                 "{{base_url}}"
               ],
@@ -1011,7 +1011,7 @@
                 "{{tenant_id}}",
                 "template-runs",
                 "{{run_id}}",
-                "approval"
+                "approve"
               ]
             },
             "description": "Valid only while the run's `status` is `waiting_approval`. Approving\nstarts the apply of the plan the run saved: the same file, applied\nwith `tofu apply` on whichever executor picks it up, so what was\nreviewed is exactly what runs. If the state has moved on since the\nplan was made, tofu refuses the plan and the run fails; plan again.\n\nRefused with `409 plan-stale` if the plan no longer describes the\ncomponent's desired config and revision. Those cannot change while\nthe plan waits, so this is a backstop.\n\nTakes no fields: send `{}` or no body at all. Returns `202` with the\nrun, now `approved`, while its apply waits for an executor; poll the\nrun until its `status` is terminal.\n\n`409` when the plan had no changes, so there is nothing to approve."
@@ -1118,7 +1118,7 @@
                 }
               ]
             },
-            "description": "Matches display name or email, case-insensitively.\n\nThis is not a directory lookup. It searches openplan's projection of\nidentities it has actually verified, so a person who has never signed\nin will not appear — and cannot be granted a role. That is the same\nlimitation `POST .../grants` enforces as `not_signed_in`.\n\nThe response echoes the `first` and `max` actually applied, so a client\npaginates from what the server used rather than from what it sent.\n\nSaves the first match who is not you, for the grant requests."
+            "description": "Matches display name or email, case-insensitively.\n\nThis is not a directory lookup. It searches openplan's projection of\nidentities it has actually verified, so a person who has never signed\nin will not appear — and cannot be granted a role. That is the same\nlimitation `PUT .../grants/{user_sub}` enforces as `not_signed_in`.\n\nThe response echoes the `first` and `max` actually applied, so a client\npaginates from what the server used rather than from what it sent.\n\nSaves the first match who is not you, for the grant requests."
           },
           "response": [
             {
@@ -1209,20 +1209,20 @@
           }
         },
         {
-          "name": "Assign a role on a stack",
+          "name": "Set a person's role on a stack",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status is 200', () =\u003e pm.response.to.have.status(200));"
+                  "pm.test('status is one of 201, 200', () =\u003e pm.expect(pm.response.code).to.be.oneOf([201, 200]));"
                 ]
               }
             }
           ],
           "request": {
-            "method": "POST",
+            "method": "PUT",
             "header": [
               {
                 "key": "Content-Type",
@@ -1231,7 +1231,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{ \"user_sub\": \"{{user_sub}}\", \"role\": \"viewer\" }",
+              "raw": "{ \"role\": \"viewer\" }",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1239,7 +1239,7 @@
               }
             },
             "url": {
-              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/stacks/{{stack_id}}/grants",
+              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/stacks/{{stack_id}}/grants/{{user_sub}}",
               "host": [
                 "{{base_url}}"
               ],
@@ -1249,10 +1249,11 @@
                 "{{tenant_id}}",
                 "stacks",
                 "{{stack_id}}",
-                "grants"
+                "grants",
+                "{{user_sub}}"
               ]
             },
-            "description": "Assigning replaces whatever role the subject already held — one person\nhas at most one role on a stack.\n\nThe subject must have signed in to openplan at least once. openplan is not\na directory: a person exists here only once a verified token has\nprojected them. Granting to a subject it has never seen returns `422\nvalidation-failed` with an `errors` entry on `#/user_sub` whose issue\nis `not_signed_in`. Use `GET /v1/tenants/{tenant_id}/users/search` to find\none.\n\nThe response is the intended grant, rendered from the identity\nlookup the request already performed. The authorization write\nitself is queued and reconciled asynchronously, so a permission\ncheck made immediately afterwards may still answer from the old\nstate.\n\nNeeds a second person who has signed in once; without one there is nobody to grant a role to."
+            "description": "Creates the person's grant, or replaces whatever role they already\nheld — one person has at most one role on a stack. Answers `201` when\nthe person held no role before, and `200` when the call changed or\nkept the role they had. The person is named by the path only; a body\nthat also sends `user_sub` is refused as an unknown field (`400\nmalformed-body`).\n\nThe person must have signed in to openplan at least once. openplan is\nnot a directory: a person exists here only once a verified token has\nprojected them. Granting to a subject it has never seen returns `422\nvalidation-failed` with an `errors` entry on `#/user_sub` whose issue\nis `not_signed_in`. Use `GET /v1/tenants/{tenant_id}/users/search` to\nfind one.\n\nThe response is the grant, rendered from the identity lookup the\nrequest already performed. The role is written in the request's own\ntransaction, so it is in effect when the response arrives.\n\nGrants a role to the person the search saved. Needs a second person who has signed in once; without one there is nobody to grant a role to."
           }
         },
         {
@@ -1740,7 +1741,7 @@
             }
           ],
           "request": {
-            "method": "PATCH",
+            "method": "PUT",
             "header": [
               {
                 "key": "Content-Type",

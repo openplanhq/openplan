@@ -4,6 +4,7 @@ import {
   addTemplateToStack,
   ApiRequestError,
   approveRun,
+  assignStackRole,
   discardRun,
   createStack,
   getTemplateRevisionVariables,
@@ -175,7 +176,8 @@ describe("api client", () => {
       1,
       "/v1/tenants/tenant_123/stack-templates/stack_template_123/config",
       expect.objectContaining({
-        method: "PATCH",
+        // PUT: the config sent replaces the whole stored one.
+        method: "PUT",
         body: JSON.stringify({ config: { region: "us-west-2" } })
       })
     );
@@ -205,7 +207,7 @@ describe("api client", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      "/v1/tenants/tenant_123/template-runs/run_123/approval",
+      "/v1/tenants/tenant_123/template-runs/run_123/approve",
       expect.objectContaining({ method: "POST" })
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
@@ -221,12 +223,26 @@ describe("api client", () => {
   it("reads log bodies as text", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(textResponse("plan output\n"));
 
-    const body = await getTemplateRunLog("tenant_123", "run_123", "plan");
+    const body = await getTemplateRunLog("tenant_123", "run_123", "plan-1");
 
     expect(body).toBe("plan output\n");
     expect(fetchMock).toHaveBeenCalledWith(
-      "/v1/tenants/tenant_123/template-runs/run_123/logs/plan",
+      "/v1/tenants/tenant_123/template-runs/run_123/logs/plan-1",
       expect.objectContaining({ method: "GET" })
+    );
+  });
+
+  // The person is named in the path, so the body carries only the role.
+  it("puts a stack role at the person's grant path", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(jsonResponse({ user_sub: "u/3", role: "viewer", display_name: "", email: "" }, 201));
+
+    await assignStackRole("tenant_123", "stack_123", "u/3", { role: "viewer" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/v1/tenants/tenant_123/stacks/stack_123/grants/u%2F3",
+      expect.objectContaining({ method: "PUT", body: JSON.stringify({ role: "viewer" }) })
     );
   });
 

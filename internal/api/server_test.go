@@ -120,13 +120,14 @@ func TestTenantScopedRoutesRejectOtherTenantBeforeHandler(t *testing.T) {
 		{name: "list attention", method: http.MethodGet, path: "/v1/tenants/tenant_other/attention"},
 		{name: "get stack", method: http.MethodGet, path: "/v1/tenants/tenant_other/stacks/stack_123"},
 		{name: "install template", method: http.MethodPost, path: "/v1/tenants/tenant_other/stacks/stack_123/templates"},
-		{name: "update template config", method: http.MethodPatch, path: "/v1/tenants/tenant_other/stack-templates/stack_template_123/config"},
+		{name: "update template config", method: http.MethodPut, path: "/v1/tenants/tenant_other/stack-templates/stack_template_123/config"},
 		{name: "upgrade template", method: http.MethodPost, path: "/v1/tenants/tenant_other/stack-templates/stack_template_123/upgrade"},
 		{name: "start run", method: http.MethodPost, path: "/v1/tenants/tenant_other/stack-templates/stack_template_123/runs"},
 		{name: "get run", method: http.MethodGet, path: "/v1/tenants/tenant_other/template-runs/run_123"},
 		{name: "list run logs", method: http.MethodGet, path: "/v1/tenants/tenant_other/template-runs/run_123/logs"},
 		{name: "get run log artifact", method: http.MethodGet, path: "/v1/tenants/tenant_other/template-runs/run_123/logs/plan"},
-		{name: "approve run", method: http.MethodPost, path: "/v1/tenants/tenant_other/template-runs/run_123/approval"},
+		{name: "approve run", method: http.MethodPost, path: "/v1/tenants/tenant_other/template-runs/run_123/approve"},
+		{name: "assign role", method: http.MethodPut, path: "/v1/tenants/tenant_other/stacks/stack_123/grants/user-2"},
 		{name: "discard run", method: http.MethodPost, path: "/v1/tenants/tenant_other/template-runs/run_123/discard"},
 		{name: "search users", method: http.MethodGet, path: "/v1/tenants/tenant_other/users/search?q=test"},
 	}
@@ -401,7 +402,7 @@ func TestApproveRunMapsStalePlanToConflictWithItsOwnCode(t *testing.T) {
 	response := httptest.NewRecorder()
 	request := authenticatedRequest(
 		http.MethodPost,
-		"/v1/tenants/tenant_123/template-runs/run_123/approval",
+		"/v1/tenants/tenant_123/template-runs/run_123/approve",
 		strings.NewReader(`{}`),
 	)
 
@@ -533,7 +534,7 @@ func TestStackTemplateResponseCarriesDerivedStatesNotRawConfigs(t *testing.T) {
 	server := NewServer(deps.service(), configuredTenantID)
 	response := httptest.NewRecorder()
 	request := authenticatedRequest(
-		http.MethodPatch,
+		http.MethodPut,
 		"/v1/tenants/tenant_123/stack-templates/stack_template_123/config",
 		strings.NewReader(`{"config":{"region":"us-west-2"}}`),
 	)
@@ -1180,7 +1181,7 @@ func TestUpdateStackTemplateConfigCallsService(t *testing.T) {
 	server := NewServer(deps.service(), configuredTenantID)
 	response := httptest.NewRecorder()
 	request := authenticatedRequest(
-		http.MethodPatch,
+		http.MethodPut,
 		"/v1/tenants/tenant_123/stack-templates/stack_template_123/config",
 		strings.NewReader(`{"config":{"region":"us-west-2"}}`),
 	)
@@ -1223,7 +1224,7 @@ func TestUpdateStackTemplateConfigRequiresConfig(t *testing.T) {
 		response := httptest.NewRecorder()
 
 		server.ServeHTTP(response, authenticatedRequest(
-			http.MethodPatch,
+			http.MethodPut,
 			"/v1/tenants/tenant_123/stack-templates/stack_template_123/config",
 			strings.NewReader(requestBody),
 		))
@@ -1369,7 +1370,7 @@ func TestStackTemplateEditRoutesHideMissingStackTemplateAsNotFound(t *testing.T)
 	}{
 		{
 			name:   "config edit",
-			method: http.MethodPatch,
+			method: http.MethodPut,
 			path:   "/v1/tenants/tenant_123/stack-templates/missing_stack_template/config",
 			body:   `{"config":{}}`,
 		},
@@ -1736,8 +1737,9 @@ func TestGetTemplateRunLogReturnsPlainText(t *testing.T) {
 	if response.Body.String() != "terraform plan output\n" {
 		t.Fatalf("body = %q, want terraform plan output", response.Body.String())
 	}
-	if deps.logs.gotPhase != "plan" {
-		t.Fatalf("phase = %q, want plan", deps.logs.gotPhase)
+	// The path value is the log's name, looked up as such.
+	if deps.logMetadata.gotGetPhase != "plan" {
+		t.Fatalf("looked up log %q, want plan", deps.logMetadata.gotGetPhase)
 	}
 }
 
@@ -1814,7 +1816,7 @@ func TestListTemplateRunLogsReturnsEmptyArray(t *testing.T) {
 // Any well-formed name is looked up, since the workflow decides which logs a
 // run has; only a name that could not be one is refused outright.
 // A log name of the wrong shape names a log that can't exist.
-func TestGetTemplateRunLogMapsInvalidPhaseToNotFound(t *testing.T) {
+func TestGetTemplateRunLogMapsInvalidNameToNotFound(t *testing.T) {
 	t.Parallel()
 
 	server := NewServer(newAPITestDependencies(t).service(), configuredTenantID)
@@ -1882,7 +1884,7 @@ func TestApproveRunCallsService(t *testing.T) {
 	response := httptest.NewRecorder()
 	request := authenticatedRequest(
 		http.MethodPost,
-		"/v1/tenants/tenant_123/template-runs/run_123/approval",
+		"/v1/tenants/tenant_123/template-runs/run_123/approve",
 		strings.NewReader(`{}`),
 	)
 
@@ -1929,7 +1931,7 @@ func TestApproveRunTakesAnEmptyBodyButNotAMalformedOne(t *testing.T) {
 	server := NewServer(deps.service(), configuredTenantID)
 	response := httptest.NewRecorder()
 
-	server.ServeHTTP(response, authenticatedRequest(http.MethodPost, "/v1/tenants/tenant_123/template-runs/run_123/approval", nil))
+	server.ServeHTTP(response, authenticatedRequest(http.MethodPost, "/v1/tenants/tenant_123/template-runs/run_123/approve", nil))
 
 	if response.Code != http.StatusAccepted {
 		t.Fatalf("empty body: status = %d, want %d; body = %s", response.Code, http.StatusAccepted, response.Body.String())
@@ -1943,7 +1945,7 @@ func TestApproveRunTakesAnEmptyBodyButNotAMalformedOne(t *testing.T) {
 		server := NewServer(deps.service(), configuredTenantID)
 		response := httptest.NewRecorder()
 
-		server.ServeHTTP(response, authenticatedRequest(http.MethodPost, "/v1/tenants/tenant_123/template-runs/run_123/approval", strings.NewReader(requestBody)))
+		server.ServeHTTP(response, authenticatedRequest(http.MethodPost, "/v1/tenants/tenant_123/template-runs/run_123/approve", strings.NewReader(requestBody)))
 
 		if response.Code != http.StatusBadRequest {
 			t.Fatalf("%s: status = %d, want %d", requestBody, response.Code, http.StatusBadRequest)
@@ -1969,7 +1971,7 @@ func TestApproveRunAllowsSelfApproval(t *testing.T) {
 	response := httptest.NewRecorder()
 	request := authenticatedRequest(
 		http.MethodPost,
-		"/v1/tenants/tenant_123/template-runs/run_123/approval",
+		"/v1/tenants/tenant_123/template-runs/run_123/approve",
 		strings.NewReader(`{}`),
 	)
 
@@ -2047,7 +2049,7 @@ func TestRunDecisionRequestsRejectTopLevelNull(t *testing.T) {
 	}{
 		{
 			name: "approval",
-			path: "/v1/tenants/tenant_123/template-runs/run_123/approval",
+			path: "/v1/tenants/tenant_123/template-runs/run_123/approve",
 			assertNoEffects: func(t *testing.T, deps *apiTestDependencies) {
 				t.Helper()
 				if deps.templateRuns.approval.RunID != "" {
@@ -2101,7 +2103,7 @@ func TestRunDecisionConflictErrorsReturnConflict(t *testing.T) {
 	}{
 		{
 			name: "approval",
-			path: "/v1/tenants/tenant_123/template-runs/run_123/approval",
+			path: "/v1/tenants/tenant_123/template-runs/run_123/approve",
 			body: `{}`,
 			configure: func(deps *apiTestDependencies) {
 				deps.templateRuns.approvalErr = app.ErrRunNotApprovable
@@ -2182,7 +2184,7 @@ func TestMutationRequestsRejectIdentityOverrides(t *testing.T) {
 		{name: "actor", path: "/v1/tenants/tenant_123/stacks", body: `{"name":"Acme","actor":"spoofed"}`, assertNoEffects: assertNoStackCreation},
 		{name: "requested by", path: "/v1/tenants/tenant_123/template-registrations", body: `{"repo_owner":"acme","repo_name":"infra","source_ref":"main","root_path":".","requested_by":"spoofed"}`, assertNoEffects: assertNoRegistration},
 		{name: "trigger actor", path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/runs", body: `{"operation":"plan","trigger_actor":"spoofed"}`, assertNoEffects: assertNoRun},
-		{name: "approved by", path: "/v1/tenants/tenant_123/template-runs/run_123/approval", body: `{"approved_by":"spoofed"}`, assertNoEffects: assertNoApproval},
+		{name: "approved by", path: "/v1/tenants/tenant_123/template-runs/run_123/approve", body: `{"approved_by":"spoofed"}`, assertNoEffects: assertNoApproval},
 		{name: "created by", path: "/v1/tenants/tenant_123/stacks", body: `{"name":"Acme","created_by":"spoofed"}`, assertNoEffects: assertNoStackCreation},
 	}
 
@@ -2449,10 +2451,10 @@ func TestStackRoleRoutesUseInheritedPermissions(t *testing.T) {
 		{name: "viewer lists stacks", role: authorization.RelationViewer, method: http.MethodGet, path: "/v1/tenants/tenant_123/stacks", status: http.StatusOK, permission: authorization.RelationCanView},
 		{name: "viewer reads stack", role: authorization.RelationViewer, method: http.MethodGet, path: "/v1/tenants/tenant_123/stacks/stack_123", status: http.StatusOK, permission: authorization.RelationCanView},
 		{name: "operator installs template", role: authorization.RelationOperator, method: http.MethodPost, path: "/v1/tenants/tenant_123/stacks/stack_123/templates", body: `{"template_revision_id":"revision_123","config":{}}`, status: http.StatusCreated, permission: authorization.RelationCanOperate},
-		{name: "owner operates config", role: authorization.RelationOwner, method: http.MethodPatch, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/config", body: `{"config":{}}`, status: http.StatusOK, permission: authorization.RelationCanOperate},
+		{name: "owner operates config", role: authorization.RelationOwner, method: http.MethodPut, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/config", body: `{"config":{}}`, status: http.StatusOK, permission: authorization.RelationCanOperate},
 		{name: "operator upgrades template", role: authorization.RelationOperator, method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/upgrade", body: `{"target_template_revision_id":"revision_123"}`, status: http.StatusOK, permission: authorization.RelationCanOperate},
 		{name: "operator starts run", role: authorization.RelationOperator, method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/runs", body: `{"operation":"plan"}`, status: http.StatusAccepted, permission: authorization.RelationCanOperate},
-		{name: "approver approves run", role: authorization.RelationApprover, method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/approval", body: `{}`, status: http.StatusAccepted, permission: authorization.RelationCanApprove},
+		{name: "approver approves run", role: authorization.RelationApprover, method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/approve", body: `{}`, status: http.StatusAccepted, permission: authorization.RelationCanApprove},
 		{name: "owner discards run", role: authorization.RelationOwner, method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/discard", body: `{}`, status: http.StatusNoContent, permission: authorization.RelationCanOperate},
 		{name: "viewer reads run", role: authorization.RelationViewer, method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123", status: http.StatusOK, permission: authorization.RelationCanView},
 		{name: "approver lists run logs", role: authorization.RelationApprover, method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123/logs", status: http.StatusOK, permission: authorization.RelationCanView},
@@ -2499,13 +2501,13 @@ func TestStackRoleRoutesDenyInsufficientRoles(t *testing.T) {
 		{name: "unassigned list is empty", method: http.MethodGet, path: "/v1/tenants/tenant_123/stacks", status: http.StatusOK, permission: authorization.RelationCanView},
 		{name: "unassigned cannot read stack", method: http.MethodGet, path: "/v1/tenants/tenant_123/stacks/stack_123", status: http.StatusNotFound, permission: authorization.RelationCanView},
 		{name: "unassigned cannot install template", method: http.MethodPost, path: "/v1/tenants/tenant_123/stacks/stack_123/templates", body: `{"template_revision_id":"revision_123","config":{}}`, status: http.StatusNotFound, permission: authorization.RelationCanOperate},
-		{name: "unassigned cannot approve run", method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/approval", body: `{}`, status: http.StatusNotFound, permission: authorization.RelationCanApprove},
-		{name: "unassigned cannot assign role", method: http.MethodPost, path: "/v1/tenants/tenant_123/stacks/stack_123/grants", body: `{"user_sub":"user-2","role":"viewer"}`, status: http.StatusNotFound, permission: authorization.RelationCanManageAccess},
+		{name: "unassigned cannot approve run", method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/approve", body: `{}`, status: http.StatusNotFound, permission: authorization.RelationCanApprove},
+		{name: "unassigned cannot assign role", method: http.MethodPut, path: "/v1/tenants/tenant_123/stacks/stack_123/grants/user-2", body: `{"role":"viewer"}`, status: http.StatusNotFound, permission: authorization.RelationCanManageAccess},
 		{name: "viewer cannot install template", role: authorization.RelationViewer, method: http.MethodPost, path: "/v1/tenants/tenant_123/stacks/stack_123/templates", body: `{"template_revision_id":"revision_123","config":{}}`, status: http.StatusForbidden, permission: authorization.RelationCanOperate},
-		{name: "approver cannot update config", role: authorization.RelationApprover, method: http.MethodPatch, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/config", body: `{"config":{}}`, status: http.StatusForbidden, permission: authorization.RelationCanOperate},
+		{name: "approver cannot update config", role: authorization.RelationApprover, method: http.MethodPut, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/config", body: `{"config":{}}`, status: http.StatusForbidden, permission: authorization.RelationCanOperate},
 		{name: "viewer cannot upgrade template", role: authorization.RelationViewer, method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/upgrade", body: `{"target_template_revision_id":"revision_123"}`, status: http.StatusForbidden, permission: authorization.RelationCanOperate},
 		{name: "approver cannot start run", role: authorization.RelationApprover, method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/runs", body: `{"operation":"plan"}`, status: http.StatusForbidden, permission: authorization.RelationCanOperate},
-		{name: "operator cannot approve run", role: authorization.RelationOperator, method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/approval", body: `{}`, status: http.StatusForbidden, permission: authorization.RelationCanApprove},
+		{name: "operator cannot approve run", role: authorization.RelationOperator, method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/approve", body: `{}`, status: http.StatusForbidden, permission: authorization.RelationCanApprove},
 		{name: "approver cannot discard run", role: authorization.RelationApprover, method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/discard", body: `{}`, status: http.StatusForbidden, permission: authorization.RelationCanOperate},
 		{name: "unassigned cannot read run", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123", status: http.StatusNotFound, permission: authorization.RelationCanView},
 		{name: "unassigned cannot list logs", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123/logs", status: http.StatusNotFound, permission: authorization.RelationCanView},
@@ -2618,11 +2620,11 @@ func TestInheritedRouteMissingAndDeniedStatusesMatch(t *testing.T) {
 		body     string
 		resource string
 	}{
-		{name: "config", method: http.MethodPatch, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/config", body: `{"config":{}}`, resource: "stack-template"},
+		{name: "config", method: http.MethodPut, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/config", body: `{"config":{}}`, resource: "stack-template"},
 		{name: "upgrade", method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/upgrade", body: `{"target_template_revision_id":"revision_123"}`, resource: "stack-template"},
 		{name: "start run", method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/runs", body: `{"operation":"plan"}`, resource: "stack-template"},
 		{name: "run detail", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123"},
-		{name: "approval", method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/approval", body: `{}`},
+		{name: "approval", method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/approve", body: `{}`},
 		{name: "discard", method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/discard", body: `{}`},
 		{name: "log list", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123/logs"},
 		{name: "log body", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123/logs/plan"},
@@ -2782,11 +2784,11 @@ func TestPlatformAdminCannotBypassMissingAuthorizer(t *testing.T) {
 		{name: "stack list", method: http.MethodGet, path: "/v1/tenants/tenant_123/stacks"},
 		{name: "stack detail", method: http.MethodGet, path: "/v1/tenants/tenant_123/stacks/stack_123"},
 		{name: "stack mutation", method: http.MethodPost, path: "/v1/tenants/tenant_123/stacks/stack_123/templates", body: `{"template_revision_id":"revision_123","config":{}}`},
-		{name: "config mutation", method: http.MethodPatch, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/config", body: `{"config":{}}`},
+		{name: "config mutation", method: http.MethodPut, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/config", body: `{"config":{}}`},
 		{name: "upgrade mutation", method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/upgrade", body: `{"target_template_revision_id":"revision_123"}`},
 		{name: "start run", method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/runs", body: `{"operation":"plan"}`},
 		{name: "inherited read", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123"},
-		{name: "approval", method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/approval", body: `{}`},
+		{name: "approval", method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/approve", body: `{}`},
 		{name: "discard", method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/discard", body: `{}`},
 		{name: "log list", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123/logs"},
 		{name: "log body", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123/logs/plan"},
@@ -3929,7 +3931,9 @@ func TestListStackGrantsReturnsEmptyOnNoGrants(t *testing.T) {
 	}
 }
 
-func TestAssignStackRoleAssignsRoleAndReturnsGrantView(t *testing.T) {
+// PUT on a grant creates it or replaces it, and the status says which: a
+// client adding someone gets 201, one changing or repeating a role gets 200.
+func TestAssignStackRoleAnswers201ThenOK(t *testing.T) {
 	t.Parallel()
 
 	deps := newAPITestDependencies(t)
@@ -3937,24 +3941,103 @@ func TestAssignStackRoleAssignsRoleAndReturnsGrantView(t *testing.T) {
 		users: []app.UserProfile{{Sub: "user-2", DisplayName: "bob", Email: "bob@example.com"}},
 	}
 	server := NewServer(deps.service(), configuredTenantID)
+
+	for _, step := range []struct {
+		role   string
+		status int
+	}{
+		{role: "viewer", status: http.StatusCreated},
+		{role: "operator", status: http.StatusOK},
+		{role: "operator", status: http.StatusOK},
+	} {
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, authenticatedRequest(
+			http.MethodPut,
+			"/v1/tenants/tenant_123/stacks/stack_123/grants/user-2",
+			strings.NewReader(`{"role":"`+step.role+`"}`),
+		))
+
+		if response.Code != step.status {
+			t.Fatalf("PUT role %s: status = %d, want %d; body = %s", step.role, response.Code, step.status, response.Body.String())
+		}
+		var body app.GrantView
+		if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if body.UserSub != "user-2" || body.Role != step.role {
+			t.Fatalf("PUT role %s: grant view = %#v", step.role, body)
+		}
+	}
+}
+
+// The person comes from the path. A body that names one too is refused
+// rather than read, so the two can't disagree about whose grant changes.
+func TestAssignStackRoleRejectsUserSubInBody(t *testing.T) {
+	t.Parallel()
+
+	deps := newAPITestDependencies(t)
+	deps.users = apiFakeUserRepository{
+		users: []app.UserProfile{{Sub: "user-2", DisplayName: "bob"}, {Sub: "user-3", DisplayName: "carol"}},
+	}
+	server := NewServer(deps.service(), configuredTenantID)
 	response := httptest.NewRecorder()
 	request := authenticatedRequest(
-		http.MethodPost,
-		"/v1/tenants/tenant_123/stacks/stack_123/grants",
-		strings.NewReader(`{"user_sub":"user-2","role":"operator"}`),
+		http.MethodPut,
+		"/v1/tenants/tenant_123/stacks/stack_123/grants/user-2",
+		strings.NewReader(`{"user_sub":"user-3","role":"viewer"}`),
 	)
 
 	server.ServeHTTP(response, request)
 
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusBadRequest, response.Body.String())
 	}
-	var body app.GrantView
-	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
-		t.Fatalf("decode response: %v", err)
+	if problem := decodeProblem(t, response); problem.Type != problemTypeURI("malformed-body") {
+		t.Fatalf("type = %q, want malformed-body", problem.Type)
 	}
-	if body.UserSub != "user-2" || body.Role != "operator" {
-		t.Fatalf("grant view = %#v", body)
+	grants, err := deps.authorizer.ListGrants(context.Background(), mustAPIGrant(t, "user-2", "stack_123", authorization.RelationViewer).Object())
+	if err != nil {
+		t.Fatalf("ListGrants: %v", err)
+	}
+	for _, sub := range []string{"user-2", "user-3"} {
+		subject, err := authorization.SubjectFromOIDCSub(sub)
+		if err != nil {
+			t.Fatalf("SubjectFromOIDCSub: %v", err)
+		}
+		for _, grant := range grants {
+			if grant.Subject().String() == subject.String() {
+				t.Fatalf("grant written for %s despite the refused body", sub)
+			}
+		}
+	}
+}
+
+// The renamed routes left nothing at their old addresses. A stale client
+// gets the mux's answer: 405 where another method still owns the path,
+// 404 where nothing does.
+func TestRenamedRoutesAnswerAtTheirOldPaths(t *testing.T) {
+	t.Parallel()
+
+	server := NewServer(newAPITestDependencies(t).service(), configuredTenantID)
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		status int
+	}{
+		{name: "grant upsert by POST", method: http.MethodPost, path: "/v1/tenants/tenant_123/stacks/stack_123/grants", status: http.StatusMethodNotAllowed},
+		{name: "config edit by PATCH", method: http.MethodPatch, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/config", status: http.StatusMethodNotAllowed},
+		{name: "approval noun", method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/approval", status: http.StatusNotFound},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			response := httptest.NewRecorder()
+			server.ServeHTTP(response, authenticatedRequest(test.method, test.path, strings.NewReader(`{}`)))
+			if response.Code != test.status {
+				t.Fatalf("status = %d, want %d; body = %s", response.Code, test.status, response.Body.String())
+			}
+		})
 	}
 }
 
@@ -3965,9 +4048,9 @@ func TestAssignStackRoleRejectsInvalidJSON(t *testing.T) {
 	server := NewServer(deps.service(), configuredTenantID)
 	response := httptest.NewRecorder()
 	request := authenticatedRequest(
-		http.MethodPost,
-		"/v1/tenants/tenant_123/stacks/stack_123/grants",
-		strings.NewReader(`{"user_sub":`),
+		http.MethodPut,
+		"/v1/tenants/tenant_123/stacks/stack_123/grants/user-2",
+		strings.NewReader(`{"role":`),
 	)
 
 	server.ServeHTTP(response, request)
@@ -3985,9 +4068,9 @@ func TestAssignStackRoleRequiresManageAccess(t *testing.T) {
 	server := NewServer(deps.service(), configuredTenantID)
 	response := httptest.NewRecorder()
 	request := ordinaryAuthenticatedRequest(
-		http.MethodPost,
-		"/v1/tenants/tenant_123/stacks/stack_123/grants",
-		strings.NewReader(`{"user_sub":"user-2","role":"viewer"}`),
+		http.MethodPut,
+		"/v1/tenants/tenant_123/stacks/stack_123/grants/user-2",
+		strings.NewReader(`{"role":"viewer"}`),
 	)
 
 	server.ServeHTTP(response, request)
@@ -4040,9 +4123,9 @@ func TestAssignStackRoleLastOwnerDemotionReturnsConflict(t *testing.T) {
 	server := NewServer(deps.service(), configuredTenantID)
 	response := httptest.NewRecorder()
 	request := authenticatedRequest(
-		http.MethodPost,
-		"/v1/tenants/tenant_123/stacks/stack_123/grants",
-		strings.NewReader(`{"user_sub":"`+apiOIDCSubject+`","role":"viewer"}`),
+		http.MethodPut,
+		"/v1/tenants/tenant_123/stacks/stack_123/grants/"+apiOIDCSubject,
+		strings.NewReader(`{"role":"viewer"}`),
 	)
 
 	server.ServeHTTP(response, request)

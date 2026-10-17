@@ -289,7 +289,7 @@ func TestAssignStackRoleReturnsProjectedDisplayFields(t *testing.T) {
 		Clock: fixedClock{now: time.Now()},
 	})
 
-	view, err := service.AssignStackRole(adminContext(), AssignStackRoleCommand{
+	result, err := service.AssignStackRole(adminContext(), AssignStackRoleCommand{
 		TenantID: domain.TenantID("tenant_123"),
 		StackID:  domain.StackID("stack_abc"),
 		UserSub:  "user_456",
@@ -298,7 +298,7 @@ func TestAssignStackRoleReturnsProjectedDisplayFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AssignStackRole returned error: %v", err)
 	}
-	if view.DisplayName != "Casey Jones" || view.Email != "casey@example.com" {
+	if view := result.Grant; view.DisplayName != "Casey Jones" || view.Email != "casey@example.com" {
 		t.Fatalf("view = %#v, want the projected display name and email", view)
 	}
 }

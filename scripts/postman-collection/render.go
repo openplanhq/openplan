@@ -432,6 +432,6 @@ var environment = []environmentValue{
 	{"stack_template_id", "", plainVariable},
 	{"credential_id", "", plainVariable},
 	{"run_id", "", plainVariable},
-	{"phase", "", plainVariable},
+	{"name", "", plainVariable},
 	{"user_sub", "", plainVariable},
 }
