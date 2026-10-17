@@ -1962,6 +1962,8 @@ func (service *Service) GetTemplateRunLog(ctx context.Context, command GetTempla
 		return nil, ErrTemplateRunLogLive
 	case domain.TemplateRunLogLost:
 		return nil, ErrTemplateRunLogLost
+	case domain.TemplateRunLogComplete:
+		// The one state with a body: read on.
 	}
 
 	content, err := service.TemplateRunLogs.ReadTemplateRunLog(ctx, log)

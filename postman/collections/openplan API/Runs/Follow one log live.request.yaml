@@ -7,10 +7,13 @@ description: |-
   JSON `data` line:
 
   - `log`: the next bytes of output. `data` is
-    `{"offset": <n>, "data": "<text>"}`: `offset` is the first byte's
-    position in the log, and `text` is the bytes as UTF-8, with any
-    invalid sequence replaced by U+FFFD. The event's `id` is what to
-    send back as `Last-Event-ID`.
+    `{"offset": <n>, "end": <m>, "data": "<text>"}`: `offset` is the
+    first byte's position in the log, `end` the position after the
+    last, counted on the raw bytes, and `text` is the bytes as UTF-8,
+    with any invalid sequence replaced by U+FFFD. Events follow one
+    another without gaps or overlaps, across reconnects too, so a
+    client appends each `text` as it arrives. The event's `id` is what
+    to send back as `Last-Event-ID`.
   - `log_truncated`: the output outgrew what is streamed live, and no
     more `log` events follow. `data` is `{}`. Read the rest from the
     log's body once it is `complete`.
@@ -18,11 +21,14 @@ description: |-
     `complete` (read the whole body from the log's body endpoint),
     `lost` (the output was not stored), or `live` (the command is still
     running, but this stream stopped following it: reconnect with
-    `Last-Event-ID`, after a backoff of the client's own).
+    `Last-Event-ID`). A stream that could not follow the log at all,
+    because the server's live log store failed or this server is
+    following as many logs as it can, sends `retry: 3000` before its
+    `log_end` `live`, so `EventSource` waits three seconds.
 
   A log that is not `live` when the request arrives gets its
-  `log_end` straight away. The stream carries no event while the
-  command prints nothing, including before its first byte.
+  `log_end` straight away. While the command prints nothing, the
+  stream carries no event, only a comment line every 20 seconds.
 
   In a collection run the plan has finished, so the stream is one `log_end` and closes.
 method: GET

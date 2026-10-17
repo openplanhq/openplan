@@ -142,6 +142,26 @@ func (reg *Registry) Subscribe(ctx context.Context, key, afterID string) (<-chan
 	return out, nil
 }
 
+// Entry reads the one entry of key at id, so a resuming reader can learn how
+// much of the log it already holds. found is false when the stream no longer
+// has the entry (it expired, or Valkey restarted), when id is not a stream
+// id, or when the entry cannot be parsed: in each case the reader holds
+// nothing it can be told about.
+func (reg *Registry) Entry(ctx context.Context, key, id string) (entry Entry, found bool, err error) {
+	if _, _, ok := parseID(id); !ok {
+		return Entry{}, false, nil
+	}
+	messages, err := reg.reader.XRange(ctx, key, id, id).Result()
+	if err != nil {
+		return Entry{}, false, fmt.Errorf("read entry %s of %s: %w", id, key, err)
+	}
+	if len(messages) == 0 {
+		return Entry{}, false, nil
+	}
+	entry, ok := parseOrSkip(key, messages[0])
+	return entry, ok, nil
+}
+
 // join registers a subscriber with key's tailer, creating the tailer if key
 // has none; created says this subscriber has to start it.
 func (reg *Registry) join(key string) (*tailer, *subscriber, bool, error) {

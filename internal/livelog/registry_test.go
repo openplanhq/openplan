@@ -425,3 +425,26 @@ func TestSubscribeIgnoresAnAfterIDPastAMissingStream(t *testing.T) {
 		t.Fatalf("entry = %+v, want %s", got, id)
 	}
 }
+
+func TestEntryReadsOneEntryByID(t *testing.T) {
+	t.Parallel()
+	reg, client := newTestRegistry(t)
+	addPiece(t, client, 0, "abc")
+	second := addPiece(t, client, 3, "defg")
+
+	entry, found, err := reg.Entry(t.Context(), registryTestKey, second)
+	if err != nil || !found {
+		t.Fatalf("Entry(%s) = found %v, error %v; want the piece", second, found, err)
+	}
+	if entry.Kind != KindPiece || entry.Offset != 3 || string(entry.Data) != "defg" {
+		t.Fatalf("Entry(%s) = %+v, want the piece at 3", second, entry)
+	}
+
+	// An id the stream no longer holds, or one that is not an id at all,
+	// is nothing the reader can be said to have.
+	for _, id := range []string{"9999999999999-0", "not-an-id", ""} {
+		if _, found, err := reg.Entry(t.Context(), registryTestKey, id); err != nil || found {
+			t.Fatalf("Entry(%q) = found %v, error %v; want not found", id, found, err)
+		}
+	}
+}

@@ -78,9 +78,10 @@ type templateRunLogResponse struct {
 	LostReason  string `json:"lost_reason,omitempty"`
 	// The upload fields describe the stored body, so a log that isn't
 	// complete leaves all three out rather than sending zeros a client could
-	// read as an empty upload.
+	// read as an empty upload. SizeBytes is a pointer so that a complete log
+	// of zero bytes still says so.
 	ContentType string    `json:"content_type,omitempty"`
-	SizeBytes   int64     `json:"size_bytes,omitempty"`
+	SizeBytes   *int64    `json:"size_bytes,omitempty"`
 	UploadedAt  time.Time `json:"uploaded_at,omitzero"`
 }
 
@@ -180,6 +181,10 @@ func newPlanSummaryResponse(summary *domain.PlanSummary) *planSummaryResponse {
 }
 
 func newTemplateRunLogResponse(log domain.TemplateRunLog) templateRunLogResponse {
+	var size *int64
+	if log.State == domain.TemplateRunLogComplete {
+		size = &log.SizeBytes
+	}
 	return templateRunLogResponse{
 		TenantID:    string(log.TenantID),
 		RunID:       string(log.RunID),
@@ -191,7 +196,7 @@ func newTemplateRunLogResponse(log domain.TemplateRunLog) templateRunLogResponse
 		State:       string(log.State),
 		LostReason:  string(log.LostReason),
 		ContentType: log.ContentType,
-		SizeBytes:   log.SizeBytes,
+		SizeBytes:   size,
 		UploadedAt:  log.UploadedAt,
 	}
 }

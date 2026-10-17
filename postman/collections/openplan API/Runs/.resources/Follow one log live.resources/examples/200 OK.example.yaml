@@ -13,7 +13,7 @@ response:
     content: |
       event: log
       id: 1760720000000-0
-      data: {"offset":0,"data":"Initializing the backend...\n"}
+      data: {"offset":0,"end":28,"data":"Initializing the backend...\n"}
 
       event: log_end
       data: {"state":"complete"}

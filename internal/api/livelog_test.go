@@ -3,12 +3,15 @@ package api
 import (
 	"bytes"
 	"context"
+	"errors"
 	"maps"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/vishu42/openplan/internal/domain"
 	"github.com/vishu42/openplan/internal/livelog"
@@ -17,10 +20,16 @@ import (
 const liveLogEventsPath = "/v1/tenants/tenant_123/template-runs/run_123/logs/plan-1/events"
 
 // fakeLiveLogs yields its entries to every subscriber, then closes the
-// channel, as a registry does once its tailer is gone.
+// channel, as a registry does once its tailer is gone; with hold, it leaves
+// the channel open, as for a command that prints nothing more.
 type fakeLiveLogs struct {
 	entries []livelog.Entry
+	hold    bool
 	err     error
+	// stored is what Entry finds, beside entries: what the stream held
+	// before the client's Last-Event-ID.
+	stored   []livelog.Entry
+	entryErr error
 
 	mu         sync.Mutex
 	calls      int
@@ -40,8 +49,22 @@ func (f *fakeLiveLogs) Subscribe(_ context.Context, key, afterID string) (<-chan
 	for _, entry := range f.entries {
 		entries <- entry
 	}
-	close(entries)
+	if !f.hold {
+		close(entries)
+	}
 	return entries, nil
+}
+
+func (f *fakeLiveLogs) Entry(_ context.Context, _, id string) (livelog.Entry, bool, error) {
+	if f.entryErr != nil {
+		return livelog.Entry{}, false, f.entryErr
+	}
+	for _, entry := range append(slices.Clone(f.stored), f.entries...) {
+		if entry.ID == id {
+			return entry, true, nil
+		}
+	}
+	return livelog.Entry{}, false, nil
 }
 
 // newLiveLogDependencies is a running run whose plan-1 log is live.
@@ -109,8 +132,8 @@ func TestStreamTemplateRunLogSendsPiecesThenEnd(t *testing.T) {
 			t.Errorf("%s = %q, want %q", header, got, want)
 		}
 	}
-	want := sseLog("1-0", `{"offset":0,"data":"hello\n"}`) +
-		sseLog("2-0", `{"offset":6,"data":"world\n"}`) +
+	want := sseLog("1-0", `{"offset":0,"end":6,"data":"hello\n"}`) +
+		sseLog("2-0", `{"offset":6,"end":12,"data":"world\n"}`) +
 		"event: log_truncated\ndata: {}\n\n" +
 		sseEnd("complete")
 	if got := response.Body.String(); got != want {
@@ -165,7 +188,8 @@ func TestStreamTemplateRunLogReplacesInvalidUTF8(t *testing.T) {
 
 	response := streamLiveLog(t, deps, live, nil)
 
-	if want := sseLog("1-0", `{"offset":0,"data":"�a"}`); !strings.HasPrefix(response.Body.String(), want) {
+	// end counts the raw bytes, two, not the three of the replaced text.
+	if want := sseLog("1-0", `{"offset":0,"end":2,"data":"�a"}`); !strings.HasPrefix(response.Body.String(), want) {
 		t.Fatalf("body = %q, want it to start %q", response.Body.String(), want)
 	}
 }
@@ -183,8 +207,8 @@ func TestStreamTemplateRunLogSkipsADuplicateOffset(t *testing.T) {
 
 	response := streamLiveLog(t, deps, live, nil)
 
-	want := sseLog("1-0", `{"offset":0,"data":"abc"}`) +
-		sseLog("3-0", `{"offset":3,"data":"def"}`) +
+	want := sseLog("1-0", `{"offset":0,"end":3,"data":"abc"}`) +
+		sseLog("3-0", `{"offset":3,"end":6,"data":"def"}`) +
 		sseEnd("complete")
 	if got := response.Body.String(); got != want {
 		t.Fatalf("body =\n%s\nwant\n%s", got, want)
@@ -204,8 +228,8 @@ func TestStreamTemplateRunLogSendsOnlyTheNewBytesOfAnOverlap(t *testing.T) {
 
 	response := streamLiveLog(t, deps, live, nil)
 
-	want := sseLog("1-0", `{"offset":0,"data":"abc"}`) +
-		sseLog("2-0", `{"offset":3,"data":"de"}`) +
+	want := sseLog("1-0", `{"offset":0,"end":3,"data":"abc"}`) +
+		sseLog("2-0", `{"offset":3,"end":5,"data":"de"}`) +
 		sseEnd("complete")
 	if got := response.Body.String(); got != want {
 		t.Fatalf("body =\n%s\nwant\n%s", got, want)
@@ -222,7 +246,7 @@ func TestStreamTemplateRunLogEndsWithTheRowsStateWhenTheChannelCloses(t *testing
 
 	response := streamLiveLog(t, deps, live, nil)
 
-	want := sseLog("1-0", `{"offset":0,"data":"abc"}`) + sseEnd("live")
+	want := sseLog("1-0", `{"offset":0,"end":3,"data":"abc"}`) + sseEnd("live")
 	if got := response.Body.String(); got != want {
 		t.Fatalf("body =\n%s\nwant\n%s", got, want)
 	}
@@ -242,17 +266,142 @@ func TestStreamTemplateRunLogAnswers503WithoutLiveLogs(t *testing.T) {
 	}
 }
 
-func TestStreamTemplateRunLogAnswers503WhenTooManyLogsAreFollowed(t *testing.T) {
+// sseRetryLater is how a stream that could not follow its log ends: a
+// reconnection delay, then an end that leaves the log live.
+const sseRetryLater = "retry: 3000\n\n" + "event: log_end\ndata: {\"state\":\"live\"}\n\n"
+
+// A Valkey that fails the subscription, likely for a moment, must not end
+// the browser's live view: EventSource gives up for good on an error status,
+// so the answer is a stream that asks it to reconnect.
+func TestStreamTemplateRunLogRecoversFromASubscribeError(t *testing.T) {
+	t.Parallel()
+	for name, err := range map[string]error{
+		"read failure": errors.New("i/o timeout"),
+		// A full replica is as passing as a failed read.
+		"too many tailers": livelog.ErrTooManyTailers,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			deps := newLiveLogDependencies(t)
+
+			response := streamLiveLog(t, deps, &fakeLiveLogs{err: err}, nil)
+
+			if response.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200; body = %s", response.Code, response.Body.String())
+			}
+			if got := response.Header().Get("Content-Type"); got != "text/event-stream" {
+				t.Fatalf("Content-Type = %q, want text/event-stream", got)
+			}
+			if got := response.Body.String(); got != sseRetryLater {
+				t.Fatalf("body = %q, want %q", got, sseRetryLater)
+			}
+		})
+	}
+}
+
+// Failing to read where a resuming client left off is the same passing
+// failure, and is not answered by replaying the log from its start, which
+// the client would show twice.
+func TestStreamTemplateRunLogRecoversFromAFailedResumeRead(t *testing.T) {
 	t.Parallel()
 	deps := newLiveLogDependencies(t)
+	live := &fakeLiveLogs{entryErr: errors.New("i/o timeout"), entries: []livelog.Entry{piece("1-0", 0, "abc")}}
 
-	response := streamLiveLog(t, deps, &fakeLiveLogs{err: livelog.ErrTooManyTailers}, nil)
+	response := streamLiveLog(t, deps, live, http.Header{"Last-Event-Id": {"1-0"}})
 
-	if response.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want 503; body = %s", response.Code, response.Body.String())
+	if got := response.Body.String(); got != sseRetryLater {
+		t.Fatalf("body = %q, want %q", got, sseRetryLater)
 	}
-	if problem := decodeProblem(t, response); problem.Type != problemTypeURI("live-logs-busy") {
-		t.Fatalf("type = %q, want live-logs-busy", problem.Type)
+	if live.calls != 0 {
+		t.Fatalf("subscribed %d times without a resume point, want 0", live.calls)
+	}
+}
+
+// The server is the only deduper: a reconnecting client is sent nothing it
+// already holds, including a retried append of bytes it had before the
+// reconnect.
+func TestStreamTemplateRunLogResumesFromLastEventID(t *testing.T) {
+	t.Parallel()
+	deps := newLiveLogDependencies(t)
+	live := &fakeLiveLogs{
+		stored: []livelog.Entry{piece("1-0", 0, "abc")},
+		// What the stream holds after 1-0, as the registry yields it.
+		entries: []livelog.Entry{
+			// A retry of the first append, which the client has.
+			piece("1-1", 0, "abc"),
+			piece("2-0", 3, "def"),
+			// A retry of the second.
+			piece("2-1", 3, "def"),
+			piece("3-0", 6, "ghi"),
+			{ID: "4-0", Kind: livelog.KindEnd, State: domain.TemplateRunLogComplete},
+		},
+	}
+
+	response := streamLiveLog(t, deps, live, http.Header{"Last-Event-Id": {"1-0"}})
+
+	want := sseLog("2-0", `{"offset":3,"end":6,"data":"def"}`) +
+		sseLog("3-0", `{"offset":6,"end":9,"data":"ghi"}`) +
+		sseEnd("complete")
+	if got := response.Body.String(); got != want {
+		t.Fatalf("body =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// A Last-Event-ID the stream no longer holds says nothing about what the
+// client has, so it is sent everything that follows.
+func TestStreamTemplateRunLogResumesFromTheStartWhenTheEntryIsGone(t *testing.T) {
+	t.Parallel()
+	deps := newLiveLogDependencies(t)
+	live := &fakeLiveLogs{entries: []livelog.Entry{
+		piece("5-0", 0, "abc"),
+		{ID: "6-0", Kind: livelog.KindEnd, State: domain.TemplateRunLogComplete},
+	}}
+
+	response := streamLiveLog(t, deps, live, http.Header{"Last-Event-Id": {"1-0"}})
+
+	want := sseLog("5-0", `{"offset":0,"end":3,"data":"abc"}`) + sseEnd("complete")
+	if got := response.Body.String(); got != want {
+		t.Fatalf("body =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// The end entry is appended after the row is written and can fail to land;
+// the keepalive's re-read of the row is what ends such a stream. Not
+// parallel: it shortens the package's keepalive interval.
+func TestStreamTemplateRunLogEndsWhenTheRowFlipsWhileConnected(t *testing.T) {
+	interval := liveLogKeepalive
+	liveLogKeepalive = 10 * time.Millisecond
+	t.Cleanup(func() { liveLogKeepalive = interval })
+	deps := newLiveLogDependencies(t)
+	complete := deps.logMetadata.log
+	complete.State = domain.TemplateRunLogComplete
+	deps.logMetadata.thenLog = &complete
+	live := &fakeLiveLogs{hold: true}
+
+	response := streamLiveLog(t, deps, live, nil)
+
+	if got, want := response.Body.String(), ":\n\n"+sseEnd("complete"); got != want {
+		t.Fatalf("body = %q, want %q", got, want)
+	}
+}
+
+// A failed re-read leaves the stream following the log: the next tick asks
+// again. Not parallel, as above.
+func TestStreamTemplateRunLogKeepsFollowingWhenARowReReadFails(t *testing.T) {
+	interval := liveLogKeepalive
+	liveLogKeepalive = 10 * time.Millisecond
+	t.Cleanup(func() { liveLogKeepalive = interval })
+	deps := newLiveLogDependencies(t)
+	complete := deps.logMetadata.log
+	complete.State = domain.TemplateRunLogComplete
+	deps.logMetadata.thenLog = &complete
+	deps.logMetadata.thenErrs = 1
+	live := &fakeLiveLogs{hold: true}
+
+	response := streamLiveLog(t, deps, live, nil)
+
+	if got, want := response.Body.String(), ":\n\n:\n\n"+sseEnd("complete"); got != want {
+		t.Fatalf("body = %q, want %q", got, want)
 	}
 }
 

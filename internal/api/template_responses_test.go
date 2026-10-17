@@ -111,6 +111,23 @@ func TestTemplateRunLogResponseFields(t *testing.T) {
 	assert.Equal(t, "plan-1", response.Name)
 }
 
+// A complete log of zero bytes is an empty upload, which a client must be
+// able to tell from a log with no upload at all.
+func TestTemplateRunLogResponseSizeBytes(t *testing.T) {
+	t.Parallel()
+
+	complete := domain.TemplateRunLog{
+		Phase: "plan-1", State: domain.TemplateRunLogComplete, ContentType: "text/plain",
+		SizeBytes: 0, UploadedAt: time.Date(2026, 10, 17, 9, 0, 0, 0, time.UTC),
+	}
+	encoded, err := json.Marshal(newTemplateRunLogResponse(complete))
+	require.NoError(t, err)
+	assert.Contains(t, string(encoded), `"size_bytes":0`)
+
+	live := domain.TemplateRunLog{Phase: "plan-1", State: domain.TemplateRunLogLive, SizeBytes: 12}
+	assert.NotContains(t, jsonKeys(t, newTemplateRunLogResponse(live)), "size_bytes")
+}
+
 func TestTemplateRegistrationResponseFields(t *testing.T) {
 	t.Parallel()
 

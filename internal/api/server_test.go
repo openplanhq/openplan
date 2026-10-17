@@ -1769,6 +1769,7 @@ func TestListTemplateRunLogsReturnsMetadata(t *testing.T) {
 			TenantID:    domain.TenantID("tenant_123"),
 			RunID:       domain.TemplateRunID("run_123"),
 			Phase:       "init",
+			State:       domain.TemplateRunLogComplete,
 			ObjectKey:   "tenants/tenant_123/runs/run_123/logs/init.log",
 			ContentType: "text/plain; charset=utf-8",
 			SizeBytes:   12,
@@ -1801,8 +1802,8 @@ func TestListTemplateRunLogsReturnsMetadata(t *testing.T) {
 	if strings.Contains(raw, "object_key") || strings.Contains(raw, `"phase"`) {
 		t.Fatalf("body = %s, want no object_key or phase", raw)
 	}
-	if body[0].SizeBytes != 12 {
-		t.Fatalf("size_bytes = %d, want 12", body[0].SizeBytes)
+	if body[0].SizeBytes == nil || *body[0].SizeBytes != 12 {
+		t.Fatalf("size_bytes = %v, want 12", body[0].SizeBytes)
 	}
 }
 
@@ -3708,7 +3709,12 @@ func (reader *recordingTemplateRunLogReader) ReadTemplateRunLog(_ context.Contex
 }
 
 type recordingTemplateRunLogRepository struct {
-	log             domain.TemplateRunLog
+	log domain.TemplateRunLog
+	// thenLog, when set, answers every Get after the first, as a row that
+	// changed while a stream was open; the first thenErrs of those fail.
+	thenLog         *domain.TemplateRunLog
+	thenErrs        int
+	getCalls        int
 	logs            []domain.TemplateRunLog
 	gotGetTenantID  domain.TenantID
 	gotGetRunID     domain.TemplateRunID
@@ -3723,8 +3729,16 @@ func (repository *recordingTemplateRunLogRepository) GetTemplateRunLog(_ context
 	repository.gotGetTenantID = tenantID
 	repository.gotGetRunID = runID
 	repository.gotGetPhase = phase
+	repository.getCalls++
 	if repository.getErr != nil {
 		return domain.TemplateRunLog{}, repository.getErr
+	}
+	if repository.thenLog != nil && repository.getCalls > 1 {
+		if repository.thenErrs > 0 {
+			repository.thenErrs--
+			return domain.TemplateRunLog{}, errors.New("database unavailable")
+		}
+		return *repository.thenLog, nil
 	}
 	return repository.log, nil
 }
