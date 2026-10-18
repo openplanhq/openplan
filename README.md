@@ -201,10 +201,35 @@ docker compose --profile s3 up -d      # MinIO, for S3-backed artifacts
 docker compose --profile debug up -d   # Temporal UI on http://localhost:8080
 ```
 
+### Upgrading
+
+Upgrade in place, on the same volumes. Stacks, runs, credentials, grants and
+sessions carry over: the api migrates the database when it starts, and runs in
+flight carry on under the new release.
+
+Without a checkout, download the new release's three files over the old ones,
+with the new version in the URLs, and start again:
+
+```bash
+docker compose -f docker-compose.release.yaml up -d
+```
+
+From a checkout, pull and restart. If you pinned `OPENPLAN_IMAGE_TAG`, raise it
+first:
+
+```bash
+git pull
+docker compose pull
+docker compose up -d --wait
+```
+
+Upgrade one release at a time: each release is written to read the state the
+one before it left.
+
 > [!NOTE]
-> **Upgrading an existing local stack?** Run `docker compose down -v` before
-> starting it back up. There is no upgrade path between releases yet, so a
-> preserved volume can hold state the current code cannot read.
+> **On v0.3.0 or earlier?** Run `docker compose down -v` before starting the
+> new release. Releases up to v0.3.0 could change state without migrating it,
+> so a preserved volume can hold state the new code cannot read.
 
 ## Running on Temporal Cloud
 
@@ -235,7 +260,9 @@ An MVP baseline, and honest about it. What that means in practice:
 - **Works end to end today:** template registration, stacks, per-stack
   variables and credentials, plan/apply/destroy with durable runs on Temporal,
   full run logs, per-stack authorization through OpenFGA, SSO through Dex.
-- **Not finished:** no upgrade path between releases yet, no audit log UI, no
+- **Not finished:** upgrades keep state from the first release after v0.3.0,
+  but nothing in CI tests an upgrade yet
+  ([#313](https://github.com/openplanhq/openplan/issues/313)); no audit log UI, no
   drift detection, no policy-as-code. The open issue tracker is the source of
   truth for what is planned. It is actively worked, and issues closed in the
   last month are visible in the history.

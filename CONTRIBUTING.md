@@ -89,11 +89,44 @@ make differential-test
 
 It skips silently without a database, and a skipped guard is no guard.
 
-## Changing a workflow
+## Keeping upgrades working
+
+An install upgrades by pulling the new release's images and restarting them on
+the same volumes, with runs still in flight. Every stack, run, credential, grant
+and session has to survive that, so what one release writes, the next has to
+read. That holds from the first release after v0.3.0 on. Releases up to v0.3.0
+were allowed to need a wipe, which is how migration `0030` could drop a table
+outright.
+
+- **Schema.** Migrations in `internal/postgres/migrations` are append-only:
+  never edit one that has merged, add a new one. They are also data-preserving.
+  Don't drop a table or column that still holds data until its data has moved,
+  and rename by adding the new column, copying into it, and dropping the old
+  one in a later release.
+- **Work-queue payloads.** Rows in `work_queue` outlive the binary that wrote
+  them, and the new one decodes them. The payloads (`StartTemplateRunPayload`
+  and the rest, in `internal/app`) are the workflow inputs, so they change only
+  additively: a new field must mean what it meant before when it is missing.
+  Anything else is a new payload kind.
+- **The OpenFGA model.** The api writes `internal/authorization/authorization-model.fga`
+  at boot, and every stored tuple names a type and relation from it. Renaming
+  or removing one orphans those tuples. Add the new name, move the tuples, and
+  remove the old name in a later release.
+- **Temporal workflows.** See below.
+- **Configuration.** A renamed or removed environment variable keeps working
+  for one release, or the api refuses to start with an error naming its
+  replacement, the way it already does for `OPENPLAN_ROOT_PASSWORD`
+  (`internal/config/auth.go`).
+
+The upgrade test in CI ([#313](https://github.com/openplanhq/openplan/issues/313))
+will check the whole of this by upgrading a stack with state in it from the
+previous release. Until it lands, review holds the line.
+
+### Changing a workflow
 
 Temporal replays a running workflow's history against the code the worker has
 now. A change to the commands a workflow issues, in their order or their kind,
-fails every execution that was running across an upgrade with a
+fails every execution that was running across the upgrade with a
 non-determinism error, and the worst case is an apply that stops with the
 infrastructure half changed.
 
@@ -102,7 +135,8 @@ timer, a session, a child workflow, a side effect. A change alters them when it
 adds, removes or reorders one, renames an activity, or changes the logic that
 decides which ones run. Activity code, activity options (timeouts, retry
 policies) and the values a workflow passes do not, though inputs and results are
-in the history too, so their types change only additively.
+in the history too, so their types change only additively, like the payloads
+above.
 
 `go test ./...` runs `TestReplayRecordedHistories`, which replays the histories
 recorded in `internal/workflows/testdata/histories` against your change:
