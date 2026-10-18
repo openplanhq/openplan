@@ -3,7 +3,8 @@
 # programs they run couldn't, before it dials Temporal.
 set -eu
 image="$1"
-if output=$(docker run --rm -e TEMPORAL_ADDRESS=unused:7233 --cap-drop ALL --cap-add SETUID --cap-add SETGID --cap-add CHOWN \
+if output=$(docker run --rm -e TEMPORAL_ADDRESS=unused:7233 -e VALKEY_URL=redis://unused:6379/0 \
+    --cap-drop ALL --cap-add SETUID --cap-add SETGID --cap-add CHOWN \
     --security-opt no-new-privileges:true "$image" 2>&1); then
   echo "FAIL: the executor started without SYS_ADMIN"; exit 1
 fi
@@ -14,7 +15,7 @@ esac
 
 # Every privilege, but a run root mounted noexec, as Docker mounts a tmpfs by
 # default: every provider would segfault.
-if output=$(docker run --rm -e TEMPORAL_ADDRESS=unused:7233 -e EXECUTOR_RUN_ROOT=/var/lib/openplan/runs \
+if output=$(docker run --rm -e TEMPORAL_ADDRESS=unused:7233 -e VALKEY_URL=redis://unused:6379/0 -e EXECUTOR_RUN_ROOT=/var/lib/openplan/runs \
     --cap-drop ALL --cap-add SYS_ADMIN --cap-add SETUID --cap-add SETGID --cap-add SETFCAP --cap-add CHOWN \
     --cap-add NET_ADMIN --cap-add NET_RAW --sysctl net.ipv4.ip_forward=1 \
     --security-opt no-new-privileges:true --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
