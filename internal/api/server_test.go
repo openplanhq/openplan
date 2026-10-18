@@ -2478,6 +2478,7 @@ func TestStackRoleRoutesUseInheritedPermissions(t *testing.T) {
 		{name: "approver lists run logs", role: authorization.RelationApprover, method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123/logs", status: http.StatusOK, permission: authorization.RelationCanView},
 		{name: "viewer reads run log", role: authorization.RelationViewer, method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123/logs/plan", status: http.StatusOK, permission: authorization.RelationCanView},
 		{name: "viewer lists run history", role: authorization.RelationViewer, method: http.MethodGet, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/runs", status: http.StatusOK, permission: authorization.RelationCanView},
+		{name: "operator searches users for its stack", role: authorization.RelationOperator, method: http.MethodGet, path: "/v1/tenants/tenant_123/users/search?q=ali&stack_id=stack_123", status: http.StatusOK, permission: authorization.RelationCanOperate},
 	}
 
 	for _, test := range tests {
@@ -2528,6 +2529,8 @@ func TestStackRoleRoutesDenyInsufficientRoles(t *testing.T) {
 		{name: "unassigned cannot list logs", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123/logs", status: http.StatusNotFound, permission: authorization.RelationCanView},
 		{name: "unassigned cannot read log", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123/logs/plan", status: http.StatusNotFound, permission: authorization.RelationCanView},
 		{name: "unassigned cannot list run history", method: http.MethodGet, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/runs", status: http.StatusNotFound, permission: authorization.RelationCanView},
+		{name: "viewer cannot search users for its stack", role: authorization.RelationViewer, method: http.MethodGet, path: "/v1/tenants/tenant_123/users/search?q=ali&stack_id=stack_123", status: http.StatusForbidden, permission: authorization.RelationCanOperate},
+		{name: "unassigned cannot search users for a stack", method: http.MethodGet, path: "/v1/tenants/tenant_123/users/search?q=ali&stack_id=stack_123", status: http.StatusNotFound, permission: authorization.RelationCanOperate},
 	}
 
 	for _, test := range tests {

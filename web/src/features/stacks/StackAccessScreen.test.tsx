@@ -418,6 +418,20 @@ describe("StackAccessScreen", () => {
       expect(searches(sent)).toEqual(["ch"]);
     });
 
+    // The server lets an operator or above search only for a named stack, so
+    // without it a stack owner who isn't a platform admin finds no one.
+    it("searches for the stack whose access it shows", async () => {
+      const sent = serve({ users: [charlie] });
+      await renderWithGrants();
+
+      await typeInSearch("ch");
+      await screen.findByRole("option", { name: /Charlie Brown/ });
+      const stackIDs = sent
+        .filter(({ url }) => url.includes("/users/search"))
+        .map(({ url }) => new URL(url, "http://localhost").searchParams.get("stack_id"));
+      expect(stackIDs).toEqual(["stack_123"]);
+    });
+
     // The server matches on name and email; the list must not filter again.
     it("lists every user the server answers with, even one matched by email", async () => {
       serve({ users: [charlie, dorothy] });

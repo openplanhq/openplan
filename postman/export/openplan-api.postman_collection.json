@@ -1170,7 +1170,7 @@
                 }
               ]
             },
-            "description": "Matches display name or email, case-insensitively.\n\nThis is not a directory lookup. It searches openplan's projection of\nidentities it has actually verified, so a person who has never signed\nin will not appear — and cannot be granted a role. That is the same\nlimitation `PUT .../grants/{user_sub}` enforces as `not_signed_in`.\n\nOrdered by display name, a page at a time. The cursor is a position in\nthat order, so one kept across a changed `q` resumes after the same\nname.\n\nSaves the first match who is not you, for the grant requests."
+            "description": "Matches display name or email, case-insensitively.\n\nThis is not a directory lookup. It searches openplan's projection of\nidentities it has actually verified, so a person who has never signed\nin will not appear — and cannot be granted a role. That is the same\nlimitation `PUT .../grants/{user_sub}` enforces as `not_signed_in`.\n\nOrdered by display name, a page at a time. The cursor is a position in\nthat order, so one kept across a changed `q` resumes after the same\nname.\n\nWho may search: with `stack_id`, anyone with operator access or\nhigher on that stack (a stack the caller can't see is `404`, a viewer\nis `403`); without it, platform administrators only.\n\nSaves the first match who is not you, for the grant requests."
           }
         }
       ]

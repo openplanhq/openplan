@@ -54,7 +54,7 @@ export default function StackAccessScreen() {
   const [mutationError, setMutationError] = useState("");
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
   const debouncedSearch = useDebounce(search, 300);
-  const searchResults = useSearchUsersQuery(tenantID, debouncedSearch);
+  const searchResults = useSearchUsersQuery(tenantID, stackId, debouncedSearch);
   const assignMutation = useAssignStackRoleMutation(tenantID, stackId);
   // Undo has its own, so restoring a role doesn't make Assign read
   // "Assigning...".

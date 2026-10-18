@@ -330,10 +330,10 @@ export function useStackGrantsQuery(tenantID: string, stackID: string) {
   });
 }
 
-export function useSearchUsersQuery(tenantID: string, query: string) {
+export function useSearchUsersQuery(tenantID: string, stackID: string, query: string) {
   return useQuery({
-    queryKey: queryKeys.userSearch(tenantID, query),
-    queryFn: async () => (await client.searchUsers(tenantID, query, { limit: 20 })).items,
+    queryKey: queryKeys.userSearch(tenantID, stackID, query),
+    queryFn: async () => (await client.searchUsers(tenantID, stackID, query, { limit: 20 })).items,
     enabled: query.length >= 2,
     // The last answer stays while the next query loads, so the stack-access
     // search list doesn't close, and blink, on every keystroke. Only for a

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vishu42/openplan/internal/authorization"
 	"github.com/vishu42/openplan/internal/domain"
 )
 
@@ -98,7 +99,8 @@ func TestSearchUsersReturnsResults(t *testing.T) {
 	}
 }
 
-func TestSearchUsersRequiresPlatformAdmin(t *testing.T) {
+// Without a stack, the search is platform-wide and stays an administrator's.
+func TestSearchUsersWithoutAStackRequiresPlatformAdmin(t *testing.T) {
 	t.Parallel()
 
 	service := NewService(Service{
@@ -113,6 +115,58 @@ func TestSearchUsersRequiresPlatformAdmin(t *testing.T) {
 	})
 	if !errors.Is(err, ErrForbidden) {
 		t.Fatalf("error = %v, want ErrForbidden", err)
+	}
+}
+
+// For a stack, anyone above viewer may search: the access form needs it, and
+// an owner is rarely a platform administrator. A viewer is refused, and a
+// caller who can't see the stack is told it isn't there.
+func TestSearchUsersForAStackRequiresOperatorOrAbove(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		role    authorization.Relation
+		wantErr error
+	}{
+		{name: "owner", role: authorization.RelationOwner},
+		{name: "approver", role: authorization.RelationApprover},
+		{name: "operator", role: authorization.RelationOperator},
+		{name: "viewer", role: authorization.RelationViewer, wantErr: ErrForbidden},
+		{name: "no role", wantErr: ErrNotFound},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			auth := newTestAuthorization(t)
+			if test.role != (authorization.Relation{}) {
+				grantStack(t, auth, "user_123", "stack_123", test.role)
+			}
+			service := NewService(Service{
+				Users:         &fakeUserRepository{users: []UserProfile{{Sub: "u1", DisplayName: "Alice Smith"}}},
+				Authorization: auth,
+			})
+
+			users, err := service.SearchUsers(platformContext("user_123"), SearchUsersCommand{
+				TenantID: domain.TenantID("tenant_1"),
+				StackID:  domain.StackID("stack_123"),
+				Query:    "ali",
+				Page:     PageRequest{Limit: 20},
+			})
+			if test.wantErr != nil {
+				if !errors.Is(err, test.wantErr) {
+					t.Fatalf("error = %v, want %v", err, test.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("SearchUsers returned error: %v", err)
+			}
+			if len(users.Items) != 1 {
+				t.Fatalf("got %d users, want 1", len(users.Items))
+			}
+		})
 	}
 }
 
