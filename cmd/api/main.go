@@ -251,15 +251,11 @@ func defaultAPIDependencies() apiDependencies {
 }
 
 func registerControl(worker temporalWorker, store controlStore, gitHubTokens activities.GitHubTokenSource, live logsink.Stream) {
-	worker.RegisterWorkflowWithOptions(workflows.TemplatePlanWorkflow, workflow.RegisterOptions{
-		Name: domain.TemplatePlanWorkflowName,
-	})
-	worker.RegisterWorkflowWithOptions(workflows.TemplateApplyWorkflow, workflow.RegisterOptions{
-		Name: domain.TemplateApplyWorkflowName,
-	})
-	worker.RegisterWorkflowWithOptions(workflows.TemplateSyncWorkflow, workflow.RegisterOptions{
-		Name: domain.TemplateSyncWorkflowName,
-	})
+	for _, registration := range workflows.Registered() {
+		worker.RegisterWorkflowWithOptions(registration.Workflow, workflow.RegisterOptions{
+			Name: registration.Name,
+		})
+	}
 
 	control := activities.NewControlActivities(store, gitHubTokens, live)
 	worker.RegisterActivityWithOptions(control.RecordTemplateRunStatus, activity.RegisterOptions{

@@ -89,6 +89,53 @@ make differential-test
 
 It skips silently without a database, and a skipped guard is no guard.
 
+## Changing a workflow
+
+Temporal replays a running workflow's history against the code the worker has
+now. A change to the commands a workflow issues, in their order or their kind,
+fails every execution that was running across an upgrade with a
+non-determinism error, and the worst case is an apply that stops with the
+infrastructure half changed.
+
+Commands are what a workflow asks Temporal to do: scheduling an activity, a
+timer, a session, a child workflow, a side effect. A change alters them when it
+adds, removes or reorders one, renames an activity, or changes the logic that
+decides which ones run. Activity code, activity options (timeouts, retry
+policies) and the values a workflow passes do not, though inputs and results are
+in the history too, so their types change only additively.
+
+`go test ./...` runs `TestReplayRecordedHistories`, which replays the histories
+recorded in `internal/workflows/testdata/histories` against your change:
+
+- **`next/`** holds histories of main since the last release. Nothing released
+  ran them, so when one fails because your change meant to alter it, re-record
+  `next/` with Compose's Temporal running:
+
+  ```bash
+  docker compose up -d temporal
+  make workflow-histories
+  ```
+
+  A new path through a workflow needs a scenario of its own in
+  `TestRecordHistories`, and a new workflow needs at least one.
+- **`vX.Y.Z/`** holds histories from a release: runs like those are what an
+  install has in flight when it upgrades. Never re-record or edit them. When
+  one fails, branch your change on a version marker, so a run that started
+  before it keeps the old commands and a new run takes the new ones:
+
+  ```go
+  if workflow.GetVersion(ctx, "record-plan-summary", workflow.DefaultVersion, 1) == 1 {
+  	// the new command
+  }
+  ```
+
+  Then re-record `next/`, which now takes the new branch. The old branch can go
+  once no supported upgrade starts from a release whose histories need it;
+  delete those histories in the same change.
+
+Cutting a release copies `next/` to a directory named for the tag, in the
+release commit, so the release's histories freeze as it ships.
+
 ## Commit messages
 
 Short, imperative, lowercase, with a prefix:

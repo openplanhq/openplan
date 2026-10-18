@@ -35,7 +35,7 @@ GOVULNCHECK := go run golang.org/x/vuln/cmd/govulncheck@v1.1.4
 
 .DEFAULT_GOAL := help
 
-.PHONY: help api-docs-preview api-docs-lint postman-collection lint vulncheck differential-test sandbox-test
+.PHONY: help api-docs-preview api-docs-lint postman-collection lint vulncheck differential-test sandbox-test workflow-histories
 
 help: ## List the available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -69,6 +69,14 @@ vulncheck: ## Scan the Go code for known vulnerabilities it calls
 # Run it after every `go get github.com/openfga/openfga@...`.
 differential-test: ## Run the authorization tests that need a real Postgres
 	OPENPLAN_POSTGRES_TEST_DSN=$(TEST_DSN) go test ./internal/authorization/ -count=1 -v
+
+# Temporal replays a running workflow's history against the code the worker has
+# now, so a workflow change that alters its commands fails every run in flight
+# across an upgrade. TestReplayRecordedHistories replays recorded histories in
+# `go test ./...`; this re-records the ones under next/, which nothing released
+# ran. Needs Compose's Temporal (`docker compose up -d temporal`).
+workflow-histories: ## Re-record the workflow histories under internal/workflows/testdata/histories/next
+	OPENPLAN_RECORD_HISTORIES=1 go test ./internal/workflows/ -run TestRecordHistories -count=1 -v
 
 sandbox-test: ## Run the sandbox tests (#245) against runsc in the executor image (needs Docker)
 	docker build -f Dockerfile.executor -t openplan-executor:sandbox .

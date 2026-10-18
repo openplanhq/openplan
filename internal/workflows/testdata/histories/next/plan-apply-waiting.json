@@ -1,0 +1,4047 @@
+{
+  "events": [
+    {
+      "eventId": "1",
+      "eventTime": "2026-10-18T17:45:06.404727505Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_EXECUTION_STARTED",
+      "taskId": "6293020",
+      "workflowExecutionStartedEventAttributes": {
+        "workflowType": {
+          "name": "TemplatePlanWorkflow"
+        },
+        "taskQueue": {
+          "name": "control",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJSdW5JRCI6InJ1bi1wbGFuLWFwcGx5LXdhaXRpbmciLCJUZW5hbnRJRCI6InRlbmFudC1oaXN0b3J5IiwiU3RhY2tUZW1wbGF0ZUlEIjoic3RhY2stdGVtcGxhdGUtaGlzdG9yeSIsIk9wZXJhdGlvbiI6ImFwcGx5IiwiU2VsZWN0ZWRSZWYiOiJtYWluIiwiUmVzb2x2ZWRDb21taXRTSEEiOiIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3IiwiV29ya3NwYWNlTmFtZSI6Imhpc3RvcnkiLCJSZXBvT3duZXIiOiJvcGVucGxhbmhxIiwiUmVwb05hbWUiOiJkZW1vLXRlbXBsYXRlcyIsIlJvb3RQYXRoIjoicmFuZG9tLXBldCIsIkNvbmZpZ0pTT04iOnt9LCJBdXRvQXBwcm92ZSI6ZmFsc2UsIlRlcnJhZm9ybVRpbWVvdXQiOjB9"
+            }
+          ]
+        },
+        "workflowExecutionTimeout": "0s",
+        "workflowRunTimeout": "0s",
+        "workflowTaskTimeout": "10s",
+        "originalExecutionRunId": "01a1501e-0264-7b17-8fde-ba8a19552149",
+        "identity": "openplan-history-recorder",
+        "firstExecutionRunId": "01a1501e-0264-7b17-8fde-ba8a19552149",
+        "attempt": 1,
+        "firstWorkflowTaskBackoff": "0s",
+        "header": {},
+        "workflowId": "history-plan-apply-waiting-1792345506404448000"
+      }
+    },
+    {
+      "eventId": "2",
+      "eventTime": "2026-10-18T17:45:06.404817922Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293021",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "control",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "3",
+      "eventTime": "2026-10-18T17:45:06.410022839Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293026",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "2",
+        "identity": "openplan-history-recorder",
+        "requestId": "815201de-7d51-4724-9636-93a9db235532",
+        "historySizeBytes": "684",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "4",
+      "eventTime": "2026-10-18T17:45:06.413866922Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293030",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "2",
+        "startedEventId": "3",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {
+          "langUsedFlags": [
+            3
+          ],
+          "sdkName": "temporal-go",
+          "sdkVersion": "1.45.0"
+        },
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "5",
+      "eventTime": "2026-10-18T17:45:06.413894380Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293031",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "5",
+        "activityType": {
+          "name": "RecordTemplateRunStatus"
+        },
+        "taskQueue": {
+          "name": "control",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJSdW5JRCI6InJ1bi1wbGFuLWFwcGx5LXdhaXRpbmciLCJUZW5hbnRJRCI6InRlbmFudC1oaXN0b3J5IiwiU3RhY2tUZW1wbGF0ZUlEIjoic3RhY2stdGVtcGxhdGUtaGlzdG9yeSIsIk9wZXJhdGlvbiI6ImFwcGx5IiwiU3RhdHVzIjoicnVubmluZyIsIkVycm9yU3VtbWFyeSI6IiIsIlBoYXNlIjoicGxhbiIsIldvcmtmbG93SUQiOiJoaXN0b3J5LXBsYW4tYXBwbHktd2FpdGluZy0xNzkyMzQ1NTA2NDA0NDQ4MDAwIn0="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "60s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "4",
+        "retryPolicy": {
+          "initialInterval": "30s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "300s",
+          "maximumAttempts": 1,
+          "nonRetryableErrorTypes": [
+            "InvalidConfig",
+            "UnsupportedCommand"
+          ]
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "6",
+      "eventTime": "2026-10-18T17:45:06.416106505Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293037",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "5",
+        "identity": "openplan-history-recorder",
+        "requestId": "2f0b46c1-1ef5-428e-b5c0-a05b2320a850",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "7",
+      "eventTime": "2026-10-18T17:45:06.419339755Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293038",
+      "activityTaskCompletedEventAttributes": {
+        "scheduledEventId": "5",
+        "startedEventId": "6",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "8",
+      "eventTime": "2026-10-18T17:45:06.419343339Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293039",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "9",
+      "eventTime": "2026-10-18T17:45:06.421311839Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293043",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "8",
+        "identity": "openplan-history-recorder",
+        "requestId": "b2f27e9f-36b8-46af-9371-b694d0624a28",
+        "historySizeBytes": "1660",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "10",
+      "eventTime": "2026-10-18T17:45:06.424169380Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293047",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "8",
+        "startedEventId": "9",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "11",
+      "eventTime": "2026-10-18T17:45:06.424187089Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293048",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "11",
+        "activityType": {
+          "name": "RecordTemplateRunStep"
+        },
+        "taskQueue": {
+          "name": "control",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJSdW5JRCI6InJ1bi1wbGFuLWFwcGx5LXdhaXRpbmciLCJUZW5hbnRJRCI6InRlbmFudC1oaXN0b3J5IiwiU3RlcCI6IndhaXRpbmdfZm9yX2V4ZWN1dG9yIn0="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "60s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "10",
+        "retryPolicy": {
+          "initialInterval": "30s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "300s",
+          "maximumAttempts": 1,
+          "nonRetryableErrorTypes": [
+            "InvalidConfig",
+            "UnsupportedCommand"
+          ]
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "12",
+      "eventTime": "2026-10-18T17:45:06.426035922Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293053",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "11",
+        "identity": "openplan-history-recorder",
+        "requestId": "5e3fcba0-0302-465c-b2a2-8d08280a8e06",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "13",
+      "eventTime": "2026-10-18T17:45:06.428000339Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293054",
+      "activityTaskCompletedEventAttributes": {
+        "scheduledEventId": "11",
+        "startedEventId": "12",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "14",
+      "eventTime": "2026-10-18T17:45:06.428003089Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293055",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "15",
+      "eventTime": "2026-10-18T17:45:06.430027672Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293059",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "14",
+        "identity": "openplan-history-recorder",
+        "requestId": "b76e92e8-1063-48db-9a97-be65c24f072d",
+        "historySizeBytes": "2461",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "16",
+      "eventTime": "2026-10-18T17:45:06.432980630Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293063",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "14",
+        "startedEventId": "15",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "17",
+      "eventTime": "2026-10-18T17:45:06.433001214Z",
+      "eventType": "EVENT_TYPE_MARKER_RECORDED",
+      "taskId": "6293064",
+      "markerRecordedEventAttributes": {
+        "markerName": "SideEffect",
+        "details": {
+          "data": {
+            "payloads": [
+              {
+                "metadata": {
+                  "encoding": "anNvbi9wbGFpbg=="
+                },
+                "data": "IjkxMTkwOTg4LTA3MjAtNDhhMi04M2ZiLTA0YjY3NTQ1ZWM4YyI="
+              }
+            ]
+          },
+          "side-effect-id": {
+            "payloads": [
+              {
+                "metadata": {
+                  "encoding": "anNvbi9wbGFpbg=="
+                },
+                "data": "MQ=="
+              }
+            ]
+          }
+        },
+        "workflowTaskCompletedEventId": "16"
+      }
+    },
+    {
+      "eventId": "18",
+      "eventTime": "2026-10-18T17:45:06.433011797Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293065",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "18",
+        "activityType": {
+          "name": "internalSessionCreationActivity"
+        },
+        "taskQueue": {
+          "name": "execution__internal_session_creation",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "IjkxMTkwOTg4LTA3MjAtNDhhMi04M2ZiLTA0YjY3NTQ1ZWM4YyI="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "60s",
+        "startToCloseTimeout": "86400s",
+        "heartbeatTimeout": "20s",
+        "workflowTaskCompletedEventId": "16",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 1.1,
+          "maximumInterval": "10s",
+          "nonRetryableErrorTypes": [
+            "TemporalTimeout:StartToClose",
+            "TemporalTimeout:Heartbeat"
+          ]
+        }
+      }
+    },
+    {
+      "eventId": "19",
+      "eventTime": "2026-10-18T17:45:06.437352047Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_EXECUTION_SIGNALED",
+      "taskId": "6293071",
+      "workflowExecutionSignaledEventAttributes": {
+        "signalName": "91190988-0720-48a2-83fb-04b67545ec8c",
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJUYXNrcXVldWUiOiIzY2Q3ZTgxYi1kMDJiLTQ5YzAtOThkOC0yNDcwMjg1NmI2ZGJAVmlzaGFscy1NYWNCb29rLVByby5sb2NhbCIsIkhvc3ROYW1lIjoiVmlzaGFscy1NYWNCb29rLVByby5sb2NhbCIsIlJlc291cmNlSUQiOiIzY2Q3ZTgxYi1kMDJiLTQ5YzAtOThkOC0yNDcwMjg1NmI2ZGIifQ=="
+            }
+          ]
+        },
+        "identity": "91588@history-recorder@",
+        "header": {}
+      }
+    },
+    {
+      "eventId": "20",
+      "eventTime": "2026-10-18T17:45:06.437353380Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293072",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "21",
+      "eventTime": "2026-10-18T17:45:06.439201964Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293076",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "20",
+        "identity": "openplan-history-recorder",
+        "requestId": "4ef0f7bd-50c7-46f0-82c4-73b4047d920e",
+        "historySizeBytes": "3552",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "22",
+      "eventTime": "2026-10-18T17:45:06.441867255Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293080",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "20",
+        "startedEventId": "21",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {
+          "langUsedFlags": [
+            5,
+            8
+          ]
+        },
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "23",
+      "eventTime": "2026-10-18T17:45:06.441884089Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293081",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "23",
+        "activityType": {
+          "name": "RecordTemplateRunStep"
+        },
+        "taskQueue": {
+          "name": "control",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJSdW5JRCI6InJ1bi1wbGFuLWFwcGx5LXdhaXRpbmciLCJUZW5hbnRJRCI6InRlbmFudC1oaXN0b3J5IiwiU3RlcCI6InByZXBhcmluZ193b3Jrc3BhY2UifQ=="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "60s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "22",
+        "retryPolicy": {
+          "initialInterval": "30s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "300s",
+          "maximumAttempts": 1,
+          "nonRetryableErrorTypes": [
+            "InvalidConfig",
+            "UnsupportedCommand"
+          ]
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "24",
+      "eventTime": "2026-10-18T17:45:06.443638589Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293085",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "23",
+        "identity": "openplan-history-recorder",
+        "requestId": "f505ea55-422a-41f8-a277-792ad4920213",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "25",
+      "eventTime": "2026-10-18T17:45:06.445435964Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293086",
+      "activityTaskCompletedEventAttributes": {
+        "scheduledEventId": "23",
+        "startedEventId": "24",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "26",
+      "eventTime": "2026-10-18T17:45:06.445438505Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293087",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "27",
+      "eventTime": "2026-10-18T17:45:06.447065255Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293091",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "26",
+        "identity": "openplan-history-recorder",
+        "requestId": "9950c4bc-89c5-4cf3-8873-abc7d8fd3b43",
+        "historySizeBytes": "4356",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "28",
+      "eventTime": "2026-10-18T17:45:06.449586755Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293095",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "26",
+        "startedEventId": "27",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "29",
+      "eventTime": "2026-10-18T17:45:06.449610672Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293096",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "29",
+        "activityType": {
+          "name": "PrepareWorkspace"
+        },
+        "taskQueue": {
+          "name": "3cd7e81b-d02b-49c0-98d8-24702856b6db@history-recorder",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJSdW5JRCI6InJ1bi1wbGFuLWFwcGx5LXdhaXRpbmciLCJUZW5hbnRJRCI6InRlbmFudC1oaXN0b3J5In0="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "60s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "28",
+        "retryPolicy": {
+          "initialInterval": "30s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "300s",
+          "maximumAttempts": 1,
+          "nonRetryableErrorTypes": [
+            "InvalidConfig",
+            "UnsupportedCommand"
+          ]
+        }
+      }
+    },
+    {
+      "eventId": "30",
+      "eventTime": "2026-10-18T17:45:06.451277839Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293100",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "29",
+        "identity": "openplan-history-recorder",
+        "requestId": "4bca018f-7e41-426b-aee0-2704c8e96fc2",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "31",
+      "eventTime": "2026-10-18T17:45:06.452851089Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293101",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJXb3Jrc3BhY2VQYXRoIjoiL3J1bnMvcnVuLXBsYW4tYXBwbHktd2FpdGluZyIsIlB1YmxpY0tleSI6ImNIVmliR2xqTFd0bGVRPT0ifQ=="
+            }
+          ]
+        },
+        "scheduledEventId": "29",
+        "startedEventId": "30",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "32",
+      "eventTime": "2026-10-18T17:45:06.452853214Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293102",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "33",
+      "eventTime": "2026-10-18T17:45:06.454456464Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293106",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "32",
+        "identity": "openplan-history-recorder",
+        "requestId": "bec9a88a-022b-4ffd-ae01-0ca870384a5e",
+        "historySizeBytes": "5286",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "34",
+      "eventTime": "2026-10-18T17:45:06.456913214Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293110",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "32",
+        "startedEventId": "33",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "35",
+      "eventTime": "2026-10-18T17:45:06.456928589Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293111",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "35",
+        "activityType": {
+          "name": "SealSourceToken"
+        },
+        "taskQueue": {
+          "name": "control",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJSZXBvT3duZXIiOiJvcGVucGxhbmhxIiwiUmVwb05hbWUiOiJkZW1vLXRlbXBsYXRlcyIsIlB1YmxpY0tleSI6ImNIVmliR2xqTFd0bGVRPT0ifQ=="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "60s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "34",
+        "retryPolicy": {
+          "initialInterval": "30s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "300s",
+          "maximumAttempts": 1,
+          "nonRetryableErrorTypes": [
+            "InvalidConfig",
+            "UnsupportedCommand"
+          ]
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "36",
+      "eventTime": "2026-10-18T17:45:06.458500964Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293115",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "35",
+        "identity": "openplan-history-recorder",
+        "requestId": "de1d0480-8038-4995-852b-39492ee7026b",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "37",
+      "eventTime": "2026-10-18T17:45:06.460372547Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293116",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJTZWFsZWRUb2tlbiI6ImMyVmhiR1ZrTFhSdmEyVnUiLCJGZXRjaEhpbnQiOiIifQ=="
+            }
+          ]
+        },
+        "scheduledEventId": "35",
+        "startedEventId": "36",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "38",
+      "eventTime": "2026-10-18T17:45:06.460374922Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293117",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "39",
+      "eventTime": "2026-10-18T17:45:06.461826630Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293121",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "38",
+        "identity": "openplan-history-recorder",
+        "requestId": "6ddbcc6e-2a49-4466-869d-cd91a541cdd7",
+        "historySizeBytes": "6154",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "40",
+      "eventTime": "2026-10-18T17:45:06.464065964Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293125",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "38",
+        "startedEventId": "39",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "41",
+      "eventTime": "2026-10-18T17:45:06.464076714Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293126",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "41",
+        "activityType": {
+          "name": "RecordTemplateRunStep"
+        },
+        "taskQueue": {
+          "name": "control",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJSdW5JRCI6InJ1bi1wbGFuLWFwcGx5LXdhaXRpbmciLCJUZW5hbnRJRCI6InRlbmFudC1oaXN0b3J5IiwiU3RlcCI6ImZldGNoaW5nX3NvdXJjZSJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "60s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "40",
+        "retryPolicy": {
+          "initialInterval": "30s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "300s",
+          "maximumAttempts": 1,
+          "nonRetryableErrorTypes": [
+            "InvalidConfig",
+            "UnsupportedCommand"
+          ]
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "42",
+      "eventTime": "2026-10-18T17:45:06.465436797Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293130",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "41",
+        "identity": "openplan-history-recorder",
+        "requestId": "e8a1a973-ae58-4492-86e8-af1667b8b4a1",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "43",
+      "eventTime": "2026-10-18T17:45:06.467025089Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293131",
+      "activityTaskCompletedEventAttributes": {
+        "scheduledEventId": "41",
+        "startedEventId": "42",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "44",
+      "eventTime": "2026-10-18T17:45:06.467027297Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293132",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "45",
+      "eventTime": "2026-10-18T17:45:06.468720839Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293136",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "44",
+        "identity": "openplan-history-recorder",
+        "requestId": "084e1fe6-74d0-456f-bc38-af3d238333da",
+        "historySizeBytes": "6950",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "46",
+      "eventTime": "2026-10-18T17:45:06.470748339Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293140",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "44",
+        "startedEventId": "45",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "47",
+      "eventTime": "2026-10-18T17:45:06.470757714Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293141",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "47",
+        "activityType": {
+          "name": "FetchSource"
+        },
+        "taskQueue": {
+          "name": "3cd7e81b-d02b-49c0-98d8-24702856b6db@history-recorder",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJSdW5JRCI6InJ1bi1wbGFuLWFwcGx5LXdhaXRpbmciLCJUZW5hbnRJRCI6InRlbmFudC1oaXN0b3J5IiwiV29ya3NwYWNlUGF0aCI6Ii9ydW5zL3J1bi1wbGFuLWFwcGx5LXdhaXRpbmciLCJSZXBvT3duZXIiOiJvcGVucGxhbmhxIiwiUmVwb05hbWUiOiJkZW1vLXRlbXBsYXRlcyIsIlNvdXJjZVJlZiI6Im1haW4iLCJSZXNvbHZlZENvbW1pdFNIQSI6IjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1NjciLCJSb290UGF0aCI6InJhbmRvbS1wZXQiLCJTZWFsZWRUb2tlbiI6ImMyVmhiR1ZrTFhSdmEyVnUiLCJGZXRjaEhpbnQiOiIifQ=="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "180s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "46",
+        "retryPolicy": {
+          "initialInterval": "30s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "300s",
+          "maximumAttempts": 1,
+          "nonRetryableErrorTypes": [
+            "InvalidConfig",
+            "UnsupportedCommand"
+          ]
+        }
+      }
+    },
+    {
+      "eventId": "48",
+      "eventTime": "2026-10-18T17:45:06.472251422Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293145",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "47",
+        "identity": "openplan-history-recorder",
+        "requestId": "48bc0ab5-7182-494b-9284-3dc046d108c0",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "49",
+      "eventTime": "2026-10-18T17:45:06.473886839Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293146",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJUZXJyYWZvcm1QYXRoIjoiL3J1bnMvcnVuLXBsYW4tYXBwbHktd2FpdGluZy9zb3VyY2UvcmFuZG9tLXBldCJ9"
+            }
+          ]
+        },
+        "scheduledEventId": "47",
+        "startedEventId": "48",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "50",
+      "eventTime": "2026-10-18T17:45:06.473889255Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293147",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "51",
+      "eventTime": "2026-10-18T17:45:06.475371547Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293151",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "50",
+        "identity": "openplan-history-recorder",
+        "requestId": "5e4dc638-ba3c-446c-9ef8-af6dec10b01f",
+        "historySizeBytes": "8119",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "52",
+      "eventTime": "2026-10-18T17:45:06.477378297Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293155",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "50",
+        "startedEventId": "51",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "53",
+      "eventTime": "2026-10-18T17:45:06.477388839Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293156",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "53",
+        "activityType": {
+          "name": "SealRunCredentials"
+        },
+        "taskQueue": {
+          "name": "control",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJUZW5hbnRJRCI6InRlbmFudC1oaXN0b3J5IiwiU3RhY2tUZW1wbGF0ZUlEIjoic3RhY2stdGVtcGxhdGUtaGlzdG9yeSIsIlB1YmxpY0tleSI6ImNIVmliR2xqTFd0bGVRPT0ifQ=="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "60s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "52",
+        "retryPolicy": {
+          "initialInterval": "30s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "300s",
+          "maximumAttempts": 1,
+          "nonRetryableErrorTypes": [
+            "InvalidConfig",
+            "UnsupportedCommand"
+          ]
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "54",
+      "eventTime": "2026-10-18T17:45:06.479253255Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293160",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "53",
+        "identity": "openplan-history-recorder",
+        "requestId": "dc630b59-f0ca-4f48-8a60-3240b11767d3",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "55",
+      "eventTime": "2026-10-18T17:45:06.481145422Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293161",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJTZWFsZWRFbnZpcm9ubWVudCI6ImMyVmhiR1ZrTFdWdWRtbHliMjV0Wlc1MCJ9"
+            }
+          ]
+        },
+        "scheduledEventId": "53",
+        "startedEventId": "54",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "56",
+      "eventTime": "2026-10-18T17:45:06.481147589Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293162",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "57",
+      "eventTime": "2026-10-18T17:45:06.482838630Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293166",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "56",
+        "identity": "openplan-history-recorder",
+        "requestId": "101914ad-a74d-45d0-a2e6-4d325993800c",
+        "historySizeBytes": "9009",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "58",
+      "eventTime": "2026-10-18T17:45:06.484806089Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293170",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "56",
+        "startedEventId": "57",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "59",
+      "eventTime": "2026-10-18T17:45:06.484820505Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293171",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "59",
+        "activityType": {
+          "name": "RecordTemplateRunLog"
+        },
+        "taskQueue": {
+          "name": "control",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJ0ZW5hbnRfaWQiOiJ0ZW5hbnQtaGlzdG9yeSIsInJ1bl9pZCI6InJ1bi1wbGFuLWFwcGx5LXdhaXRpbmciLCJwaGFzZSI6InBsYW4tMSIsInJ1bl9waGFzZSI6InBsYW4iLCJzZXEiOjEsImNvbW1hbmQiOiJpbml0Iiwic3RhdGUiOiJsaXZlIiwiY29tbWFuZF9saW5lIjoiIiwib2JqZWN0X2tleSI6IiIsImNvbnRlbnRfdHlwZSI6IiIsInNpemVfYnl0ZXMiOjAsInVwbG9hZGVkX2F0IjoiMDAwMS0wMS0wMVQwMDowMDowMFoifQ=="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "30s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "58",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 3
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "60",
+      "eventTime": "2026-10-18T17:45:06.486290547Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293175",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "59",
+        "identity": "openplan-history-recorder",
+        "requestId": "85857b83-0fd3-4316-b516-0d51ee4f2059",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "61",
+      "eventTime": "2026-10-18T17:45:06.488100714Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293176",
+      "activityTaskCompletedEventAttributes": {
+        "scheduledEventId": "59",
+        "startedEventId": "60",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "62",
+      "eventTime": "2026-10-18T17:45:06.488102255Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293177",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "63",
+      "eventTime": "2026-10-18T17:45:06.489880755Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293181",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "62",
+        "identity": "openplan-history-recorder",
+        "requestId": "335382c3-87ad-4b4f-88aa-62cf84cbefdc",
+        "historySizeBytes": "9928",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "64",
+      "eventTime": "2026-10-18T17:45:06.495049505Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293185",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "62",
+        "startedEventId": "63",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "65",
+      "eventTime": "2026-10-18T17:45:06.495084630Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293186",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "65",
+        "activityType": {
+          "name": "RecordTemplateRunStep"
+        },
+        "taskQueue": {
+          "name": "control",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJSdW5JRCI6InJ1bi1wbGFuLWFwcGx5LXdhaXRpbmciLCJUZW5hbnRJRCI6InRlbmFudC1oaXN0b3J5IiwiU3RlcCI6ImluaXRpYWxpemluZyJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "60s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "64",
+        "retryPolicy": {
+          "initialInterval": "30s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "300s",
+          "maximumAttempts": 1,
+          "nonRetryableErrorTypes": [
+            "InvalidConfig",
+            "UnsupportedCommand"
+          ]
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "66",
+      "eventTime": "2026-10-18T17:45:06.508301130Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293190",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "65",
+        "identity": "openplan-history-recorder",
+        "requestId": "2aa6ac18-f132-41b9-8165-bcc5029929d9",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "67",
+      "eventTime": "2026-10-18T17:45:06.510235214Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293191",
+      "activityTaskCompletedEventAttributes": {
+        "scheduledEventId": "65",
+        "startedEventId": "66",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "68",
+      "eventTime": "2026-10-18T17:45:06.510238839Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293192",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "69",
+      "eventTime": "2026-10-18T17:45:06.558393255Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293196",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "68",
+        "identity": "openplan-history-recorder",
+        "requestId": "665c0b48-e2b4-44f5-bbc8-a53643f1b7ba",
+        "historySizeBytes": "10721",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "70",
+      "eventTime": "2026-10-18T17:45:06.563029755Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293200",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "68",
+        "startedEventId": "69",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "71",
+      "eventTime": "2026-10-18T17:45:06.563051130Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293201",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "71",
+        "activityType": {
+          "name": "RunTerraform"
+        },
+        "taskQueue": {
+          "name": "3cd7e81b-d02b-49c0-98d8-24702856b6db@history-recorder",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJSdW5JRCI6InJ1bi1wbGFuLWFwcGx5LXdhaXRpbmciLCJUZW5hbnRJRCI6InRlbmFudC1oaXN0b3J5IiwiU3RhY2tUZW1wbGF0ZUlEIjoic3RhY2stdGVtcGxhdGUtaGlzdG9yeSIsIldvcmtzcGFjZVBhdGgiOiIvcnVucy9ydW4tcGxhbi1hcHBseS13YWl0aW5nIiwiVGVycmFmb3JtUGF0aCI6Ii9ydW5zL3J1bi1wbGFuLWFwcGx5LXdhaXRpbmcvc291cmNlL3JhbmRvbS1wZXQiLCJXb3Jrc3BhY2VOYW1lIjoiaGlzdG9yeSIsIkNvbW1hbmQiOiJpbml0IiwiTG9nTmFtZSI6InBsYW4tMSIsIkNvbmZpZ0pTT04iOnt9LCJTZWFsZWRFbnZpcm9ubWVudCI6ImMyVmhiR1ZrTFdWdWRtbHliMjV0Wlc1MCJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "2700s",
+        "heartbeatTimeout": "120s",
+        "workflowTaskCompletedEventId": "70",
+        "retryPolicy": {
+          "initialInterval": "60s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "600s",
+          "maximumAttempts": 1,
+          "nonRetryableErrorTypes": [
+            "InvalidConfig",
+            "UnsupportedCommand"
+          ]
+        }
+      }
+    },
+    {
+      "eventId": "72",
+      "eventTime": "2026-10-18T17:45:06.608891755Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293205",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "71",
+        "identity": "openplan-history-recorder",
+        "requestId": "22588283-bca9-4cec-b259-8273265f78a0",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "73",
+      "eventTime": "2026-10-18T17:45:06.611805672Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293206",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJIYXNDaGFuZ2VzIjp0cnVlLCJTdW1tYXJ5Ijp7ImFkZCI6MSwiY2hhbmdlIjowLCJkZXN0cm95IjowfX0="
+            }
+          ]
+        },
+        "scheduledEventId": "71",
+        "startedEventId": "72",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "74",
+      "eventTime": "2026-10-18T17:45:06.611809755Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293207",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "75",
+      "eventTime": "2026-10-18T17:45:06.660656922Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293211",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "74",
+        "identity": "openplan-history-recorder",
+        "requestId": "29e2dcb3-9c28-48aa-ac68-fad5d29fd8ef",
+        "historySizeBytes": "11915",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "76",
+      "eventTime": "2026-10-18T17:45:06.664995839Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293215",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "74",
+        "startedEventId": "75",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "77",
+      "eventTime": "2026-10-18T17:45:06.665028089Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293216",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "77",
+        "activityType": {
+          "name": "UploadLog"
+        },
+        "taskQueue": {
+          "name": "3cd7e81b-d02b-49c0-98d8-24702856b6db@history-recorder",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJUZW5hbnRJRCI6InRlbmFudC1oaXN0b3J5IiwiUnVuSUQiOiJydW4tcGxhbi1hcHBseS13YWl0aW5nIiwiTG9nTmFtZSI6InBsYW4tMSJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "300s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "76",
+        "retryPolicy": {
+          "initialInterval": "2s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "30s",
+          "maximumAttempts": 5
+        }
+      }
+    },
+    {
+      "eventId": "78",
+      "eventTime": "2026-10-18T17:45:06.708970005Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293220",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "77",
+        "identity": "openplan-history-recorder",
+        "requestId": "6c5515dc-35cc-4956-838f-ee76c93bb330",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "79",
+      "eventTime": "2026-10-18T17:45:06.712855089Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293221",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJ0ZW5hbnRfaWQiOiIiLCJydW5faWQiOiIiLCJwaGFzZSI6IiIsInJ1bl9waGFzZSI6IiIsInNlcSI6MCwiY29tbWFuZCI6IiIsInN0YXRlIjoiIiwiY29tbWFuZF9saW5lIjoiIiwib2JqZWN0X2tleSI6IiIsImNvbnRlbnRfdHlwZSI6InRleHQvcGxhaW4iLCJzaXplX2J5dGVzIjoxLCJ1cGxvYWRlZF9hdCI6IjIwMjYtMTAtMThUMjM6MTU6MDYuNzEyNjQ4KzA1OjMwIn0="
+            }
+          ]
+        },
+        "scheduledEventId": "77",
+        "startedEventId": "78",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "80",
+      "eventTime": "2026-10-18T17:45:06.712863172Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293222",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "81",
+      "eventTime": "2026-10-18T17:45:06.761512214Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293226",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "80",
+        "identity": "openplan-history-recorder",
+        "requestId": "6002e4c9-a5f3-4bb1-a9b4-f34df8646d74",
+        "historySizeBytes": "12958",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "82",
+      "eventTime": "2026-10-18T17:45:06.766665922Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293230",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "80",
+        "startedEventId": "81",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "83",
+      "eventTime": "2026-10-18T17:45:06.766700505Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293231",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "83",
+        "activityType": {
+          "name": "RecordTemplateRunLog"
+        },
+        "taskQueue": {
+          "name": "control",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJ0ZW5hbnRfaWQiOiJ0ZW5hbnQtaGlzdG9yeSIsInJ1bl9pZCI6InJ1bi1wbGFuLWFwcGx5LXdhaXRpbmciLCJwaGFzZSI6InBsYW4tMSIsInJ1bl9waGFzZSI6InBsYW4iLCJzZXEiOjEsImNvbW1hbmQiOiJpbml0Iiwic3RhdGUiOiJjb21wbGV0ZSIsImNvbW1hbmRfbGluZSI6IiIsIm9iamVjdF9rZXkiOiIiLCJjb250ZW50X3R5cGUiOiJ0ZXh0L3BsYWluIiwic2l6ZV9ieXRlcyI6MSwidXBsb2FkZWRfYXQiOiIyMDI2LTEwLTE4VDIzOjE1OjA2LjcxMjY0OCswNTozMCJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "30s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "82",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 3
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "84",
+      "eventTime": "2026-10-18T17:45:06.813188172Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293235",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "83",
+        "identity": "openplan-history-recorder",
+        "requestId": "65f8073c-3a05-4490-a553-1715f2d8755b",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "85",
+      "eventTime": "2026-10-18T17:45:06.817386880Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293236",
+      "activityTaskCompletedEventAttributes": {
+        "scheduledEventId": "83",
+        "startedEventId": "84",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "86",
+      "eventTime": "2026-10-18T17:45:06.817391255Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293237",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "87",
+      "eventTime": "2026-10-18T17:45:06.860473089Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293241",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "86",
+        "identity": "openplan-history-recorder",
+        "requestId": "c9cb7c0c-dfa5-4b06-94e6-ca7f7e8a38f5",
+        "historySizeBytes": "13903",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "88",
+      "eventTime": "2026-10-18T17:45:06.865421839Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293245",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "86",
+        "startedEventId": "87",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "89",
+      "eventTime": "2026-10-18T17:45:06.865448089Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293246",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "89",
+        "activityType": {
+          "name": "SealRunCredentials"
+        },
+        "taskQueue": {
+          "name": "control",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJUZW5hbnRJRCI6InRlbmFudC1oaXN0b3J5IiwiU3RhY2tUZW1wbGF0ZUlEIjoic3RhY2stdGVtcGxhdGUtaGlzdG9yeSIsIlB1YmxpY0tleSI6ImNIVmliR2xqTFd0bGVRPT0ifQ=="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "60s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "88",
+        "retryPolicy": {
+          "initialInterval": "30s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "300s",
+          "maximumAttempts": 1,
+          "nonRetryableErrorTypes": [
+            "InvalidConfig",
+            "UnsupportedCommand"
+          ]
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "90",
+      "eventTime": "2026-10-18T17:45:06.911732547Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293250",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "89",
+        "identity": "openplan-history-recorder",
+        "requestId": "fbc9e732-9dc3-48e5-a386-1decca67fd28",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "91",
+      "eventTime": "2026-10-18T17:45:06.915926422Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293251",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJTZWFsZWRFbnZpcm9ubWVudCI6ImMyVmhiR1ZrTFdWdWRtbHliMjV0Wlc1MCJ9"
+            }
+          ]
+        },
+        "scheduledEventId": "89",
+        "startedEventId": "90",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "92",
+      "eventTime": "2026-10-18T17:45:06.915930714Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293252",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "93",
+      "eventTime": "2026-10-18T17:45:06.959828922Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293256",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "92",
+        "identity": "openplan-history-recorder",
+        "requestId": "dc4480e9-d9e2-4104-abe4-45a61bed08c1",
+        "historySizeBytes": "14793",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "94",
+      "eventTime": "2026-10-18T17:45:06.965884714Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293260",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "92",
+        "startedEventId": "93",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "95",
+      "eventTime": "2026-10-18T17:45:06.965917839Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293261",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "95",
+        "activityType": {
+          "name": "RecordTemplateRunLog"
+        },
+        "taskQueue": {
+          "name": "control",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJ0ZW5hbnRfaWQiOiJ0ZW5hbnQtaGlzdG9yeSIsInJ1bl9pZCI6InJ1bi1wbGFuLWFwcGx5LXdhaXRpbmciLCJwaGFzZSI6InBsYW4tMiIsInJ1bl9waGFzZSI6InBsYW4iLCJzZXEiOjIsImNvbW1hbmQiOiJzZWxlY3Rfd29ya3NwYWNlIiwic3RhdGUiOiJsaXZlIiwiY29tbWFuZF9saW5lIjoiIiwib2JqZWN0X2tleSI6IiIsImNvbnRlbnRfdHlwZSI6IiIsInNpemVfYnl0ZXMiOjAsInVwbG9hZGVkX2F0IjoiMDAwMS0wMS0wMVQwMDowMDowMFoifQ=="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "30s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "94",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 3
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "96",
+      "eventTime": "2026-10-18T17:45:07.011896839Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293265",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "95",
+        "identity": "openplan-history-recorder",
+        "requestId": "3f030d8e-d418-462b-b287-ba3b9d7be1d6",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "97",
+      "eventTime": "2026-10-18T17:45:07.017779006Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293266",
+      "activityTaskCompletedEventAttributes": {
+        "scheduledEventId": "95",
+        "startedEventId": "96",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "98",
+      "eventTime": "2026-10-18T17:45:07.017785631Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293267",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "99",
+      "eventTime": "2026-10-18T17:45:07.060233672Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293271",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "98",
+        "identity": "openplan-history-recorder",
+        "requestId": "87f57c86-5d4d-4e93-9999-b150ece76d78",
+        "historySizeBytes": "15721",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "100",
+      "eventTime": "2026-10-18T17:45:07.067057006Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293275",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "98",
+        "startedEventId": "99",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "101",
+      "eventTime": "2026-10-18T17:45:07.067093047Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293276",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "101",
+        "activityType": {
+          "name": "RecordTemplateRunStep"
+        },
+        "taskQueue": {
+          "name": "control",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJSdW5JRCI6InJ1bi1wbGFuLWFwcGx5LXdhaXRpbmciLCJUZW5hbnRJRCI6InRlbmFudC1oaXN0b3J5IiwiU3RlcCI6InNlbGVjdGluZ193b3Jrc3BhY2UifQ=="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "60s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "100",
+        "retryPolicy": {
+          "initialInterval": "30s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "300s",
+          "maximumAttempts": 1,
+          "nonRetryableErrorTypes": [
+            "InvalidConfig",
+            "UnsupportedCommand"
+          ]
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "102",
+      "eventTime": "2026-10-18T17:45:07.111285047Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293280",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "101",
+        "identity": "openplan-history-recorder",
+        "requestId": "ac0ef242-f163-4908-9b4c-8184aef60992",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "103",
+      "eventTime": "2026-10-18T17:45:07.116681089Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293281",
+      "activityTaskCompletedEventAttributes": {
+        "scheduledEventId": "101",
+        "startedEventId": "102",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "104",
+      "eventTime": "2026-10-18T17:45:07.116685631Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293282",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "105",
+      "eventTime": "2026-10-18T17:45:07.160073922Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293286",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "104",
+        "identity": "openplan-history-recorder",
+        "requestId": "92b3a246-12d4-4fcd-b6dd-eaf47ab1bed4",
+        "historySizeBytes": "16516",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "106",
+      "eventTime": "2026-10-18T17:45:07.166871922Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293290",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "104",
+        "startedEventId": "105",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "107",
+      "eventTime": "2026-10-18T17:45:07.166898589Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293291",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "107",
+        "activityType": {
+          "name": "RunTerraform"
+        },
+        "taskQueue": {
+          "name": "3cd7e81b-d02b-49c0-98d8-24702856b6db@history-recorder",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJSdW5JRCI6InJ1bi1wbGFuLWFwcGx5LXdhaXRpbmciLCJUZW5hbnRJRCI6InRlbmFudC1oaXN0b3J5IiwiU3RhY2tUZW1wbGF0ZUlEIjoic3RhY2stdGVtcGxhdGUtaGlzdG9yeSIsIldvcmtzcGFjZVBhdGgiOiIvcnVucy9ydW4tcGxhbi1hcHBseS13YWl0aW5nIiwiVGVycmFmb3JtUGF0aCI6Ii9ydW5zL3J1bi1wbGFuLWFwcGx5LXdhaXRpbmcvc291cmNlL3JhbmRvbS1wZXQiLCJXb3Jrc3BhY2VOYW1lIjoiaGlzdG9yeSIsIkNvbW1hbmQiOiJzZWxlY3Rfd29ya3NwYWNlIiwiTG9nTmFtZSI6InBsYW4tMiIsIkNvbmZpZ0pTT04iOnt9LCJTZWFsZWRFbnZpcm9ubWVudCI6ImMyVmhiR1ZrTFdWdWRtbHliMjV0Wlc1MCJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "2700s",
+        "heartbeatTimeout": "120s",
+        "workflowTaskCompletedEventId": "106",
+        "retryPolicy": {
+          "initialInterval": "60s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "600s",
+          "maximumAttempts": 1,
+          "nonRetryableErrorTypes": [
+            "InvalidConfig",
+            "UnsupportedCommand"
+          ]
+        }
+      }
+    },
+    {
+      "eventId": "108",
+      "eventTime": "2026-10-18T17:45:07.212016422Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293295",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "107",
+        "identity": "openplan-history-recorder",
+        "requestId": "c911684b-6975-4f58-b155-099cf4bd977d",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "109",
+      "eventTime": "2026-10-18T17:45:07.217828089Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293296",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJIYXNDaGFuZ2VzIjp0cnVlLCJTdW1tYXJ5Ijp7ImFkZCI6MSwiY2hhbmdlIjowLCJkZXN0cm95IjowfX0="
+            }
+          ]
+        },
+        "scheduledEventId": "107",
+        "startedEventId": "108",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "110",
+      "eventTime": "2026-10-18T17:45:07.217835881Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293297",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "111",
+      "eventTime": "2026-10-18T17:45:07.259738797Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293301",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "110",
+        "identity": "openplan-history-recorder",
+        "requestId": "fb3977a5-3767-4177-8644-2bfebf828ef2",
+        "historySizeBytes": "17718",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "112",
+      "eventTime": "2026-10-18T17:45:07.266410506Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293305",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "110",
+        "startedEventId": "111",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "113",
+      "eventTime": "2026-10-18T17:45:07.266446672Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293306",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "113",
+        "activityType": {
+          "name": "UploadLog"
+        },
+        "taskQueue": {
+          "name": "3cd7e81b-d02b-49c0-98d8-24702856b6db@history-recorder",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJUZW5hbnRJRCI6InRlbmFudC1oaXN0b3J5IiwiUnVuSUQiOiJydW4tcGxhbi1hcHBseS13YWl0aW5nIiwiTG9nTmFtZSI6InBsYW4tMiJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "300s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "112",
+        "retryPolicy": {
+          "initialInterval": "2s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "30s",
+          "maximumAttempts": 5
+        }
+      }
+    },
+    {
+      "eventId": "114",
+      "eventTime": "2026-10-18T17:45:07.316464214Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293310",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "113",
+        "identity": "openplan-history-recorder",
+        "requestId": "e418056a-2f90-45d9-9513-5d21d1f539c5",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "115",
+      "eventTime": "2026-10-18T17:45:07.322818714Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293311",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJ0ZW5hbnRfaWQiOiIiLCJydW5faWQiOiIiLCJwaGFzZSI6IiIsInJ1bl9waGFzZSI6IiIsInNlcSI6MCwiY29tbWFuZCI6IiIsInN0YXRlIjoiIiwiY29tbWFuZF9saW5lIjoiIiwib2JqZWN0X2tleSI6IiIsImNvbnRlbnRfdHlwZSI6InRleHQvcGxhaW4iLCJzaXplX2J5dGVzIjoxLCJ1cGxvYWRlZF9hdCI6IjIwMjYtMTAtMThUMjM6MTU6MDcuMzIyMDE5KzA1OjMwIn0="
+            }
+          ]
+        },
+        "scheduledEventId": "113",
+        "startedEventId": "114",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "116",
+      "eventTime": "2026-10-18T17:45:07.322826964Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293312",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "117",
+      "eventTime": "2026-10-18T17:45:07.360617381Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293316",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "116",
+        "identity": "openplan-history-recorder",
+        "requestId": "b2be40d3-ccb6-4b97-a015-5951405bb162",
+        "historySizeBytes": "18760",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "118",
+      "eventTime": "2026-10-18T17:45:07.366332714Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293320",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "116",
+        "startedEventId": "117",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "119",
+      "eventTime": "2026-10-18T17:45:07.366367589Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293321",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "119",
+        "activityType": {
+          "name": "RecordTemplateRunLog"
+        },
+        "taskQueue": {
+          "name": "control",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJ0ZW5hbnRfaWQiOiJ0ZW5hbnQtaGlzdG9yeSIsInJ1bl9pZCI6InJ1bi1wbGFuLWFwcGx5LXdhaXRpbmciLCJwaGFzZSI6InBsYW4tMiIsInJ1bl9waGFzZSI6InBsYW4iLCJzZXEiOjIsImNvbW1hbmQiOiJzZWxlY3Rfd29ya3NwYWNlIiwic3RhdGUiOiJjb21wbGV0ZSIsImNvbW1hbmRfbGluZSI6IiIsIm9iamVjdF9rZXkiOiIiLCJjb250ZW50X3R5cGUiOiJ0ZXh0L3BsYWluIiwic2l6ZV9ieXRlcyI6MSwidXBsb2FkZWRfYXQiOiIyMDI2LTEwLTE4VDIzOjE1OjA3LjMyMjAxOSswNTozMCJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "30s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "118",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 3
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "120",
+      "eventTime": "2026-10-18T17:45:07.411695506Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293325",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "119",
+        "identity": "openplan-history-recorder",
+        "requestId": "705ccc1f-5a95-49d3-9740-b41aa7880673",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "121",
+      "eventTime": "2026-10-18T17:45:07.417611964Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293326",
+      "activityTaskCompletedEventAttributes": {
+        "scheduledEventId": "119",
+        "startedEventId": "120",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "122",
+      "eventTime": "2026-10-18T17:45:07.417619839Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293327",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "123",
+      "eventTime": "2026-10-18T17:45:07.459634339Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293331",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "122",
+        "identity": "openplan-history-recorder",
+        "requestId": "b00f3f9e-2a70-42e5-8e13-f6f457210eba",
+        "historySizeBytes": "19719",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "124",
+      "eventTime": "2026-10-18T17:45:07.466448464Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293335",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "122",
+        "startedEventId": "123",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "125",
+      "eventTime": "2026-10-18T17:45:07.466494464Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293336",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "125",
+        "activityType": {
+          "name": "SealRunCredentials"
+        },
+        "taskQueue": {
+          "name": "control",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJUZW5hbnRJRCI6InRlbmFudC1oaXN0b3J5IiwiU3RhY2tUZW1wbGF0ZUlEIjoic3RhY2stdGVtcGxhdGUtaGlzdG9yeSIsIlB1YmxpY0tleSI6ImNIVmliR2xqTFd0bGVRPT0ifQ=="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "60s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "124",
+        "retryPolicy": {
+          "initialInterval": "30s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "300s",
+          "maximumAttempts": 1,
+          "nonRetryableErrorTypes": [
+            "InvalidConfig",
+            "UnsupportedCommand"
+          ]
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "126",
+      "eventTime": "2026-10-18T17:45:07.517170589Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293340",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "125",
+        "identity": "openplan-history-recorder",
+        "requestId": "31225311-48b8-47c4-8038-d7ae976634b6",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "127",
+      "eventTime": "2026-10-18T17:45:07.523807172Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293341",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJTZWFsZWRFbnZpcm9ubWVudCI6ImMyVmhiR1ZrTFdWdWRtbHliMjV0Wlc1MCJ9"
+            }
+          ]
+        },
+        "scheduledEventId": "125",
+        "startedEventId": "126",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "128",
+      "eventTime": "2026-10-18T17:45:07.523813672Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293342",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "129",
+      "eventTime": "2026-10-18T17:45:07.560643006Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293346",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "128",
+        "identity": "openplan-history-recorder",
+        "requestId": "ea9e9d9b-45ff-4807-8928-9e7cdfe74ecc",
+        "historySizeBytes": "20612",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "130",
+      "eventTime": "2026-10-18T17:45:07.568930256Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293350",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "128",
+        "startedEventId": "129",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "131",
+      "eventTime": "2026-10-18T17:45:07.568966339Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293351",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "131",
+        "activityType": {
+          "name": "RecordTemplateRunLog"
+        },
+        "taskQueue": {
+          "name": "control",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJ0ZW5hbnRfaWQiOiJ0ZW5hbnQtaGlzdG9yeSIsInJ1bl9pZCI6InJ1bi1wbGFuLWFwcGx5LXdhaXRpbmciLCJwaGFzZSI6InBsYW4tMyIsInJ1bl9waGFzZSI6InBsYW4iLCJzZXEiOjMsImNvbW1hbmQiOiJwbGFuIiwic3RhdGUiOiJsaXZlIiwiY29tbWFuZF9saW5lIjoiIiwib2JqZWN0X2tleSI6IiIsImNvbnRlbnRfdHlwZSI6IiIsInNpemVfYnl0ZXMiOjAsInVwbG9hZGVkX2F0IjoiMDAwMS0wMS0wMVQwMDowMDowMFoifQ=="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "30s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "130",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 3
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "132",
+      "eventTime": "2026-10-18T17:45:07.609435798Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293355",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "131",
+        "identity": "openplan-history-recorder",
+        "requestId": "16665547-db32-402e-a17a-d47806b974a3",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "133",
+      "eventTime": "2026-10-18T17:45:07.614242923Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293356",
+      "activityTaskCompletedEventAttributes": {
+        "scheduledEventId": "131",
+        "startedEventId": "132",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "134",
+      "eventTime": "2026-10-18T17:45:07.614249214Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293357",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "135",
+      "eventTime": "2026-10-18T17:45:07.659436548Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293361",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "134",
+        "identity": "openplan-history-recorder",
+        "requestId": "4ea534ed-25b7-42d7-9516-28983c0068bb",
+        "historySizeBytes": "21546",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "136",
+      "eventTime": "2026-10-18T17:45:07.666348798Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293365",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "134",
+        "startedEventId": "135",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "137",
+      "eventTime": "2026-10-18T17:45:07.666401089Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293366",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "137",
+        "activityType": {
+          "name": "RecordTemplateRunStep"
+        },
+        "taskQueue": {
+          "name": "control",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJSdW5JRCI6InJ1bi1wbGFuLWFwcGx5LXdhaXRpbmciLCJUZW5hbnRJRCI6InRlbmFudC1oaXN0b3J5IiwiU3RlcCI6InBsYW5uaW5nIn0="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "60s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "136",
+        "retryPolicy": {
+          "initialInterval": "30s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "300s",
+          "maximumAttempts": 1,
+          "nonRetryableErrorTypes": [
+            "InvalidConfig",
+            "UnsupportedCommand"
+          ]
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "138",
+      "eventTime": "2026-10-18T17:45:07.712326048Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293370",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "137",
+        "identity": "openplan-history-recorder",
+        "requestId": "21a07076-13e4-474f-8f29-fc4e11131d87",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "139",
+      "eventTime": "2026-10-18T17:45:07.718973298Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293371",
+      "activityTaskCompletedEventAttributes": {
+        "scheduledEventId": "137",
+        "startedEventId": "138",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "140",
+      "eventTime": "2026-10-18T17:45:07.718993089Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293372",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "141",
+      "eventTime": "2026-10-18T17:45:07.760982464Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293376",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "140",
+        "identity": "openplan-history-recorder",
+        "requestId": "83ca483f-d7eb-4b83-a6a5-caf2789265b2",
+        "historySizeBytes": "22350",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "142",
+      "eventTime": "2026-10-18T17:45:07.767566839Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293380",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "140",
+        "startedEventId": "141",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "143",
+      "eventTime": "2026-10-18T17:45:07.767623423Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293381",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "143",
+        "activityType": {
+          "name": "RunTerraform"
+        },
+        "taskQueue": {
+          "name": "3cd7e81b-d02b-49c0-98d8-24702856b6db@history-recorder",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJSdW5JRCI6InJ1bi1wbGFuLWFwcGx5LXdhaXRpbmciLCJUZW5hbnRJRCI6InRlbmFudC1oaXN0b3J5IiwiU3RhY2tUZW1wbGF0ZUlEIjoic3RhY2stdGVtcGxhdGUtaGlzdG9yeSIsIldvcmtzcGFjZVBhdGgiOiIvcnVucy9ydW4tcGxhbi1hcHBseS13YWl0aW5nIiwiVGVycmFmb3JtUGF0aCI6Ii9ydW5zL3J1bi1wbGFuLWFwcGx5LXdhaXRpbmcvc291cmNlL3JhbmRvbS1wZXQiLCJXb3Jrc3BhY2VOYW1lIjoiaGlzdG9yeSIsIkNvbW1hbmQiOiJwbGFuIiwiTG9nTmFtZSI6InBsYW4tMyIsIkNvbmZpZ0pTT04iOnt9LCJTZWFsZWRFbnZpcm9ubWVudCI6ImMyVmhiR1ZrTFdWdWRtbHliMjV0Wlc1MCJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "2700s",
+        "heartbeatTimeout": "120s",
+        "workflowTaskCompletedEventId": "142",
+        "retryPolicy": {
+          "initialInterval": "60s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "600s",
+          "maximumAttempts": 1,
+          "nonRetryableErrorTypes": [
+            "InvalidConfig",
+            "UnsupportedCommand"
+          ]
+        }
+      }
+    },
+    {
+      "eventId": "144",
+      "eventTime": "2026-10-18T17:45:07.810777631Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293385",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "143",
+        "identity": "openplan-history-recorder",
+        "requestId": "725097f3-e3fc-4052-8c68-284212c6f4df",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "145",
+      "eventTime": "2026-10-18T17:45:07.817755381Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293386",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJIYXNDaGFuZ2VzIjp0cnVlLCJTdW1tYXJ5Ijp7ImFkZCI6MSwiY2hhbmdlIjowLCJkZXN0cm95IjowfX0="
+            }
+          ]
+        },
+        "scheduledEventId": "143",
+        "startedEventId": "144",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "146",
+      "eventTime": "2026-10-18T17:45:07.817759506Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293387",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "147",
+      "eventTime": "2026-10-18T17:45:07.859187923Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293391",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "146",
+        "identity": "openplan-history-recorder",
+        "requestId": "94a773e9-1754-448c-95d3-ab870a88fd21",
+        "historySizeBytes": "23559",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "148",
+      "eventTime": "2026-10-18T17:45:07.862833548Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293395",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "146",
+        "startedEventId": "147",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "149",
+      "eventTime": "2026-10-18T17:45:07.862853964Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293396",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "149",
+        "activityType": {
+          "name": "UploadLog"
+        },
+        "taskQueue": {
+          "name": "3cd7e81b-d02b-49c0-98d8-24702856b6db@history-recorder",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJUZW5hbnRJRCI6InRlbmFudC1oaXN0b3J5IiwiUnVuSUQiOiJydW4tcGxhbi1hcHBseS13YWl0aW5nIiwiTG9nTmFtZSI6InBsYW4tMyJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "300s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "148",
+        "retryPolicy": {
+          "initialInterval": "2s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "30s",
+          "maximumAttempts": 5
+        }
+      }
+    },
+    {
+      "eventId": "150",
+      "eventTime": "2026-10-18T17:45:07.911223756Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293400",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "149",
+        "identity": "openplan-history-recorder",
+        "requestId": "c6a7cde3-e39c-4db9-b0e8-d9551c636392",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "151",
+      "eventTime": "2026-10-18T17:45:07.914716381Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293401",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJ0ZW5hbnRfaWQiOiIiLCJydW5faWQiOiIiLCJwaGFzZSI6IiIsInJ1bl9waGFzZSI6IiIsInNlcSI6MCwiY29tbWFuZCI6IiIsInN0YXRlIjoiIiwiY29tbWFuZF9saW5lIjoiIiwib2JqZWN0X2tleSI6IiIsImNvbnRlbnRfdHlwZSI6InRleHQvcGxhaW4iLCJzaXplX2J5dGVzIjoxLCJ1cGxvYWRlZF9hdCI6IjIwMjYtMTAtMThUMjM6MTU6MDcuOTE0NTAyKzA1OjMwIn0="
+            }
+          ]
+        },
+        "scheduledEventId": "149",
+        "startedEventId": "150",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "152",
+      "eventTime": "2026-10-18T17:45:07.914720173Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293402",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "153",
+      "eventTime": "2026-10-18T17:45:07.958046631Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293406",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "152",
+        "identity": "openplan-history-recorder",
+        "requestId": "696b083e-eaae-4db8-91e1-0b270c19c147",
+        "historySizeBytes": "24617",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "154",
+      "eventTime": "2026-10-18T17:45:07.962607298Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293410",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "152",
+        "startedEventId": "153",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "155",
+      "eventTime": "2026-10-18T17:45:07.962627048Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293411",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "155",
+        "activityType": {
+          "name": "RecordTemplateRunLog"
+        },
+        "taskQueue": {
+          "name": "control",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJ0ZW5hbnRfaWQiOiJ0ZW5hbnQtaGlzdG9yeSIsInJ1bl9pZCI6InJ1bi1wbGFuLWFwcGx5LXdhaXRpbmciLCJwaGFzZSI6InBsYW4tMyIsInJ1bl9waGFzZSI6InBsYW4iLCJzZXEiOjMsImNvbW1hbmQiOiJwbGFuIiwic3RhdGUiOiJjb21wbGV0ZSIsImNvbW1hbmRfbGluZSI6IiIsIm9iamVjdF9rZXkiOiIiLCJjb250ZW50X3R5cGUiOiJ0ZXh0L3BsYWluIiwic2l6ZV9ieXRlcyI6MSwidXBsb2FkZWRfYXQiOiIyMDI2LTEwLTE4VDIzOjE1OjA3LjkxNDUwMiswNTozMCJ9"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "30s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "154",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s",
+          "maximumAttempts": 3
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "156",
+      "eventTime": "2026-10-18T17:45:08.008836423Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293415",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "155",
+        "identity": "openplan-history-recorder",
+        "requestId": "d88373a8-d404-4d2f-a458-57e3f7a09b73",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "157",
+      "eventTime": "2026-10-18T17:45:08.012736339Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293416",
+      "activityTaskCompletedEventAttributes": {
+        "scheduledEventId": "155",
+        "startedEventId": "156",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "158",
+      "eventTime": "2026-10-18T17:45:08.012741964Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293417",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "159",
+      "eventTime": "2026-10-18T17:45:08.062502089Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293421",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "158",
+        "identity": "openplan-history-recorder",
+        "requestId": "50582d07-f8e0-462a-a626-176317a5ca03",
+        "historySizeBytes": "25574",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "160",
+      "eventTime": "2026-10-18T17:45:08.066950756Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293425",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "158",
+        "startedEventId": "159",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "161",
+      "eventTime": "2026-10-18T17:45:08.066977423Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293426",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "161",
+        "activityType": {
+          "name": "SealPlanKey"
+        },
+        "taskQueue": {
+          "name": "control",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJUZW5hbnRJRCI6InRlbmFudC1oaXN0b3J5IiwiUnVuSUQiOiJydW4tcGxhbi1hcHBseS13YWl0aW5nIiwiUHVibGljS2V5IjoiY0hWaWJHbGpMV3RsZVE9PSIsIkNyZWF0ZSI6dHJ1ZX0="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "60s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "160",
+        "retryPolicy": {
+          "initialInterval": "30s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "300s",
+          "maximumAttempts": 1,
+          "nonRetryableErrorTypes": [
+            "InvalidConfig",
+            "UnsupportedCommand"
+          ]
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "162",
+      "eventTime": "2026-10-18T17:45:08.110728923Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293430",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "161",
+        "identity": "openplan-history-recorder",
+        "requestId": "01c54951-c593-481d-b1c6-94afb887c5ec",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "163",
+      "eventTime": "2026-10-18T17:45:08.114988548Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293431",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJTZWFsZWRQbGFuS2V5IjoiYzJWaGJHVmtMWEJzWVc0dGEyVjUifQ=="
+            }
+          ]
+        },
+        "scheduledEventId": "161",
+        "startedEventId": "162",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "164",
+      "eventTime": "2026-10-18T17:45:08.114994964Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293432",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "165",
+      "eventTime": "2026-10-18T17:45:08.159911214Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293436",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "164",
+        "identity": "openplan-history-recorder",
+        "requestId": "72b8bce0-0b60-4b89-aacc-7cbfbbfbcbff",
+        "historySizeBytes": "26462",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "166",
+      "eventTime": "2026-10-18T17:45:08.166504839Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293440",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "164",
+        "startedEventId": "165",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "167",
+      "eventTime": "2026-10-18T17:45:08.166541298Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293441",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "167",
+        "activityType": {
+          "name": "RecordTemplateRunStep"
+        },
+        "taskQueue": {
+          "name": "control",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJSdW5JRCI6InJ1bi1wbGFuLWFwcGx5LXdhaXRpbmciLCJUZW5hbnRJRCI6InRlbmFudC1oaXN0b3J5IiwiU3RlcCI6InNhdmluZ19wbGFuIn0="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "60s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "166",
+        "retryPolicy": {
+          "initialInterval": "30s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "300s",
+          "maximumAttempts": 1,
+          "nonRetryableErrorTypes": [
+            "InvalidConfig",
+            "UnsupportedCommand"
+          ]
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "168",
+      "eventTime": "2026-10-18T17:45:08.209545048Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293445",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "167",
+        "identity": "openplan-history-recorder",
+        "requestId": "5dd9f9cc-4b23-4005-938f-072ec126c724",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "169",
+      "eventTime": "2026-10-18T17:45:08.214385298Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293446",
+      "activityTaskCompletedEventAttributes": {
+        "scheduledEventId": "167",
+        "startedEventId": "168",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "170",
+      "eventTime": "2026-10-18T17:45:08.214391298Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293447",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "171",
+      "eventTime": "2026-10-18T17:45:08.263760673Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293451",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "170",
+        "identity": "openplan-history-recorder",
+        "requestId": "461074bb-3a0f-4041-86e2-f9097cd491a9",
+        "historySizeBytes": "27263",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "172",
+      "eventTime": "2026-10-18T17:45:08.270323840Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293455",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "170",
+        "startedEventId": "171",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "173",
+      "eventTime": "2026-10-18T17:45:08.270351590Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293456",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "173",
+        "activityType": {
+          "name": "UploadPlan"
+        },
+        "taskQueue": {
+          "name": "3cd7e81b-d02b-49c0-98d8-24702856b6db@history-recorder",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJUZW5hbnRJRCI6InRlbmFudC1oaXN0b3J5IiwiUnVuSUQiOiJydW4tcGxhbi1hcHBseS13YWl0aW5nIiwiVGVycmFmb3JtUGF0aCI6Ii9ydW5zL3J1bi1wbGFuLWFwcGx5LXdhaXRpbmcvc291cmNlL3JhbmRvbS1wZXQiLCJTZWFsZWRQbGFuS2V5IjoiYzJWaGJHVmtMWEJzWVc0dGEyVjUifQ=="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "300s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "172",
+        "retryPolicy": {
+          "initialInterval": "30s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "300s",
+          "maximumAttempts": 1,
+          "nonRetryableErrorTypes": [
+            "InvalidConfig",
+            "UnsupportedCommand"
+          ]
+        }
+      }
+    },
+    {
+      "eventId": "174",
+      "eventTime": "2026-10-18T17:45:08.309345090Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293460",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "173",
+        "identity": "openplan-history-recorder",
+        "requestId": "0731bc9c-2338-44ba-ad56-f4bc203e41fa",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "175",
+      "eventTime": "2026-10-18T17:45:08.315190256Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293461",
+      "activityTaskCompletedEventAttributes": {
+        "scheduledEventId": "173",
+        "startedEventId": "174",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "176",
+      "eventTime": "2026-10-18T17:45:08.315197090Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293462",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "177",
+      "eventTime": "2026-10-18T17:45:08.363622506Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293466",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "176",
+        "identity": "openplan-history-recorder",
+        "requestId": "cd896ad6-1862-4d57-97f7-98fe9a5bfd0c",
+        "historySizeBytes": "28198",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "178",
+      "eventTime": "2026-10-18T17:45:08.372467715Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293470",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "176",
+        "startedEventId": "177",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "179",
+      "eventTime": "2026-10-18T17:45:08.372526048Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293471",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "179",
+        "activityType": {
+          "name": "ReleaseRunKey"
+        },
+        "taskQueue": {
+          "name": "3cd7e81b-d02b-49c0-98d8-24702856b6db@history-recorder",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJUZW5hbnRJRCI6InRlbmFudC1oaXN0b3J5IiwiUnVuSUQiOiJydW4tcGxhbi1hcHBseS13YWl0aW5nIn0="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "60s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "178",
+        "retryPolicy": {
+          "initialInterval": "30s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "300s",
+          "maximumAttempts": 1,
+          "nonRetryableErrorTypes": [
+            "InvalidConfig",
+            "UnsupportedCommand"
+          ]
+        }
+      }
+    },
+    {
+      "eventId": "180",
+      "eventTime": "2026-10-18T17:45:08.411090756Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293475",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "179",
+        "identity": "openplan-history-recorder",
+        "requestId": "f5710cf5-8f29-421e-b0a8-59cfe82a865c",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "181",
+      "eventTime": "2026-10-18T17:45:08.416765090Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293476",
+      "activityTaskCompletedEventAttributes": {
+        "scheduledEventId": "179",
+        "startedEventId": "180",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "182",
+      "eventTime": "2026-10-18T17:45:08.416770965Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293477",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "183",
+      "eventTime": "2026-10-18T17:45:08.466338340Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293481",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "182",
+        "identity": "openplan-history-recorder",
+        "requestId": "f10f63f1-5834-45f0-87ed-a63aedd782ac",
+        "historySizeBytes": "29029",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "184",
+      "eventTime": "2026-10-18T17:45:08.473916173Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293485",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "182",
+        "startedEventId": "183",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "185",
+      "eventTime": "2026-10-18T17:45:08.473952340Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293486",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "185",
+        "activityType": {
+          "name": "CleanupWorkspace"
+        },
+        "taskQueue": {
+          "name": "3cd7e81b-d02b-49c0-98d8-24702856b6db@history-recorder",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJUZW5hbnRJRCI6InRlbmFudC1oaXN0b3J5IiwiUnVuSUQiOiJydW4tcGxhbi1hcHBseS13YWl0aW5nIiwiV29ya3NwYWNlUGF0aCI6Ii9ydW5zL3J1bi1wbGFuLWFwcGx5LXdhaXRpbmciLCJEZWxldGVQbGFuIjpmYWxzZX0="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "60s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "184",
+        "retryPolicy": {
+          "initialInterval": "30s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "300s",
+          "maximumAttempts": 1,
+          "nonRetryableErrorTypes": [
+            "InvalidConfig",
+            "UnsupportedCommand"
+          ]
+        }
+      }
+    },
+    {
+      "eventId": "186",
+      "eventTime": "2026-10-18T17:45:08.509630673Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293490",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "185",
+        "identity": "openplan-history-recorder",
+        "requestId": "c3e8b522-618f-4e89-8651-030ef23acd31",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "187",
+      "eventTime": "2026-10-18T17:45:08.515456090Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293491",
+      "activityTaskCompletedEventAttributes": {
+        "scheduledEventId": "185",
+        "startedEventId": "186",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "188",
+      "eventTime": "2026-10-18T17:45:08.515461090Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293492",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "189",
+      "eventTime": "2026-10-18T17:45:08.562130298Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293496",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "188",
+        "identity": "openplan-history-recorder",
+        "requestId": "b406a5a7-d914-4381-be3a-df4f02ec3721",
+        "historySizeBytes": "29932",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "190",
+      "eventTime": "2026-10-18T17:45:08.571058840Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293500",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "188",
+        "startedEventId": "189",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "191",
+      "eventTime": "2026-10-18T17:45:08.571080965Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_CANCEL_REQUESTED",
+      "taskId": "6293501",
+      "activityTaskCancelRequestedEventAttributes": {
+        "scheduledEventId": "18",
+        "workflowTaskCompletedEventId": "190"
+      }
+    },
+    {
+      "eventId": "192",
+      "eventTime": "2026-10-18T17:45:08.571100006Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293502",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "192",
+        "activityType": {
+          "name": "internalSessionCompletionActivity"
+        },
+        "taskQueue": {
+          "name": "3cd7e81b-d02b-49c0-98d8-24702856b6db@history-recorder",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "IjkxMTkwOTg4LTA3MjAtNDhhMi04M2ZiLTA0YjY3NTQ1ZWM4YyI="
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "3s",
+        "startToCloseTimeout": "3s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "190",
+        "retryPolicy": {
+          "initialInterval": "1s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "100s"
+        }
+      }
+    },
+    {
+      "eventId": "193",
+      "eventTime": "2026-10-18T17:45:08.610945048Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293508",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "192",
+        "identity": "openplan-history-recorder",
+        "requestId": "506d66cf-1750-487e-91f5-4f0de3020acc",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "194",
+      "eventTime": "2026-10-18T17:45:08.616776590Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293509",
+      "activityTaskCompletedEventAttributes": {
+        "scheduledEventId": "192",
+        "startedEventId": "193",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "195",
+      "eventTime": "2026-10-18T17:45:08.616781423Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293510",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "196",
+      "eventTime": "2026-10-18T17:45:06.434849505Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293514",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "18",
+        "identity": "openplan-history-recorder",
+        "requestId": "137125d2-46b6-4fdf-944c-c4f39acfeee3",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "197",
+      "eventTime": "2026-10-18T17:45:08.619270840Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293515",
+      "activityTaskCompletedEventAttributes": {
+        "scheduledEventId": "18",
+        "startedEventId": "196",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "198",
+      "eventTime": "2026-10-18T17:45:08.659657340Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293517",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "195",
+        "identity": "openplan-history-recorder",
+        "requestId": "65b89485-c240-49e2-9986-75febdbfbd79",
+        "historySizeBytes": "30953",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "199",
+      "eventTime": "2026-10-18T17:45:08.666611548Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293521",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "195",
+        "startedEventId": "198",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "200",
+      "eventTime": "2026-10-18T17:45:08.666641131Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+      "taskId": "6293522",
+      "activityTaskScheduledEventAttributes": {
+        "activityId": "200",
+        "activityType": {
+          "name": "FinishPlan"
+        },
+        "taskQueue": {
+          "name": "control",
+          "kind": "TASK_QUEUE_KIND_NORMAL"
+        },
+        "header": {},
+        "input": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "eyJUZW5hbnRJRCI6InRlbmFudC1oaXN0b3J5IiwiUnVuSUQiOiJydW4tcGxhbi1hcHBseS13YWl0aW5nIiwiU3RhY2tUZW1wbGF0ZUlEIjoic3RhY2stdGVtcGxhdGUtaGlzdG9yeSIsIk9wZXJhdGlvbiI6ImFwcGx5IiwiSGFzQ2hhbmdlcyI6dHJ1ZSwiU3VtbWFyeSI6eyJhZGQiOjEsImNoYW5nZSI6MCwiZGVzdHJveSI6MH19"
+            }
+          ]
+        },
+        "scheduleToCloseTimeout": "0s",
+        "scheduleToStartTimeout": "0s",
+        "startToCloseTimeout": "60s",
+        "heartbeatTimeout": "0s",
+        "workflowTaskCompletedEventId": "199",
+        "retryPolicy": {
+          "initialInterval": "30s",
+          "backoffCoefficient": 2,
+          "maximumInterval": "300s",
+          "maximumAttempts": 1,
+          "nonRetryableErrorTypes": [
+            "InvalidConfig",
+            "UnsupportedCommand"
+          ]
+        },
+        "useWorkflowBuildId": true
+      }
+    },
+    {
+      "eventId": "201",
+      "eventTime": "2026-10-18T17:45:08.709049965Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
+      "taskId": "6293527",
+      "activityTaskStartedEventAttributes": {
+        "scheduledEventId": "200",
+        "identity": "openplan-history-recorder",
+        "requestId": "f1648297-2124-4825-8d36-ee16ec1cd3d2",
+        "attempt": 1,
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "202",
+      "eventTime": "2026-10-18T17:45:08.713735881Z",
+      "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+      "taskId": "6293528",
+      "activityTaskCompletedEventAttributes": {
+        "result": {
+          "payloads": [
+            {
+              "metadata": {
+                "encoding": "anNvbi9wbGFpbg=="
+              },
+              "data": "IndhaXRpbmci"
+            }
+          ]
+        },
+        "scheduledEventId": "200",
+        "startedEventId": "201",
+        "identity": "openplan-history-recorder"
+      }
+    },
+    {
+      "eventId": "203",
+      "eventTime": "2026-10-18T17:45:08.713740006Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
+      "taskId": "6293529",
+      "workflowTaskScheduledEventAttributes": {
+        "taskQueue": {
+          "name": "history-recorder:42ff0dc8-9913-4535-8194-e2ec0d4a7adf",
+          "kind": "TASK_QUEUE_KIND_STICKY",
+          "normalName": "control"
+        },
+        "startToCloseTimeout": "10s",
+        "attempt": 1
+      }
+    },
+    {
+      "eventId": "204",
+      "eventTime": "2026-10-18T17:45:08.759766756Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
+      "taskId": "6293533",
+      "workflowTaskStartedEventAttributes": {
+        "scheduledEventId": "203",
+        "identity": "openplan-history-recorder",
+        "requestId": "10ca9b24-ee22-42fd-8c6a-ee39b68f221e",
+        "historySizeBytes": "31894",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        }
+      }
+    },
+    {
+      "eventId": "205",
+      "eventTime": "2026-10-18T17:45:08.768253631Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
+      "taskId": "6293537",
+      "workflowTaskCompletedEventAttributes": {
+        "scheduledEventId": "203",
+        "startedEventId": "204",
+        "identity": "openplan-history-recorder",
+        "workerVersion": {
+          "buildId": "3f93585fec80eaf1c6a47bd39112f3f5"
+        },
+        "sdkMetadata": {},
+        "meteringMetadata": {}
+      }
+    },
+    {
+      "eventId": "206",
+      "eventTime": "2026-10-18T17:45:08.768298006Z",
+      "eventType": "EVENT_TYPE_WORKFLOW_EXECUTION_COMPLETED",
+      "taskId": "6293538",
+      "workflowExecutionCompletedEventAttributes": {
+        "workflowTaskCompletedEventId": "205"
+      }
+    }
+  ]
+}
