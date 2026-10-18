@@ -128,13 +128,18 @@ func (server *Server) streamEntries(ctx context.Context, stream eventStream, ent
 		select {
 		case <-ctx.Done():
 			return
+		case <-server.liveStreamsClosing:
+			// Ended as live: the viewer reconnects, from its last event,
+			// to whatever serves next.
+			_ = stream.end(domain.TemplateRunLogLive)
+			return
 		case <-keepalive.C:
 			state, ok := server.keepAlive(ctx, stream, command)
 			if !ok {
 				return
 			}
 			if state != domain.TemplateRunLogLive {
-				drainThenEnd(ctx, stream, entries, &sent, state)
+				drainThenEnd(ctx, server.liveStreamsClosing, stream, entries, &sent, state)
 				return
 			}
 		case entry, open := <-entries:
@@ -154,12 +159,17 @@ func (server *Server) streamEntries(ctx context.Context, stream eventStream, ent
 // so a client that fell behind still gets the last lines, usually the ones
 // that say how the command ended; the end entry, if it comes in that time,
 // ends the stream itself.
-func drainThenEnd(ctx context.Context, stream eventStream, entries <-chan logsink.Entry, sent *int64, state domain.TemplateRunLogState) {
+func drainThenEnd(ctx context.Context, closing <-chan struct{}, stream eventStream, entries <-chan logsink.Entry, sent *int64, state domain.TemplateRunLogState) {
 	grace := time.NewTimer(liveLogDrainGrace)
 	defer grace.Stop()
 	for {
 		select {
 		case <-ctx.Done():
+			return
+		case <-closing:
+			// Still live to the viewer, which reconnects and reads the
+			// row's state from the next server.
+			_ = stream.end(domain.TemplateRunLogLive)
 			return
 		case <-grace.C:
 			_ = stream.end(state)

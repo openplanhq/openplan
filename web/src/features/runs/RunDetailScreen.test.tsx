@@ -552,7 +552,8 @@ describe("RunDetailScreen", () => {
       act(() => queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), current));
     };
     const bodyFetches = () => fetchMock.mock.calls.filter(([reqInput]) => String(reqInput).endsWith("/logs/plan-3")).length;
-    return { moveOn, bodyFetches };
+    const listFetches = () => fetchMock.mock.calls.filter(([reqInput]) => String(reqInput).endsWith("/logs")).length;
+    return { moveOn, bodyFetches, listFetches };
   }
 
   it("keeps a live log's output when its row turns lost, and says why", async () => {
@@ -614,6 +615,53 @@ describe("RunDetailScreen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Load the full log" }));
     await waitFor(() => expect(screen.getByText("plan-3 full body")).toBeTruthy());
+    expect(bodyFetches()).toBe(1);
+  });
+
+  // A stream can skip bytes, as when Valkey restarts mid-command and the
+  // executor carries on from its own offset: the stream then ends at the
+  // stored size, but what it showed has a hole in it.
+  it("offers the full log when the stream skipped bytes, even if it ended at the stored size", async () => {
+    const queryClient = testQueryClient();
+    const { moveOn, bodyFetches } = liveRowThatMovesOn(queryClient);
+
+    renderScreen(queryClient);
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+    const source = FakeEventSource.instances[0];
+    act(() => source.dispatch("log", { offset: 0, end: 12, data: "Planning...\n" }, "1-0"));
+    act(() => source.dispatch("log", { offset: 30, end: 40, data: "1 to add.\n" }, "2-0"));
+
+    moveOn(runLog({ name: "plan-3", size_bytes: 40 }));
+    act(() => source.dispatch("log_end", { state: "complete" }));
+
+    await waitFor(() => expect(screen.getByText("Some output didn't stream.")).toBeTruthy());
+    expect(screen.getByRole("button", { name: "Load the full log" })).toBeTruthy();
+    expect(bodyFetches()).toBe(0);
+  });
+
+  // The stream can end complete before the list says so. Loading the body
+  // then, and again once the list carries uploaded_at, is one fetch: a
+  // command's log is uploaded once.
+  it("fetches the full log once when the list catches up after it was loaded", async () => {
+    const queryClient = testQueryClient();
+    const { moveOn, bodyFetches, listFetches } = liveRowThatMovesOn(queryClient);
+
+    renderScreen(queryClient);
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+    const source = FakeEventSource.instances[0];
+    act(() => source.dispatch("log", { offset: 0, end: 12, data: "Planning...\n" }, "1-0"));
+    act(() => source.dispatch("log_truncated", {}));
+    act(() => source.dispatch("log_end", { state: "complete" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Load the full log" }));
+    await waitFor(() => expect(screen.getByText("plan-3 full body")).toBeTruthy());
+
+    const listsBefore = listFetches();
+    moveOn(runLog({ name: "plan-3", size_bytes: 40 }));
+    await waitFor(() => expect(listFetches()).toBe(listsBefore + 1));
+    // Give a refetch keyed on the new uploaded_at the chance to start.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+    expect(screen.getByText("plan-3 full body")).toBeTruthy();
     expect(bodyFetches()).toBe(1);
   });
 

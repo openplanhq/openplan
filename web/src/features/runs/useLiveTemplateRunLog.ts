@@ -10,6 +10,11 @@ export interface LiveTemplateRunLog {
   // the end the server gave the last piece. Against the stored log's size it
   // tells whether the stream missed anything.
   streamedBytes: number;
+  // A piece started past the end of the one before it, so the bytes between
+  // never streamed. The server never overlaps pieces, but it cannot replay
+  // what its store lost: Valkey keeps nothing on disk, and after a restart
+  // the executor carries on from its own offset.
+  gap: boolean;
   // The output outgrew what the API streams live: no more text follows, and
   // the rest is only in the log's body once it is complete.
   truncated: boolean;
@@ -19,7 +24,7 @@ export interface LiveTemplateRunLog {
   failed: boolean;
 }
 
-const NOTHING_YET: LiveTemplateRunLog = { pieces: [], streamedBytes: 0, truncated: false, ended: null, failed: false };
+const NOTHING_YET: LiveTemplateRunLog = { pieces: [], streamedBytes: 0, gap: false, truncated: false, ended: null, failed: false };
 
 const ENDED_STATES: readonly TemplateRunLogState[] = ["complete", "lost"];
 
@@ -49,14 +54,19 @@ export function useLiveTemplateRunLog(url: string): LiveTemplateRunLog {
     const source = new EventSource(url);
 
     source.addEventListener("log", (event) => {
-      const piece = eventData<{ data: string; end?: number }>(event);
+      const piece = eventData<{ data: string; offset?: number; end?: number }>(event);
       if (typeof piece?.data !== "string") {
         return;
       }
-      // end counts raw bytes, which the text's replaced characters would
-      // miscount, so it is taken as sent rather than counted here.
+      // offset and end count raw bytes, which the text's replaced characters
+      // would miscount, so they are taken as sent rather than counted here.
       const end = typeof piece.end === "number" ? piece.end : 0;
-      setLive((current) => ({ ...current, pieces: [...current.pieces, piece.data], streamedBytes: Math.max(current.streamedBytes, end) }));
+      setLive((current) => ({
+        ...current,
+        pieces: [...current.pieces, piece.data],
+        streamedBytes: Math.max(current.streamedBytes, end),
+        gap: current.gap || (typeof piece.offset === "number" && piece.offset > current.streamedBytes)
+      }));
     });
     source.addEventListener("log_truncated", () => setLive((current) => ({ ...current, truncated: true })));
     source.addEventListener("log_end", (event) => {

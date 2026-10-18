@@ -343,9 +343,13 @@ const (
 	// LogLostExecutorGone is a command whose executor stopped answering
 	// before its output was uploaded.
 	LogLostExecutorGone TemplateRunLogLostReason = "executor_gone"
-	// LogLostRunTerminated is a log still live after its run ended, as when
-	// the workflow was terminated mid-command.
+	// LogLostRunTerminated is a log still live after its run was canceled:
+	// the workflow was stopped mid-command, so nothing recorded the log.
 	LogLostRunTerminated TemplateRunLogLostReason = "run_terminated"
+	// LogLostRecordFailed is a log still live after its run completed or
+	// failed: the run's commands ran to the end, so the workflow reached the
+	// log's final record and could not write it.
+	LogLostRecordFailed TemplateRunLogLostReason = "record_failed"
 )
 
 // TemplateRunLog is one command's log within a run: where its output lives

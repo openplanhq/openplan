@@ -2582,15 +2582,17 @@ components:
             `lost_reason` says why.
         lost_reason:
           type: string
-          enum: [upload_failed, executor_gone, run_terminated]
+          enum: [upload_failed, executor_gone, run_terminated, record_failed]
           description: |
             Present only when `state` is `lost`. `upload_failed` — the
             command finished but its output couldn't be stored.
             `executor_gone` — the executor stopped answering before the
-            output was stored. `run_terminated` — the run's status says it
-            has finished while the log was still live. It derives from the
-            run's status, so a run whose workflow was terminated outside
-            openplan, which keeps its status today, does not report it.
+            output was stored. `run_terminated` — the run was canceled
+            while the log was still live. `record_failed` — the run
+            completed or failed while the log was still live, so its final
+            record was never written. The last two derive from the run's
+            status, so a run whose workflow was terminated outside openplan,
+            which keeps its status today, reports neither.
         content_type:
           type: string
           description: Present only when `state` is `complete`.

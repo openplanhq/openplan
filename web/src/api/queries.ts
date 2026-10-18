@@ -214,13 +214,15 @@ export function useTemplateRunLogsQuery(tenantID: string, runID: string, statusT
   });
 }
 
-// A log's body is stored once its command exits and is replaced only by a new
-// upload, which moves uploadedAt. So one upload's body never changes, and is
-// fetched once. Only a complete log has a body: the API refuses one for a log
-// that is live or lost, so only the component for a complete log calls this.
-export function useTemplateRunLogQuery(tenantID: string, runID: string, name: string, uploadedAt: string) {
+// A command's log is uploaded once: RunTerraform never retries, and the
+// workflow saves each command's spool exactly once. So a log's body never
+// changes under its name, and is fetched once; keying it on uploaded_at would
+// only fetch it twice when the stream ends complete before the list says so.
+// Only a complete log has a body: the API refuses one for a log that is live
+// or lost, so only the component for a complete log calls this.
+export function useTemplateRunLogQuery(tenantID: string, runID: string, name: string) {
   return useQuery({
-    queryKey: queryKeys.templateRunLog(tenantID, runID, name, uploadedAt),
+    queryKey: queryKeys.templateRunLog(tenantID, runID, name),
     queryFn: () => client.getTemplateRunLog(tenantID, runID, name),
     enabled: runID !== "" && name !== "",
     staleTime: Infinity,

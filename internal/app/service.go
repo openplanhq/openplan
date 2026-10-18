@@ -1978,7 +1978,7 @@ func (service *Service) GetTemplateRunLog(ctx context.Context, command GetTempla
 }
 
 // GetTemplateRunLogMetadata is an authorized read of one log's row, with the
-// state derived: a live row of a finished run is lost, run_terminated.
+// state derived: a live row of a finished run is lost.
 func (service *Service) GetTemplateRunLogMetadata(ctx context.Context, command GetTemplateRunLogCommand) (domain.TemplateRunLog, error) {
 	if err := validateGetTemplateRunLogCommand(command); err != nil {
 		return domain.TemplateRunLog{}, err
@@ -2015,13 +2015,20 @@ func (service *Service) TemplateRunLogState(ctx context.Context, tenantID domain
 }
 
 // deriveTemplateRunLogState reports a live log of a finished run as lost. Only
-// the workflow moves a row out of live, so a run terminated by hand, or whose
-// executor died before the final record, leaves its row live forever; the
-// run's status is what says nobody will finish it.
+// the workflow moves a row out of live, so a run canceled mid-command, or
+// whose final record never landed, leaves its row live forever; the run's
+// status is what says nobody will finish it, and which of the two it was: a
+// canceled run was cut off, while a completed or failed run ran its commands
+// to the end and reached the record, which then failed.
 func deriveTemplateRunLogState(log domain.TemplateRunLog, status domain.TemplateRunStatus) domain.TemplateRunLog {
-	if log.State == domain.TemplateRunLogLive && status.Terminal() {
-		log.State = domain.TemplateRunLogLost
+	if log.State != domain.TemplateRunLogLive || !status.Terminal() {
+		return log
+	}
+	log.State = domain.TemplateRunLogLost
+	if status == domain.TemplateRunCanceled {
 		log.LostReason = domain.LogLostRunTerminated
+	} else {
+		log.LostReason = domain.LogLostRecordFailed
 	}
 	return log
 }

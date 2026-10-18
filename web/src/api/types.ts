@@ -308,7 +308,7 @@ export interface TemplateRunLog {
 
 export type TemplateRunLogState = "live" | "complete" | "lost";
 
-export type TemplateRunLogLostReason = "upload_failed" | "executor_gone" | "run_terminated";
+export type TemplateRunLogLostReason = "upload_failed" | "executor_gone" | "run_terminated" | "record_failed";
 
 export interface GrantView {
   user_sub: string;

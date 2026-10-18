@@ -441,6 +441,52 @@ func TestStreamTemplateRunLogSendsQueuedPiecesBeforeEndingOnARowCheck(t *testing
 	}
 }
 
+// A replica shutting down ends its streams as still live, so each client
+// reconnects from its last event, and Shutdown is not held up by streams
+// that would otherwise outlive it.
+func TestStreamTemplateRunLogEndsAsLiveWhenTheServerClosesItsStreams(t *testing.T) {
+	t.Parallel()
+	deps := newLiveLogDependencies(t)
+	live := &fakeLiveLogs{hold: true}
+	server := NewServer(deps.service(), configuredTenantID, WithLiveLogs(live))
+	request := authenticatedRequest(http.MethodGet, liveLogEventsPath, nil)
+	response := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		server.ServeHTTP(response, request)
+	}()
+	waitForSubscribe(t, live)
+
+	server.CloseLiveStreams()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("stream still open after CloseLiveStreams")
+	}
+	if got, want := response.Body.String(), sseEnd("live"); got != want {
+		t.Fatalf("body = %q, want %q", got, want)
+	}
+}
+
+// waitForSubscribe returns once the handler has subscribed to its log, which
+// is when it is following the stream.
+func waitForSubscribe(t *testing.T, live *fakeLiveLogs) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		live.mu.Lock()
+		calls := live.calls
+		live.mu.Unlock()
+		if calls > 0 {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("handler never subscribed")
+}
+
 // Every viewer of a log on a replica shares its re-check: a second ask
 // within the interval reads nothing.
 func TestLiveLogStateCacheSharesOneReadPerInterval(t *testing.T) {

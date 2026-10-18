@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -24,6 +25,10 @@ const (
 	// Past it the subscriber is dropped rather than slowing the tailer down
 	// for everyone; its client reconnects from the last event it saw.
 	subscriberBuffer = 64
+	// subscriberBufferBytes bounds the same backlog in piece bytes: entries
+	// run up to PieceSize, so counting them alone would let one slow viewer
+	// pin subscriberBuffer megabytes.
+	subscriberBufferBytes = 2 << 20
 	// tailBlock bounds one blocking read. go-redis does not abandon a read
 	// when its context ends, so it is also how long a stopped tailer can
 	// linger before it notices.
@@ -76,6 +81,9 @@ type tailer struct {
 // inbox, under mu, when it removes the subscriber from the tailer.
 type subscriber struct {
 	inbox chan Entry
+	// queued is the piece bytes in inbox: added by the tailer as it sends,
+	// taken back by forward as it receives.
+	queued atomic.Int64
 }
 
 // NewRegistry returns a registry reading streams through reader.
@@ -307,14 +315,20 @@ func (reg *Registry) fanOut(t *tailer, batch []Entry) bool {
 		return true
 	}
 	for _, entry := range batch {
+		size := int64(len(entry.Data))
 		for sub := range t.subscribers {
-			select {
-			case sub.inbox <- entry:
-			default:
-				// Fallen subscriberBuffer behind: dropped, not waited for.
-				delete(t.subscribers, sub)
-				close(sub.inbox)
+			if sub.queued.Load()+size <= subscriberBufferBytes {
+				select {
+				case sub.inbox <- entry:
+					sub.queued.Add(size)
+					continue
+				default:
+				}
 			}
+			// Fallen subscriberBuffer entries or subscriberBufferBytes
+			// behind: dropped, not waited for.
+			delete(t.subscribers, sub)
+			close(sub.inbox)
 		}
 		// Only the first end counts: a retried RecordTemplateRunLog can
 		// append a second one.
@@ -355,6 +369,7 @@ func (reg *Registry) forward(ctx context.Context, t *tailer, sub *subscriber, ba
 			if !ok {
 				return
 			}
+			sub.queued.Add(-int64(len(entry.Data)))
 			if last != "" && !idAfter(entry.ID, last) {
 				continue
 			}

@@ -19,7 +19,7 @@ alter table template_run_logs
 	alter column uploaded_at drop not null,
 	add constraint template_run_logs_state_check check (state in ('live', 'complete', 'lost')),
 	add constraint template_run_logs_lost_reason_check check (
-		lost_reason is null or lost_reason in ('upload_failed', 'executor_gone', 'run_terminated')
+		lost_reason is null or lost_reason in ('upload_failed', 'executor_gone', 'run_terminated', 'record_failed')
 	),
 	add constraint template_run_logs_state_object_check check (
 		(state = 'complete') = (object_key is not null and uploaded_at is not null and content_type is not null and size_bytes is not null)

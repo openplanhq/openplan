@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -250,6 +251,41 @@ func TestSubscribeDropsASlowSubscriber(t *testing.T) {
 
 	if held := waitClosed(t, slow); held >= added {
 		t.Fatalf("slow subscriber received all %d entries without reading, want it dropped", held)
+	}
+	assertNothingArrives(t, fast)
+}
+
+// Falling behind is also measured in bytes: a burst of full-size pieces must
+// not pin megabytes per slow viewer while it is still under subscriberBuffer
+// entries behind.
+func TestSubscribeDropsASubscriberHoldingTooManyBytes(t *testing.T) {
+	t.Parallel()
+	reg, client := newTestRegistry(t)
+
+	slow, err := reg.Subscribe(t.Context(), registryTestKey, "")
+	if err != nil {
+		t.Fatalf("Subscribe slow: %v", err)
+	}
+	fast, err := reg.Subscribe(t.Context(), registryTestKey, "")
+	if err != nil {
+		t.Fatalf("Subscribe fast: %v", err)
+	}
+	// Enough full pieces to pass the byte bound with one in the slow
+	// subscriber's forwarder, well under the entry bound.
+	added := int(subscriberBufferBytes/PieceSize) + 2
+	if added >= subscriberBuffer {
+		t.Fatalf("added = %d pieces would also pass the entry bound of %d", added, subscriberBuffer)
+	}
+	data := strings.Repeat("x", int(PieceSize))
+	for i := range added {
+		id := addPiece(t, client, int64(i)*PieceSize, data)
+		if got := recv(t, fast); got.ID != id {
+			t.Fatalf("fast subscriber got %s, want %s", got.ID, id)
+		}
+	}
+
+	if held := waitClosed(t, slow); held >= added {
+		t.Fatalf("slow subscriber received all %d pieces without reading, want it dropped", held)
 	}
 	assertNothingArrives(t, fast)
 }

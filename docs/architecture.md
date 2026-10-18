@@ -750,13 +750,17 @@ its output is missing. The row says why:
 - `upload_failed`: `UploadLog` failed every attempt.
 - `executor_gone`: the executor that ran the command died, and its spool with
   it.
-- `run_terminated`: the row is still `live` but its run's status says the run
-  has finished, so the workflow never got to record the log. This one is not
-  stored: the api derives it from the run's status when it reads a `live` row,
-  which needs no reconciler. Its stream, if any, expires on its own. A run
-  whose workflow is terminated outside openplan (by hand in Temporal, or by a
-  workflow timeout) keeps its status today, so its live rows read `live` until
-  that is fixed; it is tracked as a follow-up issue.
+- `run_terminated`: the row is still `live` but its run is `canceled`, so the
+  workflow was stopped before it could record the log.
+- `record_failed`: the row is still `live` but its run is `completed` or
+  `failed`: the commands ran to the end, so the workflow reached the log's
+  final record and every attempt at it failed.
+
+The last two are not stored: the api derives them from the run's status when
+it reads a `live` row, which needs no reconciler. The stream, if any, expires
+on its own. A run whose workflow is terminated outside openplan (by hand in
+Temporal, or by a workflow timeout) keeps its status today, so its live rows
+read `live` until that is fixed; it is tracked as a follow-up issue.
 
 **Reading.** The viewer picks its source once, when it opens a log, from the
 row's state:

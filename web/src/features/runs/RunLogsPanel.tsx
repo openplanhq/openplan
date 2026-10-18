@@ -124,10 +124,8 @@ function phaseDetail(phase: RunPhase, executions: TemplateRunExecution[] | undef
 // the stored copy or the lost notice would take away the output the reader
 // is looking at.
 function RunLogBody({ runId, log }: { runId: string; log: TemplateRunLog }) {
-  const [wasLive, setWasLive] = useState(log.state === "live");
-  if (log.state === "live" && !wasLive) {
-    setWasLive(true);
-  }
+  // Decided once: a row only ever leaves live, never returns to it.
+  const [wasLive] = useState(log.state === "live");
   if (wasLive) {
     return <LiveRunLogBody runId={runId} log={log} />;
   }
@@ -148,13 +146,12 @@ function lostNotice(log: TemplateRunLog): string {
 const LOST_REASONS: Record<TemplateRunLogLostReason, string> = {
   upload_failed: "the upload failed",
   executor_gone: "the executor stopped",
-  run_terminated: "the run was terminated"
+  run_terminated: "the run was canceled",
+  record_failed: "its record was never written"
 };
 
 function CompleteRunLogBody({ runId, log }: { runId: string; log: TemplateRunLog }) {
-  // A log whose stream ended complete before the list says so has no
-  // uploaded_at yet; its body is keyed under "" until the list catches up.
-  const logQuery = useTemplateRunLogQuery(tenantID, runId, log.name, log.uploaded_at ?? "");
+  const logQuery = useTemplateRunLogQuery(tenantID, runId, log.name);
   if (logQuery.data !== undefined) {
     return <>{logQuery.data || "No log body"}</>;
   }
@@ -223,11 +220,12 @@ function LiveRunLogStream({ url, log, onLoadFull }: { url: string; log: Template
 // Whether the stored log holds more than the stream carried, which is the
 // only time the stored copy is worth offering: usually the stream carried
 // every byte and the screen already shows the whole log. A truncated stream
-// always falls short. Otherwise it is known only once the stream has stopped
-// adding and the row gives the stored size, since a last piece may still be
-// on its way; the size counts the same bytes the stream's ends do.
+// always falls short, as does one that skipped bytes. Otherwise it is known
+// only once the stream has stopped adding and the row gives the stored size,
+// since a last piece may still be on its way; the size counts the same bytes
+// the stream's ends do.
 function streamFellShort(live: LiveTemplateRunLog, log: TemplateRunLog): boolean {
-  if (live.truncated) {
+  if (live.truncated || live.gap) {
     return true;
   }
   const settled = live.ended !== null || live.failed;

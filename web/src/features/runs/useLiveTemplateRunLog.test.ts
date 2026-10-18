@@ -27,7 +27,7 @@ describe("useLiveTemplateRunLog", () => {
     const { result } = renderHook(() => useLiveTemplateRunLog(URL));
     const source = onlySource();
     expect(source.url).toBe(URL);
-    expect(result.current).toEqual({ pieces: [], streamedBytes: 0, truncated: false, ended: null, failed: false });
+    expect(result.current).toEqual({ pieces: [], streamedBytes: 0, gap: false, truncated: false, ended: null, failed: false });
 
     act(() => source.dispatch("log", { offset: 0, end: 16, data: "Initializing...\n" }, "1-0"));
     act(() => source.dispatch("log", { offset: 16, end: 22, data: "Done.\n" }, "2-0"));
@@ -108,6 +108,33 @@ describe("useLiveTemplateRunLog", () => {
 
     expect(result.current.ended).toBeNull();
     expect(source.closeCalls).toBe(0);
+  });
+
+  // Valkey keeps nothing on disk: after it restarts mid-command the stream
+  // starts again from wherever the executor had got to, and a piece arrives
+  // past the end of the last one. What lies between never streamed.
+  it("marks a gap when a piece starts past what streamed so far", () => {
+    const { result } = renderHook(() => useLiveTemplateRunLog(URL));
+    const source = onlySource();
+
+    act(() => source.dispatch("log", { offset: 0, end: 4, data: "one\n" }, "1-0"));
+    expect(result.current.gap).toBe(false);
+    act(() => source.dispatch("log", { offset: 40, end: 44, data: "ten\n" }, "2-0"));
+
+    expect(result.current.gap).toBe(true);
+    expect(result.current.pieces).toEqual(["one\n", "ten\n"]);
+    expect(result.current.streamedBytes).toBe(44);
+  });
+
+  // A fresh viewer of a stream that restarted gets its first piece from the
+  // middle of the log, which is a gap at the start.
+  it("marks a gap when the first piece does not start at the log's first byte", () => {
+    const { result } = renderHook(() => useLiveTemplateRunLog(URL));
+    const source = onlySource();
+
+    act(() => source.dispatch("log", { offset: 40, end: 44, data: "ten\n" }, "1-0"));
+
+    expect(result.current.gap).toBe(true);
   });
 
   it("marks the log truncated on log_truncated", () => {

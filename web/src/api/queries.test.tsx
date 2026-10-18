@@ -243,27 +243,25 @@ describe("polling-aware query hooks", () => {
     expect(result.current.data).toBeUndefined();
   });
 
-  it("fetches a single log phase as text, once per upload", async () => {
+  // A command's log is uploaded once (its activity never retries), so one
+  // name is one body, whenever the list learns its uploaded_at.
+  it("fetches a single log's body as text, once per log", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(() =>
       Promise.resolve(new Response("plan output\n", { status: 200, headers: { "content-type": "text/plain" } }))
     );
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const { result, rerender } = renderHook(
-      ({ uploadedAt }: { uploadedAt: string }) => useTemplateRunLogQuery("tenant_123", "run_1", "plan", uploadedAt),
-      { wrapper: wrapper(queryClient), initialProps: { uploadedAt: "2026-07-20T00:01:00Z" } }
-    );
+    const { result } = renderHook(() => useTemplateRunLogQuery("tenant_123", "run_1", "plan"), {
+      wrapper: wrapper(queryClient)
+    });
 
     await waitFor(() => expect(result.current.data).toBe("plan output\n"));
-    // Opening the same upload again reads the cache, although the client's
+    // Opening the same log again reads the cache, although the client's
     // default staleTime would refetch on mount.
-    const reopened = renderHook(() => useTemplateRunLogQuery("tenant_123", "run_1", "plan", "2026-07-20T00:01:00Z"), {
+    const reopened = renderHook(() => useTemplateRunLogQuery("tenant_123", "run_1", "plan"), {
       wrapper: wrapper(queryClient)
     });
     expect(reopened.result.current.data).toBe("plan output\n");
     expect(fetchMock).toHaveBeenCalledTimes(1);
-
-    rerender({ uploadedAt: "2026-07-20T00:02:00Z" });
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
   });
 });
 

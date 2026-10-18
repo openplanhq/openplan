@@ -467,6 +467,12 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 	}
 	defer stopControlPlane()
 
+	// Live log streams end as the process stops: http.Server.Shutdown waits
+	// for handlers, and a stream would otherwise hold it to its timeout for
+	// as long as anyone is watching a run.
+	stopLiveStreams := context.AfterFunc(ctx, handler.CloseLiveStreams)
+	defer stopLiveStreams()
+
 	if err := deps.listenAndServe(ctx, cfg.HTTPAddress, handler); err != nil {
 		return fmt.Errorf("listen and serve api: %w", err)
 	}

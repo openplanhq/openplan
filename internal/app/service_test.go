@@ -2517,7 +2517,8 @@ func TestListTemplateRunLogsDerivesLostForALiveRowOfAFinishedRun(t *testing.T) {
 		wantState  domain.TemplateRunLogState
 		wantReason domain.TemplateRunLogLostReason
 	}{
-		{name: "finished run", status: domain.TemplateRunCompleted, wantState: domain.TemplateRunLogLost, wantReason: domain.LogLostRunTerminated},
+		{name: "finished run", status: domain.TemplateRunCompleted, wantState: domain.TemplateRunLogLost, wantReason: domain.LogLostRecordFailed},
+		{name: "canceled run", status: domain.TemplateRunCanceled, wantState: domain.TemplateRunLogLost, wantReason: domain.LogLostRunTerminated},
 		{name: "running run", status: domain.TemplateRunRunning, wantState: domain.TemplateRunLogLive},
 	}
 	for _, test := range tests {
@@ -2625,7 +2626,10 @@ func TestGetTemplateRunLogMetadataDerivesState(t *testing.T) {
 		wantReason domain.TemplateRunLogLostReason
 	}{
 		{name: "live row of a running run", status: domain.TemplateRunRunning, log: liveRunLog(), wantState: domain.TemplateRunLogLive},
-		{name: "live row of a finished run", status: domain.TemplateRunFailed, log: liveRunLog(), wantState: domain.TemplateRunLogLost, wantReason: domain.LogLostRunTerminated},
+		// A failed or completed run ran its commands to the end, so a row
+		// still live is one the workflow could not record, not a run cut off.
+		{name: "live row of a failed run", status: domain.TemplateRunFailed, log: liveRunLog(), wantState: domain.TemplateRunLogLost, wantReason: domain.LogLostRecordFailed},
+		{name: "live row of a canceled run", status: domain.TemplateRunCanceled, log: liveRunLog(), wantState: domain.TemplateRunLogLost, wantReason: domain.LogLostRunTerminated},
 		{name: "complete row of a finished run", status: domain.TemplateRunCompleted, log: complete, wantState: domain.TemplateRunLogComplete},
 	}
 	for _, test := range tests {

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/vishu42/openplan/internal/app"
@@ -28,10 +29,15 @@ type Server struct {
 	liveLogs LiveLogSubscriber
 	// liveLogStates is the live streams' shared re-check of each log's state.
 	liveLogStates *liveLogStateCache
-	auth          AuthConfig
-	mux           *http.ServeMux
-	handler       http.Handler
-	debug         bool
+	// liveStreamsClosing closes when the process is stopping, which ends
+	// every open live stream: http.Server.Shutdown waits for handlers, and a
+	// stream otherwise lasts as long as its viewer.
+	liveStreamsClosing chan struct{}
+	closeLiveStreams   sync.Once
+	auth               AuthConfig
+	mux                *http.ServeMux
+	handler            http.Handler
+	debug              bool
 }
 
 // ServerOption configures optional server dependencies.
@@ -46,6 +52,15 @@ func WithQueueReader(reader queue.Reader) ServerOption {
 // events.
 func WithLiveLogs(subscriber LiveLogSubscriber) ServerOption {
 	return func(server *Server) { server.liveLogs = subscriber }
+}
+
+// CloseLiveStreams ends every open live log stream as still live, so each
+// viewer reconnects from its last event, to this process once it is back or
+// to another replica. Call it before http.Server.Shutdown, which waits for
+// handlers and would otherwise wait on every viewer. Safe to call more than
+// once.
+func (server *Server) CloseLiveStreams() {
+	server.closeLiveStreams.Do(func() { close(server.liveStreamsClosing) })
 }
 
 // AuthFlow is the subset of the OIDC flow the handlers use. *authentication.Flow
@@ -117,10 +132,11 @@ func requireCompleteAuthWiring(service *app.Service, auth AuthConfig) {
 
 func NewServer(service *app.Service, tenantID domain.TenantID, options ...ServerOption) *Server {
 	server := &Server{
-		service:       service,
-		tenantID:      tenantID,
-		liveLogStates: newLiveLogStateCache(),
-		mux:           http.NewServeMux(),
+		service:            service,
+		tenantID:           tenantID,
+		liveLogStates:      newLiveLogStateCache(),
+		liveStreamsClosing: make(chan struct{}),
+		mux:                http.NewServeMux(),
 	}
 	for _, option := range options {
 		option(server)
