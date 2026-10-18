@@ -529,17 +529,18 @@ assigned directly.
 
 | Direct stack role | `can_view` | `can_operate` | `can_approve` | `can_manage_access` | Meaning |
 |---|---:|---:|---:|---:|---|
-| `owner` | Allowed | Allowed | Allowed | Allowed | View, operate, approve, and manage access |
+| `owner` | Allowed | Allowed | Allowed | Allowed | Everything an approver can, and manage access |
+| `approver` | Allowed | Allowed | Allowed | Denied | Everything an operator can, and approve |
 | `operator` | Allowed | Allowed | Denied | Denied | View and operate |
-| `approver` | Allowed | Denied | Allowed | Denied | View and approve |
 | `viewer` | Allowed | Denied | Denied | Denied | View only |
 
-The derived relations are exactly:
+The roles are a ladder, viewer < operator < approver < owner: each one holds
+every permission of the role below it. The derived relations are exactly:
 
-- `can_view = owner or operator or approver or viewer`
-- `can_operate = owner or operator`
-- `can_approve = owner or approver`
 - `can_manage_access = owner`
+- `can_approve = can_manage_access or approver`
+- `can_operate = can_approve or operator`
+- `can_view = can_operate or viewer`
 
 `operator` always means the per-stack OpenFGA role in this repository. The
 person or pipeline that configures and deploys the services is the deployment

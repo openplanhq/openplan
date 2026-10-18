@@ -49,11 +49,12 @@ tests:
           can_operate: true
           can_approve: false
           can_manage_access: false
+      # An approver is a rung above operator, so it can also operate.
       - user: user:approver
         object: stack:example
         assertions:
           can_view: true
-          can_operate: false
+          can_operate: true
           can_approve: true
           can_manage_access: false
       - user: user:viewer
