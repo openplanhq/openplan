@@ -11,6 +11,7 @@ import { queryKeys } from "../../api/queryKeys";
 import type { Stack, TemplateRun, TemplateRunLog } from "../../api/types";
 import RunDetailScreen from "./RunDetailScreen";
 import { asListBody, pagesOf } from "../../api/listTestSupport";
+import { FakeEventSource } from "./eventSourceTestSupport";
 
 function stack(capabilities: StackCapabilities): Stack {
   return {
@@ -60,16 +61,18 @@ const LOG_COMMANDS: Record<string, Pick<TemplateRunLog, "run_phase" | "seq" | "c
   "apply-3": { run_phase: "apply", seq: 3, command: "apply", command_line: "tofu apply" }
 };
 
+// A complete log unless a test says otherwise. The API sends the upload's
+// fields only for a complete log.
 function runLog(overrides: Partial<TemplateRunLog> = {}): TemplateRunLog {
   const name = overrides.name ?? "plan-3";
+  const state = overrides.state ?? "complete";
   return {
     tenant_id: "tenant_123",
     run_id: "run_1",
     name,
     ...(LOG_COMMANDS[name] ?? { run_phase: "plan", seq: 1, command: name, command_line: name }),
-    content_type: "text/plain",
-    size_bytes: 10,
-    uploaded_at: "2026-07-20T00:01:00Z",
+    state,
+    ...(state === "complete" ? { content_type: "text/plain", size_bytes: 10, uploaded_at: "2026-07-20T00:01:00Z" } : {}),
     ...overrides
   };
 }
@@ -476,6 +479,275 @@ describe("RunDetailScreen", () => {
     await waitFor(() => expect(screen.getByText("Loading…")).toBeTruthy());
     resolveLog?.(jsonResponse({ type: "about:blank", title: "Internal Server Error", detail: "boom" }, 500));
     await waitFor(() => expect(screen.getByText("Could not load this log.")).toBeTruthy());
+  });
+
+  // The command still running has a live row, which follows its output as it
+  // is written instead of asking for a body the API does not have yet.
+  it("tails a live log, and loads its full body once it completes", async () => {
+    FakeEventSource.instances = [];
+    vi.stubGlobal("EventSource", FakeEventSource);
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    const running = run({ status: "running", step: "planning" });
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), running);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/template-runs/run_1")) return jsonResponse(running);
+      if (url.endsWith("/logs")) return jsonResponse([runLog({ name: "plan-1" }), runLog({ name: "plan-3", state: "live" })]);
+      if (url.endsWith("/logs/plan-3")) {
+        return new Response("plan-3 full body", { status: 200, headers: { "content-type": "text/plain" } });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    const bodyFetches = () => fetchMock.mock.calls.filter(([reqInput]) => String(reqInput).endsWith("/logs/plan-3")).length;
+
+    renderScreen(queryClient);
+
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+    const source = FakeEventSource.instances[0];
+    expect(source.url).toBe("/v1/tenants/tenant_123/template-runs/run_1/logs/plan-3/events");
+    expect(screen.getByText("Streaming")).toBeTruthy();
+
+    act(() => source.dispatch("log", { offset: 0, end: 12, data: "Planning...\n" }, "1-0"));
+    act(() => source.dispatch("log", { offset: 12, end: 28, data: "Plan: 1 to add.\n" }, "2-0"));
+    const panel = screen.getByTestId("log-scroll-area-plan-3");
+    expect(panel.textContent).toContain("Planning...\nPlan: 1 to add.\n");
+    // The dots are decoration; the status they stand for is read out once.
+    expect(within(panel).getByRole("status").textContent).toContain("Streaming");
+
+    act(() => source.dispatch("log_truncated", {}));
+    expect(screen.getByText("Live output stops here; load the full log once the command finishes.")).toBeTruthy();
+
+    act(() => source.dispatch("log_end", { state: "complete" }));
+    expect(source.closeCalls).toBe(1);
+    expect(screen.queryByText("Streaming")).toBeNull();
+    expect(bodyFetches()).toBe(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Load the full log" }));
+    await waitFor(() => expect(screen.getByText("plan-3 full body")).toBeTruthy());
+    expect(bodyFetches()).toBe(1);
+  });
+
+  // The list refetches when the run moves, and can say a log has ended
+  // before its stream does. What streamed stays on screen either way.
+  function liveRowThatMovesOn(queryClient: QueryClient) {
+    FakeEventSource.instances = [];
+    vi.stubGlobal("EventSource", FakeEventSource);
+    seedCapabilities(queryClient, allAllowed);
+    let current = run({ status: "running", step: "planning" });
+    let logs = [runLog({ name: "plan-3", state: "live" })];
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), current);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/template-runs/run_1")) return jsonResponse(current);
+      if (url.endsWith("/logs")) return jsonResponse(logs);
+      if (url.endsWith("/logs/plan-3")) {
+        return new Response("plan-3 full body", { status: 200, headers: { "content-type": "text/plain" } });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    const moveOn = (next: TemplateRunLog) => {
+      logs = [next];
+      current = run({ status: "failed", step: "planning" });
+      act(() => queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), current));
+    };
+    const bodyFetches = () => fetchMock.mock.calls.filter(([reqInput]) => String(reqInput).endsWith("/logs/plan-3")).length;
+    const listFetches = () => fetchMock.mock.calls.filter(([reqInput]) => String(reqInput).endsWith("/logs")).length;
+    return { moveOn, bodyFetches, listFetches };
+  }
+
+  it("keeps a live log's output when its row turns lost, and says why", async () => {
+    const queryClient = testQueryClient();
+    const { moveOn, bodyFetches } = liveRowThatMovesOn(queryClient);
+
+    renderScreen(queryClient);
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+    act(() => FakeEventSource.instances[0].dispatch("log", { offset: 0, end: 12, data: "Planning...\n" }, "1-0"));
+
+    moveOn(runLog({ name: "plan-3", state: "lost", lost_reason: "executor_gone" }));
+
+    await waitFor(() => expect(screen.getByText("Log lost: the executor stopped")).toBeTruthy());
+    expect(screen.getByTestId("log-scroll-area-plan-3").textContent).toContain("Planning...\n");
+    expect(screen.queryByText("Streaming")).toBeNull();
+    expect(FakeEventSource.instances).toHaveLength(1);
+    expect(bodyFetches()).toBe(0);
+  });
+
+  // Usually the stream carried every byte the stored log holds: the screen
+  // already shows the whole log, so nothing is offered.
+  it("keeps a live log's output when its row turns complete, and offers nothing when the stream carried it all", async () => {
+    const queryClient = testQueryClient();
+    const { moveOn, bodyFetches } = liveRowThatMovesOn(queryClient);
+
+    renderScreen(queryClient);
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+    const source = FakeEventSource.instances[0];
+    act(() => source.dispatch("log", { offset: 0, end: 12, data: "Planning...\n" }, "1-0"));
+
+    moveOn(runLog({ name: "plan-3", size_bytes: 12 }));
+    act(() => source.dispatch("log_end", { state: "complete" }));
+
+    await waitFor(() => expect(screen.queryByText("Streaming")).toBeNull());
+    expect(screen.getByTestId("log-scroll-area-plan-3").textContent).toContain("Planning...\n");
+    expect(screen.queryByRole("button", { name: "Load the full log" })).toBeNull();
+    expect(bodyFetches()).toBe(0);
+  });
+
+  // A stream that missed output, say while Valkey was away, carried fewer
+  // bytes than were stored: the stored log is offered, with why.
+  it("offers the full log once the stream has ended short of what was stored", async () => {
+    const queryClient = testQueryClient();
+    const { moveOn, bodyFetches } = liveRowThatMovesOn(queryClient);
+
+    renderScreen(queryClient);
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+    const source = FakeEventSource.instances[0];
+    act(() => source.dispatch("log", { offset: 0, end: 12, data: "Planning...\n" }, "1-0"));
+
+    moveOn(runLog({ name: "plan-3", size_bytes: 40 }));
+    await waitFor(() => expect(screen.queryByText("Streaming")).toBeNull());
+    // The row is complete, but a last piece may still be on its way.
+    expect(screen.queryByRole("button", { name: "Load the full log" })).toBeNull();
+
+    act(() => source.dispatch("log_end", { state: "complete" }));
+    expect(screen.getByText("Some output didn't stream.")).toBeTruthy();
+    expect(bodyFetches()).toBe(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Load the full log" }));
+    await waitFor(() => expect(screen.getByText("plan-3 full body")).toBeTruthy());
+    expect(bodyFetches()).toBe(1);
+  });
+
+  // A stream can skip bytes, as when Valkey restarts mid-command and the
+  // executor carries on from its own offset: the stream then ends at the
+  // stored size, but what it showed has a hole in it.
+  it("offers the full log when the stream skipped bytes, even if it ended at the stored size", async () => {
+    const queryClient = testQueryClient();
+    const { moveOn, bodyFetches } = liveRowThatMovesOn(queryClient);
+
+    renderScreen(queryClient);
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+    const source = FakeEventSource.instances[0];
+    act(() => source.dispatch("log", { offset: 0, end: 12, data: "Planning...\n" }, "1-0"));
+    act(() => source.dispatch("log", { offset: 30, end: 40, data: "1 to add.\n" }, "2-0"));
+
+    moveOn(runLog({ name: "plan-3", size_bytes: 40 }));
+    act(() => source.dispatch("log_end", { state: "complete" }));
+
+    await waitFor(() => expect(screen.getByText("Some output didn't stream.")).toBeTruthy());
+    expect(screen.getByRole("button", { name: "Load the full log" })).toBeTruthy();
+    expect(bodyFetches()).toBe(0);
+  });
+
+  // The stream can end complete before the list says so. Loading the body
+  // then, and again once the list carries uploaded_at, is one fetch: a
+  // command's log is uploaded once.
+  it("fetches the full log once when the list catches up after it was loaded", async () => {
+    const queryClient = testQueryClient();
+    const { moveOn, bodyFetches, listFetches } = liveRowThatMovesOn(queryClient);
+
+    renderScreen(queryClient);
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+    const source = FakeEventSource.instances[0];
+    act(() => source.dispatch("log", { offset: 0, end: 12, data: "Planning...\n" }, "1-0"));
+    act(() => source.dispatch("log_truncated", {}));
+    act(() => source.dispatch("log_end", { state: "complete" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Load the full log" }));
+    await waitFor(() => expect(screen.getByText("plan-3 full body")).toBeTruthy());
+
+    const listsBefore = listFetches();
+    moveOn(runLog({ name: "plan-3", size_bytes: 40 }));
+    await waitFor(() => expect(listFetches()).toBe(listsBefore + 1));
+    // Give a refetch keyed on the new uploaded_at the chance to start.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+    expect(screen.getByText("plan-3 full body")).toBeTruthy();
+    expect(bodyFetches()).toBe(1);
+  });
+
+  // A truncated stream always falls short, and says why itself. Loading the
+  // stored body replaces the stream, which closes it.
+  it("offers the full log of a truncated stream as soon as its row is complete", async () => {
+    const queryClient = testQueryClient();
+    const { moveOn, bodyFetches } = liveRowThatMovesOn(queryClient);
+
+    renderScreen(queryClient);
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+    const source = FakeEventSource.instances[0];
+    act(() => source.dispatch("log", { offset: 0, end: 12, data: "Planning...\n" }, "1-0"));
+    act(() => source.dispatch("log_truncated", {}));
+
+    moveOn(runLog({ name: "plan-3", size_bytes: 40 }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Load the full log" })).toBeTruthy());
+    expect(screen.queryByText("Some output didn't stream.")).toBeNull();
+    expect(source.closeCalls).toBe(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Load the full log" }));
+    await waitFor(() => expect(screen.getByText("plan-3 full body")).toBeTruthy());
+    expect(bodyFetches()).toBe(1);
+    expect(source.closeCalls).toBe(1);
+  });
+
+  it("closes a live log's stream when its row closes", async () => {
+    FakeEventSource.instances = [];
+    vi.stubGlobal("EventSource", FakeEventSource);
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    const running = run({ status: "running", step: "planning" });
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), running);
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/template-runs/run_1")) return jsonResponse(running);
+      if (url.endsWith("/logs")) return jsonResponse([runLog({ name: "plan-3", state: "live" })]);
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    renderScreen(queryClient);
+
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+    fireEvent.click(screen.getByRole("button", { name: "tofu plan" }));
+    expect(FakeEventSource.instances[0].closeCalls).toBe(1);
+  });
+
+  it("says why a lost log has no body, without asking for one", async () => {
+    FakeEventSource.instances = [];
+    vi.stubGlobal("EventSource", FakeEventSource);
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), run({ status: "failed" }));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/logs")) return jsonResponse([runLog({ name: "plan-3", state: "lost", lost_reason: "upload_failed" })]);
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    renderScreen(queryClient);
+
+    await waitFor(() => expect(screen.getByText("Log lost: the upload failed")).toBeTruthy());
+    expect(fetchMock.mock.calls.some(([reqInput]) => String(reqInput).includes("/logs/"))).toBe(false);
+    expect(FakeEventSource.instances).toHaveLength(0);
+  });
+
+  it("fetches a complete log's body once, and follows no stream for it", async () => {
+    FakeEventSource.instances = [];
+    vi.stubGlobal("EventSource", FakeEventSource);
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), run());
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/logs")) return jsonResponse([runLog({ name: "plan-3" })]);
+      if (url.endsWith("/logs/plan-3")) {
+        return new Response("plan-3 log body", { status: 200, headers: { "content-type": "text/plain" } });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    renderScreen(queryClient);
+
+    await waitFor(() => expect(screen.getByText("plan-3 log body")).toBeTruthy());
+    expect(fetchMock.mock.calls.filter(([reqInput]) => String(reqInput).endsWith("/logs/plan-3"))).toHaveLength(1);
+    expect(FakeEventSource.instances).toHaveLength(0);
   });
 
   // A subject from the identity provider is opaque (Dex's is base64 of a

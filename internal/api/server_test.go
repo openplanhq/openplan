@@ -1769,6 +1769,7 @@ func TestListTemplateRunLogsReturnsMetadata(t *testing.T) {
 			TenantID:    domain.TenantID("tenant_123"),
 			RunID:       domain.TemplateRunID("run_123"),
 			Phase:       "init",
+			State:       domain.TemplateRunLogComplete,
 			ObjectKey:   "tenants/tenant_123/runs/run_123/logs/init.log",
 			ContentType: "text/plain; charset=utf-8",
 			SizeBytes:   12,
@@ -1801,8 +1802,133 @@ func TestListTemplateRunLogsReturnsMetadata(t *testing.T) {
 	if strings.Contains(raw, "object_key") || strings.Contains(raw, `"phase"`) {
 		t.Fatalf("body = %s, want no object_key or phase", raw)
 	}
-	if body[0].SizeBytes != 12 {
-		t.Fatalf("size_bytes = %d, want 12", body[0].SizeBytes)
+	if body[0].SizeBytes == nil || *body[0].SizeBytes != 12 {
+		t.Fatalf("size_bytes = %v, want 12", body[0].SizeBytes)
+	}
+}
+
+func TestListTemplateRunLogsReturnsState(t *testing.T) {
+	t.Parallel()
+
+	deps := newAPITestDependencies(t)
+	deps.templateRuns.run = domain.TemplateRun{
+		ID:       domain.TemplateRunID("run_123"),
+		TenantID: domain.TenantID("tenant_123"),
+		Status:   domain.TemplateRunFailed,
+	}
+	deps.logMetadata.logs = []domain.TemplateRunLog{
+		{
+			TenantID:    domain.TenantID("tenant_123"),
+			RunID:       domain.TemplateRunID("run_123"),
+			Phase:       "plan-1",
+			State:       domain.TemplateRunLogComplete,
+			ObjectKey:   "tenants/tenant_123/runs/run_123/logs/plan-1.log",
+			ContentType: "text/plain; charset=utf-8",
+			SizeBytes:   12,
+			UploadedAt:  time.Date(2026, 7, 6, 10, 15, 0, 0, time.UTC),
+		},
+		{
+			TenantID:   domain.TenantID("tenant_123"),
+			RunID:      domain.TemplateRunID("run_123"),
+			Phase:      "plan-2",
+			State:      domain.TemplateRunLogLost,
+			LostReason: domain.LogLostUploadFailed,
+		},
+	}
+	server := NewServer(deps.service(), configuredTenantID)
+	response := httptest.NewRecorder()
+	request := authenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/template-runs/run_123/logs", nil)
+
+	server.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	body := decodeItems[map[string]json.RawMessage](t, response)
+	if len(body) != 2 {
+		t.Fatalf("len(body) = %d, want 2", len(body))
+	}
+	complete, lost := body[0], body[1]
+	if string(complete["state"]) != `"complete"` {
+		t.Fatalf("complete log state = %s, want \"complete\"", complete["state"])
+	}
+	if _, ok := complete["lost_reason"]; ok {
+		t.Fatalf("complete log has lost_reason %s, want none", complete["lost_reason"])
+	}
+	for _, key := range []string{"content_type", "size_bytes", "uploaded_at"} {
+		if _, ok := complete[key]; !ok {
+			t.Fatalf("complete log has no %s, want one", key)
+		}
+	}
+	if string(lost["state"]) != `"lost"` || string(lost["lost_reason"]) != `"upload_failed"` {
+		t.Fatalf("lost log state = %s/%s, want \"lost\"/\"upload_failed\"", lost["state"], lost["lost_reason"])
+	}
+	// Absent, never null: a log that isn't complete has no upload to describe.
+	for _, key := range []string{"content_type", "size_bytes", "uploaded_at"} {
+		if got, ok := lost[key]; ok {
+			t.Fatalf("lost log has %s %s, want none", key, got)
+		}
+	}
+}
+
+func TestGetTemplateRunLogAnswers409ForALiveLog(t *testing.T) {
+	t.Parallel()
+
+	deps := newAPITestDependencies(t)
+	deps.templateRuns.run = domain.TemplateRun{
+		ID:       domain.TemplateRunID("run_123"),
+		TenantID: domain.TenantID("tenant_123"),
+		Status:   domain.TemplateRunRunning,
+	}
+	deps.logMetadata.log = domain.TemplateRunLog{
+		TenantID: domain.TenantID("tenant_123"),
+		RunID:    domain.TemplateRunID("run_123"),
+		Phase:    "plan-1",
+		State:    domain.TemplateRunLogLive,
+	}
+	server := NewServer(deps.service(), configuredTenantID)
+	response := httptest.NewRecorder()
+	request := authenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/template-runs/run_123/logs/plan-1", nil)
+
+	server.ServeHTTP(response, request)
+
+	if response.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusConflict, response.Body.String())
+	}
+	body := decodeProblem(t, response)
+	if body.Type != problemTypeURI("log-live") {
+		t.Fatalf("type = %q, want %q", body.Type, problemTypeURI("log-live"))
+	}
+}
+
+func TestGetTemplateRunLogAnswers404ForALostLog(t *testing.T) {
+	t.Parallel()
+
+	deps := newAPITestDependencies(t)
+	deps.templateRuns.run = domain.TemplateRun{
+		ID:       domain.TemplateRunID("run_123"),
+		TenantID: domain.TenantID("tenant_123"),
+		Status:   domain.TemplateRunCompleted,
+	}
+	// Live in the store, but its run is over: lost.
+	deps.logMetadata.log = domain.TemplateRunLog{
+		TenantID: domain.TenantID("tenant_123"),
+		RunID:    domain.TemplateRunID("run_123"),
+		Phase:    "plan-1",
+		State:    domain.TemplateRunLogLive,
+	}
+	server := NewServer(deps.service(), configuredTenantID)
+	response := httptest.NewRecorder()
+	request := authenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/template-runs/run_123/logs/plan-1", nil)
+
+	server.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusNotFound, response.Body.String())
+	}
+	body := decodeProblem(t, response)
+	if body.Type != problemTypeURI("log-lost") {
+		t.Fatalf("type = %q, want %q", body.Type, problemTypeURI("log-lost"))
 	}
 }
 
@@ -3586,7 +3712,12 @@ func (reader *recordingTemplateRunLogReader) ReadTemplateRunLog(_ context.Contex
 }
 
 type recordingTemplateRunLogRepository struct {
-	log             domain.TemplateRunLog
+	log domain.TemplateRunLog
+	// thenLog, when set, answers every Get after the first, as a row that
+	// changed while a stream was open; the first thenErrs of those fail.
+	thenLog         *domain.TemplateRunLog
+	thenErrs        int
+	getCalls        int
 	logs            []domain.TemplateRunLog
 	gotGetTenantID  domain.TenantID
 	gotGetRunID     domain.TemplateRunID
@@ -3601,8 +3732,16 @@ func (repository *recordingTemplateRunLogRepository) GetTemplateRunLog(_ context
 	repository.gotGetTenantID = tenantID
 	repository.gotGetRunID = runID
 	repository.gotGetPhase = phase
+	repository.getCalls++
 	if repository.getErr != nil {
 		return domain.TemplateRunLog{}, repository.getErr
+	}
+	if repository.thenLog != nil && repository.getCalls > 1 {
+		if repository.thenErrs > 0 {
+			repository.thenErrs--
+			return domain.TemplateRunLog{}, errors.New("database unavailable")
+		}
+		return *repository.thenLog, nil
 	}
 	return repository.log, nil
 }

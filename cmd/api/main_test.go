@@ -16,15 +16,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/openfga/openfga/pkg/storage/memory"
+	"github.com/redis/go-redis/v9"
 	"github.com/vishu42/openplan/internal/app"
 	"github.com/vishu42/openplan/internal/authentication"
 
 	"github.com/vishu42/openplan/internal/activities"
+	"github.com/vishu42/openplan/internal/api"
 	"github.com/vishu42/openplan/internal/authorization"
 	"github.com/vishu42/openplan/internal/config"
 	"github.com/vishu42/openplan/internal/domain"
 	"github.com/vishu42/openplan/internal/encryption"
+	"github.com/vishu42/openplan/internal/logsink"
 	"github.com/vishu42/openplan/internal/queue"
 	"github.com/vishu42/openplan/internal/temporal"
 	"go.temporal.io/sdk/activity"
@@ -199,6 +203,29 @@ func TestRunWiresControlPlane(t *testing.T) {
 	if deps.gitHubTokens != nil {
 		t.Fatalf("GitHub token source = %#v, want nil when no App is configured", deps.gitHubTokens)
 	}
+	if deps.liveLogURL != "redis://localhost:6379" {
+		t.Fatalf("dialLiveLogs got %q, want VALKEY_URL", deps.liveLogURL)
+	}
+	if deps.registeredLive != logsink.Stream(deps.liveLogs) {
+		t.Fatal("control activities did not get the client dialLiveLogs returned")
+	}
+	if err := deps.liveLogs.Ping(context.Background()).Err(); !errors.Is(err, redis.ErrClosed) {
+		t.Fatalf("live log client ping = %v, want it closed on shutdown", err)
+	}
+	// The registry's tailers pin connections; on the control plane's client
+	// they could starve the activity that ends each log's stream.
+	if deps.liveLogReaderURL != "redis://localhost:6379" {
+		t.Fatalf("dialLiveLogReaders got %q, want VALKEY_URL", deps.liveLogReaderURL)
+	}
+	if deps.subscriberReader != logsink.Reader(deps.liveLogReaders) {
+		t.Fatal("the live log registry did not get the client dialLiveLogReaders returned")
+	}
+	if deps.liveLogReaders == deps.liveLogs {
+		t.Fatal("the live log registry shares the control plane's client")
+	}
+	if err := deps.liveLogReaders.Ping(context.Background()).Err(); !errors.Is(err, redis.ErrClosed) {
+		t.Fatalf("live log reader client ping = %v, want it closed on shutdown", err)
+	}
 	if deps.queueControllerStore != controlStore(deps.store) {
 		t.Fatal("queue controller was not wired with the store")
 	}
@@ -232,11 +259,32 @@ func TestRunWrapsTemporalDialFailure(t *testing.T) {
 	}
 }
 
+// An API that cannot end a log's live stream would leave its viewers waiting
+// on a command that already finished, so it does not start at all.
+func TestRunFailsWhenValkeyIsUnreachable(t *testing.T) {
+	t.Parallel()
+
+	dialErr := errors.New("ping live log server localhost:6379: connection refused")
+	deps := newRecordingAPIDependencies(t)
+	deps.liveLogsErr = dialErr
+
+	err := runWithDependencies(context.Background(), apiTestEnv, deps.apiDependencies)
+	if !errors.Is(err, dialErr) || !strings.Contains(err.Error(), "live logs") {
+		t.Fatalf("error = %v, want dialErr wrapped as live logs", err)
+	}
+	if deps.temporalDialed {
+		t.Fatal("dialed Temporal, want start to stop before the control worker")
+	}
+	if deps.serverHandler != nil {
+		t.Fatal("API served without live logs")
+	}
+}
+
 func TestRegisterControlRegistersWorkflowsAndControlActivities(t *testing.T) {
 	t.Parallel()
 
 	worker := &recordingControlWorker{}
-	registerControl(worker, &recordingStore{}, nil)
+	registerControl(worker, &recordingStore{}, nil, nil)
 
 	wantWorkflows := map[string]bool{
 		domain.TemplatePlanWorkflowName:  true,
@@ -457,6 +505,12 @@ func TestRunMigratesRealPostgresWhenDSNIsSet(t *testing.T) {
 	deps.dialTemporal = func(context.Context, temporal.Config) (client.Client, error) {
 		return &recordingAPITemporalClient{}, nil
 	}
+	// Nor Valkey, which the control activities only write to once a run ends.
+	liveLogServer := miniredis.RunT(t)
+	deps.dialLiveLogs = func(context.Context, string) (*redis.Client, error) {
+		return redis.NewClient(&redis.Options{Addr: liveLogServer.Addr()}), nil
+	}
+	deps.dialLiveLogReaders = deps.dialLiveLogs
 	deps.newWorker = func(client.Client, string, temporalworker.Options) temporalWorker {
 		return &recordingControlWorker{}
 	}
@@ -549,6 +603,7 @@ func apiTestValues() map[string]string {
 		"DATABASE_URL":                   "postgres://user:pass@localhost:5432/db?sslmode=disable",
 		"HTTP_ADDRESS":                   ":9090",
 		"TEMPORAL_ADDRESS":               "localhost:7233",
+		"VALKEY_URL":                     "redis://localhost:6379",
 		"TEMPORAL_NAMESPACE":             "openplan",
 		"ARTIFACT_STORE_KIND":            "filesystem",
 		"ARTIFACT_STORE_FILESYSTEM_ROOT": "/var/lib/openplan/artifacts",
@@ -602,6 +657,19 @@ type recordingAPIDependencies struct {
 	queueController           *recordingAPIQueueController
 	queueControllerStore      controlStore
 	queueControllerDispatcher app.WorkflowDispatcher
+	temporalDialed            bool
+	registeredLive            logsink.Stream
+	// liveLogs and liveLogsErr are what dialLiveLogs returns, and
+	// liveLogURL what it was given.
+	liveLogs    *redis.Client
+	liveLogsErr error
+	liveLogURL  string
+	// liveLogReaders is what dialLiveLogReaders returns, and
+	// liveLogReaderURL what it was given; subscriberReader is what the
+	// registry was built on.
+	liveLogReaders   *redis.Client
+	liveLogReaderURL string
+	subscriberReader logsink.Reader
 }
 
 func newRecordingAPIDependencies(t *testing.T) *recordingAPIDependencies {
@@ -614,6 +682,11 @@ func newRecordingAPIDependencies(t *testing.T) *recordingAPIDependencies {
 		worker:          &recordingControlWorker{},
 		queueController: &recordingAPIQueueController{},
 	}
+	server := miniredis.RunT(t)
+	deps.liveLogs = redis.NewClient(&redis.Options{Addr: server.Addr()})
+	t.Cleanup(func() { _ = deps.liveLogs.Close() })
+	deps.liveLogReaders = redis.NewClient(&redis.Options{Addr: server.Addr()})
+	t.Cleanup(func() { _ = deps.liveLogReaders.Close() })
 	deps.apiDependencies = apiDependencies{
 		newPostgresPool: func(_ context.Context, databaseURL string) (postgresPool, error) {
 			deps.pool.databaseURL = databaseURL
@@ -662,7 +735,23 @@ func newRecordingAPIDependencies(t *testing.T) *recordingAPIDependencies {
 			deps.serverHandler = handler
 			return deps.serverErr
 		},
+		dialLiveLogs: func(_ context.Context, url string) (*redis.Client, error) {
+			deps.liveLogURL = url
+			if deps.liveLogsErr != nil {
+				return nil, deps.liveLogsErr
+			}
+			return deps.liveLogs, nil
+		},
+		dialLiveLogReaders: func(_ context.Context, url string) (*redis.Client, error) {
+			deps.liveLogReaderURL = url
+			return deps.liveLogReaders, nil
+		},
+		newLiveLogSubscriber: func(reader logsink.Reader) api.LiveLogSubscriber {
+			deps.subscriberReader = reader
+			return logsink.NewRegistry(reader)
+		},
 		dialTemporal: func(_ context.Context, cfg temporal.Config) (client.Client, error) {
+			deps.temporalDialed = true
 			deps.temporalConfig = cfg
 			if deps.dialErr != nil {
 				return nil, deps.dialErr
@@ -685,9 +774,10 @@ func newRecordingAPIDependencies(t *testing.T) *recordingAPIDependencies {
 			deps.queueControllerDispatcher = dispatcher
 			return deps.queueController, nil
 		},
-		registerControl: func(worker temporalWorker, store controlStore, gitHubTokens activities.GitHubTokenSource) {
+		registerControl: func(worker temporalWorker, store controlStore, gitHubTokens activities.GitHubTokenSource, live logsink.Stream) {
 			deps.registeredControlStore = store
 			deps.gitHubTokens = gitHubTokens
+			deps.registeredLive = live
 		},
 	}
 	auth, err := authorization.NewWithDatastore(context.Background(), memory.New(), "openplan-test")

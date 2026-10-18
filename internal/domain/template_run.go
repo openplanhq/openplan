@@ -307,7 +307,53 @@ type TemplateRun struct {
 	Executions []TemplateRunWorkflowExecution `json:"executions,omitzero"`
 }
 
-// TemplateRunLog records the object-store location for one run phase log.
+// TemplateRunLogState is where a run log's output lives. A log exists from
+// the moment its command starts, before any of its output is uploaded.
+type TemplateRunLogState string
+
+const (
+	// TemplateRunLogLive is a command still running: its output is not in
+	// the object store yet.
+	TemplateRunLogLive TemplateRunLogState = "live"
+	// TemplateRunLogComplete is a log whose output is in the object store.
+	TemplateRunLogComplete TemplateRunLogState = "complete"
+	// TemplateRunLogLost is a log whose output will never reach the object
+	// store; LostReason says why.
+	TemplateRunLogLost TemplateRunLogState = "lost"
+)
+
+// Valid reports whether state is one the store accepts.
+func (state TemplateRunLogState) Valid() bool {
+	switch state {
+	case TemplateRunLogLive, TemplateRunLogComplete, TemplateRunLogLost:
+		return true
+	default:
+		return false
+	}
+}
+
+// TemplateRunLogLostReason is why a lost log's output never reached the
+// object store.
+type TemplateRunLogLostReason string
+
+const (
+	// LogLostUploadFailed is a command that finished but whose upload kept
+	// failing.
+	LogLostUploadFailed TemplateRunLogLostReason = "upload_failed"
+	// LogLostExecutorGone is a command whose executor stopped answering
+	// before its output was uploaded.
+	LogLostExecutorGone TemplateRunLogLostReason = "executor_gone"
+	// LogLostRunTerminated is a log still live after its run was canceled:
+	// the workflow was stopped mid-command, so nothing recorded the log.
+	LogLostRunTerminated TemplateRunLogLostReason = "run_terminated"
+	// LogLostRecordFailed is a log still live after its run completed or
+	// failed: the run's commands ran to the end, so the workflow reached the
+	// log's final record and could not write it.
+	LogLostRecordFailed TemplateRunLogLostReason = "record_failed"
+)
+
+// TemplateRunLog is one command's log within a run: where its output lives
+// and, once uploaded, its object-store location.
 type TemplateRunLog struct {
 	TenantID TenantID      `json:"tenant_id"`
 	RunID    TemplateRunID `json:"run_id"`
@@ -320,9 +366,15 @@ type TemplateRunLog struct {
 	RunPhase RunPhase             `json:"run_phase"`
 	Seq      int                  `json:"seq"`
 	Command  TerraformCommandType `json:"command"`
+	// State is where the output lives. LostReason is set only when State is
+	// lost.
+	State      TemplateRunLogState      `json:"state"`
+	LostReason TemplateRunLogLostReason `json:"lost_reason,omitempty"`
 	// CommandLine is Command as people read it. Derived when the log is
 	// read, never stored, so it follows what the executor runs.
-	CommandLine string    `json:"command_line"`
+	CommandLine string `json:"command_line"`
+	// The object fields are zero unless State is complete: there is nothing
+	// in the object store to describe before then.
 	ObjectKey   string    `json:"object_key"`
 	ContentType string    `json:"content_type"`
 	SizeBytes   int64     `json:"size_bytes"`

@@ -1137,16 +1137,17 @@ paths:
       - $ref: "#/components/parameters/RunID"
     get:
       tags: [Runs]
-      summary: List a run's persisted logs
+      summary: List a run's logs
       description: |
-        Metadata for each Terraform command that has finished, in the order
+        Metadata for each Terraform command that has started, in the order
         they ran: the plan's logs, then the apply's, each by `seq` — not the
-        output itself. Fetch a body from the per-log endpoint by the log's
-        `name`.
+        output itself. Each entry's `state` says whether its body can be
+        read yet. Fetch a `complete` log's body from the per-log endpoint by
+        the log's `name`.
       operationId: listTemplateRunLogs
       responses:
         "200":
-          description: One entry per finished command.
+          description: One entry per started command.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/TemplateRunLogList" }
@@ -1171,9 +1172,10 @@ paths:
       tags: [Runs]
       summary: Read one log's body
       description: |
-        Returns the raw Terraform output as `text/plain`, not JSON. A log
-        that has not been recorded yet, or a name that isn't a log name,
-        returns `404`.
+        Returns the raw Terraform output as `text/plain`, not JSON. Only a
+        log whose `state` is `complete` has a body: a `live` one returns
+        `409 log-live`, a `lost` one `404 log-lost`. A log that has not
+        started yet, or a name that isn't a log name, returns `404`.
       operationId: getTemplateRunLog
       responses:
         "200":
@@ -1183,8 +1185,100 @@ paths:
               schema: { type: string }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: |
+            No such log, or one the caller can't see (`about:blank`); or the
+            log's output was not stored (`log-lost`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "409":
+          description: |
+            The command is still running, so its output isn't stored yet
+            (`log-live`). Try again when the log is `complete`.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{name}/events:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/RunID"
+      - name: name
+        in: path
+        required: true
+        description: The log's name, such as `plan-1`, as for its body.
+        schema: { $ref: "#/components/schemas/LogName" }
+      - name: Last-Event-ID
+        in: header
+        required: false
+        description: |
+          The `id` of the last `log` event the client has. The stream starts
+          after it instead of from the log's first byte, and sends none of the
+          bytes that event already carried. A browser's `EventSource` sends it
+          on its own when it reconnects.
+        schema: { type: string, example: "1760720000000-0" }
+    get:
+      tags: [Runs]
+      summary: Follow one log live
+      description: |
+        Streams a running command's output as server-sent events
+        (`text/event-stream`), for a browser's `EventSource`. The stream
+        replays the output so far, then follows it as the command writes,
+        and ends with one `log_end` event. Three event types, each with a
+        JSON `data` line:
+
+        - `log`: the next bytes of output. `data` is
+          `{"offset": <n>, "end": <m>, "data": "<text>"}`: `offset` is the
+          first byte's position in the log, `end` the position after the
+          last, counted on the raw bytes, and `text` is the bytes as UTF-8,
+          with any invalid sequence replaced by U+FFFD. Events follow one
+          another without gaps or overlaps, across reconnects too, so a
+          client appends each `text` as it arrives. The event's `id` is what
+          to send back as `Last-Event-ID`.
+        - `log_truncated`: the output outgrew what is streamed live, and no
+          more `log` events follow. `data` is `{}`. Read the rest from the
+          log's body once it is `complete`.
+        - `log_end`: the last event. `data` is `{"state": "<state>"}`:
+          `complete` (read the whole body from the log's body endpoint),
+          `lost` (the output was not stored), or `live` (the command is still
+          running, but this stream stopped following it: reconnect with
+          `Last-Event-ID`). A stream that could not follow the log at all,
+          because the server's live log store failed or this server is
+          following as many logs as it can, sends `retry: 3000` before its
+          `log_end` `live`, so `EventSource` waits three seconds.
+
+        A log that is not `live` when the request arrives gets its
+        `log_end` straight away. While the command prints nothing, the
+        stream carries no event, only a comment line every 20 seconds.
+      operationId: streamTemplateRunLog
+      responses:
+        "200":
+          description: The log's events, until its `log_end`.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              example: |
+                event: log
+                id: 1760720000000-0
+                data: {"offset":0,"end":28,"data":"Initializing the backend...\n"}
+
+                event: log_end
+                data: {"state":"complete"}
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
+        "503":
+          description: |
+            Live logs aren't configured for this deployment
+            (`live-logs-unavailable`). The log's body can be read once it is
+            `complete`.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
 
   /v1/tenants/{tenant_id}/template-runs/{run_id}/approve:
     parameters:
@@ -1701,8 +1795,11 @@ components:
             - https://openplan.run/problems/duplicate-component-key
             - https://openplan.run/problems/duplicate-credential-name
             - https://openplan.run/problems/last-owner
+            - https://openplan.run/problems/log-live
+            - https://openplan.run/problems/log-lost
             - https://openplan.run/problems/credential-encryption-unavailable
             - https://openplan.run/problems/queue-unavailable
+            - https://openplan.run/problems/live-logs-unavailable
         title:
           type: string
           description: |
@@ -2457,7 +2554,8 @@ components:
     TemplateRunLog:
       type: object
       description: |
-        Where one command's output is stored. Read the body from
+        One command's log, from the moment the command starts. Once its
+        `state` is `complete`, read the body from
         `GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{name}`,
         with this entry's `name`.
       properties:
@@ -2486,12 +2584,41 @@ components:
             `tofu plan -destroy`: the binary and subcommand that ran, without
             the arguments. A destroy's second step reads `tofu apply`, since
             it applies the saved destroy plan.
-        content_type: { type: string }
-        size_bytes: { type: integer, format: int64 }
-        uploaded_at: { type: string, format: date-time }
+        state:
+          type: string
+          enum: [live, complete, lost]
+          description: |
+            Where the output is. `live` — the command is still running and
+            its output isn't stored yet. `complete` — the output is stored;
+            read the body. `lost` — the output will never be stored;
+            `lost_reason` says why.
+        lost_reason:
+          type: string
+          enum: [upload_failed, executor_gone, run_terminated, record_failed]
+          description: |
+            Present only when `state` is `lost`. `upload_failed` — the
+            command finished but its output couldn't be stored.
+            `executor_gone` — the executor stopped answering before the
+            output was stored. `run_terminated` — the run was canceled
+            while the log was still live. `record_failed` — the run
+            completed or failed while the log was still live, so its final
+            record was never written. The last two derive from the run's
+            status, so a run whose workflow was terminated outside openplan,
+            which keeps its status today, reports neither.
+        content_type:
+          type: string
+          description: Present only when `state` is `complete`.
+        size_bytes:
+          type: integer
+          format: int64
+          description: Present only when `state` is `complete`.
+        uploaded_at:
+          type: string
+          format: date-time
+          description: Present only when `state` is `complete`.
       required:
         [tenant_id, run_id, name, run_phase, seq, command, command_line,
-         content_type, size_bytes, uploaded_at]
+         state]
 
     TerraformCommand:
       type: string

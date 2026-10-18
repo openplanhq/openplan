@@ -1,9 +1,10 @@
 $kind: http-request
 description: |-
-  Metadata for each Terraform command that has finished, in the order
+  Metadata for each Terraform command that has started, in the order
   they ran: the plan's logs, then the apply's, each by `seq` — not the
-  output itself. Fetch a body from the per-log endpoint by the log's
-  `name`.
+  output itself. Each entry's `state` says whether its body can be
+  read yet. Fetch a `complete` log's body from the per-log endpoint by
+  the log's `name`.
 
   Saves the first log's name, which the log-body request reads by.
 method: GET

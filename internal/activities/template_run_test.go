@@ -14,8 +14,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
+
 	"github.com/vishu42/openplan/internal/domain"
 	"github.com/vishu42/openplan/internal/githubapp"
+	"github.com/vishu42/openplan/internal/logsink"
 	gitrunner "github.com/vishu42/openplan/internal/runner"
 	"github.com/vishu42/openplan/internal/runseal"
 )
@@ -24,7 +28,7 @@ func TestRecordTemplateRunStatusDelegatesToRecorder(t *testing.T) {
 	t.Parallel()
 
 	recorder := &recordingStatusRecorder{}
-	activities := NewControlActivities(&controlStoreStub{status: recorder}, nil)
+	activities := NewControlActivities(&controlStoreStub{status: recorder}, nil, nil)
 	input := domain.TemplateRunStatusActivityInput{
 		RunID:           domain.TemplateRunID("run_123"),
 		TenantID:        domain.TenantID("tenant_123"),
@@ -46,7 +50,7 @@ func TestRecordTemplateRunStatusWrapsRecorderError(t *testing.T) {
 	t.Parallel()
 
 	recorderErr := errors.New("database unavailable")
-	activities := NewControlActivities(&controlStoreStub{status: &recordingStatusRecorder{err: recorderErr}}, nil)
+	activities := NewControlActivities(&controlStoreStub{status: &recordingStatusRecorder{err: recorderErr}}, nil, nil)
 
 	err := activities.RecordTemplateRunStatus(context.Background(), domain.TemplateRunStatusActivityInput{
 		RunID:    domain.TemplateRunID("run_123"),
@@ -275,10 +279,12 @@ func TestRecordTemplateRunLogDelegatesToRecorder(t *testing.T) {
 	recorder := &recordingLogMetadataRecorder{}
 	log := domain.TemplateRunLog{
 		TenantID: "tenant_123", RunID: "run_123", Phase: "plan-3", RunPhase: domain.RunPhasePlan, Seq: 3, Command: domain.TerraformCommandPlan,
-		ObjectKey: "tenants/tenant_123/runs/run_123/logs/plan-3.log",
+		State:     domain.TemplateRunLogComplete,
+		ObjectKey: "tenants/tenant_123/runs/run_123/logs/plan-3.log", ContentType: "text/plain; charset=utf-8",
+		UploadedAt: time.Date(2026, 10, 17, 9, 0, 0, 0, time.UTC),
 	}
 
-	if err := NewControlActivities(&controlStoreStub{logs: recorder}, nil).RecordTemplateRunLog(context.Background(), log); err != nil {
+	if err := NewControlActivities(&controlStoreStub{logs: recorder}, nil, nil).RecordTemplateRunLog(context.Background(), log); err != nil {
 		t.Fatalf("RecordTemplateRunLog returned error: %v", err)
 	}
 	if recorder.log != log {
@@ -289,7 +295,7 @@ func TestRecordTemplateRunLogDelegatesToRecorder(t *testing.T) {
 	// points at, so the key recorded is the one derived from the run and name.
 	forged := log
 	forged.ObjectKey = "tenants/tenant_victim/runs/run_victim/logs/plan-3.log"
-	if err := NewControlActivities(&controlStoreStub{logs: recorder}, nil).RecordTemplateRunLog(context.Background(), forged); err != nil {
+	if err := NewControlActivities(&controlStoreStub{logs: recorder}, nil, nil).RecordTemplateRunLog(context.Background(), forged); err != nil {
 		t.Fatalf("RecordTemplateRunLog returned error: %v", err)
 	}
 	if recorder.log.ObjectKey != log.ObjectKey {
@@ -299,7 +305,7 @@ func TestRecordTemplateRunLogDelegatesToRecorder(t *testing.T) {
 	// The name and key follow the phase and number, whatever name came in.
 	renamed := log
 	renamed.Phase = "../plan"
-	if err := NewControlActivities(&controlStoreStub{logs: recorder}, nil).RecordTemplateRunLog(context.Background(), renamed); err != nil {
+	if err := NewControlActivities(&controlStoreStub{logs: recorder}, nil, nil).RecordTemplateRunLog(context.Background(), renamed); err != nil {
 		t.Fatalf("RecordTemplateRunLog returned error: %v", err)
 	}
 	if recorder.log.Phase != "plan-3" || recorder.log.ObjectKey != log.ObjectKey {
@@ -308,18 +314,18 @@ func TestRecordTemplateRunLogDelegatesToRecorder(t *testing.T) {
 
 	unnumbered := log
 	unnumbered.Seq = 0
-	if err := NewControlActivities(&controlStoreStub{logs: recorder}, nil).RecordTemplateRunLog(context.Background(), unnumbered); err == nil {
+	if err := NewControlActivities(&controlStoreStub{logs: recorder}, nil, nil).RecordTemplateRunLog(context.Background(), unnumbered); err == nil {
 		t.Fatal("RecordTemplateRunLog accepted a log with no number")
 	}
 
 	unknown := log
 	unknown.Command = "refresh"
-	if err := NewControlActivities(&controlStoreStub{logs: recorder}, nil).RecordTemplateRunLog(context.Background(), unknown); err == nil {
+	if err := NewControlActivities(&controlStoreStub{logs: recorder}, nil, nil).RecordTemplateRunLog(context.Background(), unknown); err == nil {
 		t.Fatal("RecordTemplateRunLog accepted an unknown command")
 	}
 
 	recorder.err = errors.New("database unavailable")
-	err := NewControlActivities(&controlStoreStub{logs: recorder}, nil).RecordTemplateRunLog(context.Background(), log)
+	err := NewControlActivities(&controlStoreStub{logs: recorder}, nil, nil).RecordTemplateRunLog(context.Background(), log)
 	if !errors.Is(err, recorder.err) || !strings.Contains(err.Error(), "record template run log metadata") {
 		t.Fatalf("error = %v, want wrapped recorder error", err)
 	}
@@ -345,6 +351,66 @@ func TestRunTerraformWritesCommandLogFile(t *testing.T) {
 	}
 	if !reflect.DeepEqual(executor.env, []string{"TF_VAR_region=us-east-1"}) {
 		t.Fatalf("env = %#v, want TF_VAR_region", executor.env)
+	}
+}
+
+// A failed command is published too: its last lines are usually the ones
+// that say why it failed.
+func TestRunTerraformPublishesTheSpoolLive(t *testing.T) {
+	t.Parallel()
+
+	for name, commandErr := range map[string]error{
+		"succeeded": nil,
+		"failed":    errors.New("exit status 1"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			server := miniredis.RunT(t)
+			client := redis.NewClient(&redis.Options{Addr: server.Addr()})
+			t.Cleanup(func() { _ = client.Close() })
+			activities, workspace := newTestTerraform(t, &recordingCommandExecutor{stdout: "hello\n", err: commandErr})
+			activities.WithLiveLogs(client)
+			input := planInput(workspace)
+			input.LogName = "plan-1"
+
+			if _, err := activities.RunTerraform(context.Background(), input); (err != nil) != (commandErr != nil) {
+				t.Fatalf("RunTerraform error = %v, want one only if the command failed", err)
+			}
+
+			// The command ends well inside a flush interval: what is in the
+			// stream is the final flush's, made before RunTerraform returned.
+			messages, err := client.XRange(context.Background(), "runlog:{run_123}:plan-1", "-", "+").Result()
+			if err != nil {
+				t.Fatalf("XRANGE: %v", err)
+			}
+			if len(messages) != 1 {
+				t.Fatalf("stream holds %d entries, want 1", len(messages))
+			}
+			entry, err := logsink.ParseEntry(messages[0])
+			if err != nil {
+				t.Fatalf("ParseEntry: %v", err)
+			}
+			if entry.Kind != logsink.KindPiece || entry.Offset != 0 || string(entry.Data) != "hello\n" {
+				t.Fatalf("entry = %+v, want a piece at 0 of %q", entry, "hello\n")
+			}
+		})
+	}
+}
+
+func TestRunTerraformWithoutLiveLogsStillSpools(t *testing.T) {
+	t.Parallel()
+
+	activities, workspace := newTestTerraform(t, &recordingCommandExecutor{stdout: "hello\n"})
+	activities.WithLiveLogs(nil)
+	input := planInput(workspace)
+	input.LogName = "plan-1"
+
+	if _, err := activities.RunTerraform(context.Background(), input); err != nil {
+		t.Fatalf("RunTerraform returned error: %v", err)
+	}
+	if got := runLog(t, workspace, "plan-1.log"); got != "hello\n" {
+		t.Fatalf("plan-1 log = %q, want %q", got, "hello\n")
 	}
 }
 
@@ -678,7 +744,7 @@ func fetchWithSealedToken(t *testing.T, tokens GitHubTokenSource, git *fakeGit, 
 	if err != nil {
 		t.Fatalf("PrepareWorkspace returned error: %v", err)
 	}
-	sealed, err := NewControlActivities(nil, tokens).SealSourceToken(context.Background(), domain.SealSourceTokenActivityInput{
+	sealed, err := NewControlActivities(nil, tokens, nil).SealSourceToken(context.Background(), domain.SealSourceTokenActivityInput{
 		RepoOwner: owner,
 		RepoName:  repo,
 		PublicKey: workspace.PublicKey,
@@ -819,7 +885,7 @@ func TestRunCredentialsRoundTripThroughTheRunKey(t *testing.T) {
 	store := &controlStoreStub{credentials: []domain.CredentialSet{
 		{StackID: "stack_123", Name: "AWS_SECRET_ACCESS_KEY", Ciphertext: "canary-7f3a"},
 	}}
-	sealed, err := NewControlActivities(store, nil).SealRunCredentials(context.Background(), domain.SealRunCredentialsActivityInput{
+	sealed, err := NewControlActivities(store, nil, nil).SealRunCredentials(context.Background(), domain.SealRunCredentialsActivityInput{
 		TenantID:        "tenant_123",
 		StackTemplateID: "stack_template_123",
 		PublicKey:       publicKey,
@@ -945,7 +1011,7 @@ func TestRecordTemplateRunStepDelegatesToTheStore(t *testing.T) {
 	store := &controlStoreStub{}
 	input := domain.TemplateRunStepActivityInput{TenantID: "tenant_123", RunID: "run_123", Step: domain.TemplateRunStepFetchingSource}
 
-	if err := NewControlActivities(store, nil).RecordTemplateRunStep(context.Background(), input); err != nil {
+	if err := NewControlActivities(store, nil, nil).RecordTemplateRunStep(context.Background(), input); err != nil {
 		t.Fatalf("RecordTemplateRunStep returned error: %v", err)
 	}
 	if store.step != input {
@@ -963,7 +1029,7 @@ func TestRecordTemplateRunEventDelegatesToTheStore(t *testing.T) {
 		Operation: domain.OperationApply, Event: domain.TemplateRunApplied,
 	}
 
-	err := NewControlActivities(store, nil).RecordTemplateRunEvent(context.Background(), input)
+	err := NewControlActivities(store, nil, nil).RecordTemplateRunEvent(context.Background(), input)
 	if !errors.Is(err, storeErr) || !strings.Contains(err.Error(), "record template run event") {
 		t.Fatalf("error = %v, want the store's error with event context", err)
 	}

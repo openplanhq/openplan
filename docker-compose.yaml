@@ -75,6 +75,75 @@ services:
       retries: 12
     restart: on-failure
 
+  # Carries a running command's output from the executor to the api; see
+  # "Logs" in docs/architecture.md. Required: neither starts without it.
+  #
+  # Nothing stored is rebuilt from it, so it keeps no data on disk. noeviction
+  # because an evicted stream would look like a log that never ends: a full
+  # Valkey refuses new output instead.
+  #
+  # Each process signs in as its own user, so every local run exercises the
+  # executor's write-only user. The executor can append to a log stream and set
+  # its expiry, and cannot read one. The api also reads (XREAD to follow,
+  # XRANGE to catch up, XREVRANGE for a stream's last entry) and appends the end
+  # entry. The default user is off, so nothing connects without a password.
+  #
+  # Beyond signing in, each user may only PING (startup checks the server
+  # with it), not the rest of @connection: CLIENT KILL, SELECT and the like
+  # are no business of either process.
+  #
+  # The users are defined here, one --user per rule with each word its own
+  # argument, rather than in an ACL file, so their passwords come from the same
+  # variables as the URLs below and cannot drift apart. The defaults are local
+  # throwaways. A password must avoid spaces, being one word of a rule, and the
+  # URL-reserved characters @ / : % #, being part of a URL.
+  valkey:
+    image: valkey/valkey:8-alpine
+    command:
+      - valkey-server
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - noeviction
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --user
+      - default
+      - "off"
+      - --user
+      - api
+      - "on"
+      - ">${VALKEY_API_PASSWORD:-api-local-only}"
+      - "~runlog:*"
+      - +ping
+      - +xread
+      - +xrange
+      - +xrevrange
+      - +xadd
+      - +expire
+      - --user
+      - executor
+      - "on"
+      - ">${VALKEY_EXECUTOR_PASSWORD:-executor-local-only}"
+      - "~runlog:*"
+      - +ping
+      - +xadd
+      - +expire
+    # For an api or executor run on the host. 56379, not 6379, so a Valkey or
+    # Redis already on the host keeps its port, as postgres does with 55432.
+    # Loopback only: the passwords are throwaways.
+    ports:
+      - "127.0.0.1:56379:6379"
+    healthcheck:
+      # --no-auth-warning keeps valkey-cli's warning about a password on the
+      # command line out of every health check's output.
+      test: ["CMD", "valkey-cli", "--no-auth-warning", "--user", "api", "--pass", "${VALKEY_API_PASSWORD:-api-local-only}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   temporal:
     image: temporalio/auto-setup:1.28.1
     depends_on:
@@ -159,9 +228,12 @@ services:
       # issuer is a boot failure.
       dex:
         condition: service_healthy
+      valkey:
+        condition: service_healthy
     environment:
       HTTP_ADDRESS: ":8081"
       DATABASE_URL: postgres://${APP_DB_USER:-openplan}:${APP_DB_PASSWORD:-openplan}@postgres:5432/${APP_DB_NAME:-openplan_test}?sslmode=disable
+      VALKEY_URL: redis://api:${VALKEY_API_PASSWORD:-api-local-only}@valkey:6379/0
       TEMPORAL_ADDRESS: temporal:7233
       OPENPLAN_ENVIRONMENT: development
       OPENPLAN_TENANT_ID: ${OPENPLAN_TENANT_ID:-tenant_123}
@@ -210,8 +282,14 @@ services:
     depends_on:
       temporal:
         condition: service_healthy
+      valkey:
+        condition: service_healthy
     environment:
       TEMPORAL_ADDRESS: temporal:7233
+      # Its one new route outside Temporal, for live output only. The user can
+      # append to log streams and set their expiry, and cannot read one; tofu's
+      # sandbox never sees this variable.
+      VALKEY_URL: redis://executor:${VALKEY_EXECUTOR_PASSWORD:-executor-local-only}@valkey:6379/0
       ARTIFACT_STORE_KIND: filesystem
       ARTIFACT_STORE_FILESYSTEM_ROOT: /var/lib/openplan/artifacts
       EXECUTOR_RUN_ROOT: /var/lib/openplan/runs

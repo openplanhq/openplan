@@ -2475,6 +2475,190 @@ func TestListTemplateRunLogsChecksRunOwnershipBeforeListingMetadata(t *testing.T
 	}
 }
 
+// logStateService serves one run of the given status whose log store holds
+// log, so a test can read it back through the app's log paths.
+func logStateService(t *testing.T, status domain.TemplateRunStatus, log domain.TemplateRunLog) (*Service, *recordingTemplateRunLogReader) {
+	t.Helper()
+
+	reader := &recordingTemplateRunLogReader{content: []byte("plan output\n")}
+	service := NewService(Service{
+		Authorization: testPlatformAuthorizer(t),
+		TemplateRuns: &recordingTemplateRunRepository{run: domain.TemplateRun{
+			ID:              domain.TemplateRunID("run_123"),
+			TenantID:        domain.TenantID("tenant_123"),
+			StackTemplateID: domain.StackTemplateID("stack_template_123"),
+			Status:          status,
+		}},
+		StackTemplates:         &recordingStackTemplateRepository{stackTemplate: domain.StackTemplate{ID: "stack_template_123", TenantID: "tenant_123", StackID: "stack_123"}},
+		TemplateRunLogs:        reader,
+		TemplateRunLogMetadata: &recordingTemplateRunLogRepository{log: log, logs: []domain.TemplateRunLog{log}},
+	})
+	return service, reader
+}
+
+func liveRunLog() domain.TemplateRunLog {
+	return domain.TemplateRunLog{
+		TenantID: domain.TenantID("tenant_123"),
+		RunID:    domain.TemplateRunID("run_123"),
+		Phase:    "plan-1",
+		RunPhase: domain.RunPhasePlan,
+		Seq:      1,
+		Command:  domain.TerraformCommandInit,
+		State:    domain.TemplateRunLogLive,
+	}
+}
+
+func TestListTemplateRunLogsDerivesLostForALiveRowOfAFinishedRun(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		status     domain.TemplateRunStatus
+		wantState  domain.TemplateRunLogState
+		wantReason domain.TemplateRunLogLostReason
+	}{
+		{name: "finished run", status: domain.TemplateRunCompleted, wantState: domain.TemplateRunLogLost, wantReason: domain.LogLostRecordFailed},
+		{name: "canceled run", status: domain.TemplateRunCanceled, wantState: domain.TemplateRunLogLost, wantReason: domain.LogLostRunTerminated},
+		{name: "running run", status: domain.TemplateRunRunning, wantState: domain.TemplateRunLogLive},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			service, _ := logStateService(t, test.status, liveRunLog())
+			logs, err := service.ListTemplateRunLogs(authenticatedContext(), ListTemplateRunLogsCommand{
+				TenantID: domain.TenantID("tenant_123"),
+				RunID:    domain.TemplateRunID("run_123"),
+			})
+			if err != nil {
+				t.Fatalf("ListTemplateRunLogs returned error: %v", err)
+			}
+			if len(logs) != 1 {
+				t.Fatalf("len(logs) = %d, want 1", len(logs))
+			}
+			if logs[0].State != test.wantState || logs[0].LostReason != test.wantReason {
+				t.Fatalf("state = %q/%q, want %q/%q", logs[0].State, logs[0].LostReason, test.wantState, test.wantReason)
+			}
+		})
+	}
+}
+
+func TestGetTemplateRunLogRefusesALiveLog(t *testing.T) {
+	t.Parallel()
+
+	service, reader := logStateService(t, domain.TemplateRunRunning, liveRunLog())
+	_, err := service.GetTemplateRunLog(authenticatedContext(), GetTemplateRunLogCommand{
+		TenantID: domain.TenantID("tenant_123"),
+		RunID:    domain.TemplateRunID("run_123"),
+		Name:     "plan-1",
+	})
+	if !errors.Is(err, ErrTemplateRunLogLive) {
+		t.Fatalf("error = %v, want ErrTemplateRunLogLive", err)
+	}
+	if reader.gotRunID != "" {
+		t.Fatalf("log reader run ID = %q, want no object read", reader.gotRunID)
+	}
+}
+
+func TestGetTemplateRunLogRefusesALostLog(t *testing.T) {
+	t.Parallel()
+
+	lost := liveRunLog()
+	lost.State = domain.TemplateRunLogLost
+	lost.LostReason = domain.LogLostUploadFailed
+	tests := []struct {
+		name   string
+		status domain.TemplateRunStatus
+		log    domain.TemplateRunLog
+	}{
+		{name: "stored lost", status: domain.TemplateRunFailed, log: lost},
+		// A live row of a finished run is lost too, though the store still
+		// says live.
+		{name: "derived lost", status: domain.TemplateRunCanceled, log: liveRunLog()},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			service, reader := logStateService(t, test.status, test.log)
+			_, err := service.GetTemplateRunLog(authenticatedContext(), GetTemplateRunLogCommand{
+				TenantID: domain.TenantID("tenant_123"),
+				RunID:    domain.TemplateRunID("run_123"),
+				Name:     "plan-1",
+			})
+			if !errors.Is(err, ErrTemplateRunLogLost) {
+				t.Fatalf("error = %v, want ErrTemplateRunLogLost", err)
+			}
+			if reader.gotRunID != "" {
+				t.Fatalf("log reader run ID = %q, want no object read", reader.gotRunID)
+			}
+		})
+	}
+}
+
+// The live stream's shared re-check derives as the authorized read does,
+// with no principal in the context: the viewer was authorized when its stream
+// opened.
+func TestTemplateRunLogStateDerivesWithoutAPrincipal(t *testing.T) {
+	t.Parallel()
+
+	service, _ := logStateService(t, domain.TemplateRunFailed, liveRunLog())
+	state, err := service.TemplateRunLogState(context.Background(), "tenant_123", "run_123", "plan-1")
+	if err != nil {
+		t.Fatalf("TemplateRunLogState returned error: %v", err)
+	}
+	if state != domain.TemplateRunLogLost {
+		t.Fatalf("state = %q, want lost for a live row of a finished run", state)
+	}
+}
+
+func TestGetTemplateRunLogMetadataDerivesState(t *testing.T) {
+	t.Parallel()
+
+	complete := liveRunLog()
+	complete.State = domain.TemplateRunLogComplete
+	complete.ObjectKey = "tenants/tenant_123/runs/run_123/logs/plan-1.log"
+	tests := []struct {
+		name       string
+		status     domain.TemplateRunStatus
+		log        domain.TemplateRunLog
+		wantState  domain.TemplateRunLogState
+		wantReason domain.TemplateRunLogLostReason
+	}{
+		{name: "live row of a running run", status: domain.TemplateRunRunning, log: liveRunLog(), wantState: domain.TemplateRunLogLive},
+		// A failed or completed run ran its commands to the end, so a row
+		// still live is one the workflow could not record, not a run cut off.
+		{name: "live row of a failed run", status: domain.TemplateRunFailed, log: liveRunLog(), wantState: domain.TemplateRunLogLost, wantReason: domain.LogLostRecordFailed},
+		{name: "live row of a canceled run", status: domain.TemplateRunCanceled, log: liveRunLog(), wantState: domain.TemplateRunLogLost, wantReason: domain.LogLostRunTerminated},
+		{name: "complete row of a finished run", status: domain.TemplateRunCompleted, log: complete, wantState: domain.TemplateRunLogComplete},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			service, reader := logStateService(t, test.status, test.log)
+			log, err := service.GetTemplateRunLogMetadata(authenticatedContext(), GetTemplateRunLogCommand{
+				TenantID: domain.TenantID("tenant_123"),
+				RunID:    domain.TemplateRunID("run_123"),
+				Name:     "plan-1",
+			})
+			if err != nil {
+				t.Fatalf("GetTemplateRunLogMetadata returned error: %v", err)
+			}
+			if log.State != test.wantState || log.LostReason != test.wantReason {
+				t.Fatalf("state = %q/%q, want %q/%q", log.State, log.LostReason, test.wantState, test.wantReason)
+			}
+			if log.CommandLine != "tofu init" {
+				t.Fatalf("command line = %q, want tofu init", log.CommandLine)
+			}
+			// Metadata is the row alone; the body stays unread.
+			if reader.gotRunID != "" {
+				t.Fatalf("log reader run ID = %q, want no object read", reader.gotRunID)
+			}
+		})
+	}
+}
+
 type recordingAuditRepository struct {
 	events []domain.SecurityAuditEvent
 }

@@ -1,3 +1,4 @@
+import { LoaderCircle } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ComponentProps } from "react";
 import { cn } from "@/lib/utils";
@@ -44,7 +45,10 @@ export default function StatusLabel({ icon: Icon, tone, strong = false, classNam
       className={cn("inline-flex items-baseline gap-1.75 text-meta whitespace-nowrap", TONE_CLASSES[tone], strong && "font-medium", className)}
       {...props}
     >
-      <Icon aria-hidden="true" className="size-3.5 shrink-0 self-center" strokeWidth={2.25} />
+      {/* The one icon that moves: loader-circle marks a state still at work
+          (planning, applying, validating), and standing still it reads as
+          stuck. Reduced motion stops it, as it stops every animation. */}
+      <Icon aria-hidden="true" className={cn("size-3.5 shrink-0 self-center", Icon === LoaderCircle && "animate-spin")} strokeWidth={2.25} />
       {children}
     </span>
   );

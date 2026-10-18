@@ -30,11 +30,11 @@ This document describes openplan's current MVP product model, system architectur
 
 ## Architecture
 
-The MVP uses Temporal OSS as the durable workflow engine, Postgres as the application product database, S3-compatible object storage for logs/artifacts, and Vault or another secret store for execution credentials. Temporal also has its own persistence database for workflow history, timers, task queues, signals, and retry state.
+The MVP uses Temporal OSS as the durable workflow engine, Postgres as the application product database, S3-compatible object storage for logs/artifacts, Valkey to carry a running command's output to the UI, and Vault or another secret store for execution credentials. Temporal also has its own persistence database for workflow history, timers, task queues, signals, and retry state.
 
-The architecture also defines a pluggable `EventBus` interface for system events, live log fanout, and future pub/sub needs. The MVP can start with a no-op, in-memory, or simple local implementation, then swap in Redis, NATS JetStream, Kafka, or another broker without changing API or workflow semantics.
+The architecture also defines a pluggable `EventBus` interface for system events and future pub/sub needs, which can start as a no-op and later swap in Redis, NATS JetStream, Kafka, or another broker without changing API or workflow semantics. Live log output does not go through it: Valkey carries it between processes (see Logs).
 
-The system is split into a control plane and a data plane. The API process is the control plane: it serves HTTP, owns the database and every key, runs the queue loop that turns committed intents into workflow starts and signals, and polls Temporal's `control` task queue for workflow tasks and the activities that write product state. The executor process is the data plane: it polls only the `execution` task queue and runs workspace preparation, source checkout, and Terraform. It holds no database URL and no key. Neither process calls the other; every exchange goes through Temporal. [Apply run sequence](apply-run-sequence.md) walks an apply through every round trip.
+The system is split into a control plane and a data plane. The API process is the control plane: it serves HTTP, owns the database and every key, runs the queue loop that turns committed intents into workflow starts and signals, and polls Temporal's `control` task queue for workflow tasks and the activities that write product state. The executor process is the data plane: it polls only the `execution` task queue and runs workspace preparation, source checkout, and Terraform. It holds no database URL and no key. Neither process calls the other; every exchange goes through Temporal, except a running command's output, which the executor appends to Valkey for the API to read (see Logs). [Apply run sequence](apply-run-sequence.md) walks an apply through every round trip.
 
 ```text
 UI --> openplan-api  (control plane)                      Temporal Server
@@ -52,7 +52,7 @@ UI --> openplan-api  (control plane)                      Temporal Server
                                                           no database, no keys
                                                                       |
                                                                       v
-                                                  artifact store, cloud APIs, state backends
+                                              artifact store, Valkey, cloud APIs, state backends
 ```
 
 ## Core Boundaries
@@ -141,9 +141,13 @@ heartbeat lost to a pause should not kill a run mid-apply. The heartbeat
 carries no payload: Temporal reads only its arrival, so what keeps the activity
 alive is that one came, not what it said.
 
+### Valkey
+
+Valkey (or any server speaking the Redis protocol) carries each running command's output from the executor that runs it to whichever API replica a viewer is on. It is required: the API and the executor both refuse to start without it. It holds only live output, in memory, with no persistence and `maxmemory-policy noeviction`; finished logs come from the artifact store. Each process signs in as its own user, and the executor's can only append. See Logs.
+
 ### Executors
 
-Executors are Go processes that poll the `execution` task queue and run the activities that sit next to tenant Terraform. They open no database connection and parse no key. Secrets a run needs, the repository token and the credential environment, are sealed on the control plane to an X25519 key the executor generates for that run in `PrepareWorkspace` (`internal/runseal`), so Temporal history holds only a public key and ciphertext. Results, including uploaded log metadata, return to the control plane through Temporal.
+Executors are Go processes that poll the `execution` task queue and run the activities that sit next to tenant Terraform. They open no database connection and parse no key. Secrets a run needs, the repository token and the credential environment, are sealed on the control plane to an X25519 key the executor generates for that run in `PrepareWorkspace` (`internal/runseal`), so Temporal history holds only a public key and ciphertext. Results, including uploaded log metadata, return to the control plane through Temporal. Their one new route outside Temporal, beside the artifact store and GitHub, is to Valkey, as a user that can only append live output (see Logs).
 
 The queue loop runs in the API. Multiple API replicas can safely run it because claims use short Postgres leases and `FOR UPDATE SKIP LOCKED`; no database transaction remains open during the Temporal RPC.
 
@@ -257,7 +261,7 @@ Package ownership:
 - `internal/secrets`: secret store boundary, credential set resolution, and Vault or local development adapters.
 - `internal/artifacts`: object storage adapter, redacted log artifact writes, plan summary artifacts, and artifact key generation.
 - `internal/events`: pluggable `EventBus` interface, event types, and no-op or in-memory implementations.
-- `internal/logsink`: log redaction, phase log writers, live log publication, and log metadata creation.
+- `internal/logsink`: a command's output from where it is written to where it is read: the spool file on the executor (its name and the sink that opens it in the run's logs directory), and live output through Valkey: the stream key and entry format, the executor's flusher that publishes the spool as it grows, and the api's registry of tailers that feeds the SSE endpoint.
 - `internal/locks`: product-level `StackTemplate` lease lock, including acquire, refresh, release, fencing token checks, and stale lock handling.
 - `internal/config`: environment and config structs, default values, and config validation.
 
@@ -666,20 +670,136 @@ The system should persist a redacted plan summary, preferably generated from Ter
 
 ## Logs
 
-Logs are both live streamed and persisted.
+Each Terraform command's output is one log. While the command runs, the run
+page follows it live through Valkey; once the command ends, the copy stored in
+the artifact store (S3) is the log, and Valkey's copy expires. The two never
+mix: a viewer reads a log from one source or the other, chosen when it opens
+the log.
 
 ```text
-Terraform stdout/stderr
-  -> redaction
-  -> live log stream
-  -> object storage
+EXECUTOR                                  STORES       API (any replica)                     BROWSER
+tofu (sandbox) -> redaction -> 64 MiB cap
+  -> spool file
+     flusher, ~1 s -------- XADD -------> Valkey ----- XREAD --> tailer, one per live log
+                                                                   -> GET .../logs/{name}/events -> live
+UploadLog, after tofu exits -- PUT -----> S3 --------- GET ----> GET .../logs/{name} ----------> complete
+  result via Temporal -------------------------------------------> run workflow
+                                          Postgres <-- 1. row: complete | lost --+
+                                          Valkey   <-- 2. end entry, expire -----+
 ```
 
-The API exposes a live stream endpoint, likely using Server-Sent Events:
+**Writing.** `RunTerraform` writes tofu's output to a spool file on the
+executor, outside the workspace, already redacted (exact credential values
+replaced) and capped at 64 MiB. A flusher in the executor process tails that
+file about once a second and appends what is new to the log's Valkey stream,
+in pieces of at most 1 MiB, each carrying its first byte's offset so the api
+can drop bytes a viewer already holds. A piece never ends inside a multi-byte
+UTF-8 sequence, so each decodes as text on its own. It tails the file rather than sitting in
+tofu's path, so a slow or unreachable Valkey costs the live view, never the
+command: the spool absorbs the delay and the next flush carries more. When
+tofu exits, `UploadLog` PUTs the whole spool to S3, tried up to five times.
+Nothing stored is ever rebuilt from Valkey.
 
-```text
-GET /runs/{run_id}/logs/stream
-```
+**Valkey** holds one stream per live log, keyed `runlog:{<run_id>}:<name>`.
+The braces are a cluster hash tag, so every stream of a run lands on one
+shard. It keeps them in memory only, with no persistence, because nothing
+depends on them surviving a restart: the stored log comes from the spool. It
+runs with `maxmemory-policy noeviction`, because an evicted stream would look
+like a log that never ends; a full Valkey refuses new output instead. Size
+`maxmemory` at the live cap (below) times the most commands that run at once,
+plus headroom. A stream gets a 24 hour expiry, as the safety net for a log
+nobody ends, from the first flush that appends to it while it has none, so a
+stream Valkey lost to a restart gets it back and a live one is never extended.
+It is shortened to 60 seconds once the log ends, long enough for a viewer that
+is reconnecting to see the end.
+
+Valkey is required. The api and the executor read `VALKEY_URL` (`redis://`, or
+`rediss://` for TLS) and refuse to start without a reachable server. There is
+no in-memory fallback, because the two are separate processes and memory in
+one is invisible to the other.
+
+**The executor's one new route outside Temporal** (it already reaches the
+artifact store and GitHub) is to Valkey, for live output only. Its Valkey user
+can sign in, `PING`, append to `runlog:*` streams and set their expiry, and
+nothing else; it cannot read a stream. Status, results and every row still
+travel through Temporal. tofu's sandbox gets an environment built from
+scratch, so it never sees `VALKEY_URL`; it can reach Valkey's port (see
+Runner Security), which is why Valkey must require authentication. One
+Valkey user serves every tenant's runs on an executor, as its S3 credential
+does, so a compromised executor can corrupt what viewers see of any live log.
+The same append right lets it forge an end entry, which ends live views early
+but changes nothing stored: the row, its state and its object key are written
+on the control plane only.
+
+**The row.** Postgres holds each log's metadata in `template_run_logs`, never
+its body. A row moves `live -> complete | lost`, and only the run workflow
+moves it:
+
+- It writes `live` before `RunTerraform`, so the run page can open the log
+  while the command runs. The page learns of the new command by refetching the
+  log list whenever the run's status or step moves, as it does when each
+  command starts.
+- After `UploadLog`, `RecordTemplateRunLog` sets `complete` (with the object
+  key, size and content type) or `lost`, then appends the end entry to the
+  stream and shortens its expiry. The row comes first, so once a viewer can
+  see the log ended, its end entry is on the way.
+
+A lost log does not fail the run: the command's own result stands, and only
+its output is missing. The row says why:
+
+- `upload_failed`: `UploadLog` failed every attempt.
+- `executor_gone`: the executor that ran the command died, and its spool with
+  it.
+- `run_terminated`: the row is still `live` but its run is `canceled`, so the
+  workflow was stopped before it could record the log.
+- `record_failed`: the row is still `live` but its run is `completed` or
+  `failed`: the commands ran to the end, so the workflow reached the log's
+  final record and every attempt at it failed.
+
+The last two are not stored: the api derives them from the run's status when
+it reads a `live` row, which needs no reconciler. The stream, if any, expires
+on its own. A run whose workflow is terminated outside openplan (by hand in
+Temporal, or by a workflow timeout) keeps its status today, so its live rows
+read `live` until that is fixed; it is tracked as a follow-up issue.
+
+**Reading.** The viewer picks its source once, when it opens a log, from the
+row's state:
+
+- `live`: `GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{name}/events`,
+  a Server-Sent Events stream. It sends the log from the stream's start as
+  `log` events, then each piece as it arrives, then one `log_end` with the
+  row's final state, and closes. Every 20 seconds it writes a comment, so
+  proxies keep a quiet stream open, and re-reads the row: a row that ended
+  without its end entry landing still ends the stream.
+- `complete`: `GET .../logs/{name}` returns the body from S3, once; it never
+  changes.
+- `lost`: nothing to show; the row gives the reason.
+
+The page never asks for the body of a log that is not complete. The body
+endpoint answers `log-live` (409) for a live log and `log-lost` (404) for a
+lost one, for anyone scripting the API.
+
+Nothing switches mid-stream. A live viewer keeps the output it has already
+shown rather than swapping to the stored copy, which would mean resuming S3 at
+a byte offset. A reconnect is a fresh choice: the browser resumes from its
+last event id, and the api sends none of the bytes the browser already
+holds, so the page appends every event as it comes. If the row has ended by
+then, the endpoint sends `log_end` at once and the page offers the stored
+log.
+
+Each api replica runs one tailer per live log that has a viewer on it, which
+blocks on `XREAD` and fans entries out to that replica's viewers, so a log
+watched by many browsers costs one Valkey read per replica, and viewers add no
+load to the executor, Postgres or S3. A replica follows at most 256 live logs
+at once. A viewer it cannot follow, because it is full or Valkey failed, still
+gets a stream: one that asks the browser to reconnect in three seconds.
+
+**The live cap.** A stream carries at most 8 MiB of a log, because Valkey
+holds every live log in memory at once. Past it the flusher appends one
+truncated entry and stops publishing; the viewer gets `log_truncated`, and the
+page says live output stops there and, once the command ends, offers "Load the
+full log" from S3. The spool keeps going to its own 64 MiB cap, so the stored
+log is the whole one.
 
 Object storage keys should be tenant and run scoped:
 
@@ -709,8 +829,6 @@ the run and the name, so an executor never chooses which object a run's log
 points at. Postgres derives the name from the run phase and number rather
 than storing it beside them, and the API checks only its shape (one
 lowercase path segment).
-
-Postgres stores log metadata, not large log bodies.
 
 ## Activity Logs
 

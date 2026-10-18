@@ -26,6 +26,7 @@ func productionAPIValues() map[string]string {
 	values["OIDC_ISSUER_URL"] = "https://id.example.com/realms/openplan"
 	values["DATABASE_URL"] = "postgres://user:pass@localhost:5432/db?sslmode=disable"
 	values["TEMPORAL_ADDRESS"] = "localhost:7233"
+	values["VALKEY_URL"] = "redis://localhost:6379"
 	values["SESSION_ENCRYPTION_KEY"] = freshKey
 	values["CREDENTIAL_ENCRYPTION_KEY"] = freshKey
 	return values
@@ -119,6 +120,74 @@ func TestPublishedEncryptionKeysCoverTheRepository(t *testing.T) {
 		for _, match := range matches {
 			if !slices.Contains(publishedEncryptionKeys, match[1]) {
 				t.Errorf("%s ships encryption key %s, which publishedEncryptionKeys does not list", file, match[1])
+			}
+		}
+	}
+}
+
+func TestLoadAPIConfigRefusesPublishedValkeyPasswordsInProduction(t *testing.T) {
+	t.Parallel()
+
+	for _, password := range []string{"api-local-only", "executor-local-only"} {
+		t.Run(password, func(t *testing.T) {
+			t.Parallel()
+
+			values := productionAPIValues()
+			values["VALKEY_URL"] = "redis://api:" + password + "@valkey:6379/0"
+			_, err := LoadAPIConfig(mapConfigEnv(values))
+			if !errors.Is(err, ErrInvalidConfig) {
+				t.Fatalf("error = %v, want ErrInvalidConfig", err)
+			}
+			if !strings.Contains(err.Error(), "VALKEY_URL") {
+				t.Fatalf("error = %q, want it to name VALKEY_URL", err)
+			}
+			if strings.Contains(err.Error(), password) {
+				t.Fatalf("error = %q quotes the password", err)
+			}
+		})
+	}
+}
+
+func TestLoadAPIConfigAcceptsAFreshValkeyPasswordInProduction(t *testing.T) {
+	t.Parallel()
+
+	values := productionAPIValues()
+	values["VALKEY_URL"] = "rediss://api:" + freshKey + "@valkey:6379/0"
+	if _, err := LoadAPIConfig(mapConfigEnv(values)); err != nil {
+		t.Fatalf("LoadAPIConfig returned error: %v", err)
+	}
+}
+
+func TestLoadAPIConfigAcceptsPublishedValkeyPasswordsInDevelopment(t *testing.T) {
+	t.Parallel()
+
+	values := productionAPIValues()
+	values["OPENPLAN_ENVIRONMENT"] = "development"
+	values["VALKEY_URL"] = "redis://api:api-local-only@localhost:56379/0"
+	if _, err := LoadAPIConfig(mapConfigEnv(values)); err != nil {
+		t.Fatalf("LoadAPIConfig returned error: %v", err)
+	}
+}
+
+// As for the encryption keys: every Valkey password the repository ships
+// must be on the list the production guard refuses.
+func TestPublishedValkeyPasswordsCoverTheRepository(t *testing.T) {
+	t.Parallel()
+
+	// Matches `VALKEY_API_PASSWORD=value` and `${VALKEY_API_PASSWORD:-value}`.
+	passwordPattern := regexp.MustCompile(`VALKEY_(?:API|EXECUTOR)_PASSWORD(?:=|:-)([^}\s"]+)`)
+	for _, file := range []string{".env.example", "docker-compose.yaml", "docker-compose.release.yaml"} {
+		content, err := os.ReadFile(filepath.Join("..", "..", file))
+		if err != nil {
+			t.Fatalf("read %s: %v", file, err)
+		}
+		matches := passwordPattern.FindAllStringSubmatch(string(content), -1)
+		if len(matches) == 0 {
+			t.Fatalf("%s: found no Valkey passwords; has the file moved or its format changed?", file)
+		}
+		for _, match := range matches {
+			if !slices.Contains(publishedValkeyPasswords, match[1]) {
+				t.Errorf("%s ships Valkey password %s, which publishedValkeyPasswords does not list", file, match[1])
 			}
 		}
 	}

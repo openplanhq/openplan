@@ -24,9 +24,7 @@ describe("queryKeys", () => {
     );
   });
 
-  it("keys a log body by its upload, which a new upload of the phase replaces", () => {
-    expect(queryKeys.templateRunLog("tenant_123", "run_1", "plan", "2026-07-20T00:01:00Z")).toEqual([
-      "templateRunLog", "tenant_123", "run_1", "plan", "2026-07-20T00:01:00Z"
-    ]);
+  it("keys a log body by its name: a command's log is uploaded once", () => {
+    expect(queryKeys.templateRunLog("tenant_123", "run_1", "plan")).toEqual(["templateRunLog", "tenant_123", "run_1", "plan"]);
   });
 });

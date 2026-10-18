@@ -13,6 +13,7 @@ import (
 
 	"github.com/stretchr/testify/mock"
 	"github.com/vishu42/openplan/internal/domain"
+	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/converter"
@@ -167,8 +168,9 @@ func TestTemplatePlanWorkflowRoutesTheEventActivityByPlane(t *testing.T) {
 	}
 }
 
-// The executor has no database, so the log metadata it returns must be
-// recorded by the control plane: after the command, before the run completes.
+// The executor has no database, so a log's rows are recorded by the control
+// plane: live before its command starts, so the run page finds it when the
+// step changes, and complete after the upload, before the run completes.
 func TestTemplatePlanWorkflowRecordsCommandLogsOnControlQueue(t *testing.T) {
 	t.Parallel()
 
@@ -190,7 +192,7 @@ func TestTemplatePlanWorkflowRecordsCommandLogsOnControlQueue(t *testing.T) {
 		})
 	env.OnActivity(domain.RecordTemplateRunLogActivityName, mock.Anything, mock.Anything).
 		Return(func(_ context.Context, log domain.TemplateRunLog) error {
-			events = append(events, "log:"+log.Phase)
+			events = append(events, "log:"+log.Phase+":"+string(log.State))
 			return nil
 		})
 	env.OnActivity(domain.RecordTemplateRunStatusActivityName, mock.Anything, mock.Anything).
@@ -205,9 +207,10 @@ func TestTemplatePlanWorkflowRecordsCommandLogsOnControlQueue(t *testing.T) {
 
 	assertWorkflowCompleted(t, env)
 	want := []string{
-		"terraform:init", "log:plan-1",
-		"terraform:select_workspace", "log:plan-2",
-		"terraform:plan", "log:plan-3", "status:completed",
+		"log:plan-1:live", "terraform:init", "log:plan-1:complete",
+		"log:plan-2:live", "terraform:select_workspace", "log:plan-2:complete",
+		"log:plan-3:live", "terraform:plan", "log:plan-3:complete",
+		"status:completed",
 	}
 	if !reflect.DeepEqual(events, want) {
 		t.Fatalf("events = %#v, want %#v", events, want)
@@ -255,40 +258,276 @@ func TestTemplatePlanWorkflowRecordsLogOfFailedCommand(t *testing.T) {
 	if !env.IsWorkflowCompleted() || env.GetWorkflowError() == nil {
 		t.Fatalf("workflow completed=%v error=%v, want a failed run", env.IsWorkflowCompleted(), env.GetWorkflowError())
 	}
-	if len(recorded) == 0 || recorded[len(recorded)-1].Command != domain.TerraformCommandPlan {
-		t.Fatalf("recorded logs = %#v, want the failed plan's last", recorded)
+	if len(recorded) == 0 {
+		t.Fatal("no log recorded")
+	}
+	if last := recorded[len(recorded)-1]; last.Command != domain.TerraformCommandPlan || last.State != domain.TemplateRunLogComplete {
+		t.Fatalf("recorded logs = %#v, want the failed plan's, complete, last", recorded)
 	}
 	if !strings.Contains(failedStatus.ErrorSummary, "plan: exit status 1") {
 		t.Fatalf("failure summary = %q, want the command error", failedStatus.ErrorSummary)
 	}
 }
 
-// A log that cannot be uploaded fails the step, as an upload inside
-// RunTerraform did before.
-func TestTemplatePlanWorkflowFailsWhenALogCannotBeUploaded(t *testing.T) {
+// A log that cannot be uploaded is lost, not a reason to fail the run: the
+// command it describes succeeded, and the row says why its output is gone.
+func TestTemplatePlanWorkflowRecordsALostLogWhenTheUploadFails(t *testing.T) {
 	t.Parallel()
 
 	env := newTemplateRunWorkflowTestEnvironment(t)
-	var failedStatus domain.TemplateRunStatusActivityInput
+	var recorded []string
+	var statuses []domain.TemplateRunStatus
 	mockPrepareWorkspace(t, env)
-	env.OnActivity(domain.FetchSourceActivityName, mock.Anything, mock.Anything).
-		Return(domain.FetchSourceActivityOutput{TerraformPath: "run/workspace/source"}, nil)
+	mockFetchSource(t, env)
 	env.OnActivity(domain.RunTerraformActivityName, mock.Anything, mock.Anything).
 		Return(domain.RunTerraformActivityOutput{}, nil)
 	env.OnActivity(domain.UploadLogActivityName, mock.Anything, mock.Anything).
 		Return(domain.TemplateRunLog{}, errors.New("store unavailable"))
+	env.OnActivity(domain.RecordTemplateRunLogActivityName, mock.Anything, mock.Anything).
+		Return(func(_ context.Context, log domain.TemplateRunLog) error {
+			recorded = append(recorded, log.Phase+":"+string(log.State)+":"+string(log.LostReason))
+			return nil
+		})
 	env.OnActivity(domain.RecordTemplateRunStatusActivityName, mock.Anything, mock.Anything).
 		Return(func(_ context.Context, input domain.TemplateRunStatusActivityInput) error {
-			if input.Status == domain.TemplateRunFailed {
-				failedStatus = input
-			}
+			statuses = append(statuses, input.Status)
 			return nil
 		})
 
 	env.ExecuteWorkflow(TemplatePlanWorkflow, templateRunWorkflowInput(domain.OperationPlan))
 
-	if failedStatus.Status != domain.TemplateRunFailed || !strings.Contains(failedStatus.ErrorSummary, "upload log") {
-		t.Fatalf("failed status = %+v, want the upload named", failedStatus)
+	assertWorkflowCompleted(t, env)
+	want := []string{
+		"plan-1:live:", "plan-1:lost:upload_failed",
+		"plan-2:live:", "plan-2:lost:upload_failed",
+		"plan-3:live:", "plan-3:lost:upload_failed",
+	}
+	if !reflect.DeepEqual(recorded, want) {
+		t.Fatalf("recorded logs = %#v, want %#v", recorded, want)
+	}
+	if want := []domain.TemplateRunStatus{domain.TemplateRunRunning, domain.TemplateRunCompleted}; !reflect.DeepEqual(statuses, want) {
+		t.Fatalf("statuses = %#v, want %#v", statuses, want)
+	}
+}
+
+// An upload whose result does not describe its object (no content type, no
+// upload time) cannot make a complete row, which the control plane would
+// refuse and leave live for good, so it is recorded as lost.
+func TestTemplatePlanWorkflowRecordsLostWhenTheUploadResultIsIncomplete(t *testing.T) {
+	t.Parallel()
+
+	env := newTemplateRunWorkflowTestEnvironment(t)
+	var recorded []string
+	mockPrepareWorkspace(t, env)
+	mockFetchSource(t, env)
+	env.OnActivity(domain.RunTerraformActivityName, mock.Anything, mock.Anything).
+		Return(domain.RunTerraformActivityOutput{}, nil)
+	uploads := 0
+	env.OnActivity(domain.UploadLogActivityName, mock.Anything, mock.Anything).
+		Return(func(context.Context, domain.UploadLogActivityInput) (domain.TemplateRunLog, error) {
+			uploads++
+			switch uploads {
+			case 1:
+				return domain.TemplateRunLog{SizeBytes: 3, UploadedAt: time.Unix(1, 0)}, nil
+			case 2:
+				return domain.TemplateRunLog{SizeBytes: 3, ContentType: "text/plain; charset=utf-8"}, nil
+			}
+			return domain.TemplateRunLog{SizeBytes: 3, ContentType: "text/plain; charset=utf-8", UploadedAt: time.Unix(1, 0)}, nil
+		})
+	env.OnActivity(domain.RecordTemplateRunLogActivityName, mock.Anything, mock.Anything).
+		Return(func(_ context.Context, log domain.TemplateRunLog) error {
+			recorded = append(recorded, log.Phase+":"+string(log.State)+":"+string(log.LostReason))
+			return nil
+		})
+	env.OnActivity(domain.RecordTemplateRunStatusActivityName, mock.Anything, mock.Anything).Return(nil)
+
+	env.ExecuteWorkflow(TemplatePlanWorkflow, templateRunWorkflowInput(domain.OperationPlan))
+
+	assertWorkflowCompleted(t, env)
+	want := []string{
+		"plan-1:live:", "plan-1:lost:upload_failed",
+		"plan-2:live:", "plan-2:lost:upload_failed",
+		"plan-3:live:", "plan-3:complete:",
+	}
+	if !reflect.DeepEqual(recorded, want) {
+		t.Fatalf("recorded logs = %#v, want %#v", recorded, want)
+	}
+}
+
+// A command whose heartbeat stopped had no executor left to upload its log, so
+// the log is lost to the executor, not to the store. The run still fails with
+// the command's own error: the log's fate never replaces it.
+func TestTemplatePlanWorkflowRecordsExecutorGoneWhenTheCommandHeartbeatTimesOut(t *testing.T) {
+	t.Parallel()
+
+	env := newTemplateRunWorkflowTestEnvironment(t)
+	var recorded []domain.TemplateRunLog
+	mockPrepareWorkspace(t, env)
+	mockFetchSource(t, env)
+	env.OnActivity(domain.RunTerraformActivityName, mock.Anything, mock.Anything).
+		Return(func(_ context.Context, input domain.RunTerraformActivityInput) (domain.RunTerraformActivityOutput, error) {
+			if input.Command != domain.TerraformCommandPlan {
+				return domain.RunTerraformActivityOutput{}, nil
+			}
+			return domain.RunTerraformActivityOutput{}, temporal.NewTimeoutError(enumspb.TIMEOUT_TYPE_HEARTBEAT, nil)
+		})
+	env.OnActivity(domain.UploadLogActivityName, mock.Anything, mock.Anything).
+		Return(func(_ context.Context, input domain.UploadLogActivityInput) (domain.TemplateRunLog, error) {
+			if input.LogName != "plan-3" {
+				return uploadedLog(input), nil
+			}
+			return domain.TemplateRunLog{}, errors.New("session failed")
+		})
+	env.OnActivity(domain.RecordTemplateRunLogActivityName, mock.Anything, mock.Anything).
+		Return(func(_ context.Context, log domain.TemplateRunLog) error {
+			recorded = append(recorded, log)
+			return nil
+		})
+	env.OnActivity(domain.RecordTemplateRunStatusActivityName, mock.Anything, mock.Anything).Return(nil)
+
+	env.ExecuteWorkflow(TemplatePlanWorkflow, templateRunWorkflowInput(domain.OperationPlan))
+
+	if !env.IsWorkflowCompleted() {
+		t.Fatal("workflow did not complete")
+	}
+	var timeoutErr *temporal.TimeoutError
+	if err := env.GetWorkflowError(); !errors.As(err, &timeoutErr) || timeoutErr.TimeoutType() != enumspb.TIMEOUT_TYPE_HEARTBEAT {
+		t.Fatalf("workflow error = %v, want the command's heartbeat timeout", err)
+	}
+	if len(recorded) == 0 {
+		t.Fatal("no log recorded")
+	}
+	last := recorded[len(recorded)-1]
+	if last.Phase != "plan-3" || last.State != domain.TemplateRunLogLost || last.LostReason != domain.LogLostExecutorGone {
+		t.Fatalf("last recorded log = %s %s/%s, want plan-3 lost/%s", last.Phase, last.State, last.LostReason, domain.LogLostExecutorGone)
+	}
+}
+
+// When an executor dies mid-command, its session's own heartbeat (20 s) times
+// out long before the command's (120 s): the session fails and cancels the
+// command, so the command's error is a cancellation, not a heartbeat timeout.
+// The log is still lost to the executor, not to the store. The session here
+// fails while the plan is running, with the error the SDK's creation activity
+// returns when its worker goes away. (A heartbeat timeout returned from a mock
+// is retried by the test environment, unlike the server's.)
+func TestTemplatePlanWorkflowRecordsExecutorGoneWhenTheSessionFails(t *testing.T) {
+	t.Parallel()
+
+	env := newTemplateRunWorkflowTestEnvironment(t)
+	planStarted := make(chan struct{})
+	// The plan never finishes on its own: a cancelled activity's goroutine is
+	// not stopped by the test environment, so it is released at cleanup.
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	env.OnActivity(sessionCreationActivityName, mock.Anything, mock.Anything).
+		Return(func(_ context.Context, sessionID string) error {
+			// What the SDK's own creation activity signals once the session
+			// is placed on a host.
+			env.SignalWorkflow(sessionID, struct{ Taskqueue, HostName, ResourceID string }{
+				Taskqueue: "executor-host-1", HostName: "executor-host-1", ResourceID: "executor-host-1",
+			})
+			<-planStarted
+			return temporal.NewNonRetryableApplicationError("session failed due to worker shutdown", "SessionWorkerShutdown", nil)
+		})
+	mockPrepareWorkspace(t, env)
+	mockFetchSource(t, env)
+	env.OnActivity(domain.RunTerraformActivityName, mock.Anything, mock.Anything).
+		Return(func(_ context.Context, input domain.RunTerraformActivityInput) (domain.RunTerraformActivityOutput, error) {
+			if input.Command == domain.TerraformCommandPlan {
+				close(planStarted)
+				<-release
+			}
+			return domain.RunTerraformActivityOutput{}, nil
+		})
+	var recorded []domain.TemplateRunLog
+	env.OnActivity(domain.RecordTemplateRunLogActivityName, mock.Anything, mock.Anything).
+		Return(func(_ context.Context, log domain.TemplateRunLog) error {
+			recorded = append(recorded, log)
+			return nil
+		})
+	env.OnActivity(domain.RecordTemplateRunStatusActivityName, mock.Anything, mock.Anything).Return(nil)
+
+	env.ExecuteWorkflow(TemplatePlanWorkflow, templateRunWorkflowInput(domain.OperationPlan))
+
+	if !env.IsWorkflowCompleted() {
+		t.Fatal("workflow did not complete")
+	}
+	var canceledErr *temporal.CanceledError
+	if err := env.GetWorkflowError(); !errors.As(err, &canceledErr) {
+		t.Fatalf("workflow error = %v, want the command cancelled with its session", err)
+	}
+	if len(recorded) == 0 {
+		t.Fatal("no log recorded")
+	}
+	last := recorded[len(recorded)-1]
+	if last.Phase != "plan-3" || last.State != domain.TemplateRunLogLost || last.LostReason != domain.LogLostExecutorGone {
+		t.Fatalf("last recorded log = %s %s/%s, want plan-3 lost/%s", last.Phase, last.State, last.LostReason, domain.LogLostExecutorGone)
+	}
+}
+
+// A log row that cannot be written is a gap in the run's history, not a
+// failure of the command it describes: the run completes, after the record
+// has had its own retries.
+func TestTemplatePlanWorkflowKeepsGoingWhenRecordingALogFails(t *testing.T) {
+	t.Parallel()
+
+	env := newTemplateRunWorkflowTestEnvironment(t)
+	completeAttempts := map[string]int{}
+	mockPrepareWorkspace(t, env)
+	mockFetchSource(t, env)
+	env.OnActivity(domain.RunTerraformActivityName, mock.Anything, mock.Anything).
+		Return(domain.RunTerraformActivityOutput{}, nil)
+	env.OnActivity(domain.RecordTemplateRunLogActivityName, mock.Anything, mock.Anything).
+		Return(func(_ context.Context, log domain.TemplateRunLog) error {
+			if log.State != domain.TemplateRunLogComplete {
+				return nil
+			}
+			completeAttempts[log.Phase]++
+			return errors.New("database unavailable")
+		})
+	env.OnActivity(domain.RecordTemplateRunStatusActivityName, mock.Anything, mock.Anything).Return(nil)
+
+	env.ExecuteWorkflow(TemplatePlanWorkflow, templateRunWorkflowInput(domain.OperationPlan))
+
+	assertWorkflowCompleted(t, env)
+	attempts := int(recordLogRetryPolicy.MaximumAttempts)
+	if want := map[string]int{"plan-1": attempts, "plan-2": attempts, "plan-3": attempts}; !reflect.DeepEqual(completeAttempts, want) {
+		t.Fatalf("complete record attempts = %#v, want %#v (recordLogRetryPolicy.MaximumAttempts each)", completeAttempts, want)
+	}
+}
+
+// UploadLog retries under its own policy rather than the run's default of a
+// single attempt: an upload is idempotent, and losing a log to one blip in
+// the object store is worse than a few seconds' wait.
+func TestUploadLogRetriesWithItsOwnPolicy(t *testing.T) {
+	t.Parallel()
+
+	env := newTemplateRunWorkflowTestEnvironment(t)
+	starts := map[string]int{}
+	env.SetOnActivityStartedListener(func(info *activity.Info, _ context.Context, args converter.EncodedValues) {
+		if info.ActivityType.Name != domain.UploadLogActivityName {
+			return
+		}
+		var input domain.UploadLogActivityInput
+		if err := args.Get(&input); err != nil {
+			t.Errorf("decode UploadLog input: %v", err)
+		}
+		starts[input.LogName]++
+	})
+	mockPrepareWorkspace(t, env)
+	mockFetchSource(t, env)
+	env.OnActivity(domain.RunTerraformActivityName, mock.Anything, mock.Anything).
+		Return(domain.RunTerraformActivityOutput{}, nil)
+	env.OnActivity(domain.UploadLogActivityName, mock.Anything, mock.Anything).
+		Return(domain.TemplateRunLog{}, errors.New("store unavailable"))
+	env.OnActivity(domain.RecordTemplateRunStatusActivityName, mock.Anything, mock.Anything).Return(nil)
+
+	env.ExecuteWorkflow(TemplatePlanWorkflow, templateRunWorkflowInput(domain.OperationPlan))
+
+	assertWorkflowCompleted(t, env)
+	attempts := int(uploadLogRetryPolicy.MaximumAttempts)
+	if want := map[string]int{"plan-1": attempts, "plan-2": attempts, "plan-3": attempts}; !reflect.DeepEqual(starts, want) {
+		t.Fatalf("UploadLog starts = %#v, want %#v (uploadLogRetryPolicy.MaximumAttempts each)", starts, want)
 	}
 }
 
@@ -1090,11 +1329,27 @@ func newTemplateRunWorkflowTestEnvironment(t *testing.T) *testsuite.TestWorkflow
 	)
 	env.RegisterActivityWithOptions(
 		func(_ context.Context, input domain.UploadLogActivityInput) (domain.TemplateRunLog, error) {
-			return domain.TemplateRunLog{Phase: input.LogName, ObjectKey: "logs/" + input.LogName + ".log"}, nil
+			return uploadedLog(input), nil
 		},
 		activity.RegisterOptions{Name: domain.UploadLogActivityName},
 	)
 	return env
+}
+
+// sessionCreationActivityName is the SDK's internal activity that holds an
+// executor session open, heartbeating, for as long as the session lives.
+const sessionCreationActivityName = "internalSessionCreationActivity"
+
+// uploadedLog is what an honest UploadLog returns for input: the object it
+// wrote, described as RecordTemplateRunLog needs a complete log to be.
+func uploadedLog(input domain.UploadLogActivityInput) domain.TemplateRunLog {
+	return domain.TemplateRunLog{
+		Phase:       input.LogName,
+		ObjectKey:   "logs/" + input.LogName + ".log",
+		ContentType: "text/plain; charset=utf-8",
+		SizeBytes:   42,
+		UploadedAt:  time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC),
+	}
 }
 
 func mockPrepareWorkspace(t *testing.T, env *testsuite.TestWorkflowEnvironment) {
@@ -1430,6 +1685,30 @@ func TestTerraformRetryPolicy(t *testing.T) {
 	}
 }
 
+// The log policies retry, unlike the run's default: these are the values the
+// workflow is built around.
+func TestLogRetryPolicies(t *testing.T) {
+	t.Parallel()
+
+	wantUpload := temporal.RetryPolicy{
+		InitialInterval:    2 * time.Second,
+		BackoffCoefficient: 2.0,
+		MaximumInterval:    30 * time.Second,
+		MaximumAttempts:    5,
+	}
+	if !reflect.DeepEqual(*uploadLogRetryPolicy, wantUpload) {
+		t.Fatalf("uploadLogRetryPolicy = %+v, want %+v", *uploadLogRetryPolicy, wantUpload)
+	}
+	wantRecord := temporal.RetryPolicy{
+		InitialInterval:    time.Second,
+		BackoffCoefficient: 2.0,
+		MaximumAttempts:    3,
+	}
+	if !reflect.DeepEqual(*recordLogRetryPolicy, wantRecord) {
+		t.Fatalf("recordLogRetryPolicy = %+v, want %+v", *recordLogRetryPolicy, wantRecord)
+	}
+}
+
 // TestTemplatePlanWorkflowPinsLogIdentityToTheRun proves the control plane does
 // not take the executor's word for whose run a log belongs to.
 //
@@ -1457,13 +1736,15 @@ func TestTemplatePlanWorkflowPinsLogIdentityToTheRun(t *testing.T) {
 		Return(func(_ context.Context, input domain.UploadLogActivityInput) (domain.TemplateRunLog, error) {
 			named = append(named, input.LogName)
 			return domain.TemplateRunLog{
-				TenantID:  domain.TenantID("tenant_victim"),
-				RunID:     domain.TemplateRunID("run_victim"),
-				Phase:     "apply-9",
-				RunPhase:  domain.RunPhaseApply,
-				Seq:       9,
-				Command:   domain.TerraformCommandDestroy,
-				ObjectKey: "tenants/tenant_victim/runs/run_victim/logs/apply.log",
+				TenantID:    domain.TenantID("tenant_victim"),
+				RunID:       domain.TemplateRunID("run_victim"),
+				Phase:       "apply-9",
+				RunPhase:    domain.RunPhaseApply,
+				Seq:         9,
+				Command:     domain.TerraformCommandDestroy,
+				ObjectKey:   "tenants/tenant_victim/runs/run_victim/logs/apply.log",
+				ContentType: "text/plain; charset=utf-8",
+				UploadedAt:  time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC),
 			}, nil
 		})
 
@@ -1483,23 +1764,35 @@ func TestTemplatePlanWorkflowPinsLogIdentityToTheRun(t *testing.T) {
 	if len(recorded) == 0 {
 		t.Fatal("no log metadata recorded")
 	}
+	// Each command records its log twice, live and then complete, so the
+	// i'th row is command i/2's.
+	if len(recorded) != 2*len(named) {
+		t.Fatalf("recorded %d log rows for %d commands, want two each", len(recorded), len(named))
+	}
 	for i, log := range recorded {
+		wantState := domain.TemplateRunLogLive
+		if i%2 == 1 {
+			wantState = domain.TemplateRunLogComplete
+		}
+		if log.State != wantState {
+			t.Fatalf("recorded log row %d as %s, want %s", i, log.State, wantState)
+		}
 		if log.TenantID != input.TenantID {
 			t.Fatalf("recorded %s log tenant = %q, want %q", log.Phase, log.TenantID, input.TenantID)
 		}
 		if log.RunID != input.RunID {
 			t.Fatalf("recorded %s log run = %q, want %q", log.Phase, log.RunID, input.RunID)
 		}
-		if log.Phase != named[i] {
-			t.Fatalf("recorded log %d as %q, want the workflow's name %q", i, log.Phase, named[i])
+		if log.Phase != named[i/2] {
+			t.Fatalf("recorded log row %d as %q, want the workflow's name %q", i, log.Phase, named[i/2])
 		}
 		// What wrote the log is the workflow's to say too: a plan workflow
 		// never runs a destroy.
 		if log.RunPhase != domain.RunPhasePlan || log.Command == domain.TerraformCommandDestroy {
 			t.Fatalf("recorded %s log as %s/%s, want the plan phase's own command", log.Phase, log.RunPhase, log.Command)
 		}
-		if want, _ := domain.RunLogName(log.RunPhase, log.Seq); want != log.Phase || log.Seq != i+1 {
-			t.Fatalf("recorded log %d as %q, number %d, want %q, number %d", i, log.Phase, log.Seq, want, i+1)
+		if want, _ := domain.RunLogName(log.RunPhase, log.Seq); want != log.Phase || log.Seq != i/2+1 {
+			t.Fatalf("recorded log row %d as %q, number %d, want %q, number %d", i, log.Phase, log.Seq, want, i/2+1)
 		}
 	}
 }
@@ -1515,10 +1808,12 @@ func TestTemplatePlanWorkflowPinsLogIdentityOfFailedCommand(t *testing.T) {
 		Return(domain.FetchSourceActivityOutput{TerraformPath: "run/workspace/source"}, nil)
 
 	hostileLog := domain.TemplateRunLog{
-		TenantID:  domain.TenantID("tenant_victim"),
-		RunID:     domain.TemplateRunID("run_victim"),
-		Phase:     "plan",
-		ObjectKey: "logs/plan.log",
+		TenantID:    domain.TenantID("tenant_victim"),
+		RunID:       domain.TemplateRunID("run_victim"),
+		Phase:       "plan",
+		ObjectKey:   "logs/plan.log",
+		ContentType: "text/plain; charset=utf-8",
+		UploadedAt:  time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC),
 	}
 	var recorded []domain.TemplateRunLog
 	env.OnActivity(domain.RunTerraformActivityName, mock.Anything, mock.Anything).

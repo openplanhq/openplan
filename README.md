@@ -24,8 +24,8 @@ change it, metered hourly against your peak count. As of 2026 that is $0.10 to
 $0.99 per resource per month by tier, and the free tier reached end of life in
 March 2026.
 
-openplan runs on your own Postgres and Temporal, so there is no per-resource
-meter. OpenTofu and Terraform are on equal footing, with no licence questions in
+openplan runs on your own Postgres, Temporal and Valkey, so there is no
+per-resource meter. OpenTofu and Terraform are on equal footing, with no licence questions in
 between.
 
 |                                    | **openplan**                   | HCP Terraform   | Atlantis        | Terragrunt  |

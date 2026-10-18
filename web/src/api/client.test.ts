@@ -18,6 +18,7 @@ import {
   registerTemplate,
   ssoLoginURL,
   startTemplateRun,
+  templateRunLogEventsURL,
   updateStackTemplateConfig,
   upgradeStackTemplate
 } from "./client";
@@ -262,6 +263,10 @@ describe("api client", () => {
       "/v1/tenants/tenant_123/template-runs/run_123/logs/plan-1",
       expect.objectContaining({ method: "GET" })
     );
+  });
+
+  it("addresses a log's live events beside its body", () => {
+    expect(templateRunLogEventsURL("tenant 1", "run/1", "plan-1")).toBe("/v1/tenants/tenant%201/template-runs/run%2F1/logs/plan-1/events");
   });
 
   // The person is named in the path, so the body carries only the role.

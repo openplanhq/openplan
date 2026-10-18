@@ -1,0 +1,43 @@
+$kind: http-request
+description: |-
+  Streams a running command's output as server-sent events
+  (`text/event-stream`), for a browser's `EventSource`. The stream
+  replays the output so far, then follows it as the command writes,
+  and ends with one `log_end` event. Three event types, each with a
+  JSON `data` line:
+
+  - `log`: the next bytes of output. `data` is
+    `{"offset": <n>, "end": <m>, "data": "<text>"}`: `offset` is the
+    first byte's position in the log, `end` the position after the
+    last, counted on the raw bytes, and `text` is the bytes as UTF-8,
+    with any invalid sequence replaced by U+FFFD. Events follow one
+    another without gaps or overlaps, across reconnects too, so a
+    client appends each `text` as it arrives. The event's `id` is what
+    to send back as `Last-Event-ID`.
+  - `log_truncated`: the output outgrew what is streamed live, and no
+    more `log` events follow. `data` is `{}`. Read the rest from the
+    log's body once it is `complete`.
+  - `log_end`: the last event. `data` is `{"state": "<state>"}`:
+    `complete` (read the whole body from the log's body endpoint),
+    `lost` (the output was not stored), or `live` (the command is still
+    running, but this stream stopped following it: reconnect with
+    `Last-Event-ID`). A stream that could not follow the log at all,
+    because the server's live log store failed or this server is
+    following as many logs as it can, sends `retry: 3000` before its
+    `log_end` `live`, so `EventSource` waits three seconds.
+
+  A log that is not `live` when the request arrives gets its
+  `log_end` straight away. While the command prints nothing, the
+  stream carries no event, only a comment line every 20 seconds.
+
+  In a collection run the plan has finished, so the stream is one `log_end` and closes.
+method: GET
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/template-runs/{{run_id}}/logs/{{name}}/events'
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('status is 200', () => pm.response.to.have.status(200));
+      pm.test('body is an event stream', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('text/event-stream'));
+    language: text/javascript
+examples: ./.resources/Follow one log live.resources/examples
+order: 7000

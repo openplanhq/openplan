@@ -1176,8 +1176,25 @@ func (store *Store) ListTemplateRuns(ctx context.Context, tenantID domain.Tenant
 }
 
 // RecordTemplateRunLog upserts one log's metadata, keyed by its run phase and
-// number. The database derives its name, phase, from those two.
+// number. The database derives its name, phase, from those two. The same row
+// moves from live to complete or lost as the command's output is uploaded or
+// given up on.
 func (store *Store) RecordTemplateRunLog(ctx context.Context, log domain.TemplateRunLog) error {
+	// The object columns are null until the output is in the object store,
+	// and lost_reason is null unless the log is lost: the table's checks
+	// refuse a row whose state and columns disagree, so a zero value must
+	// not be written as though it were real.
+	var objectKey, contentType, lostReason *string
+	var sizeBytes *int64
+	var uploadedAt *time.Time
+	if log.State == domain.TemplateRunLogComplete {
+		objectKey, contentType = &log.ObjectKey, &log.ContentType
+		sizeBytes, uploadedAt = &log.SizeBytes, &log.UploadedAt
+	}
+	if log.LostReason != "" {
+		reason := string(log.LostReason)
+		lostReason = &reason
+	}
 	result, err := store.pool.Exec(ctx, `
 		insert into template_run_logs (
 			tenant_id,
@@ -1185,12 +1202,14 @@ func (store *Store) RecordTemplateRunLog(ctx context.Context, log domain.Templat
 			run_phase,
 			seq,
 			command,
+			state,
+			lost_reason,
 			object_key,
 			content_type,
 			size_bytes,
 			uploaded_at
 		)
-		select $1, $2, $3, $4, $5, $6, $7, $8, $9
+		select $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 		where exists (
 			select 1
 			from template_runs
@@ -1199,6 +1218,8 @@ func (store *Store) RecordTemplateRunLog(ctx context.Context, log domain.Templat
 		)
 		on conflict (tenant_id, run_id, run_phase, seq) do update set
 			command = excluded.command,
+			state = excluded.state,
+			lost_reason = excluded.lost_reason,
 			object_key = excluded.object_key,
 			content_type = excluded.content_type,
 			size_bytes = excluded.size_bytes,
@@ -1209,10 +1230,12 @@ func (store *Store) RecordTemplateRunLog(ctx context.Context, log domain.Templat
 		log.RunPhase,
 		log.Seq,
 		log.Command,
-		log.ObjectKey,
-		log.ContentType,
-		log.SizeBytes,
-		log.UploadedAt,
+		log.State,
+		lostReason,
+		objectKey,
+		contentType,
+		sizeBytes,
+		uploadedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("record template run log: %w", err)
@@ -1224,8 +1247,7 @@ func (store *Store) RecordTemplateRunLog(ctx context.Context, log domain.Templat
 }
 
 func (store *Store) GetTemplateRunLog(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, phase string) (domain.TemplateRunLog, error) {
-	var log domain.TemplateRunLog
-	err := store.pool.QueryRow(ctx, `
+	log, err := scanTemplateRunLog(store.pool.QueryRow(ctx, `
 		select
 			tenant_id,
 			run_id,
@@ -1233,6 +1255,8 @@ func (store *Store) GetTemplateRunLog(ctx context.Context, tenantID domain.Tenan
 			run_phase,
 			seq,
 			command,
+			state,
+			lost_reason,
 			object_key,
 			content_type,
 			size_bytes,
@@ -1241,18 +1265,7 @@ func (store *Store) GetTemplateRunLog(ctx context.Context, tenantID domain.Tenan
 		where tenant_id = $1
 			and run_id = $2
 			and phase = $3
-	`, tenantID, runID, phase).Scan(
-		&log.TenantID,
-		&log.RunID,
-		&log.Phase,
-		&log.RunPhase,
-		&log.Seq,
-		&log.Command,
-		&log.ObjectKey,
-		&log.ContentType,
-		&log.SizeBytes,
-		&log.UploadedAt,
-	)
+	`, tenantID, runID, phase))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.TemplateRunLog{}, app.ErrNotFound
 	}
@@ -1271,6 +1284,8 @@ func (store *Store) ListTemplateRunLogs(ctx context.Context, tenantID domain.Ten
 			run_phase,
 			seq,
 			command,
+			state,
+			lost_reason,
 			object_key,
 			content_type,
 			size_bytes,
@@ -1287,19 +1302,8 @@ func (store *Store) ListTemplateRunLogs(ctx context.Context, tenantID domain.Ten
 
 	var logs []domain.TemplateRunLog
 	for rows.Next() {
-		var log domain.TemplateRunLog
-		if err := rows.Scan(
-			&log.TenantID,
-			&log.RunID,
-			&log.Phase,
-			&log.RunPhase,
-			&log.Seq,
-			&log.Command,
-			&log.ObjectKey,
-			&log.ContentType,
-			&log.SizeBytes,
-			&log.UploadedAt,
-		); err != nil {
+		log, err := scanTemplateRunLog(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scan template run log: %w", err)
 		}
 		logs = append(logs, log)
@@ -1309,6 +1313,49 @@ func (store *Store) ListTemplateRunLogs(ctx context.Context, tenantID domain.Ten
 	}
 
 	return logs, nil
+}
+
+// scanTemplateRunLog reads one row of the columns GetTemplateRunLog and
+// ListTemplateRunLogs select, in their order. The nullable columns come back
+// as the domain's zero values, so a log that is not complete carries no
+// object fields and one that is not lost no reason.
+func scanTemplateRunLog(row pgx.Row) (domain.TemplateRunLog, error) {
+	var log domain.TemplateRunLog
+	var objectKey, contentType, lostReason *string
+	var sizeBytes *int64
+	var uploadedAt *time.Time
+	if err := row.Scan(
+		&log.TenantID,
+		&log.RunID,
+		&log.Phase,
+		&log.RunPhase,
+		&log.Seq,
+		&log.Command,
+		&log.State,
+		&lostReason,
+		&objectKey,
+		&contentType,
+		&sizeBytes,
+		&uploadedAt,
+	); err != nil {
+		return domain.TemplateRunLog{}, err
+	}
+	if lostReason != nil {
+		log.LostReason = domain.TemplateRunLogLostReason(*lostReason)
+	}
+	if objectKey != nil {
+		log.ObjectKey = *objectKey
+	}
+	if contentType != nil {
+		log.ContentType = *contentType
+	}
+	if sizeBytes != nil {
+		log.SizeBytes = *sizeBytes
+	}
+	if uploadedAt != nil {
+		log.UploadedAt = *uploadedAt
+	}
+	return log, nil
 }
 
 func (store *Store) ApproveTemplateRun(ctx context.Context, approval domain.TemplateRunApproval) error {

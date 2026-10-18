@@ -98,16 +98,34 @@ func TestTemplateRunLogResponseFields(t *testing.T) {
 	response := newTemplateRunLogResponse(domain.TemplateRunLog{
 		TenantID: "tenant-1", RunID: "run-1", Phase: "plan-1", RunPhase: domain.RunPhasePlan,
 		Seq: 1, Command: domain.TerraformCommandPlan, CommandLine: "tofu plan",
+		State:     domain.TemplateRunLogComplete,
 		ObjectKey: "tenants/tenant-1/runs/run-1/plan-1.log", ContentType: "text/plain",
 		SizeBytes: 12, UploadedAt: time.Date(2026, 10, 17, 9, 0, 0, 0, time.UTC),
 	})
 
 	assert.Equal(t, []string{
 		"command", "command_line", "content_type", "name", "run_id", "run_phase", "seq",
-		"size_bytes", "tenant_id", "uploaded_at",
+		"size_bytes", "state", "tenant_id", "uploaded_at",
 	}, jsonKeys(t, response))
 	// name is what GET .../logs/{name} reads the log under.
 	assert.Equal(t, "plan-1", response.Name)
+}
+
+// A complete log of zero bytes is an empty upload, which a client must be
+// able to tell from a log with no upload at all.
+func TestTemplateRunLogResponseSizeBytes(t *testing.T) {
+	t.Parallel()
+
+	complete := domain.TemplateRunLog{
+		Phase: "plan-1", State: domain.TemplateRunLogComplete, ContentType: "text/plain",
+		SizeBytes: 0, UploadedAt: time.Date(2026, 10, 17, 9, 0, 0, 0, time.UTC),
+	}
+	encoded, err := json.Marshal(newTemplateRunLogResponse(complete))
+	require.NoError(t, err)
+	assert.Contains(t, string(encoded), `"size_bytes":0`)
+
+	live := domain.TemplateRunLog{Phase: "plan-1", State: domain.TemplateRunLogLive, SizeBytes: 12}
+	assert.NotContains(t, jsonKeys(t, newTemplateRunLogResponse(live)), "size_bytes")
 }
 
 func TestTemplateRegistrationResponseFields(t *testing.T) {

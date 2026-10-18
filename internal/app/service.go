@@ -41,6 +41,11 @@ var (
 	ErrCredentialNameInvalid              = errors.New("credential name is invalid")
 	ErrDuplicateCredentialName            = errors.New("duplicate credential name")
 	ErrCredentialEncryptionUnavailable    = errors.New("credential encryption is unavailable")
+	// ErrTemplateRunLogLive and ErrTemplateRunLogLost refuse a log body that
+	// is not in the object store: one still being written, or one that
+	// never will be.
+	ErrTemplateRunLogLive = errors.New("template run log is still live")
+	ErrTemplateRunLogLost = errors.New("template run log was lost")
 )
 
 func authenticatedActor(ctx context.Context) (domain.UserID, error) {
@@ -1962,17 +1967,20 @@ func (service *Service) labelTriggerActors(ctx context.Context, runs ...*domain.
 }
 
 // GetTemplateRunLog returns one log after checking that the run belongs to the tenant.
+// Only a complete log has a body: a live or lost one is refused before the
+// object store is asked for something it doesn't hold.
 func (service *Service) GetTemplateRunLog(ctx context.Context, command GetTemplateRunLogCommand) ([]byte, error) {
-	if err := validateGetTemplateRunLogCommand(command); err != nil {
-		return nil, err
-	}
-
-	if _, err := service.authorizedTemplateRun(ctx, command.TenantID, command.RunID, authorization.RelationCanView); err != nil {
-		return nil, err
-	}
-	log, err := service.TemplateRunLogMetadata.GetTemplateRunLog(ctx, command.TenantID, command.RunID, command.Name)
+	log, err := service.GetTemplateRunLogMetadata(ctx, command)
 	if err != nil {
-		return nil, fmt.Errorf("get template run log metadata: %w", err)
+		return nil, err
+	}
+	switch log.State {
+	case domain.TemplateRunLogLive:
+		return nil, ErrTemplateRunLogLive
+	case domain.TemplateRunLogLost:
+		return nil, ErrTemplateRunLogLost
+	case domain.TemplateRunLogComplete:
+		// The one state with a body: read on.
 	}
 
 	content, err := service.TemplateRunLogs.ReadTemplateRunLog(ctx, log)
@@ -1986,13 +1994,70 @@ func (service *Service) GetTemplateRunLog(ctx context.Context, command GetTempla
 	return content, nil
 }
 
+// GetTemplateRunLogMetadata is an authorized read of one log's row, with the
+// state derived: a live row of a finished run is lost.
+func (service *Service) GetTemplateRunLogMetadata(ctx context.Context, command GetTemplateRunLogCommand) (domain.TemplateRunLog, error) {
+	if err := validateGetTemplateRunLogCommand(command); err != nil {
+		return domain.TemplateRunLog{}, err
+	}
+
+	run, err := service.authorizedTemplateRun(ctx, command.TenantID, command.RunID, authorization.RelationCanView)
+	if err != nil {
+		return domain.TemplateRunLog{}, err
+	}
+	log, err := service.TemplateRunLogMetadata.GetTemplateRunLog(ctx, command.TenantID, command.RunID, command.Name)
+	if err != nil {
+		return domain.TemplateRunLog{}, fmt.Errorf("get template run log metadata: %w", err)
+	}
+	log.CommandLine = log.Command.CommandLine()
+
+	return deriveTemplateRunLogState(log, run.Status), nil
+}
+
+// TemplateRunLogState is a log's state as GetTemplateRunLogMetadata derives
+// it, without the authorization check. It is for a live log stream re-checking
+// whether its log has ended, after GetTemplateRunLogMetadata authorized the
+// viewer when the stream opened: the stream shares one re-check among every
+// viewer of the log, so the check must not depend on who is asking.
+func (service *Service) TemplateRunLogState(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, name string) (domain.TemplateRunLogState, error) {
+	run, err := service.TemplateRuns.GetTemplateRun(ctx, tenantID, runID)
+	if err != nil {
+		return "", fmt.Errorf("get template run: %w", err)
+	}
+	log, err := service.TemplateRunLogMetadata.GetTemplateRunLog(ctx, tenantID, runID, name)
+	if err != nil {
+		return "", fmt.Errorf("get template run log metadata: %w", err)
+	}
+	return deriveTemplateRunLogState(log, run.Status).State, nil
+}
+
+// deriveTemplateRunLogState reports a live log of a finished run as lost. Only
+// the workflow moves a row out of live, so a run canceled mid-command, or
+// whose final record never landed, leaves its row live forever; the run's
+// status is what says nobody will finish it, and which of the two it was: a
+// canceled run was cut off, while a completed or failed run ran its commands
+// to the end and reached the record, which then failed.
+func deriveTemplateRunLogState(log domain.TemplateRunLog, status domain.TemplateRunStatus) domain.TemplateRunLog {
+	if log.State != domain.TemplateRunLogLive || !status.Terminal() {
+		return log
+	}
+	log.State = domain.TemplateRunLogLost
+	if status == domain.TemplateRunCanceled {
+		log.LostReason = domain.LogLostRunTerminated
+	} else {
+		log.LostReason = domain.LogLostRecordFailed
+	}
+	return log
+}
+
 // ListTemplateRunLogs returns persisted log metadata after checking that the run belongs to the tenant.
 func (service *Service) ListTemplateRunLogs(ctx context.Context, command ListTemplateRunLogsCommand) ([]domain.TemplateRunLog, error) {
 	if err := validateGetTemplateRunCommand(GetTemplateRunCommand(command)); err != nil {
 		return nil, err
 	}
 
-	if _, err := service.authorizedTemplateRun(ctx, command.TenantID, command.RunID, authorization.RelationCanView); err != nil {
+	run, err := service.authorizedTemplateRun(ctx, command.TenantID, command.RunID, authorization.RelationCanView)
+	if err != nil {
 		return nil, err
 	}
 
@@ -2005,6 +2070,7 @@ func (service *Service) ListTemplateRunLogs(ctx context.Context, command ListTem
 	}
 	for i := range logs {
 		logs[i].CommandLine = logs[i].Command.CommandLine()
+		logs[i] = deriveTemplateRunLogState(logs[i], run.Status)
 	}
 
 	return logs, nil

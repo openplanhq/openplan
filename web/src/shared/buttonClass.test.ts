@@ -38,4 +38,15 @@ describe("buttonClass", () => {
     expect(icon).toEqual(expect.arrayContaining(["size-8", "text-muted-foreground"]));
     expect(icon).not.toContain("px-3");
   });
+
+  it("draws a quiet button as 12px muted text with no padding, fill or weight", () => {
+    const quiet = classes(buttonClass("quiet"));
+    expect(quiet).toEqual(
+      expect.arrayContaining(["text-xs", "text-muted-foreground", "hover:text-foreground", "hover:underline", "font-normal", "px-0", "h-auto"])
+    );
+    expect(quiet).not.toContain("text-primary");
+    expect(quiet).not.toContain("font-medium");
+    expect(quiet).not.toContain("px-2");
+    expect(quiet).not.toContain("h-6");
+  });
 });

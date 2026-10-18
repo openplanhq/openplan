@@ -276,6 +276,12 @@ export function getTemplateRunLog(tenantID: string, runID: string, name: string)
   return requestText(`/v1/tenants/${encodeURIComponent(tenantID)}/template-runs/${encodeURIComponent(runID)}/logs/${encodeURIComponent(name)}`);
 }
 
+// A live log's server-sent events, for an EventSource rather than fetch: the
+// browser holds the stream open and reconnects it on its own.
+export function templateRunLogEventsURL(tenantID: string, runID: string, name: string): string {
+  return `/v1/tenants/${encodeURIComponent(tenantID)}/template-runs/${encodeURIComponent(runID)}/logs/${encodeURIComponent(name)}/events`;
+}
+
 // approveRun answers with the run, already approved, while its apply waits for
 // an executor.
 export function approveRun(tenantID: string, runID: string): Promise<TemplateRun> {

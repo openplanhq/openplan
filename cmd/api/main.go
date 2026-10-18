@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	"github.com/vishu42/openplan/internal/activities"
 	"github.com/vishu42/openplan/internal/api"
 	"github.com/vishu42/openplan/internal/app"
@@ -26,6 +27,7 @@ import (
 	"github.com/vishu42/openplan/internal/domain"
 	"github.com/vishu42/openplan/internal/encryption"
 	"github.com/vishu42/openplan/internal/githubapp"
+	"github.com/vishu42/openplan/internal/logsink"
 	"github.com/vishu42/openplan/internal/postgres"
 	"github.com/vishu42/openplan/internal/queue"
 	"github.com/vishu42/openplan/internal/temporal"
@@ -95,6 +97,15 @@ type apiDependencies struct {
 	newVerifier          func(context.Context, authentication.OIDCVerifierConfig) (tokenVerifier, error)
 	newAuthorization     func(context.Context, postgresPool, string) (*authorization.Authorization, error)
 	listenAndServe       func(context.Context, string, http.Handler) error
+	// dialLiveLogs connects to the Valkey the executor publishes commands'
+	// output to: the API ends each finished log's stream there.
+	dialLiveLogs func(ctx context.Context, url string) (*redis.Client, error)
+	// dialLiveLogReaders connects the client the live log registry reads
+	// with, kept apart from dialLiveLogs' so tailers' blocking reads cannot
+	// starve the writes that end each stream.
+	dialLiveLogReaders func(ctx context.Context, url string) (*redis.Client, error)
+	// newLiveLogSubscriber builds what the events route follows logs with.
+	newLiveLogSubscriber func(logsink.Reader) api.LiveLogSubscriber
 
 	dialTemporal       func(context.Context, temporal.Config) (client.Client, error)
 	newWorker          func(client.Client, string, temporalworker.Options) temporalWorker
@@ -102,7 +113,7 @@ type apiDependencies struct {
 	newQueueController func(controlStore, app.WorkflowDispatcher) (queueController, error)
 	// registerControl attaches both workflows and every control activity to the
 	// worker polling the control queue.
-	registerControl func(temporalWorker, controlStore, activities.GitHubTokenSource)
+	registerControl func(temporalWorker, controlStore, activities.GitHubTokenSource, logsink.Stream)
 }
 
 func credentialRepository(store appRepositories) app.CredentialRepository {
@@ -215,8 +226,13 @@ func defaultAPIDependencies() apiDependencies {
 			}
 			return authorization.New(ctx, concrete, storeName)
 		},
-		listenAndServe: listenAndServe,
-		dialTemporal:   temporal.Dial,
+		listenAndServe:     listenAndServe,
+		dialLiveLogs:       logsink.Dial,
+		dialLiveLogReaders: logsink.DialReaders,
+		newLiveLogSubscriber: func(reader logsink.Reader) api.LiveLogSubscriber {
+			return logsink.NewRegistry(reader)
+		},
+		dialTemporal: temporal.Dial,
 		newWorker: func(temporalClient client.Client, taskQueue string, options temporalworker.Options) temporalWorker {
 			return temporalworker.New(temporalClient, taskQueue, options)
 		},
@@ -234,7 +250,7 @@ func defaultAPIDependencies() apiDependencies {
 	}
 }
 
-func registerControl(worker temporalWorker, store controlStore, gitHubTokens activities.GitHubTokenSource) {
+func registerControl(worker temporalWorker, store controlStore, gitHubTokens activities.GitHubTokenSource, live logsink.Stream) {
 	worker.RegisterWorkflowWithOptions(workflows.TemplatePlanWorkflow, workflow.RegisterOptions{
 		Name: domain.TemplatePlanWorkflowName,
 	})
@@ -245,7 +261,7 @@ func registerControl(worker temporalWorker, store controlStore, gitHubTokens act
 		Name: domain.TemplateSyncWorkflowName,
 	})
 
-	control := activities.NewControlActivities(store, gitHubTokens)
+	control := activities.NewControlActivities(store, gitHubTokens, live)
 	worker.RegisterActivityWithOptions(control.RecordTemplateRunStatus, activity.RegisterOptions{
 		Name: domain.RecordTemplateRunStatusActivityName,
 	})
@@ -375,6 +391,18 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 	if err != nil {
 		return fmt.Errorf("wire log reader: %w", err)
 	}
+	// Before the control worker: an API that takes run activities but cannot
+	// end a log's stream leaves its viewers watching a command already over.
+	liveLogs, err := deps.dialLiveLogs(ctx, cfg.LiveLogURL)
+	if err != nil {
+		return fmt.Errorf("live logs: %w", err)
+	}
+	defer liveLogs.Close()
+	liveLogReaders, err := deps.dialLiveLogReaders(ctx, cfg.LiveLogURL)
+	if err != nil {
+		return fmt.Errorf("live log readers: %w", err)
+	}
+	defer liveLogReaders.Close()
 	service, err := deps.newService(app.Service{
 		Authorization:            auth,
 		Work:                     store,
@@ -412,6 +440,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 
 	handler := api.NewAuthenticatedServer(service, cfg.Security.TenantID, cfg.Debug,
 		api.WithQueueReader(store),
+		api.WithLiveLogs(deps.newLiveLogSubscriber(liveLogReaders)),
 		api.WithAuth(api.AuthConfig{
 			Flow:                flow,
 			Verifier:            verifier,
@@ -432,11 +461,17 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 	defer stopReaper()
 	go authentication.ReapSessions(reaperCtx, sessions, authentication.DefaultSessionReapInterval, nil)
 
-	stopControlPlane, err := startControlPlane(ctx, cfg, deps, store)
+	stopControlPlane, err := startControlPlane(ctx, cfg, deps, store, liveLogs)
 	if err != nil {
 		return err
 	}
 	defer stopControlPlane()
+
+	// Live log streams end as the process stops: http.Server.Shutdown waits
+	// for handlers, and a stream would otherwise hold it to its timeout for
+	// as long as anyone is watching a run.
+	stopLiveStreams := context.AfterFunc(ctx, handler.CloseLiveStreams)
+	defer stopLiveStreams()
 
 	if err := deps.listenAndServe(ctx, cfg.HTTPAddress, handler); err != nil {
 		return fmt.Errorf("listen and serve api: %w", err)
@@ -454,7 +489,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 // keys, and the process that runs tenant Terraform must hold neither. The
 // returned function stops the queue loop, then the worker, then closes the
 // Temporal client.
-func startControlPlane(ctx context.Context, cfg config.APIConfig, deps apiDependencies, store appRepositories) (func(), error) {
+func startControlPlane(ctx context.Context, cfg config.APIConfig, deps apiDependencies, store appRepositories, live logsink.Stream) (func(), error) {
 	control, err := controlPlaneStore(store)
 	if err != nil {
 		return nil, fmt.Errorf("wire control plane store: %w", err)
@@ -481,7 +516,7 @@ func startControlPlane(ctx context.Context, cfg config.APIConfig, deps apiDepend
 
 	// TODO: no session worker here?
 	worker := deps.newWorker(temporalClient, domain.ControlTaskQueue, temporalworker.Options{})
-	deps.registerControl(worker, control, gitHubTokens)
+	deps.registerControl(worker, control, gitHubTokens, live)
 	controller, err := deps.newQueueController(control, deps.newDispatcher(temporalClient, temporal.DispatcherOptions{
 		TerraformTimeout: cfg.TerraformTimeout,
 	}))

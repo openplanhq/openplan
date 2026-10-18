@@ -67,16 +67,22 @@ type planSummaryResponse struct {
 // under. Name is the domain's Phase, sent under the name the log is read by
 // (GET .../logs/{name}): it is a key, not a run phase.
 type templateRunLogResponse struct {
-	TenantID    string    `json:"tenant_id"`
-	RunID       string    `json:"run_id"`
-	Name        string    `json:"name"`
-	RunPhase    string    `json:"run_phase"`
-	Seq         int       `json:"seq"`
-	Command     string    `json:"command"`
-	CommandLine string    `json:"command_line"`
-	ContentType string    `json:"content_type"`
-	SizeBytes   int64     `json:"size_bytes"`
-	UploadedAt  time.Time `json:"uploaded_at"`
+	TenantID    string `json:"tenant_id"`
+	RunID       string `json:"run_id"`
+	Name        string `json:"name"`
+	RunPhase    string `json:"run_phase"`
+	Seq         int    `json:"seq"`
+	Command     string `json:"command"`
+	CommandLine string `json:"command_line"`
+	State       string `json:"state"`
+	LostReason  string `json:"lost_reason,omitempty"`
+	// The upload fields describe the stored body, so a log that isn't
+	// complete leaves all three out rather than sending zeros a client could
+	// read as an empty upload. SizeBytes is a pointer so that a complete log
+	// of zero bytes still says so.
+	ContentType string    `json:"content_type,omitempty"`
+	SizeBytes   *int64    `json:"size_bytes,omitempty"`
+	UploadedAt  time.Time `json:"uploaded_at,omitzero"`
 }
 
 type templateRegistrationResponse struct {
@@ -175,6 +181,10 @@ func newPlanSummaryResponse(summary *domain.PlanSummary) *planSummaryResponse {
 }
 
 func newTemplateRunLogResponse(log domain.TemplateRunLog) templateRunLogResponse {
+	var size *int64
+	if log.State == domain.TemplateRunLogComplete {
+		size = &log.SizeBytes
+	}
 	return templateRunLogResponse{
 		TenantID:    string(log.TenantID),
 		RunID:       string(log.RunID),
@@ -183,8 +193,10 @@ func newTemplateRunLogResponse(log domain.TemplateRunLog) templateRunLogResponse
 		Seq:         log.Seq,
 		Command:     string(log.Command),
 		CommandLine: log.CommandLine,
+		State:       string(log.State),
+		LostReason:  string(log.LostReason),
 		ContentType: log.ContentType,
-		SizeBytes:   log.SizeBytes,
+		SizeBytes:   size,
 		UploadedAt:  log.UploadedAt,
 	}
 }

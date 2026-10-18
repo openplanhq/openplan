@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/vishu42/openplan/internal/domain"
+	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -57,6 +58,30 @@ var terraformRetryPolicy = &temporal.RetryPolicy{
 		"InvalidConfig",
 		"UnsupportedCommand",
 	},
+}
+
+// uploadLogRetryPolicy retries UploadLog where defaultRunRetryPolicy would
+// not: an upload is idempotent (the same spool to the same key), so retrying
+// it is safe, and without retries one blip in the object store loses a log
+// whose command already ran. Five attempts span about half a minute, which
+// rides out a brief outage without holding the run back for long; past that
+// the log is recorded lost.
+var uploadLogRetryPolicy = &temporal.RetryPolicy{
+	InitialInterval:    2 * time.Second,
+	BackoffCoefficient: 2.0,
+	MaximumInterval:    30 * time.Second,
+	MaximumAttempts:    5,
+}
+
+// recordLogRetryPolicy retries every RecordTemplateRunLog the workflow makes,
+// where defaultRunRetryPolicy would not: the record is an upsert on the log's
+// run, phase and number, so a retry rewrites the same row. It is short because
+// every command waits on its live row before starting, and a row that still
+// cannot be written is logged and the run goes on without it.
+var recordLogRetryPolicy = &temporal.RetryPolicy{
+	InitialInterval:    time.Second,
+	BackoffCoefficient: 2.0,
+	MaximumAttempts:    3,
 }
 
 // planWorkflow is TemplatePlanWorkflow as it carries a run, and applyWorkflow
@@ -522,7 +547,7 @@ func (s *session) transferPlan(step domain.TemplateRunStep, activityName string,
 
 // terraform runs one Terraform command on the executor as the step it is,
 // with the run's credentials sealed to the workspace's key, then has the
-// executor upload the log it spooled, and records it.
+// executor upload the log it spooled, and records where it ended up.
 func (s *session) terraform(command domain.TerraformCommandType) (domain.RunTerraformActivityOutput, error) {
 	// Sealed for every command rather than once per run: credentials are read
 	// fresh each time, and an apply can start a day after its plan.
@@ -537,6 +562,18 @@ func (s *session) terraform(command domain.TerraformCommandType) (domain.RunTerr
 	logName, err := domain.RunLogName(s.ws.phase, seq)
 	if err != nil {
 		return domain.RunTerraformActivityOutput{}, err
+	}
+	// The live row goes in before ExecuteStep records the step: the run page
+	// refetches its logs when the step changes, so the row has to be there
+	// by then. A row that cannot be written costs the page its live view of
+	// this command, which is no reason to skip the command.
+	if err := s.run.log(logName, domain.TemplateRunLog{
+		State:    domain.TemplateRunLogLive,
+		RunPhase: s.ws.phase,
+		Seq:      seq,
+		Command:  command,
+	}); err != nil {
+		workflow.GetLogger(s.run.ctx).Warn("record live run log", "log", logName, "error", err)
 	}
 
 	// Every Terraform command gets the configured budget and the more generous
@@ -565,37 +602,79 @@ func (s *session) terraform(command domain.TerraformCommandType) (domain.RunTerr
 		SealedEnvironment: credentials.SealedEnvironment,
 	}).Get(ctx, &output)
 	// A failed command's log is what explains the failure, so it is saved
-	// either way. A session whose executor is gone fails this too.
-	logErr := s.saveLog(logName, seq, command)
-	switch {
-	case runErr != nil && logErr != nil:
-		return domain.RunTerraformActivityOutput{}, fmt.Errorf("%w (also failed to save its log: %w)", runErr, logErr)
-	case runErr != nil:
+	// either way. Saving it never fails the step: the command's own result is
+	// what the run is about.
+	s.saveLog(logName, seq, command, runErr)
+	if runErr != nil {
 		return domain.RunTerraformActivityOutput{}, runErr
-	case logErr != nil:
-		return domain.RunTerraformActivityOutput{}, logErr
 	}
 	return output, nil
 }
 
 // saveLog uploads the log the executor spooled under name, from a sandbox of
-// its own (UploadLog), then records it on the control plane with its number
-// and the command and phase that wrote it, which the workflow knows and the
-// executor does not get to say.
-func (s *session) saveLog(name string, seq int, command domain.TerraformCommandType) error {
+// its own (UploadLog), then records it on the control plane as complete, or
+// as lost if the upload never succeeded. Its number and the command and phase
+// that wrote it are the workflow's, which the executor does not get to say.
+//
+// runErr is the command's own error, which, with the session's state, says
+// why an upload failed: see executorGone.
+//
+// Nothing here fails the step. A log that is lost, or a row that cannot be
+// written, is logged; the run's outcome stays the command's.
+func (s *session) saveLog(name string, seq int, command domain.TerraformCommandType, runErr error) {
+	logger := workflow.GetLogger(s.ctx)
+	log := domain.TemplateRunLog{RunPhase: s.ws.phase, Seq: seq, Command: command}
+
 	ctx := workflow.WithStartToCloseTimeout(s.ctx, 5*time.Minute)
-	var log domain.TemplateRunLog
+	ctx = workflow.WithRetryPolicy(ctx, *uploadLogRetryPolicy)
+	var uploaded domain.TemplateRunLog
 	if err := workflow.ExecuteActivity(ctx, domain.UploadLogActivityName, domain.UploadLogActivityInput{
 		TenantID: s.run.input.TenantID,
 		RunID:    s.run.input.RunID,
 		LogName:  name,
-	}).Get(ctx, &log); err != nil {
-		return fmt.Errorf("upload log: %w", err)
+	}).Get(ctx, &uploaded); err != nil {
+		logger.Warn("upload run log", "log", name, "error", err)
+		log.State = domain.TemplateRunLogLost
+		log.LostReason = domain.LogLostUploadFailed
+		if s.executorGone(runErr) {
+			log.LostReason = domain.LogLostExecutorGone
+		}
+	} else if uploaded.ContentType == "" || uploaded.UploadedAt.IsZero() {
+		// The control plane refuses a complete row that does not describe
+		// its object, which would leave the row live for good; an object
+		// the row cannot describe is as good as lost.
+		logger.Warn("upload run log returned an incomplete result", "log", name,
+			"content_type", uploaded.ContentType, "uploaded_at", uploaded.UploadedAt)
+		log.State = domain.TemplateRunLogLost
+		log.LostReason = domain.LogLostUploadFailed
+	} else {
+		// Only what describes the object is taken from the executor; the
+		// row's identity and key are the workflow's and the control plane's.
+		log.State = domain.TemplateRunLogComplete
+		log.ContentType = uploaded.ContentType
+		log.SizeBytes = uploaded.SizeBytes
+		log.UploadedAt = uploaded.UploadedAt
 	}
-	log.Seq = seq
-	log.Command = command
-	log.RunPhase = s.ws.phase
-	return s.run.log(name, log)
+
+	if err := s.run.log(name, log); err != nil {
+		logger.Warn("record run log", "log", name, "state", log.State, "error", err)
+	}
+}
+
+// executorGone reports whether the session's executor died, given the
+// command's error. Either of two signs says so, because which one arrives
+// depends on how it died. A dead process stops heartbeating its session
+// (20 s) long before its command's own heartbeat timeout (120 s) fires, so
+// the session fails and cancels the command: runErr is then a cancellation,
+// and only the session's state tells. An executor whose worker stays up but
+// whose command hangs keeps the session alive, and the command's heartbeat
+// timeout is what tells.
+func (s *session) executorGone(runErr error) bool {
+	if info := workflow.GetSessionInfo(s.ctx); info != nil && info.SessionState == workflow.SessionStateFailed {
+		return true
+	}
+	var timeoutErr *temporal.TimeoutError
+	return errors.As(runErr, &timeoutErr) && timeoutErr.TimeoutType() == enumspb.TIMEOUT_TYPE_HEARTBEAT
 }
 
 // sealSourceToken resolves a token for the run's repository on the control
@@ -716,8 +795,10 @@ func (r *run) event(event domain.TemplateRunEvent, summary *domain.PlanSummary) 
 	).Get(r.ctx, nil)
 }
 
-// log hands the metadata of a log the executor uploaded to the control plane,
-// which owns the database. A command that uploaded nothing is skipped.
+// log hands a log's row, in whatever state it is in, to the control plane,
+// which owns the database. Every call retries under recordLogRetryPolicy,
+// within a short budget of its own: a row write is quick, and the run waits on
+// it before its command starts.
 //
 // The identity is taken from the workflow's own input, never from the returned
 // metadata. UploadLog runs on the data plane, so everything it returns is
@@ -731,15 +812,14 @@ func (r *run) event(event domain.TemplateRunEvent, summary *domain.PlanSummary) 
 // On the honest path this overwrites nothing: PutTemplateRunLog derives the
 // same fields from the activity input the workflow supplied.
 func (r *run) log(name string, log domain.TemplateRunLog) error {
-	if log.ObjectKey == "" {
-		return nil
-	}
 	log.TenantID = r.input.TenantID
 	log.RunID = r.input.RunID
 	log.Phase = name
+	ctx := workflow.WithStartToCloseTimeout(r.ctx, 30*time.Second)
+	ctx = workflow.WithRetryPolicy(ctx, *recordLogRetryPolicy)
 	return workflow.ExecuteActivity(
-		r.ctx,
+		ctx,
 		domain.RecordTemplateRunLogActivityName,
 		log,
-	).Get(r.ctx, nil)
+	).Get(ctx, nil)
 }

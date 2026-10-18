@@ -150,6 +150,10 @@ var overrides = map[string]override{
 	"getTemplateRunLog": {
 		test: "pm.test('body is plain text', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('text/plain'));",
 	},
+	"streamTemplateRunLog": {
+		test: "pm.test('body is an event stream', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('text/event-stream'));",
+		note: "In a collection run the plan has finished, so the stream is one `log_end` and closes.",
+	},
 	"approveRun": {
 		noBody: true,
 		expect: []int{202, 409},

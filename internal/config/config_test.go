@@ -26,6 +26,8 @@ func TestLoadAPIConfigReadsAPISettings(t *testing.T) {
 			return " :9090 "
 		case "TEMPORAL_ADDRESS":
 			return " localhost:7233 "
+		case "VALKEY_URL":
+			return " redis://valkey:6379/0 "
 		case "TEMPORAL_NAMESPACE":
 			return " openplan "
 		case "ARTIFACT_STORE_KIND":
@@ -64,6 +66,9 @@ func TestLoadAPIConfigReadsAPISettings(t *testing.T) {
 	if cfg.TemporalNamespace != "openplan" {
 		t.Fatalf("TemporalNamespace = %q", cfg.TemporalNamespace)
 	}
+	if cfg.LiveLogURL != "redis://valkey:6379/0" {
+		t.Fatalf("LiveLogURL = %q", cfg.LiveLogURL)
+	}
 	if cfg.Security.TenantID != "tenant_123" {
 		t.Fatalf("Security.TenantID = %q, want tenant_123", cfg.Security.TenantID)
 	}
@@ -79,6 +84,8 @@ func TestLoadAPIConfigAppliesDefaults(t *testing.T) {
 			return "postgres://user:pass@localhost:5432/db?sslmode=disable"
 		case "TEMPORAL_ADDRESS":
 			return "localhost:7233"
+		case "VALKEY_URL":
+			return "redis://localhost:6379"
 		case "OPENFGA_API_URL":
 			return "http://localhost:8080"
 		case "OPENFGA_STORE_ID":
@@ -132,6 +139,8 @@ func TestLoadAPIConfigReadsTerraformTimeout(t *testing.T) {
 					return "postgres://user:pass@localhost:5432/db?sslmode=disable"
 				case "TEMPORAL_ADDRESS":
 					return "localhost:7233"
+				case "VALKEY_URL":
+					return "redis://localhost:6379"
 				case "OPENPLAN_TERRAFORM_TIMEOUT":
 					return testCase.value
 				default:
@@ -165,6 +174,8 @@ func TestLoadAPIConfigRejectsUnusableTerraformTimeout(t *testing.T) {
 					return "postgres://user:pass@localhost:5432/db?sslmode=disable"
 				case "TEMPORAL_ADDRESS":
 					return "localhost:7233"
+				case "VALKEY_URL":
+					return "redis://localhost:6379"
 				case "OPENPLAN_TERRAFORM_TIMEOUT":
 					return value
 				default:
@@ -209,6 +220,15 @@ func TestLoadAPIConfigRequiresTemporalAddress(t *testing.T) {
 	}
 }
 
+func TestLoadAPIConfigRequiresValkeyURL(t *testing.T) {
+	t.Parallel()
+
+	_, err := LoadAPIConfig(withValidAPIEnv(map[string]string{"VALKEY_URL": " "}))
+	if !errors.Is(err, ErrInvalidConfig) || !strings.Contains(err.Error(), "VALKEY_URL") {
+		t.Fatalf("error = %v, want ErrInvalidConfig naming VALKEY_URL", err)
+	}
+}
+
 func TestLoadAPIConfigAllowsEmptyCredentialEncryptionKey(t *testing.T) {
 	t.Parallel()
 
@@ -218,6 +238,8 @@ func TestLoadAPIConfigAllowsEmptyCredentialEncryptionKey(t *testing.T) {
 			return "postgres://user:pass@localhost:5432/db?sslmode=disable"
 		case "TEMPORAL_ADDRESS":
 			return "localhost:7233"
+		case "VALKEY_URL":
+			return "redis://localhost:6379"
 		default:
 			return ""
 		}
@@ -239,6 +261,8 @@ func TestLoadAPIConfigAcceptsValidCredentialEncryptionKey(t *testing.T) {
 			return "postgres://user:pass@localhost:5432/db?sslmode=disable"
 		case "TEMPORAL_ADDRESS":
 			return "localhost:7233"
+		case "VALKEY_URL":
+			return "redis://localhost:6379"
 		case "CREDENTIAL_ENCRYPTION_KEY":
 			return "01234567890123456789012345678901"
 		default:
@@ -262,6 +286,8 @@ func TestLoadAPIConfigRejectsMalformedCredentialEncryptionKey(t *testing.T) {
 			return "postgres://user:pass@localhost:5432/db?sslmode=disable"
 		case "TEMPORAL_ADDRESS":
 			return "localhost:7233"
+		case "VALKEY_URL":
+			return "redis://localhost:6379"
 		case "CREDENTIAL_ENCRYPTION_KEY":
 			return "too-short"
 		default:
@@ -282,6 +308,8 @@ func TestLoadAPIConfigRejectsInvalidArtifactStoreKind(t *testing.T) {
 			return "postgres://user:pass@localhost:5432/db?sslmode=disable"
 		case "TEMPORAL_ADDRESS":
 			return "localhost:7233"
+		case "VALKEY_URL":
+			return "redis://localhost:6379"
 		case "ARTIFACT_STORE_KIND":
 			return "tape-drive"
 		default:
@@ -339,6 +367,7 @@ func TestLoadAPIConfigReadsGitHubApp(t *testing.T) {
 	values := map[string]string{
 		"DATABASE_URL":           "postgres://user:pass@localhost:5432/db?sslmode=disable",
 		"TEMPORAL_ADDRESS":       "localhost:7233",
+		"VALKEY_URL":             "redis://localhost:6379",
 		"GITHUB_APP_ID":          "12345",
 		"GITHUB_APP_PRIVATE_KEY": encoded,
 	}
@@ -429,6 +458,7 @@ func withValidAPIEnv(overrides map[string]string) func(string) string {
 	base := map[string]string{
 		"DATABASE_URL":     "postgres://user:pass@localhost:5432/db?sslmode=disable",
 		"TEMPORAL_ADDRESS": "localhost:7233",
+		"VALKEY_URL":       "redis://localhost:6379",
 	}
 	return withValidSecurity(func(key string) string {
 		if value, ok := overrides[key]; ok {
@@ -443,6 +473,7 @@ func TestLoadExecutorConfigReadsExecutorSettings(t *testing.T) {
 
 	values := map[string]string{
 		"TEMPORAL_ADDRESS":               " localhost:7233 ",
+		"VALKEY_URL":                     " redis://valkey:6379/0 ",
 		"TEMPORAL_NAMESPACE":             " openplan ",
 		"EXECUTOR_RUN_ROOT":              " /var/lib/openplan/runs ",
 		"ARTIFACT_STORE_KIND":            " s3 ",
@@ -462,6 +493,9 @@ func TestLoadExecutorConfigReadsExecutorSettings(t *testing.T) {
 	if cfg.TemporalAddress != "localhost:7233" || cfg.TemporalNamespace != "openplan" {
 		t.Fatalf("temporal = %q in %q", cfg.TemporalAddress, cfg.TemporalNamespace)
 	}
+	if cfg.LiveLogURL != "redis://valkey:6379/0" {
+		t.Fatalf("LiveLogURL = %q", cfg.LiveLogURL)
+	}
 	if cfg.RunRoot != "/var/lib/openplan/runs" {
 		t.Fatalf("RunRoot = %q, want /var/lib/openplan/runs", cfg.RunRoot)
 	}
@@ -472,8 +506,11 @@ func TestLoadExecutorConfigAppliesDefaults(t *testing.T) {
 	t.Parallel()
 
 	cfg, err := LoadExecutorConfig(func(key string) string {
-		if key == "TEMPORAL_ADDRESS" {
+		switch key {
+		case "TEMPORAL_ADDRESS":
 			return "localhost:7233"
+		case "VALKEY_URL":
+			return "redis://localhost:6379"
 		}
 		return ""
 	})
@@ -496,6 +533,20 @@ func TestLoadExecutorConfigRequiresTemporalAddress(t *testing.T) {
 	}
 }
 
+func TestLoadExecutorConfigRequiresValkeyURL(t *testing.T) {
+	t.Parallel()
+
+	_, err := LoadExecutorConfig(func(key string) string {
+		if key == "TEMPORAL_ADDRESS" {
+			return "localhost:7233"
+		}
+		return ""
+	})
+	if !errors.Is(err, ErrInvalidConfig) || !strings.Contains(err.Error(), "VALKEY_URL") {
+		t.Fatalf("error = %v, want ErrInvalidConfig naming VALKEY_URL", err)
+	}
+}
+
 // The executor's configuration stays outside every sandbox, but a template
 // that escapes one lands beside it. This pins the field set: adding one means
 // deciding, here, that it may sit that close to tenant code.
@@ -507,7 +558,7 @@ func TestExecutorConfigHoldsNoControlPlaneSettings(t *testing.T) {
 	for field := range configType.Fields() {
 		got = append(got, field.Name)
 	}
-	want := []string{"TemporalAddress", "TemporalNamespace", "RunRoot", "ArtifactStore", "MaxSessions", "Sandbox"}
+	want := []string{"TemporalAddress", "TemporalNamespace", "RunRoot", "ArtifactStore", "LiveLogURL", "MaxSessions", "Sandbox"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("ExecutorConfig fields = %v, want %v", got, want)
 	}
@@ -520,6 +571,8 @@ func TestLoadExecutorConfigMaxSessions(t *testing.T) {
 			switch name {
 			case "TEMPORAL_ADDRESS":
 				return "localhost:7233"
+			case "VALKEY_URL":
+				return "redis://localhost:6379"
 			case "EXECUTOR_MAX_SESSIONS":
 				return value
 			}
@@ -557,7 +610,7 @@ func TestLoadExecutorConfigNeedsASandboxAddressPerSession(t *testing.T) {
 		{"", "253", true},
 		{"", "254", false},
 	} {
-		env := map[string]string{"TEMPORAL_ADDRESS": "temporal:7233", "EXECUTOR_SANDBOX_SUBNET": tc.subnet, "EXECUTOR_MAX_SESSIONS": tc.sessions}
+		env := map[string]string{"TEMPORAL_ADDRESS": "temporal:7233", "VALKEY_URL": "redis://valkey:6379", "EXECUTOR_SANDBOX_SUBNET": tc.subnet, "EXECUTOR_MAX_SESSIONS": tc.sessions}
 		_, err := LoadExecutorConfig(func(k string) string { return env[k] })
 		if tc.ok && err != nil {
 			t.Errorf("subnet %q, %q sessions: error = %v, want none", tc.subnet, tc.sessions, err)
@@ -571,7 +624,7 @@ func TestLoadExecutorConfigNeedsASandboxAddressPerSession(t *testing.T) {
 func TestLoadExecutorConfigSandboxDefaultsAndValidation(t *testing.T) {
 	t.Parallel()
 
-	base := map[string]string{"TEMPORAL_ADDRESS": "temporal:7233"}
+	base := map[string]string{"TEMPORAL_ADDRESS": "temporal:7233", "VALKEY_URL": "redis://valkey:6379"}
 	cfg, err := LoadExecutorConfig(func(k string) string { return base[k] })
 	if err != nil {
 		t.Fatal(err)
@@ -584,19 +637,19 @@ func TestLoadExecutorConfigSandboxDefaultsAndValidation(t *testing.T) {
 		t.Fatalf("sandbox = %+v, want %+v", cfg.Sandbox, want)
 	}
 	for _, name := range []string{"EXECUTOR_SANDBOX_MEMORY", "EXECUTOR_SANDBOX_CPUS", "EXECUTOR_SANDBOX_PIDS"} {
-		env := map[string]string{"TEMPORAL_ADDRESS": "temporal:7233", name: "0"}
+		env := map[string]string{"TEMPORAL_ADDRESS": "temporal:7233", "VALKEY_URL": "redis://valkey:6379", name: "0"}
 		if _, err := LoadExecutorConfig(func(k string) string { return env[k] }); !errors.Is(err, ErrInvalidConfig) {
 			t.Fatalf("%s=0: error = %v, want ErrInvalidConfig", name, err)
 		}
 	}
 	// Room for the gateway and at least a few sandboxes, on IPv4.
 	for _, subnet := range []string{"not-a-subnet", "10.0.0.0/30", "fd00::/64"} {
-		env := map[string]string{"TEMPORAL_ADDRESS": "temporal:7233", "EXECUTOR_SANDBOX_SUBNET": subnet}
+		env := map[string]string{"TEMPORAL_ADDRESS": "temporal:7233", "VALKEY_URL": "redis://valkey:6379", "EXECUTOR_SANDBOX_SUBNET": subnet}
 		if _, err := LoadExecutorConfig(func(k string) string { return env[k] }); !errors.Is(err, ErrInvalidConfig) {
 			t.Fatalf("EXECUTOR_SANDBOX_SUBNET=%s: error = %v, want ErrInvalidConfig", subnet, err)
 		}
 	}
-	env := map[string]string{"TEMPORAL_ADDRESS": "temporal:7233", "EXECUTOR_SANDBOX_SUBNET": "192.168.77.0/26"}
+	env := map[string]string{"TEMPORAL_ADDRESS": "temporal:7233", "VALKEY_URL": "redis://valkey:6379", "EXECUTOR_SANDBOX_SUBNET": "192.168.77.0/26"}
 	if cfg, err := LoadExecutorConfig(func(k string) string { return env[k] }); err != nil || cfg.Sandbox.Subnet != netip.MustParsePrefix("192.168.77.0/26") {
 		t.Fatalf("subnet = %v, %v; want 192.168.77.0/26", cfg.Sandbox.Subnet, err)
 	}

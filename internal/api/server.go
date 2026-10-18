@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/vishu42/openplan/internal/app"
@@ -25,10 +26,18 @@ type Server struct {
 	service  *app.Service
 	tenantID domain.TenantID
 	queue    queue.Reader
-	auth     AuthConfig
-	mux      *http.ServeMux
-	handler  http.Handler
-	debug    bool
+	liveLogs LiveLogSubscriber
+	// liveLogStates is the live streams' shared re-check of each log's state.
+	liveLogStates *liveLogStateCache
+	// liveStreamsClosing closes when the process is stopping, which ends
+	// every open live stream: http.Server.Shutdown waits for handlers, and a
+	// stream otherwise lasts as long as its viewer.
+	liveStreamsClosing chan struct{}
+	closeLiveStreams   sync.Once
+	auth               AuthConfig
+	mux                *http.ServeMux
+	handler            http.Handler
+	debug              bool
 }
 
 // ServerOption configures optional server dependencies.
@@ -37,6 +46,21 @@ type ServerOption func(*Server)
 // WithQueueReader enables the queue read endpoint.
 func WithQueueReader(reader queue.Reader) ServerOption {
 	return func(server *Server) { server.queue = reader }
+}
+
+// WithLiveLogs enables following a running command's log over server-sent
+// events.
+func WithLiveLogs(subscriber LiveLogSubscriber) ServerOption {
+	return func(server *Server) { server.liveLogs = subscriber }
+}
+
+// CloseLiveStreams ends every open live log stream as still live, so each
+// viewer reconnects from its last event, to this process once it is back or
+// to another replica. Call it before http.Server.Shutdown, which waits for
+// handlers and would otherwise wait on every viewer. Safe to call more than
+// once.
+func (server *Server) CloseLiveStreams() {
+	server.closeLiveStreams.Do(func() { close(server.liveStreamsClosing) })
 }
 
 // AuthFlow is the subset of the OIDC flow the handlers use. *authentication.Flow
@@ -108,9 +132,11 @@ func requireCompleteAuthWiring(service *app.Service, auth AuthConfig) {
 
 func NewServer(service *app.Service, tenantID domain.TenantID, options ...ServerOption) *Server {
 	server := &Server{
-		service:  service,
-		tenantID: tenantID,
-		mux:      http.NewServeMux(),
+		service:            service,
+		tenantID:           tenantID,
+		liveLogStates:      newLiveLogStateCache(),
+		liveStreamsClosing: make(chan struct{}),
+		mux:                http.NewServeMux(),
 	}
 	for _, option := range options {
 		option(server)
@@ -183,6 +209,8 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs", server.handleListTemplateRunLogs)
 	// Reads one persisted log body by the log's name, such as plan-1.
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{name}", server.handleGetTemplateRunLog)
+	// Follows one log live, as server-sent events, while its command runs.
+	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{name}/events", server.handleStreamTemplateRunLog)
 
 	// User search routes.
 	// Searches signed-in users by display name or email.

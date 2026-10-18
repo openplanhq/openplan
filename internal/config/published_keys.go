@@ -2,6 +2,8 @@ package config
 
 import (
 	"bytes"
+	neturl "net/url"
+	"slices"
 
 	"github.com/vishu42/openplan/internal/encryption"
 )
@@ -35,4 +37,30 @@ func isPublishedKey(raw []byte) bool {
 		}
 	}
 	return false
+}
+
+// publishedValkeyPasswords are the Valkey passwords both compose files and
+// .env.example default to. Like the encryption keys, anyone can read them.
+var publishedValkeyPasswords = []string{"api-local-only", "executor-local-only"}
+
+// refusePublishedValkeyPassword fails when the URL in the variable name signs
+// in with one of publishedValkeyPasswords. Either is refused: the executor's
+// on the api would be as public as the api's own. The error never quotes the
+// URL, which carries the password.
+func refusePublishedValkeyPassword(name, rawURL string) error {
+	parsed, err := neturl.Parse(rawURL)
+	// A URL that does not parse has no password to judge; dialing it
+	// reports the problem.
+	if err == nil && isPublishedValkeyPassword(parsed.User) {
+		return authConfigError("%s signs in with an example password published in the openplan repository and cannot be used in production; set the Valkey user's password to a fresh one, such as `openssl rand -hex 32`", name)
+	}
+	return nil
+}
+
+func isPublishedValkeyPassword(user *neturl.Userinfo) bool {
+	if user == nil {
+		return false
+	}
+	password, ok := user.Password()
+	return ok && slices.Contains(publishedValkeyPasswords, password)
 }

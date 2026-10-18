@@ -290,11 +290,14 @@ func TestEveryListRouteAnswersEnvelope(t *testing.T) {
 	)
 	// Search needs q; the rest take no parameters.
 	queries := map[string]string{"/v1/tenants/{tenant_id}/users/search": "?q=a"}
+	// A log's event stream ends in a word, not an {id}, but is one log's
+	// output, not a list.
+	notLists := map[string]bool{"/v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{name}/events": true}
 
 	var lists []string
 	for _, match := range tenantGETRoute.FindAllStringSubmatch(string(source), -1) {
 		pattern := match[1]
-		if strings.HasSuffix(pattern, "}") {
+		if strings.HasSuffix(pattern, "}") || notLists[pattern] {
 			continue // one resource, not a list
 		}
 		lists = append(lists, pattern)

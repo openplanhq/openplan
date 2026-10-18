@@ -6,10 +6,13 @@ import (
 	"log"
 	"os"
 
+	"github.com/redis/go-redis/v9"
+
 	"github.com/vishu42/openplan/internal/activities"
 	"github.com/vishu42/openplan/internal/artifacts"
 	"github.com/vishu42/openplan/internal/config"
 	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/logsink"
 	"github.com/vishu42/openplan/internal/runseal"
 	"github.com/vishu42/openplan/internal/sandbox"
 	"github.com/vishu42/openplan/internal/temporal"
@@ -37,9 +40,14 @@ type execution struct {
 	runner     sandbox.Runner
 	workspaces sandbox.Workspaces
 	store      config.ArtifactStoreConfig
+	// live is where each command's output is published as it runs.
+	live logsink.Stream
 }
 
 type executorDependencies struct {
+	// dialLiveLogs connects to the Valkey that commands' output is published
+	// to as they run.
+	dialLiveLogs func(ctx context.Context, url string) (*redis.Client, error)
 	// dialTemporal connects to the Temporal namespace where the worker polls for tasks.
 	dialTemporal func(context.Context, temporal.Config) (client.Client, error)
 	// newWorker creates the Temporal worker bound to the execution task queue.
@@ -69,6 +77,7 @@ func main() {
 
 func defaultExecutorDependencies() executorDependencies {
 	return executorDependencies{
+		dialLiveLogs: logsink.Dial,
 		dialTemporal: temporal.Dial,
 		newWorker: func(temporalClient client.Client, taskQueue string, options temporalworker.Options) temporalWorker {
 			return temporalworker.New(temporalClient, taskQueue, options)
@@ -102,7 +111,7 @@ func defaultExecutorDependencies() executorDependencies {
 }
 
 func registerActivities(worker temporalWorker, exec execution) error {
-	templateRun := activities.NewTemplateRunActivities(exec.runner, exec.workspaces, exec.store, exec.plans, exec.keys)
+	templateRun := activities.NewTemplateRunActivities(exec.runner, exec.workspaces, exec.store, exec.plans, exec.keys).WithLiveLogs(exec.live)
 	for name, fn := range map[string]any{
 		domain.PrepareWorkspaceActivityName: templateRun.PrepareWorkspace,
 		domain.FetchSourceActivityName:      templateRun.FetchSource,
@@ -140,6 +149,13 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps e
 	if err != nil {
 		return fmt.Errorf("wire the plan store: %w", err)
 	}
+	// Before Temporal too: an executor whose output nobody can watch should
+	// fail at start, not take work and leave its runs' logs dark.
+	liveLogs, err := deps.dialLiveLogs(ctx, cfg.LiveLogURL)
+	if err != nil {
+		return fmt.Errorf("live logs: %w", err)
+	}
+	defer liveLogs.Close()
 	temporalClient, err := deps.dialTemporal(ctx, temporal.Config{Address: cfg.TemporalAddress, Namespace: cfg.TemporalNamespace})
 	if err != nil {
 		return fmt.Errorf("dial temporal: %w", err)
@@ -154,7 +170,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps e
 	})
 	if err := deps.registerActivities(worker, execution{
 		plans: plans, keys: runseal.NewKeyRing(), runner: runner,
-		workspaces: sandbox.Workspaces{Root: cfg.RunRoot}, store: cfg.ArtifactStore,
+		workspaces: sandbox.Workspaces{Root: cfg.RunRoot}, store: cfg.ArtifactStore, live: liveLogs,
 	}); err != nil {
 		return err
 	}
