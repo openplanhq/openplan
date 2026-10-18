@@ -27,7 +27,7 @@ import (
 	"github.com/vishu42/openplan/internal/domain"
 	"github.com/vishu42/openplan/internal/encryption"
 	"github.com/vishu42/openplan/internal/githubapp"
-	"github.com/vishu42/openplan/internal/livelog"
+	"github.com/vishu42/openplan/internal/logsink"
 	"github.com/vishu42/openplan/internal/postgres"
 	"github.com/vishu42/openplan/internal/queue"
 	"github.com/vishu42/openplan/internal/temporal"
@@ -105,7 +105,7 @@ type apiDependencies struct {
 	// starve the writes that end each stream.
 	dialLiveLogReaders func(ctx context.Context, url string) (*redis.Client, error)
 	// newLiveLogSubscriber builds what the events route follows logs with.
-	newLiveLogSubscriber func(livelog.Reader) api.LiveLogSubscriber
+	newLiveLogSubscriber func(logsink.Reader) api.LiveLogSubscriber
 
 	dialTemporal       func(context.Context, temporal.Config) (client.Client, error)
 	newWorker          func(client.Client, string, temporalworker.Options) temporalWorker
@@ -113,7 +113,7 @@ type apiDependencies struct {
 	newQueueController func(controlStore, app.WorkflowDispatcher) (queueController, error)
 	// registerControl attaches both workflows and every control activity to the
 	// worker polling the control queue.
-	registerControl func(temporalWorker, controlStore, activities.GitHubTokenSource, livelog.Stream)
+	registerControl func(temporalWorker, controlStore, activities.GitHubTokenSource, logsink.Stream)
 }
 
 func credentialRepository(store appRepositories) app.CredentialRepository {
@@ -227,10 +227,10 @@ func defaultAPIDependencies() apiDependencies {
 			return authorization.New(ctx, concrete, storeName)
 		},
 		listenAndServe:     listenAndServe,
-		dialLiveLogs:       livelog.Dial,
-		dialLiveLogReaders: livelog.DialReaders,
-		newLiveLogSubscriber: func(reader livelog.Reader) api.LiveLogSubscriber {
-			return livelog.NewRegistry(reader)
+		dialLiveLogs:       logsink.Dial,
+		dialLiveLogReaders: logsink.DialReaders,
+		newLiveLogSubscriber: func(reader logsink.Reader) api.LiveLogSubscriber {
+			return logsink.NewRegistry(reader)
 		},
 		dialTemporal: temporal.Dial,
 		newWorker: func(temporalClient client.Client, taskQueue string, options temporalworker.Options) temporalWorker {
@@ -250,7 +250,7 @@ func defaultAPIDependencies() apiDependencies {
 	}
 }
 
-func registerControl(worker temporalWorker, store controlStore, gitHubTokens activities.GitHubTokenSource, live livelog.Stream) {
+func registerControl(worker temporalWorker, store controlStore, gitHubTokens activities.GitHubTokenSource, live logsink.Stream) {
 	worker.RegisterWorkflowWithOptions(workflows.TemplatePlanWorkflow, workflow.RegisterOptions{
 		Name: domain.TemplatePlanWorkflowName,
 	})
@@ -483,7 +483,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 // keys, and the process that runs tenant Terraform must hold neither. The
 // returned function stops the queue loop, then the worker, then closes the
 // Temporal client.
-func startControlPlane(ctx context.Context, cfg config.APIConfig, deps apiDependencies, store appRepositories, live livelog.Stream) (func(), error) {
+func startControlPlane(ctx context.Context, cfg config.APIConfig, deps apiDependencies, store appRepositories, live logsink.Stream) (func(), error) {
 	control, err := controlPlaneStore(store)
 	if err != nil {
 		return nil, fmt.Errorf("wire control plane store: %w", err)

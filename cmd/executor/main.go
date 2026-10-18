@@ -12,7 +12,7 @@ import (
 	"github.com/vishu42/openplan/internal/artifacts"
 	"github.com/vishu42/openplan/internal/config"
 	"github.com/vishu42/openplan/internal/domain"
-	"github.com/vishu42/openplan/internal/livelog"
+	"github.com/vishu42/openplan/internal/logsink"
 	"github.com/vishu42/openplan/internal/runseal"
 	"github.com/vishu42/openplan/internal/sandbox"
 	"github.com/vishu42/openplan/internal/temporal"
@@ -41,7 +41,7 @@ type execution struct {
 	workspaces sandbox.Workspaces
 	store      config.ArtifactStoreConfig
 	// live is where each command's output is published as it runs.
-	live livelog.Stream
+	live logsink.Stream
 }
 
 type executorDependencies struct {
@@ -77,7 +77,7 @@ func main() {
 
 func defaultExecutorDependencies() executorDependencies {
 	return executorDependencies{
-		dialLiveLogs: livelog.Dial,
+		dialLiveLogs: logsink.Dial,
 		dialTemporal: temporal.Dial,
 		newWorker: func(temporalClient client.Client, taskQueue string, options temporalworker.Options) temporalWorker {
 			return temporalworker.New(temporalClient, taskQueue, options)

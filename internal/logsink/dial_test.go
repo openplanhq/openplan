@@ -1,4 +1,4 @@
-package livelog
+package logsink
 
 import (
 	"context"

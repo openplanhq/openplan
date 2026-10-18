@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/vishu42/openplan/internal/domain"
-	"github.com/vishu42/openplan/internal/livelog"
+	"github.com/vishu42/openplan/internal/logsink"
 )
 
 const liveLogEventsPath = "/v1/tenants/tenant_123/template-runs/run_123/logs/plan-1/events"
@@ -23,7 +23,7 @@ const liveLogEventsPath = "/v1/tenants/tenant_123/template-runs/run_123/logs/pla
 // channel, as a registry does once its tailer is gone; with hold, it leaves
 // the channel open, as for a command that prints nothing more.
 type fakeLiveLogs struct {
-	entries []livelog.Entry
+	entries []logsink.Entry
 	hold    bool
 	// delay holds the entries back that long, as for a client that has
 	// fallen behind its stream.
@@ -31,7 +31,7 @@ type fakeLiveLogs struct {
 	err   error
 	// stored is what Entry finds, beside entries: what the stream held
 	// before the client's Last-Event-ID.
-	stored   []livelog.Entry
+	stored   []logsink.Entry
 	entryErr error
 
 	mu         sync.Mutex
@@ -40,7 +40,7 @@ type fakeLiveLogs struct {
 	gotAfterID string
 }
 
-func (f *fakeLiveLogs) Subscribe(_ context.Context, key, afterID string) (<-chan livelog.Entry, error) {
+func (f *fakeLiveLogs) Subscribe(_ context.Context, key, afterID string) (<-chan logsink.Entry, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls++
@@ -48,7 +48,7 @@ func (f *fakeLiveLogs) Subscribe(_ context.Context, key, afterID string) (<-chan
 	if f.err != nil {
 		return nil, f.err
 	}
-	entries := make(chan livelog.Entry, len(f.entries))
+	entries := make(chan logsink.Entry, len(f.entries))
 	deliver := func() {
 		for _, entry := range f.entries {
 			entries <- entry
@@ -65,16 +65,16 @@ func (f *fakeLiveLogs) Subscribe(_ context.Context, key, afterID string) (<-chan
 	return entries, nil
 }
 
-func (f *fakeLiveLogs) Entry(_ context.Context, _, id string) (livelog.Entry, bool, error) {
+func (f *fakeLiveLogs) Entry(_ context.Context, _, id string) (logsink.Entry, bool, error) {
 	if f.entryErr != nil {
-		return livelog.Entry{}, false, f.entryErr
+		return logsink.Entry{}, false, f.entryErr
 	}
 	for _, entry := range append(slices.Clone(f.stored), f.entries...) {
 		if entry.ID == id {
 			return entry, true, nil
 		}
 	}
-	return livelog.Entry{}, false, nil
+	return logsink.Entry{}, false, nil
 }
 
 // newLiveLogDependencies is a running run whose plan-1 log is live.
@@ -105,8 +105,8 @@ func streamLiveLog(t *testing.T, deps *apiTestDependencies, live *fakeLiveLogs, 
 	return response
 }
 
-func piece(id string, offset int64, data string) livelog.Entry {
-	return livelog.Entry{ID: id, Kind: livelog.KindPiece, Offset: offset, Data: []byte(data)}
+func piece(id string, offset int64, data string) logsink.Entry {
+	return logsink.Entry{ID: id, Kind: logsink.KindPiece, Offset: offset, Data: []byte(data)}
 }
 
 // sseLog is a log event as it goes over the wire.
@@ -121,11 +121,11 @@ func sseEnd(state string) string {
 func TestStreamTemplateRunLogSendsPiecesThenEnd(t *testing.T) {
 	t.Parallel()
 	deps := newLiveLogDependencies(t)
-	live := &fakeLiveLogs{entries: []livelog.Entry{
+	live := &fakeLiveLogs{entries: []logsink.Entry{
 		piece("1-0", 0, "hello\n"),
 		piece("2-0", 6, "world\n"),
-		{ID: "3-0", Kind: livelog.KindTruncated},
-		{ID: "4-0", Kind: livelog.KindEnd, State: domain.TemplateRunLogComplete},
+		{ID: "3-0", Kind: logsink.KindTruncated},
+		{ID: "4-0", Kind: logsink.KindEnd, State: domain.TemplateRunLogComplete},
 	}}
 
 	response := streamLiveLog(t, deps, live, nil)
@@ -152,7 +152,7 @@ func TestStreamTemplateRunLogSendsPiecesThenEnd(t *testing.T) {
 	if !response.Flushed {
 		t.Fatal("stream was never flushed")
 	}
-	if live.gotKey != livelog.StreamKey("run_123", "plan-1") {
+	if live.gotKey != logsink.StreamKey("run_123", "plan-1") {
 		t.Fatalf("subscribed to %q, want the log's stream", live.gotKey)
 	}
 }
@@ -179,7 +179,7 @@ func TestStreamTemplateRunLogAnswersEndForACompleteRow(t *testing.T) {
 func TestStreamTemplateRunLogPassesLastEventID(t *testing.T) {
 	t.Parallel()
 	deps := newLiveLogDependencies(t)
-	live := &fakeLiveLogs{entries: []livelog.Entry{{ID: "4-0", Kind: livelog.KindEnd, State: domain.TemplateRunLogComplete}}}
+	live := &fakeLiveLogs{entries: []logsink.Entry{{ID: "4-0", Kind: logsink.KindEnd, State: domain.TemplateRunLogComplete}}}
 
 	streamLiveLog(t, deps, live, http.Header{"Last-Event-Id": {"3-0"}})
 
@@ -191,9 +191,9 @@ func TestStreamTemplateRunLogPassesLastEventID(t *testing.T) {
 func TestStreamTemplateRunLogReplacesInvalidUTF8(t *testing.T) {
 	t.Parallel()
 	deps := newLiveLogDependencies(t)
-	live := &fakeLiveLogs{entries: []livelog.Entry{
-		{ID: "1-0", Kind: livelog.KindPiece, Data: []byte{0xff, 'a'}},
-		{ID: "2-0", Kind: livelog.KindEnd, State: domain.TemplateRunLogComplete},
+	live := &fakeLiveLogs{entries: []logsink.Entry{
+		{ID: "1-0", Kind: logsink.KindPiece, Data: []byte{0xff, 'a'}},
+		{ID: "2-0", Kind: logsink.KindEnd, State: domain.TemplateRunLogComplete},
 	}}
 
 	response := streamLiveLog(t, deps, live, nil)
@@ -207,12 +207,12 @@ func TestStreamTemplateRunLogReplacesInvalidUTF8(t *testing.T) {
 func TestStreamTemplateRunLogSkipsADuplicateOffset(t *testing.T) {
 	t.Parallel()
 	deps := newLiveLogDependencies(t)
-	live := &fakeLiveLogs{entries: []livelog.Entry{
+	live := &fakeLiveLogs{entries: []logsink.Entry{
 		piece("1-0", 0, "abc"),
 		// A retried append: the same bytes again, under a new id.
 		piece("2-0", 0, "abc"),
 		piece("3-0", 3, "def"),
-		{ID: "4-0", Kind: livelog.KindEnd, State: domain.TemplateRunLogComplete},
+		{ID: "4-0", Kind: logsink.KindEnd, State: domain.TemplateRunLogComplete},
 	}}
 
 	response := streamLiveLog(t, deps, live, nil)
@@ -230,10 +230,10 @@ func TestStreamTemplateRunLogSkipsADuplicateOffset(t *testing.T) {
 func TestStreamTemplateRunLogSendsOnlyTheNewBytesOfAnOverlap(t *testing.T) {
 	t.Parallel()
 	deps := newLiveLogDependencies(t)
-	live := &fakeLiveLogs{entries: []livelog.Entry{
+	live := &fakeLiveLogs{entries: []logsink.Entry{
 		piece("1-0", 0, "abc"),
 		piece("2-0", 0, "abcde"),
-		{ID: "3-0", Kind: livelog.KindEnd, State: domain.TemplateRunLogComplete},
+		{ID: "3-0", Kind: logsink.KindEnd, State: domain.TemplateRunLogComplete},
 	}}
 
 	response := streamLiveLog(t, deps, live, nil)
@@ -252,7 +252,7 @@ func TestStreamTemplateRunLogSendsOnlyTheNewBytesOfAnOverlap(t *testing.T) {
 func TestStreamTemplateRunLogEndsWithTheRowsStateWhenTheChannelCloses(t *testing.T) {
 	t.Parallel()
 	deps := newLiveLogDependencies(t)
-	live := &fakeLiveLogs{entries: []livelog.Entry{piece("1-0", 0, "abc")}}
+	live := &fakeLiveLogs{entries: []logsink.Entry{piece("1-0", 0, "abc")}}
 
 	response := streamLiveLog(t, deps, live, nil)
 
@@ -288,7 +288,7 @@ func TestStreamTemplateRunLogRecoversFromASubscribeError(t *testing.T) {
 	for name, err := range map[string]error{
 		"read failure": errors.New("i/o timeout"),
 		// A full replica is as passing as a failed read.
-		"too many tailers": livelog.ErrTooManyTailers,
+		"too many tailers": logsink.ErrTooManyTailers,
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -315,7 +315,7 @@ func TestStreamTemplateRunLogRecoversFromASubscribeError(t *testing.T) {
 func TestStreamTemplateRunLogRecoversFromAFailedResumeRead(t *testing.T) {
 	t.Parallel()
 	deps := newLiveLogDependencies(t)
-	live := &fakeLiveLogs{entryErr: errors.New("i/o timeout"), entries: []livelog.Entry{piece("1-0", 0, "abc")}}
+	live := &fakeLiveLogs{entryErr: errors.New("i/o timeout"), entries: []logsink.Entry{piece("1-0", 0, "abc")}}
 
 	response := streamLiveLog(t, deps, live, http.Header{"Last-Event-Id": {"1-0"}})
 
@@ -334,16 +334,16 @@ func TestStreamTemplateRunLogResumesFromLastEventID(t *testing.T) {
 	t.Parallel()
 	deps := newLiveLogDependencies(t)
 	live := &fakeLiveLogs{
-		stored: []livelog.Entry{piece("1-0", 0, "abc")},
+		stored: []logsink.Entry{piece("1-0", 0, "abc")},
 		// What the stream holds after 1-0, as the registry yields it.
-		entries: []livelog.Entry{
+		entries: []logsink.Entry{
 			// A retry of the first append, which the client has.
 			piece("1-1", 0, "abc"),
 			piece("2-0", 3, "def"),
 			// A retry of the second.
 			piece("2-1", 3, "def"),
 			piece("3-0", 6, "ghi"),
-			{ID: "4-0", Kind: livelog.KindEnd, State: domain.TemplateRunLogComplete},
+			{ID: "4-0", Kind: logsink.KindEnd, State: domain.TemplateRunLogComplete},
 		},
 	}
 
@@ -362,9 +362,9 @@ func TestStreamTemplateRunLogResumesFromLastEventID(t *testing.T) {
 func TestStreamTemplateRunLogResumesFromTheStartWhenTheEntryIsGone(t *testing.T) {
 	t.Parallel()
 	deps := newLiveLogDependencies(t)
-	live := &fakeLiveLogs{entries: []livelog.Entry{
+	live := &fakeLiveLogs{entries: []logsink.Entry{
 		piece("5-0", 0, "abc"),
-		{ID: "6-0", Kind: livelog.KindEnd, State: domain.TemplateRunLogComplete},
+		{ID: "6-0", Kind: logsink.KindEnd, State: domain.TemplateRunLogComplete},
 	}}
 
 	response := streamLiveLog(t, deps, live, http.Header{"Last-Event-Id": {"1-0"}})
@@ -431,7 +431,7 @@ func TestStreamTemplateRunLogSendsQueuedPiecesBeforeEndingOnARowCheck(t *testing
 	complete.State = domain.TemplateRunLogComplete
 	deps.logMetadata.thenLog = &complete
 	// The pieces arrive after the first tick has seen the row complete.
-	live := &fakeLiveLogs{entries: []livelog.Entry{piece("1-0", 0, "last\n")}, hold: true, delay: 100 * time.Millisecond}
+	live := &fakeLiveLogs{entries: []logsink.Entry{piece("1-0", 0, "last\n")}, hold: true, delay: 100 * time.Millisecond}
 
 	response := streamLiveLog(t, deps, live, nil)
 

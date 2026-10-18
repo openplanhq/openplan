@@ -19,7 +19,7 @@ import (
 
 	"github.com/vishu42/openplan/internal/domain"
 	"github.com/vishu42/openplan/internal/githubapp"
-	"github.com/vishu42/openplan/internal/livelog"
+	"github.com/vishu42/openplan/internal/logsink"
 	gitrunner "github.com/vishu42/openplan/internal/runner"
 	"github.com/vishu42/openplan/internal/runseal"
 )
@@ -387,11 +387,11 @@ func TestRunTerraformPublishesTheSpoolLive(t *testing.T) {
 			if len(messages) != 1 {
 				t.Fatalf("stream holds %d entries, want 1", len(messages))
 			}
-			entry, err := livelog.ParseEntry(messages[0])
+			entry, err := logsink.ParseEntry(messages[0])
 			if err != nil {
 				t.Fatalf("ParseEntry: %v", err)
 			}
-			if entry.Kind != livelog.KindPiece || entry.Offset != 0 || string(entry.Data) != "hello\n" {
+			if entry.Kind != logsink.KindPiece || entry.Offset != 0 || string(entry.Data) != "hello\n" {
 				t.Fatalf("entry = %+v, want a piece at 0 of %q", entry, "hello\n")
 			}
 		})

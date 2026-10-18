@@ -6,7 +6,7 @@ import (
 
 	"github.com/vishu42/openplan/internal/artifacts"
 	"github.com/vishu42/openplan/internal/domain"
-	"github.com/vishu42/openplan/internal/livelog"
+	"github.com/vishu42/openplan/internal/logsink"
 	"github.com/vishu42/openplan/internal/runseal"
 )
 
@@ -52,14 +52,14 @@ type LogMetadataRecorder interface {
 type ControlActivities struct {
 	store  ControlStore
 	tokens GitHubTokenSource
-	live   livelog.Stream
+	live   logsink.Stream
 }
 
 // NewControlActivities wires the control activities. tokens may be nil, in
 // which case sources are fetched unauthenticated. live is where a finished
 // log's end entry goes; nil skips it, which only tests that don't watch the
 // stream should do.
-func NewControlActivities(store ControlStore, tokens GitHubTokenSource, live livelog.Stream) *ControlActivities {
+func NewControlActivities(store ControlStore, tokens GitHubTokenSource, live logsink.Stream) *ControlActivities {
 	return &ControlActivities{store: store, tokens: tokens, live: live}
 }
 
@@ -128,7 +128,7 @@ func (activities *ControlActivities) RecordTemplateRunLog(ctx context.Context, l
 	if log.State == domain.TemplateRunLogLive || activities.live == nil {
 		return nil
 	}
-	if err := livelog.AppendEnd(ctx, activities.live, livelog.StreamKey(log.RunID, name), log.State); err != nil {
+	if err := logsink.AppendEnd(ctx, activities.live, logsink.StreamKey(log.RunID, name), log.State); err != nil {
 		return fmt.Errorf("end live log: %w", err)
 	}
 	return nil

@@ -28,7 +28,7 @@ import (
 	"github.com/vishu42/openplan/internal/config"
 	"github.com/vishu42/openplan/internal/domain"
 	"github.com/vishu42/openplan/internal/encryption"
-	"github.com/vishu42/openplan/internal/livelog"
+	"github.com/vishu42/openplan/internal/logsink"
 	"github.com/vishu42/openplan/internal/queue"
 	"github.com/vishu42/openplan/internal/temporal"
 	"go.temporal.io/sdk/activity"
@@ -206,7 +206,7 @@ func TestRunWiresControlPlane(t *testing.T) {
 	if deps.liveLogURL != "redis://localhost:6379" {
 		t.Fatalf("dialLiveLogs got %q, want VALKEY_URL", deps.liveLogURL)
 	}
-	if deps.registeredLive != livelog.Stream(deps.liveLogs) {
+	if deps.registeredLive != logsink.Stream(deps.liveLogs) {
 		t.Fatal("control activities did not get the client dialLiveLogs returned")
 	}
 	if err := deps.liveLogs.Ping(context.Background()).Err(); !errors.Is(err, redis.ErrClosed) {
@@ -217,7 +217,7 @@ func TestRunWiresControlPlane(t *testing.T) {
 	if deps.liveLogReaderURL != "redis://localhost:6379" {
 		t.Fatalf("dialLiveLogReaders got %q, want VALKEY_URL", deps.liveLogReaderURL)
 	}
-	if deps.subscriberReader != livelog.Reader(deps.liveLogReaders) {
+	if deps.subscriberReader != logsink.Reader(deps.liveLogReaders) {
 		t.Fatal("the live log registry did not get the client dialLiveLogReaders returned")
 	}
 	if deps.liveLogReaders == deps.liveLogs {
@@ -658,7 +658,7 @@ type recordingAPIDependencies struct {
 	queueControllerStore      controlStore
 	queueControllerDispatcher app.WorkflowDispatcher
 	temporalDialed            bool
-	registeredLive            livelog.Stream
+	registeredLive            logsink.Stream
 	// liveLogs and liveLogsErr are what dialLiveLogs returns, and
 	// liveLogURL what it was given.
 	liveLogs    *redis.Client
@@ -669,7 +669,7 @@ type recordingAPIDependencies struct {
 	// registry was built on.
 	liveLogReaders   *redis.Client
 	liveLogReaderURL string
-	subscriberReader livelog.Reader
+	subscriberReader logsink.Reader
 }
 
 func newRecordingAPIDependencies(t *testing.T) *recordingAPIDependencies {
@@ -746,9 +746,9 @@ func newRecordingAPIDependencies(t *testing.T) *recordingAPIDependencies {
 			deps.liveLogReaderURL = url
 			return deps.liveLogReaders, nil
 		},
-		newLiveLogSubscriber: func(reader livelog.Reader) api.LiveLogSubscriber {
+		newLiveLogSubscriber: func(reader logsink.Reader) api.LiveLogSubscriber {
 			deps.subscriberReader = reader
-			return livelog.NewRegistry(reader)
+			return logsink.NewRegistry(reader)
 		},
 		dialTemporal: func(_ context.Context, cfg temporal.Config) (client.Client, error) {
 			deps.temporalDialed = true
@@ -774,7 +774,7 @@ func newRecordingAPIDependencies(t *testing.T) *recordingAPIDependencies {
 			deps.queueControllerDispatcher = dispatcher
 			return deps.queueController, nil
 		},
-		registerControl: func(worker temporalWorker, store controlStore, gitHubTokens activities.GitHubTokenSource, live livelog.Stream) {
+		registerControl: func(worker temporalWorker, store controlStore, gitHubTokens activities.GitHubTokenSource, live logsink.Stream) {
 			deps.registeredControlStore = store
 			deps.gitHubTokens = gitHubTokens
 			deps.registeredLive = live

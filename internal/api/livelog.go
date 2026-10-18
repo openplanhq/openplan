@@ -13,16 +13,16 @@ import (
 
 	"github.com/vishu42/openplan/internal/app"
 	"github.com/vishu42/openplan/internal/domain"
-	"github.com/vishu42/openplan/internal/livelog"
+	"github.com/vishu42/openplan/internal/logsink"
 )
 
-// LiveLogSubscriber follows a live log's stream. *livelog.Registry satisfies
+// LiveLogSubscriber follows a live log's stream. *logsink.Registry satisfies
 // it; handler tests use a fake.
 type LiveLogSubscriber interface {
-	Subscribe(ctx context.Context, key, afterID string) (<-chan livelog.Entry, error)
+	Subscribe(ctx context.Context, key, afterID string) (<-chan logsink.Entry, error)
 	// Entry reads the entry at id, which tells a resuming client's stream
 	// how much of the log the client already holds.
-	Entry(ctx context.Context, key, id string) (entry livelog.Entry, found bool, err error)
+	Entry(ctx context.Context, key, id string) (entry logsink.Entry, found bool, err error)
 }
 
 // liveLogKeepalive is how often a live stream writes a comment, which keeps
@@ -40,7 +40,7 @@ var liveLogDrainGrace = 2 * time.Second
 // its log asks the browser for.
 const liveLogRetryMillis = 3000
 
-var _ LiveLogSubscriber = (*livelog.Registry)(nil)
+var _ LiveLogSubscriber = (*logsink.Registry)(nil)
 
 // handleStreamTemplateRunLog streams a run log as server-sent events while
 // its command runs. Authorization is the row read's, as for the body.
@@ -81,10 +81,10 @@ func (server *Server) handleStreamTemplateRunLog(response http.ResponseWriter, r
 	// would end EventSource for good; a stream that ends live has it
 	// reconnect from its last event instead.
 	stream := startEventStream(response, flusher)
-	key := livelog.StreamKey(command.RunID, command.Name)
+	key := logsink.StreamKey(command.RunID, command.Name)
 	lastEventID := request.Header.Get("Last-Event-ID")
 	sent, err := server.resumePoint(ctx, key, lastEventID)
-	var entries <-chan livelog.Entry
+	var entries <-chan logsink.Entry
 	if err == nil {
 		entries, err = server.liveLogs.Subscribe(ctx, key, lastEventID)
 	}
@@ -112,7 +112,7 @@ func (server *Server) resumePoint(ctx context.Context, key, lastEventID string) 
 	if err != nil {
 		return 0, err
 	}
-	if !found || entry.Kind != livelog.KindPiece {
+	if !found || entry.Kind != logsink.KindPiece {
 		return 0, nil
 	}
 	return entry.Offset + int64(len(entry.Data)), nil
@@ -121,7 +121,7 @@ func (server *Server) resumePoint(ctx context.Context, key, lastEventID string) 
 // streamEntries sends each entry as its event until the log ends, the
 // channel closes, or the client goes away. sent is how much of the log the
 // client already holds.
-func (server *Server) streamEntries(ctx context.Context, stream eventStream, entries <-chan livelog.Entry, command app.GetTemplateRunLogCommand, sent int64) {
+func (server *Server) streamEntries(ctx context.Context, stream eventStream, entries <-chan logsink.Entry, command app.GetTemplateRunLogCommand, sent int64) {
 	keepalive := time.NewTicker(liveLogKeepalive)
 	defer keepalive.Stop()
 	for {
@@ -154,7 +154,7 @@ func (server *Server) streamEntries(ctx context.Context, stream eventStream, ent
 // so a client that fell behind still gets the last lines, usually the ones
 // that say how the command ended; the end entry, if it comes in that time,
 // ends the stream itself.
-func drainThenEnd(ctx context.Context, stream eventStream, entries <-chan livelog.Entry, sent *int64, state domain.TemplateRunLogState) {
+func drainThenEnd(ctx context.Context, stream eventStream, entries <-chan logsink.Entry, sent *int64, state domain.TemplateRunLogState) {
 	grace := time.NewTimer(liveLogDrainGrace)
 	defer grace.Stop()
 	for {
@@ -332,9 +332,9 @@ func (stream eventStream) send(event, id string, data any) error {
 // sent is how much of the log the client holds, and grows with every piece
 // sent. A retried append repeats bytes under a new id, so a piece is cut to
 // what lies past sent, and one wholly behind it is skipped.
-func (stream eventStream) sendEntry(entry livelog.Entry, sent *int64) bool {
+func (stream eventStream) sendEntry(entry logsink.Entry, sent *int64) bool {
 	switch entry.Kind {
-	case livelog.KindPiece:
+	case logsink.KindPiece:
 		end := entry.Offset + int64(len(entry.Data))
 		if end <= *sent {
 			return true
@@ -345,9 +345,9 @@ func (stream eventStream) sendEntry(entry livelog.Entry, sent *int64) bool {
 		}
 		*sent = end
 		return stream.send("log", entry.ID, logEventData{Offset: offset, End: end, Data: strings.ToValidUTF8(string(data), "�")}) == nil
-	case livelog.KindTruncated:
+	case logsink.KindTruncated:
 		return stream.send("log_truncated", "", struct{}{}) == nil
-	case livelog.KindEnd:
+	case logsink.KindEnd:
 		_ = stream.end(entry.State)
 		return false
 	}

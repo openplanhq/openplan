@@ -10,7 +10,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/vishu42/openplan/internal/domain"
-	"github.com/vishu42/openplan/internal/livelog"
+	"github.com/vishu42/openplan/internal/logsink"
 )
 
 // planLogStream is the stream planLog's output goes to.
@@ -93,15 +93,15 @@ func assertRecordEndsTheStream(t *testing.T, log domain.TemplateRunLog, state do
 	if len(messages) != 1 {
 		t.Fatalf("stream holds %d entries, want 1", len(messages))
 	}
-	entry, err := livelog.ParseEntry(messages[0])
+	entry, err := logsink.ParseEntry(messages[0])
 	if err != nil {
 		t.Fatalf("ParseEntry: %v", err)
 	}
-	if entry.Kind != livelog.KindEnd || entry.State != state {
+	if entry.Kind != logsink.KindEnd || entry.State != state {
 		t.Fatalf("entry = %+v, want an end entry with state %q", entry, state)
 	}
-	if ttl := server.TTL(planLogStream); ttl != livelog.EndTTL {
-		t.Fatalf("TTL = %v, want %v", ttl, livelog.EndTTL)
+	if ttl := server.TTL(planLogStream); ttl != logsink.EndTTL {
+		t.Fatalf("TTL = %v, want %v", ttl, logsink.EndTTL)
 	}
 }
 

@@ -261,8 +261,7 @@ Package ownership:
 - `internal/secrets`: secret store boundary, credential set resolution, and Vault or local development adapters.
 - `internal/artifacts`: object storage adapter, redacted log artifact writes, plan summary artifacts, and artifact key generation.
 - `internal/events`: pluggable `EventBus` interface, event types, and no-op or in-memory implementations.
-- `internal/logsink`: the spool file a command's output is written to on the executor: its name and the sink that opens it in the run's logs directory.
-- `internal/livelog`: live output through Valkey: the stream key and entry format, the executor's flusher that publishes the spool as it grows, and the api's registry of tailers that feeds the SSE endpoint.
+- `internal/logsink`: a command's output from where it is written to where it is read: the spool file on the executor (its name and the sink that opens it in the run's logs directory), and live output through Valkey: the stream key and entry format, the executor's flusher that publishes the spool as it grows, and the api's registry of tailers that feeds the SSE endpoint.
 - `internal/locks`: product-level `StackTemplate` lease lock, including acquire, refresh, release, fencing token checks, and stale lock handling.
 - `internal/config`: environment and config structs, default values, and config validation.
 

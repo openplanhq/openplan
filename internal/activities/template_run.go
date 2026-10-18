@@ -14,7 +14,6 @@ import (
 
 	"github.com/vishu42/openplan/internal/config"
 	"github.com/vishu42/openplan/internal/domain"
-	"github.com/vishu42/openplan/internal/livelog"
 	"github.com/vishu42/openplan/internal/logsink"
 	"github.com/vishu42/openplan/internal/runseal"
 	"github.com/vishu42/openplan/internal/sandbox"
@@ -85,7 +84,7 @@ type TemplateRunActivities struct {
 	// live is where RunTerraform publishes each command's spool as it grows,
 	// from this process: the sandbox never holds the Valkey credential. Nil
 	// leaves live logs off.
-	live livelog.Stream
+	live logsink.Stream
 }
 
 // NewTemplateRunActivities constructs the execution activities. A nil keys
@@ -100,7 +99,7 @@ func NewTemplateRunActivities(runner sandbox.Runner, workspaces sandbox.Workspac
 // WithLiveLogs publishes each command's output live to stream. A nil stream
 // leaves live logs off; only tests pass nil, since the executor will not start
 // without its Valkey.
-func (activities *TemplateRunActivities) WithLiveLogs(stream livelog.Stream) *TemplateRunActivities {
+func (activities *TemplateRunActivities) WithLiveLogs(stream logsink.Stream) *TemplateRunActivities {
 	activities.live = stream
 	return activities
 }
@@ -215,7 +214,7 @@ func (activities *TemplateRunActivities) RunTerraform(ctx context.Context, input
 	// redacted and capped.
 	stopLive := func() {}
 	if activities.live != nil {
-		flusher := livelog.NewFlusher(activities.live, livelog.StreamKey(input.RunID, input.LogName),
+		flusher := logsink.NewFlusher(activities.live, logsink.StreamKey(input.RunID, input.LogName),
 			filepath.Join(logsDir, logsink.FileName(input.LogName)))
 		stopLive = flusher.Start(ctx)
 	}
