@@ -2,7 +2,6 @@ import { Fragment, useId, useState } from "react";
 import type { ReactNode } from "react";
 import { Ban, FileText, SquareTerminal, TriangleAlert } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { templateRunLogEventsURL } from "../../api/client";
 import { useTemplateRunLogQuery } from "../../api/queries";
 import type { RunPhase, TemplateRunExecution, TemplateRunLog, TemplateRunLogLostReason } from "../../api/types";
@@ -13,6 +12,7 @@ import { LogPhase, LogStep } from "../../shared/LogSteps";
 import StatusLabel from "../../shared/StatusLabel";
 import type { StatusLabelTone } from "../../shared/StatusLabel";
 import { useLiveTemplateRunLog } from "./useLiveTemplateRunLog";
+import type { LiveTemplateRunLog } from "./useLiveTemplateRunLog";
 
 interface RunLogsPanelProps {
   runId: string;
@@ -206,14 +206,32 @@ function LiveRunLogStream({ url, log, onLoadFull }: { url: string; log: Template
           {lostNotice(log)}
         </LogStatus>
       )}
-      {outcome === "complete" && (
-        <button type="button" className={cn(buttonClass("quiet"), "mt-2 flex font-sans")} onClick={onLoadFull}>
-          <FileText data-icon="inline-start" aria-hidden="true" />
-          Load the full log
-        </button>
+      {outcome === "complete" && streamFellShort(live, log) && (
+        <span className="mt-2 flex items-center gap-1.5 font-sans text-xs text-muted-foreground">
+          {/* A truncated log has said why above. */}
+          {!live.truncated && "Some output didn't stream."}
+          <button type="button" className={buttonClass("quiet")} onClick={onLoadFull}>
+            <FileText data-icon="inline-start" aria-hidden="true" />
+            Load the full log
+          </button>
+        </span>
       )}
     </>
   );
+}
+
+// Whether the stored log holds more than the stream carried, which is the
+// only time the stored copy is worth offering: usually the stream carried
+// every byte and the screen already shows the whole log. A truncated stream
+// always falls short. Otherwise it is known only once the stream has stopped
+// adding and the row gives the stored size, since a last piece may still be
+// on its way; the size counts the same bytes the stream's ends do.
+function streamFellShort(live: LiveTemplateRunLog, log: TemplateRunLog): boolean {
+  if (live.truncated) {
+    return true;
+  }
+  const settled = live.ended !== null || live.failed;
+  return settled && log.state === "complete" && live.streamedBytes < (log.size_bytes ?? 0);
 }
 
 // The log is still being written: dots that count from one to four in the

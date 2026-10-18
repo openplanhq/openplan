@@ -572,27 +572,72 @@ describe("RunDetailScreen", () => {
     expect(bodyFetches()).toBe(0);
   });
 
-  it("keeps a live log's output when its row turns complete, and offers the full log", async () => {
+  // Usually the stream carried every byte the stored log holds: the screen
+  // already shows the whole log, so nothing is offered.
+  it("keeps a live log's output when its row turns complete, and offers nothing when the stream carried it all", async () => {
     const queryClient = testQueryClient();
     const { moveOn, bodyFetches } = liveRowThatMovesOn(queryClient);
 
     renderScreen(queryClient);
     await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
-    act(() => FakeEventSource.instances[0].dispatch("log", { offset: 0, end: 12, data: "Planning...\n" }, "1-0"));
+    const source = FakeEventSource.instances[0];
+    act(() => source.dispatch("log", { offset: 0, end: 12, data: "Planning...\n" }, "1-0"));
 
-    moveOn(runLog({ name: "plan-3" }));
+    moveOn(runLog({ name: "plan-3", size_bytes: 12 }));
+    act(() => source.dispatch("log_end", { state: "complete" }));
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "Load the full log" })).toBeTruthy());
+    await waitFor(() => expect(screen.queryByText("Streaming")).toBeNull());
     expect(screen.getByTestId("log-scroll-area-plan-3").textContent).toContain("Planning...\n");
-    expect(screen.queryByText("Streaming")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Load the full log" })).toBeNull();
+    expect(bodyFetches()).toBe(0);
+  });
+
+  // A stream that missed output, say while Valkey was away, carried fewer
+  // bytes than were stored: the stored log is offered, with why.
+  it("offers the full log once the stream has ended short of what was stored", async () => {
+    const queryClient = testQueryClient();
+    const { moveOn, bodyFetches } = liveRowThatMovesOn(queryClient);
+
+    renderScreen(queryClient);
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+    const source = FakeEventSource.instances[0];
+    act(() => source.dispatch("log", { offset: 0, end: 12, data: "Planning...\n" }, "1-0"));
+
+    moveOn(runLog({ name: "plan-3", size_bytes: 40 }));
+    await waitFor(() => expect(screen.queryByText("Streaming")).toBeNull());
+    // The row is complete, but a last piece may still be on its way.
+    expect(screen.queryByRole("button", { name: "Load the full log" })).toBeNull();
+
+    act(() => source.dispatch("log_end", { state: "complete" }));
+    expect(screen.getByText("Some output didn't stream.")).toBeTruthy();
     expect(bodyFetches()).toBe(0);
 
-    // The stream has not ended, but the stored body replaces it: it closes.
-    expect(FakeEventSource.instances[0].closeCalls).toBe(0);
     fireEvent.click(screen.getByRole("button", { name: "Load the full log" }));
     await waitFor(() => expect(screen.getByText("plan-3 full body")).toBeTruthy());
     expect(bodyFetches()).toBe(1);
-    expect(FakeEventSource.instances[0].closeCalls).toBe(1);
+  });
+
+  // A truncated stream always falls short, and says why itself. Loading the
+  // stored body replaces the stream, which closes it.
+  it("offers the full log of a truncated stream as soon as its row is complete", async () => {
+    const queryClient = testQueryClient();
+    const { moveOn, bodyFetches } = liveRowThatMovesOn(queryClient);
+
+    renderScreen(queryClient);
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+    const source = FakeEventSource.instances[0];
+    act(() => source.dispatch("log", { offset: 0, end: 12, data: "Planning...\n" }, "1-0"));
+    act(() => source.dispatch("log_truncated", {}));
+
+    moveOn(runLog({ name: "plan-3", size_bytes: 40 }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Load the full log" })).toBeTruthy());
+    expect(screen.queryByText("Some output didn't stream.")).toBeNull();
+    expect(source.closeCalls).toBe(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Load the full log" }));
+    await waitFor(() => expect(screen.getByText("plan-3 full body")).toBeTruthy());
+    expect(bodyFetches()).toBe(1);
+    expect(source.closeCalls).toBe(1);
   });
 
   it("closes a live log's stream when its row closes", async () => {

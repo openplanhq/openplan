@@ -27,13 +27,28 @@ describe("useLiveTemplateRunLog", () => {
     const { result } = renderHook(() => useLiveTemplateRunLog(URL));
     const source = onlySource();
     expect(source.url).toBe(URL);
-    expect(result.current).toEqual({ pieces: [], truncated: false, ended: null, failed: false });
+    expect(result.current).toEqual({ pieces: [], streamedBytes: 0, truncated: false, ended: null, failed: false });
 
     act(() => source.dispatch("log", { offset: 0, end: 16, data: "Initializing...\n" }, "1-0"));
     act(() => source.dispatch("log", { offset: 16, end: 22, data: "Done.\n" }, "2-0"));
 
     expect(result.current.pieces).toEqual(["Initializing...\n", "Done.\n"]);
     expect(result.current.ended).toBeNull();
+  });
+
+  // The server counts the stored log's raw bytes, which replaced characters
+  // in the text would miscount, so its end is kept as sent.
+  it("keeps the byte count the server gave the last piece", () => {
+    const { result } = renderHook(() => useLiveTemplateRunLog(URL));
+    const source = onlySource();
+
+    act(() => source.dispatch("log", { offset: 0, end: 5, data: "\uFFFDok\n" }, "1-0"));
+    expect(result.current.streamedBytes).toBe(5);
+    act(() => source.dispatch("log", { offset: 5, end: 9, data: "more" }, "2-0"));
+    expect(result.current.streamedBytes).toBe(9);
+    // A piece with no end leaves the count where it was.
+    act(() => source.dispatch("log", { offset: 9, data: "x" }, "3-0"));
+    expect(result.current.streamedBytes).toBe(9);
   });
 
   it("skips an event whose data is not JSON, and keeps following", () => {

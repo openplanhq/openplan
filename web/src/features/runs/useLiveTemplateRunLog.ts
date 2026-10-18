@@ -6,6 +6,10 @@ export interface LiveTemplateRunLog {
   // caller can render each as its own text node: a new piece then adds a node
   // instead of replacing a text that can run to megabytes.
   pieces: readonly string[];
+  // How much of the log the stream has carried, in the stored log's bytes:
+  // the end the server gave the last piece. Against the stored log's size it
+  // tells whether the stream missed anything.
+  streamedBytes: number;
   // The output outgrew what the API streams live: no more text follows, and
   // the rest is only in the log's body once it is complete.
   truncated: boolean;
@@ -15,7 +19,7 @@ export interface LiveTemplateRunLog {
   failed: boolean;
 }
 
-const NOTHING_YET: LiveTemplateRunLog = { pieces: [], truncated: false, ended: null, failed: false };
+const NOTHING_YET: LiveTemplateRunLog = { pieces: [], streamedBytes: 0, truncated: false, ended: null, failed: false };
 
 const ENDED_STATES: readonly TemplateRunLogState[] = ["complete", "lost"];
 
@@ -45,11 +49,14 @@ export function useLiveTemplateRunLog(url: string): LiveTemplateRunLog {
     const source = new EventSource(url);
 
     source.addEventListener("log", (event) => {
-      const piece = eventData<{ data: string }>(event);
+      const piece = eventData<{ data: string; end?: number }>(event);
       if (typeof piece?.data !== "string") {
         return;
       }
-      setLive((current) => ({ ...current, pieces: [...current.pieces, piece.data] }));
+      // end counts raw bytes, which the text's replaced characters would
+      // miscount, so it is taken as sent rather than counted here.
+      const end = typeof piece.end === "number" ? piece.end : 0;
+      setLive((current) => ({ ...current, pieces: [...current.pieces, piece.data], streamedBytes: Math.max(current.streamedBytes, end) }));
     });
     source.addEventListener("log_truncated", () => setLive((current) => ({ ...current, truncated: true })));
     source.addEventListener("log_end", (event) => {
