@@ -1,12 +1,13 @@
 import { Fragment, useId, useState } from "react";
 import type { ReactNode } from "react";
-import { Ban, LoaderCircle, SquareTerminal, TriangleAlert } from "lucide-react";
+import { Ban, FileText, SquareTerminal, TriangleAlert } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { templateRunLogEventsURL } from "../../api/client";
 import { useTemplateRunLogQuery } from "../../api/queries";
 import type { RunPhase, TemplateRunExecution, TemplateRunLog, TemplateRunLogLostReason } from "../../api/types";
 import { tenantID } from "../../config";
+import { buttonClass } from "../../shared/buttonClass";
 import { formatDateTime } from "../../shared/formatTimestamp";
 import { LogPhase, LogStep } from "../../shared/LogSteps";
 import StatusLabel from "../../shared/StatusLabel";
@@ -193,9 +194,7 @@ function LiveRunLogStream({ url, log, onLoadFull }: { url: string; log: Template
             Could not load this log.
           </LogStatus>
         ) : (
-          <LogStatus icon={LoaderCircle} tone="settled">
-            Streaming…
-          </LogStatus>
+          <StreamingDots />
         ))}
       {live.truncated && (
         <LogStatus icon={Ban} tone="idle">
@@ -208,11 +207,26 @@ function LiveRunLogStream({ url, log, onLoadFull }: { url: string; log: Template
         </LogStatus>
       )}
       {outcome === "complete" && (
-        <Button variant="outline" size="sm" className="mt-2 font-sans" onClick={onLoadFull}>
+        <button type="button" className={cn(buttonClass("quiet"), "mt-2 flex font-sans")} onClick={onLoadFull}>
+          <FileText data-icon="inline-start" aria-hidden="true" />
           Load the full log
-        </Button>
+        </button>
       )}
     </>
+  );
+}
+
+// The log is still being written: dots that count from one to four in the
+// log's own type, on the line where its next output will appear. A screen
+// reader hears "Streaming" once; with reduced motion all four stand still.
+function StreamingDots() {
+  return (
+    <span role="status" className="mt-1 block text-muted-foreground">
+      <span className="sr-only">Streaming</span>
+      <span aria-hidden="true" className="inline-block animate-log-dots overflow-hidden whitespace-nowrap align-bottom">
+        ....
+      </span>
+    </span>
   );
 }
 

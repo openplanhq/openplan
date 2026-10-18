@@ -506,20 +506,21 @@ describe("RunDetailScreen", () => {
     await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
     const source = FakeEventSource.instances[0];
     expect(source.url).toBe("/v1/tenants/tenant_123/template-runs/run_1/logs/plan-3/events");
-    expect(screen.getByText("Streaming…")).toBeTruthy();
+    expect(screen.getByText("Streaming")).toBeTruthy();
 
     act(() => source.dispatch("log", { offset: 0, end: 12, data: "Planning...\n" }, "1-0"));
     act(() => source.dispatch("log", { offset: 12, end: 28, data: "Plan: 1 to add.\n" }, "2-0"));
     const panel = screen.getByTestId("log-scroll-area-plan-3");
     expect(panel.textContent).toContain("Planning...\nPlan: 1 to add.\n");
-    expect(screen.getByText("Streaming…")).toBeTruthy();
+    // The dots are decoration; the status they stand for is read out once.
+    expect(within(panel).getByRole("status").textContent).toContain("Streaming");
 
     act(() => source.dispatch("log_truncated", {}));
     expect(screen.getByText("Live output stops here; load the full log once the command finishes.")).toBeTruthy();
 
     act(() => source.dispatch("log_end", { state: "complete" }));
     expect(source.closeCalls).toBe(1);
-    expect(screen.queryByText("Streaming…")).toBeNull();
+    expect(screen.queryByText("Streaming")).toBeNull();
     expect(bodyFetches()).toBe(0);
 
     fireEvent.click(screen.getByRole("button", { name: "Load the full log" }));
@@ -566,7 +567,7 @@ describe("RunDetailScreen", () => {
 
     await waitFor(() => expect(screen.getByText("Log lost: the executor stopped")).toBeTruthy());
     expect(screen.getByTestId("log-scroll-area-plan-3").textContent).toContain("Planning...\n");
-    expect(screen.queryByText("Streaming…")).toBeNull();
+    expect(screen.queryByText("Streaming")).toBeNull();
     expect(FakeEventSource.instances).toHaveLength(1);
     expect(bodyFetches()).toBe(0);
   });
@@ -583,7 +584,7 @@ describe("RunDetailScreen", () => {
 
     await waitFor(() => expect(screen.getByRole("button", { name: "Load the full log" })).toBeTruthy());
     expect(screen.getByTestId("log-scroll-area-plan-3").textContent).toContain("Planning...\n");
-    expect(screen.queryByText("Streaming…")).toBeNull();
+    expect(screen.queryByText("Streaming")).toBeNull();
     expect(bodyFetches()).toBe(0);
 
     // The stream has not ended, but the stored body replaces it: it closes.

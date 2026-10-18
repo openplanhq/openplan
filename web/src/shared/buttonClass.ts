@@ -18,6 +18,11 @@ const FOCUS = "focus-visible:ring-0 focus-visible:outline-solid focus-visible:ou
 // The icon variant is a lone icon in a row, such as a credential's delete: a
 // 32px square with no fill until hovered, its icon in muted text. It takes
 // an aria-label, since it has no words.
+//
+// The quiet variant is an action on a record someone is reading, such as Load
+// the full log under a log: shadcn's link at its xs size, in muted text with
+// no padding, so it sits with the record instead of competing with it. It
+// turns foreground and underlines on hover.
 const VARIANTS = {
   primary: cn(buttonVariants({ variant: "default" }), PADDING, FOCUS, "focus-visible:border-transparent"),
   outline: cn(buttonVariants({ variant: "outline" }), PADDING, FOCUS, "focus-visible:border-border"),
@@ -27,7 +32,12 @@ const VARIANTS = {
     FOCUS,
     "focus-visible:border-border px-2.5 text-meta has-data-[icon=inline-start]:pl-2.5"
   ),
-  icon: cn(buttonVariants({ variant: "ghost", size: "icon" }), FOCUS, "focus-visible:border-transparent text-muted-foreground")
+  icon: cn(buttonVariants({ variant: "ghost", size: "icon" }), FOCUS, "focus-visible:border-transparent text-muted-foreground"),
+  quiet: cn(
+    buttonVariants({ variant: "link", size: "xs" }),
+    FOCUS,
+    "focus-visible:border-transparent h-auto px-0 has-data-[icon=inline-start]:pl-0 font-normal text-muted-foreground hover:text-foreground"
+  )
 };
 
 /** The classes of an openplan UI button: 36px tall at "lg", 32px otherwise. */
