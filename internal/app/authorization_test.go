@@ -230,9 +230,9 @@ func TestInheritedResourceMissingMutationReturnsNotFound(t *testing.T) {
 //
 // With a real engine the swap is exposed by the model's cascade instead. One
 // role implies a known set of capabilities -- viewer implies can_view alone,
-// operator adds can_operate, owner reaches all four -- so a permuted slice
-// decodes a correct answer into the wrong fields and the expected set no
-// longer matches.
+// operator adds can_operate, approver adds can_approve, owner reaches all
+// four -- so a permuted slice decodes a correct answer into the wrong fields
+// and the expected set no longer matches.
 
 // capabilitiesFor is the model's cascade, written out independently of the
 // model so a change to either side fails here rather than agreeing silently.
@@ -243,7 +243,7 @@ func capabilitiesFor(relation authorization.Relation) StackCapabilities {
 	case authorization.RelationOperator:
 		return StackCapabilities{CanView: true, CanOperate: true}
 	case authorization.RelationApprover:
-		return StackCapabilities{CanView: true, CanApprove: true}
+		return StackCapabilities{CanView: true, CanOperate: true, CanApprove: true}
 	case authorization.RelationOwner:
 		return StackCapabilities{CanView: true, CanOperate: true, CanApprove: true, CanManageAccess: true}
 	default:

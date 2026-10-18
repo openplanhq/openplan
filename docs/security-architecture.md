@@ -191,11 +191,11 @@ stack:<stack-id>
 The versioned model defines only direct role relations and derived permissions:
 
 ```text
-owner, operator, approver, viewer
-can_view          = owner or operator or approver or viewer
-can_operate       = owner or operator
-can_approve       = owner or approver
+viewer < operator < approver < owner
 can_manage_access = owner
+can_approve       = can_manage_access or approver
+can_operate       = can_approve or operator
+can_view          = can_operate or viewer
 ```
 
 Derived permission relations are never direct write targets. The API enforces
