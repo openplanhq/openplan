@@ -1293,8 +1293,20 @@ paths:
         Ordered by display name, a page at a time. The cursor is a position in
         that order, so one kept across a changed `q` resumes after the same
         name.
+
+        Who may search: with `stack_id`, anyone with operator access or
+        higher on that stack (a stack the caller can't see is `404`, a viewer
+        is `403`); without it, platform administrators only.
       operationId: searchUsers
       parameters:
+        - name: stack_id
+          in: query
+          required: false
+          description: |
+            The stack the search is for, such as the one whose access form is
+            open. Lets a non-administrator search.
+          schema:
+            type: string
         - name: q
           in: query
           required: true

@@ -406,6 +406,7 @@ func (server *Server) handleSearchUsers(response http.ResponseWriter, request *h
 
 	users, err := server.service.SearchUsers(request.Context(), app.SearchUsersCommand{
 		TenantID: domain.TenantID(request.PathValue("tenant_id")),
+		StackID:  domain.StackID(request.URL.Query().Get("stack_id")),
 		Query:    request.URL.Query().Get("q"),
 		Page:     page,
 	})

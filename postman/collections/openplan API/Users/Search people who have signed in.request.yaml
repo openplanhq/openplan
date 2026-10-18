@@ -11,6 +11,10 @@ description: |-
   that order, so one kept across a changed `q` resumes after the same
   name.
 
+  Who may search: with `stack_id`, anyone with operator access or
+  higher on that stack (a stack the caller can't see is `404`, a viewer
+  is `403`); without it, platform administrators only.
+
   Saves the first match who is not you, for the grant requests.
 method: GET
 url: '{{base_url}}/v1/tenants/{{tenant_id}}/users/search?q={{user_search}}&limit=50'

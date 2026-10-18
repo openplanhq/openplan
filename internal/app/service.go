@@ -479,8 +479,12 @@ type GetStackCommand struct {
 // SearchUsersCommand asks the app to search the local identity projection.
 type SearchUsersCommand struct {
 	TenantID domain.TenantID
-	Query    string
-	Page     PageRequest
+	// StackID is the stack the search is for, such as the one whose access
+	// form is open. It is what lets a non-administrator search: they may if
+	// they can operate it. Empty means a platform-wide search.
+	StackID domain.StackID
+	Query   string
+	Page    PageRequest
 }
 
 // ListStacksCommand asks the app to list tenant-owned stacks.
@@ -1314,7 +1318,7 @@ func (service *Service) SearchUsers(ctx context.Context, command SearchUsersComm
 	if err != nil {
 		return Page[UserProfile]{}, err
 	}
-	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanAdminister); err != nil {
+	if err := service.authorizeUserSearch(ctx, command.StackID); err != nil {
 		return Page[UserProfile]{}, err
 	}
 	if err := service.requireUserRepository(); err != nil {
@@ -1327,6 +1331,19 @@ func (service *Service) SearchUsers(ctx context.Context, command SearchUsersComm
 	return pageFrom(users, command.Page.Limit, usersList, func(user UserProfile) cursorKey {
 		return UserCursor{DisplayName: user.DisplayName, Sub: user.Sub}
 	}), nil
+}
+
+// authorizeUserSearch decides who may list the people who have signed in.
+// The list is a directory, so a viewer, who can change nothing, has no use for
+// it: searching takes operator access or higher on the stack it is for, or
+// platform administration for a search not tied to a stack. The stack check
+// goes through authorizeStack, so a stack the caller can't see is ErrNotFound
+// as everywhere else.
+func (service *Service) authorizeUserSearch(ctx context.Context, stackID domain.StackID) error {
+	if stackID == "" {
+		return authorizePlatform(ctx, service.Authorization, authorization.RelationCanAdminister)
+	}
+	return authorizeStack(ctx, service.Authorization, stackID, authorization.RelationCanOperate)
 }
 
 // maxSearchQueryLength bounds q, which goes into a LIKE pattern.

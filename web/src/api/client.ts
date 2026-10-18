@@ -317,9 +317,15 @@ export function revokeStackRole(tenantID: string, stackID: string, userSub: stri
   });
 }
 
-/** One page of the people whose name or email matches q, ordered by name. */
-export function searchUsers(tenantID: string, q: string, options: PageOptions = {}): Promise<ListPage<UserProfile>> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/users/search${pageQuery({ ...options, q })}`);
+/**
+ * One page of the people whose name or email matches q, ordered by name. The
+ * search is for one stack: naming it is what lets an operator or above, not
+ * only a platform administrator, search.
+ */
+export function searchUsers(tenantID: string, stackID: string, q: string, options: PageOptions = {}): Promise<ListPage<UserProfile>> {
+  const query = pageQuery({ ...options, q });
+  const stack = `${query === "" ? "?" : "&"}stack_id=${encodeURIComponent(stackID)}`;
+  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/users/search${query}${stack}`);
 }
 
 // The app's own sign-in screen. Not a server route: it is a page with one

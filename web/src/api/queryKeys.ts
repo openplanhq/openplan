@@ -21,5 +21,6 @@ export const queryKeys = {
   templateRunLog: (tenantID: string, runID: string, name: string, uploadedAt: string) =>
     ["templateRunLog", tenantID, runID, name, uploadedAt] as const,
   stackGrants: (tenantID: string, stackID: string) => ["stackGrants", tenantID, stackID] as const,
-  userSearch: (tenantID: string, query: string) => ["userSearch", tenantID, query] as const
+  // The query stays at [2]: useSearchUsersQuery's placeholder reads it there.
+  userSearch: (tenantID: string, stackID: string, query: string) => ["userSearch", tenantID, query, stackID] as const
 };
