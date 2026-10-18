@@ -166,8 +166,8 @@ docker compose --profile debug up -d   # Temporal UI on http://localhost:8080
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). `make lint` and `go test ./...` from the
-repository root, `npm test` and `npm run build` from `web/` and from `site/`. CI
-runs all of them.
+repository root, `npm test` and `npm run build` from `web/`, and `npm run build`
+from `site/`. CI runs all of them.
 
 ## License
 
