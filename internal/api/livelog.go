@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/vishu42/openplan/internal/app"
@@ -25,9 +26,15 @@ type LiveLogSubscriber interface {
 }
 
 // liveLogKeepalive is how often a live stream writes a comment, which keeps
-// proxies from closing it while the command is quiet, and re-reads its row.
+// proxies from closing it while the command is quiet, and re-checks its row.
 // A variable so tests can shorten it.
 var liveLogKeepalive = 20 * time.Second
+
+// liveLogDrainGrace is how long a stream whose row has ended keeps sending
+// what is still on its way before it ends. The row is written before the end
+// entry is appended, so a re-check can see the end while a slow client's
+// last pieces are still queued behind it. A variable so tests can shorten it.
+var liveLogDrainGrace = 2 * time.Second
 
 // liveLogRetryMillis is the reconnection delay a stream that could not follow
 // its log asks the browser for.
@@ -115,50 +122,56 @@ func (server *Server) resumePoint(ctx context.Context, key, lastEventID string) 
 // channel closes, or the client goes away. sent is how much of the log the
 // client already holds.
 func (server *Server) streamEntries(ctx context.Context, stream eventStream, entries <-chan livelog.Entry, command app.GetTemplateRunLogCommand, sent int64) {
-	// sent grows with every piece this response carries. A retried append
-	// repeats bytes under a new id, so a piece is cut to what lies past it.
 	keepalive := time.NewTicker(liveLogKeepalive)
 	defer keepalive.Stop()
 	for {
-		var (
-			entry livelog.Entry
-			open  bool
-		)
 		select {
 		case <-ctx.Done():
 			return
 		case <-keepalive.C:
-			if !server.keepAlive(ctx, stream, command) {
+			state, ok := server.keepAlive(ctx, stream, command)
+			if !ok {
 				return
 			}
-			continue
-		case entry, open = <-entries:
-		}
-		if !open {
-			server.endClosedStream(ctx, stream, command)
-			return
-		}
-		var err error
-		switch entry.Kind {
-		case livelog.KindPiece:
-			end := entry.Offset + int64(len(entry.Data))
-			if end <= sent {
-				continue
+			if state != domain.TemplateRunLogLive {
+				drainThenEnd(ctx, stream, entries, &sent, state)
+				return
 			}
-			data, offset := entry.Data, entry.Offset
-			if offset < sent {
-				data, offset = data[sent-offset:], sent
+		case entry, open := <-entries:
+			if !open {
+				server.endClosedStream(ctx, stream, command)
+				return
 			}
-			sent = end
-			err = stream.send("log", entry.ID, logEventData{Offset: offset, End: end, Data: strings.ToValidUTF8(string(data), "\uFFFD")})
-		case livelog.KindTruncated:
-			err = stream.send("log_truncated", "", struct{}{})
-		case livelog.KindEnd:
-			_ = stream.end(entry.State)
-			return
+			if !stream.sendEntry(entry, &sent) {
+				return
+			}
 		}
-		if err != nil {
+	}
+}
+
+// drainThenEnd ends a stream whose row has ended before its end entry
+// arrived. What is still queued goes out first, for up to liveLogDrainGrace,
+// so a client that fell behind still gets the last lines, usually the ones
+// that say how the command ended; the end entry, if it comes in that time,
+// ends the stream itself.
+func drainThenEnd(ctx context.Context, stream eventStream, entries <-chan livelog.Entry, sent *int64, state domain.TemplateRunLogState) {
+	grace := time.NewTimer(liveLogDrainGrace)
+	defer grace.Stop()
+	for {
+		select {
+		case <-ctx.Done():
 			return
+		case <-grace.C:
+			_ = stream.end(state)
+			return
+		case entry, open := <-entries:
+			if !open {
+				_ = stream.end(state)
+				return
+			}
+			if !stream.sendEntry(entry, sent) {
+				return
+			}
 		}
 	}
 }
@@ -181,28 +194,83 @@ func (server *Server) endClosedStream(ctx context.Context, stream eventStream, c
 	_ = stream.end(runLog.State)
 }
 
-// keepAlive writes a comment and re-reads the row, reporting whether the
-// stream goes on. The row is written before the end entry is appended, so a
-// row that ended while its end entry never landed would otherwise hold the
-// stream open until the client gave up.
-func (server *Server) keepAlive(ctx context.Context, stream eventStream, command app.GetTemplateRunLogCommand) bool {
+// keepAlive writes a comment and re-checks the row, returning its state and
+// whether the stream goes on. The row is written before the end entry is
+// appended, so a row that ended while its end entry never landed would
+// otherwise hold the stream open until the client gave up.
+//
+// The re-check is the replica's, shared by every viewer of the log through
+// liveLogStates, so a log watched by many costs one read per interval. It is
+// not authorized again: the viewer was when the stream opened, as a body read
+// is when it starts.
+func (server *Server) keepAlive(ctx context.Context, stream eventStream, command app.GetTemplateRunLogCommand) (domain.TemplateRunLogState, bool) {
 	if err := stream.comment(); err != nil {
-		return false
+		return "", false
 	}
-	runLog, err := server.service.GetTemplateRunLogMetadata(ctx, command)
+	key := string(command.TenantID) + "/" + string(command.RunID) + "/" + command.Name
+	state, err := server.liveLogStates.get(ctx, key, liveLogKeepalive, func(ctx context.Context) (domain.TemplateRunLogState, error) {
+		return server.service.TemplateRunLogState(ctx, command.TenantID, command.RunID, command.Name)
+	})
 	if err != nil {
 		// Asked again next tick; a failed read is no reason to stop
 		// following a log that is likely still live.
 		if ctx.Err() == nil {
-			log.Printf("api: live log stream: re-read %s of run %s: %v", command.Name, command.RunID, err)
+			log.Printf("api: live log stream: re-check %s of run %s: %v", command.Name, command.RunID, err)
 		}
-		return ctx.Err() == nil
+		return domain.TemplateRunLogLive, ctx.Err() == nil
 	}
-	if runLog.State == domain.TemplateRunLogLive {
-		return true
+	return state, true
+}
+
+// liveLogStateCache holds each live log's last re-checked state for the
+// replica's streams of it, so the re-checks cost reads per log, not per
+// viewer.
+type liveLogStateCache struct {
+	mu      sync.Mutex
+	entries map[string]cachedLogState
+	// now is time.Now; tests replace it.
+	now func() time.Time
+}
+
+type cachedLogState struct {
+	state domain.TemplateRunLogState
+	at    time.Time
+}
+
+func newLiveLogStateCache() *liveLogStateCache {
+	return &liveLogStateCache{entries: map[string]cachedLogState{}, now: time.Now}
+}
+
+// get returns key's state, read by fetch unless a read younger than maxAge is
+// held. A failed read is not kept, so the next caller asks again. Entries no
+// one has asked for in a while are swept as reads are stored, which bounds
+// the map by the logs being watched.
+func (cache *liveLogStateCache) get(ctx context.Context, key string, maxAge time.Duration, fetch func(context.Context) (domain.TemplateRunLogState, error)) (domain.TemplateRunLogState, error) {
+	cache.mu.Lock()
+	cached, ok := cache.entries[key]
+	now := cache.now()
+	cache.mu.Unlock()
+	if ok && now.Sub(cached.at) < maxAge {
+		return cached.state, nil
 	}
-	_ = stream.end(runLog.State)
-	return false
+
+	// Read outside the lock: one slow database read must not hold up every
+	// other log's streams. Two viewers whose ticks meet may both read, which
+	// is harmless.
+	state, err := fetch(ctx)
+	if err != nil {
+		return "", err
+	}
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+	now = cache.now()
+	for other, entry := range cache.entries {
+		if now.Sub(entry.at) > 3*maxAge {
+			delete(cache.entries, other)
+		}
+	}
+	cache.entries[key] = cachedLogState{state: state, at: now}
+	return state, nil
 }
 
 type logEventData struct {
@@ -256,6 +324,34 @@ func (stream eventStream) send(event, id string, data any) error {
 	}
 	stream.flusher.Flush()
 	return nil
+}
+
+// sendEntry sends entry as its event and reports whether the stream goes on:
+// it does not after the end entry, or once the client's connection fails.
+//
+// sent is how much of the log the client holds, and grows with every piece
+// sent. A retried append repeats bytes under a new id, so a piece is cut to
+// what lies past sent, and one wholly behind it is skipped.
+func (stream eventStream) sendEntry(entry livelog.Entry, sent *int64) bool {
+	switch entry.Kind {
+	case livelog.KindPiece:
+		end := entry.Offset + int64(len(entry.Data))
+		if end <= *sent {
+			return true
+		}
+		data, offset := entry.Data, entry.Offset
+		if offset < *sent {
+			data, offset = data[*sent-offset:], *sent
+		}
+		*sent = end
+		return stream.send("log", entry.ID, logEventData{Offset: offset, End: end, Data: strings.ToValidUTF8(string(data), "�")}) == nil
+	case livelog.KindTruncated:
+		return stream.send("log_truncated", "", struct{}{}) == nil
+	case livelog.KindEnd:
+		_ = stream.end(entry.State)
+		return false
+	}
+	return true
 }
 
 func (stream eventStream) end(state domain.TemplateRunLogState) error {

@@ -26,10 +26,12 @@ type Server struct {
 	tenantID domain.TenantID
 	queue    queue.Reader
 	liveLogs LiveLogSubscriber
-	auth     AuthConfig
-	mux      *http.ServeMux
-	handler  http.Handler
-	debug    bool
+	// liveLogStates is the live streams' shared re-check of each log's state.
+	liveLogStates *liveLogStateCache
+	auth          AuthConfig
+	mux           *http.ServeMux
+	handler       http.Handler
+	debug         bool
 }
 
 // ServerOption configures optional server dependencies.
@@ -115,9 +117,10 @@ func requireCompleteAuthWiring(service *app.Service, auth AuthConfig) {
 
 func NewServer(service *app.Service, tenantID domain.TenantID, options ...ServerOption) *Server {
 	server := &Server{
-		service:  service,
-		tenantID: tenantID,
-		mux:      http.NewServeMux(),
+		service:       service,
+		tenantID:      tenantID,
+		liveLogStates: newLiveLogStateCache(),
+		mux:           http.NewServeMux(),
 	}
 	for _, option := range options {
 		option(server)

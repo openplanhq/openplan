@@ -25,7 +25,10 @@ const liveLogEventsPath = "/v1/tenants/tenant_123/template-runs/run_123/logs/pla
 type fakeLiveLogs struct {
 	entries []livelog.Entry
 	hold    bool
-	err     error
+	// delay holds the entries back that long, as for a client that has
+	// fallen behind its stream.
+	delay time.Duration
+	err   error
 	// stored is what Entry finds, beside entries: what the stream held
 	// before the client's Last-Event-ID.
 	stored   []livelog.Entry
@@ -46,11 +49,18 @@ func (f *fakeLiveLogs) Subscribe(_ context.Context, key, afterID string) (<-chan
 		return nil, f.err
 	}
 	entries := make(chan livelog.Entry, len(f.entries))
-	for _, entry := range f.entries {
-		entries <- entry
+	deliver := func() {
+		for _, entry := range f.entries {
+			entries <- entry
+		}
+		if !f.hold {
+			close(entries)
+		}
 	}
-	if !f.hold {
-		close(entries)
+	if f.delay > 0 {
+		time.AfterFunc(f.delay, deliver)
+	} else {
+		deliver()
 	}
 	return entries, nil
 }
@@ -368,10 +378,18 @@ func TestStreamTemplateRunLogResumesFromTheStartWhenTheEntryIsGone(t *testing.T)
 // The end entry is appended after the row is written and can fail to land;
 // the keepalive's re-read of the row is what ends such a stream. Not
 // parallel: it shortens the package's keepalive interval.
+// shortenLiveLogTimers makes the keepalive tick at once and the drain after a
+// row ends brief. Tests that call it change package variables, so they are
+// not parallel.
+func shortenLiveLogTimers(t *testing.T, grace time.Duration) {
+	t.Helper()
+	interval, drain := liveLogKeepalive, liveLogDrainGrace
+	liveLogKeepalive, liveLogDrainGrace = 10*time.Millisecond, grace
+	t.Cleanup(func() { liveLogKeepalive, liveLogDrainGrace = interval, drain })
+}
+
 func TestStreamTemplateRunLogEndsWhenTheRowFlipsWhileConnected(t *testing.T) {
-	interval := liveLogKeepalive
-	liveLogKeepalive = 10 * time.Millisecond
-	t.Cleanup(func() { liveLogKeepalive = interval })
+	shortenLiveLogTimers(t, 20*time.Millisecond)
 	deps := newLiveLogDependencies(t)
 	complete := deps.logMetadata.log
 	complete.State = domain.TemplateRunLogComplete
@@ -388,9 +406,7 @@ func TestStreamTemplateRunLogEndsWhenTheRowFlipsWhileConnected(t *testing.T) {
 // A failed re-read leaves the stream following the log: the next tick asks
 // again. Not parallel, as above.
 func TestStreamTemplateRunLogKeepsFollowingWhenARowReReadFails(t *testing.T) {
-	interval := liveLogKeepalive
-	liveLogKeepalive = 10 * time.Millisecond
-	t.Cleanup(func() { liveLogKeepalive = interval })
+	shortenLiveLogTimers(t, 20*time.Millisecond)
 	deps := newLiveLogDependencies(t)
 	complete := deps.logMetadata.log
 	complete.State = domain.TemplateRunLogComplete
@@ -402,6 +418,88 @@ func TestStreamTemplateRunLogKeepsFollowingWhenARowReReadFails(t *testing.T) {
 
 	if got, want := response.Body.String(), ":\n\n:\n\n"+sseEnd("complete"); got != want {
 		t.Fatalf("body = %q, want %q", got, want)
+	}
+}
+
+// A row can end while a slow client's last pieces are still on their way:
+// the row is written before the end entry. They go out before the end. Not
+// parallel, as above.
+func TestStreamTemplateRunLogSendsQueuedPiecesBeforeEndingOnARowCheck(t *testing.T) {
+	shortenLiveLogTimers(t, time.Second)
+	deps := newLiveLogDependencies(t)
+	complete := deps.logMetadata.log
+	complete.State = domain.TemplateRunLogComplete
+	deps.logMetadata.thenLog = &complete
+	// The pieces arrive after the first tick has seen the row complete.
+	live := &fakeLiveLogs{entries: []livelog.Entry{piece("1-0", 0, "last\n")}, hold: true, delay: 100 * time.Millisecond}
+
+	response := streamLiveLog(t, deps, live, nil)
+
+	want := ":\n\n" + sseLog("1-0", `{"offset":0,"end":5,"data":"last\n"}`) + sseEnd("complete")
+	if got := response.Body.String(); got != want {
+		t.Fatalf("body = %q, want %q", got, want)
+	}
+}
+
+// Every viewer of a log on a replica shares its re-check: a second ask
+// within the interval reads nothing.
+func TestLiveLogStateCacheSharesOneReadPerInterval(t *testing.T) {
+	t.Parallel()
+
+	cache := newLiveLogStateCache()
+	now := time.Unix(0, 0)
+	cache.now = func() time.Time { return now }
+	reads := 0
+	fetch := func(context.Context) (domain.TemplateRunLogState, error) {
+		reads++
+		return domain.TemplateRunLogLive, nil
+	}
+
+	for range 3 {
+		if _, err := cache.get(context.Background(), "t/r/plan-1", 20*time.Second, fetch); err != nil {
+			t.Fatalf("get returned error: %v", err)
+		}
+	}
+	if reads != 1 {
+		t.Fatalf("reads = %d within one interval, want 1", reads)
+	}
+
+	now = now.Add(20 * time.Second)
+	if _, err := cache.get(context.Background(), "t/r/plan-1", 20*time.Second, fetch); err != nil {
+		t.Fatalf("get returned error: %v", err)
+	}
+	if reads != 2 {
+		t.Fatalf("reads = %d after the interval, want 2", reads)
+	}
+}
+
+// A failed read is not kept, and a log nobody asks about is swept.
+func TestLiveLogStateCacheKeepsNoFailureAndSweepsStaleLogs(t *testing.T) {
+	t.Parallel()
+
+	cache := newLiveLogStateCache()
+	now := time.Unix(0, 0)
+	cache.now = func() time.Time { return now }
+	failing := func(context.Context) (domain.TemplateRunLogState, error) {
+		return "", errors.New("database unavailable")
+	}
+	if _, err := cache.get(context.Background(), "t/r/plan-1", time.Second, failing); err == nil {
+		t.Fatal("get returned no error for a failed read")
+	}
+	if len(cache.entries) != 0 {
+		t.Fatalf("entries = %v, want the failure not kept", cache.entries)
+	}
+
+	live := func(context.Context) (domain.TemplateRunLogState, error) { return domain.TemplateRunLogLive, nil }
+	if _, err := cache.get(context.Background(), "t/r/plan-1", time.Second, live); err != nil {
+		t.Fatalf("get returned error: %v", err)
+	}
+	now = now.Add(4 * time.Second)
+	if _, err := cache.get(context.Background(), "t/r/plan-2", time.Second, live); err != nil {
+		t.Fatalf("get returned error: %v", err)
+	}
+	if _, ok := cache.entries["t/r/plan-1"]; ok {
+		t.Fatal("plan-1, unasked for three intervals, was not swept")
 	}
 }
 

@@ -1997,6 +1997,23 @@ func (service *Service) GetTemplateRunLogMetadata(ctx context.Context, command G
 	return deriveTemplateRunLogState(log, run.Status), nil
 }
 
+// TemplateRunLogState is a log's state as GetTemplateRunLogMetadata derives
+// it, without the authorization check. It is for a live log stream re-checking
+// whether its log has ended, after GetTemplateRunLogMetadata authorized the
+// viewer when the stream opened: the stream shares one re-check among every
+// viewer of the log, so the check must not depend on who is asking.
+func (service *Service) TemplateRunLogState(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, name string) (domain.TemplateRunLogState, error) {
+	run, err := service.TemplateRuns.GetTemplateRun(ctx, tenantID, runID)
+	if err != nil {
+		return "", fmt.Errorf("get template run: %w", err)
+	}
+	log, err := service.TemplateRunLogMetadata.GetTemplateRunLog(ctx, tenantID, runID, name)
+	if err != nil {
+		return "", fmt.Errorf("get template run log metadata: %w", err)
+	}
+	return deriveTemplateRunLogState(log, run.Status).State, nil
+}
+
 // deriveTemplateRunLogState reports a live log of a finished run as lost. Only
 // the workflow moves a row out of live, so a run terminated by hand, or whose
 // executor died before the final record, leaves its row live forever; the

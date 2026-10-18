@@ -2595,6 +2595,22 @@ func TestGetTemplateRunLogRefusesALostLog(t *testing.T) {
 	}
 }
 
+// The live stream's shared re-check derives as the authorized read does,
+// with no principal in the context: the viewer was authorized when its stream
+// opened.
+func TestTemplateRunLogStateDerivesWithoutAPrincipal(t *testing.T) {
+	t.Parallel()
+
+	service, _ := logStateService(t, domain.TemplateRunFailed, liveRunLog())
+	state, err := service.TemplateRunLogState(context.Background(), "tenant_123", "run_123", "plan-1")
+	if err != nil {
+		t.Fatalf("TemplateRunLogState returned error: %v", err)
+	}
+	if state != domain.TemplateRunLogLost {
+		t.Fatalf("state = %q, want lost for a live row of a finished run", state)
+	}
+}
+
 func TestGetTemplateRunLogMetadataDerivesState(t *testing.T) {
 	t.Parallel()
 
