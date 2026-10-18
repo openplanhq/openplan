@@ -6,90 +6,37 @@
 [![Go](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)](go.mod)
 [![React](https://img.shields.io/badge/react-19-61DAFB?logo=react&logoColor=black)](web/package.json)
 
-Register a Terraform or OpenTofu module once, and anyone on your team can stand
-up their own copy of it from a web UI, with their own variables, their own
-credentials, and a full history of every change.
-
 ![The stacks list](docs/ss/stacks-list.png)
 
-> [!WARNING]
-> openplan is not production ready. It is an MVP baseline intended for local
-> development, evaluation, and continued hardening. Check back in a few days 🙂
+## Features
 
-## Why not Terraform Cloud
-
-HCP Terraform (formerly Terraform Cloud) bills on **resources under management**:
-every managed resource in your state costs money every month whether or not you
-change it, metered hourly against your peak count. As of 2026 that is $0.10 to
-$0.99 per resource per month by tier, and the free tier reached end of life in
-March 2026.
-
-openplan runs on your own Postgres, Temporal and Valkey, so there is no
-per-resource meter. OpenTofu and Terraform are on equal footing, with no licence questions in
-between.
-
-|                                    | **openplan**                   | HCP Terraform   | Atlantis        | Terragrunt  |
-| ---------------------------------- | ------------------------------ | --------------- | --------------- | ----------- |
-| **Self-hosted**                    | Yes, Apache 2.0                | Enterprise only | Yes             | Yes         |
-| **Billed per managed resource**    | No                             | Yes             | No              | No          |
-| **Web UI for non-infra engineers** | Yes                            | Yes             | No, PR comments | No, a CLI   |
-| **Per-stack access control**       | Yes, OpenFGA                   | Project-level   | Repo-level only | No          |
-| **SSO**                            | Any OIDC/LDAP                  | Yes             | Bring your own  | No          |
-| **Run history and log retention**  | Yes, durable                   | Yes             | Yes             | Yes         |
-| **Approval gates before apply**    | Yes                            | Yes             | Yes             | No          |
-| **Terraform *and* OpenTofu**       | Yes, first-class               | Yes             | Yes             | Yes         |
-| **Workflow engine**                | Temporal, self-hosted or Cloud | Built in        | No              | No          |
-| **Cost**                           | Your infrastructure            | Per resource    | Free            | Free / paid |
-
-Each of the others solves a different problem, and none of this is an argument
-against them:
-
-- **Atlantis** is excellent pull-request automation. It has no product UI, so a
-  platform team cannot offer self-service without building one on top.
-- **Terragrunt** is a CLI layer that removes repetition and adds a run queue. It
-  is not a service with an authorization model.
-- **Terraform Enterprise** is the real self-hosted comparison, and the one worth
-  benchmarking against if openplan's feature set does not cover you yet.
-
-## What it does
-
-- **Register templates.** Point openplan at a Git repository and a revision. That
+- **Template Registry** - Point openplan at a Git repository and a revision. That
   becomes a reusable template anyone on the platform can install.
-- **Compose stacks.** A stack groups the templates that make up one environment
+- **Stacks** - A stack groups the templates that make up one environment
   or one service, each with its own configuration.
-- **Configure per stack.** Set input variables and attach cloud credentials
-  without editing anyone's Terraform.
-- **Plan, apply and destroy from the browser.** Runs are durably orchestrated on
+- **Variable Management** - Vars are parsed on template registration and saved on template installation. 
+- **Plan, apply and destroy from the browser** - Runs are durably orchestrated on
   Temporal, so a plan or apply survives a restart rather than being lost halfway.
-- **Watch runs and read logs.** Every run keeps its `init`, `plan` and
-  `workspace` output, and its history.
-- **Upgrade deliberately.** When a template gets a new revision, upgrade a stack
-  to it as an explicit, reviewable step instead of drifting silently.
-- **Control access per stack.** Grant people access to the stacks they need,
-  rather than to everything.
-- **Sign in with SSO.** openplan signs in through [Dex](https://dexidp.io), its
+- **RBAC** - Grant people access to the stacks they need, rather than to everything.
+- **Environment** - Configure environment at stack level or template level.
+- **Sign in with SSO** - openplan signs in through [Dex](https://dexidp.io), its
   identity provider in every deployment. A corporate IdP, GitHub, or LDAP plugs
   in as a Dex connector, and the local stack ships Dex preconfigured, so there
   is nothing to wire up to try it.
 
-Signed-in sessions are openplan's own record, bounded by its own absolute and
-idle timeouts rather than by Dex's token lifetime. See
-[Authentication and Authorization](docs/authentication.md) for the session
-model and logout.
-
 ## Screenshots
 
-**What needs attention.** Plans waiting for approval and destroys that failed,
+**What needs attention** Plans waiting for approval and destroys that failed,
 across every stack you can see.
 
 ![Plans waiting for approval](docs/ss/attention.png)
 
-**Templates and runs.** The templates a stack is built from, the plan and apply
+**Templates and runs** - The templates a stack is built from, the plan and apply
 controls, and the run history, all on one screen.
 
 ![A stack's templates and runs](docs/ss/stack-template-and-runs.png)
 
-**Runs and logs.** Every run keeps its status, its timings, and the full `init`,
+**Runs and logs** - Every run keeps its status, its timings, and the full `init`,
 `plan` and `workspace` output.
 
 ![A completed apply run with its logs](docs/ss/run-logs.png)
@@ -205,40 +152,6 @@ docker compose --profile debug up -d   # Temporal UI on http://localhost:8080
 > **Upgrading an existing local stack?** Run `docker compose down -v` before
 > starting it back up. There is no upgrade path between releases yet, so a
 > preserved volume can hold state the current code cannot read.
-
-## Running on Temporal Cloud
-
-openplan's runs are Temporal workflows, and the API and executors connect to
-whatever cluster `TEMPORAL_ADDRESS` points at. That means you can host the API
-and the database yourself and let a managed Temporal cluster do the durable
-execution, instead of running one.
-
-Temporal Cloud is priced per action rather than per resource, so it does not
-inherit Terraform Cloud's billing problem. It starts at $50 per million actions
-with $150 in credits, storage is $0.042/GB-hour active and $0.00105/GB-hour
-retained, and the Developer plan has no base monthly fee. For an infrastructure
-platform the action count tracks runs, not resource count, so the bill stays
-small next to a per-resource meter.
-
-> [!NOTE]
-> Connecting to Temporal Cloud today needs a small change: openplan's Temporal
-> client sets only `HostPort` and `Namespace`
-> ([internal/temporal/client.go](internal/temporal/client.go)), so it speaks
-> plaintext and sends no API key. Temporal Cloud requires TLS and an API key.
-> Self-hosting Temporal works as-is. See
-> [#301](https://github.com/openplanhq/openplan/issues/301).
-
-## Maturity
-
-An MVP baseline, and honest about it. What that means in practice:
-
-- **Works end to end today:** template registration, stacks, per-stack
-  variables and credentials, plan/apply/destroy with durable runs on Temporal,
-  full run logs, per-stack authorization through OpenFGA, SSO through Dex.
-- **Not finished:** no upgrade path between releases yet, no audit log UI, no
-  drift detection, no policy-as-code. The open issue tracker is the source of
-  truth for what is planned. It is actively worked, and issues closed in the
-  last month are visible in the history.
 
 ## Documentation
 
