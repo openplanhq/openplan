@@ -47,6 +47,16 @@ func dial(ctx context.Context, url string, configure func(*redis.Options)) (*red
 		}
 		return nil, fmt.Errorf("parse live log url: %w", err)
 	}
+	// The Valkey users may not SELECT, which go-redis sends on every new
+	// connection for any other database: said here, rather than as a NOPERM
+	// from the ping.
+	if options.DB != 0 {
+		return nil, fmt.Errorf("live log url selects database %d; use database 0, since the Valkey users may not SELECT", options.DB)
+	}
+	// Without this, go-redis runs socket reads and writes under a background
+	// context, and a caller's deadline, such as the flusher's per pass,
+	// bounds only the wait for a connection.
+	options.ContextTimeoutEnabled = true
 	configure(options)
 	client := redis.NewClient(options)
 	if err := client.Ping(ctx).Err(); err != nil {

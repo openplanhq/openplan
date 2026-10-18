@@ -42,6 +42,49 @@ func TestDialPingsTheServer(t *testing.T) {
 	}
 }
 
+// A caller's deadline bounds the socket I/O too, not just the wait for a
+// connection, so the flusher's per-pass bound holds against a Valkey that
+// stops answering.
+func TestDialHonoursContextDeadlines(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	server := miniredis.RunT(t)
+	for name, dial := range map[string]func(context.Context, string) (*redis.Client, error){"Dial": Dial, "DialReaders": DialReaders} {
+		client, err := dial(ctx, "redis://"+server.Addr())
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		t.Cleanup(func() { _ = client.Close() })
+		if !client.Options().ContextTimeoutEnabled {
+			t.Fatalf("%s: ContextTimeoutEnabled = false, want true", name)
+		}
+	}
+}
+
+// The Valkey users may not SELECT, so a URL naming another database is
+// refused before the ping, by path or by query.
+func TestDialRefusesADatabaseOtherThanZero(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	server := miniredis.RunT(t)
+	for _, url := range []string{"redis://" + server.Addr() + "/1", "redis://" + server.Addr() + "/?db=2"} {
+		if _, err := Dial(ctx, url); err == nil || !strings.Contains(err.Error(), "use database 0") {
+			t.Fatalf("Dial(%q): error = %v, want a database refusal", url, err)
+		}
+	}
+	client, err := Dial(ctx, "redis://"+server.Addr()+"/0")
+	if err != nil {
+		t.Fatalf("Dial with database 0: %v", err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+}
+
 // The registry's client holds a connection per tailer, plus the backlog
 // reads of subscribers joining them.
 func TestDialReadersSizesThePoolForEveryTailer(t *testing.T) {
