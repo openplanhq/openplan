@@ -515,7 +515,7 @@ describe("RunDetailScreen", () => {
     expect(screen.getByText("Streaming…")).toBeTruthy();
 
     act(() => source.dispatch("log_truncated", {}));
-    expect(screen.getByText("Live output stops here; the full log loads when the command finishes.")).toBeTruthy();
+    expect(screen.getByText("Live output stops here; load the full log once the command finishes.")).toBeTruthy();
 
     act(() => source.dispatch("log_end", { state: "complete" }));
     expect(source.closeCalls).toBe(1);
@@ -586,9 +586,12 @@ describe("RunDetailScreen", () => {
     expect(screen.queryByText("Streaming…")).toBeNull();
     expect(bodyFetches()).toBe(0);
 
+    // The stream has not ended, but the stored body replaces it: it closes.
+    expect(FakeEventSource.instances[0].closeCalls).toBe(0);
     fireEvent.click(screen.getByRole("button", { name: "Load the full log" }));
     await waitFor(() => expect(screen.getByText("plan-3 full body")).toBeTruthy());
     expect(bodyFetches()).toBe(1);
+    expect(FakeEventSource.instances[0].closeCalls).toBe(1);
   });
 
   it("closes a live log's stream when its row closes", async () => {

@@ -27,12 +27,12 @@ describe("useLiveTemplateRunLog", () => {
     const { result } = renderHook(() => useLiveTemplateRunLog(URL));
     const source = onlySource();
     expect(source.url).toBe(URL);
-    expect(result.current).toEqual({ text: "", truncated: false, ended: null, failed: false });
+    expect(result.current).toEqual({ pieces: [], truncated: false, ended: null, failed: false });
 
     act(() => source.dispatch("log", { offset: 0, end: 16, data: "Initializing...\n" }, "1-0"));
     act(() => source.dispatch("log", { offset: 16, end: 22, data: "Done.\n" }, "2-0"));
 
-    expect(result.current.text).toBe("Initializing...\nDone.\n");
+    expect(result.current.pieces).toEqual(["Initializing...\n", "Done.\n"]);
     expect(result.current.ended).toBeNull();
   });
 
@@ -45,7 +45,7 @@ describe("useLiveTemplateRunLog", () => {
     act(() => source.dispatchRaw("log_end", "{not json"));
     act(() => source.dispatch("log", { offset: 4, end: 8, data: "two\n" }, "2-0"));
 
-    expect(result.current.text).toBe("one\ntwo\n");
+    expect(result.current.pieces).toEqual(["one\n", "two\n"]);
     expect(result.current.ended).toBeNull();
     expect(source.closeCalls).toBe(0);
   });
@@ -69,7 +69,7 @@ describe("useLiveTemplateRunLog", () => {
     act(() => source.dispatch("log_end", { state: "complete" }));
 
     expect(result.current.ended).toBe("complete");
-    expect(result.current.text).toBe("out\n");
+    expect(result.current.pieces).toEqual(["out\n"]);
     expect(source.closeCalls).toBe(1);
   });
 
@@ -103,7 +103,7 @@ describe("useLiveTemplateRunLog", () => {
     act(() => source.dispatch("log_truncated", {}));
 
     expect(result.current.truncated).toBe(true);
-    expect(result.current.text).toBe("a lot\n");
+    expect(result.current.pieces).toEqual(["a lot\n"]);
     expect(result.current.ended).toBeNull();
   });
 
@@ -127,10 +127,11 @@ describe("useLiveTemplateRunLog", () => {
     expect(source.closeCalls).toBe(1);
   });
 
-  it("closes the old stream and starts over when the URL changes", () => {
-    const { result, rerender } = renderHook(({ url }: { url: string }) => useLiveTemplateRunLog(url), { initialProps: { url: URL } });
+  // The state is one stream's: a caller that can switch logs keys its
+  // component by URL, so the hook only has to move to the new stream.
+  it("closes the old stream and opens the new one when the URL changes", () => {
+    const { rerender } = renderHook(({ url }: { url: string }) => useLiveTemplateRunLog(url), { initialProps: { url: URL } });
     const first = onlySource();
-    act(() => first.dispatch("log", { offset: 0, end: 6, data: "first\n" }, "1-0"));
 
     const next = URL.replace("plan-3", "apply-3");
     rerender({ url: next });
@@ -138,6 +139,5 @@ describe("useLiveTemplateRunLog", () => {
     expect(first.closeCalls).toBe(1);
     expect(FakeEventSource.instances).toHaveLength(2);
     expect(FakeEventSource.instances[1].url).toBe(next);
-    expect(result.current).toEqual({ text: "", truncated: false, ended: null, failed: false });
   });
 });

@@ -217,12 +217,12 @@ export function useTemplateRunLogsQuery(tenantID: string, runID: string, statusT
 // A log's body is stored once its command exits and is replaced only by a new
 // upload, which moves uploadedAt. So one upload's body never changes, and is
 // fetched once. Only a complete log has a body: the API refuses one for a log
-// that is live or lost, so the caller enables this only once it is complete.
-export function useTemplateRunLogQuery(tenantID: string, runID: string, name: string, uploadedAt: string, options: { enabled: boolean }) {
+// that is live or lost, so only the component for a complete log calls this.
+export function useTemplateRunLogQuery(tenantID: string, runID: string, name: string, uploadedAt: string) {
   return useQuery({
     queryKey: queryKeys.templateRunLog(tenantID, runID, name, uploadedAt),
     queryFn: () => client.getTemplateRunLog(tenantID, runID, name),
-    enabled: options.enabled && runID !== "" && name !== "",
+    enabled: runID !== "" && name !== "",
     staleTime: Infinity,
     placeholderData: keepPreviousData
   });

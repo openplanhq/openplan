@@ -1,6 +1,7 @@
-import { useId, useState } from "react";
+import { Fragment, useId, useState } from "react";
 import type { ReactNode } from "react";
-import { SquareTerminal } from "lucide-react";
+import { Ban, LoaderCircle, SquareTerminal, TriangleAlert } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { templateRunLogEventsURL } from "../../api/client";
 import { useTemplateRunLogQuery } from "../../api/queries";
@@ -8,6 +9,8 @@ import type { RunPhase, TemplateRunExecution, TemplateRunLog, TemplateRunLogLost
 import { tenantID } from "../../config";
 import { formatDateTime } from "../../shared/formatTimestamp";
 import { LogPhase, LogStep } from "../../shared/LogSteps";
+import StatusLabel from "../../shared/StatusLabel";
+import type { StatusLabelTone } from "../../shared/StatusLabel";
 import { useLiveTemplateRunLog } from "./useLiveTemplateRunLog";
 
 interface RunLogsPanelProps {
@@ -128,7 +131,11 @@ function RunLogBody({ runId, log }: { runId: string; log: TemplateRunLog }) {
     return <LiveRunLogBody runId={runId} log={log} />;
   }
   if (log.state === "lost") {
-    return <>{lostNotice(log)}</>;
+    return (
+      <LogStatus icon={TriangleAlert} tone="failed">
+        {lostNotice(log)}
+      </LogStatus>
+    );
   }
   return <CompleteRunLogBody runId={runId} log={log} />;
 }
@@ -146,7 +153,7 @@ const LOST_REASONS: Record<TemplateRunLogLostReason, string> = {
 function CompleteRunLogBody({ runId, log }: { runId: string; log: TemplateRunLog }) {
   // A log whose stream ended complete before the list says so has no
   // uploaded_at yet; its body is keyed under "" until the list catches up.
-  const logQuery = useTemplateRunLogQuery(tenantID, runId, log.name, log.uploaded_at ?? "", { enabled: true });
+  const logQuery = useTemplateRunLogQuery(tenantID, runId, log.name, log.uploaded_at ?? "");
   if (logQuery.data !== undefined) {
     return <>{logQuery.data || "No log body"}</>;
   }
@@ -159,26 +166,62 @@ function CompleteRunLogBody({ runId, log }: { runId: string; log: TemplateRunLog
 // reader. The command has finished once the stream ends or the row's state
 // moves on, whichever the page hears first; the row is the record, so it
 // decides when it has.
+//
+// Loading the full log swaps the stream out for the stored body, which closes
+// the stream: nothing it still carried is shown any more.
 function LiveRunLogBody({ runId, log }: { runId: string; log: TemplateRunLog }) {
-  const live = useLiveTemplateRunLog(templateRunLogEventsURL(tenantID, runId, log.name));
   const [loadFull, setLoadFull] = useState(false);
   if (loadFull) {
     return <CompleteRunLogBody runId={runId} log={log} />;
   }
+  const url = templateRunLogEventsURL(tenantID, runId, log.name);
+  return <LiveRunLogStream key={url} url={url} log={log} onLoadFull={() => setLoadFull(true)} />;
+}
+
+function LiveRunLogStream({ url, log, onLoadFull }: { url: string; log: TemplateRunLog; onLoadFull: () => void }) {
+  const live = useLiveTemplateRunLog(url);
   const outcome = log.state === "live" ? live.ended : log.state;
   return (
     <>
-      {live.text}
-      {outcome === null && <span className="block text-muted-foreground">{live.failed ? "Could not load this log." : "Streaming…"}</span>}
+      {live.pieces.map((piece, index) => (
+        // Pieces only ever append, so a piece's place is its identity.
+        <Fragment key={index}>{piece}</Fragment>
+      ))}
+      {outcome === null &&
+        (live.failed ? (
+          <LogStatus icon={TriangleAlert} tone="failed">
+            Could not load this log.
+          </LogStatus>
+        ) : (
+          <LogStatus icon={LoaderCircle} tone="settled">
+            Streaming…
+          </LogStatus>
+        ))}
       {live.truncated && (
-        <span className="block text-muted-foreground">Live output stops here; the full log loads when the command finishes.</span>
+        <LogStatus icon={Ban} tone="idle">
+          Live output stops here; load the full log once the command finishes.
+        </LogStatus>
       )}
-      {outcome === "lost" && <span className="block text-muted-foreground">{lostNotice(log)}</span>}
+      {outcome === "lost" && (
+        <LogStatus icon={TriangleAlert} tone="failed">
+          {lostNotice(log)}
+        </LogStatus>
+      )}
       {outcome === "complete" && (
-        <Button variant="outline" size="sm" className="mt-2 font-sans" onClick={() => setLoadFull(true)}>
+        <Button variant="outline" size="sm" className="mt-2 font-sans" onClick={onLoadFull}>
           Load the full log
         </Button>
       )}
     </>
+  );
+}
+
+// A log's state under its output, as openplan UI draws a state: an icon and a
+// word. On its own line, in the interface's type rather than the log's.
+function LogStatus({ icon, tone, children }: { icon: LucideIcon; tone: StatusLabelTone; children: ReactNode }) {
+  return (
+    <StatusLabel icon={icon} tone={tone} className="mt-1 flex w-fit font-sans whitespace-normal">
+      {children}
+    </StatusLabel>
   );
 }
