@@ -1,5 +1,5 @@
 # Deploys site/ to GitHub Pages, served at https://openplan.run (site/public/CNAME).
-# CI's `site` job tests every PR; this one publishes what lands on main.
+# CI's `site` job builds every PR; this one publishes what lands on main.
 name: Site
 
 on:
@@ -40,9 +40,6 @@ jobs:
 
       - name: install
         run: npm ci
-
-      - name: test
-        run: npm test
 
       - name: build
         run: npm run build

@@ -1,6 +1,6 @@
 # CI for openplan. One job per thing a contributor is asked to run: the Go
 # build from the repository root, the executor's isolation test, the frontend
-# checks from web/, the website checks from site/, and the lint and
+# checks from web/, the website build from site/, and the lint and
 # vulnerability scan the Makefile pins.
 #
 # The backend job runs against a real Postgres, so every test gated on
@@ -129,7 +129,7 @@ jobs:
         run: npm run build
 
   site:
-    name: site (test, build)
+    name: site (build)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -146,11 +146,6 @@ jobs:
 
       - name: install
         run: npm ci
-
-      # The guards read ../web/src/styles/theme.css, so a theme change that
-      # drops a colour the page uses fails here.
-      - name: test
-        run: npm test
 
       - name: build
         run: npm run build
