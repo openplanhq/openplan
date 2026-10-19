@@ -92,6 +92,17 @@ describe("AppShell", () => {
     expect(templates.classList).toContain("text-muted-foreground");
   });
 
+  it("offers Access only to people who manage platform access", async () => {
+    await renderShell();
+    expect(within(screen.getByRole("navigation", { name: "Primary" })).queryByRole("link", { name: "Access" })).toBeNull();
+    cleanup();
+
+    const admin = authValue();
+    admin.me!.global_capabilities.can_manage_platform_access = true;
+    await renderShell(admin);
+    expect(within(screen.getByRole("navigation", { name: "Primary" })).getByRole("link", { name: "Access" }).getAttribute("href")).toBe("/access");
+  });
+
   it("renders nav, an identity slot, a static tenant indicator, and routed content", async () => {
     const markup = await shellMarkup();
 

@@ -28,6 +28,7 @@ import { templatePath } from "../features/templates/templateRoutes";
 import RegistryVariablesTab from "../features/templates/VariablesTab";
 import RunDetailScreen from "../features/runs/RunDetailScreen";
 import StackAccessScreen from "../features/stacks/StackAccessScreen";
+import PlatformAccessScreen from "../features/access/PlatformAccessScreen";
 import CreateStackScreen from "../features/stacks/CreateStackScreen";
 // The design system gallery is a development-only route, and deliberately a
 // sibling of "/" rather than a child: everything under "/" renders inside
@@ -172,6 +173,13 @@ export const routeConfig: RouteObject[] = [
                 ]
               }
             ]
+          },
+          // Platform roles, for people who manage platform access.
+          {
+            path: "access",
+            element: <RequireCapability capability="can_manage_platform_access" mode="route" />,
+            handle: canvas,
+            children: [{ index: true, element: <PlatformAccessScreen /> }]
           },
           { path: "*", element: <NotFound /> }
         ]

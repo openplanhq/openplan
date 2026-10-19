@@ -4,9 +4,11 @@ import { tenantID } from "../config";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-const navItems: { to: string; label: string }[] = [
+const navItems: { to: string; label: string; manage?: true }[] = [
   { to: "/stacks", label: "Stacks" },
-  { to: "/templates", label: "Templates" }
+  { to: "/templates", label: "Templates" },
+  // Only for people who manage platform access: anyone else would land on a refusal.
+  { to: "/access", label: "Access", manage: true }
 ];
 
 const isDebug = import.meta.env.DEV || import.meta.env.VITE_DEBUG === "true";
@@ -43,7 +45,7 @@ export default function AppShell() {
           <nav className="flex items-center gap-1" aria-label="Primary">
             {/* The section you are in is marked, with the muted fill its
                 hover shows; NavLink sets aria-current="page" on it. */}
-            {navItems.map((item) => (
+            {navItems.filter((item) => !item.manage || me?.global_capabilities.can_manage_platform_access).map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}

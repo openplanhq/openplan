@@ -1,4 +1,4 @@
-import { CircleHelp, Eye, Pencil, Shield, Stamp, Wrench } from "lucide-react";
+import { CircleHelp, Eye, KeyRound, Pencil, Shield, Stamp, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 /** One role a grant can hold: its word, what it adds to the role below it,
@@ -27,6 +27,10 @@ export const PLATFORM_ROLES = [
   { value: "editor", description: "Creates stacks and publishes templates, and sees what a viewer sees.", icon: Pencil },
   { value: "viewer", description: "Sees every stack and template.", icon: Eye }
 ] as const satisfies readonly RoleDefinition[];
+
+// Root, drawn above the platform's ladder on /access but never offered in it:
+// a key the server holds, not a role anyone grants.
+export const ROOT_ROLE = [{ value: "root", description: "", icon: KeyRound }] as const satisfies readonly RoleDefinition[];
 
 export type StackRole = (typeof STACK_ROLES)[number]["value"];
 
