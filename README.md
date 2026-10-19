@@ -148,10 +148,35 @@ docker compose --profile s3 up -d      # MinIO, for S3-backed artifacts
 docker compose --profile debug up -d   # Temporal UI on http://localhost:8080
 ```
 
+### Upgrading
+
+Upgrade in place, on the same volumes. Stacks, runs, credentials, grants and
+sessions carry over: the api migrates the database when it starts, and runs in
+flight carry on under the new release.
+
+Without a checkout, download the new release's three files over the old ones,
+with the new version in the URLs, and start again:
+
+```bash
+docker compose -f docker-compose.release.yaml up -d
+```
+
+From a checkout, pull and restart. If you pinned `OPENPLAN_IMAGE_TAG`, raise it
+first:
+
+```bash
+git pull
+docker compose pull
+docker compose up -d --wait
+```
+
+Upgrade one release at a time: each release is written to read the state the
+one before it left.
+
 > [!NOTE]
-> **Upgrading an existing local stack?** Run `docker compose down -v` before
-> starting it back up. There is no upgrade path between releases yet, so a
-> preserved volume can hold state the current code cannot read.
+> **On v0.3.0 or earlier?** Run `docker compose down -v` before starting the
+> new release. Releases up to v0.3.0 could change state without migrating it,
+> so a preserved volume can hold state the new code cannot read.
 
 ## Documentation
 
