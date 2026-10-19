@@ -2,9 +2,10 @@ terraform {
   # 1.10 for S3 native state locking (use_lockfile), so no DynamoDB table.
   required_version = ">= 1.10"
 
-  # Bucket and locking come from ../backend.hcl, which state/ writes:
+  # Locking and encryption come from ../backend.hcl, which state/ writes:
   # terraform init -backend-config=../backend.hcl
   backend "s3" {
+    bucket = "afee87ae65ab4365-terraform-remote-backend"
     key    = "op-ecs/terraform.tfstate"
     region = "eu-central-1"
   }
