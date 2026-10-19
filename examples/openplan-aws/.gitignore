@@ -4,3 +4,4 @@
 *.tfstate.*
 *.tfvars
 backend.hcl
+*_override.tf

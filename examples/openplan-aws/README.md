@@ -26,9 +26,10 @@ below.
 
 Three root modules, applied in order:
 
-- [`state/`](state): the S3 bucket the other two keep their Terraform state
-  in (versioned, encrypted, TLS only), and `backend.hcl`, which points them
-  at it. The one module on local state, since it creates the bucket.
+- [`state/`](state): the S3 bucket all three keep their Terraform state in
+  (versioned, encrypted, TLS only), and `backend.hcl`, which points them at
+  it. Its own state starts out local, since the bucket doesn't exist yet, and
+  then moves into the bucket.
 - [`network/`](network): VPC across two AZs, public and private subnets, the
   NAT instance, and the Route 53 zone.
 - [`op-ecs/`](op-ecs): the certificate, ALB, RDS, S3 bucket, the ECS cluster
@@ -40,16 +41,29 @@ You need Terraform 1.10+ or OpenTofu 1.10+ (for S3 state locking without
 DynamoDB), AWS credentials for the target account, and a domain whose NS
 records you can change.
 
-1. Create the state bucket:
+1. Create the state bucket. This module's backend is the bucket it creates,
+   so the first apply runs on local state, under a temporary override:
 
    ```bash
    cd state
+   printf 'terraform {\n  backend "local" {}\n}\n' > backend_override.tf
    terraform init
    terraform apply
    ```
 
-   This writes `../backend.hcl`. Keep `state/terraform.tfstate`: it's small
-   and holds no secrets, but it's how this bucket stays managed.
+   That writes `../backend.hcl`. Now delete the override and move this
+   module's state into the bucket:
+
+   ```bash
+   rm backend_override.tf
+   terraform init -migrate-state -backend-config=../backend.hcl
+   rm terraform.tfstate terraform.tfstate.backup
+   ```
+
+   Answer `yes` when it asks to copy the existing state. From here on, every
+   module inits with `-backend-config=../backend.hcl`. On another machine,
+   write `backend.hcl` by hand with the bucket name (the `bucket` output, or
+   the `openplan-tfstate-…` bucket in S3) before the first init.
 
 2. Create the network and the zone:
 
@@ -91,9 +105,19 @@ records you can change.
 To tear it all down, `terraform destroy` in `op-ecs/`, then in `network/`
 (both with the same `-var domain_name`). RDS skips its final snapshot and the
 artifacts bucket is force-destroyed, so this deletes everything, data
-included. The state bucket is left for last and on purpose isn't
-force-destroyed: empty it of every object version, then `terraform destroy`
-in `state/`.
+included.
+
+The state bucket goes last, and on purpose isn't force-destroyed. Its own
+state lives inside it, so move that back out first, then empty the bucket of
+every object version and destroy it:
+
+```bash
+cd state
+printf 'terraform {\n  backend "local" {}\n}\n' > backend_override.tf
+terraform init -migrate-state
+# empty the bucket (every version and delete marker), then:
+terraform destroy
+```
 
 ## Why everything is on EC2
 
