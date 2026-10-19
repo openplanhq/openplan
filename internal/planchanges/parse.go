@@ -3,38 +3,98 @@
 //
 // It runs on the executor, inside the sandbox that ran the plan: the JSON
 // holds variable values, the prior state and sensitive values in plaintext,
-// so it never leaves that sandbox. Only what Parse returns does, with every
+// so it never leaves that sandbox. Only what Read returns does, with every
 // sensitive value already replaced.
 package planchanges
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
 	"strings"
 
+	version "github.com/hashicorp/go-version"
 	tfjson "github.com/hashicorp/terraform-json"
 	"github.com/vishu42/openplan/internal/domain"
 )
 
-// Parse reads a plan's JSON into its resource changes, in reading order and
-// cut to the domain limits. It accepts the plan format both OpenTofu and
-// Terraform write, any 1.x version; it refuses another major version, as the
-// format's rules say a reader must.
+// planJSON is the part of `tofu show -json` this package reads. The rest,
+// prior_state and configuration above all, is skipped rather than decoded:
+// it can be most of the file, and this runs inside the plan's
+// memory-limited sandbox.
+type planJSON struct {
+	FormatVersion   string                   `json:"format_version"`
+	ResourceChanges []*tfjson.ResourceChange `json:"resource_changes"`
+}
+
+// Read reads a plan's JSON once, into its counts and its resource changes.
+//
+// The counts are the plan's own: JSON that can't be read is an error, and
+// the plan fails with it, as it always has. The list is the reviewer's: it is
+// nil when this openplan can't list the changes, such as a format major
+// version other than 1, which the format's rules say a reader must refuse,
+// and the plan stands without it.
+func Read(body []byte) (domain.PlanSummary, *domain.PlanChanges, error) {
+	var plan planJSON
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	// Numbers stay as written: a large integer read as a float would show
+	// as a different value than the one being applied.
+	decoder.UseNumber()
+	if err := decoder.Decode(&plan); err != nil {
+		return domain.PlanSummary{}, nil, fmt.Errorf("decode saved plan: %w", err)
+	}
+	return summarize(plan.ResourceChanges), list(plan), nil
+}
+
+// Parse is Read's list alone, failing where Read's would be nil.
+func Parse(body []byte) (domain.PlanChanges, error) {
+	_, changes, err := Read(body)
+	if err != nil {
+		return domain.PlanChanges{}, err
+	}
+	if changes == nil {
+		return domain.PlanChanges{}, errors.New("this plan's changes can't be listed")
+	}
+	return *changes, nil
+}
+
+// summarize counts the changes the way tofu's own "Plan: N to add, N to
+// change, N to destroy" line does: a replacement is one add and one destroy,
+// and reads, no-ops and forgets count as nothing.
+func summarize(resources []*tfjson.ResourceChange) domain.PlanSummary {
+	var summary domain.PlanSummary
+	for _, resource := range resources {
+		if resource == nil || resource.Change == nil {
+			continue
+		}
+		for _, action := range resource.Change.Actions {
+			switch action {
+			case tfjson.ActionCreate:
+				summary.Add++
+			case tfjson.ActionUpdate:
+				summary.Change++
+			case tfjson.ActionDelete:
+				summary.Destroy++
+			case tfjson.ActionNoop, tfjson.ActionRead, tfjson.ActionForget:
+			}
+		}
+	}
+	return summary
+}
+
+// list is the plan's resource changes in reading order, cut to the domain
+// limits, or nil when the plan's format isn't one this openplan reads.
 //
 // Reads and no-ops are left out, as tofu's own "Plan:" line leaves them out,
 // except a no-op that imports or moves a resource, which a reviewer should
 // still see.
-func Parse(body []byte) (domain.PlanChanges, error) {
-	var plan tfjson.Plan
-	// Numbers stay as written: a large integer read as a float would show
-	// as a different value than the one being applied.
-	plan.UseJSONNumber(true)
-	if err := json.Unmarshal(body, &plan); err != nil {
-		return domain.PlanChanges{}, fmt.Errorf("read plan JSON: %w", err)
+func list(plan planJSON) *domain.PlanChanges {
+	if !supportedFormat(plan.FormatVersion) {
+		return nil
 	}
-
 	changes := make([]domain.PlanResourceChange, 0, len(plan.ResourceChanges))
 	for _, resource := range plan.ResourceChanges {
 		if resource == nil || resource.Change == nil {
@@ -42,14 +102,26 @@ func Parse(body []byte) (domain.PlanChanges, error) {
 		}
 		change, ok, err := resourceChange(resource)
 		if err != nil {
-			return domain.PlanChanges{}, fmt.Errorf("read change to %s: %w", resource.Address, err)
+			return nil
 		}
 		if ok {
 			changes = append(changes, change)
 		}
 	}
 	domain.SortPlanResourceChanges(changes)
-	return fit(changes), nil
+	fitted := fit(changes)
+	return &fitted
+}
+
+// supportedFormat reports whether version is a plan format version
+// terraform-json reads, which is any 1.x.
+func supportedFormat(formatVersion string) bool {
+	parsed, err := version.NewVersion(formatVersion)
+	if err != nil {
+		return false
+	}
+	constraint, err := version.NewConstraint(tfjson.PlanFormatVersionConstraints)
+	return err == nil && constraint.Check(parsed)
 }
 
 // resourceChange is one resource's row, or false for a change nobody needs
@@ -74,21 +146,23 @@ func resourceChange(resource *tfjson.ResourceChange) (domain.PlanResourceChange,
 		}
 	}
 
+	// Postgres text and jsonb can't hold a NUL, so any in tofu's strings are
+	// replaced here rather than failing the plan when FinishPlan stores them.
 	row := domain.PlanResourceChange{
-		Address:             resource.Address,
-		PreviousAddress:     resource.PreviousAddress,
-		ModuleAddress:       resource.ModuleAddress,
-		Mode:                string(resource.Mode),
-		Type:                resource.Type,
-		Name:                resource.Name,
-		ProviderName:        resource.ProviderName,
-		Deposed:             resource.DeposedKey,
-		Action:              action,
+		Address:             scrubText(resource.Address),
+		PreviousAddress:     scrubText(resource.PreviousAddress),
+		ModuleAddress:       scrubText(resource.ModuleAddress),
+		Mode:                scrubText(string(resource.Mode)),
+		Type:                scrubText(resource.Type),
+		Name:                scrubText(resource.Name),
+		ProviderName:        scrubText(resource.ProviderName),
+		Deposed:             scrubText(resource.DeposedKey),
+		Action:              domain.PlanChangeAction(scrubText(string(action))),
 		CreateBeforeDestroy: createBeforeDestroy,
-		ActionReason:        string(resource.ActionReason),
+		ActionReason:        scrubText(string(resource.ActionReason)),
 	}
 	if importing {
-		row.ImportingID = change.Importing.ID
+		row.ImportingID = scrubText(change.Importing.ID)
 	}
 	var err error
 	if len(change.ReplacePaths) > 0 {
@@ -246,7 +320,7 @@ func anyMarked(marks any) bool {
 // encodeValue encodes a value for storage, or the too-large mark when it is
 // over the per-value limit.
 func encodeValue(value any) (json.RawMessage, error) {
-	encoded, err := json.Marshal(value)
+	encoded, err := json.Marshal(scrubValue(value))
 	if err != nil {
 		return nil, err
 	}
@@ -254,6 +328,34 @@ func encodeValue(value any) (json.RawMessage, error) {
 		return json.Marshal(domain.PlanValueTooLargeToShow)
 	}
 	return encoded, nil
+}
+
+// scrubText replaces each NUL with U+FFFD, the replacement character.
+func scrubText(text string) string {
+	return strings.ReplaceAll(text, "\x00", "\uFFFD")
+}
+
+// scrubValue is scrubText over every string in a decoded JSON value, keys
+// included.
+func scrubValue(value any) any {
+	switch typed := value.(type) {
+	case string:
+		return scrubText(typed)
+	case map[string]any:
+		out := make(map[string]any, len(typed))
+		for key, child := range typed {
+			out[scrubText(key)] = scrubValue(child)
+		}
+		return out
+	case []any:
+		out := make([]any, len(typed))
+		for i, child := range typed {
+			out[i] = scrubValue(child)
+		}
+		return out
+	default:
+		return value
+	}
 }
 
 // fit keeps the head of the sorted changes within the row and byte limits.

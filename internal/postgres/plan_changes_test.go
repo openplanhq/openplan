@@ -130,6 +130,34 @@ func TestFinishTemplatePlanMarksChangesUnavailable(t *testing.T) {
 	require.Empty(t, listed)
 }
 
+// FinishPlan deletes the upload once it is recorded, so a retry whose first
+// attempt committed finds none; the list it recorded stands.
+func TestFinishTemplatePlanRetryWithoutTheUploadKeepsTheList(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := savedPlanStore(t, pool)
+	seedStackWithTemplate(t, ctx, store)
+	seedPlanRun(t, ctx, pool, "run_123", domain.OperationApply, domain.TemplateRunRunning)
+
+	input := domain.FinishPlanActivityInput{
+		TenantID: "tenant_123", RunID: "run_123", StackTemplateID: "stack_template_123", Operation: domain.OperationApply,
+		HasChanges: true, Summary: domain.PlanSummary{Add: 1, Destroy: 2},
+	}
+	_, err := store.FinishTemplatePlan(ctx, input, samplePlanChanges())
+	require.NoError(t, err)
+	_, err = store.FinishTemplatePlan(ctx, input, nil)
+	require.NoError(t, err)
+
+	run, err := store.GetTemplateRun(ctx, "tenant_123", "run_123")
+	require.NoError(t, err)
+	require.Equal(t, domain.PlanChangesComplete, run.PlanChangesState)
+	listed, err := store.ListTemplateRunResourceChangesPage(ctx, "tenant_123", "run_123", -1, 50)
+	require.NoError(t, err)
+	require.Len(t, listed, 3)
+}
+
 // A plan with nothing to change has no list to describe.
 func TestFinishTemplatePlanWithoutChangesRecordsNoList(t *testing.T) {
 	t.Parallel()

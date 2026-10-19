@@ -15,6 +15,9 @@ func TestPlanChangesValidate(t *testing.T) {
 
 	valid := PlanChanges{Changes: []PlanResourceChange{{Address: "x.a", Action: PlanChangeCreate}}, Total: 1}
 	require.NoError(t, valid.Validate())
+	// A literal backslash and "u0000" is text, not a NUL.
+	literal := PlanChanges{Changes: []PlanResourceChange{{Address: "x.a", Action: PlanChangeCreate, After: json.RawMessage(`{"k":"\\u0000"}`)}}, Total: 1}
+	require.NoError(t, literal.Validate())
 
 	for name, changes := range map[string]PlanChanges{
 		"total under the list":       {Changes: valid.Changes, Total: 0},
@@ -26,6 +29,10 @@ func TestPlanChangesValidate(t *testing.T) {
 		"value not JSON":             {Changes: []PlanResourceChange{{Address: "x.a", Action: PlanChangeCreate, After: json.RawMessage(`{`)}}, Total: 1},
 		"value over the limit":       {Changes: []PlanResourceChange{{Address: "x.a", Action: PlanChangeCreate, After: json.RawMessage(`"` + strings.Repeat("a", MaxPlanChangeValueBytes) + `"`)}}, Total: 1},
 		"more rows than are allowed": {Changes: make([]PlanResourceChange, MaxPlanResourceChanges+1), Total: MaxPlanResourceChanges + 1},
+		"total past the integer":     {Changes: valid.Changes, Total: 3_000_000_000, Truncated: true},
+		"NUL in a text field":        {Changes: []PlanResourceChange{{Address: "x.a\x00", Action: PlanChangeCreate}}, Total: 1},
+		"NUL in a value":             {Changes: []PlanResourceChange{{Address: "x.a", Action: PlanChangeCreate, After: json.RawMessage(`{"k":"a\u0000b"}`)}}, Total: 1},
+		"NUL in a key":               {Changes: []PlanResourceChange{{Address: "x.a", Action: PlanChangeCreate, After: json.RawMessage(`{"a\u0000":1}`)}}, Total: 1},
 	} {
 		require.Error(t, changes.Validate(), name)
 	}

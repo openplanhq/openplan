@@ -97,12 +97,52 @@ func TestParseRealPlans(t *testing.T) {
 	}
 }
 
-// The format's rule: a reader refuses a major version it doesn't know.
-func TestParseRefusesAnotherMajorVersion(t *testing.T) {
+// The format's rule: a reader refuses a major version it doesn't know. The
+// plan's counts still stand: only the list is refused.
+func TestReadRefusesAnotherMajorVersionsList(t *testing.T) {
 	t.Parallel()
 
-	_, err := Parse([]byte(`{"format_version":"2.0","resource_changes":[]}`))
+	body := []byte(`{"format_version":"2.0","resource_changes":[{"change":{"actions":["delete","create"]}}]}`)
+	summary, changes, err := Read(body)
+	require.NoError(t, err)
+	assert.Equal(t, domain.PlanSummary{Add: 1, Destroy: 1}, summary)
+	assert.Nil(t, changes)
+	_, err = Parse(body)
 	require.Error(t, err)
+}
+
+// The counts come from the same read as the rows, the way tofu's own Plan:
+// line counts: a replace is one add and one destroy; a forget is nothing.
+func TestReadCountsLikeTofu(t *testing.T) {
+	t.Parallel()
+
+	for _, tool := range []string{"tofu", "terraform"} {
+		body, err := os.ReadFile("testdata/" + tool + ".plan.json")
+		require.NoError(t, err)
+		summary, _, err := Read(body)
+		require.NoError(t, err)
+		assert.Equal(t, domain.PlanSummary{Add: 3, Change: 2, Destroy: 3}, summary, tool)
+	}
+}
+
+func TestReadFailsOnJSONItCannotDecode(t *testing.T) {
+	t.Parallel()
+
+	_, _, err := Read([]byte(`{`))
+	require.Error(t, err)
+}
+
+// Postgres can't store a NUL, so any in tofu's strings are replaced rather
+// than failing the plan when FinishPlan stores them.
+func TestParseScrubsNULs(t *testing.T) {
+	t.Parallel()
+
+	changes, err := Parse(plan(`{"address":"x.a\u0000","mode":"managed","type":"x","name":"a","change":{"actions":["create"],"after":{"k\u0000":"v\u0000"}}}`))
+	require.NoError(t, err)
+	require.Len(t, changes.Changes, 1)
+	assert.Equal(t, "x.a\uFFFD", changes.Changes[0].Address)
+	assert.JSONEq(t, "{\"k\uFFFD\":\"v\uFFFD\"}", string(changes.Changes[0].After))
+	require.NoError(t, changes.Validate())
 }
 
 func TestParseKeepsActionsItDoesNotName(t *testing.T) {

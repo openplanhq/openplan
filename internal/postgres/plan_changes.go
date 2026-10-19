@@ -11,22 +11,26 @@ import (
 
 // recordPlanChanges stores a finished plan's resource changes, replacing any a
 // retried FinishPlan stored before, and records what the list is on the run.
-// Nil changes records that the plan's changes could not be listed.
+// Nil changes records that the plan's changes could not be listed, unless a
+// list is already recorded.
 func recordPlanChanges(ctx context.Context, tx pgx.Tx, tenantID domain.TenantID, runID domain.TemplateRunID, changes *domain.PlanChanges) error {
-	if _, err := tx.Exec(ctx, `
-		delete from template_run_resource_changes where tenant_id = $1 and run_id = $2
-	`, tenantID, runID); err != nil {
-		return fmt.Errorf("clear plan changes: %w", err)
-	}
-
 	if changes == nil {
+		// FinishPlan deletes the upload once it is recorded, so a retry whose
+		// first attempt committed finds none. Only a run with no list yet is
+		// marked unavailable; one already recorded keeps its rows.
 		if _, err := tx.Exec(ctx, `
 			update template_runs set plan_changes_state = $3, plan_changes_total = null
-			where tenant_id = $1 and id = $2
+			where tenant_id = $1 and id = $2 and plan_changes_state is null
 		`, tenantID, runID, domain.PlanChangesUnavailable); err != nil {
 			return fmt.Errorf("record plan changes unavailable: %w", err)
 		}
 		return nil
+	}
+
+	if _, err := tx.Exec(ctx, `
+		delete from template_run_resource_changes where tenant_id = $1 and run_id = $2
+	`, tenantID, runID); err != nil {
+		return fmt.Errorf("clear plan changes: %w", err)
 	}
 
 	rows := make([][]any, len(changes.Changes))

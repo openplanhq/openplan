@@ -158,6 +158,56 @@ func newPlanChangesActivities(t *testing.T, tofu runner.CommandExecutor) (*Templ
 	return activities, changes, prepareTestWorkspace(t, activities)
 }
 
+// A list that can't be stored must not cost the plan its log, the record of
+// every change.
+func TestUploadLogKeepsTheLogWhenTheChangesCannotBeStored(t *testing.T) {
+	t.Parallel()
+
+	planJSON, err := os.ReadFile("../planchanges/testdata/tofu.plan.json")
+	require.NoError(t, err)
+	logs := &recordingTemplateRunLogStore{}
+	bodies := &Bodies{
+		terraform: runner.NewLocalTerraformRunnerWithExecutor(&planningExecutor{planJSON: planJSON}),
+		logs:      logs,
+		changes:   refusingChangesStore{},
+	}
+	activities := NewTemplateRunActivities(sandbox.InProcess{Handlers: bodies.Handlers()}, sandbox.Workspaces{Root: t.TempDir()},
+		config.ArtifactStoreConfig{Kind: config.ArtifactStoreS3}, nil, runseal.NewKeyRing())
+	workspace := prepareTestWorkspace(t, activities)
+
+	_, err = activities.RunTerraform(context.Background(), planInput(workspace))
+	require.NoError(t, err)
+	log, err := activities.UploadLog(context.Background(), domain.UploadLogActivityInput{TenantID: "tenant_123", RunID: "run_123", LogName: "plan"})
+	require.NoError(t, err)
+	require.Equal(t, "plan", log.Phase)
+	require.Contains(t, logs.content, "Plan: 4 to add")
+}
+
+type refusingChangesStore struct{}
+
+func (refusingChangesStore) PutPlanChanges(context.Context, domain.TenantID, domain.TemplateRunID, []byte) error {
+	return errors.New("bucket unavailable")
+}
+
+// Once recorded, the upload is deleted: Postgres holds the list.
+func TestFinishPlanDeletesTheRecordedUpload(t *testing.T) {
+	t.Parallel()
+
+	body, err := json.Marshal(domain.PlanChanges{Changes: []domain.PlanResourceChange{{Address: "x.a", Action: domain.PlanChangeCreate}}, Total: 1})
+	require.NoError(t, err)
+	reader := &memoryPlanChangesStore{}
+	require.NoError(t, reader.PutPlanChanges(context.Background(), "tenant_123", "run_123", body))
+	store := &controlStoreStub{}
+
+	_, err = NewControlActivities(store, nil, nil).WithPlanChanges(reader).FinishPlan(context.Background(), domain.FinishPlanActivityInput{
+		TenantID: "tenant_123", RunID: "run_123", HasChanges: true,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, store.planChanges)
+	_, err = reader.GetPlanChanges(context.Background(), "tenant_123", "run_123")
+	require.ErrorIs(t, err, os.ErrNotExist)
+}
+
 // FinishPlan records what the executor uploaded, checked again; anything it
 // can't trust is recorded as unavailable, and only an unreachable store
 // fails the activity.
@@ -224,7 +274,18 @@ func TestFinishPlanChecksTheUploadedChanges(t *testing.T) {
 	}
 }
 
+func (store *memoryPlanChangesStore) DeletePlanChanges(_ context.Context, _ domain.TenantID, runID domain.TemplateRunID) error {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	delete(store.body, runID)
+	return nil
+}
+
 type failingChangesReader struct{ err error }
+
+func (failingChangesReader) DeletePlanChanges(context.Context, domain.TenantID, domain.TemplateRunID) error {
+	return nil
+}
 
 func (reader failingChangesReader) GetPlanChanges(context.Context, domain.TenantID, domain.TemplateRunID) ([]byte, error) {
 	return nil, reader.err

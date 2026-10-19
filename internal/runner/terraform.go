@@ -196,52 +196,11 @@ func (runner *LocalTerraformRunner) summarize(ctx context.Context, input Terrafo
 	if err := runner.executor.Run(ctx, input.WorkspacePath, sortedEnvironment(input.Environment), &stdout, &stderr, terraformExecutable, "show", "-json", "-no-color", PlanFileName); err != nil {
 		return domain.PlanSummary{}, nil, &CommandError{Command: input.Command, Err: fmt.Errorf("show saved plan: %w: %s", err, strings.TrimSpace(stderr.String()))}
 	}
-	summary, err := summarizePlanJSON(stdout.Bytes())
+	summary, changes, err := planchanges.Read(stdout.Bytes())
 	if err != nil {
 		return domain.PlanSummary{}, nil, &CommandError{Command: input.Command, Err: err}
 	}
-	return summary, listChanges(stdout.Bytes()), nil
-}
-
-// listChanges is the plan's resource changes, or nil when this openplan
-// can't read them: the plan stands without its list.
-func listChanges(planJSON []byte) *domain.PlanChanges {
-	changes, err := planchanges.Parse(planJSON)
-	if err != nil {
-		return nil
-	}
-	return &changes
-}
-
-// summarizePlanJSON counts a `tofu show -json` plan's resource changes the way
-// tofu's own "Plan: N to add, N to change, N to destroy" line does: a
-// replacement is one add and one destroy, and reads and no-ops count as
-// nothing.
-func summarizePlanJSON(body []byte) (domain.PlanSummary, error) {
-	var plan struct {
-		ResourceChanges []struct {
-			Change struct {
-				Actions []string `json:"actions"`
-			} `json:"change"`
-		} `json:"resource_changes"`
-	}
-	if err := json.Unmarshal(body, &plan); err != nil {
-		return domain.PlanSummary{}, fmt.Errorf("decode saved plan: %w", err)
-	}
-	var summary domain.PlanSummary
-	for _, resourceChange := range plan.ResourceChanges {
-		for _, action := range resourceChange.Change.Actions {
-			switch action {
-			case "create":
-				summary.Add++
-			case "update":
-				summary.Change++
-			case "delete":
-				summary.Destroy++
-			}
-		}
-	}
-	return summary, nil
+	return summary, changes, nil
 }
 
 // selectWorkspace selects the requested Terraform workspace or creates it.

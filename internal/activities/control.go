@@ -51,10 +51,13 @@ type LogMetadataRecorder interface {
 	RecordTemplateRunLog(ctx context.Context, log domain.TemplateRunLog) error
 }
 
-// PlanChangesReader reads the resource changes a run's executor uploaded.
+// PlanChangesReader reads the resource changes a run's executor uploaded,
+// and deletes them once they are recorded.
 type PlanChangesReader interface {
 	// GetPlanChanges fails wrapping os.ErrNotExist when none were uploaded.
 	GetPlanChanges(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) ([]byte, error)
+	// DeletePlanChanges removes the upload; removing none succeeds.
+	DeletePlanChanges(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) error
 }
 
 // ControlActivities are the template-run activities that belong to the control
@@ -248,6 +251,12 @@ func (activities *ControlActivities) FinishPlan(ctx context.Context, input domai
 	outcome, err := activities.store.FinishTemplatePlan(ctx, input, changes)
 	if err != nil {
 		return "", fmt.Errorf("finish plan: %w", err)
+	}
+	// Postgres holds the list now, so the upload only takes up space. Best
+	// effort: one left behind is masked data, and a retry that finds none
+	// keeps what this attempt recorded.
+	if changes != nil {
+		_ = activities.changes.DeletePlanChanges(ctx, input.TenantID, input.RunID)
 	}
 	return outcome, nil
 }

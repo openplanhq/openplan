@@ -171,10 +171,11 @@ func (b *Bodies) uploadLog(ctx context.Context, request uploadLogRequest, _ io.W
 	if !ok {
 		return domain.TemplateRunLog{}, fmt.Errorf("no log %s", request.FileName)
 	}
-	if changes, ok := files[request.ChangesFileName]; ok && request.ChangesFileName != "" {
-		if err := stores.changes.PutPlanChanges(ctx, request.TenantID, request.RunID, changes); err != nil {
-			return domain.TemplateRunLog{}, err
-		}
+	// Best effort: the plan log is the record of every change, so failing to
+	// store the list must not lose the log with it. FinishPlan finds no list
+	// and records it as unavailable, pointing the reviewer at this log.
+	if changes, ok := files[request.ChangesFileName]; ok && request.ChangesFileName != "" && stores.changes != nil {
+		_ = stores.changes.PutPlanChanges(ctx, request.TenantID, request.RunID, changes)
 	}
 	return stores.logs.PutTemplateRunLog(ctx, request.TenantID, request.RunID, request.Phase, bytes.NewReader(content))
 }
@@ -231,7 +232,8 @@ type bodyStores struct {
 	changes PlanChangesStore
 }
 
-// stores opens the stores cfg names, unless a test set its own.
+// stores opens the stores cfg names, unless a test set its own; then only
+// those are used, and the rest stay nil for the bodies to skip.
 func (b *Bodies) stores(cfg config.ArtifactStoreConfig) (bodyStores, error) {
 	if b.logs != nil || b.plans != nil || b.changes != nil {
 		return bodyStores{logs: b.logs, plans: b.plans, changes: b.changes}, nil

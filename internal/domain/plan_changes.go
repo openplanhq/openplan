@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -75,6 +77,9 @@ const (
 	MaxPlanChangesBytes = 768 << 10
 	// maxPlanChangeTextBytes caps every string field: an address, a reason.
 	maxPlanChangeTextBytes = 2048
+	// maxPlanChangesTotal bounds the count of a plan's changes, listed or
+	// not, well inside Postgres's integer: no real plan comes near it.
+	maxPlanChangesTotal = 1 << 24
 )
 
 // PlanResourceChange is one resource a saved plan changes, as the run's
@@ -150,6 +155,9 @@ func (changes PlanChanges) Validate() error {
 	if len(changes.Changes) > MaxPlanResourceChanges {
 		return fmt.Errorf("%d resource changes is over the limit of %d", len(changes.Changes), MaxPlanResourceChanges)
 	}
+	if changes.Total > maxPlanChangesTotal {
+		return fmt.Errorf("total %d is over the limit of %d", changes.Total, maxPlanChangesTotal)
+	}
 	if changes.Total < len(changes.Changes) {
 		return fmt.Errorf("total %d is less than the %d changes listed", changes.Total, len(changes.Changes))
 	}
@@ -175,17 +183,46 @@ func (change PlanResourceChange) validate() error {
 		change.Address, change.PreviousAddress, change.ModuleAddress, change.Mode, change.Type, change.Name,
 		change.ProviderName, change.Deposed, string(change.Action), change.ActionReason, change.ImportingID,
 	} {
-		if len(text) > maxPlanChangeTextBytes || !utf8.ValidString(text) {
-			return errors.New("a text field is too long or not UTF-8")
+		// Postgres text can't hold a NUL; the parser scrubs them, so one here
+		// was put there by something else.
+		if len(text) > maxPlanChangeTextBytes || !utf8.ValidString(text) || strings.ContainsRune(text, 0) {
+			return errors.New("a text field is too long, not UTF-8 or holds a NUL")
 		}
 	}
 	for _, value := range []json.RawMessage{change.ReplacePaths, change.Before, change.After} {
 		if len(value) == 0 {
 			continue
 		}
-		if len(value) > MaxPlanChangeValueBytes || !json.Valid(value) {
-			return errors.New("a value is too large or not JSON")
+		if len(value) > MaxPlanChangeValueBytes || !json.Valid(value) || holdsNUL(value) {
+			return errors.New("a value is too large, not JSON or holds a NUL")
 		}
 	}
 	return nil
+}
+
+// holdsNUL reports whether a JSON value has a NUL in any string or key,
+// which jsonb refuses. It decodes rather than searching for the escape, so
+// a literal backslash followed by u0000 isn't mistaken for one.
+func holdsNUL(value json.RawMessage) bool {
+	var decoded any
+	if json.Unmarshal(value, &decoded) != nil {
+		return true
+	}
+	return anyNUL(decoded)
+}
+
+func anyNUL(value any) bool {
+	switch typed := value.(type) {
+	case string:
+		return strings.ContainsRune(typed, 0)
+	case map[string]any:
+		for key, child := range typed {
+			if strings.ContainsRune(key, 0) || anyNUL(child) {
+				return true
+			}
+		}
+	case []any:
+		return slices.ContainsFunc(typed, anyNUL)
+	}
+	return false
 }

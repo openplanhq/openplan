@@ -211,15 +211,15 @@ func (activities *TemplateRunActivities) RunTerraform(ctx context.Context, input
 	if err != nil {
 		return domain.RunTerraformActivityOutput{}, err
 	}
-	file, err := logsink.NewFileSink(logsDir).Open(logsink.FileName(input.LogName))
-	if err != nil {
-		return domain.RunTerraformActivityOutput{}, fmt.Errorf("open terraform log: %w", err)
-	}
 	// A changes file left by an earlier attempt of this command would be
 	// uploaded as this attempt's, so it goes before the command runs.
 	changesPath := filepath.Join(logsDir, changesFileName(input.LogName))
 	if err := os.Remove(changesPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return domain.RunTerraformActivityOutput{}, fmt.Errorf("remove earlier plan changes: %w", err)
+	}
+	file, err := logsink.NewFileSink(logsDir).Open(logsink.FileName(input.LogName))
+	if err != nil {
+		return domain.RunTerraformActivityOutput{}, fmt.Errorf("open terraform log: %w", err)
 	}
 	spool := newRedactingWriter(newCappedWriter(file, spoolLimit), credentialValues(environment))
 	// The flusher tails the spool file, not the writer, so the command's

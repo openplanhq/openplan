@@ -87,6 +87,12 @@ func (store LogStore) GetPlanChanges(ctx context.Context, tenantID domain.Tenant
 	return NewPlanChangesStore(store.store).GetPlanChanges(ctx, tenantID, runID)
 }
 
+// DeletePlanChanges deletes a run's uploaded plan changes through the log
+// store's object store.
+func (store LogStore) DeletePlanChanges(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) error {
+	return NewPlanChangesStore(store.store).DeletePlanChanges(ctx, tenantID, runID)
+}
+
 // PlanStore keeps a run's saved plan: the encrypted bundle the plan phase
 // uploads and the apply phase downloads. It never sees plaintext; encryption
 // happens on the executor before Put and after Get.
@@ -180,6 +186,19 @@ func (store PlanChangesStore) GetPlanChanges(ctx context.Context, tenantID domai
 		return nil, fmt.Errorf("get plan changes: %w", err)
 	}
 	return body, nil
+}
+
+// DeletePlanChanges removes the run's uploaded changes once the control plane
+// has recorded them. Deleting none succeeds.
+func (store PlanChangesStore) DeletePlanChanges(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) error {
+	key, err := PlanChangesKey(tenantID, runID)
+	if err != nil {
+		return err
+	}
+	if err := store.store.DeleteObject(ctx, key); err != nil {
+		return fmt.Errorf("delete plan changes: %w", err)
+	}
+	return nil
 }
 
 // PlanChangesKey is where a run's plan's resource changes live, beside its
