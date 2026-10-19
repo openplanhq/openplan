@@ -228,6 +228,15 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	// Revokes a role from a stack.
 	server.handleTenantRoute("DELETE /v1/tenants/{tenant_id}/stacks/{stack_id}/grants/{user_sub}", server.handleRevokeStackRole)
 
+	// Platform grant routes, the stack grant routes on the platform singleton.
+	// Tenant-scoped like every resource route: an api serves one tenant.
+	// Lists who holds a platform role.
+	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/platform/grants", server.handleListPlatformGrants)
+	// Sets one person's platform role, creating or replacing their grant.
+	server.handleTenantRoute("PUT /v1/tenants/{tenant_id}/platform/grants/{user_sub}", server.handleAssignPlatformRole)
+	// Revokes a person's platform role.
+	server.handleTenantRoute("DELETE /v1/tenants/{tenant_id}/platform/grants/{user_sub}", server.handleRevokePlatformRole)
+
 	// Template run decision routes.
 	// Records approval for a waiting template run.
 	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/template-runs/{run_id}/approve", server.handleApproveRun)
@@ -308,8 +317,9 @@ func (server *Server) handleMe(response http.ResponseWriter, request *http.Reque
 		return
 	}
 	writeJSON(response, http.StatusOK, meFromPrincipal(principal, server.tenantID, globalCapabilities{
-		CanCreateStack:     capabilities.CanCreateStack,
-		CanPublishTemplate: capabilities.CanPublishTemplate,
+		CanCreateStack:          capabilities.CanCreateStack,
+		CanPublishTemplate:      capabilities.CanPublishTemplate,
+		CanManagePlatformAccess: capabilities.CanManagePlatformAccess,
 	}))
 }
 
@@ -1230,7 +1240,7 @@ func (server *Server) handleListStackGrants(response http.ResponseWriter, reques
 }
 
 func (server *Server) handleAssignStackRole(response http.ResponseWriter, request *http.Request) {
-	var body assignStackRoleRequest
+	var body assignRoleRequest
 	if !decodeRequestBody(response, request, &body) {
 		return
 	}
@@ -1255,8 +1265,9 @@ func (server *Server) handleAssignStackRole(response http.ResponseWriter, reques
 }
 
 // The person is named by the path alone, so the body has no user_sub to
-// disagree with it, and one that sends it is refused as an unknown field.
-type assignStackRoleRequest struct {
+// disagree with it, and one that sends it is refused as an unknown field. The
+// stack and platform grant routes both take it.
+type assignRoleRequest struct {
 	Role string `json:"role"`
 }
 
@@ -1264,6 +1275,55 @@ func (server *Server) handleRevokeStackRole(response http.ResponseWriter, reques
 	err := server.service.RevokeStackRole(request.Context(), app.RevokeStackRoleCommand{
 		TenantID: domain.TenantID(request.PathValue("tenant_id")),
 		StackID:  domain.StackID(request.PathValue("stack_id")),
+		UserSub:  request.PathValue("user_sub"),
+	})
+	if err != nil {
+		writeAppError(response, err)
+		return
+	}
+
+	response.WriteHeader(http.StatusNoContent)
+}
+
+func (server *Server) handleListPlatformGrants(response http.ResponseWriter, request *http.Request) {
+	result, err := server.service.ListPlatformGrants(request.Context(), app.ListPlatformGrantsCommand{
+		TenantID: domain.TenantID(request.PathValue("tenant_id")),
+	})
+	if err != nil {
+		writeAppError(response, err)
+		return
+	}
+
+	writeJSON(response, http.StatusOK, newListResponse(result.Grants, ""))
+}
+
+func (server *Server) handleAssignPlatformRole(response http.ResponseWriter, request *http.Request) {
+	var body assignRoleRequest
+	if !decodeRequestBody(response, request, &body) {
+		return
+	}
+
+	result, err := server.service.AssignPlatformRole(request.Context(), app.AssignPlatformRoleCommand{
+		TenantID: domain.TenantID(request.PathValue("tenant_id")),
+		UserSub:  request.PathValue("user_sub"),
+		Role:     body.Role,
+	})
+	if err != nil {
+		writeAppError(response, err)
+		return
+	}
+
+	// No Location: the grant's URL is the one just requested.
+	status := http.StatusOK
+	if result.Created {
+		status = http.StatusCreated
+	}
+	writeJSON(response, status, result.Grant)
+}
+
+func (server *Server) handleRevokePlatformRole(response http.ResponseWriter, request *http.Request) {
+	err := server.service.RevokePlatformRole(request.Context(), app.RevokePlatformRoleCommand{
+		TenantID: domain.TenantID(request.PathValue("tenant_id")),
 		UserSub:  request.PathValue("user_sub"),
 	})
 	if err != nil {

@@ -37,6 +37,9 @@ type globalCapabilities struct {
 	// template detail screen's Sync button posts — so the button is hidden
 	// rather than left to earn a 403.
 	CanPublishTemplate bool `json:"can_publish_template"`
+	// CanManagePlatformAccess gates the Access nav item and /access, where
+	// platform roles are granted.
+	CanManagePlatformAccess bool `json:"can_manage_platform_access"`
 }
 
 // meFromPrincipal maps the authenticated principal and its resolved platform

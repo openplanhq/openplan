@@ -172,3 +172,47 @@ func TestNonProblemErrorPathsMatchTheSpec(t *testing.T) {
 		t.Fatal("collection test gates the problem check on the content type")
 	}
 }
+
+// A collection run must not change a real person's platform role. The user
+// search saves someone else's sub for the stack grant requests, and a stack
+// grant only touches the stack the run created; a platform grant would demote
+// or strip a colleague on a shared install. So the platform requests target a
+// variable nobody sets by default, skip themselves while it is empty, and the
+// PUT accepts the 201 a first grant answers.
+func TestPlatformGrantRequestsTouchNoOneUnlessAsked(t *testing.T) {
+	spec, err := os.ReadFile(filepath.Join("..", "..", "docs", "openapi.yaml"))
+	if err != nil {
+		t.Fatalf("read spec: %v", err)
+	}
+	doc, err := parseSpec(spec)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	model, err := buildCollection(doc)
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	found := map[string]request{}
+	for _, f := range model.folders {
+		for _, r := range f.requests {
+			if strings.Contains(r.path, "/platform/grants/") {
+				found[r.method] = r
+			}
+		}
+	}
+	for _, method := range []string{"PUT", "DELETE"} {
+		r, ok := found[method]
+		if !ok {
+			t.Fatalf("no %s platform grant request", method)
+		}
+		if !strings.HasSuffix(r.path, "/platform/grants/{{platform_grant_sub}}") {
+			t.Errorf("%s path = %q, want it to target {{platform_grant_sub}}", method, r.path)
+		}
+		if !strings.Contains(r.preRequest, "pm.environment.get('platform_grant_sub')") || !strings.Contains(r.preRequest, "pm.execution.skipRequest()") {
+			t.Errorf("%s pre-request = %q, want it to skip while platform_grant_sub is unset", method, r.preRequest)
+		}
+	}
+	if test := found["PUT"].test; !strings.Contains(test, "201") || !strings.Contains(test, "200") {
+		t.Errorf("PUT test = %q, want it to accept 201 and 200", test)
+	}
+}

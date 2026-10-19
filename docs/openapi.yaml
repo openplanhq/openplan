@@ -141,7 +141,7 @@ tags:
   - name: Runs
     description: Starting, watching, approving and discarding Terraform operations.
   - name: Access
-    description: Per-stack role grants.
+    description: Role grants, per stack and on the platform.
   - name: Users
     description: Searching people who have signed in at least once.
   - name: Queue
@@ -805,6 +805,108 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/platform/grants:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+    get:
+      tags: [Access]
+      summary: List platform role grants
+      description: |
+        Who holds a platform role. Root is not listed: it comes from
+        `OPENPLAN_ROOT_SUBJECT` at boot and is not a grant this API manages.
+        Needs `can_manage_platform_access`, which platform administrators
+        and root hold.
+      operationId: listPlatformGrants
+      responses:
+        "200":
+          description: Who holds a platform role.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlatformGrantList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/platform/grants/{user_sub}:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - name: user_sub
+        in: path
+        required: true
+        description: |
+          The person's subject identifier, as returned by
+          `GET /v1/tenants/{tenant_id}/users/search` with no `stack_id`.
+        schema: { type: string }
+    put:
+      tags: [Access]
+      summary: Set a person's platform role
+      description: |
+        Creates the person's platform grant, or replaces whatever platform
+        role they already held: one person has at most one. Answers `201`
+        when the person held no platform role before, and `200` when the call
+        changed or kept the role they had. The person is named by the path
+        only; a body that also sends `user_sub` is refused as an unknown
+        field (`400 malformed-body`).
+
+        The person must have signed in to openplan at least once, as for a
+        stack grant (`422`, `#/user_sub`, `not_signed_in`). Their stack roles
+        are untouched.
+
+        There is no last-admin guard: root can't be granted or revoked here,
+        so the platform stays administrable whoever gives up `admin`. The
+        role is written in the request's own transaction, so it is in effect
+        when the response arrives.
+      operationId: assignPlatformRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssignPlatformRoleRequest" }
+            example:
+              role: editor
+      responses:
+        "200":
+          description: The person's platform role was changed or already held.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlatformGrant" }
+        "201":
+          description: The person had no platform role; this created it.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlatformGrant" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "422":
+          description: |
+            A role the platform doesn't grant (`#/role`, `unsupported`), a
+            stack role or `root` included; a malformed subject in the path
+            (`#/user_sub`, `invalid_format`); or a person who has never
+            signed in (`#/user_sub`, `not_signed_in`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    delete:
+      tags: [Access]
+      summary: Revoke a person's platform role
+      description: |
+        Removes the person's platform role, if they hold one; revoking what
+        isn't held succeeds. Their stack roles are untouched. Revoking the
+        last `admin` is allowed: root remains.
+      operationId: revokePlatformRole
+      responses:
+        "204":
+          description: Revoked.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
 
   /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/config:
@@ -1729,6 +1831,15 @@ components:
           items: { $ref: "#/components/schemas/Grant" }
         next_cursor: { $ref: "#/components/schemas/NextCursor" }
       required: [items, next_cursor]
+    PlatformGrantList:
+      type: object
+      description: Every platform role grant; always one page.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformGrant" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
     TemplateRunList:
       type: object
       description: One page of a component's runs, newest first.
@@ -1879,7 +1990,10 @@ components:
           properties:
             can_create_stack: { type: boolean }
             can_publish_template: { type: boolean }
-          required: [can_create_stack, can_publish_template]
+            can_manage_platform_access:
+              type: boolean
+              description: May grant and revoke platform roles. Platform administrators and root.
+          required: [can_create_stack, can_publish_template, can_manage_platform_access]
         tenant_id:
           type: string
           description: The tenant this deployment serves. Use it in every tenant-scoped path.
@@ -2652,6 +2766,33 @@ components:
       properties:
         user_sub: { type: string }
         role: { $ref: "#/components/schemas/StackRole" }
+        display_name: { type: string }
+        email: { type: string, format: email }
+      required: [user_sub, role, display_name, email]
+
+    AssignPlatformRoleRequest:
+      type: object
+      additionalProperties: false
+      description: The person is named by the path, so the body holds only the role.
+      properties:
+        role: { $ref: "#/components/schemas/PlatformRole" }
+      required: [role]
+
+    PlatformRole:
+      type: string
+      enum: [viewer, editor, admin]
+      description: |
+        A platform role. `viewer` sees every stack and reads the template
+        catalog; `editor` also creates stacks and publishes templates;
+        `admin` also operates, approves and manages access on every stack,
+        and manages platform access. Root is not a role this API grants.
+
+    PlatformGrant:
+      type: object
+      description: One person's platform role, with the identity resolved for display.
+      properties:
+        user_sub: { type: string }
+        role: { $ref: "#/components/schemas/PlatformRole" }
         display_name: { type: string }
         email: { type: string, format: email }
       required: [user_sub, role, display_name, email]

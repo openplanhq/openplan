@@ -72,3 +72,7 @@ values:
     value: ""
     enabled: true
     type: default
+  - key: platform_grant_sub
+    value: ""
+    enabled: true
+    type: default

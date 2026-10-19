@@ -1,0 +1,35 @@
+$kind: http-request
+description: |-
+  Creates the person's platform grant, or replaces whatever platform
+  role they already held: one person has at most one. Answers `201`
+  when the person held no platform role before, and `200` when the call
+  changed or kept the role they had. The person is named by the path
+  only; a body that also sends `user_sub` is refused as an unknown
+  field (`400 malformed-body`).
+
+  The person must have signed in to openplan at least once, as for a
+  stack grant (`422`, `#/user_sub`, `not_signed_in`). Their stack roles
+  are untouched.
+
+  There is no last-admin guard: root can't be granted or revoked here,
+  so the platform stays administrable whoever gives up `admin`. The
+  role is written in the request's own transaction, so it is in effect
+  when the response arrives.
+
+  Changes a real person's platform role: skipped unless you set platform_grant_sub to the sub of someone it is safe to make a platform viewer.
+method: PUT
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/platform/grants/{{platform_grant_sub}}'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: '{ "role": "viewer" }'
+scripts:
+  - type: beforeRequest
+    code: if (!pm.environment.get('platform_grant_sub')) { pm.execution.skipRequest(); }
+    language: text/javascript
+  - type: afterResponse
+    code: pm.test('status is one of 201, 200', () => pm.expect(pm.response.code).to.be.oneOf([201, 200]));
+    language: text/javascript
+order: 5000

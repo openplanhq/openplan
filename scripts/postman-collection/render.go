@@ -434,5 +434,8 @@ var environment = []environmentValue{
 	{"run_id", "", plainVariable},
 	{"run_number", "", plainVariable},
 	{"name", "", plainVariable},
-	{"user_sub", "", plainVariable},
+	{userSubVariable, "", plainVariable},
+	// Unset unless the person running the collection names someone it is
+	// safe to change the platform role of.
+	{platformGrantSubVariable, "", plainVariable},
 }
