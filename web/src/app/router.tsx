@@ -15,7 +15,7 @@ import StackSectionLayout from "../features/stacks/StackSectionLayout";
 import TemplatePanel from "../features/stacks/TemplatePanel";
 import TemplateRunsTab from "../features/stacks/TemplateRunsTab";
 import TemplateVariablesTab from "../features/stacks/TemplateVariablesTab";
-import TemplateCredentialsTab from "../features/stacks/TemplateCredentialsTab";
+import TemplateEnvironmentTab from "../features/stacks/TemplateEnvironmentTab";
 import TemplateSettingsTab from "../features/stacks/TemplateSettingsTab";
 import UpgradeStackTemplateScreen from "../features/stacks/UpgradeStackTemplateScreen";
 import EnvironmentScreen from "../features/stacks/EnvironmentScreen";
@@ -112,9 +112,9 @@ export const routeConfig: RouteObject[] = [
                       { path: "runs/:runNumber", element: <RunDetailScreen /> },
                       { path: "variables", element: <TemplateVariablesTab /> },
                       {
-                        path: "credentials",
+                        path: "environment",
                         element: <RequireCapability capability="can_manage_access" mode="route" />,
-                        children: [{ index: true, element: <TemplateCredentialsTab /> }]
+                        children: [{ index: true, element: <TemplateEnvironmentTab /> }]
                       },
                       { path: "settings", element: <TemplateSettingsTab /> },
                       {

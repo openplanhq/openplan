@@ -6,7 +6,7 @@ import type { TemplateTab } from "./templateSelection";
 
 // A template's tabs on the stack's page, one per route below the template.
 // The route decides the current tab, so a run keeps Runs lit and Change
-// revision keeps Settings lit. Credentials shows only to people who may
+// revision keeps Settings lit. Environment shows only to people who may
 // manage access, the capability its route requires; while the stack's
 // capabilities load, it stays hidden, as RequireCapability would keep it.
 export default function TemplateTabs({ stackId, stackTemplateId }: { stackId: string; stackTemplateId: string }) {
@@ -15,7 +15,7 @@ export default function TemplateTabs({ stackId, stackTemplateId }: { stackId: st
   const tabs: [TemplateTab, string][] = [
     ["runs", "Runs"],
     ["variables", "Variables"],
-    ...(canManageAccess ? ([["credentials", "Credentials"]] as [TemplateTab, string][]) : []),
+    ...(canManageAccess ? ([["environment", "Environment"]] as [TemplateTab, string][]) : []),
     ["settings", "Settings"]
   ];
 

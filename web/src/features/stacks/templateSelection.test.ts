@@ -52,7 +52,7 @@ describe("templateTabOf", () => {
     ["/stacks/s1/templates/t1/runs", "runs"],
     ["/stacks/s1/templates/t1/runs/14", "runs"],
     ["/stacks/s1/templates/t1/variables", "variables"],
-    ["/stacks/s1/templates/t1/credentials", "credentials"],
+    ["/stacks/s1/templates/t1/environment", "environment"],
     ["/stacks/s1/templates/t1/settings", "settings"],
     ["/stacks/s1/templates/t1/upgrade", "settings"]
   ] as const)("%s belongs to %s", (pathname, tab) => {
