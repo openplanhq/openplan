@@ -83,6 +83,7 @@ tests:
           can_create_stack: true
           can_publish_template: true
           can_read_template: true
+          can_manage_platform_access: true
       - user: user:admin
         object: platform:openplan
         assertions:
@@ -92,6 +93,7 @@ tests:
           can_create_stack: true
           can_publish_template: true
           can_read_template: true
+          can_manage_platform_access: true
       - user: user:editor
         object: platform:openplan
         assertions:
@@ -101,6 +103,7 @@ tests:
           can_create_stack: true
           can_publish_template: true
           can_read_template: true
+          can_manage_platform_access: false
       - user: user:platform-viewer
         object: platform:openplan
         assertions:
@@ -111,6 +114,7 @@ tests:
           # A platform viewer may read the catalog but never publish to it.
           can_publish_template: false
           can_read_template: true
+          can_manage_platform_access: false
       - user: user:unrelated
         object: platform:openplan
         assertions:
@@ -120,6 +124,7 @@ tests:
           can_create_stack: false
           can_publish_template: false
           can_read_template: false
+          can_manage_platform_access: false
 
   # Platform tiers reach stacks monotonically: administrators get everything,
   # editors and viewers get read-only, and neither may operate or approve.

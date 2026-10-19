@@ -47,6 +47,7 @@ func TestEmbeddedDSLTransformsToExpectedModel(t *testing.T) {
 			"root", "admin", "editor", "viewer",
 			"can_administer", "can_edit", "can_view",
 			"can_create_stack", "can_publish_template", "can_read_template",
+			"can_manage_platform_access",
 		},
 		"stack": {
 			"owner", "operator", "approver", "viewer", "parent",

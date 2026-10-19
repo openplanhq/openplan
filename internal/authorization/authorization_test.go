@@ -149,6 +149,25 @@ func TestListGrantsSkipsStructuralEdges(t *testing.T) {
 	require.Equal(t, "owner", grants[0].Relation().String())
 }
 
+// Root takes the other skip path from the parent edge: its subject is a user,
+// and only its relation says it is structure. The platform's grant list must
+// never offer it as a role someone could change or revoke.
+func TestListGrantsSkipsRoot(t *testing.T) {
+	ctx := context.Background()
+	auth := newTestAuthorization(t)
+	alice, err := authorization.SubjectFromOIDCSub("alice")
+	require.NoError(t, err)
+	root, err := authorization.NewStructuralRelationship(alice, authorization.Platform, authorization.RelationRoot)
+	require.NoError(t, err)
+	require.NoError(t, auth.Grant(ctx, root, platformGrant(t, "bob", authorization.RelationAdmin)))
+
+	grants, err := auth.ListGrants(ctx, authorization.Platform)
+	require.NoError(t, err)
+	require.Len(t, grants, 1, "root is structure, not a grant")
+	require.Equal(t, "user:bob", grants[0].Subject().String())
+	require.Equal(t, "admin", grants[0].Relation().String())
+}
+
 func TestListGrantsSortsBySubjectThenRelation(t *testing.T) {
 	ctx := context.Background()
 	auth := newTestAuthorization(t)

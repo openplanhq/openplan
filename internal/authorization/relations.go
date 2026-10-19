@@ -164,10 +164,11 @@ var (
 
 	// Platform capabilities. Each gates a route; the tiers they derive from
 	// live in the model, not here, so re-tiering one never touches Go.
-	RelationCanAdminister      = mustRelation("can_administer")
-	RelationCanCreateStack     = mustRelation("can_create_stack")
-	RelationCanReadTemplate    = mustRelation("can_read_template")
-	RelationCanPublishTemplate = mustRelation("can_publish_template")
+	RelationCanAdminister           = mustRelation("can_administer")
+	RelationCanCreateStack          = mustRelation("can_create_stack")
+	RelationCanReadTemplate         = mustRelation("can_read_template")
+	RelationCanPublishTemplate      = mustRelation("can_publish_template")
+	RelationCanManagePlatformAccess = mustRelation("can_manage_platform_access")
 )
 
 // mustRelation is NewRelation for the package-level table above. It panics on
