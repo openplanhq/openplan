@@ -8,7 +8,6 @@ import SearchField from "../../shared/SearchField";
 import { buttonClass } from "../../shared/buttonClass";
 import { cn } from "@/lib/utils";
 import GrantRow from "./GrantRow";
-import type { GrantRowMode } from "./GrantRow";
 import PersonPicker from "./PersonPicker";
 import RoleSelect from "./RoleSelect";
 import { roleRank } from "./roles";
@@ -23,28 +22,21 @@ export interface AccessCopy {
   access: string;
   /** Where a role applies: "on prod", "on the platform". */
   where: string;
-  /** Who can give access back: "another owner or a platform admin". */
-  restorers: string;
   /** The list's accessible name: "People with access to prod". */
   listLabel: string;
   loadError: string;
   emptyTitle: string;
 }
 
-/** The role a removed or restored grant had, kept until the server agrees. */
-type Kept = { grant: GrantView; state: "removed" | "restored" };
-type Confirming = { sub: string; kind: "remove" } | { sub: string; kind: "role"; role: string };
-
 /**
  * Who has a role on one object, and the ways to change it: openplan UI's
  * access card. A person picker, a role and Grant access on top, then a
  * GrantRow per person, highest role first. Nothing in it is stack-only: the
- * platform's Access screen (#424) passes its own roles, words and calls.
+ * platform's Access screen passes its own roles, words and calls.
  *
- * The confirmation rule: what the server will refuse (removing or demoting
- * the only owner, with lockLastTop) is never offered; what takes away your
- * own access confirms with what you lose; removing anyone confirms in the
- * row; and a removed row stays with Undo until the page is left.
+ * Every change acts at once (owner, 2026-10-19): no confirm, no Undo, your
+ * own access included. What the server will refuse (removing or demoting
+ * the only owner, with lockLastTop) is never offered.
  */
 export default function AccessList({
   roles,
@@ -55,7 +47,6 @@ export default function AccessList({
   onRetry,
   meSub,
   lockLastTop,
-  lastTopWarning,
   useSearch,
   assign,
   revoke,
@@ -71,33 +62,28 @@ export default function AccessList({
   meSub?: string;
   /** The server refuses to remove or demote the last holder of the top role. */
   lockLastTop: boolean;
-  /** Said when removing the last holder of the top role is allowed but worth a warning. */
-  lastTopWarning?: (name: string) => string;
   useSearch: (query: string) => { data?: UserProfile[] };
   assign: (sub: string, role: string) => Promise<unknown>;
   revoke: (sub: string) => Promise<unknown>;
-  /** Your own grant changed. Resolves false when you've left the page, so nothing more is drawn. */
-  onOwnAccessChanged: (kind: "removed" | "demoted") => Promise<boolean>;
+  /** Your own grant changed: re-read what you may still do here. */
+  onOwnAccessChanged?: () => void;
 }) {
-  const top = roles[0].value;
   const lowest = roles[roles.length - 1].value;
   const roleFieldId = useId();
   const searchId = useId();
+  const listRef = useRef<HTMLUListElement>(null);
 
   const [picked, setPicked] = useState<UserProfile | null>(null);
   const [newRole, setNewRole] = useState(lowest);
   const [granting, setGranting] = useState(false);
   const [addError, setAddError] = useState("");
-  const [confirming, setConfirming] = useState<Confirming | null>(null);
-  const [kept, setKept] = useState<Record<string, Kept>>({});
+  // People removed on this visit, hidden until the list comes back without them.
+  const [gone, setGone] = useState<ReadonlySet<string>>(new Set());
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [filter, setFilter] = useState("");
   const [announce, setAnnounce] = useState("");
-  // You removed your own grant and could still manage access (a platform
-  // admin), so giving it back is still yours to do.
-  const [keptOwnAccess, setKeptOwnAccess] = useState(false);
   const mounted = useRef(true);
   // Set on every mount too: StrictMode mounts twice, running the cleanup between.
   useEffect(() => {
@@ -110,19 +96,13 @@ export default function AccessList({
   const places = useRef(new Map<string, { rank: number; name: string }>());
   const server = useMemo(() => new Map((grants ?? []).map((g) => [g.user_sub, g])), [grants]);
 
-  // A restored grant, or a role change, is drawn from what was sent until the
-  // list comes back with it, so a row never flickers back to its old state.
+  // A role change is drawn from what was sent until the list comes back with
+  // it, and a removed row stays hidden until the list drops it, so a row never
+  // flickers back to its old state.
   useEffect(() => {
-    setKept((current) => {
-      const next = { ...current };
-      let changed = false;
-      for (const [sub, entry] of Object.entries(current)) {
-        if (entry.state === "restored" && server.has(sub)) {
-          delete next[sub];
-          changed = true;
-        }
-      }
-      return changed ? next : current;
+    setGone((current) => {
+      const next = new Set([...current].filter((sub) => server.has(sub)));
+      return next.size === current.size ? current : next;
     });
     setDrafts((current) => {
       const next = { ...current };
@@ -138,13 +118,9 @@ export default function AccessList({
   }, [server]);
 
   const rows = useMemo(() => {
-    const subs = new Set([...server.keys(), ...Object.keys(kept)]);
-    const list = [...subs].map((sub) => {
-      const entry = kept[sub];
-      if (entry?.state === "removed") return { grant: entry.grant, removed: true };
-      const grant = server.get(sub) ?? entry!.grant;
-      return { grant: drafts[sub] ? { ...grant, role: drafts[sub] } : grant, removed: false };
-    });
+    const list = [...server.values()]
+      .filter((grant) => !gone.has(grant.user_sub))
+      .map((grant) => (drafts[grant.user_sub] ? { ...grant, role: drafts[grant.user_sub] } : grant));
     // By role, highest first, then by name; someone openplan has no record of
     // goes last in their role, since their "name" is only a subject. Each
     // person keeps the place they had when first seen on this visit, so a row
@@ -159,17 +135,18 @@ export default function AccessList({
       return place;
     };
     return list.sort((a, b) => {
-      const pa = placeOf(a.grant);
-      const pb = placeOf(b.grant);
+      const pa = placeOf(a);
+      const pb = placeOf(b);
       return pa.rank - pb.rank || pa.name.localeCompare(pb.name);
     });
-  }, [server, kept, drafts, roles]);
+  }, [server, gone, drafts, roles]);
 
-  const topHolders = rows.filter((row) => !row.removed && row.grant.role === top).length;
+  const top = roles[0].value;
+  const topHolders = rows.filter((grant) => grant.role === top).length;
   const ready = status === "success";
   const needle = filter.trim().toLowerCase();
   const shown = needle
-    ? rows.filter(({ grant }) => grant.display_name.toLowerCase().includes(needle) || grant.email.toLowerCase().includes(needle))
+    ? rows.filter((grant) => grant.display_name.toLowerCase().includes(needle) || grant.email.toLowerCase().includes(needle))
     : rows;
 
   const fail = (sub: string, err: unknown, fallback: string) => {
@@ -185,12 +162,11 @@ export default function AccessList({
 
   const changeRole = async (grant: GrantView, role: string) => {
     clearError(grant.user_sub);
-    setConfirming(null);
     setDrafts((current) => ({ ...current, [grant.user_sub]: role }));
     try {
       await assign(grant.user_sub, role);
       setAnnounce(`${nameOf(grant)} is now ${role}.`);
-      if (grant.user_sub === meSub && grant.role === top) await onOwnAccessChanged("demoted");
+      if (grant.user_sub === meSub) onOwnAccessChanged?.();
     } catch (err) {
       setDrafts((current) => {
         const next = { ...current };
@@ -202,35 +178,23 @@ export default function AccessList({
   };
 
   const remove = async (grant: GrantView) => {
-    clearError(grant.user_sub);
-    setBusy(grant.user_sub);
+    const sub = grant.user_sub;
+    clearError(sub);
+    setBusy(sub);
+    // The row is about to go with the button that has focus: hand focus to
+    // the next row's Remove, else the one before, else the search.
+    const buttons = [...(listRef.current?.querySelectorAll<HTMLButtonElement>("[data-remove]") ?? [])];
+    const at = buttons.findIndex((button) => button.closest("li")?.dataset.testid === `grant-${sub}`);
+    const heir = buttons[at + 1] ?? buttons[at - 1];
     try {
-      await revoke(grant.user_sub);
-      if (grant.user_sub === meSub) {
-        if (!(await onOwnAccessChanged("removed"))) return;
-        setKeptOwnAccess(true);
-      }
+      await revoke(sub);
       if (!mounted.current) return;
-      setConfirming(null);
-      setKept((current) => ({ ...current, [grant.user_sub]: { grant, state: "removed" } }));
-      setAnnounce(`Removed ${nameOf(grant)}’s ${copy.access}. Undo is beside the row.`);
+      setGone((current) => new Set(current).add(sub));
+      setAnnounce(`Removed ${nameOf(grant)}’s ${copy.access}.`);
+      requestAnimationFrame(() => (heir && !heir.disabled ? heir : document.getElementById(searchId))?.focus());
+      if (sub === meSub) onOwnAccessChanged?.();
     } catch (err) {
-      setConfirming(null);
-      fail(grant.user_sub, err, `${nameOf(grant)}’s access could not be removed.`);
-    } finally {
-      if (mounted.current) setBusy(null);
-    }
-  };
-
-  const undo = async (grant: GrantView) => {
-    clearError(grant.user_sub);
-    setBusy(grant.user_sub);
-    try {
-      await assign(grant.user_sub, grant.role);
-      setKept((current) => ({ ...current, [grant.user_sub]: { grant, state: "restored" } }));
-      setAnnounce(`${nameOf(grant)} is ${grant.role} again.`);
-    } catch (err) {
-      fail(grant.user_sub, err, `${nameOf(grant)}’s access could not be given back.`);
+      fail(sub, err, `${nameOf(grant)}’s access could not be removed.`);
     } finally {
       if (mounted.current) setBusy(null);
     }
@@ -243,10 +207,12 @@ export default function AccessList({
     setGranting(true);
     try {
       await assign(person.sub, newRole);
-      setKept((current) => {
-        // Someone removed earlier on this visit and granted again is just granted.
-        if (!(person.sub in current)) return current;
-        return { ...current, [person.sub]: { grant: { user_sub: person.sub, role: newRole, display_name: person.display_name, email: person.email }, state: "restored" } };
+      // Someone removed earlier on this visit and granted again is just granted.
+      setGone((current) => {
+        if (!current.has(person.sub)) return current;
+        const next = new Set(current);
+        next.delete(person.sub);
+        return next;
       });
       setPicked(null);
       // Back to the search, ready for the next person.
@@ -259,11 +225,7 @@ export default function AccessList({
     }
   };
 
-  const heldRole = (sub: string) => {
-    const entry = kept[sub];
-    if (entry?.state === "removed") return undefined;
-    return server.get(sub)?.role ?? entry?.grant.role;
-  };
+  const heldRole = (sub: string) => (gone.has(sub) ? undefined : server.get(sub)?.role);
 
   return (
     <section aria-label={copy.listLabel} className="rounded-panel border bg-card">
@@ -346,61 +308,23 @@ export default function AccessList({
 
       {ready && rows.length > 0 && (
         <>
-          <ul aria-label={copy.listLabel}>
-            {shown.map(({ grant, removed }) => {
+          <ul aria-label={copy.listLabel} ref={listRef}>
+            {shown.map((grant) => {
               const sub = grant.user_sub;
-              const isMe = sub === meSub;
-              const c = confirming?.sub === sub ? confirming : null;
-              const mode: GrantRowMode = removed ? "removed" : c ? "confirm" : "idle";
-              const lastTop = grant.role === top && topHolders === 1;
-              const locked = !removed && lockLastTop && lastTop;
-              let question = "";
-              let confirmLabel = "";
-              let warning: string | undefined;
-              if (c?.kind === "remove") {
-                question = isMe ? `Remove your own ${copy.access}?` : `Remove ${nameOf(grant)}’s ${copy.access}?`;
-                confirmLabel = isMe ? "Remove my access" : "Remove access";
-                if (isMe) warning = `If you are not a platform admin, you will lose ${copy.access} right away, and only ${copy.restorers} can give it back.`;
-                else if (lastTop && lastTopWarning) warning = lastTopWarning(nameOf(grant));
-              } else if (c?.kind === "role") {
-                question = `Make yourself ${c.role} ${copy.where}?`;
-                confirmLabel = "Change my role";
-                warning = `If you are not a platform admin, you will stop managing ${copy.access} right away, and only ${copy.restorers} can make you ${top} again.`;
-              }
               return (
                 <GrantRow
                   key={sub}
                   roles={roles}
                   grant={grant}
-                  isMe={isMe}
-                  mode={mode}
+                  isMe={sub === meSub}
                   // Locked without a line saying why: the owner's call for
                   // this screen (2026-10-19), over the design system's rule.
-                  locked={locked}
+                  locked={lockLastTop && grant.role === top && topHolders === 1}
                   rolePending={drafts[sub] !== undefined}
                   busy={busy === sub}
-                  question={question}
-                  confirmLabel={confirmLabel}
-                  warning={warning}
                   error={rowErrors[sub]}
-                  // Your own access, once gone, is yours to give back only if
-                  // you can still manage access here.
-                  canUndo={!isMe || keptOwnAccess}
-                  onRoleChange={(role) => {
-                    // Taking away your own top role is the one role change that asks first.
-                    if (isMe && grant.role === top && roleRank(roles, role) > 0) setConfirming({ sub, kind: "role", role });
-                    else void changeRole(grant, role);
-                  }}
-                  onRemove={() => {
-                    clearError(sub);
-                    setConfirming({ sub, kind: "remove" });
-                  }}
-                  onConfirm={() => {
-                    if (c?.kind === "role") void changeRole(grant, c.role);
-                    else void remove(grant);
-                  }}
-                  onCancel={() => setConfirming(null)}
-                  onUndo={() => void undo(grant)}
+                  onRoleChange={(role) => void changeRole(grant, role)}
+                  onRemove={() => void remove(grant)}
                 />
               );
             })}
