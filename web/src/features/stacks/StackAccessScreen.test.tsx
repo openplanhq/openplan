@@ -131,14 +131,18 @@ describe("StackAccessScreen", () => {
     expect(within(row(ME)).getByText("you")).toBeTruthy();
     expect(screen.getByTestId("page-count").textContent).toBe("5");
     expect(screen.getByRole("heading", { level: 1, name: "Access" })).toBeTruthy();
+    // No line explains what the screen already shows (owner, 2026-10-19).
+    for (const cut of ["Who can see and change", "Search for someone who has signed in", "Person"]) {
+      expect(screen.queryByText(cut, { exact: false })).toBeNull();
+    }
   });
 
-  it("waits to add anyone while the list loads, and says why", async () => {
+  it("waits to add anyone while the list loads", async () => {
     serve({ grants: "stall" });
     renderScreen();
     expect(await screen.findByTestId("access-loading")).toBeTruthy();
     expect((screen.getByRole("button", { name: "Grant access" }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText("Adding people waits until the list of who has access loads.")).toBeTruthy();
+    expect((screen.getByTestId("person-search") as HTMLInputElement).disabled).toBe(true);
   });
 
   it("says a failed list failed, offers Retry, and keeps adding locked", async () => {
@@ -157,11 +161,12 @@ describe("StackAccessScreen", () => {
     expect((await screen.findByTestId("access-empty")).textContent).toContain("No one has access to");
   });
 
-  it("locks the only owner's role and remove, with the reason in the row", async () => {
+  it("locks the only owner's role and remove, without a line explaining it", async () => {
     serve({ grants: [grant(ME, "Sam Park", "owner"), grant("lena", "Lena Novak", "approver")] });
     renderScreen();
     await screen.findByTestId(`grant-${ME}`);
-    expect(within(row(ME)).getByText("You are the only owner. Make someone else owner before changing your role.")).toBeTruthy();
+    // The owner cut the reason line (2026-10-19): the lock stays, the line doesn't.
+    expect(row(ME).textContent).not.toContain("only owner");
     expect((within(row(ME)).getByRole("button", { name: "Remove your access" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByTestId(`role-${ME}`) as HTMLButtonElement).disabled).toBe(true);
     expect((within(row("lena")).getByRole("button", { name: "Remove Lena Novak’s access" }) as HTMLButtonElement).disabled).toBe(false);
@@ -257,7 +262,6 @@ describe("StackAccessScreen", () => {
     expect(new URL(search!.url, "http://localhost").searchParams.get("stack_id")).toBe("stack_1");
     await user.click(screen.getByRole("option", { name: /Lee Park/ }));
     expect(screen.getByTestId("person-picked").textContent).toContain("Lee Park");
-    expect(screen.getByText("Grant access gives Lee Park the viewer role on prod.")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Grant access" }));
     await waitFor(() => expect(writes(sent)).toEqual(["PUT lee viewer"]));
     await screen.findByTestId("grant-lee");
@@ -269,7 +273,7 @@ describe("StackAccessScreen", () => {
     renderScreen();
     await screen.findByTestId(`grant-${sub}`);
     expect(within(row(sub)).getByText("Unknown person")).toBeTruthy();
-    expect(row(sub).textContent).toContain("Not in openplan’s user list");
+    expect(row(sub).textContent).toContain(sub);
   });
 
   it("offers a filter once the list is long", async () => {

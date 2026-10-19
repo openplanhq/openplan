@@ -29,7 +29,6 @@ export interface AccessCopy {
   listLabel: string;
   loadError: string;
   emptyTitle: string;
-  emptyLine: string;
 }
 
 /** The role a removed or restored grant had, kept until the server agrees. */
@@ -82,7 +81,6 @@ export default function AccessList({
 }) {
   const top = roles[0].value;
   const lowest = roles[roles.length - 1].value;
-  const noteId = useId();
   const roleFieldId = useId();
   const searchId = useId();
 
@@ -267,16 +265,10 @@ export default function AccessList({
     return server.get(sub)?.role ?? entry?.grant.role;
   };
 
-  const note = !ready
-    ? "Adding people waits until the list of who has access loads."
-    : picked
-      ? `Grant access gives ${picked.display_name} the ${newRole} role ${copy.where}.`
-      : "Search for someone who has signed in to openplan, then choose their role.";
-
   return (
     <section aria-label={copy.listLabel} className="rounded-panel border bg-card">
       {/* Add a person: who, their role, and Grant access. */}
-      <div className="flex flex-col gap-1.5 border-b border-divider px-5 py-4">
+      <div className="flex flex-col gap-3 border-b border-divider px-5 py-4">
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
             <PersonPicker
@@ -292,7 +284,6 @@ export default function AccessList({
                 if (user) requestAnimationFrame(() => document.getElementById(roleFieldId)?.focus());
               }}
               disabled={!ready || granting}
-              describedBy={noteId}
               inputId={searchId}
             />
           </div>
@@ -312,16 +303,12 @@ export default function AccessList({
             type="button"
             className={cn(buttonClass("primary", "lg"), "shrink-0 pointer-coarse:h-11")}
             disabled={!ready || !picked || granting}
-            aria-describedby={noteId}
             onClick={grantPicked}
           >
             {granting ? <LoaderCircle data-icon="inline-start" aria-hidden="true" className="animate-spin" /> : <Plus data-icon="inline-start" aria-hidden="true" />}
             Grant access
           </button>
         </div>
-        <p id={noteId} className="text-xs text-muted-foreground">
-          {note}
-        </p>
         {addError && <ErrorLine>{addError}</ErrorLine>}
       </div>
 
@@ -353,18 +340,12 @@ export default function AccessList({
         <div className="p-5">
           <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-dashed-border px-5 py-10 text-center" data-testid="access-empty">
             <p className="text-sm leading-label font-medium">{copy.emptyTitle}</p>
-            <p className="text-meta text-muted-foreground">{copy.emptyLine}</p>
           </div>
         </div>
       )}
 
       {ready && rows.length > 0 && (
         <>
-          <div aria-hidden="true" className="flex h-10 items-center gap-4 border-b border-divider pr-3 pl-5 text-xs font-medium text-muted-foreground">
-            <span className="flex-1">Person</span>
-            <span className="w-55 shrink-0">Role</span>
-            <span className="w-18 shrink-0" />
-          </div>
           <ul aria-label={copy.listLabel}>
             {shown.map(({ grant, removed }) => {
               const sub = grant.user_sub;
@@ -393,13 +374,9 @@ export default function AccessList({
                   grant={grant}
                   isMe={isMe}
                   mode={mode}
-                  lockReason={
-                    locked
-                      ? isMe
-                        ? `You are the only ${top}. Make someone else ${top} before changing your role.`
-                        : `The only ${top}. Make someone else ${top} before changing this role.`
-                      : undefined
-                  }
+                  // Locked without a line saying why: the owner's call for
+                  // this screen (2026-10-19), over the design system's rule.
+                  locked={locked}
                   rolePending={drafts[sub] !== undefined}
                   busy={busy === sub}
                   question={question}

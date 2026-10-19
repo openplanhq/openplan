@@ -20,7 +20,7 @@ export default function GrantRow({
   grant,
   isMe,
   mode,
-  lockReason,
+  locked = false,
   rolePending = false,
   busy = false,
   question,
@@ -38,8 +38,8 @@ export default function GrantRow({
   grant: GrantView;
   isMe: boolean;
   mode: GrantRowMode;
-  /** Why the role and Remove are locked, such as being the only owner. */
-  lockReason?: string;
+  /** The role and Remove can't change, such as for a stack's only owner. */
+  locked?: boolean;
   /** A role change is saving. */
   rolePending?: boolean;
   /** A remove or an Undo is running. */
@@ -89,8 +89,8 @@ export default function GrantRow({
             {isMe && <span className="shrink-0 text-xs text-muted-foreground">you</span>}
           </span>
           {unknown ? (
-            <span title={grant.user_sub} className="truncate text-xs text-muted-foreground">
-              Not in openplan’s user list · <span className="font-mono">{grant.user_sub}</span>
+            <span title={grant.user_sub} className="truncate font-mono text-xs text-muted-foreground">
+              {grant.user_sub}
             </span>
           ) : (
             grant.email && (
@@ -99,7 +99,6 @@ export default function GrantRow({
               </span>
             )
           )}
-          {lockReason && !removed && <span className="text-xs text-muted-foreground">{lockReason}</span>}
         </div>
 
         {mode === "idle" && (
@@ -110,7 +109,7 @@ export default function GrantRow({
                 value={grant.role}
                 onChange={onRoleChange}
                 label={isMe ? "Your role" : `${name}’s role`}
-                disabled={lockReason !== undefined || busy}
+                disabled={locked || busy}
                 pending={rolePending}
                 testId={`role-${grant.user_sub}`}
               />
@@ -121,7 +120,7 @@ export default function GrantRow({
                 type="button"
                 className={cn(buttonClass("icon"), "pointer-coarse:size-11")}
                 aria-label={`Remove ${possessive} access`}
-                disabled={lockReason !== undefined || rolePending || busy}
+                disabled={locked || rolePending || busy}
                 onClick={onRemove}
               >
                 <Trash2 aria-hidden="true" strokeWidth={2.25} className="size-3.5" />

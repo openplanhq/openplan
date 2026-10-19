@@ -71,9 +71,7 @@ export default function StackAccessScreen() {
           { label: "Stacks", to: "/stacks" },
           { label: stackName, to: `/stacks/${stackId}` }
         ]}
-      >
-        <p className="text-meta text-muted-foreground">Who can see and change {stackName}. Platform admins can always manage its access.</p>
-      </PageHeader>
+      />
       <AccessList
         roles={STACK_ROLES}
         copy={{
@@ -82,8 +80,7 @@ export default function StackAccessScreen() {
           restorers: "another owner or a platform admin",
           listLabel: `People with access to ${stackName}`,
           loadError: `Something went wrong while loading who has access to ${stackName}.`,
-          emptyTitle: `No one has access to ${stackName} yet`,
-          emptyLine: `Platform admins can manage it now. Grant someone the owner role so ${stackName} has an owner of its own.`
+          emptyTitle: `No one has access to ${stackName} yet`
         }}
         grants={grants.data}
         status={grants.status}

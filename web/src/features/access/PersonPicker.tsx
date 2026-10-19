@@ -33,7 +33,6 @@ export default function PersonPicker({
   picked,
   onPick,
   disabled = false,
-  describedBy,
   inputId
 }: {
   /** The server search for a query, as a query hook: an empty stack id is the platform's. */
@@ -45,8 +44,6 @@ export default function PersonPicker({
   picked: UserProfile | null;
   onPick: (user: UserProfile | null) => void;
   disabled?: boolean;
-  /** The line under the field that says what to do, and why Grant access waits. */
-  describedBy?: string;
   /** The search input's id, so the screen can return focus to it. */
   inputId?: string;
 }) {
@@ -117,7 +114,6 @@ export default function PersonPicker({
           render={<InputGroupInput />}
           id={inputId}
           aria-label="Search people"
-          aria-describedby={describedBy}
           placeholder="Search people by name or email"
           autoFocus={focusSearch}
           onFocus={() => setOpen(true)}
