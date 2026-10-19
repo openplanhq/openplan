@@ -1,5 +1,5 @@
 /* The page's drawings and their motion. Colours come only from the theme's
-   custom properties; page.test.ts holds this file to that.
+   custom properties.
 
    Without src/alive.ts, or for people who ask for reduced motion, nothing
    here moves or hides: every drawing stands complete. The script adds
