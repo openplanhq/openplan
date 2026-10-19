@@ -78,7 +78,7 @@ function serve({
 
 function auth(): AuthContextValue {
   return {
-    me: { sub: ME, tenant_id: "tenant_123", display_name: "Sam Park", global_capabilities: { can_create_stack: true, can_publish_template: true } },
+    me: { sub: ME, tenant_id: "tenant_123", display_name: "Sam Park", global_capabilities: { can_create_stack: true, can_publish_template: true, can_manage_platform_access: false } },
     status: "authenticated",
     login: () => {},
     logout: () => {}

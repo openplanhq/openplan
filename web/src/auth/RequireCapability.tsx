@@ -21,7 +21,8 @@ export type CapabilityKey = GlobalCapabilityKey | StackCapabilityKey;
 
 const GLOBAL_CAPABILITY_KEYS: readonly GlobalCapabilityKey[] = [
   "can_create_stack",
-  "can_publish_template"
+  "can_publish_template",
+  "can_manage_platform_access"
 ];
 
 function isGlobalCapability(capability: CapabilityKey): capability is GlobalCapabilityKey {
