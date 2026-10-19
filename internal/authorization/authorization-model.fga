@@ -21,6 +21,9 @@ type platform
     define can_create_stack: can_edit
     define can_publish_template: can_edit
     define can_read_template: can_view
+    # Granting and revoking platform roles, and the platform-wide person
+    # search that picking someone for a role needs.
+    define can_manage_platform_access: can_administer
 
 type stack
   relations

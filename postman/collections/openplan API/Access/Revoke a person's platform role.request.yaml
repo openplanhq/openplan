@@ -1,0 +1,17 @@
+$kind: http-request
+description: |-
+  Removes the person's platform role, if they hold one; revoking what
+  isn't held succeeds. Their stack roles are untouched. Revoking the
+  last `admin` is allowed: root remains.
+
+  Removes every platform role platform_grant_sub holds: skipped unless you set it.
+method: DELETE
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/platform/grants/{{platform_grant_sub}}'
+scripts:
+  - type: beforeRequest
+    code: if (!pm.environment.get('platform_grant_sub')) { pm.execution.skipRequest(); }
+    language: text/javascript
+  - type: afterResponse
+    code: pm.test('status is 204', () => pm.response.to.have.status(204));
+    language: text/javascript
+order: 6000

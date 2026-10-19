@@ -17,6 +17,9 @@ type override struct {
 	noBody   bool
 	// query sets query parameter values, and includes optional ones.
 	query map[string]string
+	// pathVars renames a path parameter's variable, for a request that must
+	// not reuse the one an earlier request saved under the parameter's name.
+	pathVars map[string]string
 	// expect replaces the spec's success status, for a request a run cannot
 	// make succeed (the sign-in callback) or one that may legitimately lose a
 	// race (approving a plan someone else already acted on).
@@ -176,7 +179,37 @@ var overrides = map[string]override{
 		expect: []int{201, 200},
 		note:   "Grants a role to the person the search saved. Needs a second person who has signed in once; without one there is nobody to grant a role to.",
 	},
+	// A stack grant only touches the stack the run created. A platform grant
+	// changes what a person may do everywhere, so a run must never aim one at
+	// the colleague the user search happened to find: both requests target
+	// platform_grant_sub instead, which nothing sets, and skip while it is
+	// empty.
+	"assignPlatformRole": {
+		pathVars:   map[string]string{userSubVariable: platformGrantSubVariable},
+		preRequest: skipUnlessPlatformGrantSub,
+		jsonBody:   `{ "role": "viewer" }`,
+		// 201 the first time the person is granted, 200 on every re-run.
+		expect: []int{201, 200},
+		note:   "Changes a real person's platform role: skipped unless you set platform_grant_sub to the sub of someone it is safe to make a platform viewer.",
+	},
+	"revokePlatformRole": {
+		pathVars:   map[string]string{userSubVariable: platformGrantSubVariable},
+		preRequest: skipUnlessPlatformGrantSub,
+		note:       "Removes every platform role platform_grant_sub holds: skipped unless you set it.",
+	},
 }
+
+// userSubVariable holds the person the user search found, for the stack grant
+// requests; platformGrantSubVariable holds the person a platform grant request
+// may change, and nothing sets it.
+const (
+	userSubVariable          = "user_sub"
+	platformGrantSubVariable = "platform_grant_sub"
+)
+
+// skipUnlessPlatformGrantSub keeps a collection run from changing anyone's
+// platform role unless the person running it named who.
+const skipUnlessPlatformGrantSub = "if (!pm.environment.get('" + platformGrantSubVariable + "')) { pm.execution.skipRequest(); }"
 
 // requestTest asserts the expected status, then runs the override's script.
 func requestTest(expected []int, extra string) string {

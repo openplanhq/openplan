@@ -3998,11 +3998,12 @@ func TestMeReturnsIdentityWithGlobalCapabilities(t *testing.T) {
 		tier        string
 		wantCreate  bool
 		wantPublish bool
+		wantManage  bool
 	}{
 		// An administrator holds can_create_stack and can_publish_template
 		// too: the model derives both from can_edit, which can_administer
-		// satisfies.
-		{name: "platform admin", tier: "admin", wantCreate: true, wantPublish: true},
+		// satisfies. Only an administrator manages platform access.
+		{name: "platform admin", tier: "admin", wantCreate: true, wantPublish: true, wantManage: true},
 		{name: "editor", tier: "editor", wantCreate: true, wantPublish: true},
 		{name: "no tier", tier: "", wantCreate: false, wantPublish: false},
 	}
@@ -4035,8 +4036,9 @@ func TestMeReturnsIdentityWithGlobalCapabilities(t *testing.T) {
 				DisplayName        string `json:"display_name"`
 				Email              string `json:"email"`
 				GlobalCapabilities struct {
-					CanCreateStack     bool `json:"can_create_stack"`
-					CanPublishTemplate bool `json:"can_publish_template"`
+					CanCreateStack          bool `json:"can_create_stack"`
+					CanPublishTemplate      bool `json:"can_publish_template"`
+					CanManagePlatformAccess bool `json:"can_manage_platform_access"`
 				} `json:"global_capabilities"`
 				TenantID string `json:"tenant_id"`
 			}
@@ -4060,6 +4062,10 @@ func TestMeReturnsIdentityWithGlobalCapabilities(t *testing.T) {
 			// and RegisterTemplate is the route it would call.
 			if body.GlobalCapabilities.CanPublishTemplate != test.wantPublish {
 				t.Errorf("can_publish_template = %t, want %t", body.GlobalCapabilities.CanPublishTemplate, test.wantPublish)
+			}
+			// The Access nav item and /access are gated on this.
+			if body.GlobalCapabilities.CanManagePlatformAccess != test.wantManage {
+				t.Errorf("can_manage_platform_access = %t, want %t", body.GlobalCapabilities.CanManagePlatformAccess, test.wantManage)
 			}
 			if body.TenantID != string(configuredTenantID) {
 				t.Errorf("tenant_id = %q, want %q", body.TenantID, string(configuredTenantID))

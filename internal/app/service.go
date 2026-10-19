@@ -264,6 +264,32 @@ type RevokeStackRoleCommand struct {
 	UserSub  string
 }
 
+type ListPlatformGrantsCommand struct {
+	TenantID domain.TenantID
+}
+
+type ListPlatformGrantsResult struct {
+	Grants []GrantView
+}
+
+type AssignPlatformRoleCommand struct {
+	TenantID domain.TenantID
+	UserSub  string
+	Role     string
+}
+
+// AssignPlatformRoleResult is AssignStackRoleResult for the platform: Created
+// says the person held no platform role before.
+type AssignPlatformRoleResult struct {
+	Grant   GrantView
+	Created bool
+}
+
+type RevokePlatformRoleCommand struct {
+	TenantID domain.TenantID
+	UserSub  string
+}
+
 // Service owns app use cases and the dependencies wired by cmd packages.
 type Service struct {
 	Authorization            *authorization.Authorization
@@ -1347,7 +1373,7 @@ func (service *Service) SearchUsers(ctx context.Context, command SearchUsersComm
 // as everywhere else.
 func (service *Service) authorizeUserSearch(ctx context.Context, stackID domain.StackID) error {
 	if stackID == "" {
-		return authorizePlatform(ctx, service.Authorization, authorization.RelationCanAdminister)
+		return authorizePlatform(ctx, service.Authorization, authorization.RelationCanManagePlatformAccess)
 	}
 	return authorizeStack(ctx, service.Authorization, stackID, authorization.RelationCanOperate)
 }
@@ -1414,16 +1440,25 @@ func (service *Service) ListStackGrants(ctx context.Context, command ListStackGr
 		return ListStackGrantsResult{}, err
 	}
 
-	// One lookup for every grant on the stack, rather than one per grant. This
-	// read used to be an N+1 of IdP admin API calls, which put the
-	// customer's IdP on the critical path for rendering a list.
+	views, err := service.grantViews(ctx, grants)
+	if err != nil {
+		return ListStackGrantsResult{}, err
+	}
+	return ListStackGrantsResult{Grants: views}, nil
+}
+
+// grantViews resolves each grant's person from the identity projection, for
+// display. One lookup serves every grant, rather than one per grant: this read
+// used to be an N+1 of IdP admin API calls, which put the customer's IdP on
+// the critical path for rendering a list.
+func (service *Service) grantViews(ctx context.Context, grants []authorization.Grant) ([]GrantView, error) {
 	subs := make([]string, 0, len(grants))
 	for _, grant := range grants {
 		subs = append(subs, grant.Subject().ID())
 	}
 	profiles, err := service.Users.UsersBySubs(ctx, subs)
 	if err != nil {
-		return ListStackGrantsResult{}, err
+		return nil, err
 	}
 
 	views := make([]GrantView, 0, len(grants))
@@ -1443,8 +1478,7 @@ func (service *Service) ListStackGrants(ctx context.Context, command ListStackGr
 		}
 		views = append(views, gv)
 	}
-
-	return ListStackGrantsResult{Grants: views}, nil
+	return views, nil
 }
 
 // listGrantsForStack reads every direct role assignment on one stack. The
@@ -1457,6 +1491,66 @@ func (service *Service) ListStackGrants(ctx context.Context, command ListStackGr
 //	stack:abc with no grants  → nil, nil
 func (service *Service) listGrantsForStack(ctx context.Context, object authorization.Object) ([]authorization.Grant, error) {
 	return service.Authorization.ListGrants(ctx, object)
+}
+
+// convergeGrant leaves subject holding exactly desired on object, and runs
+// inside the caller's transaction. Converging rather than delete-then-write
+// means stale roles go and desired is written only when it isn't already
+// held, so the subject is never left with no role in between, and a repeated
+// request writes nothing: OpenFGA refuses a write of a tuple that exists.
+//
+// guard, when set, sees object's grants and the subject's role before
+// anything changes; an error from it leaves both as they were. The role the
+// subject held before is returned, "" for none.
+//
+// Only object's grants are read or changed, so a person's platform role and
+// their stack roles never touch each other.
+func (service *Service) convergeGrant(ctx context.Context, object authorization.Object, subject authorization.Subject, desired authorization.Relation, guard func(grants []authorization.Grant, currentRole string) error) (string, error) {
+	grants, err := service.Authorization.ListGrants(ctx, object)
+	if err != nil {
+		return "", err
+	}
+
+	var held []authorization.Grant
+	currentRole := ""
+	for _, grant := range grants {
+		if grant.Subject().String() == subject.String() {
+			held = append(held, grant)
+			if currentRole == "" {
+				currentRole = grant.Relation().String()
+			}
+		}
+	}
+	if guard != nil {
+		if err := guard(grants, currentRole); err != nil {
+			return currentRole, err
+		}
+	}
+
+	var stale []authorization.Grant
+	alreadyHeld := false
+	for _, grant := range held {
+		if grant.Relation() == desired {
+			alreadyHeld = true
+			continue
+		}
+		stale = append(stale, grant)
+	}
+	if len(stale) > 0 {
+		if err := service.Authorization.Revoke(ctx, stale...); err != nil {
+			return currentRole, err
+		}
+	}
+	if !alreadyHeld {
+		grant, err := authorization.NewGrant(subject, object, desired)
+		if err != nil {
+			return currentRole, err
+		}
+		if err := service.Authorization.Grant(ctx, grant); err != nil {
+			return currentRole, err
+		}
+	}
+	return currentRole, nil
 }
 
 //nolint:gocognit // Authorization logic; split it only as a reviewed refactor.
@@ -1513,61 +1607,26 @@ func (service *Service) AssignStackRole(ctx context.Context, command AssignStack
 	}
 
 	// Everything below runs inside the transaction, including the read the
-	// last-owner guard depends on. Reading outside it would reopen the window
-	// this change exists to close: two concurrent demotions could each observe
-	// two owners, each pass the guard, and leave the stack with none. Inside,
-	// the SELECT … FOR UPDATE the tuple write takes holds until commit, so the
-	// second demotion serializes behind the first and is correctly refused.
+	// last-owner guard depends on, so the guard and the write see one state.
+	// #422: under READ COMMITTED that read takes no lock, so two demotions of
+	// different owners can still both pass it.
 	var currentRole string
 	if err := service.Work.InTx(ctx, func(ctx context.Context, repository TxRepo, _ queue.Enqueuer) error {
-		currentGrants, err := service.listGrantsForStack(ctx, object)
-		if err != nil {
-			return err
-		}
-
-		var held []authorization.Grant
-		ownerCount := 0
-		for _, grant := range currentGrants {
-			if grant.Relation() == authorization.RelationOwner {
-				ownerCount++
-			}
-			if grant.Subject().String() == subject.String() {
-				held = append(held, grant)
-				if currentRole == "" {
-					currentRole = grant.Relation().String()
+		var err error
+		currentRole, err = service.convergeGrant(ctx, object, subject, desired, func(grants []authorization.Grant, currentRole string) error {
+			ownerCount := 0
+			for _, grant := range grants {
+				if grant.Relation() == authorization.RelationOwner {
+					ownerCount++
 				}
 			}
-		}
-
-		if currentRole == authorization.RelationOwner.String() && command.Role != authorization.RelationOwner.String() && ownerCount == 1 {
-			return fmt.Errorf("%w: assign another owner before changing this role", ErrLastOwner)
-		}
-
-		// Converge rather than delete-then-write: stale roles go, the desired
-		// one is written only when it is not already held, and the whole thing
-		// is one transaction, so there is no window where the user holds none.
-		var stale []authorization.Grant
-		alreadyHeld := false
-		for _, grant := range held {
-			if grant.Relation() == desired {
-				alreadyHeld = true
-				continue
+			if currentRole == authorization.RelationOwner.String() && command.Role != authorization.RelationOwner.String() && ownerCount == 1 {
+				return fmt.Errorf("%w: assign another owner before changing this role", ErrLastOwner)
 			}
-			stale = append(stale, grant)
-		}
-		if len(stale) > 0 {
-			if err := service.Authorization.Revoke(ctx, stale...); err != nil {
-				return err
-			}
-		}
-		if !alreadyHeld {
-			grant, err := authorization.NewGrant(subject, object, desired)
-			if err != nil {
-				return err
-			}
-			if err := service.Authorization.Grant(ctx, grant); err != nil {
-				return err
-			}
+			return nil
+		})
+		if err != nil {
+			return err
 		}
 
 		return repository.AppendAuditEvent(ctx, domain.SecurityAuditEvent{
@@ -1673,6 +1732,162 @@ func (service *Service) RevokeStackRole(ctx context.Context, command RevokeStack
 		return fmt.Errorf("revoke stack role: %w", err)
 	}
 
+	return nil
+}
+
+// platformRoles are the roles the platform grants. GrantRelation admits the
+// stack roles as well, and OpenFGA would refuse an owner on the platform only
+// at the write, as a server error; checking here makes it the caller's 400.
+// root is not among them: it comes from OPENPLAN_ROOT_SUBJECT at boot.
+var platformRoles = []authorization.Relation{
+	authorization.RelationAdmin,
+	authorization.RelationEditor,
+	authorization.RelationViewer,
+}
+
+// ListPlatformGrants lists who holds a platform role. Root is not among them:
+// it is structure, not a grant, and ListGrants skips it.
+func (service *Service) ListPlatformGrants(ctx context.Context, command ListPlatformGrantsCommand) (ListPlatformGrantsResult, error) {
+	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanManagePlatformAccess); err != nil {
+		return ListPlatformGrantsResult{}, err
+	}
+	if err := service.requireUserRepository(); err != nil {
+		return ListPlatformGrantsResult{}, err
+	}
+	grants, err := service.Authorization.ListGrants(ctx, authorization.Platform)
+	if err != nil {
+		return ListPlatformGrantsResult{}, err
+	}
+	views, err := service.grantViews(ctx, grants)
+	if err != nil {
+		return ListPlatformGrantsResult{}, err
+	}
+	return ListPlatformGrantsResult{Grants: views}, nil
+}
+
+// AssignPlatformRole sets one person's platform role, as AssignStackRole does
+// for a stack, with no last-admin guard: root can't be revoked through the
+// API, so the platform stays administrable whoever gives up admin.
+func (service *Service) AssignPlatformRole(ctx context.Context, command AssignPlatformRoleCommand) (AssignPlatformRoleResult, error) {
+	principal, err := requirePrincipal(ctx)
+	if err != nil {
+		return AssignPlatformRoleResult{}, err
+	}
+	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanManagePlatformAccess); err != nil {
+		return AssignPlatformRoleResult{}, err
+	}
+
+	// Role and sub are checked together, so one response reports both.
+	desired, roleErr := authorization.GrantRelation(command.Role)
+	subject, subErr := authorization.SubjectFromOIDCSub(command.UserSub)
+	var problems []error
+	if roleErr != nil || !slices.Contains(platformRoles, desired) {
+		problems = append(problems, fieldError(ErrInvalidCommand, IssueUnsupported, "role must be one the platform can grant", "role"))
+	}
+	if subErr != nil {
+		problems = append(problems, fieldError(ErrInvalidCommand, IssueInvalidFormat, "user_sub is not a valid subject", "user_sub"))
+	}
+	if len(problems) > 0 {
+		return AssignPlatformRoleResult{}, errors.Join(problems...)
+	}
+
+	if service.Work == nil {
+		return AssignPlatformRoleResult{}, fmt.Errorf("unit of work not configured")
+	}
+	if err := service.requireUserRepository(); err != nil {
+		return AssignPlatformRoleResult{}, err
+	}
+	// Someone who has never signed in has no projected row, and can't be
+	// granted anything, here as on a stack.
+	profiles, err := service.Users.UsersBySubs(ctx, []string{command.UserSub})
+	if err != nil {
+		return AssignPlatformRoleResult{}, err
+	}
+	target, known := profiles[command.UserSub]
+	if !known {
+		return AssignPlatformRoleResult{}, fieldError(ErrUserNotProvisioned, IssueNotSignedIn,
+			"that person hasn't signed in to openplan yet; they need to sign in once before a role can be granted", "user_sub")
+	}
+
+	var currentRole string
+	if err := service.Work.InTx(ctx, func(ctx context.Context, repository TxRepo, _ queue.Enqueuer) error {
+		var err error
+		currentRole, err = service.convergeGrant(ctx, authorization.Platform, subject, desired, nil)
+		if err != nil {
+			return err
+		}
+		return repository.AppendAuditEvent(ctx, domain.SecurityAuditEvent{
+			ActorSubject: principal.Subject,
+			Action:       domain.AuditActionGrant,
+			TargetUser:   command.UserSub,
+			TenantID:     command.TenantID,
+			OldRole:      currentRole,
+			NewRole:      command.Role,
+			Outcome:      domain.AuditOutcomeSuccess,
+		})
+	}); err != nil {
+		return AssignPlatformRoleResult{}, fmt.Errorf("assign platform role: %w", err)
+	}
+
+	return AssignPlatformRoleResult{
+		Grant: GrantView{
+			UserSub:     command.UserSub,
+			Role:        command.Role,
+			DisplayName: strval.FirstNonEmpty(target.DisplayName, command.UserSub),
+			Email:       target.Email,
+		},
+		Created: currentRole == "",
+	}, nil
+}
+
+// RevokePlatformRole removes every platform role the person holds. Revoking
+// what isn't held is not an error: they already have no platform role, which
+// is what the caller asked for.
+func (service *Service) RevokePlatformRole(ctx context.Context, command RevokePlatformRoleCommand) error {
+	principal, err := requirePrincipal(ctx)
+	if err != nil {
+		return err
+	}
+	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanManagePlatformAccess); err != nil {
+		return err
+	}
+	if service.Work == nil {
+		return fmt.Errorf("unit of work not configured")
+	}
+	subject, err := authorization.SubjectFromOIDCSub(command.UserSub)
+	if err != nil {
+		return fmt.Errorf("%w: invalid user sub", ErrInvalidCommand)
+	}
+
+	if err := service.Work.InTx(ctx, func(ctx context.Context, repository TxRepo, _ queue.Enqueuer) error {
+		grants, err := service.Authorization.ListGrants(ctx, authorization.Platform)
+		if err != nil {
+			return err
+		}
+		var held []authorization.Grant
+		for _, grant := range grants {
+			if grant.Subject().String() == subject.String() {
+				held = append(held, grant)
+			}
+		}
+		oldRole := ""
+		if len(held) > 0 {
+			if err := service.Authorization.Revoke(ctx, held...); err != nil {
+				return err
+			}
+			oldRole = held[0].Relation().String()
+		}
+		return repository.AppendAuditEvent(ctx, domain.SecurityAuditEvent{
+			ActorSubject: principal.Subject,
+			Action:       domain.AuditActionRevoke,
+			TargetUser:   command.UserSub,
+			TenantID:     command.TenantID,
+			OldRole:      oldRole,
+			Outcome:      domain.AuditOutcomeSuccess,
+		})
+	}); err != nil {
+		return fmt.Errorf("revoke platform role: %w", err)
+	}
 	return nil
 }
 

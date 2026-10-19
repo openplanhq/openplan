@@ -332,7 +332,7 @@ func TestResolvePlatformCapabilitiesMapsEachRelationPositionally(t *testing.T) {
 		{authorization.RelationEditor, PlatformCapabilities{CanCreateStack: true, CanPublishTemplate: true}},
 		{
 			authorization.RelationAdmin,
-			PlatformCapabilities{CanCreateStack: true, CanPublishTemplate: true},
+			PlatformCapabilities{CanCreateStack: true, CanPublishTemplate: true, CanManagePlatformAccess: true},
 		},
 	}
 

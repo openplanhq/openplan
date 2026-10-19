@@ -174,6 +174,9 @@ func buildRequest(doc *specDoc, method, path string, pathParams *yaml.Node, op *
 		path:        pathParameter.ReplaceAllString(path, "{{$1}}"),
 		noRedirect:  extra.noRedirect,
 	}
+	for parameter, variable := range extra.pathVars {
+		req.path = strings.ReplaceAll(req.path, "{{"+parameter+"}}", "{{"+variable+"}}")
+	}
 	if req.name == "" {
 		return request{}, fmt.Errorf("%s %s has no summary", method, path)
 	}

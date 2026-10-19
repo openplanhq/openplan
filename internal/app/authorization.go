@@ -316,8 +316,9 @@ func (service *Service) operableStackTemplate(
 // field names keep the wire contract the web client already reads; what
 // changed is where the answers come from.
 type PlatformCapabilities struct {
-	CanCreateStack     bool
-	CanPublishTemplate bool
+	CanCreateStack          bool
+	CanPublishTemplate      bool
+	CanManagePlatformAccess bool
 }
 
 // platformCapabilityRelations is the order a platform BatchCheck is built in,
@@ -327,12 +328,14 @@ type PlatformCapabilities struct {
 var platformCapabilityRelations = []authorization.Relation{
 	authorization.RelationCanCreateStack,
 	authorization.RelationCanPublishTemplate,
+	authorization.RelationCanManagePlatformAccess,
 }
 
 func platformCapabilitiesFrom(results []bool) PlatformCapabilities {
 	return PlatformCapabilities{
-		CanCreateStack:     results[0],
-		CanPublishTemplate: results[1],
+		CanCreateStack:          results[0],
+		CanPublishTemplate:      results[1],
+		CanManagePlatformAccess: results[2],
 	}
 }
 

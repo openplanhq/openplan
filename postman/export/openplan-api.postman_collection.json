@@ -1288,7 +1288,7 @@
     },
     {
       "name": "Access",
-      "description": "Per-stack role grants.",
+      "description": "Role grants, per stack and on the platform.",
       "item": [
         {
           "name": "List role grants on a stack",
@@ -1401,6 +1401,136 @@
                 "{{user_sub}}"
               ]
             }
+          }
+        },
+        {
+          "name": "List platform role grants",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () =\u003e pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/platform/grants",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "{{tenant_id}}",
+                "platform",
+                "grants"
+              ]
+            },
+            "description": "Who holds a platform role. Root is not listed: it comes from\n`OPENPLAN_ROOT_SUBJECT` at boot and is not a grant this API manages.\nNeeds `can_manage_platform_access`, which platform administrators\nand root hold."
+          }
+        },
+        {
+          "name": "Set a person's platform role",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.environment.get('platform_grant_sub')) { pm.execution.skipRequest(); }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is one of 201, 200', () =\u003e pm.expect(pm.response.code).to.be.oneOf([201, 200]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"role\": \"viewer\" }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/platform/grants/{{platform_grant_sub}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "{{tenant_id}}",
+                "platform",
+                "grants",
+                "{{platform_grant_sub}}"
+              ]
+            },
+            "description": "Creates the person's platform grant, or replaces whatever platform\nrole they already held: one person has at most one. Answers `201`\nwhen the person held no platform role before, and `200` when the call\nchanged or kept the role they had. The person is named by the path\nonly; a body that also sends `user_sub` is refused as an unknown\nfield (`400 malformed-body`).\n\nThe person must have signed in to openplan at least once, as for a\nstack grant (`422`, `#/user_sub`, `not_signed_in`). Their stack roles\nare untouched.\n\nThere is no last-admin guard: root can't be granted or revoked here,\nso the platform stays administrable whoever gives up `admin`. The\nrole is written in the request's own transaction, so it is in effect\nwhen the response arrives.\n\nChanges a real person's platform role: skipped unless you set platform_grant_sub to the sub of someone it is safe to make a platform viewer."
+          }
+        },
+        {
+          "name": "Revoke a person's platform role",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.environment.get('platform_grant_sub')) { pm.execution.skipRequest(); }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 204', () =\u003e pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/platform/grants/{{platform_grant_sub}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "{{tenant_id}}",
+                "platform",
+                "grants",
+                "{{platform_grant_sub}}"
+              ]
+            },
+            "description": "Removes the person's platform role, if they hold one; revoking what\nisn't held succeeds. Their stack roles are untouched. Revoking the\nlast `admin` is allowed: root remains.\n\nRemoves every platform role platform_grant_sub holds: skipped unless you set it."
           }
         }
       ]
