@@ -31,7 +31,7 @@ resource "aws_subnet" "public" {
   availability_zone = local.azs[count.index]
   cidr_block        = cidrsubnet(var.vpc_cidr, 4, count.index)
 
-  tags = { Name = "${var.name}-public-${local.azs[count.index]}" }
+  tags = { Name = "${var.name}-public-${local.azs[count.index]}", Tier = "public" }
 }
 
 # Private: the ECS instance, every task and RDS. Tasks run in awsvpc mode, and
@@ -43,7 +43,7 @@ resource "aws_subnet" "private" {
   availability_zone = local.azs[count.index]
   cidr_block        = cidrsubnet(var.vpc_cidr, 4, count.index + 8)
 
-  tags = { Name = "${var.name}-private-${local.azs[count.index]}" }
+  tags = { Name = "${var.name}-private-${local.azs[count.index]}", Tier = "private" }
 }
 
 resource "aws_route_table" "public" {

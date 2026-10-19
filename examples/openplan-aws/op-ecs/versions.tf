@@ -1,5 +1,12 @@
 terraform {
-  required_version = ">= 1.6"
+  # 1.10 for S3 native state locking (use_lockfile), so no DynamoDB table.
+  required_version = ">= 1.10"
+
+  # Bucket, region and locking come from ../backend.hcl, which state/ writes:
+  # terraform init -backend-config=../backend.hcl
+  backend "s3" {
+    key = "op-ecs/terraform.tfstate"
+  }
 
   required_providers {
     aws = {
@@ -13,22 +20,12 @@ terraform {
   }
 }
 
-# network/ is applied first, from the sibling directory, with local state.
-# Switch both to a remote backend before more than one person applies this.
-data "terraform_remote_state" "network" {
-  backend = "local"
-
-  config = {
-    path = "${path.module}/../network/terraform.tfstate"
-  }
-}
-
 provider "aws" {
-  region = data.terraform_remote_state.network.outputs.region
+  region = var.region
 
   default_tags {
     tags = {
-      Project = data.terraform_remote_state.network.outputs.name
+      Project = var.name
     }
   }
 }

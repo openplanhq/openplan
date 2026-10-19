@@ -1,3 +1,20 @@
+variable "region" {
+  description = "Region network/ was applied in."
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "name" {
+  description = "The name network/ was applied with: its resources are found by it."
+  type        = string
+  default     = "openplan"
+}
+
+variable "domain_name" {
+  description = "The zone network/ created. openplan is served at its apex."
+  type        = string
+}
+
 variable "openplan_version" {
   description = "Release tag of the openplan images (ghcr.io/openplanhq/openplan-{api,executor,web}). Needs a release with the gVisor executor."
   type        = string

@@ -3,12 +3,6 @@
 # in a task definition. They do sit in Terraform state, which is why the state
 # must be treated as a secret too.
 
-locals {
-  network = data.terraform_remote_state.network.outputs
-  name    = local.network.name
-  domain  = local.network.domain_name
-}
-
 # No special characters: these end up inside URLs (DATABASE_URL, VALKEY_URL),
 # and a Valkey password is also one word of an ACL rule.
 resource "random_password" "db" {
