@@ -1,7 +1,7 @@
 variable "region" {
-  description = "Region of the state bucket. Need not match where openplan runs."
+  description = "Region of the state bucket. Must match the region in every module's backend block. Need not match where openplan runs."
   type        = string
-  default     = "us-east-1"
+  default     = "eu-central-1"
 }
 
 variable "name" {

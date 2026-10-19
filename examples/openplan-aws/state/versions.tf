@@ -9,7 +9,8 @@ terraform {
   # After that it's like the other two modules:
   # terraform init -backend-config=../backend.hcl
   backend "s3" {
-    key = "state/terraform.tfstate"
+    key    = "state/terraform.tfstate"
+    region = "eu-central-1"
   }
 
   required_providers {

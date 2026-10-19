@@ -66,15 +66,14 @@ resource "aws_s3_bucket_policy" "state" {
   depends_on = [aws_s3_bucket_public_access_block.state]
 }
 
-# The backend settings the other two modules share, so neither needs the
-# bucket's generated name typed in: `terraform init -backend-config=../backend.hcl`.
-# Each module sets its own key in its backend block.
+# The backend settings all three modules share, so none needs the bucket's
+# generated name typed in: `terraform init -backend-config=../backend.hcl`.
+# Each module sets its own key, and the region, in its backend block.
 resource "local_file" "backend_config" {
   filename        = "${path.module}/../backend.hcl"
   file_permission = "0644"
   content         = <<-EOT
     bucket       = "${aws_s3_bucket.state.bucket}"
-    region       = "${var.region}"
     encrypt      = true
     use_lockfile = true
   EOT
