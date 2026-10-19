@@ -4,6 +4,7 @@ import {
   addTemplateToStack,
   ApiRequestError,
   approveRun,
+  assignPlatformRole,
   assignStackRole,
   discardRun,
   createStack,
@@ -11,11 +12,14 @@ import {
   getTemplateRunByNumber,
   getTemplateRunLog,
   listAll,
+  listPlatformGrants,
   listStacks,
   listTemplateRevisions,
   listTemplateRuns,
   logout,
   registerTemplate,
+  revokePlatformRole,
+  searchUsers,
   ssoLoginURL,
   startTemplateRun,
   templateRunLogEventsURL,
@@ -281,6 +285,35 @@ describe("api client", () => {
       "/v1/tenants/tenant_123/stacks/stack_123/grants/u%2F3",
       expect.objectContaining({ method: "PUT", body: JSON.stringify({ role: "viewer" }) })
     );
+  });
+
+  it("lists, sets and revokes platform roles at the platform's grant paths", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock.mockResolvedValueOnce(jsonResponse({ items: [{ user_sub: "u/3", role: "admin", display_name: "Sam", email: "" }], next_cursor: null }));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ user_sub: "u/3", role: "editor", display_name: "", email: "" }));
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    await expect(listPlatformGrants("tenant_123")).resolves.toEqual([{ user_sub: "u/3", role: "admin", display_name: "Sam", email: "" }]);
+    await assignPlatformRole("tenant_123", "u/3", { role: "editor" });
+    await revokePlatformRole("tenant_123", "u/3");
+
+    expect(fetchMock.mock.calls[0][0]).toBe("/v1/tenants/tenant_123/platform/grants");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/v1/tenants/tenant_123/platform/grants/u%2F3",
+      expect.objectContaining({ method: "PUT", body: JSON.stringify({ role: "editor" }) })
+    );
+    expect(fetchMock).toHaveBeenCalledWith("/v1/tenants/tenant_123/platform/grants/u%2F3", expect.objectContaining({ method: "DELETE" }));
+  });
+
+  // No stack means the platform search, so no empty stack_id rides along.
+  it("searches the platform when no stack is named", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => jsonResponse({ items: [], next_cursor: null }));
+
+    await searchUsers("tenant_123", "", "sam", { limit: 20 });
+    await searchUsers("tenant_123", "stack_1", "sam", { limit: 20 });
+
+    expect(fetchMock.mock.calls[0][0]).toBe("/v1/tenants/tenant_123/users/search?q=sam&limit=20");
+    expect(fetchMock.mock.calls[1][0]).toBe("/v1/tenants/tenant_123/users/search?q=sam&limit=20&stack_id=stack_1");
   });
 
   // The API serves every error as application/problem+json, which a check

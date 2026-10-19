@@ -72,7 +72,7 @@ export function authValue(canPublishTemplate = true): AuthContextValue {
       sub: "user_1",
       tenant_id: TENANT,
       display_name: "Test User",
-      global_capabilities: { can_create_stack: false, can_publish_template: canPublishTemplate }
+      global_capabilities: { can_create_stack: false, can_publish_template: canPublishTemplate, can_manage_platform_access: false }
     },
     status: "authenticated",
     login: () => {},

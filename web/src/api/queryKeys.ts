@@ -20,6 +20,7 @@ export const queryKeys = {
     ["templateRunLogs", tenantID, runID, statusTag] as const,
   templateRunLog: (tenantID: string, runID: string, name: string) => ["templateRunLog", tenantID, runID, name] as const,
   stackGrants: (tenantID: string, stackID: string) => ["stackGrants", tenantID, stackID] as const,
+  platformGrants: (tenantID: string) => ["platformGrants", tenantID] as const,
   // The query stays at [2]: useSearchUsersQuery's placeholder reads it there.
   userSearch: (tenantID: string, stackID: string, query: string) => ["userSearch", tenantID, query, stackID] as const
 };

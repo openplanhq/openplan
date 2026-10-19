@@ -323,14 +323,36 @@ export function revokeStackRole(tenantID: string, stackID: string, userSub: stri
   });
 }
 
+// Who holds a platform role. Root isn't among them: the server sets it from
+// OPENPLAN_ROOT_SUBJECT and never lists it as a grant.
+export function listPlatformGrants(tenantID: string): Promise<GrantView[]> {
+  return listItems(`/v1/tenants/${encodeURIComponent(tenantID)}/platform/grants`);
+}
+
+// assignPlatformRole sets userSub's platform role, creating the grant or
+// replacing the role they hold, as assignStackRole does for a stack.
+export function assignPlatformRole(tenantID: string, userSub: string, body: AssignStackRoleBody): Promise<GrantView> {
+  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/platform/grants/${encodeURIComponent(userSub)}`, {
+    method: "PUT",
+    body: JSON.stringify(body)
+  });
+}
+
+export function revokePlatformRole(tenantID: string, userSub: string): Promise<void> {
+  return requestNoContent(`/v1/tenants/${encodeURIComponent(tenantID)}/platform/grants/${encodeURIComponent(userSub)}`, {
+    method: "DELETE"
+  });
+}
+
 /**
- * One page of the people whose name or email matches q, ordered by name. The
- * search is for one stack: naming it is what lets an operator or above, not
- * only a platform administrator, search.
+ * One page of the people whose name or email matches q, ordered by name.
+ * With a stack, the search is for that stack: naming it is what lets an
+ * operator or above, not only a platform administrator, search. Without one
+ * it searches the platform, which only people who manage platform access may.
  */
 export function searchUsers(tenantID: string, stackID: string, q: string, options: PageOptions = {}): Promise<ListPage<UserProfile>> {
   const query = pageQuery({ ...options, q });
-  const stack = `${query === "" ? "?" : "&"}stack_id=${encodeURIComponent(stackID)}`;
+  const stack = stackID === "" ? "" : `${query === "" ? "?" : "&"}stack_id=${encodeURIComponent(stackID)}`;
   return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/users/search${query}${stack}`);
 }
 

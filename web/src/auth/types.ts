@@ -13,6 +13,9 @@ export interface Me {
     /** Registering a template — which is also what the detail screen's Sync
         button posts, so it gates that button too. */
     can_publish_template: boolean;
+    /** Granting and revoking platform roles on /access. Platform admins
+        and root hold it. */
+    can_manage_platform_access: boolean;
   };
   /** RFC 3339. When the session's ID token expires. */
   session_expires_at?: string;
