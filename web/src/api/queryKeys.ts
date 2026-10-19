@@ -18,6 +18,9 @@ export const queryKeys = {
     ["templateRunByNumber", tenantID, stackTemplateID, runNumber] as const,
   templateRunLogs: (tenantID: string, runID: string, statusTag: string) =>
     ["templateRunLogs", tenantID, runID, statusTag] as const,
+  // The list is recorded once, when the plan finishes, so the key carries
+  // its state: it is read again only when that moves.
+  templateRunChanges: (tenantID: string, runID: string, state: string) => ["templateRunChanges", tenantID, runID, state] as const,
   templateRunLog: (tenantID: string, runID: string, name: string) => ["templateRunLog", tenantID, runID, name] as const,
   stackGrants: (tenantID: string, stackID: string) => ["stackGrants", tenantID, stackID] as const,
   // The query stays at [2]: useSearchUsersQuery's placeholder reads it there.

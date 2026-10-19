@@ -5,6 +5,7 @@ import { useParams } from "react-router-dom";
 import {
   useApproveRunMutation,
   useDiscardRunMutation,
+  useTemplateRunChangesQuery,
   useTemplateRunByNumberQuery,
   useTemplateRunLogsQuery,
   useTemplateRunQuery,
@@ -22,7 +23,11 @@ import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import { cn } from "@/lib/utils";
 import PanelTrail from "../stacks/PanelTrail";
 import { stackTemplatePath } from "../stacks/templateSelection";
+import RunChanges, { RunViewFrame } from "./RunChanges";
 import RunLogsPanel from "./RunLogsPanel";
+import { defaultRunView } from "./planChanges";
+import type { RunView } from "./planChanges";
+import SegmentedControl from "../../shared/SegmentedControl";
 import { runProgressTag } from "./runIndicator";
 import RunStatusLabel from "./RunStatusLabel";
 import WaitingRunActions from "./WaitingRunActions";
@@ -61,6 +66,12 @@ export default function RunDetailScreen() {
   const progressTag = run ? runProgressTag(run) : "";
   const logsQuery = useTemplateRunLogsQuery(tenantID, runId, progressTag);
 
+  const changesQuery = useTemplateRunChangesQuery(tenantID, runId, run?.plan_changes?.state ?? "");
+  // The view the person picked holds while the run polls; until they pick,
+  // the run's state picks. Keyed on the run, so another run starts fresh.
+  const [picked, setPicked] = useState<{ runId: string; view: RunView } | null>(null);
+  const view: RunView = picked?.runId === runId ? picked.view : run ? defaultRunView(run) : "logs";
+
   const approveRunMutation = useApproveRunMutation(tenantID);
   const discardRunMutation = useDiscardRunMutation(tenantID);
 
@@ -87,6 +98,46 @@ export default function RunDetailScreen() {
     await runAction(async () => {
       await discardRunMutation.mutateAsync({ runID: runId, body: { reason: "discarded from run detail" } });
     });
+  }
+
+  // The switch appears once the run has loaded; the logs show before that,
+  // as they always have. Both views sit under the same toolbar row, so
+  // switching never moves the switch.
+  const toolbar = run && (
+    <SegmentedControl
+      label="Run views"
+      value={view}
+      onChange={(next) => setPicked({ runId, view: next })}
+      options={[
+        { value: "changes", label: "Changes" },
+        { value: "logs", label: "Logs" }
+      ]}
+    />
+  );
+  const logsPanel = (
+    <RunLogsPanel
+      key={runId}
+      runId={runId}
+      logs={logsQuery.data}
+      executions={run?.executions}
+      failed={logsQuery.isError}
+      finished={Boolean(run && isTerminalRunStatus(run.status))}
+    />
+  );
+  let runView = logsPanel;
+  if (run && view === "changes") {
+    runView = (
+      <RunChanges
+        key={runId}
+        run={run}
+        changes={changesQuery.data}
+        failed={changesQuery.isError}
+        onRetry={() => void changesQuery.refetch()}
+        toolbar={toolbar}
+      />
+    );
+  } else if (run) {
+    runView = <RunViewFrame toolbar={toolbar}>{logsPanel}</RunViewFrame>;
   }
 
   const trail = (
@@ -187,14 +238,7 @@ export default function RunDetailScreen() {
           {run.error_summary && <ErrorLine live={false}>{run.error_summary}</ErrorLine>}
         </>
       )}
-      <RunLogsPanel
-        key={runId}
-        runId={runId}
-        logs={logsQuery.data}
-        executions={run?.executions}
-        failed={logsQuery.isError}
-        finished={Boolean(run && isTerminalRunStatus(run.status))}
-      />
+      {runView}
     </section>
   );
 }

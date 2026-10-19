@@ -1,6 +1,6 @@
 import { Fragment, useId, useState } from "react";
 import type { ReactNode } from "react";
-import { Ban, FileText, SquareTerminal, TriangleAlert } from "lucide-react";
+import { Ban, FileText, TriangleAlert } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { templateRunLogEventsURL } from "../../api/client";
 import { useTemplateRunLogQuery } from "../../api/queries";
@@ -71,8 +71,9 @@ export default function RunLogsPanel({ runId, logs, executions, failed, finished
 
   return (
     <section aria-labelledby={headingId} className="overflow-hidden rounded-lg border" data-testid="run-logs-panel">
-      <h4 id={headingId} className="flex items-center gap-2 border-b border-divider px-4 py-3 text-sm font-semibold">
-        <SquareTerminal className="size-4 text-subtle-foreground" aria-hidden="true" />
+      {/* The run's Changes/Logs switch names this view already, so the
+          heading is for assistive technology only. */}
+      <h4 id={headingId} className="sr-only">
         Logs
       </h4>
       {content}
