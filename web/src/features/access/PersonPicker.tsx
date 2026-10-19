@@ -163,7 +163,7 @@ function PersonChoice({ user, query, roles, held, isMe }: { user: UserProfile; q
         <span className={cn("truncate text-sm leading-label font-medium", held ? "text-muted-foreground" : "text-foreground")}>
           {lead > 0 && <mark className="bg-transparent font-semibold text-foreground">{user.display_name.slice(0, lead)}</mark>}
           {user.display_name.slice(lead)}
-          {isMe && <span className="ml-2 text-xs font-normal text-muted-foreground">you</span>}
+          {isMe && <span className="font-normal text-muted-foreground"> (you)</span>}
         </span>
         {user.email && <span className="truncate text-xs text-muted-foreground">{user.email}</span>}
       </span>

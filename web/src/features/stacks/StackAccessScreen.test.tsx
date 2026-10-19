@@ -128,7 +128,8 @@ describe("StackAccessScreen", () => {
     renderScreen();
     await screen.findByTestId("grant-mei");
     expect(names()).toEqual(["Priya Raman", "Sam Park", "Lena Novak", "Alex Kim", "Mei Chen"]);
-    expect(within(row(ME)).getByText("you")).toBeTruthy();
+    // "Name (you)": the marker joins the name (owner's pick, 2026-10-19).
+    expect(row(ME).querySelector("span span")?.parentElement?.textContent).toBe("Sam Park (you)");
     expect(screen.getByTestId("page-count").textContent).toBe("5");
     expect(screen.getByRole("heading", { level: 1, name: "Access" })).toBeTruthy();
     // No line explains what the screen already shows (owner, 2026-10-19).
@@ -265,6 +266,17 @@ describe("StackAccessScreen", () => {
     await user.click(screen.getByRole("button", { name: "Grant access" }));
     await waitFor(() => expect(writes(sent)).toEqual(["PUT lee viewer"]));
     await screen.findByTestId("grant-lee");
+  });
+
+  it("marks you in the picker as it does in the list", async () => {
+    serve({ users: [{ sub: ME, display_name: "Sam Park", email: "sam@acme.example" }] });
+    const user = userEvent.setup();
+    renderScreen();
+    await screen.findByTestId("grant-mei");
+    await user.type(screen.getByTestId("person-search"), "sa");
+    const me = await screen.findByRole("option", { name: /Sam Park/ });
+    expect(me.textContent).toContain("Sam Park (you)");
+    expect(me.getAttribute("aria-disabled")).toBe("true");
   });
 
   it("names someone openplan has no record of", async () => {

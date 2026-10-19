@@ -82,11 +82,19 @@ export default function GrantRow({
     <li className={cn("border-t border-divider first:border-t-0", mode === "confirm" && "bg-canvas")} data-testid={`grant-${grant.user_sub}`}>
       <div className="flex min-h-14 items-center gap-4 py-2 pr-3 pl-5">
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="flex min-w-0 items-baseline gap-2">
+          <span className="flex min-w-0 items-baseline">
             <span title={name} className={cn("truncate text-sm leading-label font-medium", removed ? "text-subtle-foreground" : unknown ? "text-muted-foreground" : "text-foreground")}>
               {name}
             </span>
-            {isMe && <span className="shrink-0 text-xs text-muted-foreground">you</span>}
+            {/* "Name (you)", the way share lists mark you (owner's pick,
+                2026-10-19): the name's size, normal weight, muted, joined
+                by a plain space so it reads as part of the name. It never
+                shrinks, so a long name is cut before it. */}
+            {isMe && (
+              <span className={cn("shrink-0 text-sm leading-label whitespace-pre", removed ? "text-subtle-foreground" : "text-muted-foreground")}>
+                {" (you)"}
+              </span>
+            )}
           </span>
           {unknown ? (
             <span title={grant.user_sub} className="truncate font-mono text-xs text-muted-foreground">
