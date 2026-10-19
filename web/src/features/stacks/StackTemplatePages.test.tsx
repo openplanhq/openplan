@@ -12,7 +12,7 @@ import type { StackTemplate, StackView, TemplateRevision, TemplateRun, TemplateV
 import type { StackCapabilities } from "../../auth/types";
 import RunDetailScreen from "../runs/RunDetailScreen";
 import TemplatePanel from "./TemplatePanel";
-import TemplateCredentialsTab from "./TemplateCredentialsTab";
+import TemplateEnvironmentTab from "./TemplateEnvironmentTab";
 import TemplateRunsTab from "./TemplateRunsTab";
 import TemplateSettingsTab from "./TemplateSettingsTab";
 import TemplateVariablesTab from "./TemplateVariablesTab";
@@ -165,8 +165,8 @@ function renderAt(queryClient: QueryClient, initialEntry: string, auth?: AuthCon
               <Route path="runs" element={<TemplateRunsTab />} />
               <Route path="runs/:runNumber" element={<RunDetailScreen />} />
               <Route path="variables" element={<TemplateVariablesTab />} />
-              <Route path="credentials" element={<RequireCapability capability="can_manage_access" mode="route" />}>
-                <Route index element={<TemplateCredentialsTab />} />
+              <Route path="environment" element={<RequireCapability capability="can_manage_access" mode="route" />}>
+                <Route index element={<TemplateEnvironmentTab />} />
               </Route>
               <Route path="settings" element={<TemplateSettingsTab />} />
             </Route>
@@ -208,14 +208,14 @@ describe("TemplatePanel", () => {
     expect(screen.getByTestId("stack-template-missing")).toBeTruthy();
   });
 
-  it("hides the Credentials tab without can_manage_access", async () => {
+  it("hides the Environment tab without can_manage_access", async () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient, { ...allAllowed, can_manage_access: false });
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/runs");
 
     await waitFor(() => expect(screen.getByTestId("template-runs-tab")).toBeTruthy());
-    expect(screen.queryByRole("link", { name: "Credentials" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Environment" })).toBeNull();
     expect(screen.getByRole("link", { name: "Settings" })).toBeTruthy();
   });
 
@@ -509,8 +509,8 @@ describe("editing while a run is in flight", () => {
   });
 });
 
-describe("TemplateCredentialsTab", () => {
-  it("shows only this template's credentials, under the note on what they override", () => {
+describe("TemplateEnvironmentTab", () => {
+  it("shows only this template's environment, under the note on what they override", () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);
     queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), [
@@ -520,7 +520,7 @@ describe("TemplateCredentialsTab", () => {
       { id: "template_credential", name: "TEMPLATE_ONLY", scope: "stack_template", created_at: "2026-07-19T00:00:00Z" }
     ]);
 
-    renderAt(queryClient, "/stacks/stack_1/templates/st_1/credentials");
+    renderAt(queryClient, "/stacks/stack_1/templates/st_1/environment");
 
     expect(screen.getByText("TEMPLATE_ONLY")).toBeTruthy();
     expect(screen.queryByText("STACK_ONLY")).toBeNull();
@@ -528,21 +528,21 @@ describe("TemplateCredentialsTab", () => {
     expect(screen.getByRole("button", { name: "Delete TEMPLATE_ONLY" })).toBeTruthy();
   });
 
-  it("says its runs use the stack environment when it has no credentials of its own", () => {
+  it("says its runs use the stack environment when it has no overrides of its own", () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);
     queryClient.setQueryData(queryKeys.stackTemplateCredentials("tenant_123", "st_1"), []);
 
-    renderAt(queryClient, "/stacks/stack_1/templates/st_1/credentials");
+    renderAt(queryClient, "/stacks/stack_1/templates/st_1/environment");
 
-    expect(screen.getByText("No credentials for this template")).toBeTruthy();
+    expect(screen.getByText("No overrides for this template")).toBeTruthy();
     expect(screen.getByText("Its runs use the stack environment.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Add credential" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add variable" })).toBeTruthy();
   });
 
   // A list that failed is not an empty one: saying the runs use the stack
   // environment would be a guess, and the form would invite a duplicate.
-  it("says the credentials failed to load, in place of the list and its form, and retries", async () => {
+  it("says the environment failed to load, in place of the list and its form, and retries", async () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);
     const respond = (body: unknown, status: number) =>
@@ -554,14 +554,14 @@ describe("TemplateCredentialsTab", () => {
         respond({ items: [{ id: "c1", name: "TEMPLATE_ONLY", scope: "stack_template", created_at: "2026-07-19T00:00:00Z" }], next_cursor: null }, 200)
       );
 
-    renderAt(queryClient, "/stacks/stack_1/templates/st_1/credentials");
+    renderAt(queryClient, "/stacks/stack_1/templates/st_1/environment");
 
-    const error = await screen.findByTestId("template-credentials-error");
-    expect(error.textContent).toContain("Something went wrong while loading this template's credentials.");
-    expect(screen.queryByText("No credentials for this template")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Add credential" })).toBeNull();
+    const error = await screen.findByTestId("template-environment-error");
+    expect(error.textContent).toContain("Something went wrong while loading this template's environment.");
+    expect(screen.queryByText("No overrides for this template")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add variable" })).toBeNull();
 
-    fireEvent.click(screen.getByTestId("template-credentials-retry"));
+    fireEvent.click(screen.getByTestId("template-environment-retry"));
 
     expect(await screen.findByText("TEMPLATE_ONLY")).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -571,7 +571,7 @@ describe("TemplateCredentialsTab", () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient, { ...allAllowed, can_manage_access: false });
 
-    renderAt(queryClient, "/stacks/stack_1/templates/st_1/credentials");
+    renderAt(queryClient, "/stacks/stack_1/templates/st_1/environment");
 
     await waitFor(() => expect(screen.getByTestId("route-access-denied")).toBeTruthy());
   });

@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 interface CredentialsPanelProps {
-  /** What these credentials are for, above the list. */
+  /** What these variables are for, above the list. */
   note: string;
   /** The empty state's title and its line, shown in place of an empty list. */
   emptyTitle: string;
@@ -87,7 +87,7 @@ export default function CredentialsPanel({ note, emptyTitle, emptyDescription, c
       <p className="text-meta text-muted-foreground">{note}</p>
       {loading ? (
         <p className="flex items-center gap-2 text-meta text-muted-foreground">
-          <Loader2 aria-hidden="true" className="size-3.5 animate-spin" /> Loading credentials…
+          <Loader2 aria-hidden="true" className="size-3.5 animate-spin" /> Loading environment…
         </p>
       ) : credentials.length === 0 ? (
         <Empty className="gap-2 rounded-lg border border-dashed border-dashed-border px-5 py-7">
@@ -117,7 +117,7 @@ export default function CredentialsPanel({ note, emptyTitle, emptyDescription, c
           ))}
         </ul>
       )}
-      {/* Name, Value and Add credential on one row, wrapping on a phone. */}
+      {/* Name, Value and Add variable on one row, wrapping on a phone. */}
       <div className="flex flex-wrap items-end gap-2">
         <div className="flex min-w-0 flex-1 basis-50 flex-col gap-1.5">
           <Label htmlFor={nameId} className={fieldLabelClass}>
@@ -153,7 +153,7 @@ export default function CredentialsPanel({ note, emptyTitle, emptyDescription, c
           />
         </div>
         <button type="button" className={cn(buttonClass("outline", "lg"), "pointer-coarse:h-11")} disabled={busy} onClick={() => void submit()}>
-          Add credential
+          Add variable
         </button>
       </div>
       {error && <ErrorLine id={errorId}>{error}</ErrorLine>}

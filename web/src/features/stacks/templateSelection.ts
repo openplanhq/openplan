@@ -2,7 +2,7 @@ import { matchPath } from "react-router-dom";
 import type { StackTemplate } from "../../api/types";
 
 /** The tabs of a template's panel, each its own route below the template. */
-export type TemplateTab = "runs" | "variables" | "credentials" | "settings";
+export type TemplateTab = "runs" | "variables" | "environment" | "settings";
 
 /**
  * The template the stack's page opens on when the URL names none: the first
@@ -27,8 +27,8 @@ export function templateTabOf(pathname: string): TemplateTab {
   switch (match?.params.section) {
     case "variables":
       return "variables";
-    case "credentials":
-      return "credentials";
+    case "environment":
+      return "environment";
     case "settings":
     case "upgrade":
       return "settings";

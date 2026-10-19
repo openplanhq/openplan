@@ -13,32 +13,32 @@ import { useStackTemplate } from "./stackTemplateContext";
 import RequestIdNote from "../../shared/RequestIdNote";
 import { cn } from "@/lib/utils";
 
-// /stacks/:stackId/templates/:stackTemplateId/credentials — credentials that
+// /stacks/:stackId/templates/:stackTemplateId/environment — variables that
 // override the stack's environment for this template only. The route itself is
 // gated on canManageAccess, the same capability the stack Environment tab needs.
-export default function TemplateCredentialsTab() {
+export default function TemplateEnvironmentTab() {
   const { stackTemplate } = useStackTemplate();
   const credentialsQuery = useStackTemplateCredentialsQuery(tenantID, stackTemplate.id);
   const createMutation = useCreateStackTemplateCredentialMutation(tenantID, stackTemplate.id);
   const deleteMutation = useDeleteStackTemplateCredentialMutation(tenantID, stackTemplate.id);
   const boundary = useQueryErrorBoundary(credentialsQuery.error);
 
-  // A list that never arrived is not an empty one: "No credentials for this
+  // A list that never arrived is not an empty one: "No overrides for this
   // template" would tell someone its runs use the stack environment when they
-  // may not, and invite a second copy of a credential already there. So the
+  // may not, and invite a second copy of a variable already there. So the
   // form waits for the list too. A failed refetch keeps the list it had.
   if (credentialsQuery.status === "error" && credentialsQuery.data === undefined) {
     if (boundary !== null) {
       return <>{boundary}</>;
     }
     return (
-      <div className="flex flex-col items-start gap-3" data-testid="template-credentials-error">
-        <ErrorLine live={false}>Something went wrong while loading this template's credentials.</ErrorLine>
+      <div className="flex flex-col items-start gap-3" data-testid="template-environment-error">
+        <ErrorLine live={false}>Something went wrong while loading this template's environment.</ErrorLine>
         <RequestIdNote error={credentialsQuery.error} />
         <button
           type="button"
           className={cn(buttonClass("outline"), "pointer-coarse:h-11")}
-          data-testid="template-credentials-retry"
+          data-testid="template-environment-retry"
           onClick={() => void credentialsQuery.refetch()}
         >
           <RefreshCw data-icon="inline-start" aria-hidden="true" />
@@ -49,10 +49,10 @@ export default function TemplateCredentialsTab() {
   }
 
   return (
-    <div className="flex min-w-0 flex-col" data-testid="template-credentials-tab">
+    <div className="flex min-w-0 flex-col" data-testid="template-environment-tab">
       <CredentialsPanel
         note="Overrides the stack environment for this template only."
-        emptyTitle="No credentials for this template"
+        emptyTitle="No overrides for this template"
         emptyDescription="Its runs use the stack environment."
         credentials={credentialsQuery.data ?? []}
         loading={credentialsQuery.isPending}

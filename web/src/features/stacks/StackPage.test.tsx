@@ -150,12 +150,12 @@ describe("StackPage header", () => {
 
   it("offers Environment and Access only to people who may manage access", () => {
     renderPage(seed([network]), "/stacks/stack_1");
-    expect(screen.getByRole("link", { name: "Environment" }).getAttribute("href")).toBe("/stacks/stack_1/environment");
+    expect(stackEnvironmentLink()).toBeTruthy();
     expect(screen.getByRole("link", { name: "Access" }).getAttribute("href")).toBe("/stacks/stack_1/access");
     cleanup();
 
     renderPage(seed([network], { ...allAllowed, can_manage_access: false }), "/stacks/stack_1");
-    expect(screen.queryByRole("link", { name: "Environment" })).toBeNull();
+    expect(stackEnvironmentLink()).toBeUndefined();
     expect(screen.queryByRole("link", { name: "Access" })).toBeNull();
   });
 
@@ -164,7 +164,7 @@ describe("StackPage header", () => {
   it("keeps Environment and Access on one row beside a long name", () => {
     renderPage(seed([network]), "/stacks/stack_1");
 
-    expect(screen.getByRole("link", { name: "Environment" }).parentElement?.classList).toContain("shrink-0");
+    expect(stackEnvironmentLink()?.parentElement?.classList).toContain("shrink-0");
   });
 });
 
@@ -334,3 +334,9 @@ describe("StackPage on a phone", () => {
     expect(screen.getByRole("link", { name: "Templates" }).getAttribute("href")).toBe("/stacks/stack_1");
   });
 });
+
+// The stack's Environment link. The open template has an Environment tab of
+// its own, so the name alone matches two links.
+function stackEnvironmentLink() {
+  return screen.queryAllByRole("link", { name: "Environment" }).find((link) => link.getAttribute("href") === "/stacks/stack_1/environment");
+}

@@ -412,7 +412,7 @@ export default function StyleGuide() {
                 </TabsList>
                 <TabsContent value="overview">The stack at a glance.</TabsContent>
                 <TabsContent value="templates">The templates installed on this stack.</TabsContent>
-                <TabsContent value="environment">Credentials every template on this stack receives.</TabsContent>
+                <TabsContent value="environment">Variables every template on this stack receives.</TabsContent>
               </Tabs>
             </Specimen>
             <Specimen label="Combobox" hint="filters these five as you type; the stack-access search asks the server instead" stack>
