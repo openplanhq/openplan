@@ -50,15 +50,23 @@ staticClients:
 
 enablePasswordDB: true
 
-# The local stack's administrator. Its userID is fixed because the OIDC sub
-# Dex issues is derived from it and the connector ID ("local"), and that sub is
-# what openplan grants authority to. Changing either strands every grant.
+# The local stack's administrator, and a second person with no role, so that
+# granting, changing and revoking access can be tried against someone other
+# than yourself. Their userIDs are fixed because the OIDC sub Dex issues is
+# derived from each and the connector ID ("local"), and that sub is what
+# openplan grants authority to. Changing either strands every grant.
 #
-# The hash is bcrypt of "admin-local-only", base64-encoded: a raw bcrypt hash
-# contains "$", which the env expansion above would eat.
+# Each hash is bcrypt of the password, base64-encoded: a raw bcrypt hash
+# contains "$", which the env expansion above would eat. The passwords are
+# "admin-local-only" and "member-local-only".
 staticPasswords:
   - email: admin@openplan.local
     hash: JDJhJDEwJGJwakNYR2JtVTB6NFdPL0JrZFhLUk9pc2NobTM3d2UuTVlmd3J3SjdzQldlMEc1dDdlWWZX
     username: admin
     name: openplan admin
     userID: 7c4b2f0e-3d1a-4e8b-9f6c-2a5d8e1b0c47
+  - email: member@openplan.local
+    hash: JDJhJDEwJDU3THdIREx5ZHZiZnFweHpoY0J1Li5iQWFnRS5GNFN4LzlBNUxiRmZrR29oNHY2WWhYYUku
+    username: member
+    name: openplan member
+    userID: e4208148-b8ee-4dee-8afa-6d433724d5a9

@@ -7,7 +7,9 @@ toolchain go1.26.9
 require (
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/alicebob/miniredis/v2 v2.40.0
+	github.com/hashicorp/go-version v1.9.0
 	github.com/hashicorp/hcl/v2 v2.24.0
+	github.com/hashicorp/terraform-json v0.29.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/lestrrat-go/httprc/v3 v3.0.2
 	github.com/lestrrat-go/jwx/v3 v3.0.13
@@ -19,7 +21,7 @@ require (
 	github.com/stretchr/testify v1.12.1
 	github.com/vishvananda/netlink v1.3.1
 	github.com/vishvananda/netns v0.0.5
-	github.com/zclconf/go-cty v1.16.3
+	github.com/zclconf/go-cty v1.16.4
 	go.temporal.io/api v1.62.12
 	go.temporal.io/sdk v1.45.0
 	golang.org/x/crypto v0.57.0

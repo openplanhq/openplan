@@ -205,6 +205,8 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/runs/{run_number}", server.handleGetTemplateRunByNumber)
 	// Reads the current state of a template run.
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/template-runs/{run_id}", server.handleGetTemplateRun)
+	// Lists the resources a run's plan changes, removals first, a page at a time.
+	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/template-runs/{run_id}/changes", server.handleListTemplateRunResourceChanges)
 	// Lists persisted log metadata for all phases of a template run.
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs", server.handleListTemplateRunLogs)
 	// Reads one persisted log body by the log's name, such as plan-1.
@@ -900,6 +902,24 @@ func (server *Server) handleGetTemplateRunLog(response http.ResponseWriter, requ
 	response.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	response.WriteHeader(http.StatusOK)
 	_, _ = response.Write(content)
+}
+
+func (server *Server) handleListTemplateRunResourceChanges(response http.ResponseWriter, request *http.Request) {
+	page, ok := readPageRequest(response, request)
+	if !ok {
+		return
+	}
+	changes, err := server.service.ListTemplateRunResourceChanges(request.Context(), app.ListTemplateRunResourceChangesCommand{
+		TenantID: domain.TenantID(request.PathValue("tenant_id")),
+		RunID:    domain.TemplateRunID(request.PathValue("run_id")),
+		Page:     page,
+	})
+	if err != nil {
+		writeAppError(response, err)
+		return
+	}
+
+	writeJSON(response, http.StatusOK, newListResponse(mapItems(changes.Items, newPlanResourceChangeResponse), changes.NextCursor))
 }
 
 func (server *Server) handleListTemplateRunLogs(response http.ResponseWriter, request *http.Request) {

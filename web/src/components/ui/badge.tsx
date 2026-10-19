@@ -18,7 +18,7 @@ const badgeVariants = cva(
         ghost:
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline",
-        // Status tones and roles: src/shared/StatusBadge.tsx and RoleBadge.tsx.
+        // Status tones: src/shared/StatusBadge.tsx.
         // theme.guard.test.ts checks each text colour on its tint.
         success: "bg-success/10 text-success",
         progress: "bg-primary/10 text-primary",

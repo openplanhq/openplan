@@ -666,7 +666,7 @@ Apply may re-run planning after approval. MVP does not persist binary `tfplan` f
 
 The UI should communicate that approval is based on the displayed plan, but apply will re-evaluate before execution. The re-evaluation must use the same resolved commit SHA as the approved plan.
 
-The system should persist a redacted plan summary, preferably generated from Terraform JSON output, as a run artifact. This is not an exact binary `tfplan` approval artifact, but it gives the UI and audit trail a structured summary of the approved intent.
+A plan's resource changes are what a reviewer reads before approving (#420). The plan's sandbox reads `tofu show -json` with `internal/planchanges` (on HashiCorp's `terraform-json`, which reads OpenTofu's plans too), replaces every value the plan marks sensitive with `(sensitive)`, sorts the changes removals first, and cuts them to `domain.MaxPlanResourceChanges` and `MaxPlanChangesBytes`. Only that list leaves the sandbox, in its result frame; the JSON, with its variable values and prior state, never does. RunTerraform's worker writes it beside the command's log, `UploadLog`'s storage sandbox puts it in the artifact store with the log, and `FinishPlan` checks it again (it came from the sandbox that ran the template's code) and stores it in `template_run_resource_changes` in the transaction that records the plan's counts. Nothing passes through Temporal's history, and the workflow's commands are unchanged. A list that can't be read, such as a plan format major version other than 1, is recorded as unavailable and never fails the plan: the plan log still has every change. `GET .../template-runs/{run_id}/changes` serves the list; the run's `plan_changes` says whether it is complete, truncated or unavailable.
 
 ## Logs
 

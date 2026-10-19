@@ -113,11 +113,16 @@ type apiDependencies struct {
 	newQueueController func(controlStore, app.WorkflowDispatcher) (queueController, error)
 	// registerControl attaches both workflows and every control activity to the
 	// worker polling the control queue.
-	registerControl func(temporalWorker, controlStore, activities.GitHubTokenSource, logsink.Stream)
+	registerControl func(temporalWorker, controlStore, activities.GitHubTokenSource, logsink.Stream, activities.PlanChangesReader)
 }
 
 func credentialRepository(store appRepositories) app.CredentialRepository {
 	repository, _ := store.(app.CredentialRepository)
+	return repository
+}
+
+func planChangeRepository(store appRepositories) app.PlanChangeRepository {
+	repository, _ := store.(app.PlanChangeRepository)
 	return repository
 }
 
@@ -250,14 +255,14 @@ func defaultAPIDependencies() apiDependencies {
 	}
 }
 
-func registerControl(worker temporalWorker, store controlStore, gitHubTokens activities.GitHubTokenSource, live logsink.Stream) {
+func registerControl(worker temporalWorker, store controlStore, gitHubTokens activities.GitHubTokenSource, live logsink.Stream, planChanges activities.PlanChangesReader) {
 	for _, registration := range workflows.Registered() {
 		worker.RegisterWorkflowWithOptions(registration.Workflow, workflow.RegisterOptions{
 			Name: registration.Name,
 		})
 	}
 
-	control := activities.NewControlActivities(store, gitHubTokens, live)
+	control := activities.NewControlActivities(store, gitHubTokens, live).WithPlanChanges(planChanges)
 	worker.RegisterActivityWithOptions(control.RecordTemplateRunStatus, activity.RegisterOptions{
 		Name: domain.RecordTemplateRunStatusActivityName,
 	})
@@ -414,6 +419,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 		TemplateRevisions:        store,
 		TemplateRunLogs:          logReader,
 		TemplateRunLogMetadata:   store,
+		PlanChanges:              planChangeRepository(store),
 		Audit:                    store,
 		Users:                    store,
 	})
@@ -457,7 +463,10 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 	defer stopReaper()
 	go authentication.ReapSessions(reaperCtx, sessions, authentication.DefaultSessionReapInterval, nil)
 
-	stopControlPlane, err := startControlPlane(ctx, cfg, deps, store, liveLogs)
+	// The log reader is the artifact store's, which also holds what each
+	// plan's executor uploaded of its resource changes.
+	planChanges, _ := logReader.(activities.PlanChangesReader)
+	stopControlPlane, err := startControlPlane(ctx, cfg, deps, store, liveLogs, planChanges)
 	if err != nil {
 		return err
 	}
@@ -485,7 +494,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 // keys, and the process that runs tenant Terraform must hold neither. The
 // returned function stops the queue loop, then the worker, then closes the
 // Temporal client.
-func startControlPlane(ctx context.Context, cfg config.APIConfig, deps apiDependencies, store appRepositories, live logsink.Stream) (func(), error) {
+func startControlPlane(ctx context.Context, cfg config.APIConfig, deps apiDependencies, store appRepositories, live logsink.Stream, planChanges activities.PlanChangesReader) (func(), error) {
 	control, err := controlPlaneStore(store)
 	if err != nil {
 		return nil, fmt.Errorf("wire control plane store: %w", err)
@@ -512,7 +521,7 @@ func startControlPlane(ctx context.Context, cfg config.APIConfig, deps apiDepend
 
 	// TODO: no session worker here?
 	worker := deps.newWorker(temporalClient, domain.ControlTaskQueue, temporalworker.Options{})
-	deps.registerControl(worker, control, gitHubTokens, live)
+	deps.registerControl(worker, control, gitHubTokens, live, planChanges)
 	controller, err := deps.newQueueController(control, deps.newDispatcher(temporalClient, temporal.DispatcherOptions{
 		TerraformTimeout: cfg.TerraformTimeout,
 	}))

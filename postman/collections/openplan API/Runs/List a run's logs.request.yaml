@@ -16,4 +16,4 @@ scripts:
       const logs = pm.response.json().items;
       if (logs.length) { pm.environment.set('name', logs[0].name); }
     language: text/javascript
-order: 5000
+order: 6000

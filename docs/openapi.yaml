@@ -1233,6 +1233,47 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /v1/tenants/{tenant_id}/template-runs/{run_id}/changes:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/RunID"
+    get:
+      tags: [Runs]
+      summary: List the resources a run's plan changes
+      description: |
+        One entry per resource the run's saved plan changes, in reading
+        order: replacements, then destroys, updates, creates, then the rest
+        (forgets, imports, moves, and any action this openplan doesn't name),
+        each kind by address. Reads and no-ops are left out, as tofu's own
+        summary leaves them out.
+
+        The executor reads them from `tofu show -json` inside the plan's
+        sandbox and replaces every sensitive value with `(sensitive)` there;
+        the plan JSON itself never leaves the executor. Unknown values read
+        `(known after apply)`, and a value over 16 KiB reads
+        `(too large to show)`.
+
+        The run's `plan_changes` says what this list is: `complete`,
+        `truncated` (the first of `total`; the plan log has the rest) or
+        `unavailable` (the plan had changes this openplan couldn't list, such
+        as a plan format it doesn't read; the plan log has them). A run whose
+        plan has not finished, or had no changes, answers an empty list.
+      operationId: listTemplateRunResourceChanges
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: One page of the plan's resource changes.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlanResourceChangeList" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
   /v1/tenants/{tenant_id}/template-runs/{run_id}/logs:
     parameters:
       - $ref: "#/components/parameters/TenantID"
@@ -1849,6 +1890,56 @@ components:
           items: { $ref: "#/components/schemas/TemplateRun" }
         next_cursor: { $ref: "#/components/schemas/NextCursor" }
       required: [items, next_cursor]
+    PlanResourceChangeList:
+      type: object
+      description: One page of a run's plan's resource changes, in reading order.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PlanResourceChange" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
+    PlanResourceChange:
+      type: object
+      description: One resource a run's plan changes.
+      properties:
+        address: { type: string, description: "The resource's full address, module path included." }
+        previous_address:
+          type: string
+          description: Where a `moved` block moved it from. Empty otherwise.
+        module_address: { type: string, description: Empty for a resource in the root module. }
+        mode: { type: string, description: "`managed`, or `data` for a data source." }
+        type: { type: string }
+        name: { type: string }
+        provider_name: { type: string }
+        deposed: { type: string, description: The deposed object's key, for a change to a deposed object. Empty otherwise. }
+        action:
+          type: string
+          description: |
+            `create`, `update`, `replace`, `destroy`, `forget` (left in place,
+            dropped from the state), `import` or `move` (a no-op that imports
+            or moves the resource). Any other value is an action tofu named
+            that this openplan doesn't, kept as tofu's own words.
+        create_before_destroy:
+          type: boolean
+          description: A `replace` that creates the new object before destroying the old one.
+        action_reason:
+          type: string
+          description: |
+            tofu's reason for the action, such as `replace_because_cannot_update`
+            or `delete_because_no_resource_config`. Empty when it gives none.
+            A display hint: treat a value you don't know as no reason.
+        importing_id: { type: string, description: The ID an import reads the resource by. Empty otherwise. }
+        replace_paths:
+          description: The attribute paths that force a `replace`, each a list of keys and indexes. Null otherwise.
+        before:
+          description: The resource's values before, sensitive ones masked. Null for a create.
+        after:
+          description: The resource's values after, sensitive and unknown ones masked. Null for a destroy or a forget.
+      required:
+        [address, previous_address, module_address, mode, type, name,
+         provider_name, deposed, action, create_before_destroy, action_reason,
+         importing_id, replace_paths, before, after]
     TemplateRunLogList:
       type: object
       description: One page of a run's logs, in the order they ran; always one page.
@@ -2548,6 +2639,25 @@ components:
             change: { type: integer, minimum: 0 }
             destroy: { type: integer, minimum: 0 }
           required: [add, change, destroy]
+        plan_changes:
+          type: [object, "null"]
+          description: |
+            What `GET .../template-runs/{run_id}/changes` holds for this run.
+            Null until a plan with changes has finished.
+          properties:
+            state:
+              type: string
+              enum: [complete, truncated, unavailable]
+              description: |
+                `complete`: every change is listed. `truncated`: the first of
+                `total` are; the plan log has the rest. `unavailable`: the
+                plan had changes, but none could be listed; the plan log has
+                them.
+            total:
+              type: [integer, "null"]
+              minimum: 0
+              description: Every change the plan has, listed or not. Null when `unavailable`.
+          required: [state, total]
         executions:
           type: array
           description: |
@@ -2559,7 +2669,7 @@ components:
         [id, tenant_id, stack_template_id, template_revision_id, operation,
          selected_ref, resolved_commit_sha, status, step, trigger_actor,
          trigger_actor_display_name, created_at, error_summary, run_number,
-         auto_approve, plan_summary]
+         auto_approve, plan_summary, plan_changes]
 
     TemplateRunStatus:
       type: string

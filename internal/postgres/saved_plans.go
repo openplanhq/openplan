@@ -93,7 +93,10 @@ func (store *Store) PlanKey(ctx context.Context, tenantID domain.TenantID, runID
 //     plan run saved no plan, so there is nothing to approve.
 //   - Changes on an apply or destroy run: the counts are stored and the run
 //     waits for approval as the template's pending plan.
-func (store *Store) FinishTemplatePlan(ctx context.Context, input domain.FinishPlanActivityInput) (domain.PlanOutcome, error) {
+//
+// Either way a plan with changes stores its resource changes with its counts;
+// nil changes records them as unavailable.
+func (store *Store) FinishTemplatePlan(ctx context.Context, input domain.FinishPlanActivityInput, changes *domain.PlanChanges) (domain.PlanOutcome, error) {
 	tx, err := store.pool.Begin(ctx)
 	if err != nil {
 		return "", fmt.Errorf("begin finish plan: %w", err)
@@ -139,6 +142,9 @@ func (store *Store) FinishTemplatePlan(ctx context.Context, input domain.FinishP
 		if err := recordPlanCounts(ctx, tx, input.TenantID, input.RunID, input.Summary); err != nil {
 			return "", err
 		}
+		if err := recordPlanChanges(ctx, tx, input.TenantID, input.RunID, changes); err != nil {
+			return "", err
+		}
 		outcome = domain.PlanOutcomePlanned
 	default:
 		outcome = domain.PlanOutcomeWaiting
@@ -163,6 +169,9 @@ func (store *Store) FinishTemplatePlan(ctx context.Context, input domain.FinishP
 			return "", fmt.Errorf("record pending plan: %w", err)
 		}
 		if err := recordPlanCounts(ctx, tx, input.TenantID, input.RunID, input.Summary); err != nil {
+			return "", err
+		}
+		if err := recordPlanChanges(ctx, tx, input.TenantID, input.RunID, changes); err != nil {
 			return "", err
 		}
 		// The plan is done, and nothing runs while the run waits for a

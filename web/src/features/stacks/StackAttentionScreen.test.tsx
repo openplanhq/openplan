@@ -23,7 +23,8 @@ function waiting(overrides: Partial<AttentionItem> = {}): AttentionItem {
       run_number: 7,
       trigger_actor: "user_priya",
       trigger_actor_display_name: "Priya Shah",
-      plan_summary: { add: 2, change: 1, destroy: 0 }
+      plan_summary: { add: 2, change: 1, destroy: 0 },
+      plan_changes: null,
     } as TemplateRun,
     ...overrides
   };

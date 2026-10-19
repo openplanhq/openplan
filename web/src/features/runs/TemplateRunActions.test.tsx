@@ -53,6 +53,7 @@ function run(overrides: Partial<TemplateRun> = {}): TemplateRun {
     run_number: 1,
     auto_approve: false,
     plan_summary: null,
+    plan_changes: null,
     ...overrides
   };
 }
@@ -278,7 +279,8 @@ describe("TemplateRunActions", () => {
         operation: "apply",
         status: "waiting_approval",
         trigger_actor_display_name: "Priya Shah",
-        plan_summary: { add: 2, change: 1, destroy: 0 }
+        plan_summary: { add: 2, change: 1, destroy: 0 },
+        plan_changes: null,
       }),
       run({ id: "run_done", operation: "apply", status: "completed" })
     ]);

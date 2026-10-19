@@ -172,7 +172,7 @@ describe("AppShell", () => {
 
 // The header is sticky and opaque. Whatever opens over scrolled content must
 // paint above it: the Combobox and Select popups, which Base UI portals to the
-// body, and the undo banner on stack access. Update this test when an overlay
+// body, and the access screen's role list, which does too. Update this test when an overlay
 // is added or moves.
 describe("AppShell layering", () => {
   const read = (path: string) => readFileSync(join(dirname(fileURLToPath(import.meta.url)), path), "utf8");
@@ -186,9 +186,7 @@ describe("AppShell layering", () => {
     const overlays = {
       "Combobox popup": zIndex(positioner("../components/ui/combobox.tsx", "ComboboxPrimitive")),
       "Select popup": zIndex(positioner("../components/ui/select.tsx", "SelectPrimitive")),
-      "undo banner": zIndex(
-        read("../features/stacks/StackAccessScreen.tsx").match(/<div\s+role="status"\s+className="([^"]*)"/)?.[1] ?? ""
-      )
+      "RoleSelect popup": zIndex(positioner("../features/access/RoleSelect.tsx", "Select"))
     };
 
     expect(header).toBeGreaterThan(0);

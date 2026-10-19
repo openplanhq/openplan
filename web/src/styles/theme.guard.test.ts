@@ -150,7 +150,7 @@ describe("Button variants on theme.css", () => {
   });
 });
 
-// StatusBadge and RoleBadge set each colour's text on a tint of that colour.
+// StatusBadge sets each colour's text on a tint of that colour.
 describe("Badge variants on theme.css", () => {
   const vars = rootVariables(theme());
   const colour = (name: string) => rgb(vars[name]);

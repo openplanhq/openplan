@@ -150,6 +150,7 @@ function runFor(stackTemplateID: string, overrides: Partial<TemplateRun> = {}): 
     run_number: 1,
     auto_approve: false,
     plan_summary: null,
+    plan_changes: null,
     ...overrides
   };
 }

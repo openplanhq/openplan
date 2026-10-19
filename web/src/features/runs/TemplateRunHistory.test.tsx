@@ -27,6 +27,7 @@ function run(overrides: Partial<TemplateRun> = {}): TemplateRun {
     run_number: 1,
     auto_approve: false,
     plan_summary: null,
+    plan_changes: null,
     ...overrides
   };
 }
@@ -88,7 +89,8 @@ describe("TemplateRunHistory", () => {
         status: "completed",
         trigger_actor: "CiQ3YzRiMmYwZS0zZDFhLTRlOGItOWY2Yy0yYTVkOGUxYjBjNDcSBWxvY2Fs",
         trigger_actor_display_name: "Ada Lovelace",
-        plan_summary: { add: 3, change: 1, destroy: 0 }
+        plan_summary: { add: 3, change: 1, destroy: 0 },
+        plan_changes: null,
       })
     ]);
 

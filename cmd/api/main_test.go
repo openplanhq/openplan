@@ -284,7 +284,7 @@ func TestRegisterControlRegistersWorkflowsAndControlActivities(t *testing.T) {
 	t.Parallel()
 
 	worker := &recordingControlWorker{}
-	registerControl(worker, &recordingStore{}, nil, nil)
+	registerControl(worker, &recordingStore{}, nil, nil, nil)
 
 	wantWorkflows := map[string]bool{
 		domain.TemplatePlanWorkflowName:  true,
@@ -774,7 +774,7 @@ func newRecordingAPIDependencies(t *testing.T) *recordingAPIDependencies {
 			deps.queueControllerDispatcher = dispatcher
 			return deps.queueController, nil
 		},
-		registerControl: func(worker temporalWorker, store controlStore, gitHubTokens activities.GitHubTokenSource, live logsink.Stream) {
+		registerControl: func(worker temporalWorker, store controlStore, gitHubTokens activities.GitHubTokenSource, live logsink.Stream, _ activities.PlanChangesReader) {
 			deps.registeredControlStore = store
 			deps.gitHubTokens = gitHubTokens
 			deps.registeredLive = live
@@ -923,7 +923,7 @@ func (recordingStore) PlanKey(context.Context, domain.TenantID, domain.TemplateR
 	return nil, nil
 }
 
-func (recordingStore) FinishTemplatePlan(context.Context, domain.FinishPlanActivityInput) (domain.PlanOutcome, error) {
+func (recordingStore) FinishTemplatePlan(context.Context, domain.FinishPlanActivityInput, *domain.PlanChanges) (domain.PlanOutcome, error) {
 	return "", nil
 }
 

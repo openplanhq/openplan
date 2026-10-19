@@ -27,7 +27,8 @@ function run(status: TemplateRun["status"]): TemplateRun {
     error_summary: "",
     run_number: 7,
     auto_approve: false,
-    plan_summary: null
+    plan_summary: null,
+    plan_changes: null,
   };
 }
 

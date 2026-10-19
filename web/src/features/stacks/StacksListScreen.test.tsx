@@ -87,11 +87,11 @@ function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue 
   };
 }
 
-function renderScreen(queryClient: QueryClient, options: { auth?: AuthContextValue; path?: string } = {}) {
+function renderScreen(queryClient: QueryClient, options: { auth?: AuthContextValue; path?: string; state?: unknown } = {}) {
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthContext.Provider value={options.auth ?? authValue()}>
-        <MemoryRouter initialEntries={[options.path ?? "/stacks"]}>
+        <MemoryRouter initialEntries={[options.state === undefined ? (options.path ?? "/stacks") : { pathname: options.path ?? "/stacks", state: options.state }]}>
           <StacksListScreen />
         </MemoryRouter>
       </AuthContext.Provider>
@@ -133,6 +133,18 @@ describe("StacksListScreen", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Stacks" })).toBeTruthy();
     expect(screen.getByTestId("create-stack-link")).toBeTruthy();
     expect(screen.queryByTestId("page-count")).toBeNull();
+  });
+
+  it("says why you landed here after leaving a stack's Access page", () => {
+    renderScreen(testQueryClient(), { state: { notice: "You no longer have access to prod." } });
+
+    expect(screen.getByTestId("left-stack-note").textContent).toBe("You no longer have access to prod.");
+  });
+
+  it("says nothing extra when you came any other way", () => {
+    renderScreen(testQueryClient());
+
+    expect(screen.getByTestId("left-stack-note").textContent).toBe("");
   });
 
   it("says the stacks failed to load under the page's header, with an outline Retry", async () => {
