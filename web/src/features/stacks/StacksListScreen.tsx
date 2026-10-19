@@ -1,6 +1,6 @@
-import { ArrowRight, Hourglass, Layers, Loader2, Plus, RefreshCw, TriangleAlert } from "lucide-react";
+import { ArrowRight, Hourglass, Info, Layers, Loader2, Plus, RefreshCw, TriangleAlert } from "lucide-react";
 import { useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useAttentionQuery, useStacksQuery } from "../../api/queries";
 import type { AttentionItem, StackListItem } from "../../api/types";
 import { useAuth } from "../../auth/AuthContext";
@@ -19,6 +19,7 @@ import {
 } from "./attention";
 import type { StackAttention } from "./attention";
 import StackPreview from "./StackPreview";
+import type { LeftStackNotice } from "./StackAccessScreen";
 import { buttonClass } from "../../shared/buttonClass";
 import Chip from "../../shared/Chip";
 import { listItemClass } from "../../shared/listItemClass";
@@ -88,6 +89,7 @@ export default function StacksListScreen() {
       }
     >
       <AttentionSummary items={attention} />
+      <LeftStackNote />
     </PageHeader>
   );
 
@@ -307,5 +309,23 @@ function TemplateCount({ templates, selected }: { templates: number; selected: b
         </span>
       )}
     </span>
+  );
+}
+
+// Why you landed here, after removing or demoting yourself on a stack's
+// Access page: the stack is gone from your list, or its Access button is, and
+// that shouldn't look like something broke. It rides on the history entry, so
+// it is gone once you move on.
+function LeftStackNote() {
+  const notice = (useLocation().state as LeftStackNotice | null)?.notice;
+  return (
+    <p role="status" className="flex items-center gap-2 text-meta text-muted-foreground empty:hidden" data-testid="left-stack-note">
+      {notice && (
+        <>
+          <Info aria-hidden="true" strokeWidth={2.25} className="size-3.5 shrink-0" />
+          {notice}
+        </>
+      )}
+    </p>
   );
 }
