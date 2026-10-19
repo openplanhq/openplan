@@ -300,6 +300,13 @@ type TemplateRun struct {
 	// execution, or, for an auto-approved apply, which has no plan, what the
 	// apply changed. Nil until known, and for a plan with no changes.
 	PlanSummary *PlanSummary `json:"plan_summary"`
+	// PlanChangesState says what the run's list of resource changes is:
+	// complete, cut short, or unavailable although the plan had changes.
+	// Empty until a plan with changes finishes.
+	PlanChangesState PlanChangesState `json:"plan_changes_state,omitempty"`
+	// PlanChangesTotal counts every resource change the plan had, listed or
+	// not. Nil when there is no list.
+	PlanChangesTotal *int `json:"plan_changes_total,omitempty"`
 	// Executions are the workflows that carried the run, in the order they
 	// started, each with its steps. Only a read of one run fills them, empty
 	// for a run no workflow has carried yet; a list leaves them nil, which

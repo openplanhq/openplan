@@ -1012,7 +1012,9 @@ const templateRunSelect = `
 		r.auto_approve,
 		counts.resource_add,
 		counts.resource_change,
-		counts.resource_destroy
+		counts.resource_destroy,
+		r.plan_changes_state,
+		r.plan_changes_total
 	from template_runs r
 	left join lateral (
 		select s.step
@@ -1044,6 +1046,7 @@ func scanTemplateRun(row pgx.Row) (domain.TemplateRun, error) {
 	var createdAt sql.NullTime
 	var completedAt sql.NullTime
 	var add, change, destroy *int
+	var planChangesState *string
 	if err := row.Scan(
 		&run.ID,
 		&run.TenantID,
@@ -1068,8 +1071,13 @@ func scanTemplateRun(row pgx.Row) (domain.TemplateRun, error) {
 		&add,
 		&change,
 		&destroy,
+		&planChangesState,
+		&run.PlanChangesTotal,
 	); err != nil {
 		return domain.TemplateRun{}, err
+	}
+	if planChangesState != nil {
+		run.PlanChangesState = domain.PlanChangesState(*planChangesState)
 	}
 	if createdAt.Valid {
 		run.CreatedAt = createdAt.Time

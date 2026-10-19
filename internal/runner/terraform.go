@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/planchanges"
 )
 
 type TerraformCommand struct {
@@ -62,6 +63,11 @@ type Result struct {
 	// plan, an apply's from its closing "Apply complete!" or "Destroy
 	// complete!" line. Zero when there are none.
 	Summary domain.PlanSummary
+	// Changes lists a plan's resource changes, read from the same JSON as
+	// Summary. Nil for an apply, a plan with no changes, or a plan whose
+	// changes could not be read: listing them is for the reviewer's eyes,
+	// so it never fails the plan.
+	Changes *domain.PlanChanges
 }
 
 // Run validates input and executes the requested Terraform-compatible command.
@@ -122,11 +128,11 @@ func (runner *LocalTerraformRunner) plan(ctx context.Context, input TerraformCom
 		return Result{}, err
 	}
 
-	summary, err := runner.summarize(ctx, input)
+	summary, changes, err := runner.summarize(ctx, input)
 	if err != nil {
 		return Result{}, err
 	}
-	return Result{HasChanges: true, Summary: summary}, nil
+	return Result{HasChanges: true, Summary: summary, Changes: changes}, nil
 }
 
 // apply runs an apply and counts what it did from its closing line. The
@@ -177,51 +183,24 @@ func summarizeApplyOutput(output string) domain.PlanSummary {
 	return summary
 }
 
-// summarize reads the saved plan back as JSON and counts its resource changes.
-// The JSON holds variable values and sensitive attributes in plaintext, so it
-// is parsed here and only the counts leave the executor; it is never written
-// to the log.
-func (runner *LocalTerraformRunner) summarize(ctx context.Context, input TerraformCommand) (domain.PlanSummary, error) {
+// summarize reads the saved plan back as JSON, counts its resource changes
+// and lists them. The JSON holds variable values and sensitive attributes in
+// plaintext, so it is parsed here and only the counts and the masked list
+// leave the executor; it is never written to the log.
+//
+// The counts are the plan's: failing to read them fails the plan. The list is
+// the reviewer's: failing to read it, such as a plan format version this
+// openplan doesn't know, leaves it nil and the plan stands.
+func (runner *LocalTerraformRunner) summarize(ctx context.Context, input TerraformCommand) (domain.PlanSummary, *domain.PlanChanges, error) {
 	var stdout, stderr bytes.Buffer
 	if err := runner.executor.Run(ctx, input.WorkspacePath, sortedEnvironment(input.Environment), &stdout, &stderr, terraformExecutable, "show", "-json", "-no-color", PlanFileName); err != nil {
-		return domain.PlanSummary{}, &CommandError{Command: input.Command, Err: fmt.Errorf("show saved plan: %w: %s", err, strings.TrimSpace(stderr.String()))}
+		return domain.PlanSummary{}, nil, &CommandError{Command: input.Command, Err: fmt.Errorf("show saved plan: %w: %s", err, strings.TrimSpace(stderr.String()))}
 	}
-	summary, err := summarizePlanJSON(stdout.Bytes())
+	summary, changes, err := planchanges.Read(stdout.Bytes())
 	if err != nil {
-		return domain.PlanSummary{}, &CommandError{Command: input.Command, Err: err}
+		return domain.PlanSummary{}, nil, &CommandError{Command: input.Command, Err: err}
 	}
-	return summary, nil
-}
-
-// summarizePlanJSON counts a `tofu show -json` plan's resource changes the way
-// tofu's own "Plan: N to add, N to change, N to destroy" line does: a
-// replacement is one add and one destroy, and reads and no-ops count as
-// nothing.
-func summarizePlanJSON(body []byte) (domain.PlanSummary, error) {
-	var plan struct {
-		ResourceChanges []struct {
-			Change struct {
-				Actions []string `json:"actions"`
-			} `json:"change"`
-		} `json:"resource_changes"`
-	}
-	if err := json.Unmarshal(body, &plan); err != nil {
-		return domain.PlanSummary{}, fmt.Errorf("decode saved plan: %w", err)
-	}
-	var summary domain.PlanSummary
-	for _, resourceChange := range plan.ResourceChanges {
-		for _, action := range resourceChange.Change.Actions {
-			switch action {
-			case "create":
-				summary.Add++
-			case "update":
-				summary.Change++
-			case "delete":
-				summary.Destroy++
-			}
-		}
-	}
-	return summary, nil
+	return summary, changes, nil
 }
 
 // selectWorkspace selects the requested Terraform workspace or creates it.

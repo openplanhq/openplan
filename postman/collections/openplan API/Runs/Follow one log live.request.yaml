@@ -40,4 +40,4 @@ scripts:
       pm.test('body is an event stream', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('text/event-stream'));
     language: text/javascript
 examples: ./.resources/Follow one log live.resources/examples
-order: 7000
+order: 8000

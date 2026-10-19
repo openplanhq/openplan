@@ -50,6 +50,10 @@ type runTerraformRequest struct {
 type runTerraformResult struct {
 	HasChanges bool
 	Summary    domain.PlanSummary
+	// Changes is a plan's resource changes, masked inside the sandbox. It
+	// travels in the result frame, which holds 1 MiB, so the parser cuts it
+	// to domain.MaxPlanChangesBytes.
+	Changes *domain.PlanChanges `json:",omitempty"`
 }
 
 // uploadLogRequest carries storage access: its sandbox runs only our code.
@@ -60,6 +64,10 @@ type uploadLogRequest struct {
 	Phase    string
 	LogsDir  string
 	FileName string
+	// ChangesFileName is the plan's resource changes RunTerraform wrote
+	// beside the log, uploaded with it when it is there. Only a plan command
+	// writes one.
+	ChangesFileName string `json:",omitempty"`
 }
 
 // planRequest carries storage access and the plan key: its sandbox runs only
@@ -76,10 +84,11 @@ type planRequest struct {
 type Bodies struct {
 	terraform *runner.LocalTerraformRunner
 	git       *runner.LocalGitRunner
-	// logs and plans, when set, stand in for the stores a request names.
-	// Tests set them; in a sandbox they stay nil.
-	logs  TemplateRunLogStore
-	plans PlanArtifactStore
+	// logs, plans and changes, when set, stand in for the stores a request
+	// names. Tests set them; in a sandbox they stay nil.
+	logs    TemplateRunLogStore
+	plans   PlanArtifactStore
+	changes PlanChangesStore
 }
 
 // NewBodies returns the bodies as a sandbox runs them: git and tofu as plain
@@ -142,15 +151,19 @@ func (b *Bodies) runTerraform(ctx context.Context, request runTerraformRequest, 
 		Stdout:        output,
 		Stderr:        output,
 	})
-	return runTerraformResult{HasChanges: result.HasChanges, Summary: result.Summary}, err
+	return runTerraformResult{HasChanges: result.HasChanges, Summary: result.Summary, Changes: result.Changes}, err
 }
 
 func (b *Bodies) uploadLog(ctx context.Context, request uploadLogRequest, _ io.Writer) (domain.TemplateRunLog, error) {
-	logs, _, err := b.stores(request.Store)
+	stores, err := b.stores(request.Store)
 	if err != nil {
 		return domain.TemplateRunLog{}, err
 	}
-	files, err := sandbox.ReadFiles(request.LogsDir, []string{request.FileName})
+	names := []string{request.FileName}
+	if request.ChangesFileName != "" {
+		names = append(names, request.ChangesFileName)
+	}
+	files, err := sandbox.ReadFiles(request.LogsDir, names)
 	if err != nil {
 		return domain.TemplateRunLog{}, err
 	}
@@ -158,14 +171,21 @@ func (b *Bodies) uploadLog(ctx context.Context, request uploadLogRequest, _ io.W
 	if !ok {
 		return domain.TemplateRunLog{}, fmt.Errorf("no log %s", request.FileName)
 	}
-	return logs.PutTemplateRunLog(ctx, request.TenantID, request.RunID, request.Phase, bytes.NewReader(content))
+	// Best effort: the plan log is the record of every change, so failing to
+	// store the list must not lose the log with it. FinishPlan finds no list
+	// and records it as unavailable, pointing the reviewer at this log.
+	if changes, ok := files[request.ChangesFileName]; ok && request.ChangesFileName != "" && stores.changes != nil {
+		_ = stores.changes.PutPlanChanges(ctx, request.TenantID, request.RunID, changes)
+	}
+	return stores.logs.PutTemplateRunLog(ctx, request.TenantID, request.RunID, request.Phase, bytes.NewReader(content))
 }
 
 func (b *Bodies) uploadPlan(ctx context.Context, request planRequest, _ io.Writer) (struct{}, error) {
-	_, plans, err := b.stores(request.Store)
+	stores, err := b.stores(request.Store)
 	if err != nil {
 		return struct{}{}, err
 	}
+	plans := stores.plans
 	files, err := sandbox.ReadFiles(request.TerraformPath, planbundle.Files)
 	if err != nil {
 		return struct{}{}, fmt.Errorf("read saved plan: %w", err)
@@ -182,10 +202,11 @@ func (b *Bodies) uploadPlan(ctx context.Context, request planRequest, _ io.Write
 }
 
 func (b *Bodies) downloadPlan(ctx context.Context, request planRequest, _ io.Writer) (struct{}, error) {
-	_, plans, err := b.stores(request.Store)
+	stores, err := b.stores(request.Store)
 	if err != nil {
 		return struct{}{}, err
 	}
+	plans := stores.plans
 	sealed, err := plans.GetPlan(ctx, request.TenantID, request.RunID)
 	if err != nil {
 		return struct{}{}, err
@@ -204,14 +225,26 @@ func (b *Bodies) downloadPlan(ctx context.Context, request planRequest, _ io.Wri
 	return struct{}{}, nil
 }
 
-// stores opens the stores cfg names, unless a test set its own.
-func (b *Bodies) stores(cfg config.ArtifactStoreConfig) (TemplateRunLogStore, PlanArtifactStore, error) {
-	if b.logs != nil || b.plans != nil {
-		return b.logs, b.plans, nil
+// bodyStores are the artifact stores a storage body writes to.
+type bodyStores struct {
+	logs    TemplateRunLogStore
+	plans   PlanArtifactStore
+	changes PlanChangesStore
+}
+
+// stores opens the stores cfg names, unless a test set its own; then only
+// those are used, and the rest stay nil for the bodies to skip.
+func (b *Bodies) stores(cfg config.ArtifactStoreConfig) (bodyStores, error) {
+	if b.logs != nil || b.plans != nil || b.changes != nil {
+		return bodyStores{logs: b.logs, plans: b.plans, changes: b.changes}, nil
 	}
 	store, err := artifacts.NewObjectStore(cfg)
 	if err != nil {
-		return nil, nil, fmt.Errorf("open the artifact store: %w", err)
+		return bodyStores{}, fmt.Errorf("open the artifact store: %w", err)
 	}
-	return artifacts.NewLogStore(store), artifacts.NewPlanStore(store), nil
+	return bodyStores{
+		logs:    artifacts.NewLogStore(store),
+		plans:   artifacts.NewPlanStore(store),
+		changes: artifacts.NewPlanChangesStore(store),
+	}, nil
 }

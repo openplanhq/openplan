@@ -12,4 +12,4 @@ scripts:
       pm.test('status is 200', () => pm.response.to.have.status(200));
       pm.test('body is plain text', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('text/plain'));
     language: text/javascript
-order: 6000
+order: 7000

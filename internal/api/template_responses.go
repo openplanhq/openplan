@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/vishu42/openplan/internal/domain"
@@ -33,7 +34,74 @@ type templateRunResponse struct {
 	RunNumber               int                            `json:"run_number"`
 	AutoApprove             bool                           `json:"auto_approve"`
 	PlanSummary             *planSummaryResponse           `json:"plan_summary"`
+	PlanChanges             *planChangesResponse           `json:"plan_changes"`
 	Executions              []templateRunExecutionResponse `json:"executions,omitzero"`
+}
+
+// planChangesResponse says what GET .../changes holds for the run: every
+// change (complete), the first of more (truncated, with total counting them
+// all), or none although the plan had changes (unavailable). Null until a
+// plan with changes finishes.
+type planChangesResponse struct {
+	State string `json:"state"`
+	Total *int   `json:"total"`
+}
+
+// planResourceChangeResponse is one resource a run's plan changes. before and
+// after are the resource's values with sensitive ones already replaced by
+// "(sensitive)" and unknown ones by "(known after apply)".
+type planResourceChangeResponse struct {
+	Address             string          `json:"address"`
+	PreviousAddress     string          `json:"previous_address"`
+	ModuleAddress       string          `json:"module_address"`
+	Mode                string          `json:"mode"`
+	Type                string          `json:"type"`
+	Name                string          `json:"name"`
+	ProviderName        string          `json:"provider_name"`
+	Deposed             string          `json:"deposed"`
+	Action              string          `json:"action"`
+	CreateBeforeDestroy bool            `json:"create_before_destroy"`
+	ActionReason        string          `json:"action_reason"`
+	ImportingID         string          `json:"importing_id"`
+	ReplacePaths        json.RawMessage `json:"replace_paths"`
+	Before              json.RawMessage `json:"before"`
+	After               json.RawMessage `json:"after"`
+}
+
+func newPlanChangesResponse(run domain.TemplateRun) *planChangesResponse {
+	if run.PlanChangesState == "" {
+		return nil
+	}
+	return &planChangesResponse{State: string(run.PlanChangesState), Total: run.PlanChangesTotal}
+}
+
+func newPlanResourceChangeResponse(change domain.PlanResourceChange) planResourceChangeResponse {
+	return planResourceChangeResponse{
+		Address:             change.Address,
+		PreviousAddress:     change.PreviousAddress,
+		ModuleAddress:       change.ModuleAddress,
+		Mode:                change.Mode,
+		Type:                change.Type,
+		Name:                change.Name,
+		ProviderName:        change.ProviderName,
+		Deposed:             change.Deposed,
+		Action:              string(change.Action),
+		CreateBeforeDestroy: change.CreateBeforeDestroy,
+		ActionReason:        change.ActionReason,
+		ImportingID:         change.ImportingID,
+		ReplacePaths:        jsonOrNull(change.ReplacePaths),
+		Before:              jsonOrNull(change.Before),
+		After:               jsonOrNull(change.After),
+	}
+}
+
+// jsonOrNull answers a missing value as null rather than leaving it out, so
+// every change has the same fields.
+func jsonOrNull(raw json.RawMessage) json.RawMessage {
+	if len(raw) == 0 {
+		return json.RawMessage("null")
+	}
+	return raw
 }
 
 // templateRunExecutionResponse leaves out the Temporal workflow ID, which
@@ -138,6 +206,7 @@ func newTemplateRunResponse(run domain.TemplateRun) templateRunResponse {
 		RunNumber:               run.RunNumber,
 		AutoApprove:             run.AutoApprove,
 		PlanSummary:             newPlanSummaryResponse(run.PlanSummary),
+		PlanChanges:             newPlanChangesResponse(run),
 	}
 	// A list leaves executions nil, which omits the field; a read of one run
 	// fills them, an empty slice for a run no workflow has carried yet.

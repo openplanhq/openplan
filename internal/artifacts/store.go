@@ -81,6 +81,18 @@ func (store LogStore) ReadTemplateRunLog(ctx context.Context, log domain.Templat
 	return content, nil
 }
 
+// GetPlanChanges reads a run's uploaded plan changes through the log
+// store's object store: the API holds one store for everything it reads.
+func (store LogStore) GetPlanChanges(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) ([]byte, error) {
+	return NewPlanChangesStore(store.store).GetPlanChanges(ctx, tenantID, runID)
+}
+
+// DeletePlanChanges deletes a run's uploaded plan changes through the log
+// store's object store.
+func (store LogStore) DeletePlanChanges(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) error {
+	return NewPlanChangesStore(store.store).DeletePlanChanges(ctx, tenantID, runID)
+}
+
 // PlanStore keeps a run's saved plan: the encrypted bundle the plan phase
 // uploads and the apply phase downloads. It never sees plaintext; encryption
 // happens on the executor before Put and after Get.
@@ -136,6 +148,66 @@ func PlanKey(tenantID domain.TenantID, runID domain.TemplateRunID) (string, erro
 		return "", fmt.Errorf("tenant ID and run ID must be safe path components")
 	}
 	return path.Join("tenants", string(tenantID), "runs", string(runID), "plan", "tfplan.bundle.enc"), nil
+}
+
+// PlanChangesStore keeps a plan's resource changes, already masked on the
+// executor, from the executor's upload until the control plane records them
+// in Postgres at FinishPlan.
+type PlanChangesStore struct {
+	store ObjectStore
+}
+
+func NewPlanChangesStore(store ObjectStore) PlanChangesStore {
+	return PlanChangesStore{store: store}
+}
+
+const planChangesContentType = "application/json"
+
+func (store PlanChangesStore) PutPlanChanges(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, body []byte) error {
+	key, err := PlanChangesKey(tenantID, runID)
+	if err != nil {
+		return err
+	}
+	if err := store.store.PutObject(ctx, key, planChangesContentType, bytes.NewReader(body)); err != nil {
+		return fmt.Errorf("put plan changes: %w", err)
+	}
+	return nil
+}
+
+// GetPlanChanges returns the run's uploaded changes. A run whose executor
+// uploaded none reads as an error wrapping os.ErrNotExist.
+func (store PlanChangesStore) GetPlanChanges(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) ([]byte, error) {
+	key, err := PlanChangesKey(tenantID, runID)
+	if err != nil {
+		return nil, err
+	}
+	body, err := store.store.GetObject(ctx, key)
+	if err != nil {
+		return nil, fmt.Errorf("get plan changes: %w", err)
+	}
+	return body, nil
+}
+
+// DeletePlanChanges removes the run's uploaded changes once the control plane
+// has recorded them. Deleting none succeeds.
+func (store PlanChangesStore) DeletePlanChanges(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) error {
+	key, err := PlanChangesKey(tenantID, runID)
+	if err != nil {
+		return err
+	}
+	if err := store.store.DeleteObject(ctx, key); err != nil {
+		return fmt.Errorf("delete plan changes: %w", err)
+	}
+	return nil
+}
+
+// PlanChangesKey is where a run's plan's resource changes live, beside its
+// saved plan. A run has one plan, so the key needs nothing but the run.
+func PlanChangesKey(tenantID domain.TenantID, runID domain.TemplateRunID) (string, error) {
+	if !safePathComponent(string(tenantID)) || !safePathComponent(string(runID)) {
+		return "", fmt.Errorf("tenant ID and run ID must be safe path components")
+	}
+	return path.Join("tenants", string(tenantID), "runs", string(runID), "plan", "changes.json"), nil
 }
 
 func LogKey(tenantID domain.TenantID, runID domain.TemplateRunID, phase string) (string, error) {

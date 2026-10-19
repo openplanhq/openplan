@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -36,6 +37,12 @@ type PlanArtifactStore interface {
 	PutPlan(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, sealed []byte) error
 	GetPlan(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) ([]byte, error)
 	DeletePlan(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) error
+}
+
+// PlanChangesStore keeps a run's plan's resource changes, masked, between the
+// executor that read them and the control plane that records them.
+type PlanChangesStore interface {
+	PutPlanChanges(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, body []byte) error
 }
 
 // TemplateRunLogStore persists output produced by a template run.
@@ -204,6 +211,12 @@ func (activities *TemplateRunActivities) RunTerraform(ctx context.Context, input
 	if err != nil {
 		return domain.RunTerraformActivityOutput{}, err
 	}
+	// A changes file left by an earlier attempt of this command would be
+	// uploaded as this attempt's, so it goes before the command runs.
+	changesPath := filepath.Join(logsDir, changesFileName(input.LogName))
+	if err := os.Remove(changesPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return domain.RunTerraformActivityOutput{}, fmt.Errorf("remove earlier plan changes: %w", err)
+	}
 	file, err := logsink.NewFileSink(logsDir).Open(logsink.FileName(input.LogName))
 	if err != nil {
 		return domain.RunTerraformActivityOutput{}, fmt.Errorf("open terraform log: %w", err)
@@ -245,7 +258,26 @@ func (activities *TemplateRunActivities) RunTerraform(ctx context.Context, input
 	if err := json.Unmarshal(data, &result); err != nil {
 		return domain.RunTerraformActivityOutput{}, fmt.Errorf("decode terraform result: %w", err)
 	}
+	// The changes go beside the log, where only this process writes, and
+	// UploadLog takes them to the artifact store. They stay out of the
+	// activity's output, so Temporal's history never holds them.
+	if result.Changes != nil {
+		encoded, err := json.Marshal(result.Changes)
+		if err != nil {
+			return domain.RunTerraformActivityOutput{}, fmt.Errorf("encode plan changes: %w", err)
+		}
+		//nolint:gosec // UploadLog's sandbox reads it as the sandbox user, as it does the log
+		if err := os.WriteFile(changesPath, encoded, 0o644); err != nil {
+			return domain.RunTerraformActivityOutput{}, fmt.Errorf("write plan changes: %w", err)
+		}
+	}
 	return domain.RunTerraformActivityOutput{HasChanges: result.HasChanges, Summary: result.Summary}, nil
+}
+
+// changesFileName is the file a plan command's resource changes wait in, in
+// the run's logs/ beside the command's log.
+func changesFileName(logName string) string {
+	return logName + ".changes.json"
 }
 
 // UploadLog uploads the log RunTerraform spooled for a command, from a
@@ -264,6 +296,7 @@ func (activities *TemplateRunActivities) UploadLog(ctx context.Context, input do
 		Request: uploadLogRequest{
 			Store: activities.store, TenantID: input.TenantID, RunID: input.RunID,
 			Phase: input.LogName, LogsDir: logsDir, FileName: logsink.FileName(input.LogName),
+			ChangesFileName: changesFileName(input.LogName),
 		},
 		Mounts: append([]sandbox.Mount{{Path: logsDir, ReadOnly: true}}, mounts...),
 		Groups: groups,

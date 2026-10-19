@@ -3208,6 +3208,7 @@ type apiTestDependencies struct {
 	templates              recordingTemplateRepository
 	logs                   recordingTemplateRunLogReader
 	logMetadata            recordingTemplateRunLogRepository
+	planChanges            apiPlanChangeRepository
 	workflows              recordingWorkflowDispatcher
 	users                  apiFakeUserRepository
 	stackID                domain.StackID
@@ -3380,6 +3381,7 @@ func (deps *apiTestDependencies) service() *app.Service {
 		TemplateRevisions:        &deps.templates,
 		TemplateRunLogs:          &deps.logs,
 		TemplateRunLogMetadata:   &deps.logMetadata,
+		PlanChanges:              &deps.planChanges,
 		Workflows:                &deps.workflows,
 		Users:                    &deps.users,
 		StackIDs:                 fixedStackIDGenerator{id: deps.createdStackID},
@@ -3388,6 +3390,24 @@ func (deps *apiTestDependencies) service() *app.Service {
 		RegistrationIDs:          fixedTemplateRegistrationIDGenerator{id: deps.registrationID},
 		Clock:                    fixedClock{now: deps.now},
 	})
+}
+
+// apiPlanChangeRepository holds runs' plan resource changes in memory, by
+// position, as the store pages them.
+type apiPlanChangeRepository struct {
+	changes map[domain.TemplateRunID][]domain.PlanResourceChange
+}
+
+func (repository *apiPlanChangeRepository) ListTemplateRunResourceChangesPage(_ context.Context, _ domain.TenantID, runID domain.TemplateRunID, afterPosition int, limit int) ([]domain.PlanResourceChange, error) {
+	page := []domain.PlanResourceChange{}
+	for i, change := range repository.changes[runID] {
+		if i <= afterPosition || len(page) == limit {
+			continue
+		}
+		change.Position = i
+		page = append(page, change)
+	}
+	return page, nil
 }
 
 // apiStackOverviewRepository holds a tenant's templates and waiting runs in
