@@ -91,7 +91,7 @@ describe("StyleGuide", () => {
     expect(combobox.closest('[data-slot="input-group"]')).not.toBeNull();
     const select = section.getByRole("combobox", { name: "Default role" });
     expect(select.getAttribute("data-slot")).toBe("select-trigger");
-    expect(select.querySelector('[data-slot="select-value"]')?.textContent).toBe("Viewer");
+    expect(select.querySelector('[data-slot="select-value"]')?.textContent).toBe("viewer");
     const field = section.getByRole("textbox", { name: "Input group specimen" });
     expect(field.closest('[data-slot="input-group"]')).not.toBeNull();
     expect(section.getByLabelText("Description").getAttribute("data-slot")).toBe("textarea");

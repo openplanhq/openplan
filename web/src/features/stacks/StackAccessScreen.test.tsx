@@ -1,818 +1,284 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import StackAccessScreen from "./StackAccessScreen";
-import type { GrantView, ListPage, UserProfile } from "../../api/types";
+import { AuthContext } from "../../auth/AuthContext";
+import type { AuthContextValue } from "../../auth/AuthContext";
+import type { GrantView, UserProfile } from "../../api/types";
 
-function wrapper(initialRoute = "/stacks/stack_123/access") {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false }
-    }
-  });
-  return function Wrapper({ children }: { children: React.ReactNode }) {
-    return (
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={[initialRoute]}>
-          <Routes>
-            <Route path="/stacks/:stackId/access" element={children} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>
-    );
-  };
-}
+const ME = "user_me";
+const grant = (user_sub: string, display_name: string, role: string, email = `${user_sub}@acme.example`): GrantView => ({ user_sub, display_name, email, role });
 
-const emptyGrants: ListPage<GrantView> = { items: [], next_cursor: null };
-
-const twoGrants: ListPage<GrantView> = {
-  next_cursor: null,
-  items: [
-    {
-      user_sub: "u1",
-      role: "owner",
-      display_name: "Alice",
-      email: "alice@example.com"
-    },
-    {
-      user_sub: "u2",
-      role: "viewer",
-      display_name: "Bob",
-      email: "bob@example.com"
-    }
-  ]
-};
-
-const searchResults: ListPage<UserProfile> = {
-  items: [
-    {
-      sub: "u3",
-      display_name: "Charlie Brown",
-      email: "charlie@example.com"
-    }
-  ],
-  next_cursor: null
-};
-
-const charlie = searchResults.items[0];
-const chad: UserProfile = { sub: "u4", display_name: "Chad", email: "chad@example.com" };
-const dave: UserProfile = { sub: "u6", display_name: "Dave Grohl", email: "dave@example.com" };
-// Matched by email: there is no "ch" in her name.
-const dorothy: UserProfile = { sub: "u5", display_name: "Dorothy Vaughan", email: "dvaughan@chem.example.com" };
+const team = (): GrantView[] => [
+  grant("mei", "Mei Chen", "viewer"),
+  grant(ME, "Sam Park", "owner"),
+  grant("lena", "Lena Novak", "approver"),
+  grant("priya", "Priya Raman", "owner"),
+  grant("alex", "Alex Kim", "operator")
+];
 
 interface Sent {
   method: string;
   url: string;
-  body?: Record<string, string>;
+  body?: { role?: string };
 }
 
-// Answers each request by its URL, so a test can count and inspect what the
-// screen sent. A search gets `users`, after `searchDelay` ms; a PUT gets
-// `assign` (or the grant it asked for); anything else gets the grants list.
+// A stateful grants API: a PUT or DELETE changes what the next list returns,
+// as the server would. `grants: "fail"` fails the list; `"stall"` never answers it.
 function serve({
-  grants = [],
+  grants = team(),
   users = [],
-  assign,
-  searchDelay = 0
-}: { grants?: GrantView[]; users?: UserProfile[]; assign?: () => Promise<Response>; searchDelay?: number } = {}) {
+  canManageAfter = true
+}: { grants?: GrantView[] | "fail" | "stall"; users?: UserProfile[]; canManageAfter?: boolean } = {}) {
   const sent: Sent[] = [];
-  const json = (value: unknown) =>
-    new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
+  let current = Array.isArray(grants) ? grants : [];
+  const gone: GrantView[] = [];
+  const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
     const method = init?.method ?? "GET";
-    const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, string>) : undefined;
+    const body = init?.body ? (JSON.parse(String(init.body)) as Sent["body"]) : undefined;
     sent.push({ method, url, body });
-    if (url.includes("/users/search")) {
-      await new Promise((resolve) => setTimeout(resolve, searchDelay));
-      return json({ items: users, next_cursor: null });
+    const path = new URL(url, "http://localhost").pathname;
+    if (path.endsWith("/users/search")) return json({ items: users, next_cursor: null });
+    if (path.endsWith("/grants")) {
+      if (grants === "stall") return new Promise<Response>(() => {});
+      if (grants === "fail") return json({ title: "Internal Server Error", status: 500 }, 500);
+      return json({ items: current, next_cursor: null });
     }
-    if (method === "PUT") {
-      const userSub = decodeURIComponent(url.slice(url.lastIndexOf("/") + 1));
-      return assign ? assign() : json({ user_sub: userSub, role: body?.role, display_name: "", email: "" });
+    const sub = decodeURIComponent(path.slice(path.lastIndexOf("/") + 1));
+    if (path.includes("/grants/") && method === "PUT") {
+      const known = current.find((g) => g.user_sub === sub) ?? gone.find((g) => g.user_sub === sub);
+      const person = users.find((u) => u.sub === sub);
+      const next = { user_sub: sub, display_name: known?.display_name ?? person?.display_name ?? sub, email: known?.email ?? person?.email ?? "", role: body?.role ?? "" };
+      current = current.filter((g) => g.user_sub !== sub).concat([next]);
+      return json(next);
     }
-    return json({ items: grants, next_cursor: null });
+    if (path.includes("/grants/") && method === "DELETE") {
+      gone.push(...current.filter((g) => g.user_sub === sub));
+      current = current.filter((g) => g.user_sub !== sub);
+      return new Response(null, { status: 204 });
+    }
+    // The stack itself.
+    return json({
+      stack: {
+        id: "stack_1",
+        name: "prod",
+        slug: "prod",
+        effective_capabilities: { can_view: canManageAfter, can_operate: canManageAfter, can_approve: canManageAfter, can_manage_access: canManageAfter }
+      },
+      templates: []
+    });
   });
   return sent;
 }
 
-/** The query of each user search the screen sent, in order. */
-const searches = (sent: Sent[]) =>
-  sent
-    .filter(({ url }) => url.includes("/users/search"))
-    .map(({ url }) => new URL(url, "http://localhost").searchParams.get("q"));
-
-/** Moves fake time on, running the timers and the renders they cause. */
-const elapse = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
-
-/** The search waits 300ms after the last keystroke. */
-const afterDebounce = () => elapse(400);
-
-// userEvent waits between keystrokes; under fake timers it must move them on.
-const setupUser = () =>
-  vi.isFakeTimers() ? userEvent.setup({ advanceTimers: vi.advanceTimersByTime }) : userEvent.setup();
-
-async function renderWithGrants(grants: GrantView[] = []) {
-  render(<StackAccessScreen />, { wrapper: wrapper() });
-  await screen.findByText(grants.length === 0 ? /No users have been assigned/ : grants[0].display_name);
+function auth(): AuthContextValue {
+  return {
+    me: { sub: ME, tenant_id: "tenant_123", display_name: "Sam Park", global_capabilities: { can_create_stack: true, can_publish_template: true } },
+    status: "authenticated",
+    login: () => {},
+    logout: () => {}
+  };
 }
 
-async function typeInSearch(text: string) {
-  const user = setupUser();
-  const input = screen.getByRole("combobox", { name: "Search users" }) as HTMLInputElement;
-  await user.click(input);
-  await user.type(input, text);
-  return { user, input };
+function Stacks() {
+  const notice = (useLocation().state as { notice?: string } | null)?.notice;
+  return <p data-testid="stacks-page">{notice}</p>;
 }
 
-// Only while no popup is open: Base UI hides the rest of the page from
-// assistive technology while one is, and a role query can't name it then.
-const assignButton = () => screen.getByRole("button", { name: "Assign Role" }) as HTMLButtonElement;
+function renderScreen() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <AuthContext.Provider value={auth()}>
+        <MemoryRouter initialEntries={["/stacks/stack_1/access"]}>
+          <Routes>
+            <Route path="/stacks/:stackId/access" element={<StackAccessScreen />} />
+            <Route path="/stacks" element={<Stacks />} />
+          </Routes>
+        </MemoryRouter>
+      </AuthContext.Provider>
+    </QueryClientProvider>
+  );
+}
+
+const row = (sub: string) => screen.getByTestId(`grant-${sub}`);
+const names = () => screen.getAllByTestId(/^grant-/).map((li) => li.querySelector("span span")?.textContent);
+const writes = (sent: Sent[]) => sent.filter(({ method }) => method !== "GET").map(({ method, url, body }) => `${method} ${url.slice(url.lastIndexOf("/") + 1)}${body?.role ? ` ${body.role}` : ""}`);
+
+/** Opens a RoleSelect and picks a role. Base UI opens a select on pointer down. */
+async function pickRole(user: ReturnType<typeof userEvent.setup>, trigger: HTMLElement, role: string) {
+  await user.click(trigger);
+  const option = await screen.findByRole("option", { name: new RegExp(`^${role}`) });
+  await user.click(option);
+}
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe("StackAccessScreen", () => {
-  beforeEach(() => {
-    cleanup();
-    vi.restoreAllMocks();
+  it("lists people by role, highest first, then by name, and marks you", async () => {
+    serve();
+    renderScreen();
+    await screen.findByTestId("grant-mei");
+    expect(names()).toEqual(["Priya Raman", "Sam Park", "Lena Novak", "Alex Kim", "Mei Chen"]);
+    expect(within(row(ME)).getByText("you")).toBeTruthy();
+    expect(screen.getByTestId("page-count").textContent).toBe("5");
+    expect(screen.getByRole("heading", { level: 1, name: "Access" })).toBeTruthy();
   });
 
-  it("shows loading state for grants", () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(
-      () => new Promise(() => {})
-    );
-
-    render(<StackAccessScreen />, { wrapper: wrapper() });
-
-    expect(screen.getByText("Loading grants...")).toBeDefined();
+  it("waits to add anyone while the list loads, and says why", async () => {
+    serve({ grants: "stall" });
+    renderScreen();
+    expect(await screen.findByTestId("access-loading")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Grant access" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("Adding people waits until the list of who has access loads.")).toBeTruthy();
   });
 
-  it("renders grants list when data is loaded", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      new Response(JSON.stringify(twoGrants), {
-        status: 200,
-        headers: { "content-type": "application/json" }
-      })
-    );
-
-    render(<StackAccessScreen />, { wrapper: wrapper() });
-
-    await waitFor(() => {
-      expect(screen.getByText("Alice")).toBeDefined();
-    });
-    expect(screen.getByText("Bob")).toBeDefined();
-    expect(screen.getByText("owner")).toBeDefined();
-    expect(screen.getByText("viewer")).toBeDefined();
+  it("says a failed list failed, offers Retry, and keeps adding locked", async () => {
+    const sent = serve({ grants: "fail" });
+    renderScreen();
+    expect((await screen.findByRole("alert")).textContent).toContain("Something went wrong while loading who has access to");
+    expect((screen.getByRole("button", { name: "Grant access" }) as HTMLButtonElement).disabled).toBe(true);
+    const before = sent.filter(({ url }) => url.endsWith("/grants")).length;
+    await userEvent.setup().click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(sent.filter(({ url }) => url.endsWith("/grants")).length).toBe(before + 1));
   });
 
-  it("shows empty state when no grants", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      new Response(JSON.stringify(emptyGrants), {
-        status: 200,
-        headers: { "content-type": "application/json" }
-      })
-    );
-
-    render(<StackAccessScreen />, { wrapper: wrapper() });
-
-    await waitFor(() => {
-      expect(
-        screen.getByText(
-          "No users have been assigned access yet. Use the panel on the right to add the first grant."
-        )
-      ).toBeDefined();
-    });
+  it("says no one has access yet", async () => {
+    serve({ grants: [] });
+    renderScreen();
+    expect((await screen.findByTestId("access-empty")).textContent).toContain("No one has access to");
   });
 
-  it("shows search results when typing 2+ characters", async () => {
-    vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(emptyGrants), {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(searchResults), {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        })
-      );
+  it("locks the only owner's role and remove, with the reason in the row", async () => {
+    serve({ grants: [grant(ME, "Sam Park", "owner"), grant("lena", "Lena Novak", "approver")] });
+    renderScreen();
+    await screen.findByTestId(`grant-${ME}`);
+    expect(within(row(ME)).getByText("You are the only owner. Make someone else owner before changing your role.")).toBeTruthy();
+    expect((within(row(ME)).getByRole("button", { name: "Remove your access" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId(`role-${ME}`) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(row("lena")).getByRole("button", { name: "Remove Lena Novak’s access" }) as HTMLButtonElement).disabled).toBe(false);
+  });
 
-    render(<StackAccessScreen />, { wrapper: wrapper() });
+  it("changes someone's role from their row at once", async () => {
+    const sent = serve();
     const user = userEvent.setup();
-
-    await waitFor(() => {
-      expect(screen.getByText(/No users/)).toBeDefined();
-    });
-
-    const searchInput = screen.getByLabelText("Search users");
-    await user.click(searchInput);
-    await user.type(searchInput, "cha");
-
-    await waitFor(() => {
-      expect(screen.getByText("Charlie Brown")).toBeDefined();
-    });
+    renderScreen();
+    await screen.findByTestId("grant-mei");
+    await pickRole(user, screen.getByTestId("role-mei"), "operator");
+    await waitFor(() => expect(writes(sent)).toEqual(["PUT mei operator"]));
+    await waitFor(() => expect(within(row("mei")).getByTestId("role-mei").textContent).toContain("operator"));
   });
 
-  it("shows confirm state and triggers revoke", async () => {
-    vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(twoGrants), {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(null, {
-          status: 204
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ items: [twoGrants.items[0]], next_cursor: null }), {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        })
-      );
-
-    render(<StackAccessScreen />, { wrapper: wrapper() });
+  it("confirms a remove in the row, then keeps the row with Undo", async () => {
+    const sent = serve();
     const user = userEvent.setup();
-
-    await waitFor(() => {
-      expect(screen.getByText("Bob")).toBeDefined();
-    });
-
-    const revokeButton = screen.getByLabelText("Revoke Bob's viewer role");
-    await user.click(revokeButton);
-
-    expect(screen.getByText("Remove access?")).toBeDefined();
-    expect(screen.getByText("Confirm")).toBeDefined();
-
-    await user.click(screen.getByText("Confirm"));
-
-    await waitFor(() => {
-      expect(screen.getByText(/Removed Bob.*viewer access/)).toBeDefined();
-    });
+    renderScreen();
+    await screen.findByTestId("grant-lena");
+    await user.click(within(row("lena")).getByRole("button", { name: "Remove Lena Novak’s access" }));
+    expect(within(row("lena")).getByText("Remove Lena Novak’s access to prod?")).toBeTruthy();
+    expect(writes(sent)).toEqual([]);
+    await user.click(within(row("lena")).getByRole("button", { name: "Remove access" }));
+    await waitFor(() => expect(within(row("lena")).getByText("access removed")).toBeTruthy());
+    expect(writes(sent)).toEqual(["DELETE lena"]);
+    expect(screen.getByRole("status").textContent).toContain("Removed Lena Novak’s access to prod.");
+    await user.click(within(row("lena")).getByRole("button", { name: "Undo removing Lena Novak’s access" }));
+    await waitFor(() => expect(writes(sent)).toEqual(["DELETE lena", "PUT lena approver"]));
+    await waitFor(() => expect(within(row("lena")).getByTestId("role-lena").textContent).toContain("approver"));
   });
 
-  it("shows error banner on failed revoke", async () => {
-    vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(twoGrants), {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            type: "https://openplan.run/problems/last-owner",
-            title: "The stack needs an owner",
-            detail: "cannot remove the last owner"
-          }),
-          {
-            status: 409,
-            headers: { "content-type": "application/json" }
-          }
-        )
-      );
-
-    render(<StackAccessScreen />, { wrapper: wrapper() });
+  it("cancels a remove without sending anything", async () => {
+    const sent = serve();
     const user = userEvent.setup();
-
-    await waitFor(() => {
-      expect(screen.getByText("Alice")).toBeDefined();
-    });
-
-    await user.click(screen.getByLabelText("Revoke Alice's owner role"));
-    await user.click(screen.getByText("Confirm"));
-
-    await waitFor(() => {
-      expect(
-        screen.getByText("cannot remove the last owner")
-      ).toBeDefined();
-    });
-    expect(screen.getByText("cannot remove the last owner").closest('[data-slot="alert"]')).not.toBeNull();
+    renderScreen();
+    await screen.findByTestId("grant-lena");
+    await user.click(within(row("lena")).getByRole("button", { name: "Remove Lena Novak’s access" }));
+    await user.click(within(row("lena")).getByRole("button", { name: "Cancel" }));
+    expect(within(row("lena")).getByTestId("role-lena")).toBeTruthy();
+    expect(writes(sent)).toEqual([]);
   });
 
-  it("assigns role when selecting a user and clicking assign", async () => {
-    vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(emptyGrants), {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(searchResults), {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            user_sub: "u3",
-            role: "viewer",
-            display_name: "Charlie Brown"
-          }),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" }
-          }
-        )
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            grants: [
-              {
-                user_sub: "u3",
-                role: "viewer",
-                display_name: "Charlie Brown",
-                email: "charlie@example.com"
-              }
-            ]
-          }),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" }
-          }
-        )
-      );
-
-    render(<StackAccessScreen />, { wrapper: wrapper() });
+  it("warns before you remove yourself, then sends you to /stacks with why", async () => {
+    const sent = serve({ canManageAfter: false });
     const user = userEvent.setup();
-
-    await waitFor(() => {
-      expect(screen.getByText(/No users/)).toBeDefined();
-    });
-
-    await user.click(screen.getByLabelText("Search users"));
-    await user.type(screen.getByLabelText("Search users"), "cha");
-
-    await waitFor(() => {
-      expect(screen.getByText("Charlie Brown")).toBeDefined();
-    });
-
-    await user.click(screen.getByText("Charlie Brown"));
-    await user.click(screen.getByRole("button", { name: "Assign Role" }));
-
-    await waitFor(() => {
-      expect(globalThis.fetch).toHaveBeenCalledTimes(4);
-    });
+    renderScreen();
+    await screen.findByTestId(`grant-${ME}`);
+    await user.click(within(row(ME)).getByRole("button", { name: "Remove your access" }));
+    expect(within(row(ME)).getByText(/you will lose access to prod right away/)).toBeTruthy();
+    await user.click(within(row(ME)).getByRole("button", { name: "Remove my access" }));
+    expect((await screen.findByTestId("stacks-page")).textContent).toBe("You no longer have access to prod.");
+    expect(writes(sent)).toEqual([`DELETE ${ME}`]);
   });
 
-  it("has proper tab order for keyboard accessibility", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify(emptyGrants), {
-        status: 200,
-        headers: { "content-type": "application/json" }
-      })
-    );
-
-    render(<StackAccessScreen />, { wrapper: wrapper() });
+  it("keeps a platform admin who removes themself on the page, with Undo", async () => {
+    serve({ canManageAfter: true });
     const user = userEvent.setup();
-
-    await waitFor(() => {
-      expect(screen.getByText(/No users/)).toBeDefined();
-    });
-
-    await user.tab();
-    expect(screen.getByLabelText("Search users")).toEqual(
-      document.activeElement
-    );
-
-    await user.tab();
-    expect(screen.getByLabelText("Role")).toEqual(document.activeElement);
-
-    const assignButton = screen.getByRole("button", { name: "Assign Role" });
-    expect((assignButton as HTMLButtonElement).disabled).toBe(true);
-  });
-  describe("user search", () => {
-    // Fake time, so waiting out the debounce or a slow search costs nothing
-    // and can't race a loaded runner. shouldAdvanceTime keeps findBy's and
-    // waitFor's polling, and Base UI's animation frames, moving.
-    beforeEach(() => {
-      vi.useFakeTimers({ shouldAdvanceTime: true });
-    });
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
-    it("is a combobox that stays shut until two characters are typed", async () => {
-      const sent = serve({ users: [charlie] });
-      await renderWithGrants();
-
-      const { user, input } = await typeInSearch("c");
-      await afterDebounce();
-      expect(input.getAttribute("aria-expanded")).toBe("false");
-      expect(screen.queryByText("No users found")).toBeNull();
-      expect(searches(sent)).toEqual([]);
-
-      await user.type(input, "h");
-      await screen.findByRole("option", { name: /Charlie Brown/ });
-      expect(input.getAttribute("aria-expanded")).toBe("true");
-      expect(searches(sent)).toEqual(["ch"]);
-    });
-
-    // The server lets an operator or above search only for a named stack, so
-    // without it a stack owner who isn't a platform admin finds no one.
-    it("searches for the stack whose access it shows", async () => {
-      const sent = serve({ users: [charlie] });
-      await renderWithGrants();
-
-      await typeInSearch("ch");
-      await screen.findByRole("option", { name: /Charlie Brown/ });
-      const stackIDs = sent
-        .filter(({ url }) => url.includes("/users/search"))
-        .map(({ url }) => new URL(url, "http://localhost").searchParams.get("stack_id"));
-      expect(stackIDs).toEqual(["stack_123"]);
-    });
-
-    // The server matches on name and email; the list must not filter again.
-    it("lists every user the server answers with, even one matched by email", async () => {
-      serve({ users: [charlie, dorothy] });
-      await renderWithGrants();
-
-      await typeInSearch("ch");
-      expect(await screen.findByRole("option", { name: /Dorothy Vaughan/ })).toBeDefined();
-      expect(screen.getAllByRole("option")).toHaveLength(2);
-    });
-
-    it("moves the highlight with ArrowDown and ArrowUp, and picks with Enter", async () => {
-      serve({ users: [charlie, chad] });
-      await renderWithGrants();
-
-      const { user, input } = await typeInSearch("ch");
-      const [first, second] = await screen.findAllByRole("option");
-      await user.keyboard("{ArrowDown}");
-      expect(input.getAttribute("aria-activedescendant")).toBe(first.id);
-      await user.keyboard("{ArrowDown}");
-      expect(input.getAttribute("aria-activedescendant")).toBe(second.id);
-      expect(second.hasAttribute("data-highlighted")).toBe(true);
-      await user.keyboard("{ArrowUp}");
-      expect(input.getAttribute("aria-activedescendant")).toBe(first.id);
-
-      await user.keyboard("{Enter}");
-      expect(input.value).toBe("Charlie Brown");
-      expect(input.getAttribute("aria-expanded")).toBe("false");
-      expect(assignButton().disabled).toBe(false);
-    });
-
-    it("closes and clears on Escape", async () => {
-      serve({ users: [charlie] });
-      await renderWithGrants();
-
-      const { user, input } = await typeInSearch("cha");
-      await screen.findByRole("option", { name: /Charlie Brown/ });
-      await user.keyboard("{Escape}");
-      expect(input.getAttribute("aria-expanded")).toBe("false");
-      expect(screen.queryByRole("option")).toBeNull();
-      expect(input.value).toBe("");
-    });
-
-    it("keeps the pick, and searches only what was typed, while the user looks again", async () => {
-      const sent = serve({ users: [charlie] });
-      await renderWithGrants();
-
-      const { user, input } = await typeInSearch("cha");
-      await user.click(await screen.findByRole("option", { name: /Charlie Brown/ }));
-      expect(input.value).toBe("Charlie Brown");
-      await afterDebounce();
-      expect(searches(sent)).toEqual(["cha"]);
-
-      // Typing searches again; leaving without a new pick puts the pick back.
-      await user.type(input, "x");
-      await user.tab();
-      expect(input.value).toBe("Charlie Brown");
-      expect(assignButton().disabled).toBe(false);
-    });
-
-    // Base UI resets its input to the pick, or empties it, whenever the list
-    // closes. Neither a search loading nor a query too short to search may
-    // cost the user what they typed.
-    it("keeps what was typed while a refined search loads", async () => {
-      serve({ users: [charlie, chad], searchDelay: 200 });
-      await renderWithGrants();
-
-      const { user, input } = await typeInSearch("ch");
-      await screen.findAllByRole("option");
-      await user.type(input, "a");
-      await afterDebounce();
-      expect(input.value).toBe("cha");
-      expect(screen.getAllByRole("option")).toHaveLength(2);
-    });
-
-    it("keeps a query shortened below two characters", async () => {
-      serve({ users: [charlie] });
-      await renderWithGrants();
-
-      const { user, input } = await typeInSearch("ch");
-      await screen.findAllByRole("option");
-      await user.keyboard("{Backspace}");
-      await afterDebounce();
-      expect(input.value).toBe("c");
-      expect(input.getAttribute("aria-expanded")).toBe("false");
-    });
-
-    it("keeps what was typed after a pick while that search runs", async () => {
-      serve({ users: [charlie] });
-      await renderWithGrants();
-
-      const { user, input } = await typeInSearch("cha");
-      await user.click(await screen.findByRole("option", { name: /Charlie Brown/ }));
-      await user.type(input, "x");
-      await afterDebounce();
-      expect(input.value).toBe("Charlie Brownx");
-    });
-
-    it("sends no search for what was typed once the user leaves", async () => {
-      const sent = serve({ users: [charlie] });
-      await renderWithGrants();
-
-      const { user, input } = await typeInSearch("cha");
-      await user.click(await screen.findByRole("option", { name: /Charlie Brown/ }));
-      await user.type(input, "x");
-      await user.tab();
-      await afterDebounce();
-      expect(input.value).toBe("Charlie Brown");
-      expect(searches(sent)).toEqual(["cha"]);
-    });
-
-    it("puts the pick back when the user leaves a query too short to search", async () => {
-      serve({ users: [charlie] });
-      await renderWithGrants();
-
-      const { user, input } = await typeInSearch("cha");
-      await user.click(await screen.findByRole("option", { name: /Charlie Brown/ }));
-      await user.type(input, "d", { initialSelectionStart: 0, initialSelectionEnd: input.value.length });
-      await afterDebounce();
-      expect(input.value).toBe("d");
-      await user.tab();
-      expect(input.value).toBe("Charlie Brown");
-      expect(assignButton().disabled).toBe(false);
-    });
-
-    // A previous answer may stand in only for a search that narrows it; an
-    // unrelated query says it is searching until its own answer.
-    it("says Searching... for a new, unrelated search, not the last one's users", async () => {
-      serve({ users: [charlie], searchDelay: 300 });
-      await renderWithGrants();
-
-      const { user, input } = await typeInSearch("cha");
-      await screen.findByRole("option", { name: /Charlie Brown/ });
-      await user.keyboard("{Escape}");
-      await user.type(input, "da");
-      await afterDebounce();
-      expect(input.getAttribute("aria-expanded")).toBe("true");
-      expect(screen.getByText("Searching...")).toBeDefined();
-      expect(screen.queryByRole("option")).toBeNull();
-      expect(screen.queryByText("No users found")).toBeNull();
-
-      await elapse(300);
-      expect(await screen.findByRole("option", { name: /Charlie Brown/ })).toBeDefined();
-      expect(input.value).toBe("da");
-    });
-
-    it("keeps the query when Enter is pressed with nothing highlighted", async () => {
-      serve({ users: [charlie] });
-      await renderWithGrants();
-
-      const { user, input } = await typeInSearch("cha");
-      await screen.findByRole("option", { name: /Charlie Brown/ });
-      await user.keyboard("{Enter}");
-      expect(input.value).toBe("cha");
-    });
-
-    // The search goes out 300ms after typing and answers 100ms later; the
-    // user leaves in between, and the answer must not open the list.
-    it("doesn't open the list once the user has left", async () => {
-      serve({ users: [charlie], searchDelay: 100 });
-      await renderWithGrants();
-
-      const { user, input } = await typeInSearch("ch");
-      await elapse(320);
-      await user.tab();
-      await elapse(150);
-      expect(input.getAttribute("aria-expanded")).toBe("false");
-      expect(screen.queryByRole("option")).toBeNull();
-    });
-
-    it("returns focus to the search after the pick is cleared from the keyboard", async () => {
-      serve({ users: [charlie] });
-      await renderWithGrants();
-
-      const { user, input } = await typeInSearch("cha");
-      await user.click(await screen.findByRole("option", { name: /Charlie Brown/ }));
-      await user.tab();
-      expect(document.activeElement?.getAttribute("aria-label")).toBe("Clear selected user");
-      await user.keyboard("{Enter}");
-      expect(document.activeElement).toBe(input);
-    });
-
-    it("clears the pick with the clear button", async () => {
-      serve({ users: [charlie] });
-      await renderWithGrants();
-
-      const { user, input } = await typeInSearch("cha");
-      await user.click(await screen.findByRole("option", { name: /Charlie Brown/ }));
-      await user.click(screen.getByRole("button", { name: "Clear selected user" }));
-      expect(input.value).toBe("");
-      expect(screen.queryByRole("button", { name: "Clear selected user" })).toBeNull();
-      expect(assignButton().disabled).toBe(true);
-    });
-
-    it("shows a user who already holds a role with it, and won't pick them", async () => {
-      const alice = twoGrants.items[0];
-      serve({ grants: [alice], users: [{ sub: alice.user_sub, display_name: alice.display_name, email: alice.email }] });
-      await renderWithGrants([alice]);
-
-      const { user, input } = await typeInSearch("ali");
-      const option = await screen.findByRole("option", { name: /Alice/ });
-      expect(option.getAttribute("aria-disabled")).toBe("true");
-      expect(option.textContent).toContain("alice@example.com — owner");
-
-      await user.keyboard("{ArrowDown}{Enter}");
-      expect(input.value).toBe("ali");
-      // jsdom has no CSS, so the click reaches the option that pointer-events-none
-      // shields in a browser. Either way nothing is picked.
-      await user.click(option);
-      await user.keyboard("{Escape}");
-      expect(input.value).toBe("");
-      expect(assignButton().disabled).toBe(true);
-    });
-
-    it("says No users found when the search finds nobody", async () => {
-      serve({ users: [] });
-      await renderWithGrants();
-
-      await typeInSearch("zz");
-      expect(await screen.findByText("No users found")).toBeDefined();
-    });
+    renderScreen();
+    await screen.findByTestId(`grant-${ME}`);
+    await user.click(within(row(ME)).getByRole("button", { name: "Remove your access" }));
+    await user.click(within(row(ME)).getByRole("button", { name: "Remove my access" }));
+    await waitFor(() => expect(within(row(ME)).getByText("access removed")).toBeTruthy());
+    expect(within(row(ME)).getByRole("button", { name: "Undo removing your access" })).toBeTruthy();
   });
 
-  describe("role picker", () => {
-    it("opens from the keyboard, moves with the arrows, and commits with Enter", async () => {
-      const sent = serve({ users: [charlie] });
-      await renderWithGrants();
-      const { user } = await typeInSearch("cha");
-      await user.click(await screen.findByRole("option", { name: /Charlie Brown/ }));
-
-      const role = screen.getByRole("combobox", { name: "Role" });
-      const shown = () => role.querySelector('[data-slot="select-value"]')?.textContent;
-      expect(shown()).toBe("Viewer");
-
-      role.focus();
-      await user.keyboard("{Enter}");
-      const listbox = await screen.findByRole("listbox");
-      expect(within(listbox).getAllByRole("option").map((option) => option.textContent)).toEqual([
-        "Owner",
-        "Operator",
-        "Approver",
-        "Viewer"
-      ]);
-      expect(document.activeElement?.textContent).toBe("Viewer");
-      await user.keyboard("{ArrowUp}{ArrowUp}");
-      expect(document.activeElement?.textContent).toBe("Operator");
-      await user.keyboard("{ArrowDown}");
-      expect(document.activeElement?.textContent).toBe("Approver");
-      await user.keyboard("{Enter}");
-      await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
-      expect(shown()).toBe("Approver");
-      expect(document.activeElement).toBe(role);
-
-      await user.click(assignButton());
-      await waitFor(() =>
-        expect(sent.find(({ method }) => method === "PUT")).toMatchObject({ url: expect.stringMatching(/\/grants\/u3$/), body: { role: "approver" } })
-      );
-    });
+  it("asks before you take away your own owner role", async () => {
+    const sent = serve();
+    const user = userEvent.setup();
+    renderScreen();
+    await screen.findByTestId(`grant-${ME}`);
+    await pickRole(user, screen.getByTestId(`role-${ME}`), "approver");
+    expect(within(row(ME)).getByText("Make yourself approver on prod?")).toBeTruthy();
+    expect(writes(sent)).toEqual([]);
+    await user.click(within(row(ME)).getByRole("button", { name: "Change my role" }));
+    await waitFor(() => expect(writes(sent)).toEqual([`PUT ${ME} approver`]));
   });
 
-  // What the input shows is who gets the role.
-  it("won't assign while the input shows someone other than the pick", async () => {
-    serve({ users: [charlie] });
-    await renderWithGrants();
-    const { user, input } = await typeInSearch("cha");
-    await user.click(await screen.findByRole("option", { name: /Charlie Brown/ }));
-
-    await user.type(input, "dave", { initialSelectionStart: 0, initialSelectionEnd: input.value.length });
-    expect(input.value).toBe("dave");
-    expect((screen.getByText("Assign Role", { selector: "button" }) as HTMLButtonElement).disabled).toBe(true);
+  it("finds people, shows who already has a role, and grants the one picked", async () => {
+    const users: UserProfile[] = [
+      { sub: "lena", display_name: "Lena Novak", email: "lena@acme.example" },
+      { sub: "lee", display_name: "Lee Park", email: "lee@acme.example" }
+    ];
+    const sent = serve({ users });
+    const user = userEvent.setup();
+    renderScreen();
+    await screen.findByTestId("grant-mei");
+    await user.type(screen.getByTestId("person-search"), "le");
+    const lena = await screen.findByRole("option", { name: /Lena Novak/ });
+    expect(lena.getAttribute("aria-disabled")).toBe("true");
+    expect(lena.textContent).toContain("already approver");
+    const search = sent.find(({ url }) => url.includes("/users/search"));
+    expect(new URL(search!.url, "http://localhost").searchParams.get("stack_id")).toBe("stack_1");
+    await user.click(screen.getByRole("option", { name: /Lee Park/ }));
+    expect(screen.getByTestId("person-picked").textContent).toContain("Lee Park");
+    expect(screen.getByText("Grant access gives Lee Park the viewer role on prod.")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Grant access" }));
+    await waitFor(() => expect(writes(sent)).toEqual(["PUT lee viewer"]));
+    await screen.findByTestId("grant-lee");
   });
 
-  it("keeps a newer pick when an earlier assignment finishes", async () => {
-    let finish!: (response: Response) => void;
-    serve({ users: [charlie, dave], assign: () => new Promise<Response>((resolve) => (finish = resolve)) });
-    await renderWithGrants();
-    const { user, input } = await typeInSearch("cha");
-    await user.click(await screen.findByRole("option", { name: /Charlie Brown/ }));
-    await user.click(assignButton());
-
-    await user.type(input, "da", { initialSelectionStart: 0, initialSelectionEnd: input.value.length });
-    await user.click(await screen.findByRole("option", { name: /Dave Grohl/ }));
-    finish(new Response(JSON.stringify({ user_sub: "u3", role: "viewer" }), { status: 200, headers: { "content-type": "application/json" } }));
-    await waitFor(() => expect(screen.getByText("Assign Role", { selector: "button" })).toBeDefined());
-    expect(input.value).toBe("Dave Grohl");
+  it("names someone openplan has no record of", async () => {
+    const sub = "CiQ5ZjNh";
+    serve({ grants: [grant(ME, "Sam Park", "owner"), grant(sub, sub, "viewer", "")] });
+    renderScreen();
+    await screen.findByTestId(`grant-${sub}`);
+    expect(within(row(sub)).getByText("Unknown person")).toBeTruthy();
+    expect(row(sub).textContent).toContain("Not in openplan’s user list");
   });
 
-  it("sends one assignment however often Assign is pressed while it is out", async () => {
-    const sent = serve({ users: [charlie], assign: () => new Promise<Response>(() => {}) });
-    await renderWithGrants();
-    const { user } = await typeInSearch("cha");
-    await user.click(await screen.findByRole("option", { name: /Charlie Brown/ }));
-
-    const assign = assignButton();
-    await user.click(assign);
-    expect(assign.textContent).toBe("Assigning...");
-    expect(assign.disabled).toBe(true);
-    await user.click(assign);
-    expect(sent.filter(({ method }) => method === "PUT")).toHaveLength(1);
-  });
-  describe("current grants", () => {
-    it("shows each grant's role as a RoleBadge", async () => {
-      serve({ grants: twoGrants.items });
-      await renderWithGrants(twoGrants.items);
-
-      const owner = screen.getByText("owner");
-      expect(owner.getAttribute("data-slot")).toBe("badge");
-      expect(owner.getAttribute("data-role")).toBe("owner");
-    });
-
-    it("cuts a long name or email short and shows it whole on hover", async () => {
-      const name = "Bartholomew Montgomery-Fitzwilliam the Third, Platform Operations";
-      const email = "bartholomew.montgomery-fitzwilliam@platform-operations.example.com";
-      serve({ grants: [{ user_sub: "u9", role: "viewer", display_name: name, email }] });
-      render(<StackAccessScreen />, { wrapper: wrapper() });
-
-      for (const text of [name, email]) {
-        const element = await screen.findByText(text);
-        expect(element.classList).toContain("truncate");
-        expect(element.getAttribute("title")).toBe(text);
-      }
-    });
-
-    it("puts a failed load in an Alert, with a Retry that loads again", async () => {
-      let calls = 0;
-      vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
-        calls += 1;
-        return calls === 1
-          ? new Response(JSON.stringify({ type: "about:blank", title: "Internal Server Error", detail: "boom" }), {
-              status: 500,
-              headers: { "content-type": "application/json" }
-            })
-          : new Response(JSON.stringify(twoGrants), { status: 200, headers: { "content-type": "application/json" } });
-      });
-      render(<StackAccessScreen />, { wrapper: wrapper() });
-
-      expect((await screen.findByRole("alert")).textContent).toContain("Failed to load grants.");
-      await userEvent.setup().click(screen.getByRole("button", { name: "Retry" }));
-      expect(await screen.findByText("Alice")).toBeDefined();
-    });
-
-    // Screen readers announce a change to a live region that is already in
-    // the page; one mounted together with its text often goes unread.
-    it("keeps the undo status region in the page before it has anything to say", async () => {
-      serve({ grants: twoGrants.items });
-      await renderWithGrants(twoGrants.items);
-
-      const status = screen.getByRole("status");
-      expect(status.textContent).toBe("");
-      const user = userEvent.setup();
-      await user.click(screen.getByRole("button", { name: "Revoke Bob's viewer role" }));
-      await user.click(screen.getByRole("button", { name: "Confirm" }));
-      await waitFor(() => expect(status.textContent).toMatch(/Removed Bob.*viewer access/));
-    });
-
-    it("disables Undo while it restores the role, and leaves Assign alone", async () => {
-      serve({ grants: twoGrants.items, assign: () => new Promise<Response>(() => {}) });
-      await renderWithGrants(twoGrants.items);
-      const user = userEvent.setup();
-
-      await user.click(screen.getByRole("button", { name: "Revoke Bob's viewer role" }));
-      await user.click(screen.getByRole("button", { name: "Confirm" }));
-      const undo = await screen.findByRole("button", { name: "Undo" });
-      await user.click(undo);
-      expect((undo as HTMLButtonElement).disabled).toBe(true);
-      expect(assignButton().textContent).toBe("Assign Role");
-    });
-
-    it("offers Undo in a status banner after a revoke, and Undo restores the role", async () => {
-      const sent = serve({ grants: twoGrants.items });
-      await renderWithGrants(twoGrants.items);
-      const user = userEvent.setup();
-
-      await user.click(screen.getByRole("button", { name: "Revoke Bob's viewer role" }));
-      await user.click(screen.getByRole("button", { name: "Confirm" }));
-      const banner = (await screen.findByText(/Removed Bob.*viewer access/)).closest<HTMLElement>('[role="status"]');
-      expect(banner).not.toBeNull();
-
-      await user.click(within(banner as HTMLElement).getByRole("button", { name: "Undo" }));
-      await waitFor(() =>
-        expect(sent.find(({ method }) => method === "PUT")).toMatchObject({ url: expect.stringMatching(/\/grants\/u2$/), body: { role: "viewer" } })
-      );
-    });
+  it("offers a filter once the list is long", async () => {
+    const many = Array.from({ length: 11 }, (_, i) => grant(`u${i}`, `Person ${String(i).padStart(2, "0")}`, "viewer"));
+    serve({ grants: [grant(ME, "Sam Park", "owner"), ...many] });
+    const user = userEvent.setup();
+    renderScreen();
+    await screen.findByTestId("grant-u0");
+    await user.type(screen.getByTestId("access-filter"), "Person 03");
+    expect(names()).toEqual(["Person 03"]);
   });
 });

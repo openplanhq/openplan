@@ -6,8 +6,8 @@ import Breadcrumb from "../shared/Breadcrumb";
 import { LogPhase, LogStep } from "../shared/LogSteps";
 import StatusRow from "../shared/StatusRow";
 import { statusTone } from "../shared/statusTone";
-import RoleBadge from "../shared/RoleBadge";
-import { STACK_ROLES } from "../shared/roles";
+import RoleLabel from "../features/access/RoleLabel";
+import { PLATFORM_ROLES, STACK_ROLES } from "../features/access/roles";
 import StatusBadge from "../shared/StatusBadge";
 import { CircleAlert, Info, Plus, Search, SearchX } from "lucide-react";
 import {
@@ -258,9 +258,12 @@ export default function StyleGuide() {
                 <StatusRow label="Approved" value="approved" />
               </div>
             </Specimen>
-            <Specimen label="RoleBadge" hint="real component">
+            <Specimen label="RoleLabel" hint="real component">
               {STACK_ROLES.map(({ value }) => (
-                <RoleBadge key={value} stackRole={value} />
+                <RoleLabel key={value} roles={STACK_ROLES} role={value} />
+              ))}
+              {PLATFORM_ROLES.slice(0, 2).map(({ value }) => (
+                <RoleLabel key={value} roles={PLATFORM_ROLES} role={value} />
               ))}
             </Specimen>
             <Specimen label="Breadcrumb" hint="real component" stack>
@@ -433,14 +436,14 @@ export default function StyleGuide() {
             <Specimen label="Select" stack>
               <div className="grid w-full max-w-sm gap-2">
                 <Label htmlFor="sg-select">Default role</Label>
-                <Select items={STACK_ROLES} defaultValue="viewer">
+                <Select items={STACK_ROLES.map((role) => ({ label: role.value, value: role.value }))} defaultValue="viewer">
                   <SelectTrigger id="sg-select" className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {STACK_ROLES.map((role) => (
                       <SelectItem key={role.value} value={role.value}>
-                        {role.label}
+                        {role.value}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -466,7 +469,7 @@ export default function StyleGuide() {
           <Section
             id="colour"
             title="Colour"
-            note="The primary is the only saturated colour in ordinary use. The three status colours are reserved for state, and each clears AA against its own tint, which is how StatusBadge and RoleBadge paint them."
+            note="The primary is the only saturated colour in ordinary use. The three status colours are reserved for state, and each clears AA against its own tint, which is how StatusBadge paints them."
           >
             <Specimen label="Palette" hint="values read from theme.css at runtime">
               <div className="grid w-full grid-cols-2 gap-4 sm:grid-cols-4">
