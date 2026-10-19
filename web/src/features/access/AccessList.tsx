@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { LoaderCircle, Plus, RefreshCw } from "lucide-react";
 import type { GrantView, UserProfile } from "../../api/types";
 import { apiErrorMessage } from "../../api/problems";
@@ -50,7 +51,8 @@ export default function AccessList({
   useSearch,
   assign,
   revoke,
-  onOwnAccessChanged
+  onOwnAccessChanged,
+  lead
 }: {
   /** The ladder, highest first. */
   roles: readonly RoleDefinition[];
@@ -67,6 +69,9 @@ export default function AccessList({
   revoke: (sub: string) => Promise<unknown>;
   /** Your own grant changed: re-read what you may still do here. */
   onOwnAccessChanged?: () => void;
+  /** A row above the grants that isn't one, such as the platform's root.
+      With it the list is never empty, so the empty state never shows. */
+  lead?: ReactNode;
 }) {
   const lowest = roles[roles.length - 1].value;
   const roleFieldId = useId();
@@ -298,7 +303,7 @@ export default function AccessList({
         </div>
       )}
 
-      {ready && rows.length === 0 && (
+      {ready && rows.length === 0 && !lead && (
         <div className="p-5">
           <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-dashed-border px-5 py-10 text-center" data-testid="access-empty">
             <p className="text-sm leading-label font-medium">{copy.emptyTitle}</p>
@@ -306,9 +311,11 @@ export default function AccessList({
         </div>
       )}
 
-      {ready && rows.length > 0 && (
+      {ready && (rows.length > 0 || lead) && (
         <>
           <ul aria-label={copy.listLabel} ref={listRef}>
+            {/* A filter narrows to the people it names; the lead row isn't one. */}
+            {!needle && lead}
             {shown.map((grant) => {
               const sub = grant.user_sub;
               return (
