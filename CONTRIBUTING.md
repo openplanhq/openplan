@@ -138,37 +138,32 @@ policies) and the values a workflow passes do not, though inputs and results are
 in the history too, so their types change only additively, like the payloads
 above.
 
-`go test ./...` runs `TestReplayRecordedHistories`, which replays the histories
-recorded in `internal/workflows/testdata/histories` against your change:
+The `workflow-replay` CI job checks this on every change to
+`internal/workflows` or `internal/domain`. It checks out the last release,
+records that release's histories against a real Temporal, and replays them
+against your change. Run the same locally with Compose's Temporal up:
 
-- **`next/`** holds histories of main since the last release. Nothing released
-  ran them, so when one fails because your change meant to alter it, re-record
-  `next/` with Compose's Temporal running:
+```bash
+docker compose up -d --wait temporal
+make workflow-replay
+```
 
-  ```bash
-  docker compose up -d temporal
-  make workflow-histories
-  ```
+When it fails, branch your change on a version marker, so a run that started
+under the release keeps the old commands and a new run takes the new ones:
 
-  A new path through a workflow needs a scenario of its own in
-  `TestRecordHistories`, and a new workflow needs at least one.
-- **`vX.Y.Z/`** holds histories from a release: runs like those are what an
-  install has in flight when it upgrades. Never re-record or edit them. When
-  one fails, branch your change on a version marker, so a run that started
-  before it keeps the old commands and a new run takes the new ones:
+```go
+if workflow.GetVersion(ctx, "record-plan-summary", workflow.DefaultVersion, 1) == 1 {
+	// the new command
+}
+```
 
-  ```go
-  if workflow.GetVersion(ctx, "record-plan-summary", workflow.DefaultVersion, 1) == 1 {
-  	// the new command
-  }
-  ```
+The old branch can go once no supported upgrade starts from a release that
+lacks the marker.
 
-  Then re-record `next/`, which now takes the new branch. The old branch can go
-  once no supported upgrade starts from a release whose histories need it;
-  delete those histories in the same change.
-
-Cutting a release copies `next/` to a directory named for the tag, in the
-release commit, so the release's histories freeze as it ships.
+The recordings come from `TestRecordHistories`, one scenario per path through
+a workflow, and nothing it records is committed. A new path needs a scenario of
+its own, and a new workflow needs at least one: the next release records from
+them.
 
 ## Commit messages
 

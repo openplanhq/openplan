@@ -24,9 +24,10 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
-// recordHistoriesEnv turns TestRecordHistories on. It is off by default
-// because it needs a real Temporal server: `make workflow-histories` runs it
-// against the one Compose starts.
+// recordHistoriesEnv names the directory TestRecordHistories writes to, and
+// turns it on: it needs a real Temporal server, so `go test ./...` skips it.
+// scripts/workflow-replay.sh sets it when it runs this test from an older
+// release's checkout, so the name is a contract between releases: keep it.
 const recordHistoriesEnv = "OPENPLAN_RECORD_HISTORIES"
 
 // historyNamespace keeps the recording away from the default namespace, where
@@ -106,16 +107,17 @@ func historySyncScenarios() []syncScenario {
 }
 
 // TestRecordHistories runs every scenario on a real Temporal server, with
-// stubbed activities, and writes each execution's history to
-// testdata/histories/next, replacing what is there. TestReplayRecordedHistories
-// then replays them against the code as it changes.
+// stubbed activities, and writes each execution's history as JSON to the
+// directory recordHistoriesEnv names. scripts/workflow-replay.sh runs it from
+// the last release's checkout and replays what it wrote against the code as it
+// is now: those are the runs an install has in flight when it upgrades.
 //
-// next is the code on main since the last release, so re-recording it is how
-// a change to a workflow updates it. Released histories are never re-recorded:
-// they are what a running install has in flight when it upgrades.
+// Nothing it records is committed. A release's histories are its own code's
+// to produce, from its own scenarios, whenever a later change needs them.
 func TestRecordHistories(t *testing.T) {
-	if os.Getenv(recordHistoriesEnv) == "" {
-		t.Skipf("set %s=1 to record workflow histories against a real Temporal server", recordHistoriesEnv)
+	dir := os.Getenv(recordHistoriesEnv)
+	if dir == "" {
+		t.Skipf("set %s to a directory to record workflow histories against a real Temporal server", recordHistoriesEnv)
 	}
 	address := os.Getenv("TEMPORAL_ADDRESS")
 	if address == "" {
@@ -129,6 +131,19 @@ func TestRecordHistories(t *testing.T) {
 
 	runs := historyRunScenarios()
 	syncs := historySyncScenarios()
+	// A workflow with no scenario would record nothing and replay nothing.
+	covered := map[string]bool{}
+	for _, scenario := range runs {
+		covered[scenario.workflow] = true
+	}
+	if len(syncs) > 0 {
+		covered[domain.TemplateSyncWorkflowName] = true
+	}
+	for _, registration := range Registered() {
+		if !covered[registration.Name] {
+			t.Fatalf("no scenario records %s: add one to TestRecordHistories", registration.Name)
+		}
+	}
 	stubs := &historyStubs{runs: map[domain.TemplateRunID]runScenario{}, syncs: map[domain.TemplateRegistrationID]syncScenario{}}
 	for _, scenario := range runs {
 		stubs.runs[scenario.input.RunID] = scenario
@@ -138,10 +153,6 @@ func TestRecordHistories(t *testing.T) {
 	}
 	startHistoryWorkers(t, temporalClient, stubs)
 
-	dir := filepath.Join("testdata", "histories", "next")
-	if err := os.RemoveAll(dir); err != nil {
-		t.Fatal(err)
-	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}

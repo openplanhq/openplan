@@ -1,0 +1,82 @@
+# Replays the last release's workflow histories against the change.
+#
+# Temporal replays a running workflow's history against the code the worker
+# has now. A change to the commands a workflow issues therefore fails every
+# run the previous release had in flight when an install upgrades, and an
+# apply can stop with its infrastructure half changed. scripts/workflow-replay.sh
+# checks out the release, records its histories against a real Temporal, and
+# replays them against this checkout.
+#
+# Nothing it records is committed: the release's own code produces its
+# histories whenever they are needed. It needs a Temporal server, so
+# `go test ./...` cannot run it, and like differential.yml it is a workflow of
+# its own so a skipped guard cannot pass for a green one.
+name: workflow-replay
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "internal/workflows/**"
+      - "internal/domain/**"
+      - "go.mod"
+      - "go.sum"
+      - "scripts/workflow-replay.sh"
+      - ".github/workflows/workflow-replay.yml"
+  pull_request:
+    paths:
+      - "internal/workflows/**"
+      - "internal/domain/**"
+      - "go.mod"
+      - "go.sum"
+      - "scripts/workflow-replay.sh"
+      - ".github/workflows/workflow-replay.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: workflow-replay-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  replay:
+    name: workflow replay (last release vs this change)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The release tags, which the script checks out.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: cache go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      # Compose's Temporal, with the Postgres it depends on, on the image
+      # tags a local stack runs.
+      - name: start Temporal
+        run: |
+          cp .env.example .env
+          docker compose up -d --wait temporal
+
+      # The recorder is what a later change will run from this release's
+      # checkout, so it has to keep working between releases.
+      - name: record and replay this change's own histories
+        run: scripts/workflow-replay.sh HEAD
+
+      - name: replay the last release's histories against this change
+        run: scripts/workflow-replay.sh
