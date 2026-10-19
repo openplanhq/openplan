@@ -135,18 +135,6 @@ describe("StacksListScreen", () => {
     expect(screen.queryByTestId("page-count")).toBeNull();
   });
 
-  it("says why you landed here after leaving a stack's Access page", () => {
-    renderScreen(testQueryClient(), { state: { notice: "You no longer have access to prod." } });
-
-    expect(screen.getByTestId("left-stack-note").textContent).toBe("You no longer have access to prod.");
-  });
-
-  it("says nothing extra when you came any other way", () => {
-    renderScreen(testQueryClient());
-
-    expect(screen.getByTestId("left-stack-note").textContent).toBe("");
-  });
-
   it("says the stacks failed to load under the page's header, with an outline Retry", async () => {
     mockAPI({ "/stacks": () => Promise.reject(new TypeError("network down")) });
 

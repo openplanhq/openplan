@@ -183,67 +183,43 @@ describe("StackAccessScreen", () => {
     await waitFor(() => expect(within(row("mei")).getByTestId("role-mei").textContent).toContain("operator"));
   });
 
-  it("confirms a remove in the row, then keeps the row with Undo", async () => {
+  // No confirm and no Undo (owner, 2026-10-19): the person leaves the list.
+  it("removes someone at once, and they leave the list", async () => {
     const sent = serve();
     const user = userEvent.setup();
     renderScreen();
     await screen.findByTestId("grant-lena");
     await user.click(within(row("lena")).getByRole("button", { name: "Remove Lena Novak’s access" }));
-    expect(within(row("lena")).getByText("Remove Lena Novak’s access to prod?")).toBeTruthy();
-    expect(writes(sent)).toEqual([]);
-    await user.click(within(row("lena")).getByRole("button", { name: "Remove access" }));
-    await waitFor(() => expect(within(row("lena")).getByText("access removed")).toBeTruthy());
+    await waitFor(() => expect(screen.queryByTestId("grant-lena")).toBeNull());
     expect(writes(sent)).toEqual(["DELETE lena"]);
-    expect(screen.getByRole("status").textContent).toContain("Removed Lena Novak’s access to prod.");
-    await user.click(within(row("lena")).getByRole("button", { name: "Undo removing Lena Novak’s access" }));
-    await waitFor(() => expect(writes(sent)).toEqual(["DELETE lena", "PUT lena approver"]));
-    await waitFor(() => expect(within(row("lena")).getByTestId("role-lena").textContent).toContain("approver"));
+    expect(screen.queryByRole("button", { name: /Undo/ })).toBeNull();
+    expect(screen.getByRole("status").textContent).toBe("Removed Lena Novak’s access to prod.");
+    // Focus moves on to the next row, never onto the page body.
+    await waitFor(() => expect(document.activeElement?.getAttribute("aria-label")).toBe("Remove Alex Kim’s access"));
   });
 
-  it("cancels a remove without sending anything", async () => {
-    const sent = serve();
-    const user = userEvent.setup();
-    renderScreen();
-    await screen.findByTestId("grant-lena");
-    await user.click(within(row("lena")).getByRole("button", { name: "Remove Lena Novak’s access" }));
-    await user.click(within(row("lena")).getByRole("button", { name: "Cancel" }));
-    expect(within(row("lena")).getByTestId("role-lena")).toBeTruthy();
-    expect(writes(sent)).toEqual([]);
-  });
-
-  it("warns before you remove yourself, then sends you to /stacks with why", async () => {
+  it("removes your own access at once, and the page follows what the server says", async () => {
     const sent = serve({ canManageAfter: false });
     const user = userEvent.setup();
     renderScreen();
     await screen.findByTestId(`grant-${ME}`);
+    const before = sent.filter(({ url }) => url.endsWith("/stacks/stack_1")).length;
     await user.click(within(row(ME)).getByRole("button", { name: "Remove your access" }));
-    expect(within(row(ME)).getByText(/you will lose access to prod right away/)).toBeTruthy();
-    await user.click(within(row(ME)).getByRole("button", { name: "Remove my access" }));
-    expect((await screen.findByTestId("stacks-page")).textContent).toBe("You no longer have access to prod.");
+    await waitFor(() => expect(screen.queryByTestId(`grant-${ME}`)).toBeNull());
     expect(writes(sent)).toEqual([`DELETE ${ME}`]);
+    // No redirect: the stack is read again, so its guard can refuse the page.
+    await waitFor(() => expect(sent.filter(({ url }) => url.endsWith("/stacks/stack_1")).length).toBeGreaterThan(before));
+    expect(screen.queryByTestId("stacks-page")).toBeNull();
   });
 
-  it("keeps a platform admin who removes themself on the page, with Undo", async () => {
-    serve({ canManageAfter: true });
-    const user = userEvent.setup();
-    renderScreen();
-    await screen.findByTestId(`grant-${ME}`);
-    await user.click(within(row(ME)).getByRole("button", { name: "Remove your access" }));
-    await user.click(within(row(ME)).getByRole("button", { name: "Remove my access" }));
-    await waitFor(() => expect(within(row(ME)).getByText("access removed")).toBeTruthy());
-    expect(within(row(ME)).getByRole("button", { name: "Undo removing your access" })).toBeTruthy();
-  });
-
-  it("asks before you take away your own owner role", async () => {
+  it("changes your own owner role at once", async () => {
     const sent = serve();
     const user = userEvent.setup();
     renderScreen();
     await screen.findByTestId(`grant-${ME}`);
     await pickRole(user, screen.getByTestId(`role-${ME}`), "approver");
-    expect(within(row(ME)).getByText("Make yourself approver on prod?")).toBeTruthy();
-    expect(writes(sent)).toEqual([]);
-    await user.click(within(row(ME)).getByRole("button", { name: "Change my role" }));
     await waitFor(() => expect(writes(sent)).toEqual([`PUT ${ME} approver`]));
+    expect(screen.queryByRole("button", { name: /Change my role|Cancel/ })).toBeNull();
   });
 
   it("finds people, shows who already has a role, and grants the one picked", async () => {

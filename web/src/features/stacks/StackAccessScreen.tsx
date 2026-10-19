@@ -1,7 +1,5 @@
-import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useParams } from "react-router-dom";
-import { getStack } from "../../api/client";
+import { useParams } from "react-router-dom";
 import {
   useAssignStackRoleMutation,
   useRevokeStackRoleMutation,
@@ -17,11 +15,6 @@ import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import AccessList from "../access/AccessList";
 import { STACK_ROLES } from "../access/roles";
 
-/** The line /stacks shows after you've changed your own access to a stack. */
-export interface LeftStackNotice {
-  notice: string;
-}
-
 // A stack's Access page, on openplan UI: who holds which of the stack's roles,
 // and the ways to change that. The list and its parts are AccessList, which
 // the platform's Access screen shares; this page gives it the stack's roles,
@@ -34,31 +27,12 @@ export default function StackAccessScreen() {
   const revoke = useRevokeStackRoleMutation(tenantID, stackId);
   const me = useAuth().me;
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const boundary = useQueryErrorBoundary(grants.error);
   const useSearch = (query: string) => useSearchUsersQuery(tenantID, stackId, query);
 
-  // After you remove or demote yourself, ask the server what you can still
-  // do here: a platform admin keeps managing the stack and stays; anyone else
-  // goes to /stacks, told why, before this page turns into a refusal.
-  const onOwnAccessChanged = useCallback(
-    async (kind: "removed" | "demoted") => {
-      let canManage = false;
-      try {
-        canManage = (await getStack(tenantID, stackId)).stack.effective_capabilities.can_manage_access;
-      } catch {
-        // The stack is gone from view: no access is left at all.
-      }
-      if (canManage) return true;
-      const notice: LeftStackNotice = {
-        notice: kind === "removed" ? `You no longer have access to ${stackName}.` : `You no longer manage access to ${stackName}.`
-      };
-      navigate("/stacks", { state: notice });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.stack(tenantID, stackId) });
-      return false;
-    },
-    [navigate, queryClient, stackId, stackName]
-  );
+  // Your own grant changed: re-read the stack, so if you can no longer
+  // manage its access the page turns into its refusal, as any page does.
+  const onOwnAccessChanged = () => void queryClient.invalidateQueries({ queryKey: queryKeys.stack(tenantID, stackId) });
 
   if (boundary !== null) return <>{boundary}</>;
 
@@ -77,7 +51,6 @@ export default function StackAccessScreen() {
         copy={{
           access: `access to ${stackName}`,
           where: `on ${stackName}`,
-          restorers: "another owner or a platform admin",
           listLabel: `People with access to ${stackName}`,
           loadError: `Something went wrong while loading who has access to ${stackName}.`,
           emptyTitle: `No one has access to ${stackName} yet`
