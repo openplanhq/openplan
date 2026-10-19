@@ -220,6 +220,38 @@ export interface PlanSummary {
   destroy: number;
 }
 
+export type PlanChangesState = "complete" | "truncated" | "unavailable";
+
+export interface PlanChanges {
+  state: PlanChangesState;
+  // Every change the plan has, listed or not. Null when unavailable.
+  total: number | null;
+}
+
+// What a plan does to one resource. The API passes an action it doesn't name
+// through as tofu's own words, so any string can arrive.
+export type PlanChangeAction = "create" | "update" | "replace" | "destroy" | "forget" | "import" | "move" | (string & {});
+
+// One resource a run's plan changes. before and after are its values with
+// sensitive ones already "(sensitive)" and unknown ones "(known after apply)".
+export interface PlanResourceChange {
+  address: string;
+  previous_address: string;
+  module_address: string;
+  mode: string;
+  type: string;
+  name: string;
+  provider_name: string;
+  deposed: string;
+  action: PlanChangeAction;
+  create_before_destroy: boolean;
+  action_reason: string;
+  importing_id: string;
+  replace_paths: (string | number)[][] | null;
+  before: unknown;
+  after: unknown;
+}
+
 export interface TemplateRun {
   id: string;
   tenant_id: string;
@@ -248,6 +280,10 @@ export interface TemplateRun {
   // What the plan would change, or, for an auto-approved apply, what it
   // changed. Null until a plan with changes, or the apply, finishes.
   plan_summary: PlanSummary | null;
+  // What the run's list of resource changes is, once a plan with changes has
+  // finished: every change, the first of total, or none although the plan
+  // had changes (the plan log has them). Null otherwise.
+  plan_changes: PlanChanges | null;
   // The workflows that carried the run, in the order they started: its plan,
   // its apply, or one of them. Only the run's own endpoint returns them.
   executions?: TemplateRunExecution[];

@@ -46,6 +46,7 @@ function run(overrides: Partial<TemplateRun> = {}): TemplateRun {
     run_number: 1,
     auto_approve: false,
     plan_summary: null,
+    plan_changes: null,
     ...overrides
   };
 }
@@ -932,5 +933,143 @@ describe("RunDetailScreen", () => {
         expect.objectContaining({ method: "POST", body: JSON.stringify({ reason: "discarded from run detail" }) })
       )
     );
+  });
+});
+
+describe("RunDetailScreen changes", () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  const changes = [
+    {
+      address: "aws_db_instance.main", previous_address: "", module_address: "", mode: "managed", type: "aws_db_instance", name: "main",
+      provider_name: "aws", deposed: "", action: "replace", create_before_destroy: false, action_reason: "replace_because_cannot_update",
+      importing_id: "", replace_paths: [["storage_encrypted"]],
+      before: { storage_encrypted: false, password: "(sensitive)" }, after: { storage_encrypted: true, password: "(sensitive)" }
+    },
+    {
+      address: "aws_s3_bucket.audit_logs", previous_address: "", module_address: "", mode: "managed", type: "aws_s3_bucket", name: "audit_logs",
+      provider_name: "aws", deposed: "", action: "destroy", create_before_destroy: false, action_reason: "delete_because_no_resource_config",
+      importing_id: "", replace_paths: null, before: { bucket: "acme-prod-audit-logs" }, after: null
+    },
+    {
+      address: "aws_iam_role.monitoring", previous_address: "", module_address: "", mode: "managed", type: "aws_iam_role", name: "monitoring",
+      provider_name: "aws", deposed: "", action: "create", create_before_destroy: false, action_reason: "", importing_id: "",
+      replace_paths: null, before: null, after: { name: "monitoring" }
+    }
+  ];
+
+  function stubAPI() {
+    return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/changes")) {
+        return jsonResponse(changes);
+      }
+      if (url.endsWith("/logs")) {
+        return jsonResponse([runLog({ name: "plan-3" })]);
+      }
+      if (url.endsWith("/logs/plan-3")) {
+        return new Response("plan-3 log body", { status: 200, headers: { "content-type": "text/plain" } });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+  }
+
+  it("opens a waiting plan on its changes, removals first, filtered by action", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(
+      queryKeys.templateRun("tenant_123", "run_1"),
+      run({ operation: "apply", status: "waiting_approval", plan_summary: { add: 2, change: 0, destroy: 2 }, plan_changes: { state: "complete", total: 3 } })
+    );
+    stubAPI();
+    renderScreen(queryClient);
+
+    const views = screen.getByRole("group", { name: "Run views" });
+    expect(within(views).getByRole("button", { name: /^Changes\s?3$/ }).getAttribute("aria-pressed")).toBe("true");
+    await waitFor(() => expect(screen.getByTestId("run-changes")).toBeTruthy());
+    expect(screen.queryByTestId("run-logs-panel")).toBeNull();
+
+    const rows = screen.getAllByRole("row").slice(1);
+    expect(rows.map((row) => within(row).getAllByRole("cell")[1].textContent)).toEqual([
+      "aws_db_instance.main",
+      "aws_s3_bucket.audit_logs",
+      "aws_iam_role.monitoring"
+    ]);
+    expect(within(rows[0]).getByText("storage_encrypted forces replacement")).toBeTruthy();
+    expect(within(rows[1]).getByText("no longer in the configuration")).toBeTruthy();
+
+    const filters = screen.getByRole("group", { name: "Show changes by action" });
+    await userEvent.click(within(filters).getByRole("button", { name: /^Destroy\s?1$/ }));
+    expect(screen.getAllByRole("row").slice(1)).toHaveLength(1);
+    expect(screen.getByText("aws_s3_bucket.audit_logs")).toBeTruthy();
+  });
+
+  it("opens a row on what changes in it, never showing a sensitive value", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(
+      queryKeys.templateRun("tenant_123", "run_1"),
+      run({ operation: "apply", status: "waiting_approval", plan_changes: { state: "complete", total: 3 } })
+    );
+    stubAPI();
+    renderScreen(queryClient);
+
+    const address = await screen.findByRole("button", { name: "aws_db_instance.main" });
+    expect(address.getAttribute("aria-expanded")).toBe("false");
+    await userEvent.click(address);
+    expect(address.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText(/storage_encrypted = false -> true/)).toBeTruthy();
+    expect(screen.getByText("# forces replacement")).toBeTruthy();
+    expect(screen.getByText("# (1 unchanged attribute hidden)")).toBeTruthy();
+  });
+
+  it("switches to the logs and keeps that view while the run polls", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(
+      queryKeys.templateRun("tenant_123", "run_1"),
+      run({ operation: "apply", status: "waiting_approval", plan_changes: { state: "complete", total: 3 } })
+    );
+    stubAPI();
+    renderScreen(queryClient);
+
+    await userEvent.click(screen.getByRole("button", { name: "Logs" }));
+    await waitFor(() => expect(screen.getByText("plan-3 log body")).toBeTruthy());
+    act(() => {
+      queryClient.setQueryData(
+        queryKeys.templateRun("tenant_123", "run_1"),
+        run({ operation: "apply", status: "approved", plan_changes: { state: "complete", total: 3 } })
+      );
+    });
+    expect(screen.getByRole("button", { name: "Logs" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("run-logs-panel")).toBeTruthy();
+  });
+
+  it("says when the list is cut short, and opens an unlisted plan on its logs", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(
+      queryKeys.templateRun("tenant_123", "run_1"),
+      run({ operation: "apply", status: "waiting_approval", plan_changes: { state: "truncated", total: 4210 } })
+    );
+    stubAPI();
+    renderScreen(queryClient);
+    expect(await screen.findByTestId("run-changes-truncated")).toBeTruthy();
+    expect(screen.getByTestId("run-changes-truncated").textContent).toBe("Showing the first 3 of 4210 changes; the plan log has them all.");
+    cleanup();
+
+    const unlisted = testQueryClient();
+    seedCapabilities(unlisted, allAllowed);
+    unlisted.setQueryData(
+      queryKeys.templateRun("tenant_123", "run_1"),
+      run({ operation: "apply", status: "waiting_approval", plan_changes: { state: "unavailable", total: null } })
+    );
+    renderScreen(unlisted);
+    expect(screen.getByRole("button", { name: "Logs" }).getAttribute("aria-pressed")).toBe("true");
+    await userEvent.click(screen.getByRole("button", { name: "Changes" }));
+    expect(screen.getByTestId("run-changes-note").textContent).toBe("openplan can't list this plan's changes; the plan log has them all.");
   });
 });
