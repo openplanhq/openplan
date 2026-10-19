@@ -200,11 +200,17 @@ func (runner *LocalTerraformRunner) summarize(ctx context.Context, input Terrafo
 	if err != nil {
 		return domain.PlanSummary{}, nil, &CommandError{Command: input.Command, Err: err}
 	}
-	changes, err := planchanges.Parse(stdout.Bytes())
+	return summary, listChanges(stdout.Bytes()), nil
+}
+
+// listChanges is the plan's resource changes, or nil when this openplan
+// can't read them: the plan stands without its list.
+func listChanges(planJSON []byte) *domain.PlanChanges {
+	changes, err := planchanges.Parse(planJSON)
 	if err != nil {
-		return summary, nil, nil
+		return nil
 	}
-	return summary, &changes, nil
+	return &changes
 }
 
 // summarizePlanJSON counts a `tofu show -json` plan's resource changes the way

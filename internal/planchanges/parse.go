@@ -10,6 +10,8 @@ package planchanges
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 
 	tfjson "github.com/hashicorp/terraform-json"
@@ -54,13 +56,14 @@ func Parse(body []byte) (domain.PlanChanges, error) {
 // to review.
 func resourceChange(resource *tfjson.ResourceChange) (domain.PlanResourceChange, bool, error) {
 	change := resource.Change
-	action, createBeforeDestroy := foldActions(change.Actions)
+	words := actionWords(change.Actions)
+	action, createBeforeDestroy := foldActions(words)
 	importing := change.Importing != nil
 	moved := resource.PreviousAddress != "" && resource.PreviousAddress != resource.Address
-	switch action {
-	case "read":
+	switch words {
+	case readActions:
 		return domain.PlanResourceChange{}, false, nil
-	case "no-op":
+	case noOpActions, "":
 		switch {
 		case importing:
 			action = domain.PlanChangeImport
@@ -110,16 +113,29 @@ func resourceChange(resource *tfjson.ResourceChange) (domain.PlanResourceChange,
 	return row, true, nil
 }
 
-// foldActions turns tofu's action list into one action. Both replace orders
-// are a replace; createBeforeDestroy says which order. A list it doesn't
-// recognise keeps its words, joined, so an action added in a later version
-// still shows as what tofu called it.
-func foldActions(actions tfjson.Actions) (domain.PlanChangeAction, bool) {
+// tofu's action lists that resourceChange settles before folding: a read
+// is never listed, and a no-op only when it imports or moves the resource.
+const (
+	readActions = "read"
+	noOpActions = "no-op"
+)
+
+// actionWords is tofu's action list as one comma-joined string, the form
+// the switches here match on.
+func actionWords(actions tfjson.Actions) string {
 	words := make([]string, len(actions))
 	for i, action := range actions {
 		words[i] = string(action)
 	}
-	switch strings.Join(words, ",") {
+	return strings.Join(words, ",")
+}
+
+// foldActions turns tofu's action list, as actionWords joins it, into one
+// action. Both replace orders are a replace; createBeforeDestroy says which
+// order. A list it doesn't recognise keeps its words, so an action added in
+// a later version still shows as what tofu called it.
+func foldActions(words string) (domain.PlanChangeAction, bool) {
+	switch words {
 	case "create":
 		return domain.PlanChangeCreate, false
 	case "update":
@@ -132,12 +148,8 @@ func foldActions(actions tfjson.Actions) (domain.PlanChangeAction, bool) {
 		return domain.PlanChangeReplace, true
 	case "forget":
 		return domain.PlanChangeForget, false
-	case "read":
-		return "read", false
-	case "no-op", "":
-		return "no-op", false
 	default:
-		return domain.PlanChangeAction(strings.Join(words, "-")), false
+		return domain.PlanChangeAction(strings.ReplaceAll(words, ",", "-")), false
 	}
 }
 
@@ -188,9 +200,7 @@ func markUnknown(value, unknown any) any {
 	case map[string]any:
 		object, _ := value.(map[string]any)
 		out := make(map[string]any, len(object)+len(marks))
-		for key, child := range object {
-			out[key] = child
-		}
+		maps.Copy(out, object)
 		for key, mark := range marks {
 			out[key] = markUnknown(out[key], mark)
 		}
@@ -228,11 +238,7 @@ func anyMarked(marks any) bool {
 			}
 		}
 	case []any:
-		for _, mark := range typed {
-			if anyMarked(mark) {
-				return true
-			}
-		}
+		return slices.ContainsFunc(typed, anyMarked)
 	}
 	return false
 }

@@ -274,12 +274,18 @@ func (activities *ControlActivities) planChanges(ctx context.Context, input doma
 	if len(body) > 2*domain.MaxPlanChangesBytes {
 		return nil, nil
 	}
+	return checkedPlanChanges(body), nil
+}
+
+// checkedPlanChanges decodes uploaded changes and checks them against the
+// limits, in reading order, or nil when they can't be trusted.
+func checkedPlanChanges(body []byte) *domain.PlanChanges {
 	var changes domain.PlanChanges
-	if err := json.Unmarshal(body, &changes); err != nil || changes.Validate() != nil {
-		return nil, nil
+	if json.Unmarshal(body, &changes) != nil || changes.Validate() != nil {
+		return nil
 	}
 	domain.SortPlanResourceChanges(changes.Changes)
-	return &changes, nil
+	return &changes
 }
 
 // BeginApply claims a run for its apply phase.
