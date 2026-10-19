@@ -946,6 +946,7 @@ type controlStoreStub struct {
 	logs        *recordingLogMetadataRecorder
 	planKey     []byte
 	finished    domain.FinishPlanActivityInput
+	planChanges *domain.PlanChanges
 	outcome     domain.PlanOutcome
 	claimed     bool
 	step        domain.TemplateRunStepActivityInput
@@ -986,7 +987,8 @@ func (store *controlStoreStub) PlanKey(context.Context, domain.TenantID, domain.
 	return store.planKey, nil
 }
 
-func (store *controlStoreStub) FinishTemplatePlan(_ context.Context, input domain.FinishPlanActivityInput) (domain.PlanOutcome, error) {
+func (store *controlStoreStub) FinishTemplatePlan(_ context.Context, input domain.FinishPlanActivityInput, changes *domain.PlanChanges) (domain.PlanOutcome, error) {
+	store.planChanges = changes
 	store.finished = input
 	return store.outcome, nil
 }

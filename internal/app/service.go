@@ -306,6 +306,7 @@ type Service struct {
 	StackTemplateInstaller   StackTemplateInstaller
 	TemplateRunLogs          TemplateRunLogReader
 	TemplateRunLogMetadata   TemplateRunLogRepository
+	PlanChanges              PlanChangeRepository
 	Workflows                WorkflowDispatcher
 	StackIDs                 StackIDGenerator
 	StackTemplateIDs         StackTemplateIDGenerator

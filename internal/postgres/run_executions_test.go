@@ -379,7 +379,7 @@ func TestFinishTemplatePlanWaitingFinishesThePlanExecution(t *testing.T) {
 	outcome, err := store.FinishTemplatePlan(ctx, domain.FinishPlanActivityInput{
 		TenantID: "tenant_123", RunID: "run_123", StackTemplateID: "stack_template_123",
 		Operation: domain.OperationApply, HasChanges: true, Summary: domain.PlanSummary{Add: 3, Change: 1},
-	})
+	}, nil)
 	if err != nil || outcome != domain.PlanOutcomeWaiting {
 		t.Fatalf("FinishTemplatePlan = %q, %v; want waiting", outcome, err)
 	}
@@ -406,7 +406,7 @@ func TestFinishTemplatePlanWithoutChangesStoresNoCounts(t *testing.T) {
 	if _, err := store.FinishTemplatePlan(ctx, domain.FinishPlanActivityInput{
 		TenantID: "tenant_123", RunID: "run_123", StackTemplateID: "stack_template_123",
 		Operation: domain.OperationApply,
-	}); err != nil {
+	}, nil); err != nil {
 		t.Fatal(err)
 	}
 	mustSucceed(t, store.RecordTemplateRunStatus(ctx, statusWrite("run_123", domain.OperationApply, domain.TemplateRunCompleted, domain.RunPhasePlan)))
@@ -606,7 +606,7 @@ func TestFinishTemplatePlanWaitingEndsTheLastStep(t *testing.T) {
 	if _, err := store.FinishTemplatePlan(ctx, domain.FinishPlanActivityInput{
 		TenantID: "tenant_123", RunID: "run_123", StackTemplateID: "stack_template_123",
 		Operation: domain.OperationApply, HasChanges: true, Summary: domain.PlanSummary{Add: 1},
-	}); err != nil {
+	}, nil); err != nil {
 		t.Fatal(err)
 	}
 	rows := stepExecutionRows(t, ctx, pool, "run_123")
@@ -658,7 +658,7 @@ func planToApproval(t *testing.T, ctx context.Context, store *Store, runID domai
 	outcome, err := store.FinishTemplatePlan(ctx, domain.FinishPlanActivityInput{
 		TenantID: "tenant_123", RunID: runID, StackTemplateID: "stack_template_123",
 		Operation: domain.OperationApply, HasChanges: true, Summary: domain.PlanSummary{Add: 3, Change: 1},
-	})
+	}, nil)
 	if err != nil || outcome != domain.PlanOutcomeWaiting {
 		t.Fatalf("FinishTemplatePlan = %q, %v; want waiting", outcome, err)
 	}
@@ -780,7 +780,7 @@ func TestRunReadsAPlanWithNoChanges(t *testing.T) {
 	recordSteps(t, ctx, store, "run_123", domain.TemplateRunStepPlanning)
 	if _, err := store.FinishTemplatePlan(ctx, domain.FinishPlanActivityInput{
 		TenantID: "tenant_123", RunID: "run_123", StackTemplateID: "stack_template_123", Operation: domain.OperationPlan,
-	}); err != nil {
+	}, nil); err != nil {
 		t.Fatal(err)
 	}
 	mustSucceed(t, store.RecordTemplateRunStatus(ctx, statusWrite("run_123", domain.OperationPlan, domain.TemplateRunCompleted, domain.RunPhasePlan)))
@@ -857,7 +857,7 @@ func TestRunListDerivesEachRunsFieldsFromItsOwnExecutions(t *testing.T) {
 	if _, err := store.FinishTemplatePlan(ctx, domain.FinishPlanActivityInput{
 		TenantID: "tenant_123", RunID: "run_plan", StackTemplateID: "stack_template_123",
 		Operation: domain.OperationPlan, HasChanges: true, Summary: domain.PlanSummary{Destroy: 2},
-	}); err != nil {
+	}, nil); err != nil {
 		t.Fatal(err)
 	}
 	mustSucceed(t, store.RecordTemplateRunStatus(ctx, statusWrite("run_plan", domain.OperationPlan, domain.TemplateRunCompleted, domain.RunPhasePlan)))
@@ -998,7 +998,7 @@ func TestFinishTemplatePlanRetryChangesNothing(t *testing.T) {
 			outcome, err := store.FinishTemplatePlan(ctx, domain.FinishPlanActivityInput{
 				TenantID: "tenant_123", RunID: "run_123", StackTemplateID: "stack_template_123",
 				Operation: domain.OperationApply, HasChanges: true, Summary: domain.PlanSummary{Add: 3, Change: 1},
-			})
+			}, nil)
 			if test.wantErr && err == nil {
 				t.Fatalf("FinishTemplatePlan = %q, nil; want refused", outcome)
 			}

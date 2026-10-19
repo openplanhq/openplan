@@ -1,0 +1,32 @@
+$kind: http-request
+description: |-
+  One entry per resource the run's saved plan changes, in reading
+  order: replacements, then destroys, updates, creates, then the rest
+  (forgets, imports, moves, and any action this openplan doesn't name),
+  each kind by address. Reads and no-ops are left out, as tofu's own
+  summary leaves them out.
+
+  The executor reads them from `tofu show -json` inside the plan's
+  sandbox and replaces every sensitive value with `(sensitive)` there;
+  the plan JSON itself never leaves the executor. Unknown values read
+  `(known after apply)`, and a value over 16 KiB reads
+  `(too large to show)`.
+
+  The run's `plan_changes` says what this list is: `complete`,
+  `truncated` (the first of `total`; the plan log has the rest) or
+  `unavailable` (the plan had changes this openplan couldn't list, such
+  as a plan format it doesn't read; the plan log has them). A run whose
+  plan has not finished, or had no changes, answers an empty list.
+method: GET
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/template-runs/{{run_id}}/changes?limit=50'
+queryParams:
+  - key: limit
+    value: "50"
+    description: |-
+      At most how many items the page holds. Out of range is a `422`; not an
+      integer, a `400` (`invalid-query`).
+scripts:
+  - type: afterResponse
+    code: pm.test('status is 200', () => pm.response.to.have.status(200));
+    language: text/javascript
+order: 5000

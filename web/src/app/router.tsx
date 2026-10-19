@@ -126,7 +126,7 @@ export const routeConfig: RouteObject[] = [
                   }
                 ]
               },
-              // Environment and Access keep their pages, under a breadcrumb.
+              // Environment keeps its page, under a breadcrumb, until it is redesigned.
               {
                 element: <StackSectionLayout />,
                 children: [
@@ -134,13 +134,15 @@ export const routeConfig: RouteObject[] = [
                     path: "environment",
                     element: <RequireCapability capability="can_manage_access" mode="route" />,
                     children: [{ index: true, element: <EnvironmentScreen /> }]
-                  },
-                  {
-                    path: "access",
-                    element: <RequireCapability capability="can_manage_access" mode="route" />,
-                    children: [{ index: true, element: <StackAccessScreen /> }]
                   }
                 ]
+              },
+              // Access is on openplan UI: its own header and trail, on the canvas.
+              {
+                path: "access",
+                element: <RequireCapability capability="can_manage_access" mode="route" />,
+                handle: canvas,
+                children: [{ index: true, element: <StackAccessScreen /> }]
               }
             ]
           },

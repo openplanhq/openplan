@@ -7,6 +7,7 @@ import type {
   GrantView,
   ListPage,
   Operation,
+  PlanResourceChange,
   ProblemFieldError,
   Stack,
   StackListItem,
@@ -264,6 +265,12 @@ export function getTemplateRunByNumber(tenantID: string, stackTemplateID: string
   return requestJSON(
     `/v1/tenants/${encodeURIComponent(tenantID)}/stack-templates/${encodeURIComponent(stackTemplateID)}/runs/${encodeURIComponent(runNumber)}`
   );
+}
+
+// A run's plan's resource changes, a page at a time, removals first. One
+// run lists at most 1,000, so a caller can read them all with listAll.
+export function listTemplateRunChanges(tenantID: string, runID: string, options: PageOptions = {}): Promise<ListPage<PlanResourceChange>> {
+  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/template-runs/${encodeURIComponent(runID)}/changes${pageQuery(options)}`);
 }
 
 export function listTemplateRunLogs(tenantID: string, runID: string): Promise<TemplateRunLog[]> {

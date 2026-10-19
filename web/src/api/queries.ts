@@ -3,7 +3,7 @@ import type { InfiniteData, QueryClient } from "@tanstack/react-query";
 import * as client from "./client";
 import { queryKeys } from "./queryKeys";
 import { isTerminalRegistrationStatus, isTerminalRunStatus } from "./polling";
-import type { ListPage, TemplateRegistration, TemplateRegistrationStatus, TemplateRun, TemplateRunStatus } from "./types";
+import type { ListPage, PlanChangesState, TemplateRegistration, TemplateRegistrationStatus, TemplateRun, TemplateRunStatus } from "./types";
 
 // What getNextPageParam gives back: the next page's cursor, or undefined on
 // the last page, which is how TanStack Query knows there is no next page.
@@ -205,6 +205,20 @@ export function useTemplateRunByNumberQuery(tenantID: string, stackTemplateID: s
 // A run's log list refetches whenever the run moves. The previous list stays
 // on screen while it does, but only for the same run: another run's phases
 // would be requested under this run's id.
+/**
+ * Every resource change a run's plan lists, read once its list exists. A run
+ * lists at most 1,000, so the pages are read in full, a hundred at a time:
+ * the view filters and counts them, which a partial list would get wrong.
+ */
+export function useTemplateRunChangesQuery(tenantID: string, runID: string, state: PlanChangesState | "") {
+  return useQuery({
+    queryKey: queryKeys.templateRunChanges(tenantID, runID, state),
+    queryFn: () => client.listAll((cursor) => client.listTemplateRunChanges(tenantID, runID, { cursor, limit: 100 })),
+    enabled: runID !== "" && (state === "complete" || state === "truncated"),
+    staleTime: Infinity
+  });
+}
+
 export function useTemplateRunLogsQuery(tenantID: string, runID: string, statusTag: string) {
   return useQuery({
     queryKey: queryKeys.templateRunLogs(tenantID, runID, statusTag),

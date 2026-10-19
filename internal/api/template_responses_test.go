@@ -35,7 +35,7 @@ func fullTemplateRun() domain.TemplateRun {
 		BackendType: "s3", BackendConfigHash: "hash", Status: domain.TemplateRunCompleted,
 		Step: domain.TemplateRunStepApplying, TriggerActor: "alice", TriggerActorDisplayName: "Alice",
 		CreatedAt: at, CompletedAt: at, ErrorSummary: "none", RunNumber: 3, AutoApprove: true,
-		PlanSummary: summary,
+		PlanSummary: summary, PlanChangesState: domain.PlanChangesComplete, PlanChangesTotal: new(6),
 		Executions: []domain.TemplateRunWorkflowExecution{{
 			Phase: domain.RunPhasePlan, WorkflowID: "temporal-workflow-1", Actor: "alice",
 			ActorDisplayName: "Alice", Status: domain.TemplateRunExecutionSucceeded,
@@ -55,7 +55,7 @@ func TestTemplateRunResponseFields(t *testing.T) {
 
 	assert.Equal(t, []string{
 		"auto_approve", "completed_at", "created_at", "error_summary", "executions", "id",
-		"operation", "plan_summary", "resolved_commit_sha", "run_number", "selected_ref",
+		"operation", "plan_changes", "plan_summary", "resolved_commit_sha", "run_number", "selected_ref",
 		"stack_template_id", "status", "step", "template_revision_id", "tenant_id",
 		"trigger_actor", "trigger_actor_display_name",
 	}, jsonKeys(t, response))

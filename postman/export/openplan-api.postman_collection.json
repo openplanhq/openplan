@@ -972,6 +972,46 @@
           }
         },
         {
+          "name": "List the resources a run's plan changes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () =\u003e pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/template-runs/{{run_id}}/changes?limit=50",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "{{tenant_id}}",
+                "template-runs",
+                "{{run_id}}",
+                "changes"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "At most how many items the page holds. Out of range is a `422`; not an\ninteger, a `400` (`invalid-query`)."
+                }
+              ]
+            },
+            "description": "One entry per resource the run's saved plan changes, in reading\norder: replacements, then destroys, updates, creates, then the rest\n(forgets, imports, moves, and any action this openplan doesn't name),\neach kind by address. Reads and no-ops are left out, as tofu's own\nsummary leaves them out.\n\nThe executor reads them from `tofu show -json` inside the plan's\nsandbox and replaces every sensitive value with `(sensitive)` there;\nthe plan JSON itself never leaves the executor. Unknown values read\n`(known after apply)`, and a value over 16 KiB reads\n`(too large to show)`.\n\nThe run's `plan_changes` says what this list is: `complete`,\n`truncated` (the first of `total`; the plan log has the rest) or\n`unavailable` (the plan had changes this openplan couldn't list, such\nas a plan format it doesn't read; the plan log has them). A run whose\nplan has not finished, or had no changes, answers an empty list."
+          }
+        },
+        {
           "name": "List a run's logs",
           "event": [
             {
