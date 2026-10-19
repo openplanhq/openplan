@@ -988,7 +988,7 @@ describe("RunDetailScreen changes", () => {
     renderScreen(queryClient);
 
     const views = screen.getByRole("group", { name: "Run views" });
-    expect(within(views).getByRole("button", { name: /^Changes\s?3$/ }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(views).getByRole("button", { name: "Changes" }).getAttribute("aria-pressed")).toBe("true");
     await waitFor(() => expect(screen.getByTestId("run-changes")).toBeTruthy());
     expect(screen.queryByTestId("run-logs-panel")).toBeNull();
 

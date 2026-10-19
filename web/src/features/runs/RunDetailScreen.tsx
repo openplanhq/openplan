@@ -71,7 +71,6 @@ export default function RunDetailScreen() {
   // the run's state picks. Keyed on the run, so another run starts fresh.
   const [picked, setPicked] = useState<{ runId: string; view: RunView } | null>(null);
   const view: RunView = picked?.runId === runId ? picked.view : run ? defaultRunView(run) : "logs";
-  const listed = run?.plan_changes?.state === "complete" || run?.plan_changes?.state === "truncated";
 
   const approveRunMutation = useApproveRunMutation(tenantID);
   const discardRunMutation = useDiscardRunMutation(tenantID);
@@ -110,7 +109,7 @@ export default function RunDetailScreen() {
       value={view}
       onChange={(next) => setPicked({ runId, view: next })}
       options={[
-        { value: "changes", label: "Changes", count: listed ? (run.plan_changes?.total ?? undefined) : undefined },
+        { value: "changes", label: "Changes" },
         { value: "logs", label: "Logs" }
       ]}
     />
