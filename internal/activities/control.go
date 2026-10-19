@@ -2,7 +2,10 @@ package activities
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
 
 	"github.com/vishu42/openplan/internal/artifacts"
 	"github.com/vishu42/openplan/internal/domain"
@@ -32,7 +35,9 @@ type PlanKeyStore interface {
 // PlanRecorder records the two steps between a run's plan and its apply.
 type PlanRecorder interface {
 	// FinishTemplatePlan records a finished plan and decides what follows it.
-	FinishTemplatePlan(ctx context.Context, input domain.FinishPlanActivityInput) (domain.PlanOutcome, error)
+	// changes is the plan's resource changes; nil for a plan with changes
+	// means they could not be listed.
+	FinishTemplatePlan(ctx context.Context, input domain.FinishPlanActivityInput, changes *domain.PlanChanges) (domain.PlanOutcome, error)
 	// BeginTemplateApply claims a run for its apply phase by moving it to
 	// running, and starts its apply execution as workflowID: an approved run,
 	// or with autoApprove a queued one. It reports true for a run it already
@@ -46,13 +51,28 @@ type LogMetadataRecorder interface {
 	RecordTemplateRunLog(ctx context.Context, log domain.TemplateRunLog) error
 }
 
+// PlanChangesReader reads the resource changes a run's executor uploaded.
+type PlanChangesReader interface {
+	// GetPlanChanges fails wrapping os.ErrNotExist when none were uploaded.
+	GetPlanChanges(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) ([]byte, error)
+}
+
 // ControlActivities are the template-run activities that belong to the control
 // plane. They write product state or handle secrets, so they run in the API
 // process on the control queue, never next to tenant Terraform.
 type ControlActivities struct {
-	store  ControlStore
-	tokens GitHubTokenSource
-	live   logsink.Stream
+	store   ControlStore
+	tokens  GitHubTokenSource
+	live    logsink.Stream
+	changes PlanChangesReader
+}
+
+// WithPlanChanges reads each finished plan's resource changes from reader,
+// to record them with the plan. Without it, a plan's changes are recorded as
+// unavailable.
+func (activities *ControlActivities) WithPlanChanges(reader PlanChangesReader) *ControlActivities {
+	activities.changes = reader
+	return activities
 }
 
 // NewControlActivities wires the control activities. tokens may be nil, in
@@ -221,11 +241,45 @@ func (activities *ControlActivities) SealPlanKey(ctx context.Context, input doma
 // FinishPlan records a finished plan and reports what follows: completion, a
 // wait for approval, or, for an auto-approved run, its apply.
 func (activities *ControlActivities) FinishPlan(ctx context.Context, input domain.FinishPlanActivityInput) (domain.PlanOutcome, error) {
-	outcome, err := activities.store.FinishTemplatePlan(ctx, input)
+	changes, err := activities.planChanges(ctx, input)
+	if err != nil {
+		return "", fmt.Errorf("finish plan: %w", err)
+	}
+	outcome, err := activities.store.FinishTemplatePlan(ctx, input, changes)
 	if err != nil {
 		return "", fmt.Errorf("finish plan: %w", err)
 	}
 	return outcome, nil
+}
+
+// planChanges reads the resource changes the run's executor uploaded for its
+// plan. They come from the sandbox that ran the template's code, so they are
+// checked again here: anything missing, unreadable or over the limits is
+// recorded as unavailable rather than failing the plan, since the plan log
+// still has every change. Only a store that can't be reached is an error, so
+// the activity retries it.
+func (activities *ControlActivities) planChanges(ctx context.Context, input domain.FinishPlanActivityInput) (*domain.PlanChanges, error) {
+	if !input.HasChanges || activities.changes == nil {
+		return nil, nil
+	}
+	body, err := activities.changes.GetPlanChanges(ctx, input.TenantID, input.RunID)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	// Twice the parser's own budget leaves room for JSON's escaping and
+	// still refuses a file no real plan's executor would write.
+	if len(body) > 2*domain.MaxPlanChangesBytes {
+		return nil, nil
+	}
+	var changes domain.PlanChanges
+	if err := json.Unmarshal(body, &changes); err != nil || changes.Validate() != nil {
+		return nil, nil
+	}
+	domain.SortPlanResourceChanges(changes.Changes)
+	return &changes, nil
 }
 
 // BeginApply claims a run for its apply phase.

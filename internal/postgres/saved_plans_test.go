@@ -109,7 +109,7 @@ func TestFinishTemplatePlanWithChangesWaitsForApproval(t *testing.T) {
 	outcome, err := store.FinishTemplatePlan(ctx, domain.FinishPlanActivityInput{
 		TenantID: "tenant_123", RunID: "run_123", StackTemplateID: "stack_template_123", Operation: domain.OperationApply,
 		HasChanges: true, Summary: domain.PlanSummary{Add: 3, Change: 1},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("FinishTemplatePlan returned error: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestFinishTemplatePlanCompletesAPlanRunWithChanges(t *testing.T) {
 	outcome, err := store.FinishTemplatePlan(ctx, domain.FinishPlanActivityInput{
 		TenantID: "tenant_123", RunID: "run_123", StackTemplateID: "stack_template_123", Operation: domain.OperationPlan,
 		HasChanges: true, Summary: domain.PlanSummary{Add: 1, Destroy: 2},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("FinishTemplatePlan returned error: %v", err)
 	}
@@ -193,7 +193,7 @@ func TestFinishTemplatePlanWithoutChangesRecordsTheSnapshotAsLive(t *testing.T) 
 
 			outcome, err := store.FinishTemplatePlan(ctx, domain.FinishPlanActivityInput{
 				TenantID: "tenant_123", RunID: "run_123", StackTemplateID: "stack_template_123", Operation: operation,
-			})
+			}, nil)
 			if err != nil {
 				t.Fatalf("FinishTemplatePlan returned error: %v", err)
 			}
@@ -328,7 +328,7 @@ func TestTerminalRunsDropTheirPlanKeyAndPendingPlan(t *testing.T) {
 	}
 	if _, err := store.FinishTemplatePlan(ctx, domain.FinishPlanActivityInput{
 		TenantID: "tenant_123", RunID: "run_123", StackTemplateID: "stack_template_123", Operation: domain.OperationApply, HasChanges: true,
-	}); err != nil {
+	}, nil); err != nil {
 		t.Fatal(err)
 	}
 	// Approved, then its apply workflow fails before it claims the run.
