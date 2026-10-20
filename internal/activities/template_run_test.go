@@ -349,8 +349,11 @@ func TestRunTerraformWritesCommandLogFile(t *testing.T) {
 	if got := runLog(t, workspace, "plan.log"); got != "plan stdout\nplan stderr\n" {
 		t.Fatalf("plan log = %q", got)
 	}
-	if !reflect.DeepEqual(executor.env, []string{"TF_VAR_region=us-east-1"}) {
-		t.Fatalf("env = %#v, want TF_VAR_region", executor.env)
+	if len(executor.env) != 0 {
+		t.Fatalf("env = %#v, want none: variables travel in the var file", executor.env)
+	}
+	if executor.varFile != `{"region":"us-east-1"}` {
+		t.Fatalf("var file = %q, want the run's config", executor.varFile)
 	}
 }
 
@@ -718,11 +721,23 @@ type recordingCommandExecutor struct {
 	stdout string
 	stderr string
 	env    []string
-	err    error
+	// varFile is what the command's -var-file held, read while it ran: the
+	// runner removes the file once the command returns.
+	varFile string
+	err     error
 }
 
-func (executor *recordingCommandExecutor) Run(_ context.Context, _ string, env []string, stdout io.Writer, stderr io.Writer, _ string, _ ...string) error {
+func (executor *recordingCommandExecutor) Run(_ context.Context, _ string, env []string, stdout io.Writer, stderr io.Writer, _ string, args ...string) error {
 	executor.env = append([]string(nil), env...)
+	for _, arg := range args {
+		if path, ok := strings.CutPrefix(arg, "-var-file="); ok {
+			contents, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			executor.varFile = string(contents)
+		}
+	}
 	if _, err := io.WriteString(stdout, executor.stdout); err != nil {
 		return err
 	}

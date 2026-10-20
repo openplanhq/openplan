@@ -258,13 +258,58 @@ func (runner *LocalTerraformRunner) run(ctx context.Context, input TerraformComm
 	return nil
 }
 
+// runWithTerraformVariables runs a command that plans, handing it the run's
+// variables as a -var-file rather than TF_VAR_ entries. tofu reads a TF_VAR of
+// a non-primitive type as HCL, so `${` in a string fails, and a template's own
+// *.auto.tfvars silently outranks it; a JSON var file takes strings
+// literally and outranks every file the template ships.
 func (runner *LocalTerraformRunner) runWithTerraformVariables(ctx context.Context, input TerraformCommand, args ...string) error {
-	env, err := terraformVariableEnv(input.ConfigJSON)
+	path, err := writeVariableFile(input.ConfigJSON)
 	if err != nil {
 		return &CommandError{Command: input.Command, Err: fmt.Errorf("variables: %w", err)}
 	}
-	credentialEnv := sortedEnvironment(input.Environment)
-	return runner.run(ctx, input, append(credentialEnv, env...), args...)
+	if path != "" {
+		// Removed however the command ends. Inside a sandbox the file would
+		// go with its /tmp anyway; on any other host it would not.
+		defer func() { _ = os.Remove(path) }()
+		args = append(args, "-var-file="+path)
+	}
+	return runner.run(ctx, input, sortedEnvironment(input.Environment), args...)
+}
+
+// writeVariableFile writes the run's config, byte for byte as stored, to a new
+// .tfvars.json file and returns its path, or "" when there are no variables.
+//
+// The file goes in TMPDIR, which in a sandbox is the sandbox's own tmpfs,
+// outside the template tree. os.CreateTemp picks a random name, opens it with
+// O_EXCL and mode 0600, so nothing a hostile template planted ahead of time,
+// such as a symlink, can redirect the write.
+func writeVariableFile(config json.RawMessage) (string, error) {
+	if len(config) == 0 {
+		return "", nil
+	}
+	var variables map[string]json.RawMessage
+	if err := json.Unmarshal(config, &variables); err != nil {
+		return "", fmt.Errorf("decode config JSON: %w", err)
+	}
+	if variables == nil {
+		return "", fmt.Errorf("config must be a JSON object")
+	}
+	if len(variables) == 0 {
+		return "", nil
+	}
+
+	file, err := os.CreateTemp("", "openplan-*.tfvars.json")
+	if err != nil {
+		return "", fmt.Errorf("create var file: %w", err)
+	}
+	_, writeErr := file.Write(config)
+	closeErr := file.Close()
+	if err := errors.Join(writeErr, closeErr); err != nil {
+		_ = os.Remove(file.Name())
+		return "", fmt.Errorf("write var file: %w", err)
+	}
+	return file.Name(), nil
 }
 
 // sortedEnvironment converts credential variables into deterministic NAME=value process entries.
@@ -282,51 +327,6 @@ func sortedEnvironment(values map[string]string) []string {
 		env = append(env, key+"="+values[key])
 	}
 	return env
-}
-
-func terraformVariableEnv(raw json.RawMessage) ([]string, error) {
-	if len(raw) == 0 {
-		return nil, nil
-	}
-
-	var config map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &config); err != nil {
-		return nil, fmt.Errorf("decode config JSON: %w", err)
-	}
-	if config == nil {
-		return nil, fmt.Errorf("config must be a JSON object")
-	}
-	if len(config) == 0 {
-		return nil, nil
-	}
-
-	keys := make([]string, 0, len(config))
-	for key := range config {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-
-	env := make([]string, 0, len(keys))
-	for _, key := range keys {
-		value, err := terraformVariableValue(config[key])
-		if err != nil {
-			return nil, fmt.Errorf("variable %q: %w", key, err)
-		}
-		env = append(env, "TF_VAR_"+key+"="+value)
-	}
-	return env, nil
-}
-
-func terraformVariableValue(raw json.RawMessage) (string, error) {
-	trimmed := strings.TrimSpace(string(raw))
-	if strings.HasPrefix(trimmed, `"`) {
-		var value string
-		if err := json.Unmarshal(raw, &value); err != nil {
-			return "", err
-		}
-		return value, nil
-	}
-	return trimmed, nil
 }
 
 // outputWriters returns the command-specific output writers with process defaults.
