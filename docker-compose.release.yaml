@@ -1,6 +1,6 @@
 # openplan, self-contained. One file, no .env, no build, no source checkout:
 #
-#   curl -O https://raw.githubusercontent.com/openplanhq/openplan/v0.2.0/docker-compose.release.yaml
+#   curl -O https://raw.githubusercontent.com/openplanhq/openplan/v0.4.0/docker-compose.release.yaml
 #   docker compose -f docker-compose.release.yaml up -d
 #   open http://localhost:5173 and sign in as
 #   admin@openplan.local / admin-local-only
@@ -22,7 +22,7 @@
 # VALKEY_API_PASSWORD and VALKEY_EXECUTOR_PASSWORD in the environment to
 # replace them.
 #
-# Written against v0.2.0. `latest` moves as releases land, so pin the tag to keep
+# Written against v0.4.0. `latest` moves as releases land, so pin the tag to keep
 # a stack reproducible.
 name: openplan
 
@@ -167,7 +167,7 @@ services:
       retries: 10
 
   api:
-    image: ghcr.io/openplanhq/openplan-api:v0.2.0
+    image: ghcr.io/openplanhq/openplan-api:v0.4.0
     pull_policy: missing
     depends_on:
       postgres:
@@ -220,7 +220,7 @@ services:
   # and sealing key stay on one executor through a Temporal session, so the
   # run root is a tmpfs of that container's own.
   executor:
-    image: ghcr.io/openplanhq/openplan-executor:v0.2.0
+    image: ghcr.io/openplanhq/openplan-executor:v0.4.0
     pull_policy: missing
     deploy:
       replicas: 2
@@ -264,7 +264,7 @@ services:
       - artifacts:/var/lib/openplan/artifacts
 
   web:
-    image: ghcr.io/openplanhq/openplan-web:v0.2.0
+    image: ghcr.io/openplanhq/openplan-web:v0.4.0
     pull_policy: missing
     depends_on:
       - api
