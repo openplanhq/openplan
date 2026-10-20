@@ -600,7 +600,11 @@ paths:
             example:
               template_revision_id: 01J9K2M4P7QW8X0YZ1A2B3C4D5
               component_key: vpc
-              config: { cidr_block: 10.0.0.0/16, region: us-east-1 }
+              config:
+                cidr_block: 10.0.0.0/16
+                region: us-east-1
+                azs: [us-east-1a, us-east-1b]
+                tags: { team: platform, env: dev }
       responses:
         "201":
           description: The template was installed.
@@ -2389,20 +2393,40 @@ components:
             Names this component within the stack. It is what lets one stack
             install the same template twice.
         config:
-          type: object
-          additionalProperties: true
+          $ref: "#/components/schemas/StackTemplateConfig"
           description: |
             Terraform input variables, keyed by variable name. Validated
             against the revision's variables. Omit or send `{}` for none.
       required: [template_revision_id, component_key]
+
+    StackTemplateConfig:
+      type: object
+      additionalProperties: true
+      description: |
+        Terraform input variables, keyed by variable name. Each value is the
+        variable's value in Terraform's JSON value encoding (as in
+        `.tfvars.json`): a list or set is an array, a map or object is an
+        object, and a string is accepted for `string`, `number` and `bool`,
+        using Terraform's own conversion, at any depth.
+
+        A value that doesn't fit the variable's declared type is refused with
+        `422 validation-failed`, pointer `#/config/<name>` and issue
+        `invalid`; the detail says where inside the value it is wrong, as in
+        `subnets[1]: a number is required`. A type openplan can't read is not
+        checked here, and Terraform reports it at plan. `null` is refused:
+        leave a variable out to use its default. The value is stored and
+        passed to the run as sent, not as converted.
+      example:
+        region: us-east-1
+        azs: [us-east-1a, us-east-1b]
+        network: { cidr: 10.0.0.0/16, tags: { team: platform } }
 
     UpdateStackTemplateConfigRequest:
       type: object
       additionalProperties: false
       properties:
         config:
-          type: object
-          additionalProperties: true
+          $ref: "#/components/schemas/StackTemplateConfig"
           description: The complete desired config. Replaces the current one wholesale.
       required: [config]
 
@@ -2414,8 +2438,7 @@ components:
           type: string
           description: The revision to stage. Must share the component's `source_template_id`.
         config:
-          type: object
-          additionalProperties: true
+          $ref: "#/components/schemas/StackTemplateConfig"
           description: |
             Optional. Omit to carry the current config forward; supply it when
             the target revision's variables changed.
@@ -2451,8 +2474,7 @@ components:
             segment of its root path (`modules/network/vpc` is `vpc`), or the
             repository name for a template at the repository root.
         config:
-          type: object
-          additionalProperties: true
+          $ref: "#/components/schemas/StackTemplateConfig"
           description: The desired Terraform input variables.
         last_applied_run_id: { type: string }
         last_applied_at: { type: string, format: date-time }

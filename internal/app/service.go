@@ -2586,10 +2586,16 @@ func validateTemplateConfig(raw json.RawMessage, variables []domain.TemplateVari
 		case !ok:
 			problems = append(problems, fieldError(ErrStackTemplateConfigInvalid, IssueUnknown,
 				name+" is not a variable of this template", "config", name))
-		// A required variable's null is reported below, as missing.
-		case string(config[name]) == "null" && !variable.Required:
-			problems = append(problems, fieldError(ErrStackTemplateConfigInvalid, IssueNull,
-				name+" must not be null; leave it out to use its default", "config", name))
+		case string(config[name]) == "null":
+			// A required variable's null is reported below, as missing.
+			if !variable.Required {
+				problems = append(problems, fieldError(ErrStackTemplateConfigInvalid, IssueNull,
+					name+" must not be null; leave it out to use its default", "config", name))
+			}
+		default:
+			if err := checkVariableValue(variable, config[name]); err != nil {
+				problems = append(problems, fieldError(ErrStackTemplateConfigInvalid, IssueInvalid, err.Error(), "config", name))
+			}
 		}
 	}
 	for _, variable := range variables {
