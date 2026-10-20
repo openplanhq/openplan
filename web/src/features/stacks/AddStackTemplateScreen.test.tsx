@@ -408,6 +408,53 @@ describe("AddStackTemplateScreen", () => {
     });
   });
 
+  it("sends a structured variable's value as the JSON typed into it", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [templateRevision()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [
+      variable({ name: "subnets", type_expression: "list(string)" })
+    ]);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "st_new" }), { status: 200, headers: { "content-type": "application/json" } })
+    );
+
+    renderScreen(queryClient);
+
+    await chooseTemplate(userEvent.setup(), "vpc");
+    fireEvent.change(screen.getByLabelText(/subnets/), { target: { value: '["10.0.1.0/24", "10.0.2.0/24"]' } });
+    fireEvent.click(screen.getByRole("button", { name: "Add template" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string).config).toEqual({ subnets: ["10.0.1.0/24", "10.0.2.0/24"] });
+  });
+
+  // Text that isn't JSON can't be sent as a value, so it's refused under its
+  // field without asking the server.
+  it("refuses a structured value that isn't JSON before any request", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [templateRevision()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [
+      variable({ name: "subnets", type_expression: "list(string)" })
+    ]);
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+
+    renderScreen(queryClient);
+
+    await chooseTemplate(userEvent.setup(), "vpc");
+    const subnets = screen.getByLabelText(/subnets/);
+    fireEvent.change(subnets, { target: { value: "[10.0.1.0/24]" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add template" }));
+
+    await waitFor(() => expect(subnets.getAttribute("aria-invalid")).toBe("true"));
+    expect(screen.getByText("subnets is not valid JSON")).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fireEvent.change(subnets, { target: { value: '["10.0.1.0/24"]' } });
+    expect(subnets.getAttribute("aria-invalid")).toBeNull();
+    expect(screen.queryByText("subnets is not valid JSON")).toBeNull();
+  });
+
   it("surfaces a failed install without leaving the screen", async () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [templateRevision()]);

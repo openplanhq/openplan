@@ -432,6 +432,36 @@ describe("UpgradeStackTemplateScreen", () => {
     expect(screen.queryByRole("button", { name: /Change revision/ })).toBeNull();
   });
 
+  it("refuses a structured value that isn't JSON before any request", async () => {
+    const queryClient = testQueryClient();
+    seedUpgradeable(queryClient);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_next"), [
+      variable({ name: "region", template_revision_id: "rev_next" }),
+      variable({ name: "new_var", template_revision_id: "rev_next", type_expression: "map(string)" })
+    ]);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "st_1" }), { status: 200, headers: { "content-type": "application/json" } })
+    );
+
+    renderScreen(queryClient);
+
+    const newVar = screen.getByLabelText(/new_var/);
+    fireEvent.change(newVar, { target: { value: "team=payments" } });
+    fireEvent.click(screen.getByRole("button", { name: /Change revision/ }));
+
+    await waitFor(() => expect(newVar.getAttribute("aria-invalid")).toBe("true"));
+    expect(screen.getByText("new_var is not valid JSON")).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fireEvent.change(newVar, { target: { value: '{"team": "payments"}' } });
+    expect(screen.queryByText("new_var is not valid JSON")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Change revision/ }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string).config).toEqual({ region: "us-east-1", new_var: { team: "payments" } });
+  });
+
   it("surfaces a failed upgrade without leaving the screen", async () => {
     const queryClient = testQueryClient();
     seedUpgradeable(queryClient);
