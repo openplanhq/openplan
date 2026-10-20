@@ -1,7 +1,6 @@
 package activities
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -9,7 +8,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -185,7 +183,7 @@ func (activities *TemplateRunActivities) FetchSource(ctx context.Context, input 
 }
 
 // RunTerraform runs one Terraform command in a sandbox with only the run's
-// cloud credentials, spooling its output, redacted and capped, to the run's
+// cloud credentials, spooling its output, capped, to the run's
 // logs/, which no tofu sandbox mounts. With live logs on, the spool is also
 // published to its stream as it grows. UploadLog uploads it afterwards,
 // whether or not the command succeeded.
@@ -221,10 +219,9 @@ func (activities *TemplateRunActivities) RunTerraform(ctx context.Context, input
 	if err != nil {
 		return domain.RunTerraformActivityOutput{}, fmt.Errorf("open terraform log: %w", err)
 	}
-	spool := newRedactingWriter(newCappedWriter(file, spoolLimit), credentialValues(environment))
+	spool := newCappedWriter(file, spoolLimit)
 	// The flusher tails the spool file, not the writer, so the command's
-	// output never waits on Valkey, and what it publishes is already
-	// redacted and capped.
+	// output never waits on Valkey, and what it publishes is already capped.
 	stopLive := func() {}
 	if activities.live != nil {
 		flusher := logsink.NewFlusher(activities.live, logsink.StreamKey(input.RunID, input.LogName),
@@ -436,44 +433,6 @@ func (activities *TemplateRunActivities) startHeartbeat(ctx context.Context) (st
 		close(done)
 		<-stopped
 	}
-}
-
-type redactingWriter struct {
-	writer  io.WriteCloser
-	secrets []string
-}
-
-// newRedactingWriter wraps a log destination and replaces exact credential values.
-func newRedactingWriter(writer io.WriteCloser, secrets []string) *redactingWriter {
-	return &redactingWriter{writer: writer, secrets: secrets}
-}
-
-// Write redacts configured secrets before forwarding command output to the destination.
-func (writer *redactingWriter) Write(body []byte) (int, error) {
-	redacted := append([]byte(nil), body...)
-	for _, secret := range writer.secrets {
-		redacted = bytes.ReplaceAll(redacted, []byte(secret), []byte("******"))
-	}
-	_, err := writer.writer.Write(redacted)
-	if err != nil {
-		return 0, err
-	}
-	return len(body), nil
-}
-
-// Close releases the wrapped log destination.
-func (writer *redactingWriter) Close() error { return writer.writer.Close() }
-
-// credentialValues extracts non-empty values so Terraform logs can be scrubbed.
-func credentialValues(environment map[string]string) []string {
-	secrets := make([]string, 0, len(environment))
-	for _, value := range environment {
-		if value != "" {
-			secrets = append(secrets, value)
-		}
-	}
-	sort.Slice(secrets, func(i, j int) bool { return len(secrets[i]) > len(secrets[j]) })
-	return secrets
 }
 
 // resolveCredentialEnvironment decrypts inherited Stack credentials and applies StackTemplate overrides.

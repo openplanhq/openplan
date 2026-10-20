@@ -54,10 +54,9 @@ func (action PlanChangeAction) rank() int {
 	}
 }
 
-// Masks put in place of a value the plan must not show. They replace the
-// value itself, so nothing downstream can display it by mistake.
+// Markers put in place of a value the plan can't show: one not known until
+// apply, or one too large to store.
 const (
-	PlanValueSensitive      = "(sensitive)"
 	PlanValueKnownAfter     = "(known after apply)"
 	PlanValueTooLargeToShow = "(too large to show)"
 )
@@ -84,8 +83,7 @@ const (
 
 // PlanResourceChange is one resource a saved plan changes, as the run's
 // Changes view shows it. Before and After are the resource's values with every
-// sensitive leaf replaced by PlanValueSensitive and every unknown one shown as
-// PlanValueKnownAfter, so they are safe to store and show as they are.
+// unknown one shown as PlanValueKnownAfter.
 type PlanResourceChange struct {
 	// Position is the change's place in its run's reading order, set when
 	// it is read back from the database; the API pages by it.

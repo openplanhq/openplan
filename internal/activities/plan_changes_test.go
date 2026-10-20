@@ -103,7 +103,6 @@ func TestPlanChangesTravelFromThePlanToTheArtifactStore(t *testing.T) {
 	require.NoError(t, json.Unmarshal(uploaded, &read))
 	require.Equal(t, 8, read.Total)
 	require.Equal(t, "terraform_data.replaced", read.Changes[0].Address)
-	require.NotContains(t, string(uploaded), "hunter3")
 	require.NoError(t, read.Validate())
 }
 

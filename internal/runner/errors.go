@@ -55,17 +55,7 @@ func (e *GitCommandError) Unwrap() error {
 	return e.Err
 }
 
-// newGitCommandError builds a GitCommandError with every literal form of
-// credential scrubbed from output.
-//
-// Git itself strips userinfo from URLs before printing them, so this is not the
-// only thing standing between a token and a log. It is the last one: Output is
-// persisted as a template registration's error summary and rendered in the UI,
-// so scrubbing here keeps that safe no matter which git flags a later change
-// introduces.
-func newGitCommandError(command GitCommand, output string, credential GitCredential, err error) *GitCommandError {
-	for _, secret := range credential.secrets() {
-		output = strings.ReplaceAll(output, secret, "******")
-	}
+// newGitCommandError builds a GitCommandError from a failed git command's output.
+func newGitCommandError(command GitCommand, output string, err error) *GitCommandError {
 	return &GitCommandError{Command: command, Output: strings.TrimSpace(output), Err: err}
 }

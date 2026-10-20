@@ -2,9 +2,8 @@
 // resource changes a run's Changes view lists.
 //
 // It runs on the executor, inside the sandbox that ran the plan: the JSON
-// holds variable values, the prior state and sensitive values in plaintext,
-// so it never leaves that sandbox. Only what Read returns does, with every
-// sensitive value already replaced.
+// holds variable values and the prior state, so it never leaves that sandbox.
+// Only what Read returns does.
 package planchanges
 
 import (
@@ -171,16 +170,16 @@ func resourceChange(resource *tfjson.ResourceChange) (domain.PlanResourceChange,
 		}
 	}
 	if change.Before != nil {
-		if row.Before, err = encodeValue(mask(change.Before, change.BeforeSensitive)); err != nil {
+		if row.Before, err = encodeValue(change.Before); err != nil {
 			return domain.PlanResourceChange{}, false, err
 		}
 	}
 	// after is unset for a destroy or a forget, though tofu still writes an
 	// empty after_unknown for one. An unknown value is absent from after, so
-	// it is put back, marked, before anything is masked.
+	// it is put back, marked.
 	if change.After != nil || anyMarked(change.AfterUnknown) {
 		after := markUnknown(change.After, change.AfterUnknown)
-		if row.After, err = encodeValue(mask(after, change.AfterSensitive)); err != nil {
+		if row.After, err = encodeValue(after); err != nil {
 			return domain.PlanResourceChange{}, false, err
 		}
 	}
@@ -224,40 +223,6 @@ func foldActions(words string) (domain.PlanChangeAction, bool) {
 		return domain.PlanChangeForget, false
 	default:
 		return domain.PlanChangeAction(strings.ReplaceAll(words, ",", "-")), false
-	}
-}
-
-// mask replaces every value its sensitivity marks as sensitive. The marks
-// mirror the value's shape with true on sensitive leaves, and true on a whole
-// object or list marks all of it.
-func mask(value, sensitive any) any {
-	if marked, ok := sensitive.(bool); ok {
-		if marked {
-			return domain.PlanValueSensitive
-		}
-		return value
-	}
-	switch typed := value.(type) {
-	case map[string]any:
-		marks, _ := sensitive.(map[string]any)
-		out := make(map[string]any, len(typed))
-		for key, child := range typed {
-			out[key] = mask(child, marks[key])
-		}
-		return out
-	case []any:
-		marks, _ := sensitive.([]any)
-		out := make([]any, len(typed))
-		for i, child := range typed {
-			var mark any
-			if i < len(marks) {
-				mark = marks[i]
-			}
-			out[i] = mask(child, mark)
-		}
-		return out
-	default:
-		return value
 	}
 }
 

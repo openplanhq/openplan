@@ -313,7 +313,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 		return fmt.Errorf("load api config: %w", err)
 	}
 
-	sessionSealer, err := encryption.NewCipher(cfg.Security.SessionEncryptionKey.Value())
+	sessionSealer, err := encryption.NewCipher(cfg.Security.SessionEncryptionKey)
 	if err != nil {
 		return fmt.Errorf("create session sealer: %w", err)
 	}
@@ -332,7 +332,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 
 	flow, err := authentication.NewFlow(authentication.FlowConfig{
 		ClientID:     cfg.Security.OIDC.ClientID,
-		ClientSecret: cfg.Security.OIDC.ClientSecret.Value(),
+		ClientSecret: cfg.Security.OIDC.ClientSecret,
 		RedirectURI:  publicURL + "/v1/auth/callback",
 		Endpoints:    verifier,
 		HTTPClient:   &http.Client{Timeout: 10 * time.Second},
@@ -377,8 +377,8 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 	}
 
 	var credentialCipher *encryption.Cipher
-	if !cfg.CredentialEncryptionKey.Empty() {
-		credentialCipher, err = encryption.NewCipher(cfg.CredentialEncryptionKey.Value())
+	if cfg.CredentialEncryptionKey != "" {
+		credentialCipher, err = encryption.NewCipher(cfg.CredentialEncryptionKey)
 		if err != nil {
 			return fmt.Errorf("create credential cipher: %w", err)
 		}
@@ -503,7 +503,7 @@ func startControlPlane(ctx context.Context, cfg config.APIConfig, deps apiDepend
 	// A nil interface, not a typed nil pointer, when no App is configured.
 	var gitHubTokens activities.GitHubTokenSource
 	if cfg.GitHubApp.Enabled() {
-		privateKey, err := githubapp.ParsePrivateKey(cfg.GitHubApp.PrivateKey.Value())
+		privateKey, err := githubapp.ParsePrivateKey(cfg.GitHubApp.PrivateKey)
 		if err != nil {
 			// Unreachable in practice: LoadAPIConfig parses the same key.
 			return nil, fmt.Errorf("parse github app private key: %w", err)

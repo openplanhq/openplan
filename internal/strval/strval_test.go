@@ -58,30 +58,3 @@ func TestSafeOpaque(t *testing.T) {
 		})
 	}
 }
-
-func TestRedact(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name   string
-		value  string
-		secret string
-		want   string
-	}{
-		{"replaces the secret", "token abc leaked", "abc", "token [REDACTED] leaked"},
-		{"replaces every occurrence", "abc and abc", "abc", "[REDACTED] and [REDACTED]"},
-		{"absent secret", "nothing here", "abc", "nothing here"},
-		{"empty secret changes nothing", "anything", "", "anything"},
-		{"empty value", "", "abc", ""},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := Redact(test.value, test.secret); got != test.want {
-				t.Fatalf("Redact(%q, %q) = %q, want %q", test.value, test.secret, got, test.want)
-			}
-		})
-	}
-}

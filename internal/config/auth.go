@@ -36,7 +36,7 @@ type SecurityConfig struct {
 	Root RootConfig
 
 	PublicURL            *url.URL
-	SessionEncryptionKey Secret
+	SessionEncryptionKey string
 	SessionAbsoluteTTL   time.Duration
 	SessionIdleTTL       time.Duration
 
@@ -53,66 +53,13 @@ type RootConfig struct {
 type OIDCConfig struct {
 	IssuerURL    *url.URL
 	ClientID     string
-	ClientSecret Secret
+	ClientSecret string
 }
 
 // OpenFGAConfig is what is left once OpenFGA runs in process: the name of the
 // store to adopt, and nothing else.
 type OpenFGAConfig struct {
 	StoreName string
-}
-
-type Secret struct {
-	value string
-}
-
-func newSecret(value string) Secret {
-	return Secret{value: value}
-}
-
-func (secret Secret) Empty() bool {
-	return secret.value == ""
-}
-
-func (secret Secret) Value() string {
-	return secret.value
-}
-
-func (Secret) String() string {
-	return "[REDACTED]"
-}
-
-func (Secret) GoString() string {
-	return "[REDACTED]"
-}
-
-func (cfg OpenFGAConfig) String() string {
-	return fmt.Sprintf("OpenFGAConfig{StoreName:%q}", cfg.StoreName)
-}
-
-func (cfg OpenFGAConfig) GoString() string {
-	return cfg.String()
-}
-
-func (cfg SecurityConfig) String() string {
-	return fmt.Sprintf(
-		"SecurityConfig{Mode:%q TenantID:%q OIDC:{IssuerURL:%v ClientID:%q ClientSecret:%s} Root:{Subject:%q} PublicURL:%v SessionEncryptionKey:%s SessionAbsoluteTTL:%s SessionIdleTTL:%s OpenFGA:%s}",
-		cfg.Mode,
-		cfg.TenantID,
-		cfg.OIDC.IssuerURL,
-		cfg.OIDC.ClientID,
-		cfg.OIDC.ClientSecret,
-		cfg.Root.Subject,
-		cfg.PublicURL,
-		cfg.SessionEncryptionKey,
-		cfg.SessionAbsoluteTTL,
-		cfg.SessionIdleTTL,
-		cfg.OpenFGA,
-	)
-}
-
-func (cfg SecurityConfig) GoString() string {
-	return cfg.String()
 }
 
 func loadSecurityConfig(getenv func(string) string) (SecurityConfig, error) {
@@ -145,11 +92,11 @@ func loadSecurityConfig(getenv func(string) string) (SecurityConfig, error) {
 	}
 	publicURL.Path = strings.TrimRight(publicURL.Path, "/")
 
-	sessionKey := newSecret(strings.TrimSpace(getenv("SESSION_ENCRYPTION_KEY")))
-	if sessionKey.Empty() {
+	sessionKey := strings.TrimSpace(getenv("SESSION_ENCRYPTION_KEY"))
+	if sessionKey == "" {
 		return SecurityConfig{}, authConfigError("SESSION_ENCRYPTION_KEY is required")
 	}
-	if _, err := encryption.NewCipher(sessionKey.Value()); err != nil {
+	if _, err := encryption.NewCipher(sessionKey); err != nil {
 		return SecurityConfig{}, authConfigError("SESSION_ENCRYPTION_KEY must be a 32-byte raw, base64, or hex key")
 	}
 
@@ -247,7 +194,7 @@ func loadOIDCConfig(getenv func(string) string) (OIDCConfig, error) {
 
 	rawIssuer := strings.TrimSpace(getenv("OIDC_ISSUER_URL"))
 	clientID := strings.TrimSpace(getenv("OIDC_CLIENT_ID"))
-	clientSecret := newSecret(strings.TrimSpace(getenv("OIDC_CLIENT_SECRET")))
+	clientSecret := strings.TrimSpace(getenv("OIDC_CLIENT_SECRET"))
 
 	issuerURL, err := parseConfigURL("OIDC_ISSUER_URL", rawIssuer)
 	if err != nil {
@@ -259,7 +206,7 @@ func loadOIDCConfig(getenv func(string) string) (OIDCConfig, error) {
 	if !strval.SafeOpaque(clientID) {
 		return OIDCConfig{}, authConfigError("OIDC_CLIENT_ID must not contain whitespace or control characters")
 	}
-	if clientSecret.Empty() {
+	if clientSecret == "" {
 		return OIDCConfig{}, authConfigError("OIDC_CLIENT_SECRET is required")
 	}
 	return OIDCConfig{IssuerURL: issuerURL, ClientID: clientID, ClientSecret: clientSecret}, nil

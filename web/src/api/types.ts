@@ -233,7 +233,7 @@ export interface PlanChanges {
 export type PlanChangeAction = "create" | "update" | "replace" | "destroy" | "forget" | "import" | "move" | (string & {});
 
 // One resource a run's plan changes. before and after are its values with
-// sensitive ones already "(sensitive)" and unknown ones "(known after apply)".
+// unknown ones already "(known after apply)".
 export interface PlanResourceChange {
   address: string;
   previous_address: string;

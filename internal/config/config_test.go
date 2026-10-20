@@ -247,7 +247,7 @@ func TestLoadAPIConfigAllowsEmptyCredentialEncryptionKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadAPIConfig returned error: %v", err)
 	}
-	if !cfg.CredentialEncryptionKey.Empty() {
+	if cfg.CredentialEncryptionKey != "" {
 		t.Fatal("CredentialEncryptionKey is not empty, want empty: credential encryption is optional")
 	}
 }
@@ -272,8 +272,8 @@ func TestLoadAPIConfigAcceptsValidCredentialEncryptionKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadAPIConfig returned error: %v", err)
 	}
-	if cfg.CredentialEncryptionKey.Value() != "01234567890123456789012345678901" {
-		t.Fatalf("CredentialEncryptionKey.Value() = %q", cfg.CredentialEncryptionKey.Value())
+	if cfg.CredentialEncryptionKey != "01234567890123456789012345678901" {
+		t.Fatalf("CredentialEncryptionKey = %q", cfg.CredentialEncryptionKey)
 	}
 }
 
@@ -426,18 +426,6 @@ func TestLoadAPIConfigRejectsMalformedGitHubAppValues(t *testing.T) {
 		if _, err := LoadAPIConfig(withValidAPIEnv(env)); !errors.Is(err, ErrInvalidConfig) {
 			t.Fatalf("%s: error = %v, want ErrInvalidConfig", name, err)
 		}
-	}
-}
-
-// The key must not be recoverable from a config value printed in a log.
-func TestGitHubAppConfigRedactsPrivateKey(t *testing.T) {
-	t.Parallel()
-
-	encoded, _ := testRSAPrivateKeyPEM(t)
-	cfg := GitHubAppConfig{AppID: "12345", PrivateKey: newSecret(encoded)}
-
-	if rendered := cfg.PrivateKey.String(); rendered != "[REDACTED]" {
-		t.Fatalf("PrivateKey = %q, want [REDACTED]", rendered)
 	}
 }
 

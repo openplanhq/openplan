@@ -38,7 +38,7 @@ type APIConfig struct {
 	TemporalNamespace       string
 	ArtifactStore           ArtifactStoreConfig
 	Security                SecurityConfig
-	CredentialEncryptionKey Secret
+	CredentialEncryptionKey string
 	// LiveLogURL is the Valkey, as a redis:// or rediss:// URL, that the api
 	// tails running commands' output from.
 	LiveLogURL string
@@ -289,13 +289,13 @@ func loadTerraformTimeout(getenv func(string) string) (time.Duration, error) {
 // backs. Unlike SESSION_ENCRYPTION_KEY, it is optional — an empty value means
 // credential encryption is unavailable, not misconfigured — but a value that
 // is present and malformed must fail at startup rather than at first use.
-func loadCredentialEncryptionKey(getenv func(string) string) (Secret, error) {
-	key := newSecret(strings.TrimSpace(getenv("CREDENTIAL_ENCRYPTION_KEY")))
-	if key.Empty() {
+func loadCredentialEncryptionKey(getenv func(string) string) (string, error) {
+	key := strings.TrimSpace(getenv("CREDENTIAL_ENCRYPTION_KEY"))
+	if key == "" {
 		return key, nil
 	}
-	if _, err := encryption.NewCipher(key.Value()); err != nil {
-		return Secret{}, fmt.Errorf("%w: CREDENTIAL_ENCRYPTION_KEY must be a 32-byte raw, base64, or hex key", ErrInvalidConfig)
+	if _, err := encryption.NewCipher(key); err != nil {
+		return "", fmt.Errorf("%w: CREDENTIAL_ENCRYPTION_KEY must be a 32-byte raw, base64, or hex key", ErrInvalidConfig)
 	}
 	return key, nil
 }
@@ -307,13 +307,13 @@ func loadCredentialEncryptionKey(getenv func(string) string) (Secret, error) {
 // seals them to the executor, which never holds the signing key.
 type GitHubAppConfig struct {
 	AppID      string
-	PrivateKey Secret
+	PrivateKey string
 }
 
 // Enabled reports whether a GitHub App is configured. When it is not, source
 // fetches stay unauthenticated and only public repositories are reachable.
 func (cfg GitHubAppConfig) Enabled() bool {
-	return cfg.AppID != "" && !cfg.PrivateKey.Empty()
+	return cfg.AppID != "" && cfg.PrivateKey != ""
 }
 
 // loadGitHubAppConfig validates GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY the
@@ -326,21 +326,21 @@ func (cfg GitHubAppConfig) Enabled() bool {
 // would otherwise surface much later as an unexplained authentication failure.
 func loadGitHubAppConfig(getenv func(string) string) (GitHubAppConfig, error) {
 	appID := strings.TrimSpace(getenv("GITHUB_APP_ID"))
-	privateKey := newSecret(strings.TrimSpace(getenv("GITHUB_APP_PRIVATE_KEY")))
+	privateKey := strings.TrimSpace(getenv("GITHUB_APP_PRIVATE_KEY"))
 
-	if appID == "" && privateKey.Empty() {
+	if appID == "" && privateKey == "" {
 		return GitHubAppConfig{}, nil
 	}
 	if appID == "" {
 		return GitHubAppConfig{}, fmt.Errorf("%w: GITHUB_APP_ID is required when GITHUB_APP_PRIVATE_KEY is set", ErrInvalidConfig)
 	}
-	if privateKey.Empty() {
+	if privateKey == "" {
 		return GitHubAppConfig{}, fmt.Errorf("%w: GITHUB_APP_PRIVATE_KEY is required when GITHUB_APP_ID is set", ErrInvalidConfig)
 	}
 	if _, err := strconv.ParseInt(appID, 10, 64); err != nil {
 		return GitHubAppConfig{}, fmt.Errorf("%w: GITHUB_APP_ID must be the App's numeric id", ErrInvalidConfig)
 	}
-	if _, err := githubapp.ParsePrivateKey(privateKey.Value()); err != nil {
+	if _, err := githubapp.ParsePrivateKey(privateKey); err != nil {
 		return GitHubAppConfig{}, fmt.Errorf("%w: GITHUB_APP_PRIVATE_KEY must be an RSA private key as PEM or base64-encoded PEM", ErrInvalidConfig)
 	}
 	return GitHubAppConfig{AppID: appID, PrivateKey: privateKey}, nil

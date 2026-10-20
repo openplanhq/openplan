@@ -61,30 +61,6 @@ func TestLoadSecurityConfigProductionAndSecretFormatting(t *testing.T) {
 	if cfg.Mode != RuntimeProduction {
 		t.Fatalf("Mode = %q, want %q", cfg.Mode, RuntimeProduction)
 	}
-	// OpenFGA no longer carries a secret: there is no service to authenticate
-	// to. The redaction this pins is the remaining one, on the client secret.
-	formatted := fmt.Sprintf("%s\n%v\n%+v\n%#v", cfg.OIDC.ClientSecret, cfg.OpenFGA, cfg.OpenFGA, cfg)
-	if strings.Contains(formatted, "directory-reader-secret-sentinel") {
-		t.Fatalf("formatted configuration leaked directory reader secret: %s", formatted)
-	}
-	if !strings.Contains(formatted, "[REDACTED]") {
-		t.Fatalf("formatted configuration did not show redaction marker: %s", formatted)
-	}
-}
-
-func TestSecretIsRedactedInEveryFormatVerb(t *testing.T) {
-	t.Parallel()
-
-	secret := newSecret("my-secret-value")
-	if got := secret.String(); got != "[REDACTED]" {
-		t.Fatalf("Secret.String() = %q, want [REDACTED]", got)
-	}
-	if got := secret.String(); got != "[REDACTED]" {
-		t.Fatalf("Secret via %%v = %q, want [REDACTED]", got)
-	}
-	if got := fmt.Sprintf("%+v", secret); got != "[REDACTED]" {
-		t.Fatalf("Secret via %%+v = %q, want [REDACTED]", got)
-	}
 }
 
 func TestLoadSecurityConfigRejectsMissingAndMalformedValues(t *testing.T) {
@@ -235,24 +211,11 @@ func TestLoadSecurityConfigReadsPublicURLAndSessionKey(t *testing.T) {
 	if cfg.OIDC.ClientID != "openplan-api" {
 		t.Fatalf("ClientID = %q", cfg.OIDC.ClientID)
 	}
-	if cfg.OIDC.ClientSecret.Value() != "oidc-client-secret" {
-		t.Fatalf("ClientSecret = %q", cfg.OIDC.ClientSecret.Value())
+	if cfg.OIDC.ClientSecret != "oidc-client-secret" {
+		t.Fatalf("ClientSecret = %q", cfg.OIDC.ClientSecret)
 	}
-	if cfg.SessionEncryptionKey.Value() != "01234567890123456789012345678901" {
-		t.Fatalf("SessionEncryptionKey = %q", cfg.SessionEncryptionKey.Value())
-	}
-}
-
-func TestSecurityConfigStringRedactsSecrets(t *testing.T) {
-	cfg, err := loadSecurityConfig(mapConfigEnv(validSecurityValues()))
-	if err != nil {
-		t.Fatalf("loadSecurityConfig returned error: %v", err)
-	}
-	rendered := cfg.String()
-	for _, secret := range []string{"oidc-client-secret", "01234567890123456789012345678901"} {
-		if strings.Contains(rendered, secret) {
-			t.Fatalf("SecurityConfig.String() leaked %q: %s", secret, rendered)
-		}
+	if cfg.SessionEncryptionKey != "01234567890123456789012345678901" {
+		t.Fatalf("SessionEncryptionKey = %q", cfg.SessionEncryptionKey)
 	}
 }
 

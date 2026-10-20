@@ -95,8 +95,8 @@ describe("diffLines", () => {
       change({
         action: "replace",
         replace_paths: [["storage_encrypted"]],
-        before: { storage_encrypted: false, password: "(sensitive)", arn: "arn:1", name: "main" },
-        after: { storage_encrypted: true, password: "(sensitive)", arn: "(known after apply)", name: "main" }
+        before: { storage_encrypted: false, password: "hunter2", arn: "arn:1", name: "main" },
+        after: { storage_encrypted: true, password: "hunter2", arn: "(known after apply)", name: "main" }
       })
     );
     expect(lines).toEqual([

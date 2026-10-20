@@ -22,7 +22,7 @@ func TestListTemplateRunResourceChangesPagesInOrder(t *testing.T) {
 		"run_123": {
 			{Address: "aws_db_instance.main", Mode: "managed", Type: "aws_db_instance", Name: "main", Action: domain.PlanChangeReplace,
 				ActionReason: "replace_because_cannot_update", ReplacePaths: json.RawMessage(`[["storage_encrypted"]]`),
-				Before: json.RawMessage(`{"password":"(sensitive)"}`), After: json.RawMessage(`{"password":"(sensitive)"}`)},
+				Before: json.RawMessage(`{"password":"hunter2"}`), After: json.RawMessage(`{"password":"hunter2"}`)},
 			{Address: "aws_s3_bucket.logs", Mode: "managed", Type: "aws_s3_bucket", Name: "logs", Action: domain.PlanChangeDestroy,
 				Before: json.RawMessage(`{"bucket":"logs"}`)},
 			{Address: "aws_iam_role.monitoring", Mode: "managed", Type: "aws_iam_role", Name: "monitoring", Action: domain.PlanChangeCreate,

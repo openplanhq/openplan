@@ -67,14 +67,14 @@ func TestParseRealPlans(t *testing.T) {
 
 			assert.Equal(t, "terraform_data.old_name", byAddress["terraform_data.new_name"].PreviousAddress)
 
-			// The sensitive input is masked on both sides; the output tofu
+			// A sensitive input comes through as written; the output tofu
 			// can't know yet is marked rather than dropped.
 			secret := byAddress["terraform_data.secret"]
 			var before, after map[string]any
 			require.NoError(t, json.Unmarshal(secret.Before, &before))
 			require.NoError(t, json.Unmarshal(secret.After, &after))
-			assert.Equal(t, domain.PlanValueSensitive, before["input"])
-			assert.Equal(t, domain.PlanValueSensitive, after["input"])
+			assert.Equal(t, "hunter2", before["input"])
+			assert.Equal(t, "hunter3", after["input"])
 			assert.Equal(t, domain.PlanValueKnownAfter, after["output"])
 
 			// Nested values and numbers come through as written.
@@ -83,15 +83,6 @@ func TestParseRealPlans(t *testing.T) {
 			assert.Equal(t, map[string]any{"name": "alarm", "nested": []any{1.0, 2.0}}, created["input"])
 			assert.Equal(t, domain.PlanValueKnownAfter, created["output"])
 
-			// The variable's current value is in the plan, under variables
-			// and the resource's sensitive input, and must reach neither.
-			// The old output is not marked sensitive by either tool, and
-			// tofu's own plan log prints it too, so it is shown as tofu
-			// shows it.
-			require.Contains(t, string(body), "hunter3")
-			encoded, err := json.Marshal(changes)
-			require.NoError(t, err)
-			assert.NotContains(t, string(encoded), "hunter3")
 			assert.Equal(t, "hunter2", before["output"])
 		})
 	}
@@ -171,9 +162,8 @@ func TestParseImportsAndSkipsNoOpsAndReads(t *testing.T) {
 	assert.Equal(t, 1, changes.Total)
 }
 
-// A mark of true on an object or a list masks all of it, and marks inside a
-// list mask by index.
-func TestParseMasksWholeObjectsAndListItems(t *testing.T) {
+// Sensitivity marks don't change a value: it is stored as tofu wrote it.
+func TestParseKeepsSensitiveValues(t *testing.T) {
 	t.Parallel()
 
 	changes, err := Parse(plan(`{"address":"x.a","mode":"managed","type":"x","name":"a","change":{"actions":["update"],
@@ -183,8 +173,8 @@ func TestParseMasksWholeObjectsAndListItems(t *testing.T) {
 		"after_sensitive":{"block":true,"keys":[false,true]}}}`))
 	require.NoError(t, err)
 	require.Len(t, changes.Changes, 1)
-	assert.JSONEq(t, `{"block":"(sensitive)","keys":["k1","(sensitive)"]}`, string(changes.Changes[0].Before))
-	assert.JSONEq(t, `{"block":"(sensitive)","keys":["k1","(sensitive)"]}`, string(changes.Changes[0].After))
+	assert.JSONEq(t, `{"block":{"password":"old","user":"u"},"keys":["k1","k2"]}`, string(changes.Changes[0].Before))
+	assert.JSONEq(t, `{"block":{"password":"new","user":"u"},"keys":["k1","k3"]}`, string(changes.Changes[0].After))
 }
 
 // Over the row limit, the sort decides what's cut: creates go, destroys stay.

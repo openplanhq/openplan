@@ -18,7 +18,7 @@ import (
 // Flusher publishes a command's spool file to its stream as the file grows.
 // It tails the file rather than sitting in the writer's path, so a slow or
 // unreachable Valkey costs the live view, never the command. The spool is
-// already redacted and capped; the flusher publishes its bytes as they are.
+// already capped; the flusher publishes its bytes as they are.
 //
 // A Flusher is not safe for concurrent use: Start's goroutine owns it until
 // stop returns.

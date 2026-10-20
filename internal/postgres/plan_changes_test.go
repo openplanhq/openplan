@@ -17,8 +17,8 @@ func samplePlanChanges() *domain.PlanChanges {
 				ProviderName: "registry.opentofu.org/hashicorp/aws", Action: domain.PlanChangeReplace,
 				CreateBeforeDestroy: true, ActionReason: "replace_because_cannot_update",
 				ReplacePaths: json.RawMessage(`[["storage_encrypted"]]`),
-				Before:       json.RawMessage(`{"password":"(sensitive)","storage_encrypted":false}`),
-				After:        json.RawMessage(`{"password":"(sensitive)","storage_encrypted":true}`),
+				Before:       json.RawMessage(`{"password":"hunter2","storage_encrypted":false}`),
+				After:        json.RawMessage(`{"password":"hunter2","storage_encrypted":true}`),
 			},
 			{
 				Address: "aws_s3_bucket.logs", Mode: "managed", Type: "aws_s3_bucket", Name: "logs",

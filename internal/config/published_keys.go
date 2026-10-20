@@ -20,8 +20,8 @@ var publishedEncryptionKeys = []string{
 // refusePublishedKey fails when key, read from the variable name, is one of
 // publishedEncryptionKeys. Keys compare as bytes, so re-encoding a published
 // key does not get it past.
-func refusePublishedKey(name string, key Secret) error {
-	raw, err := encryption.DecodeKey(key.Value())
+func refusePublishedKey(name string, key string) error {
+	raw, err := encryption.DecodeKey(key)
 	// A key that does not decode is not a published one; the variable's own
 	// validation reports it.
 	if err == nil && isPublishedKey(raw) {

@@ -38,21 +38,3 @@ func SafeOpaque(value string) bool {
 		return unicode.IsSpace(character) || unicode.IsControl(character)
 	}) == -1
 }
-
-// Redact removes every occurrence of secret from value. It is applied to
-// anything a remote service echoes back before that text reaches an error or a
-// log, because a service that quotes the request can otherwise carry a token
-// into somewhere it is retained.
-//
-// An empty secret redacts nothing, rather than matching everywhere: "no secret
-// is configured" must not turn a message into a row of markers.
-//
-//	("token abc leaked", "abc") → "token [REDACTED] leaked"
-//	("nothing here", "abc")     → "nothing here"
-//	("anything", "")            → unchanged
-func Redact(value, secret string) string {
-	if secret == "" {
-		return value
-	}
-	return strings.ReplaceAll(value, secret, "[REDACTED]")
-}

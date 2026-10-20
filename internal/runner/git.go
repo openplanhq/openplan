@@ -32,7 +32,7 @@ func (runner *LocalGitRunner) Clone(ctx context.Context, repoURL string, ref str
 	environment := gitEnvironment(credential)
 	output, err := runner.combinedOutput(ctx, environment, "git", "clone", "--depth", "1", "--branch", ref, repoURL, dest)
 	if err != nil {
-		return newGitCommandError(GitCommandClone, output, credential, err)
+		return newGitCommandError(GitCommandClone, output, err)
 	}
 	return nil
 }
@@ -67,7 +67,7 @@ func (runner *LocalGitRunner) CheckoutCommit(ctx context.Context, repoURL string
 	for _, step := range steps {
 		output, err := runner.combinedOutput(ctx, environment, "git", step.args...)
 		if err != nil {
-			return newGitCommandError(step.command, output, credential, err)
+			return newGitCommandError(step.command, output, err)
 		}
 	}
 	return nil
@@ -77,7 +77,7 @@ func (runner *LocalGitRunner) ResolveHead(ctx context.Context, repoPath string) 
 	environment := gitEnvironment(GitCredential{})
 	output, err := runner.combinedOutput(ctx, environment, "git", "-C", repoPath, "rev-parse", "HEAD")
 	if err != nil {
-		return "", newGitCommandError(GitCommandResolveHead, output, GitCredential{}, err)
+		return "", newGitCommandError(GitCommandResolveHead, output, err)
 	}
 	return strings.TrimSpace(output), nil
 }

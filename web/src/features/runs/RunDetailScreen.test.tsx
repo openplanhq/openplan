@@ -947,7 +947,7 @@ describe("RunDetailScreen changes", () => {
       address: "aws_db_instance.main", previous_address: "", module_address: "", mode: "managed", type: "aws_db_instance", name: "main",
       provider_name: "aws", deposed: "", action: "replace", create_before_destroy: false, action_reason: "replace_because_cannot_update",
       importing_id: "", replace_paths: [["storage_encrypted"]],
-      before: { storage_encrypted: false, password: "(sensitive)" }, after: { storage_encrypted: true, password: "(sensitive)" }
+      before: { storage_encrypted: false, password: "hunter2" }, after: { storage_encrypted: true, password: "hunter2" }
     },
     {
       address: "aws_s3_bucket.audit_logs", previous_address: "", module_address: "", mode: "managed", type: "aws_s3_bucket", name: "audit_logs",

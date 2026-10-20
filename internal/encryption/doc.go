@@ -3,7 +3,6 @@
 // in the database go through Cipher rather than reaching for crypto/aes
 // themselves.
 //
-// It deliberately does not own "security helpers" generally -- scrubbing a
-// secret out of text is strval.Redact, and minting an unguessable token is
-// authentication.NewRandomToken.
+// It deliberately does not own "security helpers" generally -- minting an
+// unguessable token is authentication.NewRandomToken.
 package encryption

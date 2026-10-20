@@ -4,10 +4,6 @@ import "encoding/base64"
 
 // GitCredential carries a short-lived token authenticating one git operation
 // against a remote.
-//
-// String and GoString both render "[REDACTED]", so a credential cannot reach a
-// log through %v, %+v, or %#v on any struct that holds one. This mirrors
-// config.Secret, which guards the same hazard for configuration values.
 type GitCredential struct {
 	token string
 }
@@ -21,24 +17,11 @@ func NewGitCredential(token string) GitCredential {
 // Empty reports whether this credential would authenticate anything.
 func (credential GitCredential) Empty() bool { return credential.token == "" }
 
-func (GitCredential) String() string { return "[REDACTED]" }
-
-func (GitCredential) GoString() string { return "[REDACTED]" }
-
 // basicAuth renders the credential as it travels on the wire. GitHub ignores
 // the username; "x-access-token" is its documented convention for signalling
 // that the password field holds an installation token.
 func (credential GitCredential) basicAuth() string {
 	return base64.StdEncoding.EncodeToString([]byte("x-access-token:" + credential.token))
-}
-
-// secrets returns every literal form this credential can take in command
-// output, so all of them can be scrubbed before the output is persisted.
-func (credential GitCredential) secrets() []string {
-	if credential.Empty() {
-		return nil
-	}
-	return []string{credential.token, credential.basicAuth()}
 }
 
 // gitEnvironment returns the environment for one git invocation.
@@ -68,7 +51,6 @@ func gitEnvironment(credential GitCredential) []string {
 		"GIT_TRACE=",
 		"GIT_TRACE_PACKET=",
 		"GIT_TRACE_CURL=",
-		"GIT_TRACE_REDACT=1",
 	}
 	if credential.Empty() {
 		return environment

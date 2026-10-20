@@ -161,7 +161,7 @@ function isShortScalar(value: unknown): boolean {
 }
 
 // Masks the executor put in place of values read as words, not strings.
-const MASKS = new Set(["(sensitive)", "(known after apply)", "(too large to show)"]);
+const MASKS = new Set(["(known after apply)", "(too large to show)"]);
 
 /** One value as tofu writes it: strings quoted, masks and absent values bare. */
 export function valueText(value: unknown): string {

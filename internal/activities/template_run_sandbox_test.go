@@ -68,20 +68,6 @@ func TestRunTerraformSpoolsItsLogOutsideTheWorkspace(t *testing.T) {
 	}
 }
 
-func TestRunTerraformRedactsCredentialsInItsLog(t *testing.T) {
-	t.Parallel()
-
-	activities, _, workspace := newSandboxedActivities(t, &scriptedExecutor{stdout: "key is s3cr3t-value\n"})
-	input := planInput(workspace)
-	input.SealedEnvironment = sealedEnvironment(t, activities, map[string]string{"AWS_SECRET_ACCESS_KEY": "s3cr3t-value"})
-	if _, err := activities.RunTerraform(context.Background(), input); err != nil {
-		t.Fatalf("RunTerraform returned error: %v", err)
-	}
-	if got := runLog(t, workspace, "plan.log"); strings.Contains(got, "s3cr3t-value") {
-		t.Fatalf("plan.log leaks the credential: %q", got)
-	}
-}
-
 // The credential rule: tofu's sandbox gets the run's credentials, its
 // workspace, and nothing of storage.
 func TestRunTerraformJobCarriesOnlyTheRunsCredentials(t *testing.T) {

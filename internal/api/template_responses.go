@@ -48,8 +48,8 @@ type planChangesResponse struct {
 }
 
 // planResourceChangeResponse is one resource a run's plan changes. before and
-// after are the resource's values with sensitive ones already replaced by
-// "(sensitive)" and unknown ones by "(known after apply)".
+// after are the resource's values with unknown ones replaced by
+// "(known after apply)".
 type planResourceChangeResponse struct {
 	Address             string          `json:"address"`
 	PreviousAddress     string          `json:"previous_address"`

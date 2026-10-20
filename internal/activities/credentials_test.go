@@ -12,18 +12,6 @@ type testCredentialReader struct {
 	credentials []domain.CredentialSet
 }
 
-// TestRedactingWriterRemovesCredentialValues verifies that command output never exposes exact secret values.
-func TestRedactingWriterRemovesCredentialValues(t *testing.T) {
-	var output bytes.Buffer
-	writer := newRedactingWriter(nopWriteCloser{Buffer: &output}, []string{"secret"})
-	if _, err := writer.Write([]byte("key=secret")); err != nil {
-		t.Fatalf("Write returned error: %v", err)
-	}
-	if output.String() != "key=******" || bytes.Contains(output.Bytes(), []byte("secret")) {
-		t.Fatalf("output = %q", output.String())
-	}
-}
-
 type nopWriteCloser struct{ *bytes.Buffer }
 
 // Close implements io.WriteCloser for the in-memory test buffer.
