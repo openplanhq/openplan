@@ -11,6 +11,14 @@ const FOCUS = cn(
 /** For shadcn's Input. md:text-meta outranks the Input's own md:text-sm. */
 export const inputClass = cn("h-9 px-3 font-mono text-meta md:text-meta placeholder:text-subtle-foreground pointer-coarse:h-11", FOCUS);
 
+/** For shadcn's Textarea, holding a JSON value: the Input's mono text and
+    inset, two lines tall when empty, growing with its content to about
+    fourteen, then scrolling, so a long value can't push Save off the page. */
+export const textareaClass = cn(
+  "max-h-80 resize-y px-3 py-2 font-mono text-meta leading-relaxed md:text-meta",
+  FOCUS
+);
+
 /** For shadcn's SelectTrigger at its default size; its chevron keeps the right inset. */
 export const selectTriggerClass = cn(
   "w-full pl-3 font-mono text-meta data-[size=default]:h-9 pointer-coarse:data-[size=default]:h-11",
