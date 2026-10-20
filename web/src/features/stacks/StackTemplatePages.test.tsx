@@ -401,6 +401,46 @@ describe("TemplateVariablesTab", () => {
     expect(actionButton(/Save variables/).disabled).toBe(false);
   });
 
+  it("shows a structured value as JSON and does not count reformatting it as an edit", () => {
+    const queryClient = testQueryClient();
+    seedDefaultData(queryClient);
+    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, [stackTemplate({ config: { subnets: ["a", "b"] } })]));
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [
+      variable({ name: "subnets", type_expression: "list(string)" })
+    ]);
+
+    renderAt(queryClient, "/stacks/stack_1/templates/st_1/variables");
+
+    const subnets = screen.getByLabelText(/subnets/) as HTMLInputElement;
+    // An input drops the line breaks of the indented text; the value is the same.
+    expect(JSON.parse(subnets.value)).toEqual(["a", "b"]);
+    fireEvent.change(subnets, { target: { value: '["a", "b"]' } });
+    expect(actionButton(/Save variables/).disabled).toBe(true);
+  });
+
+  it("refuses a structured value that isn't JSON before any request", async () => {
+    const queryClient = testQueryClient();
+    seedDefaultData(queryClient);
+    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, [stackTemplate({ config: { subnets: ["a"] } })]));
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [
+      variable({ name: "subnets", type_expression: "list(string)" })
+    ]);
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+
+    renderAt(queryClient, "/stacks/stack_1/templates/st_1/variables");
+
+    const subnets = screen.getByLabelText(/subnets/);
+    fireEvent.change(subnets, { target: { value: "[a, b]" } });
+    fireEvent.click(actionButton(/Save variables/));
+
+    await waitFor(() => expect(subnets.getAttribute("aria-invalid")).toBe("true"));
+    expect(screen.getByText("subnets is not valid JSON")).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fireEvent.change(subnets, { target: { value: '["a", "b"]' } });
+    expect(screen.queryByText("subnets is not valid JSON")).toBeNull();
+  });
+
   it("locks configuration when canOperate is denied", async () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient, { ...allAllowed, can_operate: false });

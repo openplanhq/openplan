@@ -49,10 +49,16 @@ export default function TemplateVariablesTab() {
     }
     setErrorMessage("");
     variableErrors.clear();
+    // A value that isn't JSON is refused here, under its field, before any request.
+    const encoded = configFromVariableValues(variables, variableValues);
+    if (Object.keys(encoded.errors).length > 0) {
+      variableErrors.set(encoded.errors);
+      return;
+    }
     try {
       await updateStackTemplateConfigMutation.mutateAsync({
         stackTemplateID: stackTemplate.id,
-        body: { config: configFromVariableValues(variables, variableValues) }
+        body: { config: encoded.config }
       });
       setEditedValues({});
     } catch (error) {

@@ -119,7 +119,7 @@ export default function AddStackTemplateScreen() {
       return;
     }
     focusAfterPickRef.current = false;
-    const firstVariable = variableFieldsRef.current?.querySelector("input");
+    const firstVariable = variableFieldsRef.current?.querySelector<HTMLElement>("input, textarea");
     const installButton = installButtonRef.current?.disabled ? null : installButtonRef.current;
     (firstVariable ?? installButton ?? changeButtonRef.current)?.focus();
   }, [variablesLoading, chosenRevisionID]);
@@ -133,10 +133,16 @@ export default function AddStackTemplateScreen() {
     }
     setErrorMessage("");
     variableErrors.clear();
+    // A value that isn't JSON is refused here, under its field, before any request.
+    const encoded = configFromVariableValues(variables, values);
+    if (Object.keys(encoded.errors).length > 0) {
+      variableErrors.set(encoded.errors);
+      return;
+    }
     try {
       const installed = await addTemplateToStackMutation.mutateAsync({
         template_revision_id: chosenRevision.id,
-        config: configFromVariableValues(variables, values)
+        config: encoded.config
       });
       navigate(stackTemplatePath(stackId, installed.id));
     } catch (error) {

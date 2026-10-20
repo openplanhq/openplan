@@ -80,24 +80,59 @@ export function canSaveInstalledTemplateConfig(
   return hasConfigChanged(stackTemplate, variables, variableValues);
 }
 
+// Terraform's simple types keep a plain input and are sent as typed: the
+// server converts "3" to a number and "true" to a bool the way Terraform does.
+const simpleVariableTypes = new Set(["string", "number", "bool"]);
+
+// isStructuredVariable says whether a variable's value is edited as JSON.
+// An untyped variable counts: Terraform reads a missing type as `any`, so its
+// value can be a list or an object, and a plain string is typed in quotes.
+export function isStructuredVariable(variable: Pick<TemplateVariable, "type_expression">): boolean {
+  return !simpleVariableTypes.has(variable.type_expression.trim());
+}
+
 export function variableValuesFromConfig(config: Record<string, unknown>, variables: TemplateVariable[]): Record<string, string> {
   const values: Record<string, string> = {};
   for (const variable of variables) {
     const value = config[variable.name];
-    values[variable.name] = value == null ? "" : String(value);
+    if (value == null) {
+      values[variable.name] = "";
+    } else {
+      values[variable.name] = isStructuredVariable(variable) ? JSON.stringify(value, null, 2) : String(value);
+    }
   }
   return values;
 }
 
-export function configFromVariableValues(variables: TemplateVariable[], values: Record<string, string>): Record<string, string> {
-  const config: Record<string, string> = {};
+export interface EncodedConfig {
+  config: Record<string, unknown>;
+  /** Field text that isn't valid JSON, by variable name. Such a variable is
+      left out of config, so a caller must not send config while this has any. */
+  errors: Record<string, string>;
+}
+
+// configFromVariableValues turns the field text into the request's config.
+// Empty text means "not set", so the variable is left out and its default
+// applies. The shape against the type is the server's check, not this one's.
+export function configFromVariableValues(variables: TemplateVariable[], values: Record<string, string>): EncodedConfig {
+  const config: Record<string, unknown> = {};
+  const errors: Record<string, string> = {};
   for (const variable of variables) {
-    const value = values[variable.name]?.trim() ?? "";
-    if (value !== "") {
-      config[variable.name] = value;
+    const text = values[variable.name]?.trim() ?? "";
+    if (text === "") {
+      continue;
+    }
+    if (!isStructuredVariable(variable)) {
+      config[variable.name] = text;
+      continue;
+    }
+    try {
+      config[variable.name] = JSON.parse(text);
+    } catch {
+      errors[variable.name] = `${variable.name} is not valid JSON`;
     }
   }
-  return config;
+  return { config, errors };
 }
 
 export function upsertStackTemplate(stackTemplates: StackTemplate[], stackTemplate: StackTemplate): StackTemplate[] {
@@ -183,26 +218,22 @@ export function stackTemplateStatus(stackTemplate: StackTemplate): StackTemplate
   }
 }
 
-function areStringRecordEqual(left: Record<string, string>, right: Record<string, string>): boolean {
-  const leftKeys = Object.keys(left);
-  const rightKeys = Object.keys(right);
-  if (leftKeys.length !== rightKeys.length) {
-    return false;
-  }
-  for (const key of leftKeys) {
-    if ((left[key] ?? "") !== (right[key] ?? "")) {
-      return false;
-    }
-  }
-  return true;
-}
-
+// hasConfigChanged compares encoded values, so reformatting JSON alone is not
+// a change. Text that doesn't parse counts as one: Save stays enabled and the
+// click is what shows the error.
 function hasConfigChanged(
   stackTemplate: StackTemplate,
   variables: TemplateVariable[],
   variableValues: Record<string, string>
 ): boolean {
-  const currentConfig = configFromVariableValues(variables, variableValues);
-  const savedConfig = configFromVariableValues(variables, variableValuesFromConfig(stackTemplate.config, variables));
-  return !areStringRecordEqual(currentConfig, savedConfig);
+  const current = configFromVariableValues(variables, variableValues);
+  if (Object.keys(current.errors).length > 0) {
+    return true;
+  }
+  const saved = configFromVariableValues(variables, variableValuesFromConfig(stackTemplate.config, variables)).config;
+  const currentNames = Object.keys(current.config);
+  if (currentNames.length !== Object.keys(saved).length) {
+    return true;
+  }
+  return currentNames.some((name) => !(name in saved) || JSON.stringify(current.config[name]) !== JSON.stringify(saved[name]));
 }

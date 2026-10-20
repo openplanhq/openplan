@@ -83,12 +83,18 @@ export default function UpgradeStackTemplateScreen() {
     }
     setErrorMessage("");
     variableErrors.clear();
+    // A value that isn't JSON is refused here, under its field, before any request.
+    const encoded = configFromVariableValues(targetVariables, variableValues);
+    if (Object.keys(encoded.errors).length > 0) {
+      variableErrors.set(encoded.errors);
+      return;
+    }
     try {
       await upgradeStackTemplateMutation.mutateAsync({
         stackTemplateID: stackTemplate.id,
         body: {
           target_template_revision_id: targetRevision.id,
-          config: configFromVariableValues(targetVariables, variableValues)
+          config: encoded.config
         }
       });
       navigate(stackTemplatePath(stackId, stackTemplate.id, "runs"));

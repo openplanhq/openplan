@@ -5,6 +5,7 @@ import {
   canUpgradeStackTemplate,
   configFromVariableValues,
   findSelectedStackTemplate,
+  isStructuredVariable,
   partitionUpgradeVariables,
   stackTemplateLabel,
   stackTemplateStatus,
@@ -137,18 +138,67 @@ describe("stack workflow helpers", () => {
   it("maps stack template config to editable variable values and request config", () => {
     const variables = [
       templateVariable({ name: "region" }),
-      templateVariable({ name: "size" })
+      templateVariable({ name: "size", type_expression: "number" })
     ];
 
     expect(variableValuesFromConfig({ region: "us-east-1", size: 3, unused: true }, variables)).toEqual({
       region: "us-east-1",
       size: "3"
     });
+    // Simple types go as typed: the server converts "3" to a number.
     expect(configFromVariableValues(variables, {
       region: " us-west-2 ",
-      size: "",
+      size: "3",
       unused: "ignored"
-    })).toEqual({ region: "us-west-2" });
+    })).toEqual({ config: { region: "us-west-2", size: "3" }, errors: {} });
+    expect(configFromVariableValues(variables, { region: "", size: "" })).toEqual({ config: {}, errors: {} });
+  });
+
+  it("edits every type but string, number and bool as JSON, untyped included", () => {
+    for (const type of ["string", "number", "bool", " bool\n"]) {
+      expect(isStructuredVariable(templateVariable({ type_expression: type }))).toBe(false);
+    }
+    for (const type of ["", "any", "list(string)", "map(string)", "object({ cidr = string })", "set(string)", "tuple([string, number])"]) {
+      expect(isStructuredVariable(templateVariable({ type_expression: type }))).toBe(true);
+    }
+  });
+
+  it("round-trips structured values through the field text", () => {
+    const variables = [
+      templateVariable({ name: "subnets", type_expression: "list(string)" }),
+      templateVariable({ name: "tags", type_expression: "map(string)" }),
+      templateVariable({ name: "network", type_expression: "object({ cidr = string, size = number })" }),
+      templateVariable({ name: "anything", type_expression: "any" }),
+      templateVariable({ name: "untyped", type_expression: "" })
+    ];
+    const config = {
+      subnets: ["10.0.1.0/24", "10.0.2.0/24"],
+      tags: { team: "payments" },
+      network: { cidr: "10.0.0.0/16", size: 3 },
+      anything: "a ${b} c",
+      untyped: [1, 2]
+    };
+
+    const values = variableValuesFromConfig(config, variables);
+
+    // An object used to read back as "[object Object]" and be saved that way.
+    expect(values.network).toBe('{\n  "cidr": "10.0.0.0/16",\n  "size": 3\n}');
+    // A string stored for a structured variable shows as the JSON string it is.
+    expect(values.anything).toBe('"a ${b} c"');
+    expect(configFromVariableValues(variables, values)).toEqual({ config, errors: {} });
+  });
+
+  it("names each structured variable whose text isn't JSON and leaves it out", () => {
+    const variables = [
+      templateVariable({ name: "subnets", type_expression: "list(string)" }),
+      templateVariable({ name: "untyped", type_expression: "" }),
+      templateVariable({ name: "region" })
+    ];
+
+    expect(configFromVariableValues(variables, { subnets: "[10.0.1.0/24]", untyped: "plain", region: "eu-west-1" })).toEqual({
+      config: { region: "eu-west-1" },
+      errors: { subnets: "subnets is not valid JSON", untyped: "untyped is not valid JSON" }
+    });
   });
 
   it("upserts refreshed stack templates without changing other installs", () => {
@@ -232,6 +282,16 @@ describe("stack workflow helpers", () => {
 
     expect(canSaveInstalledTemplateConfig(installed, variables, { region: "us-east-1" })).toBe(false);
     expect(canSaveInstalledTemplateConfig(installed, variables, { region: "eu-west-1" })).toBe(true);
+  });
+
+  it("does not count reformatted JSON as a change, and counts text that isn't JSON as one", () => {
+    const installed = stackTemplate({ config: { subnets: ["a", "b"] } });
+    const variables = [variable({ name: "subnets", type_expression: "list(string)" })];
+
+    expect(canSaveInstalledTemplateConfig(installed, variables, { subnets: '[ "a",\n "b" ]' })).toBe(false);
+    expect(canSaveInstalledTemplateConfig(installed, variables, { subnets: '["a"]' })).toBe(true);
+    expect(canSaveInstalledTemplateConfig(installed, variables, { subnets: "[a, b]" })).toBe(true);
+    expect(canSaveInstalledTemplateConfig(installed, variables, { subnets: "" })).toBe(true);
   });
 
   it("does not enable saving installed config without an installed template", () => {
