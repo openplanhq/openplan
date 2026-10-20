@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -138,27 +140,30 @@ func TestLocalTerraformRunnerRunsTerraformDestroy(t *testing.T) {
 
 // Variables go to whatever plans and nowhere after it: a saved plan carries
 // the values it was made with, and applying it must not be able to change
-// them. An auto-approved apply plans as it applies, so it takes them.
+// them. An auto-approved apply plans as it applies, so it takes them. They
+// arrive as a -var-file holding the config exactly as stored, never as
+// TF_VAR_ entries in the environment.
 func TestLocalTerraformRunnerSetsTerraformVariablesOnlyWhenPlanning(t *testing.T) {
 	t.Parallel()
 
+	const config = `{"enabled":true,"region":"us-east-1","replicas":3,"tags":{"env":"prod"},"zones":["us-east-1a","us-east-1b"]}`
 	tests := []struct {
-		name    string
-		command domain.TerraformCommandType
-		args    []string
-		env     []string
+		name      string
+		command   domain.TerraformCommandType
+		args      []string
+		variables bool
 	}{
 		{
-			name:    "plan",
-			command: domain.TerraformCommandPlan,
-			args:    []string{"plan", "-input=false", "-no-color", "-detailed-exitcode", "-out=tfplan"},
-			env:     []string{"TF_VAR_enabled=true", "TF_VAR_region=us-east-1", "TF_VAR_replicas=3", "TF_VAR_tags={\"env\":\"prod\"}", "TF_VAR_zones=[\"us-east-1a\",\"us-east-1b\"]"},
+			name:      "plan",
+			command:   domain.TerraformCommandPlan,
+			args:      []string{"plan", "-input=false", "-no-color", "-detailed-exitcode", "-out=tfplan"},
+			variables: true,
 		},
 		{
-			name:    "destroy plan",
-			command: domain.TerraformCommandPlanDestroy,
-			args:    []string{"plan", "-input=false", "-no-color", "-detailed-exitcode", "-out=tfplan", "-destroy"},
-			env:     []string{"TF_VAR_enabled=true", "TF_VAR_region=us-east-1", "TF_VAR_replicas=3", "TF_VAR_tags={\"env\":\"prod\"}", "TF_VAR_zones=[\"us-east-1a\",\"us-east-1b\"]"},
+			name:      "destroy plan",
+			command:   domain.TerraformCommandPlanDestroy,
+			args:      []string{"plan", "-input=false", "-no-color", "-detailed-exitcode", "-out=tfplan", "-destroy"},
+			variables: true,
 		},
 		{
 			name:    "apply",
@@ -171,10 +176,10 @@ func TestLocalTerraformRunnerSetsTerraformVariablesOnlyWhenPlanning(t *testing.T
 			args:    []string{"apply", "-input=false", "-auto-approve", "-no-color", "tfplan"},
 		},
 		{
-			name:    "auto-approved apply",
-			command: domain.TerraformCommandApplyAutoApprove,
-			args:    []string{"apply", "-input=false", "-auto-approve", "-no-color"},
-			env:     []string{"TF_VAR_enabled=true", "TF_VAR_region=us-east-1", "TF_VAR_replicas=3", "TF_VAR_tags={\"env\":\"prod\"}", "TF_VAR_zones=[\"us-east-1a\",\"us-east-1b\"]"},
+			name:      "auto-approved apply",
+			command:   domain.TerraformCommandApplyAutoApprove,
+			args:      []string{"apply", "-input=false", "-auto-approve", "-no-color"},
+			variables: true,
 		},
 	}
 
@@ -189,24 +194,140 @@ func TestLocalTerraformRunnerSetsTerraformVariablesOnlyWhenPlanning(t *testing.T
 				WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 				WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 				Command:       tt.command,
-				ConfigJSON:    []byte(`{"enabled":true,"region":"us-east-1","replicas":3,"tags":{"env":"prod"},"zones":["us-east-1a","us-east-1b"]}`),
+				ConfigJSON:    []byte(config),
 			})
 			if err != nil {
 				t.Fatalf("Run returned error: %v", err)
 			}
 
-			want := []recordedCommand{
-				{
-					dir:  "/tmp/openplan/runs/tenant_123/run_123",
-					env:  tt.env,
-					name: "tofu",
-					args: tt.args,
-				},
+			if len(executor.commands) != 1 {
+				t.Fatalf("ran %d commands, want 1", len(executor.commands))
 			}
-			if !reflect.DeepEqual(executor.commands, want) {
-				t.Fatalf("commands = %#v, want %#v", executor.commands, want)
+			got := executor.commands[0]
+			if got.env != nil {
+				t.Fatalf("env = %#v, want none: variables travel in the var file", got.env)
+			}
+			if !tt.variables {
+				if !reflect.DeepEqual(got.args, tt.args) || got.varFile != nil {
+					t.Fatalf("args = %#v, want %#v and no var file", got.args, tt.args)
+				}
+				return
+			}
+			if got.varFile == nil {
+				t.Fatalf("args = %#v, want a -var-file", got.args)
+			}
+			wantArgs := append(append([]string(nil), tt.args...), "-var-file="+got.varFile.path)
+			if !reflect.DeepEqual(got.args, wantArgs) {
+				t.Fatalf("args = %#v, want %#v", got.args, wantArgs)
+			}
+			if got.varFile.contents != config {
+				t.Fatalf("var file = %q, want the config as given", got.varFile.contents)
+			}
+			if got.varFile.mode != 0o600 {
+				t.Fatalf("var file mode = %v, want 0600", got.varFile.mode)
+			}
+			if !filepath.IsAbs(got.varFile.path) || strings.HasPrefix(got.varFile.path, "/tmp/openplan/runs/") || !strings.HasSuffix(got.varFile.path, ".tfvars.json") {
+				t.Fatalf("var file path = %q, want an absolute .tfvars.json outside the workspace", got.varFile.path)
+			}
+			if _, err := os.Stat(got.varFile.path); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("var file still there after the command: stat error = %v", err)
 			}
 		})
+	}
+}
+
+// Strings a TF_VAR would have parsed as templates (${, %{) reach tofu as the
+// stored bytes, in the file.
+func TestLocalTerraformRunnerWritesTemplateLikeStringsVerbatim(t *testing.T) {
+	t.Parallel()
+
+	const config = `{"greeting":"a ${b} %{ if c }d%{ endif } \\/ e"}`
+	executor := &recordingCommandExecutor{}
+	runner := NewLocalTerraformRunnerWithExecutor(executor)
+
+	if _, err := runner.Run(context.Background(), TerraformCommand{
+		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
+		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
+		Command:       domain.TerraformCommandPlan,
+		ConfigJSON:    []byte(config),
+	}); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if got := executor.commands[0].varFile; got == nil || got.contents != config {
+		t.Fatalf("var file = %#v, want %q", got, config)
+	}
+}
+
+// No variables, no file and no flag: tofu reads the template's defaults.
+func TestLocalTerraformRunnerPassesNoVarFileForAnEmptyConfig(t *testing.T) {
+	t.Parallel()
+
+	for _, config := range []string{"", "{}", " { } "} {
+		executor := &recordingCommandExecutor{}
+		runner := NewLocalTerraformRunnerWithExecutor(executor)
+
+		if _, err := runner.Run(context.Background(), TerraformCommand{
+			WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
+			WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
+			Command:       domain.TerraformCommandPlan,
+			ConfigJSON:    []byte(config),
+		}); err != nil {
+			t.Fatalf("config %q: Run returned error: %v", config, err)
+		}
+		want := []string{"plan", "-input=false", "-no-color", "-detailed-exitcode", "-out=tfplan"}
+		if got := executor.commands[0]; !reflect.DeepEqual(got.args, want) || got.varFile != nil {
+			t.Fatalf("config %q: args = %#v, want %#v and no var file", config, got.args, want)
+		}
+	}
+}
+
+// A failed plan leaves no var file behind either.
+func TestLocalTerraformRunnerRemovesTheVarFileWhenTheCommandFails(t *testing.T) {
+	t.Parallel()
+
+	commandErr := errors.New("exit status 1")
+	executor := &recordingCommandExecutor{errs: []error{commandErr}}
+	runner := NewLocalTerraformRunnerWithExecutor(executor)
+
+	_, err := runner.Run(context.Background(), TerraformCommand{
+		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
+		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
+		Command:       domain.TerraformCommandPlan,
+		ConfigJSON:    []byte(`{"region":"us-east-1"}`),
+	})
+	if !errors.Is(err, commandErr) {
+		t.Fatalf("error = %v, want the command's", err)
+	}
+	varFile := executor.commands[0].varFile
+	if varFile == nil {
+		t.Fatal("plan ran without a var file")
+	}
+	if _, err := os.Stat(varFile.path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("var file still there after a failed command: stat error = %v", err)
+	}
+}
+
+// A config that isn't a JSON object fails the command before tofu runs.
+func TestLocalTerraformRunnerRefusesAConfigThatIsNotAnObject(t *testing.T) {
+	t.Parallel()
+
+	for _, config := range []string{"null", "[]", `"x"`, "{"} {
+		executor := &recordingCommandExecutor{}
+		runner := NewLocalTerraformRunnerWithExecutor(executor)
+
+		_, err := runner.Run(context.Background(), TerraformCommand{
+			WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
+			WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
+			Command:       domain.TerraformCommandPlan,
+			ConfigJSON:    []byte(config),
+		})
+		var cmdErr *CommandError
+		if !errors.As(err, &cmdErr) || !strings.Contains(err.Error(), "variables") {
+			t.Fatalf("config %q: error = %v, want a variables CommandError", config, err)
+		}
+		if len(executor.commands) != 0 {
+			t.Fatalf("config %q: ran %#v, want nothing", config, executor.commands)
+		}
 	}
 }
 
@@ -512,10 +633,11 @@ type recordingCommandExecutor struct {
 
 func (executor *recordingCommandExecutor) Run(_ context.Context, dir string, env []string, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
 	executor.commands = append(executor.commands, recordedCommand{
-		dir:  dir,
-		env:  append([]string(nil), env...),
-		name: name,
-		args: append([]string(nil), args...),
+		dir:     dir,
+		env:     append([]string(nil), env...),
+		name:    name,
+		args:    append([]string(nil), args...),
+		varFile: readVarFile(args),
 	})
 	if executor.stdout != "" {
 		if _, err := io.WriteString(stdout, executor.stdout); err != nil {
@@ -563,10 +685,37 @@ func (executor *scriptedCommandExecutor) Run(_ context.Context, dir string, env 
 }
 
 type recordedCommand struct {
-	dir  string
-	env  []string
-	name string
-	args []string
+	dir     string
+	env     []string
+	name    string
+	args    []string
+	varFile *recordedVarFile
+}
+
+// recordedVarFile is the -var-file a command was given, read while it ran:
+// the runner removes it once the command returns.
+type recordedVarFile struct {
+	path     string
+	contents string
+	mode     os.FileMode
+}
+
+func readVarFile(args []string) *recordedVarFile {
+	for _, arg := range args {
+		path, ok := strings.CutPrefix(arg, "-var-file=")
+		if !ok {
+			continue
+		}
+		recorded := &recordedVarFile{path: path}
+		if info, err := os.Stat(path); err == nil {
+			recorded.mode = info.Mode().Perm()
+		}
+		if contents, err := os.ReadFile(path); err == nil {
+			recorded.contents = string(contents)
+		}
+		return recorded
+	}
+	return nil
 }
 
 // An approved apply and a destroy apply a saved plan, and count what they did
