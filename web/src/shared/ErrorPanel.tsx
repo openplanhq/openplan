@@ -8,7 +8,9 @@ import { cn } from "@/lib/utils";
 // sync or a registration that the server refused. It is drawn as a Notice is,
 // a bordered block of its own, so it can never be read as part of the text
 // beside it: a headline after a destructive triangle, then what to do next,
-// then the server's own words.
+// then the server's own words. Those sit straight inside the one border, in
+// mono under the headline: a second box inside the first read as clutter
+// (owner, 2026-10-21).
 //
 // Today the server only sends its raw error, so callers pass a generic
 // headline and the raw text as details, shown open. Once failures carry a
@@ -59,7 +61,7 @@ export default function ErrorPanel({
         {hasDetails && open && (
           <pre
             id={detailsId}
-            className="m-0 mt-2 rounded-lg border bg-canvas px-3 py-2.5 font-mono text-xs leading-relaxed whitespace-pre-wrap text-code-foreground wrap-anywhere"
+            className="m-0 mt-1 font-mono text-xs leading-relaxed whitespace-pre-wrap text-code-foreground wrap-anywhere"
           >
             {details}
           </pre>
