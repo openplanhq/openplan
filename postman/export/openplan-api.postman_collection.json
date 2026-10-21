@@ -77,8 +77,210 @@
     },
     {
       "name": "Templates",
-      "description": "Registering Terraform sources as immutable, reusable revisions.",
+      "description": "Registering Terraform sources as templates, and syncing them into immutable, reusable revisions.",
       "item": [
+        {
+          "name": "Register a template",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 202', () =\u003e pm.response.to.have.status(202));",
+                  "if (pm.response.code \u003c 300) { pm.environment.set('template_id', pm.response.json().id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"repo_owner\": \"{{template_repo_owner}}\",\n  \"repo_name\": \"{{template_repo_name}}\",\n  \"source_ref\": \"{{template_source_ref}}\",\n  \"root_path\": \"{{template_root_path}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/templates",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "{{tenant_id}}",
+                "templates"
+              ]
+            },
+            "description": "Points openplan at a Terraform source in a GitHub repository: an owner,\na repository, a ref and a root path. Returns `202` with the template,\nand queues a sync that resolves the ref to a commit, fetches the\nsource, and records a revision with its input variables.\n\nA source names one template, so registering a source that is already\nregistered returns the same template, and syncs it again. Read the\ntemplate until `latest_template_revision_id` names a revision."
+          }
+        },
+        {
+          "name": "List templates",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () =\u003e pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/templates?limit=50",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "{{tenant_id}}",
+                "templates"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "At most how many items the page holds. Out of range is a `422`; not an\ninteger, a `400` (`invalid-query`)."
+                }
+              ]
+            },
+            "description": "Newest first, a page at a time. A template shows from the moment it is\nregistered, before any sync has recorded a revision of it."
+          }
+        },
+        {
+          "name": "Read a template",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () =\u003e pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/templates/{{template_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "{{tenant_id}}",
+                "templates",
+                "{{template_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sync a template",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 202', () =\u003e pm.response.to.have.status(202));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/templates/{{template_id}}/syncs",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "{{tenant_id}}",
+                "templates",
+                "{{template_id}}",
+                "syncs"
+              ]
+            },
+            "description": "Queues a sync of the template's source, to pick up a new commit on its\nref or to retry a sync that failed.\n\nTakes no fields: send `{}` or no body at all. Returns `202` with the\ntemplate; a sync has no read of its own."
+          }
+        },
+        {
+          "name": "List a template's revisions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () =\u003e pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/templates/{{template_id}}/revisions?limit=50",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "{{tenant_id}}",
+                "templates",
+                "{{template_id}}",
+                "revisions"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "At most how many items the page holds. Out of range is a `422`; not an\ninteger, a `400` (`invalid-query`)."
+                }
+              ]
+            },
+            "description": "Newest first, a page at a time. A template no sync has recorded a\nrevision of yet has an empty list; an unknown template is a `404`."
+          }
+        },
         {
           "name": "Register a template revision",
           "event": [

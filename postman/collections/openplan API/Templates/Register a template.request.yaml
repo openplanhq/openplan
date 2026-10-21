@@ -1,0 +1,31 @@
+$kind: http-request
+description: |-
+  Points openplan at a Terraform source in a GitHub repository: an owner,
+  a repository, a ref and a root path. Returns `202` with the template,
+  and queues a sync that resolves the ref to a commit, fetches the
+  source, and records a revision with its input variables.
+
+  A source names one template, so registering a source that is already
+  registered returns the same template, and syncs it again. Read the
+  template until `latest_template_revision_id` names a revision.
+method: POST
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/templates'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "repo_owner": "{{template_repo_owner}}",
+      "repo_name": "{{template_repo_name}}",
+      "source_ref": "{{template_source_ref}}",
+      "root_path": "{{template_root_path}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('status is 202', () => pm.response.to.have.status(202));
+      if (pm.response.code < 300) { pm.environment.set('template_id', pm.response.json().id); }
+    language: text/javascript
+order: 1000

@@ -88,6 +88,13 @@ var overrides = map[string]override{
 		test: save("my_sub", "pm.response.json().sub") + "\n" +
 			"pm.test('tenant matches the environment', () => pm.expect(pm.response.json().tenant_id).to.eql(pm.environment.get('tenant_id')));",
 	},
+	"createTemplate": {
+		jsonBody: jsonObject([][2]string{
+			{"repo_owner", "{{template_repo_owner}}"}, {"repo_name", "{{template_repo_name}}"},
+			{"source_ref", "{{template_source_ref}}"}, {"root_path", "{{template_root_path}}"},
+		}),
+		test: save("template_id", "pm.response.json().id"),
+	},
 	"createTemplateRegistration": {
 		jsonBody: jsonObject([][2]string{
 			{"repo_owner", "{{template_repo_owner}}"}, {"repo_name", "{{template_repo_name}}"},

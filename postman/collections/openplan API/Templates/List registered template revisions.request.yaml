@@ -15,4 +15,4 @@ scripts:
       const revisions = pm.response.json().items;
       if (!pm.environment.get('template_revision_id') && revisions.length) { pm.environment.set('template_revision_id', revisions[0].id); }
     language: text/javascript
-order: 2000
+order: 7000

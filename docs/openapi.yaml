@@ -50,9 +50,9 @@ info:
     ## Request bodies
 
     JSON request bodies must be exactly one JSON object, and unknown fields are
-    rejected with `400 malformed-body`. Approving and discarding a run need
-    nothing from the body, so they also accept no body at all; a body that is
-    sent is still held to the schema.
+    rejected with `400 malformed-body`. Approving and discarding a run, and
+    syncing a template, need nothing from the body, so they also accept no
+    body at all; a body that is sent is still held to the schema.
 
     A JSON request body may be at most 1 MiB; a larger one is rejected with
     `413` before any of it is acted on.
@@ -97,8 +97,8 @@ info:
 
     Every list answers one shape: `{"items": [...], "next_cursor": ...}`.
 
-    The lists that grow (stacks, template revisions, a component's runs, user
-    search and the queue) page by cursor. Ask for up to `limit` items (1 to
+    The lists that grow (stacks, templates, template revisions, a
+    component's runs, user search and the queue) page by cursor. Ask for up to `limit` items (1 to
     100, default 50); while `next_cursor` is a string, send it back as
     `cursor` for the next page, and on the last page it is `null`. A cursor
     is opaque, belongs to the list that gave it out, and is only a position:
@@ -133,7 +133,7 @@ tags:
   - name: Identity
     description: Who the caller is and what they may do platform-wide.
   - name: Templates
-    description: Registering Terraform sources as immutable, reusable revisions.
+    description: Registering Terraform sources as templates, and syncing them into immutable, reusable revisions.
   - name: Stacks
     description: Grouping installed templates into one environment or service.
   - name: Credentials
@@ -338,6 +338,157 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
+
+  /v1/tenants/{tenant_id}/templates:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+    post:
+      tags: [Templates]
+      summary: Register a template
+      description: |
+        Points openplan at a Terraform source in a GitHub repository: an owner,
+        a repository, a ref and a root path. Returns `202` with the template,
+        and queues a sync that resolves the ref to a commit, fetches the
+        source, and records a revision with its input variables.
+
+        A source names one template, so registering a source that is already
+        registered returns the same template, and syncs it again. Read the
+        template until `latest_template_revision_id` names a revision.
+      operationId: createTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterTemplateRevisionRequest" }
+            example:
+              repo_owner: vishu42
+              repo_name: terraform-modules
+              source_ref: v1.4.0
+              root_path: modules/vpc
+      responses:
+        "202":
+          description: The template, with a sync of it queued.
+          headers:
+            Location:
+              description: The template's own URL, `/v1/tenants/{tenant_id}/templates/{template_id}`.
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Template" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    get:
+      tags: [Templates]
+      summary: List templates
+      description: |
+        Newest first, a page at a time. A template shows from the moment it is
+        registered, before any sync has recorded a revision of it.
+      operationId: listTemplates
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of the tenant's templates.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TemplateList" }
+        "400": { $ref: "#/components/responses/InvalidQuery" }
+        "422": { $ref: "#/components/responses/InvalidPaging" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/templates/{template_id}:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/TemplateID"
+    get:
+      tags: [Templates]
+      summary: Read a template
+      operationId: getTemplate
+      responses:
+        "200":
+          description: The template.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Template" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/templates/{template_id}/syncs:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/TemplateID"
+    post:
+      tags: [Templates]
+      summary: Sync a template
+      description: |
+        Queues a sync of the template's source, to pick up a new commit on its
+        ref or to retry a sync that failed.
+
+        Takes no fields: send `{}` or no body at all. Returns `202` with the
+        template; a sync has no read of its own.
+      operationId: startTemplateSync
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+            example: {}
+      responses:
+        "202":
+          description: The template, with a sync of it queued.
+          headers:
+            Location:
+              description: The template's own URL, `/v1/tenants/{tenant_id}/templates/{template_id}`.
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Template" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/templates/{template_id}/revisions:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/TemplateID"
+    get:
+      tags: [Templates]
+      summary: List a template's revisions
+      description: |
+        Newest first, a page at a time. A template no sync has recorded a
+        revision of yet has an empty list; an unknown template is a `404`.
+      operationId: listTemplateRevisionsForTemplate
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of the template's revisions.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TemplateRevisionList" }
+        "400": { $ref: "#/components/responses/InvalidQuery" }
+        "422": { $ref: "#/components/responses/InvalidPaging" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /v1/tenants/{tenant_id}/template-registrations:
     parameters:
@@ -1631,6 +1782,12 @@ components:
         The tenant. A deployment serves one configured tenant; any other value
         returns `404`. Read yours from `GET /v1/me`.
       schema: { type: string }
+    TemplateID:
+      name: template_id
+      in: path
+      required: true
+      description: A registered template, as `POST /v1/tenants/{tenant_id}/templates` returned it.
+      schema: { type: string }
     StackID:
       name: stack_id
       in: path
@@ -1822,6 +1979,15 @@ components:
       description: |
         Send it back as `cursor` for the next page. `null` on the last page,
         and always on a list that is one page.
+    TemplateList:
+      type: object
+      description: One page of templates, newest first.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Template" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
     TemplateRevisionList:
       type: object
       description: One page of registered template revisions, newest first.
@@ -2183,6 +2349,42 @@ components:
       enum:
         - ""
         - syncing
+
+    Template:
+      type: object
+      description: |
+        A registered Terraform source: one repository, ref and root path.
+        Its revisions are the commits its syncs recorded; stacks install a
+        revision, never the template itself.
+      properties:
+        id: { type: string }
+        tenant_id: { type: string }
+        repo_owner: { type: string }
+        repo_name: { type: string }
+        source_ref:
+          type: string
+          description: The ref every sync resolves to a commit.
+        root_path: { type: string }
+        name:
+          type: string
+          description: |
+            The latest revision's name. Before the first revision, the last
+            element of `root_path`, or `repo_name` for a template at the
+            repository root.
+        description:
+          type: string
+          description: The latest revision's description; empty before the first revision.
+        tags:
+          type: array
+          items: { type: string }
+          description: The latest revision's tags; empty before the first revision.
+        latest_template_revision_id:
+          type: string
+          description: The newest revision a sync recorded. Empty until one has.
+        created_at: { type: string, format: date-time }
+      required:
+        [id, tenant_id, repo_owner, repo_name, source_ref, root_path, name,
+         description, tags, latest_template_revision_id, created_at]
 
     TemplateRevision:
       type: object
