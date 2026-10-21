@@ -6,9 +6,9 @@ import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../../auth/AuthContext";
 import { queryKeys } from "../../api/queryKeys";
-import type { TemplateRevision } from "../../api/types";
+import type { TemplateLatestSync, TemplateRevision } from "../../api/types";
 import TemplatePanel from "./TemplatePanel";
-import { authValue, jsonResponse, revision, seedTemplates, template, TENANT, testQueryClient, variable } from "./testSupport";
+import { authValue, jsonResponse, latestSync, revision, seedTemplates, template, templateReadResponse, TENANT, testQueryClient, variable } from "./testSupport";
 
 const latest = revision({ id: "rev_2", resolved_commit_sha: "9e7d3b2aaaabbbbccccddddeeeeffff000011112", created_at: "2026-10-05T09:30:00Z" });
 const older = revision({ id: "rev_1" });
@@ -116,13 +116,6 @@ describe("TemplatePanel header", () => {
     expect(screen.getByTestId("template-missing").textContent).toBe("That template is not registered.");
   });
 
-  it("reads as missing while no sync has produced a revision for it", () => {
-    const queryClient = seed();
-    seedTemplates(queryClient, [latest, older], [template({ id: "tpl_new", latest_template_revision_id: "" })]);
-    renderPanel(queryClient, "/templates/tpl_new/variables");
-    expect(screen.getByTestId("template-missing").textContent).toBe("That template is not registered.");
-  });
-
   it("says it is loading while the template's revisions load", () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.templates(TENANT), [template()]);
@@ -154,5 +147,83 @@ describe("TemplatePanel tabs", () => {
     expect(revisions.getAttribute("href")).toBe("/templates/tpl_1/revisions");
     expect(revisions.getAttribute("aria-current")).toBe("page");
     expect(screen.getByTestId("revisions-content")).toBeTruthy();
+  });
+});
+
+// A template exists before any sync has recorded a revision for it: its first
+// sync is still running, or failed. The panel is its header alone, and the
+// template's latest_sync says why there is nothing to install.
+describe("TemplatePanel before a first revision", () => {
+  function unsynced(latestSyncValue: TemplateLatestSync | null): QueryClient {
+    const queryClient = seed();
+    seedTemplates(queryClient, [latest, older], [
+      template({ id: "tpl_new", name: "eks-fresh", description: "", tags: [], latest_template_revision_id: "", latest_sync: latestSyncValue })
+    ]);
+    return queryClient;
+  }
+
+  it("shows its name and source, with no commit, description, tabs or tab content", () => {
+    renderPanel(unsynced(latestSync({ status: "failed", error_summary: "ref not found" })), "/templates/tpl_new/variables");
+
+    expect(screen.getByRole("heading", { level: 2, name: "eks-fresh" })).toBeTruthy();
+    const source = screen.getByTestId("template-source");
+    expect(source.querySelectorAll("li")).toHaveLength(3);
+    expect(within(source).queryByRole("link", { name: /^Latest commit/ })).toBeNull();
+    expect(screen.queryByTestId("template-no-description")).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Template sections" })).toBeNull();
+    expect(screen.queryByTestId("variables-content")).toBeNull();
+    expect(screen.queryByTestId("template-missing")).toBeNull();
+  });
+
+  it("says why when its first sync failed, in the server's words", () => {
+    renderPanel(unsynced(latestSync({ status: "invalid", error_summary: "no .tf files in aws/ekss" })), "/templates/tpl_new/variables");
+
+    const error = screen.getByTestId("template-sync-error");
+    expect(within(error).getByText("Sync failed")).toBeTruthy();
+    expect(error.textContent).toContain("No revision yet, so stacks can't add this template.");
+    expect(error.textContent).toContain("no .tf files in aws/ekss");
+  });
+
+  it("names a first sync that stalled, without repeating its headline", () => {
+    renderPanel(unsynced(latestSync({ status: "stalled", error_summary: "" })), "/templates/tpl_new/variables");
+
+    const error = screen.getByTestId("template-sync-error");
+    expect(within(error).getByText("Sync stalled")).toBeTruthy();
+    expect(error.textContent).not.toContain("Sync failed");
+    expect(error.querySelector("pre")).toBeNull();
+  });
+
+  it("follows a first sync still running until it lands a revision, then shows the template", async () => {
+    const fresh = revision({ id: "rev_new", source_template_id: "tpl_new", name: "eks-fresh", resolved_commit_sha: "abc1234ffff" });
+    let done = false;
+    vi.mocked(globalThis.fetch).mockImplementation(async (input) => {
+      const path = String(input).split("?")[0];
+      if (path === `/v1/tenants/${TENANT}/templates/tpl_new`) {
+        // The first read still finds it syncing; the next, synced.
+        const answer = done
+          ? template({ id: "tpl_new", name: "eks-fresh", latest_template_revision_id: "rev_new", latest_sync: latestSync({ status: "synced", resolved_commit_sha: "abc1234ffff" }) })
+          : template({ id: "tpl_new", name: "eks-fresh", latest_template_revision_id: "", latest_sync: latestSync({ status: "syncing" }) });
+        done = true;
+        return jsonResponse(answer);
+      }
+      return templateReadResponse(input, [fresh, latest, older]) ?? new Promise<Response>(() => {});
+    });
+    renderPanel(unsynced(latestSync({ status: "syncing" })), "/templates/tpl_new/variables");
+
+    expect(screen.getByTestId("template-sync-result").textContent).toBe("syncing");
+    await waitFor(() => expect(screen.getByRole("navigation", { name: "Template sections" })).toBeTruthy(), { timeout: 4000 });
+    expect(screen.getByTestId("template-sync-result").textContent).toBe("synced commit abc1234");
+  });
+
+  it("says no revision when no sync has been asked for", () => {
+    renderPanel(unsynced(null), "/templates/tpl_new/variables");
+    expect(screen.getByTestId("template-sync-result").textContent).toBe("no revision");
+    expect(screen.queryByTestId("template-sync-error")).toBeNull();
+  });
+
+  it("tells people who cannot publish why, without offering Sync", () => {
+    renderPanel(unsynced(latestSync({ status: "failed", error_summary: "ref not found" })), "/templates/tpl_new/variables", false);
+    expect(screen.queryByTestId("template-sync")).toBeNull();
+    expect(screen.getByTestId("template-sync-error").textContent).toContain("ref not found");
   });
 });

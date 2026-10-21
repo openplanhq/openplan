@@ -1,10 +1,9 @@
 import type { Template, TemplateRevision } from "../../api/types";
 
 /**
- * The templates the registry and Add template show: those a sync has produced
- * a revision for. A template whose first sync is still running, or failed, has
- * nothing to show or install yet, so it stays out of both, as it did before
- * templates were read on their own.
+ * The templates Add template offers: those a sync has produced a revision
+ * for. A template whose first sync is still running, or failed, has nothing
+ * to install yet. The registry lists it all the same, and says why.
  */
 export function templatesWithRevision(templates: Template[]): Template[] {
   return templates.filter((template) => template.latest_template_revision_id !== "");

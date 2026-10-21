@@ -1,17 +1,18 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Loader2, LoaderCircle, RefreshCw } from "lucide-react";
+import { Check, Loader2, LoaderCircle, Minus, RefreshCw } from "lucide-react";
 import { isSyncSettled } from "../../api/polling";
 import { apiErrorMessage } from "../../api/problems";
 import { queryKeys } from "../../api/queryKeys";
 import { useSyncTemplateMutation, useTemplateQuery } from "../../api/queries";
+import type { Template } from "../../api/types";
+import RequireCapability from "../../auth/RequireCapability";
 import { tenantID } from "../../config";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorPanel from "../../shared/ErrorPanel";
 import StatusLabel from "../../shared/StatusLabel";
 import { cn } from "@/lib/utils";
-import { useTemplate } from "./templateContext";
 import { shortCommitSHA } from "./templateWorkflow";
 
 // Sync asks the server to read the template's ref again, so a branch it
@@ -23,22 +24,35 @@ import { shortCommitSHA } from "./templateWorkflow";
 // follows the template's latest_sync until it settles, then says what
 // happened under them: the commit it synced, that nothing was new, or, in an
 // ErrorPanel, that it failed. The server tells a new commit from a known one
-// (synced or up_to_date). A sync started elsewhere, or before a reload, is not
-// shown here.
+// (synced or up_to_date). For a template with a revision, a sync started
+// elsewhere, or before a reload, is not shown here.
+//
+// A template with no revision yet is followed from the start: its first sync
+// is the only thing there is to say about it, so its latest_sync says why
+// nothing can be installed (still syncing, failed, stalled), and a first sync
+// still running finishes on screen.
+//
+// Sync is hidden rather than disabled for people who cannot publish: the
+// POST would be refused, so there is nothing anyone could do to make it
+// work. They still see a first sync's outcome.
 //
 // The panel mounts one per template (key), so a sync never follows the person
 // to another template.
-export default function TemplateSync({ heading, source, about }: { heading: ReactNode; source: ReactNode; about: ReactNode }) {
-  const { template } = useTemplate();
+export default function TemplateSync({ template, heading, source, about }: { template: Template; heading: ReactNode; source: ReactNode; about: ReactNode }) {
   const queryClient = useQueryClient();
   const syncTemplateMutation = useSyncTemplateMutation(tenantID);
-  // Whether a sync pressed here is being followed; the template query stays
-  // off until then.
-  const [following, setFollowing] = useState(false);
+  // Read once, at mount: once the first sync lands a revision the panel
+  // keeps this component, and its outcome stays in view.
+  const [unsynced] = useState(template.latest_template_revision_id === "");
+  // Whether a sync is being followed; the template query stays off until
+  // then.
+  const [following, setFollowing] = useState(unsynced && template.latest_sync !== null);
   const [requestError, setRequestError] = useState("");
   const templateQuery = useTemplateQuery(tenantID, following ? template.id : "");
 
-  const sync = following ? templateQuery.data?.latest_sync ?? null : null;
+  // Until the first read answers, the list's copy of the template says where
+  // its sync stood, so a failed first sync never flashes "syncing".
+  const sync = following ? (templateQuery.data ?? template).latest_sync : null;
   const status = sync?.status ?? null;
   const settled = status !== null && isSyncSettled(status);
   // React Query keeps the last syncing data through a failing poll, so
@@ -50,7 +64,11 @@ export default function TemplateSync({ heading, source, about }: { heading: Reac
   // Stalled is a failure too: the sync did not finish, and pressing Sync
   // again is the way on.
   const failed = settled && !completed;
-  const errorMessage = requestError || pollError || (failed ? sync?.error_summary || "Sync failed" : "");
+  // A first sync that never finished has no words of its own; its headline
+  // says so, rather than repeating "Sync failed" under itself.
+  const stalledFirst = unsynced && status === "stalled";
+  const errorMessage = requestError || pollError || (failed ? sync?.error_summary || (stalledFirst ? "" : "Sync failed") : "");
+  const showError = !syncing && (errorMessage !== "" || failed);
   // A poll that fails says nothing about the sync itself, which may still
   // finish.
   const unchecked = requestError === "" && pollError !== "";
@@ -96,20 +114,22 @@ export default function TemplateSync({ heading, source, about }: { heading: Reac
                 While a sync runs it stays focusable, marked aria-disabled,
                 and ignores presses: disabling it would drop a keyboard
                 user's focus. */}
-            <button
-              type="button"
-              className={cn(buttonClass("subtle", "sm"), "-my-px -mr-2.5 pointer-coarse:h-11")}
-              aria-disabled={syncing ? "true" : undefined}
-              onClick={() => void handleSync()}
-              data-testid="template-sync"
-            >
-              {syncing ? (
-                <Loader2 data-icon="inline-start" aria-hidden="true" strokeWidth={2.42} className="size-3.25 animate-spin" />
-              ) : (
-                <RefreshCw data-icon="inline-start" aria-hidden="true" strokeWidth={2.42} className="size-3.25" />
-              )}
-              Sync
-            </button>
+            <RequireCapability capability="can_publish_template">
+              <button
+                type="button"
+                className={cn(buttonClass("subtle", "sm"), "-my-px -mr-2.5 pointer-coarse:h-11")}
+                aria-disabled={syncing ? "true" : undefined}
+                onClick={() => void handleSync()}
+                data-testid="template-sync"
+              >
+                {syncing ? (
+                  <Loader2 data-icon="inline-start" aria-hidden="true" strokeWidth={2.42} className="size-3.25 animate-spin" />
+                ) : (
+                  <RefreshCw data-icon="inline-start" aria-hidden="true" strokeWidth={2.42} className="size-3.25" />
+                )}
+                Sync
+              </button>
+            </RequireCapability>
           </div>
           {source}
         </div>
@@ -134,15 +154,27 @@ export default function TemplateSync({ heading, source, about }: { heading: Reac
               )}
             </StatusLabel>
           </p>
+        ) : unsynced && !showError ? (
+          // No sync to speak of (none requested, or one that ended without
+          // a revision): the template simply has nothing to install yet.
+          <p className="mt-5">
+            <StatusLabel icon={Minus} tone="idle" data-testid="template-no-revision">
+              no revision
+            </StatusLabel>
+          </p>
         ) : null}
       </div>
-      {!syncing && errorMessage !== "" && (
+      {showError && (
         <ErrorPanel
           testId="template-sync-error"
-          title={unchecked ? "Could not check on this sync" : "Sync failed"}
+          title={unchecked ? "Could not check on this sync" : stalledFirst ? "Sync stalled" : "Sync failed"}
           details={errorMessage}
         >
-          {unchecked ? "It may still finish. Reload the page to see what it registered." : undefined}
+          {unchecked
+            ? "It may still finish. Reload the page to see what it registered."
+            : unsynced && failed
+              ? "No revision yet, so stacks can't add this template."
+              : undefined}
         </ErrorPanel>
       )}
     </>
