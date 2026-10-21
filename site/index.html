@@ -389,9 +389,12 @@ docker compose -f docker-compose.release.yaml up -d</code></pre>
         <source srcset="/footer-train.webp" type="image/webp" />
         <img src="/footer-train.jpg" alt="A watercolour of a steam train crossing a viaduct over water" width="1800" height="796" loading="lazy" decoding="async" class="block h-[300px] w-full bg-canvas object-cover object-[65%_62%] sm:object-[50%_62%]" />
       </picture>
-      <div class="mx-auto flex max-w-[1216px] flex-wrap items-center justify-between gap-x-8 gap-y-4 px-5 py-8">
+      <!-- Columns top-aligned, so each one's first line sits on one line. -->
+      <div class="mx-auto flex max-w-[1216px] flex-wrap items-start justify-between gap-x-8 gap-y-4 px-5 py-8">
         <div class="flex flex-col gap-2">
-          <img src="/logo.svg" alt="openplan" width="101" height="19" class="block h-[19px] w-auto" />
+          <!-- self-start: a flex column stretches the img to its width, and the
+               SVG then draws itself in the middle of that box. -->
+          <img src="/logo.svg" alt="openplan" width="101" height="19" class="block h-[19px] w-auto self-start" />
           <span class="text-meta text-muted-foreground">Self-hosted, open-source Terraform for your whole team.</span>
         </div>
         <nav aria-label="Footer" class="flex gap-6 text-meta font-medium">
