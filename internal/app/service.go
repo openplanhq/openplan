@@ -41,6 +41,9 @@ var (
 	ErrCredentialNameInvalid              = errors.New("credential name is invalid")
 	ErrDuplicateCredentialName            = errors.New("duplicate credential name")
 	ErrCredentialEncryptionUnavailable    = errors.New("credential encryption is unavailable")
+	// ErrTemplateInUse refuses deleting a template that a stack has
+	// installed, in any lifecycle, destroyed included.
+	ErrTemplateInUse = errors.New("template is installed in a stack")
 	// ErrTemplateRunLogLive and ErrTemplateRunLogLost refuse a log body that
 	// is not in the object store: one still being written, or one that
 	// never will be.
@@ -182,9 +185,13 @@ type TemplateRevisionRepository interface {
 }
 
 // SourceTemplateRepository reads templates and the revisions their syncs
-// recorded.
+// recorded, and deletes templates.
 type SourceTemplateRepository interface {
 	GetSourceTemplate(ctx context.Context, tenantID domain.TenantID, id domain.SourceTemplateID) (domain.SourceTemplate, error)
+	// DeleteSourceTemplate deletes the template with its revisions and syncs.
+	// It is ErrTemplateInUse while any stack template names the template,
+	// and ErrNotFound when the tenant has no such template.
+	DeleteSourceTemplate(ctx context.Context, tenantID domain.TenantID, id domain.SourceTemplateID) error
 	// ListSourceTemplatesPage returns up to limit templates after the cursor,
 	// newest first.
 	ListSourceTemplatesPage(ctx context.Context, tenantID domain.TenantID, after *SourceTemplateCursor, limit int) ([]domain.SourceTemplate, error)
@@ -438,6 +445,12 @@ type ListTemplatesCommand struct {
 
 // GetTemplateCommand asks the app to read one tenant-owned template.
 type GetTemplateCommand struct {
+	TenantID   domain.TenantID
+	TemplateID domain.SourceTemplateID
+}
+
+// DeleteTemplateCommand asks the app to delete one template.
+type DeleteTemplateCommand struct {
 	TenantID   domain.TenantID
 	TemplateID domain.SourceTemplateID
 }
@@ -1462,6 +1475,24 @@ func (service *Service) GetTemplate(ctx context.Context, command GetTemplateComm
 		return domain.SourceTemplate{}, fmt.Errorf("get template: %w", err)
 	}
 	return template, nil
+}
+
+// DeleteTemplate deletes a template no stack has installed. The refusal is
+// the store's, made in the delete itself, so an install racing the delete
+// can't slip between a check and the delete. A sync running across the
+// delete finds its template gone and ends.
+func (service *Service) DeleteTemplate(ctx context.Context, command DeleteTemplateCommand) error {
+	if err := validateTemplateCommand(command.TenantID, command.TemplateID); err != nil {
+		return err
+	}
+	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanPublishTemplate); err != nil {
+		return err
+	}
+
+	if err := service.SourceTemplates.DeleteSourceTemplate(ctx, command.TenantID, command.TemplateID); err != nil {
+		return fmt.Errorf("delete template: %w", err)
+	}
+	return nil
 }
 
 // ListTemplateRevisionsForTemplate returns one page of a template's

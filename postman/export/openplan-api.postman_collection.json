@@ -195,6 +195,47 @@
           }
         },
         {
+          "name": "Delete a template",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.environment.get('delete_template_id')) { pm.execution.skipRequest(); }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is one of 204, 409', () =\u003e pm.expect(pm.response.code).to.be.oneOf([204, 409]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/templates/{{delete_template_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "{{tenant_id}}",
+                "templates",
+                "{{delete_template_id}}"
+              ]
+            },
+            "description": "Deletes the template with its revisions and syncs. Refused while any\nstack has installed it, including an install since destroyed: its run\nhistory still points at the template's revisions.\n\nA sync still running ends without recording anything.\n\nSkipped unless you set delete_template_id. `409` when a stack has installed it."
+          }
+        },
+        {
           "name": "Sync a template",
           "event": [
             {

@@ -1031,6 +1031,56 @@ func TestStartTemplateSyncRefusals(t *testing.T) {
 	}
 }
 
+func TestDeleteTemplate(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name     string
+		tier     string
+		path     string
+		status   int
+		slug     string
+		remained bool
+	}{
+		{name: "uninstalled", tier: "admin", path: "source_template_vpc", status: http.StatusNoContent},
+		{name: "installed", tier: "admin", path: "source_template_used", status: http.StatusConflict, slug: "template-in-use", remained: true},
+		{name: "unknown template", tier: "admin", path: "source_template_missing", status: http.StatusNotFound},
+		{name: "platform viewer", tier: "viewer", path: "source_template_vpc", status: http.StatusForbidden, remained: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			deps := newAPITestDependencies(t).withPlatformTier(test.tier)
+			deps.sourceTemplates.templates = []domain.SourceTemplate{
+				{ID: "source_template_vpc", TenantID: "tenant_123"},
+				{ID: "source_template_used", TenantID: "tenant_123"},
+			}
+			deps.sourceTemplates.installed = map[domain.SourceTemplateID]bool{"source_template_used": true}
+			server := NewServer(deps.service(), configuredTenantID)
+			response := httptest.NewRecorder()
+
+			server.ServeHTTP(response, authenticatedRequest(http.MethodDelete, "/v1/tenants/tenant_123/templates/"+test.path, nil))
+
+			if response.Code != test.status {
+				t.Fatalf("status = %d, want %d; body = %s", response.Code, test.status, response.Body.String())
+			}
+			if test.slug != "" {
+				var problem problemDocument
+				if err := json.Unmarshal(response.Body.Bytes(), &problem); err != nil {
+					t.Fatalf("decode problem: %v", err)
+				}
+				if problem.Type != problemTypeURI(test.slug) {
+					t.Fatalf("problem type = %q, want %q", problem.Type, problemTypeURI(test.slug))
+				}
+			}
+			_, err := deps.sourceTemplates.GetSourceTemplate(context.Background(), "tenant_123", domain.SourceTemplateID(test.path))
+			if remained := err == nil; remained != test.remained {
+				t.Fatalf("template remained = %t, want %t", remained, test.remained)
+			}
+		})
+	}
+}
+
 // A template's revisions are read under it; an unknown template is a 404,
 // not an empty list, so a wrong id is told apart from a template no sync has
 // filled in yet.
@@ -4246,6 +4296,23 @@ func (repository *recordingTemplateRepository) GetTemplateRevisionVariables(_ co
 type apiSourceTemplateRepository struct {
 	templates []domain.SourceTemplate
 	revisions []domain.TemplateRevision
+	// installed names the templates a stack has installed, which the store's
+	// key refuses to delete.
+	installed map[domain.SourceTemplateID]bool
+}
+
+func (repository *apiSourceTemplateRepository) DeleteSourceTemplate(_ context.Context, tenantID domain.TenantID, id domain.SourceTemplateID) error {
+	for i, template := range repository.templates {
+		if template.TenantID != tenantID || template.ID != id {
+			continue
+		}
+		if repository.installed[id] {
+			return app.ErrTemplateInUse
+		}
+		repository.templates = append(repository.templates[:i], repository.templates[i+1:]...)
+		return nil
+	}
+	return app.ErrNotFound
 }
 
 func (repository *apiSourceTemplateRepository) GetSourceTemplate(_ context.Context, tenantID domain.TenantID, id domain.SourceTemplateID) (domain.SourceTemplate, error) {

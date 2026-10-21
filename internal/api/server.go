@@ -169,6 +169,8 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/templates", server.handleListTemplates)
 	// Reads one template.
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/templates/{template_id}", server.handleGetTemplate)
+	// Deletes a template no stack has installed.
+	server.handleTenantRoute("DELETE /v1/tenants/{tenant_id}/templates/{template_id}", server.handleDeleteTemplate)
 	// Syncs a template again, to pick up a new commit or retry a failed sync.
 	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/templates/{template_id}/syncs", server.handleStartTemplateSync)
 	// Lists one template's revisions, newest first, a page at a time.
@@ -526,6 +528,19 @@ func (server *Server) handleGetTemplate(response http.ResponseWriter, request *h
 	}
 
 	writeJSON(response, http.StatusOK, newTemplateResponse(template, server.service.Clock.Now()))
+}
+
+func (server *Server) handleDeleteTemplate(response http.ResponseWriter, request *http.Request) {
+	err := server.service.DeleteTemplate(request.Context(), app.DeleteTemplateCommand{
+		TenantID:   domain.TenantID(request.PathValue("tenant_id")),
+		TemplateID: domain.SourceTemplateID(request.PathValue("template_id")),
+	})
+	if err != nil {
+		writeAppError(response, err)
+		return
+	}
+
+	response.WriteHeader(http.StatusNoContent)
 }
 
 // handleStartTemplateSync answers 202 with the template, not the sync: a sync

@@ -3192,9 +3192,20 @@ type recordingSourceTemplateRepository struct {
 	templates         []domain.SourceTemplate
 	revisions         []domain.TemplateRevision
 	getErr            error
+	deleteErr         error
 	gotTenantID       domain.TenantID
 	gotID             domain.SourceTemplateID
+	deletedID         domain.SourceTemplateID
 	revisionPageCalls int
+}
+
+func (repository *recordingSourceTemplateRepository) DeleteSourceTemplate(_ context.Context, tenantID domain.TenantID, id domain.SourceTemplateID) error {
+	repository.gotTenantID = tenantID
+	if repository.deleteErr != nil {
+		return repository.deleteErr
+	}
+	repository.deletedID = id
+	return nil
 }
 
 func (repository *recordingSourceTemplateRepository) GetSourceTemplate(_ context.Context, tenantID domain.TenantID, id domain.SourceTemplateID) (domain.SourceTemplate, error) {
@@ -3670,6 +3681,38 @@ func TestGetTemplateReadsTheTenantsTemplate(t *testing.T) {
 
 	_, err = service.GetTemplate(authenticatedContext(), GetTemplateCommand{TenantID: "tenant_123"})
 	require.ErrorIs(t, err, ErrInvalidCommand)
+}
+
+func TestDeleteTemplateDeletesTheTenantsTemplate(t *testing.T) {
+	t.Parallel()
+
+	templates := &recordingSourceTemplateRepository{}
+	service := NewService(Service{Authorization: testPlatformAuthorizer(t), SourceTemplates: templates})
+
+	err := service.DeleteTemplate(authenticatedContext(), DeleteTemplateCommand{TenantID: "tenant_123", TemplateID: "source_template_vpc"})
+	require.NoError(t, err)
+	assert.Equal(t, domain.TenantID("tenant_123"), templates.gotTenantID)
+	assert.Equal(t, domain.SourceTemplateID("source_template_vpc"), templates.deletedID)
+}
+
+// The store's refusals reach the caller as the sentinels the API maps: in
+// use is a 409, an unknown template a 404.
+func TestDeleteTemplateRefusals(t *testing.T) {
+	t.Parallel()
+
+	for _, storeErr := range []error{ErrTemplateInUse, ErrNotFound} {
+		templates := &recordingSourceTemplateRepository{deleteErr: storeErr}
+		service := NewService(Service{Authorization: testPlatformAuthorizer(t), SourceTemplates: templates})
+
+		err := service.DeleteTemplate(authenticatedContext(), DeleteTemplateCommand{TenantID: "tenant_123", TemplateID: "source_template_vpc"})
+		require.ErrorIs(t, err, storeErr)
+	}
+
+	templates := &recordingSourceTemplateRepository{}
+	service := NewService(Service{Authorization: testPlatformAuthorizer(t), SourceTemplates: templates})
+	err := service.DeleteTemplate(authenticatedContext(), DeleteTemplateCommand{TenantID: "tenant_123"})
+	require.ErrorIs(t, err, ErrInvalidCommand)
+	assert.Empty(t, templates.deletedID)
 }
 
 // An unknown template is a 404, not an empty page: an empty page is what a
