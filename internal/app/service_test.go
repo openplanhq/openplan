@@ -1608,8 +1608,11 @@ func TestRegisterTemplateCreatesPendingRegistrationAndDispatchesWorkflow(t *test
 	if len(work.createdTemplates) != 1 || !reflect.DeepEqual(work.createdTemplates[0], wantTemplate) {
 		t.Fatalf("created templates = %#v, want %#v", work.createdTemplates, wantTemplate)
 	}
-	if !reflect.DeepEqual(started.Template, wantTemplate) {
-		t.Fatalf("started.Template = %#v, want %#v", started.Template, wantTemplate)
+	// The answer already reads the sync it queued as the template's latest.
+	wantStarted := wantTemplate
+	wantStarted.LatestSync = &domain.LatestTemplateSync{Status: domain.TemplateRegistrationPending, RequestedAt: now}
+	if !reflect.DeepEqual(started.Template, wantStarted) {
+		t.Fatalf("started.Template = %#v, want %#v", started.Template, wantStarted)
 	}
 
 	registration := started.Sync
@@ -3544,10 +3547,12 @@ func TestRegisterTemplateAgainSyncsTheStoredTemplate(t *testing.T) {
 	}
 	registrations := &recordingTemplateRegistrationRepository{}
 	work := &recordingUnitOfWork{templateRegistrations: registrations, storedTemplate: stored}
+	now := time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC)
 	service := NewService(Service{
 		Authorization:   testPlatformAuthorizer(t),
 		Work:            work,
 		RegistrationIDs: fixedTemplateRegistrationIDGenerator{id: "registration_again"},
+		Clock:           fixedClock{now: now},
 	})
 
 	started, err := service.RegisterTemplate(authenticatedContext(), RegisterTemplateCommand{
@@ -3555,7 +3560,9 @@ func TestRegisterTemplateAgainSyncsTheStoredTemplate(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	assert.Equal(t, stored, started.Template)
+	wantTemplate := stored
+	wantTemplate.LatestSync = &domain.LatestTemplateSync{Status: domain.TemplateRegistrationPending, RequestedAt: now}
+	assert.Equal(t, wantTemplate, started.Template)
 	assert.Equal(t, domain.SourceTemplateID("source_template_stored"), registrations.created.SourceTemplateID)
 	require.Len(t, work.requests, 1)
 	var payload StartTemplateSyncPayload
@@ -3585,6 +3592,10 @@ func TestStartTemplateSyncQueuesASyncOfTheStoredTemplate(t *testing.T) {
 
 	template := domain.SourceTemplate{
 		ID: "source_template_vpc", TenantID: "tenant_123", RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc",
+		LatestSync: &domain.LatestTemplateSync{
+			Status: domain.TemplateRegistrationFailed, ErrorSummary: "clone failed",
+			RequestedAt: time.Date(2026, 10, 20, 9, 0, 0, 0, time.UTC), CompletedAt: time.Date(2026, 10, 20, 9, 1, 0, 0, time.UTC),
+		},
 	}
 	templates := &recordingSourceTemplateRepository{template: template}
 	registrations := &recordingTemplateRegistrationRepository{}
@@ -3601,7 +3612,10 @@ func TestStartTemplateSyncQueuesASyncOfTheStoredTemplate(t *testing.T) {
 	started, err := service.StartTemplateSync(authenticatedContext(), StartTemplateSyncCommand{TenantID: "tenant_123", TemplateID: "source_template_vpc"})
 	require.NoError(t, err)
 
-	assert.Equal(t, template, started.Template)
+	// The sync just queued replaces the failed one as the template's latest.
+	wantTemplate := template
+	wantTemplate.LatestSync = &domain.LatestTemplateSync{Status: domain.TemplateRegistrationPending, RequestedAt: now}
+	assert.Equal(t, wantTemplate, started.Template)
 	assert.Equal(t, domain.TenantID("tenant_123"), templates.gotTenantID)
 	assert.Equal(t, domain.SourceTemplateID("source_template_vpc"), templates.gotID)
 	assert.Empty(t, work.createdTemplates, "a Sync never stores a template")

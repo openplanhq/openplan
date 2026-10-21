@@ -6,8 +6,9 @@ description: |-
   source, and records a revision with its input variables.
 
   A source names one template, so registering a source that is already
-  registered returns the same template, and syncs it again. Read the
-  template until `latest_template_revision_id` names a revision.
+  registered returns the same template, and syncs it again. The answer's
+  `latest_sync` is the sync just queued; read the template while
+  `latest_sync.status` is `syncing` to follow it.
 method: POST
 url: '{{base_url}}/v1/tenants/{{tenant_id}}/templates'
 headers:

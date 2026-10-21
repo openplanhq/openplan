@@ -4,7 +4,8 @@ description: |-
   ref or to retry a sync that failed.
 
   Takes no fields: send `{}` or no body at all. Returns `202` with the
-  template; a sync has no read of its own.
+  template, whose `latest_sync` is the sync just queued; a sync has no
+  read of its own, so read the template to follow it.
 method: POST
 url: '{{base_url}}/v1/tenants/{{tenant_id}}/templates/{{template_id}}/syncs'
 headers:

@@ -805,6 +805,9 @@ func TestCreateTemplateAnswersTheTemplate(t *testing.T) {
 	if body.ID != wantID || body.RepoOwner != "acme" || body.RootPath != "modules/vpc" || !body.CreatedAt.Equal(createdAt) {
 		t.Fatalf("template = %#v", body)
 	}
+	if body.LatestSync == nil || body.LatestSync.Status != "syncing" || !body.LatestSync.RequestedAt.Equal(createdAt) {
+		t.Fatalf("latest_sync = %#v, want the sync just queued, syncing", body.LatestSync)
+	}
 	if len(deps.work.requests) != 1 || deps.work.requests[0].Kind != app.KindStartTemplateSync {
 		t.Fatalf("queued requests = %#v, want one start_template_sync request", deps.work.requests)
 	}
@@ -862,6 +865,92 @@ func TestGetTemplate(t *testing.T) {
 	}
 }
 
+// Every template read carries its latest sync as shown at the server's now:
+// null before any sync, the stored timestamps in RFC 3339, completed_at left
+// out until the sync ends, and stalled derived rather than stored.
+func TestTemplateReadsCarryTheLatestSync(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)
+	for _, test := range []struct {
+		name string
+		sync *domain.LatestTemplateSync
+		want string
+	}{
+		{name: "never synced", want: `null`},
+		{
+			name: "syncing",
+			sync: &domain.LatestTemplateSync{Status: domain.TemplateRegistrationRunning, RequestedAt: now.Add(-time.Minute)},
+			want: `{"status":"syncing","error_summary":"","resolved_commit_sha":"","requested_at":"2026-10-21T11:59:00Z"}`,
+		},
+		{
+			name: "stalled",
+			sync: &domain.LatestTemplateSync{Status: domain.TemplateRegistrationPending, RequestedAt: now.Add(-domain.TemplateSyncStallsAfter)},
+			want: `{"status":"stalled","error_summary":"","resolved_commit_sha":"","requested_at":"2026-10-21T11:30:00Z"}`,
+		},
+		{
+			name: "up to date",
+			sync: &domain.LatestTemplateSync{
+				Status: domain.TemplateRegistrationCompleted, ResolvedCommitSHA: "abc123", RevisionPredatesRequest: true,
+				RequestedAt: now.Add(-2 * time.Hour), CompletedAt: now.Add(-2*time.Hour + time.Minute),
+			},
+			want: `{"status":"up_to_date","error_summary":"","resolved_commit_sha":"abc123","requested_at":"2026-10-21T10:00:00Z","completed_at":"2026-10-21T10:01:00Z"}`,
+		},
+		{
+			name: "invalid",
+			sync: &domain.LatestTemplateSync{
+				Status: domain.TemplateRegistrationInvalid, ErrorSummary: "root path modules/vpc does not exist",
+				RequestedAt: now.Add(-2 * time.Hour), CompletedAt: now.Add(-2*time.Hour + time.Minute),
+			},
+			want: `{"status":"invalid","error_summary":"root path modules/vpc does not exist","resolved_commit_sha":"","requested_at":"2026-10-21T10:00:00Z","completed_at":"2026-10-21T10:01:00Z"}`,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			deps := newAPITestDependencies(t)
+			deps.now = now
+			deps.sourceTemplates.templates = []domain.SourceTemplate{{ID: "source_template_vpc", TenantID: "tenant_123", LatestSync: test.sync}}
+			server := NewServer(deps.service(), configuredTenantID)
+
+			response := httptest.NewRecorder()
+			server.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/templates/source_template_vpc", nil))
+			if response.Code != http.StatusOK {
+				t.Fatalf("read status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
+			}
+			var one struct {
+				LatestSync json.RawMessage `json:"latest_sync"`
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &one); err != nil {
+				t.Fatalf("decode read: %v", err)
+			}
+			if got := string(one.LatestSync); got != test.want {
+				t.Fatalf("read latest_sync = %s, want %s", got, test.want)
+			}
+
+			response = httptest.NewRecorder()
+			server.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/templates", nil))
+			if response.Code != http.StatusOK {
+				t.Fatalf("list status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
+			}
+			var list struct {
+				Items []struct {
+					LatestSync json.RawMessage `json:"latest_sync"`
+				} `json:"items"`
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &list); err != nil {
+				t.Fatalf("decode list: %v", err)
+			}
+			if len(list.Items) != 1 {
+				t.Fatalf("list items = %d, want 1", len(list.Items))
+			}
+			if got := string(list.Items[0].LatestSync); got != test.want {
+				t.Fatalf("list latest_sync = %s, want %s", got, test.want)
+			}
+		})
+	}
+}
+
 // A sync answers with the template it syncs, takes {} or no body at all, and
 // queues a sync of exactly the source the template names.
 func TestStartTemplateSync(t *testing.T) {
@@ -893,6 +982,9 @@ func TestStartTemplateSync(t *testing.T) {
 			}
 			if template.ID != "source_template_vpc" {
 				t.Fatalf("template id = %q, want source_template_vpc", template.ID)
+			}
+			if template.LatestSync == nil || template.LatestSync.Status != "syncing" {
+				t.Fatalf("latest_sync = %#v, want the sync just queued, syncing", template.LatestSync)
 			}
 			if len(deps.work.requests) != 1 || deps.work.requests[0].Kind != app.KindStartTemplateSync {
 				t.Fatalf("queued requests = %#v, want one start_template_sync request", deps.work.requests)
