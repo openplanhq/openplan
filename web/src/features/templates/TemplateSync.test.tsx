@@ -162,19 +162,48 @@ describe("TemplateSync", () => {
     expect(syncing()).toBe(false);
   });
 
-  // The outcome is this tab's: a template whose last sync failed elsewhere
-  // shows nothing until Sync is pressed here.
-  it("shows nothing for a sync it did not start", () => {
+  // The template's latest sync, whoever started it and wherever: the list
+  // already carries it, so the outcome shows with no request of its own.
+  it.each([
+    [{ status: "synced", resolved_commit_sha: "f17f983444455556666" }, "template-sync-result", "synced commit f17f983"],
+    [{ status: "up_to_date" }, "template-sync-result", "up to date"],
+    [{ status: "failed", error_summary: "ref not found: main" }, "template-sync-error", "ref not found: main"]
+  ] as const)("shows the latest sync's outcome when the panel opens (%o)", (latest, testId, text) => {
     const queryClient = seed();
     queryClient.setQueryData(queryKeys.templates(TENANT), [
-      template({ latest_sync: latestSync({ status: "failed", error_summary: "ref not found: main" }) }),
+      template({ latest_sync: latestSync(latest) }),
       template({ id: "tpl_net", name: "network", root_path: "aws/network", latest_template_revision_id: "rev_net" })
     ]);
-    vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise(() => {}));
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise(() => {}));
     renderPanel(queryClient);
 
-    expect(screen.getByTestId("template-sync-result").textContent).toBe("");
-    expect(screen.queryByTestId("template-sync-error")).toBeNull();
+    expect(screen.getByTestId(testId).textContent).toContain(text);
+    expect(syncing()).toBe(false);
+    // An outcome that was already in when the panel opened changed nothing
+    // since the list and the revisions were read.
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+
+  // A reload in the middle of a sync started anywhere picks it up again.
+  it("follows a sync already running when the panel opens, to its outcome", async () => {
+    const fresh = revision({ id: "rev_2", resolved_commit_sha: "f17f983444455556666" });
+    const queryClient = seed();
+    queryClient.setQueryData(queryKeys.templates(TENANT), [
+      template({ latest_sync: latestSync({ status: "syncing" }) }),
+      template({ id: "tpl_net", name: "network", root_path: "aws/network", latest_template_revision_id: "rev_net" })
+    ]);
+    serve({
+      polled: [{ status: "syncing" }, { status: "synced", resolved_commit_sha: "f17f983444455556666" }],
+      listed: () => [fresh, current, other]
+    });
+    renderPanel(queryClient);
+
+    expect(syncing()).toBe(true);
+    expect(screen.getByTestId("template-sync-result").textContent).toBe("syncing");
+    await waitFor(() => expect(screen.getByTestId("template-sync-result").textContent).toBe("synced commit f17f983"), { timeout: 4000 });
+    await waitFor(() => expect(screen.getAllByTestId(/^revision-row-/)[0].getAttribute("data-testid")).toBe("revision-row-rev_2"));
   });
 
   it("is not offered to people who cannot publish templates", () => {

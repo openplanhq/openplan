@@ -27,6 +27,7 @@ import {
   useTemplateRunsQuery,
   useTemplatesQuery,
   templateRefetchInterval,
+  templatesRefetchInterval,
   useUpdateStackTemplateConfigMutation,
   useUpgradeStackTemplateMutation
 } from "./queries";
@@ -179,6 +180,18 @@ describe("polling-aware query hooks", () => {
     POLL_INTERVAL_MS * 8
   );
 
+  it("polls the templates list while a template syncs and stops once none does", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse([syncingTemplate("syncing")]))
+      .mockResolvedValue(jsonResponse([syncingTemplate("failed")]));
+    const { result } = renderHook(() => useTemplatesQuery("tenant_123"), { wrapper: wrapper(testQueryClient()) });
+
+    await waitFor(() => expect(result.current.data?.[0].latest_sync?.status).toBe("failed"), { timeout: POLL_INTERVAL_MS * 3 });
+    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS * 2));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  }, POLL_INTERVAL_MS * 8);
+
   it("fetches a template run's status regardless of poll option", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(() =>
       Promise.resolve(jsonResponse({ id: "run_1", status: "running" }))
@@ -203,6 +216,16 @@ describe("polling-aware query hooks", () => {
       // Nothing to follow: not read yet, or never synced.
       expect(templateRefetchInterval(undefined)).toBe(false);
       expect(templateRefetchInterval({ ...syncingTemplate("syncing"), latest_sync: null })).toBe(false);
+    });
+
+    // Any one template still syncing keeps the list polled, so a reload in
+    // the middle of a sync keeps following it.
+    it("polls the templates list while any template syncs", () => {
+      expect(templatesRefetchInterval([syncingTemplate("synced"), syncingTemplate("syncing")])).toBe(1500);
+      expect(templatesRefetchInterval([syncingTemplate("synced"), syncingTemplate("stalled")])).toBe(false);
+      expect(templatesRefetchInterval([{ ...syncingTemplate("syncing"), latest_sync: null }])).toBe(false);
+      expect(templatesRefetchInterval([])).toBe(false);
+      expect(templatesRefetchInterval(undefined)).toBe(false);
     });
 
     it("only polls a run when told to, and stops on terminal status", () => {
