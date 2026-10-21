@@ -493,7 +493,7 @@ func (server *Server) handleCreateTemplate(response http.ResponseWriter, request
 	}
 
 	setLocation(response, request, "templates", string(started.Template.ID))
-	writeJSON(response, http.StatusAccepted, newTemplateResponse(started.Template))
+	writeJSON(response, http.StatusAccepted, newTemplateResponse(started.Template, server.service.Clock.Now()))
 }
 
 func (server *Server) handleListTemplates(response http.ResponseWriter, request *http.Request) {
@@ -510,7 +510,9 @@ func (server *Server) handleListTemplates(response http.ResponseWriter, request 
 		return
 	}
 
-	writeJSON(response, http.StatusOK, newListResponse(mapItems(templates.Items, newTemplateResponse), templates.NextCursor))
+	now := server.service.Clock.Now()
+	items := mapItems(templates.Items, func(template domain.SourceTemplate) templateResponse { return newTemplateResponse(template, now) })
+	writeJSON(response, http.StatusOK, newListResponse(items, templates.NextCursor))
 }
 
 func (server *Server) handleGetTemplate(response http.ResponseWriter, request *http.Request) {
@@ -523,7 +525,7 @@ func (server *Server) handleGetTemplate(response http.ResponseWriter, request *h
 		return
 	}
 
-	writeJSON(response, http.StatusOK, newTemplateResponse(template))
+	writeJSON(response, http.StatusOK, newTemplateResponse(template, server.service.Clock.Now()))
 }
 
 // handleStartTemplateSync answers 202 with the template, not the sync: a sync
@@ -545,7 +547,7 @@ func (server *Server) handleStartTemplateSync(response http.ResponseWriter, requ
 	}
 
 	setLocation(response, request, "templates", string(started.Template.ID))
-	writeJSON(response, http.StatusAccepted, newTemplateResponse(started.Template))
+	writeJSON(response, http.StatusAccepted, newTemplateResponse(started.Template, server.service.Clock.Now()))
 }
 
 func (server *Server) handleListTemplateRevisionsForTemplate(response http.ResponseWriter, request *http.Request) {

@@ -686,12 +686,8 @@ func (service *Service) RegisterTemplate(ctx context.Context, command RegisterTe
 		if err != nil {
 			return err
 		}
-		templateSync, err := service.queueTemplateSync(ctx, repository, enqueuer, template, actor)
-		if err != nil {
-			return err
-		}
-		started = StartedTemplateSync{Template: template, Sync: templateSync}
-		return nil
+		started, err = service.queueTemplateSync(ctx, repository, enqueuer, template, actor)
+		return err
 	}); err != nil {
 		return StartedTemplateSync{}, fmt.Errorf("register template: %w", err)
 	}
@@ -716,21 +712,23 @@ func (service *Service) StartTemplateSync(ctx context.Context, command StartTemp
 	if err != nil {
 		return StartedTemplateSync{}, fmt.Errorf("get template: %w", err)
 	}
-	var templateSync domain.TemplateRegistration
+	var started StartedTemplateSync
 	if err := service.Work.InTx(ctx, func(ctx context.Context, repository TxRepo, enqueuer queue.Enqueuer) error {
-		templateSync, err = service.queueTemplateSync(ctx, repository, enqueuer, template, actor)
+		started, err = service.queueTemplateSync(ctx, repository, enqueuer, template, actor)
 		return err
 	}); err != nil {
 		return StartedTemplateSync{}, fmt.Errorf("start template sync: %w", err)
 	}
-	return StartedTemplateSync{Template: template, Sync: templateSync}, nil
+	return started, nil
 }
 
 // queueTemplateSync records a pending sync of the template and queues the
 // workflow that runs it, inside the caller's transaction. The sync takes its
 // source from the stored template, not the request, so it clones exactly
-// what the template names.
-func (service *Service) queueTemplateSync(ctx context.Context, repository TxRepo, enqueuer queue.Enqueuer, template domain.SourceTemplate, actor domain.UserID) (domain.TemplateRegistration, error) {
+// what the template names. The template comes back with this sync as its
+// latest, which a read after the commit would also find, so the answer never
+// shows the sync it replaced.
+func (service *Service) queueTemplateSync(ctx context.Context, repository TxRepo, enqueuer queue.Enqueuer, template domain.SourceTemplate, actor domain.UserID) (StartedTemplateSync, error) {
 	templateSync := domain.TemplateRegistration{
 		ID:               service.RegistrationIDs.NewTemplateRegistrationID(),
 		TenantID:         template.TenantID,
@@ -753,10 +751,10 @@ func (service *Service) queueTemplateSync(ctx context.Context, repository TxRepo
 		RootPath:         templateSync.RootPath,
 	}))
 	if err != nil {
-		return domain.TemplateRegistration{}, fmt.Errorf("encode start template sync payload: %w", err)
+		return StartedTemplateSync{}, fmt.Errorf("encode start template sync payload: %w", err)
 	}
 	if err := repository.CreateTemplateRegistration(ctx, templateSync); err != nil {
-		return domain.TemplateRegistration{}, err
+		return StartedTemplateSync{}, err
 	}
 	if err := enqueuer.Enqueue(ctx, queue.Request{
 		Kind:         KindStartTemplateSync,
@@ -764,9 +762,10 @@ func (service *Service) queueTemplateSync(ctx context.Context, repository TxRepo
 		ActorSubject: string(actor),
 		TenantID:     string(templateSync.TenantID),
 	}); err != nil {
-		return domain.TemplateRegistration{}, err
+		return StartedTemplateSync{}, err
 	}
-	return templateSync, nil
+	template.LatestSync = &domain.LatestTemplateSync{Status: templateSync.Status, RequestedAt: templateSync.RequestedAt}
+	return StartedTemplateSync{Template: template, Sync: templateSync}, nil
 }
 
 // CreateStack creates a tenant-owned infrastructure stack.

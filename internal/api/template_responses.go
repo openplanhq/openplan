@@ -172,19 +172,32 @@ type templateRegistrationResponse struct {
 
 // templateResponse is a registered source. Name, description and tags are
 // its latest revision's; before the first sync records one, the name is the
-// fallback the sync would use and the revision id is "".
+// fallback the sync would use and the revision id is "". LatestSync is null
+// until a sync is requested.
 type templateResponse struct {
-	ID                       string    `json:"id"`
-	TenantID                 string    `json:"tenant_id"`
-	RepoOwner                string    `json:"repo_owner"`
-	RepoName                 string    `json:"repo_name"`
-	SourceRef                string    `json:"source_ref"`
-	RootPath                 string    `json:"root_path"`
-	Name                     string    `json:"name"`
-	Description              string    `json:"description"`
-	Tags                     []string  `json:"tags"`
-	LatestTemplateRevisionID string    `json:"latest_template_revision_id"`
-	CreatedAt                time.Time `json:"created_at"`
+	ID                       string              `json:"id"`
+	TenantID                 string              `json:"tenant_id"`
+	RepoOwner                string              `json:"repo_owner"`
+	RepoName                 string              `json:"repo_name"`
+	SourceRef                string              `json:"source_ref"`
+	RootPath                 string              `json:"root_path"`
+	Name                     string              `json:"name"`
+	Description              string              `json:"description"`
+	Tags                     []string            `json:"tags"`
+	LatestTemplateRevisionID string              `json:"latest_template_revision_id"`
+	LatestSync               *latestSyncResponse `json:"latest_sync"`
+	CreatedAt                time.Time           `json:"created_at"`
+}
+
+// latestSyncResponse is a template's newest sync. Status is the shown one,
+// derived when the response is built (stalled is never stored), so it is not
+// the registration's status.
+type latestSyncResponse struct {
+	Status            string    `json:"status"`
+	ErrorSummary      string    `json:"error_summary"`
+	ResolvedCommitSHA string    `json:"resolved_commit_sha"`
+	RequestedAt       time.Time `json:"requested_at"`
+	CompletedAt       time.Time `json:"completed_at,omitzero"`
 }
 
 type templateRevisionResponse struct {
@@ -306,7 +319,9 @@ func newTemplateRegistrationResponse(registration domain.TemplateRegistration) t
 	}
 }
 
-func newTemplateResponse(template domain.SourceTemplate) templateResponse {
+// newTemplateResponse needs now because the latest sync's status depends on
+// how long it has been running.
+func newTemplateResponse(template domain.SourceTemplate, now time.Time) templateResponse {
 	tags := template.Tags
 	if tags == nil {
 		tags = []string{}
@@ -322,7 +337,21 @@ func newTemplateResponse(template domain.SourceTemplate) templateResponse {
 		Description:              template.Description,
 		Tags:                     tags,
 		LatestTemplateRevisionID: string(template.LatestTemplateRevisionID),
+		LatestSync:               newLatestSyncResponse(template.LatestSync, now),
 		CreatedAt:                template.CreatedAt,
+	}
+}
+
+func newLatestSyncResponse(sync *domain.LatestTemplateSync, now time.Time) *latestSyncResponse {
+	if sync == nil {
+		return nil
+	}
+	return &latestSyncResponse{
+		Status:            string(sync.StatusAt(now)),
+		ErrorSummary:      sync.ErrorSummary,
+		ResolvedCommitSHA: sync.ResolvedCommitSHA,
+		RequestedAt:       sync.RequestedAt,
+		CompletedAt:       sync.CompletedAt,
 	}
 }
 

@@ -352,8 +352,9 @@ paths:
         source, and records a revision with its input variables.
 
         A source names one template, so registering a source that is already
-        registered returns the same template, and syncs it again. Read the
-        template until `latest_template_revision_id` names a revision.
+        registered returns the same template, and syncs it again. The answer's
+        `latest_sync` is the sync just queued; read the template while
+        `latest_sync.status` is `syncing` to follow it.
       operationId: createTemplate
       requestBody:
         required: true
@@ -436,7 +437,8 @@ paths:
         ref or to retry a sync that failed.
 
         Takes no fields: send `{}` or no body at all. Returns `202` with the
-        template; a sync has no read of its own.
+        template, whose `latest_sync` is the sync just queued; a sync has no
+        read of its own, so read the template to follow it.
       operationId: startTemplateSync
       requestBody:
         required: false
@@ -2381,10 +2383,52 @@ components:
         latest_template_revision_id:
           type: string
           description: The newest revision a sync recorded. Empty until one has.
+        latest_sync:
+          type: [object, "null"]
+          description: |
+            The newest sync requested for the template, whoever requested it
+            and whether or not it has finished. Null until the template's
+            first sync is requested.
+          properties:
+            status: { $ref: "#/components/schemas/TemplateSyncStatus" }
+            error_summary:
+              type: string
+              description: |
+                Why the sync was `invalid` or `failed`, with paths relative
+                to the repository. Empty otherwise.
+            resolved_commit_sha:
+              type: string
+              description: The commit `source_ref` resolved to. Empty until the sync resolves it.
+            requested_at: { type: string, format: date-time }
+            completed_at:
+              type: string
+              format: date-time
+              description: Absent until the sync ends.
+          required: [status, error_summary, resolved_commit_sha, requested_at]
         created_at: { type: string, format: date-time }
       required:
         [id, tenant_id, repo_owner, repo_name, source_ref, root_path, name,
-         description, tags, latest_template_revision_id, created_at]
+         description, tags, latest_template_revision_id, latest_sync,
+         created_at]
+
+    TemplateSyncStatus:
+      type: string
+      enum: [syncing, stalled, up_to_date, synced, invalid, failed]
+      description: |
+        How a template's latest sync reads now, derived each time the
+        template is read:
+
+        - `syncing`: queued or running, requested under 30 minutes ago.
+        - `stalled`: still queued or running 30 minutes after it was
+          requested. Its retries are exhausted by then, so it will not finish
+          on its own; sync again.
+        - `up_to_date`: finished, and the commit it resolved to was already
+          a revision, so nothing new was recorded.
+        - `synced`: finished, and recorded a new revision.
+        - `invalid`: the source was rejected, for example a root path that
+          does not exist; `error_summary` says why.
+        - `failed`: the sync itself broke, for example a clone that failed;
+          `error_summary` says why.
 
     TemplateRevision:
       type: object

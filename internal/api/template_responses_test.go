@@ -178,21 +178,22 @@ func TestTemplateResponseFields(t *testing.T) {
 		ID: "source_template_1", TenantID: "tenant-1", RepoOwner: "o", RepoName: "r", SourceRef: "main",
 		RootPath: ".", Name: "n", Description: "d", Tags: []string{"t"}, LatestTemplateRevisionID: "rev-1",
 		CreatedAt: time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 10, 21, 10, 0, 0, 0, time.UTC),
-	})
+	}, time.Date(2026, 10, 21, 11, 0, 0, 0, time.UTC))
 
 	assert.Equal(t, []string{
-		"created_at", "description", "id", "latest_template_revision_id", "name", "repo_name",
+		"created_at", "description", "id", "latest_sync", "latest_template_revision_id", "name", "repo_name",
 		"repo_owner", "root_path", "source_ref", "tags", "tenant_id",
 	}, jsonKeys(t, response))
 }
 
 // A template no sync has filled in yet still sends every field: tags as [],
-// and the revision id as "".
+// the revision id as "", and latest_sync as null.
 func TestTemplateResponseBeforeTheFirstRevision(t *testing.T) {
 	t.Parallel()
 
-	encoded, err := json.Marshal(newTemplateResponse(domain.SourceTemplate{ID: "source_template_1"}))
+	encoded, err := json.Marshal(newTemplateResponse(domain.SourceTemplate{ID: "source_template_1"}, time.Now()))
 	require.NoError(t, err)
 	assert.Contains(t, string(encoded), `"tags":[]`)
 	assert.Contains(t, string(encoded), `"latest_template_revision_id":""`)
+	assert.Contains(t, string(encoded), `"latest_sync":null`)
 }
