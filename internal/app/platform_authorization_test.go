@@ -109,17 +109,13 @@ func TestPlatformViewerReadsTheCatalogButCannotPublishToIt(t *testing.T) {
 	t.Parallel()
 
 	service := NewService(Service{
-		TemplateRevisions:     &recordingTemplateRepository{},
-		TemplateRegistrations: &recordingTemplateRegistrationRepository{},
-		SourceTemplates:       &recordingSourceTemplateRepository{template: domain.SourceTemplate{ID: "source_template_1", TenantID: "tenant_1"}},
-		Work:                  &recordingUnitOfWork{},
-		Authorization:         newPlatformAuthorizer(t, platformViewer("viewer-subject")),
+		TemplateRevisions: &recordingTemplateRepository{},
+		SourceTemplates:   &recordingSourceTemplateRepository{template: domain.SourceTemplate{ID: "source_template_1", TenantID: "tenant_1"}},
+		Work:              &recordingUnitOfWork{},
+		Authorization:     newPlatformAuthorizer(t, platformViewer("viewer-subject")),
 	})
 	ctx := platformContext("viewer-subject")
 
-	if _, err := service.ListTemplateRevisions(ctx, ListTemplateRevisionsCommand{TenantID: domain.TenantID("tenant_1"), Page: FirstPage()}); err != nil {
-		t.Fatalf("ListTemplateRevisions error = %v, want nil", err)
-	}
 	if _, err := service.ListTemplates(ctx, ListTemplatesCommand{TenantID: "tenant_1", Page: FirstPage()}); err != nil {
 		t.Fatalf("ListTemplates error = %v, want nil", err)
 	}

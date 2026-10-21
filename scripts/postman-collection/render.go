@@ -426,7 +426,6 @@ var environment = []environmentValue{
 	{"template_root_path", "modules/random-id", plainVariable},
 	{"user_search", "a", plainVariable},
 	{"my_sub", "", plainVariable},
-	{"registration_id", "", plainVariable},
 	{"template_id", "", plainVariable},
 	{"template_revision_id", "", plainVariable},
 	{"stack_id", "", plainVariable},

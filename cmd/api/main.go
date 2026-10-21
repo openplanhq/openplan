@@ -49,7 +49,6 @@ type appRepositories interface {
 	app.StackTemplateRepository
 	app.StackTemplateInstaller
 	app.TemplateRunRepository
-	app.TemplateRegistrationRepository
 	app.TemplateRevisionMetadataRepository
 	app.TemplateRevisionRepository
 	app.SourceTemplateRepository
@@ -415,7 +414,6 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 		CredentialEncryptor:      credentialEncryptor(store),
 		StackTemplateInstaller:   store,
 		TemplateRuns:             store,
-		TemplateRegistrations:    store,
 		TemplateRevisionMetadata: store,
 		TemplateRevisions:        store,
 		SourceTemplates:          store,

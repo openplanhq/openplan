@@ -111,9 +111,9 @@ func TestTenantScopedRoutesRejectOtherTenantBeforeHandler(t *testing.T) {
 		method string
 		path   string
 	}{
-		{name: "register template", method: http.MethodPost, path: "/v1/tenants/tenant_other/template-registrations"},
-		{name: "list template revisions", method: http.MethodGet, path: "/v1/tenants/tenant_other/template-revisions"},
-		{name: "get template registration", method: http.MethodGet, path: "/v1/tenants/tenant_other/template-registrations/registration_123"},
+		{name: "register template", method: http.MethodPost, path: "/v1/tenants/tenant_other/templates"},
+		{name: "list templates", method: http.MethodGet, path: "/v1/tenants/tenant_other/templates"},
+		{name: "get template", method: http.MethodGet, path: "/v1/tenants/tenant_other/templates/template_123"},
 		{name: "get template variables", method: http.MethodGet, path: "/v1/tenants/tenant_other/template-revisions/revision_123/variables"},
 		{name: "create stack", method: http.MethodPost, path: "/v1/tenants/tenant_other/stacks"},
 		{name: "list stacks", method: http.MethodGet, path: "/v1/tenants/tenant_other/stacks"},
@@ -643,83 +643,14 @@ func TestStartTemplateRunHidesMissingStackTemplateAsNotFound(t *testing.T) {
 	}
 }
 
-func TestRegisterTemplateCallsService(t *testing.T) {
-	t.Parallel()
-
-	requestedAt := time.Date(2026, 7, 6, 11, 30, 0, 0, time.UTC)
-	deps := newAPITestDependencies(t).withPlatformTier("admin")
-	deps.registrationID = domain.TemplateRegistrationID("template_registration_123")
-	deps.now = requestedAt
-	server := NewServer(deps.service(), configuredTenantID)
-	response := httptest.NewRecorder()
-	request := authenticatedRequest(
-		http.MethodPost,
-		"/v1/tenants/tenant_123/template-registrations",
-		strings.NewReader(`{"repo_owner":"acme","repo_name":"infra-templates","source_ref":"v0.0.1","root_path":"modules/vpc"}`),
-	)
-
-	server.ServeHTTP(response, request)
-
-	if response.Code != http.StatusAccepted {
-		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusAccepted, response.Body.String())
-	}
-	// The registration is read back by its id under the collection it was posted to.
-	if got, want := response.Header().Get("Location"), "/v1/tenants/tenant_123/template-registrations/template_registration_123"; got != want {
-		t.Fatalf("Location = %q, want %q", got, want)
-	}
-	if deps.registrations.created.TenantID != domain.TenantID("tenant_123") {
-		t.Fatalf("tenant id = %q", deps.registrations.created.TenantID)
-	}
-	if deps.registrations.created.RepoOwner != "acme" {
-		t.Fatalf("repo owner = %q", deps.registrations.created.RepoOwner)
-	}
-	if deps.registrations.created.SourceRef != "v0.0.1" {
-		t.Fatalf("source ref = %q", deps.registrations.created.SourceRef)
-	}
-	if deps.registrations.created.RequestedBy != domain.UserID(apiOIDCSubject) {
-		t.Fatalf("requested by = %q, want %q", deps.registrations.created.RequestedBy, apiOIDCSubject)
-	}
-	if len(deps.work.requests) != 1 || deps.work.requests[0].Kind != app.KindStartTemplateSync {
-		t.Fatalf("queued requests = %#v, want one start_template_sync request", deps.work.requests)
-	}
-	// The sync writes into the template the register stored and never makes
-	// one, so this route (the web's Register and Sync) works only while the
-	// registration and its sync both name it.
-	wantTemplateID := domain.SourceTemplateIDFor("tenant_123", "acme", "infra-templates", "modules/vpc", "v0.0.1")
-	if deps.registrations.created.SourceTemplateID != wantTemplateID {
-		t.Fatalf("registration source template id = %q, want %q", deps.registrations.created.SourceTemplateID, wantTemplateID)
-	}
-	var syncInput app.StartTemplateSyncPayload
-	if err := json.Unmarshal(deps.work.requests[0].Payload, &syncInput); err != nil {
-		t.Fatalf("decode sync intent: %v", err)
-	}
-	if syncInput.SourceTemplateID != wantTemplateID {
-		t.Fatalf("sync source template id = %q, want %q", syncInput.SourceTemplateID, wantTemplateID)
-	}
-
-	var body templateRegistrationResponse
-	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if body.ID != string(domain.TemplateRegistrationID("template_registration_123")) {
-		t.Fatalf("id = %q, want template_registration_123", body.ID)
-	}
-	if body.Status != string(domain.TemplateRegistrationPending) {
-		t.Fatalf("status = %q, want pending", body.Status)
-	}
-	if !body.RequestedAt.Equal(requestedAt) {
-		t.Fatalf("requested_at = %v, want %v", body.RequestedAt, requestedAt)
-	}
-}
-
-func TestRegisterTemplateRejectsInvalidJSON(t *testing.T) {
+func TestCreateTemplateRejectsInvalidJSON(t *testing.T) {
 	t.Parallel()
 
 	server := NewServer(newAPITestDependencies(t).service(), configuredTenantID)
 	response := httptest.NewRecorder()
 	request := authenticatedRequest(
 		http.MethodPost,
-		"/v1/tenants/tenant_123/template-registrations",
+		"/v1/tenants/tenant_123/templates",
 		strings.NewReader(`{"repo_owner":`),
 	)
 
@@ -730,52 +661,6 @@ func TestRegisterTemplateRejectsInvalidJSON(t *testing.T) {
 	}
 }
 
-func TestRegisterTemplateMapsMissingSourceRefToValidationFailed(t *testing.T) {
-	t.Parallel()
-
-	server := NewServer(newAPITestDependencies(t).withPlatformTier("admin").service(), configuredTenantID)
-	response := httptest.NewRecorder()
-	request := authenticatedRequest(
-		http.MethodPost,
-		"/v1/tenants/tenant_123/template-registrations",
-		strings.NewReader(`{"repo_owner":"acme","repo_name":"infra-templates","root_path":"modules/vpc"}`),
-	)
-
-	server.ServeHTTP(response, request)
-
-	assertValidationFailed(t, response, "#/source_ref required")
-}
-
-// Registration was once POSTed to /template-revisions, which only lists
-// revisions now. With GET still routed there the mux answers 405, not 404,
-// and nothing is registered.
-func TestRegisterTemplateOnTheRevisionsPathIsMethodNotAllowed(t *testing.T) {
-	t.Parallel()
-
-	deps := newAPITestDependencies(t).withPlatformTier("admin")
-	server := NewServer(deps.service(), configuredTenantID)
-	response := httptest.NewRecorder()
-	request := authenticatedRequest(
-		http.MethodPost,
-		"/v1/tenants/tenant_123/template-revisions",
-		strings.NewReader(`{"repo_owner":"acme","repo_name":"infra-templates","source_ref":"v0.0.1","root_path":"modules/vpc"}`),
-	)
-
-	server.ServeHTTP(response, request)
-
-	if response.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusMethodNotAllowed, response.Body.String())
-	}
-	if deps.registrations.created.ID != "" {
-		t.Fatalf("registration = %#v, want none", deps.registrations.created)
-	}
-	if len(deps.work.requests) != 0 {
-		t.Fatalf("queued requests = %#v, want none", deps.work.requests)
-	}
-}
-
-// Registering answers with the template, under its own URL, and queues the
-// sync that fills it in.
 func TestCreateTemplateAnswersTheTemplate(t *testing.T) {
 	t.Parallel()
 
@@ -813,6 +698,16 @@ func TestCreateTemplateAnswersTheTemplate(t *testing.T) {
 	}
 	if deps.registrations.created.SourceTemplateID != domain.SourceTemplateID(wantID) {
 		t.Fatalf("sync template id = %q, want %q", deps.registrations.created.SourceTemplateID, wantID)
+	}
+	if deps.registrations.created.RequestedBy != domain.UserID(apiOIDCSubject) {
+		t.Fatalf("requested by = %q, want %q", deps.registrations.created.RequestedBy, apiOIDCSubject)
+	}
+	var syncInput app.StartTemplateSyncPayload
+	if err := json.Unmarshal(deps.work.requests[0].Payload, &syncInput); err != nil {
+		t.Fatalf("decode sync intent: %v", err)
+	}
+	if syncInput.SourceTemplateID != domain.SourceTemplateID(wantID) {
+		t.Fatalf("queued sync template id = %q, want %q", syncInput.SourceTemplateID, wantID)
 	}
 }
 
@@ -1793,79 +1688,6 @@ func TestStackTemplateEditRoutesHideMissingStackTemplateAsNotFound(t *testing.T)
 	}
 }
 
-func TestGetTemplateRegistrationReturnsRegistration(t *testing.T) {
-	t.Parallel()
-
-	deps := newAPITestDependencies(t).withPlatformTier("admin")
-	deps.registrations.registration = domain.TemplateRegistration{
-		ID:       domain.TemplateRegistrationID("template_registration_123"),
-		TenantID: domain.TenantID("tenant_123"),
-		Status:   domain.TemplateRegistrationCompleted,
-	}
-	server := NewServer(deps.service(), configuredTenantID)
-	response := httptest.NewRecorder()
-	request := authenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/template-registrations/template_registration_123", nil)
-
-	server.ServeHTTP(response, request)
-
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
-	}
-	if deps.registrations.gotGetTenantID != domain.TenantID("tenant_123") {
-		t.Fatalf("tenant id = %q, want tenant_123", deps.registrations.gotGetTenantID)
-	}
-
-	var body templateRegistrationResponse
-	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if body.ID != string(domain.TemplateRegistrationID("template_registration_123")) {
-		t.Fatalf("id = %q, want template_registration_123", body.ID)
-	}
-}
-
-func TestListTemplateRevisionsReturnsTenantTemplateRevisions(t *testing.T) {
-	t.Parallel()
-
-	createdAt := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
-	deps := newAPITestDependencies(t).withPlatformTier("admin")
-	deps.templates.templates = []domain.TemplateRevision{
-		{
-			ID:                domain.TemplateRevisionID("template_123"),
-			TenantID:          domain.TenantID("tenant_123"),
-			RepoOwner:         "acme",
-			RepoName:          "infra-templates",
-			SourceRef:         "main",
-			ResolvedCommitSHA: "abc123",
-			RootPath:          ".",
-			Name:              "infra-templates",
-			Tags:              []string{"aws"},
-			Status:            domain.TemplateRevisionActive,
-			CreatedAt:         createdAt,
-		},
-	}
-	server := NewServer(deps.service(), configuredTenantID)
-	response := httptest.NewRecorder()
-	request := authenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/template-revisions", nil)
-
-	server.ServeHTTP(response, request)
-
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
-	}
-	if deps.templates.gotListTenantID != domain.TenantID("tenant_123") {
-		t.Fatalf("tenant list lookup = %q, want tenant_123", deps.templates.gotListTenantID)
-	}
-
-	body := decodeItems[templateRevisionResponse](t, response)
-	if len(body) != 1 {
-		t.Fatalf("len(body) = %d, want 1", len(body))
-	}
-	if body[0].ID != string(domain.TemplateRevisionID("template_123")) || body[0].Status != string(domain.TemplateRevisionActive) {
-		t.Fatalf("template revision response = %#v", body[0])
-	}
-}
-
 func TestListTemplateRunsReturnsRunsForStackTemplate(t *testing.T) {
 	t.Parallel()
 
@@ -2723,7 +2545,7 @@ func TestMutationRequestsRejectIdentityOverrides(t *testing.T) {
 		assertNoEffects func(*testing.T, *apiTestDependencies)
 	}{
 		{name: "actor", path: "/v1/tenants/tenant_123/stacks", body: `{"name":"Acme","actor":"spoofed"}`, assertNoEffects: assertNoStackCreation},
-		{name: "requested by", path: "/v1/tenants/tenant_123/template-registrations", body: `{"repo_owner":"acme","repo_name":"infra","source_ref":"main","root_path":".","requested_by":"spoofed"}`, assertNoEffects: assertNoRegistration},
+		{name: "requested by", path: "/v1/tenants/tenant_123/templates", body: `{"repo_owner":"acme","repo_name":"infra","source_ref":"main","root_path":".","requested_by":"spoofed"}`, assertNoEffects: assertNoRegistration},
 		{name: "trigger actor", path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/runs", body: `{"operation":"plan","trigger_actor":"spoofed"}`, assertNoEffects: assertNoRun},
 		{name: "approved by", path: "/v1/tenants/tenant_123/template-runs/run_123/approve", body: `{"approved_by":"spoofed"}`, assertNoEffects: assertNoApproval},
 		{name: "created by", path: "/v1/tenants/tenant_123/stacks", body: `{"name":"Acme","created_by":"spoofed"}`, assertNoEffects: assertNoStackCreation},
@@ -2896,9 +2718,8 @@ func TestTemplateCatalogRoutesRejectOrdinaryUser(t *testing.T) {
 		path   string
 		body   string
 	}{
-		{name: "register", method: http.MethodPost, path: "/v1/tenants/tenant_123/template-registrations", body: `{"repo_owner":"acme","repo_name":"infra","source_ref":"main","root_path":"."}`},
-		{name: "list revisions", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-revisions"},
-		{name: "registration status", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-registrations/registration_123"},
+		{name: "register", method: http.MethodPost, path: "/v1/tenants/tenant_123/templates", body: `{"repo_owner":"acme","repo_name":"infra","source_ref":"main","root_path":"."}`},
+		{name: "list templates", method: http.MethodGet, path: "/v1/tenants/tenant_123/templates"},
 		{name: "revision variables", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-revisions/revision_123/variables"},
 	}
 
@@ -2932,9 +2753,8 @@ func TestTemplateCatalogRoutesAllowGlobalRoles(t *testing.T) {
 		body   string
 		status int
 	}{
-		{name: "register", method: http.MethodPost, path: "/v1/tenants/tenant_123/template-registrations", body: `{"repo_owner":"acme","repo_name":"infra","source_ref":"main","root_path":"."}`, status: http.StatusAccepted},
-		{name: "list revisions", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-revisions", status: http.StatusOK},
-		{name: "registration status", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-registrations/registration_123", status: http.StatusOK},
+		{name: "register", method: http.MethodPost, path: "/v1/tenants/tenant_123/templates", body: `{"repo_owner":"acme","repo_name":"infra","source_ref":"main","root_path":"."}`, status: http.StatusAccepted},
+		{name: "list templates", method: http.MethodGet, path: "/v1/tenants/tenant_123/templates", status: http.StatusOK},
 		{name: "revision variables", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-revisions/revision_123/variables", status: http.StatusOK},
 	}
 
@@ -3777,7 +3597,6 @@ func (deps *apiTestDependencies) service() *app.Service {
 		StackTemplates:           &deps.stackTemplates,
 		StackTemplateInstaller:   &deps.stackTemplateInstaller,
 		TemplateRuns:             &deps.templateRuns,
-		TemplateRegistrations:    &deps.registrations,
 		TemplateRevisionMetadata: &deps.templates,
 		TemplateRevisions:        &deps.templates,
 		SourceTemplates:          &deps.sourceTemplates,
@@ -3835,7 +3654,7 @@ func (repository *apiStackOverviewRepository) ListTemplateRunsByStatus(_ context
 type apiUnitOfWork struct {
 	stacks                app.StackRepository
 	templateRuns          app.TemplateRunRepository
-	templateRegistrations app.TemplateRegistrationRepository
+	templateRegistrations *recordingTemplateRegistrationRepository
 	requests              []queue.Request
 	audits                []domain.SecurityAuditEvent
 	err                   error
@@ -3875,12 +3694,10 @@ func (unit *apiUnitOfWork) CreateTemplateRun(ctx context.Context, run domain.Tem
 }
 
 func (unit *apiUnitOfWork) CreateTemplateRegistration(ctx context.Context, registration domain.TemplateRegistration) error {
-	if repository, ok := unit.templateRegistrations.(interface {
-		CreateTemplateRegistration(context.Context, domain.TemplateRegistration) error
-	}); ok {
-		return repository.CreateTemplateRegistration(ctx, registration)
+	if unit.templateRegistrations == nil {
+		return nil
 	}
-	return nil
+	return unit.templateRegistrations.CreateTemplateRegistration(ctx, registration)
 }
 
 func (unit *apiUnitOfWork) ApproveTemplateRun(ctx context.Context, approval domain.TemplateRunApproval) error {
@@ -4183,14 +4000,8 @@ func (repository *recordingTemplateRunLogRepository) ListTemplateRunLogs(_ conte
 }
 
 type recordingTemplateRegistrationRepository struct {
-	created        domain.TemplateRegistration
-	registration   domain.TemplateRegistration
-	gotGetTenantID domain.TenantID
-	gotGetID       domain.TemplateRegistrationID
-	createErr      error
-	getErr         error
-	statusInput    domain.TemplateRegistrationStatusActivityInput
-	statusErr      error
+	created   domain.TemplateRegistration
+	createErr error
 }
 
 func (repository *recordingTemplateRegistrationRepository) CreateTemplateRegistration(_ context.Context, registration domain.TemplateRegistration) error {
@@ -4198,23 +4009,6 @@ func (repository *recordingTemplateRegistrationRepository) CreateTemplateRegistr
 		return repository.createErr
 	}
 	repository.created = registration
-	return nil
-}
-
-func (repository *recordingTemplateRegistrationRepository) GetTemplateRegistration(_ context.Context, tenantID domain.TenantID, id domain.TemplateRegistrationID) (domain.TemplateRegistration, error) {
-	repository.gotGetTenantID = tenantID
-	repository.gotGetID = id
-	if repository.getErr != nil {
-		return domain.TemplateRegistration{}, repository.getErr
-	}
-	return repository.registration, nil
-}
-
-func (repository *recordingTemplateRegistrationRepository) RecordTemplateRegistrationStatus(_ context.Context, input domain.TemplateRegistrationStatusActivityInput) error {
-	if repository.statusErr != nil {
-		return repository.statusErr
-	}
-	repository.statusInput = input
 	return nil
 }
 
@@ -4262,24 +4056,6 @@ func (repository *recordingTemplateRepository) ListTemplateRevisions(_ context.C
 		return nil, repository.listErr
 	}
 	return repository.templates, nil
-}
-
-func (repository *recordingTemplateRepository) ListTemplateRevisionsPage(_ context.Context, tenantID domain.TenantID, after *app.TemplateRevisionCursor, limit int) ([]domain.TemplateRevision, error) {
-	repository.gotListTenantID = tenantID
-	if repository.listErr != nil {
-		return nil, repository.listErr
-	}
-	start := 0
-	if after != nil {
-		for i, revision := range repository.templates {
-			if revision.ID == after.ID {
-				start = i + 1
-				break
-			}
-		}
-	}
-	end := min(start+limit, len(repository.templates))
-	return append([]domain.TemplateRevision{}, repository.templates[start:end]...), nil
 }
 
 func (repository *recordingTemplateRepository) GetTemplateRevisionVariables(_ context.Context, tenantID domain.TenantID, templateID domain.TemplateRevisionID) ([]domain.TemplateVariable, error) {

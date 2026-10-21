@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,7 +34,6 @@ var (
 	_ app.StackTemplateInstaller             = (*Store)(nil)
 	_ app.TemplateRevisionMetadataRepository = (*Store)(nil)
 	_ app.TemplateRunRepository              = (*Store)(nil)
-	_ app.TemplateRegistrationRepository     = (*Store)(nil)
 	_ app.TemplateRevisionRepository         = (*Store)(nil)
 	_ app.SourceTemplateRepository           = (*Store)(nil)
 	_ app.AuditRepository                    = (*Store)(nil)
@@ -3308,6 +3308,65 @@ func openMigratedTestPool(t *testing.T, ctx context.Context) *pgxpool.Pool {
 	}
 
 	return pool
+}
+
+// CreateTemplateRegistration and GetTemplateRegistration let tests write and
+// read a registration row directly; the app writes one only inside a unit of
+// work, and reads syncs through the template.
+func (store *Store) CreateTemplateRegistration(ctx context.Context, registration domain.TemplateRegistration) error {
+	return createTemplateRegistration(ctx, store.pool, registration)
+}
+
+func (store *Store) GetTemplateRegistration(ctx context.Context, tenantID domain.TenantID, id domain.TemplateRegistrationID) (domain.TemplateRegistration, error) {
+	var registration domain.TemplateRegistration
+	var completedAt sql.NullTime
+	err := store.pool.QueryRow(ctx, `
+		select
+			id,
+			tenant_id,
+			repo_owner,
+			repo_name,
+			source_ref,
+			root_path,
+			status,
+			step,
+			template_revision_id,
+			resolved_commit_sha,
+			requested_by,
+			requested_at,
+			completed_at,
+			error_summary,
+			coalesce(source_template_id, '')
+		from template_registrations
+		where tenant_id = $1
+			and id = $2
+	`, tenantID, id).Scan(
+		&registration.ID,
+		&registration.TenantID,
+		&registration.RepoOwner,
+		&registration.RepoName,
+		&registration.SourceRef,
+		&registration.RootPath,
+		&registration.Status,
+		&registration.Step,
+		&registration.TemplateRevisionID,
+		&registration.ResolvedCommitSHA,
+		&registration.RequestedBy,
+		&registration.RequestedAt,
+		&completedAt,
+		&registration.ErrorSummary,
+		&registration.SourceTemplateID,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.TemplateRegistration{}, app.ErrNotFound
+	}
+	if err != nil {
+		return domain.TemplateRegistration{}, fmt.Errorf("get template registration: %w", err)
+	}
+	if completedAt.Valid {
+		registration.CompletedAt = completedAt.Time
+	}
+	return registration, nil
 }
 
 // seedSourceTemplate stores a template with id, which revisions and stack

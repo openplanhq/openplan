@@ -1,8 +1,20 @@
 $kind: http-request
+description: In a collection run this re-sends itself until the template's sync ends, and saves its newest revision.
 method: GET
 url: '{{base_url}}/v1/tenants/{{tenant_id}}/templates/{{template_id}}'
 scripts:
   - type: afterResponse
-    code: pm.test('status is 200', () => pm.response.to.have.status(200));
+    code: |-
+      pm.test('status is 200', () => pm.response.to.have.status(200));
+      const template = pm.response.json();
+      if (template.latest_template_revision_id) { pm.environment.set('template_revision_id', template.latest_template_revision_id); }
+      const tries = Number(pm.environment.get('poll_tries') || 0);
+      if (!(!template.latest_sync || template.latest_sync.status !== 'syncing') && tries < 30) {
+        pm.environment.set('poll_tries', String(tries + 1));
+        setTimeout(() => {}, 2000);
+        pm.execution.setNextRequest(pm.info.requestName);
+      } else {
+        pm.environment.unset('poll_tries');
+      }
     language: text/javascript
 order: 3000

@@ -127,7 +127,6 @@ func TestPagedListsRejectBadPaging(t *testing.T) {
 	stacksCursor := app.EncodeCursor("stacks", app.StackPageCursor{CreatedAt: time.Now(), ID: "stack_1"})
 	for _, path := range []string{
 		"/v1/tenants/tenant_123/stacks",
-		"/v1/tenants/tenant_123/template-revisions",
 		"/v1/tenants/tenant_123/templates",
 		"/v1/tenants/tenant_123/templates/source_template_123/revisions",
 		"/v1/tenants/tenant_123/stack-templates/stack_template_123/runs",
@@ -151,24 +150,6 @@ func TestPagedListsRejectBadPaging(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestListTemplateRevisionsPaging(t *testing.T) {
-	t.Parallel()
-
-	deps := newAPITestDependencies(t)
-	for i := range 3 {
-		deps.templates.templates = append(deps.templates.templates, domain.TemplateRevision{
-			ID: domain.TemplateRevisionID(fmt.Sprintf("rev_%d", i)), TenantID: "tenant_123", CreatedAt: time.Unix(int64(100-i), 0),
-		})
-	}
-	server := NewServer(deps.service(), configuredTenantID)
-
-	pages := walkPages[templateRevisionResponse](t, server, "/v1/tenants/tenant_123/template-revisions?limit=2")
-
-	require.Len(t, pages, 2)
-	assert.Equal(t, "rev_0", pages[0][0].ID)
-	assert.Equal(t, "rev_2", pages[1][0].ID)
 }
 
 func TestListTemplatesPaging(t *testing.T) {

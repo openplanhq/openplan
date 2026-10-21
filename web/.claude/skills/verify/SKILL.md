@@ -20,7 +20,7 @@ canManageAccess }`. Endpoints the stack screens hit:
 
 - `GET /v1/tenants/tenant_123/stacks` → `[stack]`
 - `GET /v1/tenants/tenant_123/stacks/:id` → `{ stack, templates: [] }`
-- `GET /v1/tenants/tenant_123/template-revisions` → `[]`
+- `GET /v1/tenants/tenant_123/templates` → `[]`
 
 Recipe that works:
 

@@ -145,7 +145,7 @@ func TestListStacksRejectsBadPaging(t *testing.T) {
 		"q too long":        {ListStacksCommand{TenantID: "t", Page: FirstPage(), Query: strings.Repeat("a", 201)}, ErrInvalidCommand, IssueTooLong, "q"},
 		"garbage cursor":    {ListStacksCommand{TenantID: "t", Page: PageRequest{Limit: 5, Cursor: "%%%"}}, ErrInvalidQuery, IssueInvalidFormat, "cursor"},
 		"a runs cursor":     {ListStacksCommand{TenantID: "t", Page: PageRequest{Limit: 5, Cursor: EncodeCursor(templateRunsList, templateRunCursor{RunNumber: 3})}}, ErrInvalidQuery, IssueInvalidFormat, "cursor"},
-		"a revision cursor": {ListStacksCommand{TenantID: "t", Page: PageRequest{Limit: 5, Cursor: EncodeCursor(templateRevisionsList, TemplateRevisionCursor{CreatedAt: time.Now(), ID: "rev"})}}, ErrInvalidQuery, IssueInvalidFormat, "cursor"},
+		"a revision cursor": {ListStacksCommand{TenantID: "t", Page: PageRequest{Limit: 5, Cursor: EncodeCursor(templateRevisionsOfTemplateList, TemplateRevisionCursor{CreatedAt: time.Now(), ID: "rev"})}}, ErrInvalidQuery, IssueInvalidFormat, "cursor"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -258,36 +258,6 @@ func TestGetTemplateRunByNumberRequiresViewingTheStack(t *testing.T) {
 	assert.Empty(t, runs.gotListStackTemplateID, "the run is not read before the stack is authorized")
 }
 
-func TestListTemplateRevisionsPaging(t *testing.T) {
-	t.Parallel()
-
-	revisions := make([]domain.TemplateRevision, 5)
-	for i := range revisions {
-		revisions[i] = domain.TemplateRevision{ID: domain.TemplateRevisionID(fmt.Sprintf("rev_%d", i)), CreatedAt: time.Unix(int64(100-i), 0)}
-	}
-	service := NewService(Service{TemplateRevisions: &recordingTemplateRepository{templates: revisions}, Authorization: testPlatformAuthorizer(t)})
-
-	var seen []domain.TemplateRevisionID
-	cursor := ""
-	for {
-		page, err := service.ListTemplateRevisions(authenticatedContext(), ListTemplateRevisionsCommand{TenantID: "tenant_123", Page: PageRequest{Limit: 2, Cursor: cursor}})
-		require.NoError(t, err)
-		for _, revision := range page.Items {
-			seen = append(seen, revision.ID)
-		}
-		if page.NextCursor == "" {
-			break
-		}
-		cursor = page.NextCursor
-	}
-	assert.Equal(t, []domain.TemplateRevisionID{"rev_0", "rev_1", "rev_2", "rev_3", "rev_4"}, seen)
-
-	_, err := service.ListTemplateRevisions(authenticatedContext(), ListTemplateRevisionsCommand{
-		TenantID: "tenant_123", Page: PageRequest{Limit: 2, Cursor: EncodeCursor(stacksList, StackPageCursor{CreatedAt: time.Now(), ID: "s"})},
-	})
-	require.ErrorIs(t, err, ErrInvalidQuery)
-}
-
 func TestListTemplatesPaging(t *testing.T) {
 	t.Parallel()
 
@@ -315,7 +285,7 @@ func TestListTemplatesPaging(t *testing.T) {
 	assert.Equal(t, domain.TenantID("tenant_123"), repository.gotTenantID)
 
 	_, err := service.ListTemplates(authenticatedContext(), ListTemplatesCommand{
-		TenantID: "tenant_123", Page: PageRequest{Limit: 2, Cursor: EncodeCursor(templateRevisionsList, TemplateRevisionCursor{CreatedAt: time.Now(), ID: "r"})},
+		TenantID: "tenant_123", Page: PageRequest{Limit: 2, Cursor: EncodeCursor(templateRevisionsOfTemplateList, TemplateRevisionCursor{CreatedAt: time.Now(), ID: "r"})},
 	})
 	require.ErrorIs(t, err, ErrInvalidQuery)
 }
@@ -343,8 +313,8 @@ func TestListTemplateRevisionsForTemplatePaging(t *testing.T) {
 	assert.Equal(t, revisions[2:], last.Items)
 	assert.Empty(t, last.NextCursor)
 
-	// A cursor from the tenant-wide revisions list is another list's.
-	command.Page.Cursor = EncodeCursor(templateRevisionsList, TemplateRevisionCursor{CreatedAt: time.Now(), ID: "rev_0"})
+	// A cursor from the templates list is another list's.
+	command.Page.Cursor = EncodeCursor(templatesList, SourceTemplateCursor{CreatedAt: time.Now(), ID: "source_template_vpc"})
 	_, err = service.ListTemplateRevisionsForTemplate(authenticatedContext(), command)
 	require.ErrorIs(t, err, ErrInvalidQuery)
 }

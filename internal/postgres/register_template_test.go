@@ -21,8 +21,8 @@ import (
 // The sync never creates a template: it writes its revision into the one its
 // input names. This drives the app's register and Sync over the real schema
 // and proves each queued sync names a stored template its revision can land
-// in, which is what the template-registrations route and the web's Sync
-// button depend on.
+// in, which is what the templates routes and the web's Sync button depend
+// on.
 func TestRegisteredTemplateTakesItsSyncsRevision(t *testing.T) {
 	t.Parallel()
 

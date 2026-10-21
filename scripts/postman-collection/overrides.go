@@ -45,7 +45,7 @@ func save(variable, expression string) string {
 }
 
 // poll re-sends the current request in a collection run until done holds, at
-// most 30 times, two seconds apart. The run, the registration and the plan
+// most 30 times, two seconds apart. The run, the sync and the plan
 // are asynchronous, so a run would otherwise race ahead of them.
 func poll(done string) string {
 	return `const tries = Number(pm.environment.get('poll_tries') || 0);
@@ -104,20 +104,15 @@ var overrides = map[string]override{
 		expect:     []int{204, 409},
 		note:       "Skipped unless you set delete_template_id. `409` when a stack has installed it.",
 	},
-	"createTemplateRegistration": {
-		jsonBody: jsonObject([][2]string{
-			{"repo_owner", "{{template_repo_owner}}"}, {"repo_name", "{{template_repo_name}}"},
-			{"source_ref", "{{template_source_ref}}"}, {"root_path", "{{template_root_path}}"},
-		}),
-		test: save("registration_id", "pm.response.json().id"),
+	// The run installs the revision the template's first sync records, so
+	// reading the template waits that sync out.
+	"getTemplate": {
+		test: "const template = pm.response.json();\n" +
+			"if (template.latest_template_revision_id) { pm.environment.set('template_revision_id', template.latest_template_revision_id); }\n" +
+			poll("!template.latest_sync || template.latest_sync.status !== 'syncing'"),
+		note: "In a collection run this re-sends itself until the template's sync ends, and saves its newest revision.",
 	},
-	"getTemplateRegistration": {
-		test: "const registration = pm.response.json();\n" +
-			"if (registration.template_revision_id) { pm.environment.set('template_revision_id', registration.template_revision_id); }\n" +
-			poll("!['pending', 'running'].includes(registration.status)"),
-		note: "In a collection run this re-sends itself until the registration ends, and saves its revision.",
-	},
-	"listTemplateRevisions": {
+	"listTemplateRevisionsForTemplate": {
 		test: "const revisions = pm.response.json().items;\n" +
 			"if (!pm.environment.get('template_revision_id') && revisions.length) { pm.environment.set('template_revision_id', revisions[0].id); }",
 	},
@@ -269,7 +264,7 @@ Setup:
 2. Sign in at the web UI, then copy the openplan_session cookie's value into
    session_cookie. Keep it in the current value, which stays on your machine.
 3. Run the collection top to bottom. Each create request saves the id the
-   next one needs, and the asynchronous ones (a registration, a plan) are
+   next one needs, and the asynchronous ones (a sync, a plan) are
    polled until they finish.
 
 Every response is checked for a request id, and every error for an RFC 9457
