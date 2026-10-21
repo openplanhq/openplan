@@ -24,13 +24,13 @@ import { shortCommitSHA } from "./templateWorkflow";
 // follows the template's latest_sync until it settles, then says what
 // happened under them: the commit it synced, that nothing was new, or, in an
 // ErrorPanel, that it failed. The server tells a new commit from a known one
-// (synced or up_to_date). For a template with a revision, a sync started
-// elsewhere, or before a reload, is not shown here.
+// (synced or up_to_date).
 //
-// A template with no revision yet is followed from the start: its first sync
-// is the only thing there is to say about it, so its latest_sync says why
-// nothing can be installed (still syncing, failed, stalled), and a first sync
-// still running finishes on screen.
+// Until Sync is pressed, the panel shows the template's latest sync from the
+// list, whoever started it: an outcome as it stands, and a sync still running
+// (started elsewhere, or before a reload) followed until it settles. For a
+// template with no revision yet, that first sync says why nothing can be
+// installed (still syncing, failed, stalled).
 //
 // Sync is hidden rather than disabled for people who cannot publish: the
 // POST would be refused, so there is nothing anyone could do to make it
@@ -44,15 +44,17 @@ export default function TemplateSync({ template, heading, source, about }: { tem
   // Read once, at mount: once the first sync lands a revision the panel
   // keeps this component, and its outcome stays in view.
   const [unsynced] = useState(template.latest_template_revision_id === "");
-  // Whether a sync is being followed; the template query stays off until
-  // then.
-  const [following, setFollowing] = useState(unsynced && template.latest_sync !== null);
+  // Whether a running sync is being followed; the template query stays off
+  // until then, so a settled outcome costs no request.
+  const [following, setFollowing] = useState(template.latest_sync?.status === "syncing");
+  // Once Sync is pressed, the outcome shown is that sync's alone.
+  const [pressed, setPressed] = useState(false);
   const [requestError, setRequestError] = useState("");
   const templateQuery = useTemplateQuery(tenantID, following ? template.id : "");
 
   // Until the first read answers, the list's copy of the template says where
   // its sync stood, so a failed first sync never flashes "syncing".
-  const sync = following ? (templateQuery.data ?? template).latest_sync : null;
+  const sync = following ? (templateQuery.data ?? template).latest_sync : pressed ? null : template.latest_sync;
   const status = sync?.status ?? null;
   const settled = status !== null && isSyncSettled(status);
   // React Query keeps the last syncing data through a failing poll, so
@@ -74,14 +76,16 @@ export default function TemplateSync({ template, heading, source, about }: { tem
   const unchecked = requestError === "" && pollError !== "";
 
   useEffect(() => {
-    if (!somethingNew) {
+    // An outcome already in when the panel opened changed nothing since the
+    // list and the revisions were read.
+    if (!following || !somethingNew) {
       return;
     }
     // The sync wrote a revision, which may rename the template: refetch the
     // list and the template's revisions.
     void queryClient.invalidateQueries({ queryKey: queryKeys.templates(tenantID), exact: true });
     void queryClient.invalidateQueries({ queryKey: queryKeys.templateRevisions(tenantID, template.id) });
-  }, [somethingNew, template.id, queryClient]);
+  }, [following, somethingNew, template.id, queryClient]);
 
   async function handleSync() {
     if (syncing) {
@@ -89,6 +93,7 @@ export default function TemplateSync({ template, heading, source, about }: { tem
     }
     setRequestError("");
     // Drop any earlier outcome, so this one follows its own sync.
+    setPressed(true);
     setFollowing(false);
     try {
       await syncTemplateMutation.mutateAsync(template.id);
