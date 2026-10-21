@@ -1,6 +1,6 @@
 /**
- * The API exposes three separate status unions (TemplateRunStatus with 7
- * values, TemplateRegistrationStatus with 5, TemplateRevisionStatus with 4).
+ * The API exposes separate status unions (TemplateRunStatus with 7 values,
+ * TemplateRevisionStatus with 4, among others).
  * Every status maps onto one of five visual tones.
  */
 export type StatusTone = "settled" | "progress" | "waiting" | "failed" | "canceled";

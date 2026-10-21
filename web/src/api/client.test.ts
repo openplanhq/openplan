@@ -8,6 +8,8 @@ import {
   assignStackRole,
   discardRun,
   createStack,
+  deleteTemplate,
+  getTemplate,
   getTemplateRevisionVariables,
   getTemplateRunByNumber,
   getTemplateRunLog,
@@ -16,12 +18,14 @@ import {
   listStacks,
   listTemplateRevisions,
   listTemplateRuns,
+  listTemplates,
   logout,
   registerTemplate,
   revokePlatformRole,
   searchUsers,
   ssoLoginURL,
   startTemplateRun,
+  syncTemplate,
   templateRunLogEventsURL,
   updateStackTemplateConfig,
   upgradeStackTemplate
@@ -34,8 +38,8 @@ describe("api client", () => {
     vi.restoreAllMocks();
   });
 
-  it("posts template registration to the tenant route", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: "template_registration_123" }));
+  it("registers a template on the tenant's templates", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: "tpl_1" }, 202));
 
     await registerTemplate("tenant_123", {
       repo_owner: "acme",
@@ -45,7 +49,7 @@ describe("api client", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "/v1/tenants/tenant_123/template-registrations",
+      "/v1/tenants/tenant_123/templates",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
@@ -101,19 +105,49 @@ describe("api client", () => {
     );
   });
 
-  // Screens group revisions and look them up by id, so the client reads every
-  // page, at the largest size the API serves.
-  it("reads every page of template revisions", async () => {
+  // The registry sorts and filters every template, and a template's screens
+  // read every revision, so the client reads every page, at the largest size
+  // the API serves.
+  it("reads every page of templates", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ items: [{ id: "tpl_1" }], next_cursor: "c2" }))
+      .mockResolvedValueOnce(jsonResponse({ items: [{ id: "tpl_2" }], next_cursor: null }));
+
+    const templates = await listTemplates("tenant_123");
+
+    expect(templates.map((template) => template.id)).toEqual(["tpl_1", "tpl_2"]);
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/v1/tenants/tenant_123/templates?limit=100", expect.anything());
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/v1/tenants/tenant_123/templates?limit=100&cursor=c2", expect.anything());
+  });
+
+  it("reads every page of one template's revisions", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(jsonResponse({ items: [{ id: "rev_1", tags: [] }], next_cursor: "c2" }))
       .mockResolvedValueOnce(jsonResponse({ items: [{ id: "rev_2", tags: [] }], next_cursor: null }));
 
-    const templateRevisions = await listTemplateRevisions("tenant_123");
+    const templateRevisions = await listTemplateRevisions("tenant_123", "tpl 1");
 
     expect(templateRevisions.map((revision) => revision.id)).toEqual(["rev_1", "rev_2"]);
-    expect(fetchMock).toHaveBeenNthCalledWith(1, "/v1/tenants/tenant_123/template-revisions?limit=100", expect.anything());
-    expect(fetchMock).toHaveBeenNthCalledWith(2, "/v1/tenants/tenant_123/template-revisions?limit=100&cursor=c2", expect.anything());
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/v1/tenants/tenant_123/templates/tpl%201/revisions?limit=100", expect.anything());
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/v1/tenants/tenant_123/templates/tpl%201/revisions?limit=100&cursor=c2", expect.anything());
+  });
+
+  it("reads, syncs and deletes one template", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ id: "tpl_1" }))
+      .mockResolvedValueOnce(jsonResponse({ id: "tpl_1" }, 202))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    await getTemplate("tenant_123", "tpl_1");
+    await syncTemplate("tenant_123", "tpl_1");
+    await deleteTemplate("tenant_123", "tpl_1");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/v1/tenants/tenant_123/templates/tpl_1", expect.objectContaining({ method: "GET" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/v1/tenants/tenant_123/templates/tpl_1/syncs", expect.objectContaining({ method: "POST", body: "{}" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "/v1/tenants/tenant_123/templates/tpl_1", expect.objectContaining({ method: "DELETE" }));
   });
 
   it("follows next_cursor to the last page", async () => {
@@ -131,18 +165,6 @@ describe("api client", () => {
 
     expect(items).toEqual([1, 2, 3]);
     expect(asked).toEqual([undefined, "b", "c"]);
-  });
-
-  // A template registered without tags has been stored, and served, with
-  // "tags": null; every screen reads tags as a list.
-  it("reads a template revision's null or missing tags as no tags", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ items: [{ id: "rev_1", tags: null }, { id: "rev_2" }, { id: "rev_3", tags: ["aws"] }], next_cursor: null })
-    );
-
-    const templateRevisions = await listTemplateRevisions("tenant_123");
-
-    expect(templateRevisions.map((templateRevision) => templateRevision.tags)).toEqual([[], [], ["aws"]]);
   });
 
   // The small lists are one page; the client hands screens their items.

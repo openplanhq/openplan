@@ -4,14 +4,14 @@ import { listItemClass } from "../../shared/listItemClass";
 import SearchField from "../../shared/SearchField";
 import { cn } from "@/lib/utils";
 import { templatePath, templateTabOf } from "./templateRoutes";
-import { matchesTemplateFilter } from "./templateWorkflow";
-import type { SourceTemplateGroup } from "./templateWorkflow";
+import type { Template } from "../../api/types";
+import { matchesTemplateFilter, templateDisplayName } from "./templateWorkflow";
 
 // The left side of /templates: every template by name, narrowed as the person
 // types. A row links to the same tab of its template, and pushes a history
 // entry: a template is a working page, and on a phone its own screen, so Back
 // returns to the list.
-export default function TemplateList({ templates, selectedId }: { templates: SourceTemplateGroup[]; selectedId: string | null }) {
+export default function TemplateList({ templates, selectedId }: { templates: Template[]; selectedId: string | null }) {
   const [filter, setFilter] = useState("");
   const tab = templateTabOf(useLocation().pathname);
   const visible = templates.filter((template) => matchesTemplateFilter(template, filter));
@@ -33,8 +33,8 @@ export default function TemplateList({ templates, selectedId }: { templates: Sou
         ) : (
           <ul className="flex flex-col gap-0.5" aria-label="Templates">
             {visible.map((template) => (
-              <li key={template.sourceTemplateID}>
-                <TemplateRow template={template} to={templatePath(template.sourceTemplateID, tab)} selected={template.sourceTemplateID === selectedId} />
+              <li key={template.id}>
+                <TemplateRow template={template} to={templatePath(template.id, tab)} selected={template.id === selectedId} />
               </li>
             ))}
           </ul>
@@ -48,20 +48,20 @@ export default function TemplateList({ templates, selectedId }: { templates: Sou
 // tracks. Each part is cut with an ellipsis rather than broken, the ref at
 // most half the line so the repository stays readable, and both are whole in
 // the title.
-function TemplateRow({ template, to, selected }: { template: SourceTemplateGroup; to: string; selected: boolean }) {
-  const latest = template.latestRevision;
-  const repository = `${latest.repo_owner}/${latest.repo_name}`;
+function TemplateRow({ template, to, selected }: { template: Template; to: string; selected: boolean }) {
+  const repository = `${template.repo_owner}/${template.repo_name}`;
+  const name = templateDisplayName(template);
 
   return (
-    <Link to={to} aria-current={selected ? "true" : undefined} className={listItemClass(selected)} data-testid={`template-link-${template.sourceTemplateID}`}>
+    <Link to={to} aria-current={selected ? "true" : undefined} className={listItemClass(selected)} data-testid={`template-link-${template.id}`}>
       <span className="flex min-w-0 flex-col gap-0.5">
-        <span className={cn("truncate text-sm leading-label font-medium", selected && "text-primary-strong")} title={template.name}>
-          {template.name}
+        <span className={cn("truncate text-sm leading-label font-medium", selected && "text-primary-strong")} title={name}>
+          {name}
         </span>
-        <span className="flex min-w-0 gap-1.5 font-mono text-xs text-muted-foreground" title={`${repository} · ${template.sourceRef}`}>
+        <span className="flex min-w-0 gap-1.5 font-mono text-xs text-muted-foreground" title={`${repository} · ${template.source_ref}`}>
           <span className="min-w-0 truncate">{repository}</span>
           <span aria-hidden="true">·</span>
-          <span className="max-w-1/2 shrink-0 truncate">{template.sourceRef}</span>
+          <span className="max-w-1/2 shrink-0 truncate">{template.source_ref}</span>
         </span>
       </span>
     </Link>

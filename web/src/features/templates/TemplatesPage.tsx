@@ -1,6 +1,6 @@
 import { ArrowLeft, Loader2, Plus, RefreshCw } from "lucide-react";
 import { Link, Outlet, useMatch } from "react-router-dom";
-import { useTemplateRevisionsQuery } from "../../api/queries";
+import { useTemplatesQuery } from "../../api/queries";
 import RequireCapability from "../../auth/RequireCapability";
 import { tenantID } from "../../config";
 import { buttonClass } from "../../shared/buttonClass";
@@ -10,7 +10,7 @@ import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import { cn } from "@/lib/utils";
 import TemplateList from "./TemplateList";
 import type { TemplatesPageOutletContext } from "./templatesPageOutlet";
-import { listSourceTemplates } from "./templateWorkflow";
+import { templatesByName, templatesWithRevision } from "./templateWorkflow";
 import RequestIdNote from "../../shared/RequestIdNote";
 
 const registerLinkClass = cn(buttonClass("primary", "lg"), "w-full pointer-coarse:h-11 md:w-auto");
@@ -26,11 +26,11 @@ const registerLinkClass = cn(buttonClass("primary", "lg"), "w-full pointer-coars
 // their guards, ids and outlet contexts, so they share the look, not a
 // component.
 export default function TemplatesPage() {
-  const templateRevisionsQuery = useTemplateRevisionsQuery(tenantID);
-  const boundary = useQueryErrorBoundary(templateRevisionsQuery.error);
+  const templatesQuery = useTemplatesQuery(tenantID);
+  const boundary = useQueryErrorBoundary(templatesQuery.error);
   const templateMatch = useMatch("/templates/:sourceTemplateId/*");
 
-  if (templateRevisionsQuery.status === "pending") {
+  if (templatesQuery.status === "pending") {
     return (
       <section data-testid="templates-loading">
         <p className="flex items-center gap-2 text-meta text-muted-foreground" role="status">
@@ -40,7 +40,7 @@ export default function TemplatesPage() {
     );
   }
 
-  if (templateRevisionsQuery.status === "error") {
+  if (templatesQuery.status === "error") {
     if (boundary !== null) {
       return <>{boundary}</>;
     }
@@ -49,12 +49,12 @@ export default function TemplatesPage() {
         <PageHeader title="Templates" />
         <div className="flex flex-col items-start gap-3">
           <ErrorLine live={false}>Something went wrong while loading templates.</ErrorLine>
-          <RequestIdNote error={templateRevisionsQuery.error} />
+          <RequestIdNote error={templatesQuery.error} />
           <button
             type="button"
             className={cn(buttonClass("outline"), "pointer-coarse:h-11")}
             data-testid="templates-retry"
-            onClick={() => void templateRevisionsQuery.refetch()}
+            onClick={() => void templatesQuery.refetch()}
           >
             <RefreshCw data-icon="inline-start" aria-hidden="true" />
             Retry
@@ -64,13 +64,13 @@ export default function TemplatesPage() {
     );
   }
 
-  const templates = listSourceTemplates(templateRevisionsQuery.data);
+  const templates = templatesByName(templatesWithRevision(templatesQuery.data));
   const count = templates.length;
   const first = templates[0] ?? null;
   const onPanel = templateMatch !== null;
   const registering = templateMatch?.params.sourceTemplateId === "new";
-  const selectedId = onPanel ? (registering ? null : templateMatch.params.sourceTemplateId ?? null) : first?.sourceTemplateID ?? null;
-  const outletContext: TemplatesPageOutletContext = { indexTemplateId: first?.sourceTemplateID ?? null };
+  const selectedId = onPanel ? (registering ? null : templateMatch.params.sourceTemplateId ?? null) : first?.id ?? null;
+  const outletContext: TemplatesPageOutletContext = { indexTemplateId: first?.id ?? null };
 
   return (
     <section data-testid="templates-page">

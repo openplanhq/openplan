@@ -1,9 +1,14 @@
 import type { StackCapabilities } from "../auth/types";
 
-export type TemplateRegistrationStatus =
-  | "pending"
-  | "running"
-  | "completed"
+// How a template's latest sync reads, as the server derives it: syncing
+// until it ends or turns stalled (still running 30 minutes after it was
+// requested, never stored); up_to_date when the ref still named a commit the
+// template had, synced when it named a new one.
+export type TemplateSyncStatus =
+  | "syncing"
+  | "stalled"
+  | "up_to_date"
+  | "synced"
   | "invalid"
   | "failed";
 
@@ -57,6 +62,7 @@ export const problemTypes = {
   templateNotEditable: `${problemBase}template-not-editable`,
   templateNotUpgradable: `${problemBase}template-not-upgradable`,
   revisionNotInstallable: `${problemBase}revision-not-installable`,
+  templateInUse: `${problemBase}template-in-use`,
   duplicateSlug: `${problemBase}duplicate-slug`,
   duplicateComponentKey: `${problemBase}duplicate-component-key`,
   duplicateCredentialName: `${problemBase}duplicate-credential-name`,
@@ -99,26 +105,32 @@ export interface ApiProblem {
   errors?: ProblemFieldError[];
 }
 
-// What a sync is doing, or, once it ended, what it was doing last. Nothing
-// about what the registration may do next depends on it.
-export type TemplateRegistrationStep = "syncing";
+// A template's newest sync. completed_at is left out until it ends.
+export interface TemplateLatestSync {
+  status: TemplateSyncStatus;
+  error_summary: string;
+  resolved_commit_sha: string;
+  requested_at: string;
+  completed_at?: string;
+}
 
-export interface TemplateRegistration {
+// A registered source: one repository, ref and root path. Name, description
+// and tags are its latest revision's; before a sync records one, the name is
+// the server's fallback and latest_template_revision_id is "".
+export interface Template {
   id: string;
   tenant_id: string;
   repo_owner: string;
   repo_name: string;
   source_ref: string;
   root_path: string;
-  status: TemplateRegistrationStatus;
-  // Empty until the sync starts its first step.
-  step: TemplateRegistrationStep | "";
-  template_revision_id: string;
-  resolved_commit_sha: string;
-  requested_by: string;
-  requested_at: string;
-  completed_at?: string;
-  error_summary: string;
+  name: string;
+  description: string;
+  tags: string[];
+  latest_template_revision_id: string;
+  // Null until a sync is requested.
+  latest_sync: TemplateLatestSync | null;
+  created_at: string;
 }
 
 export interface TemplateRevision {

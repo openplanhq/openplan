@@ -1,7 +1,9 @@
-import type { TemplateRegistrationStatus, TemplateRunStatus } from "./types";
+import type { TemplateRunStatus, TemplateSyncStatus } from "./types";
 
-export function isTerminalRegistrationStatus(status: TemplateRegistrationStatus): boolean {
-  return status === "completed" || status === "invalid" || status === "failed";
+// Only syncing can still change. Stalled is final for the screen too: the
+// sync may never end, so following it would poll forever.
+export function isSyncSettled(status: TemplateSyncStatus): boolean {
+  return status !== "syncing";
 }
 
 export function isTerminalRunStatus(status: TemplateRunStatus): boolean {

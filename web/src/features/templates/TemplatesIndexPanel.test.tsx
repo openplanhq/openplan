@@ -9,11 +9,11 @@ import { queryKeys } from "../../api/queryKeys";
 import type { TemplateRevision } from "../../api/types";
 import TemplatesIndexPanel from "./TemplatesIndexPanel";
 import TemplatesPage from "./TemplatesPage";
-import { authValue, jsonResponse, revision, TENANT, testQueryClient, variable } from "./testSupport";
+import { authValue, jsonResponse, revision, seedTemplates, templateReadResponse, TENANT, testQueryClient, variable } from "./testSupport";
 
 function seed(revisions: TemplateRevision[]): QueryClient {
   const queryClient = testQueryClient();
-  queryClient.setQueryData(queryKeys.templateRevisions(TENANT), revisions);
+  seedTemplates(queryClient, revisions);
   queryClient.setQueryData(queryKeys.templateRevisionVariables(TENANT, "rev_1"), [variable()]);
   return queryClient;
 }
@@ -67,21 +67,19 @@ describe("TemplatesIndexPanel", () => {
     expect(empty.textContent).toContain("Templates appear here once someone who can publish registers one.");
     expect(within(empty).queryByRole("link")).toBeNull();
   });
-  // Regression: a template registered without tags is served with
-  // "tags": null. Through the API client, not the cache, so its reading is
-  // what is tested.
-  it("draws templates the API serves with null tags, and filters them", async () => {
+  // Through the API client, not the cache: the list, then the first
+  // template's revisions and its latest revision's variables.
+  it("reads the templates, then the first one's revisions, and filters them", async () => {
+    const revisions = [revision(), revision({ id: "rev_net", source_template_id: "tpl_net", name: "network", root_path: "aws/network" })];
     vi.mocked(globalThis.fetch).mockImplementation(async (input) => {
       if (String(input).endsWith("/variables")) return jsonResponse([]);
-      return jsonResponse([
-        { ...revision(), tags: null },
-        { ...revision({ id: "rev_net", source_template_id: "tpl_net", name: "network", root_path: "aws/network" }), tags: null }
-      ]);
+      return templateReadResponse(input, revisions) ?? jsonResponse({ type: "about:blank", title: "Not Found" }, 404);
     });
     renderIndex(testQueryClient());
 
     await waitFor(() => expect(screen.getByRole("heading", { level: 2, name: "eks" })).toBeTruthy());
     await waitFor(() => expect(screen.getByTestId("template-variables-none")).toBeTruthy());
+    expect(vi.mocked(globalThis.fetch).mock.calls.map(([input]) => String(input))).toContain(`/v1/tenants/${TENANT}/templates/tpl_1/revisions?limit=100`);
 
     const filter = screen.getByRole("searchbox", { name: "Filter templates" });
     fireEvent.change(filter, { target: { value: "network" } });

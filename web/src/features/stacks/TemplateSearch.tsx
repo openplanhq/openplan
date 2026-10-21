@@ -5,8 +5,9 @@ import { Link } from "react-router-dom";
 import { searchFieldClass } from "../../shared/SearchField";
 import StatusLabel from "../../shared/StatusLabel";
 import { revisionIndicator } from "../templates/revisionIndicator";
-import { activeRevisions, revisionCountLabel, searchTemplates, templateRootPathLabel } from "../templates/templateWorkflow";
-import type { SourceTemplateGroup, TemplateSearchMatch } from "../templates/templateWorkflow";
+import type { Template, TemplateRevision } from "../../api/types";
+import { activeRevisions, revisionCountLabel, searchTemplates, templateDisplayName, templateRootPathLabel } from "../templates/templateWorkflow";
+import type { TemplateSearchMatch } from "../templates/templateWorkflow";
 import { ComboboxContent, ComboboxEmpty, ComboboxList, useComboboxAnchor } from "@/components/ui/combobox";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { cn } from "@/lib/utils";
@@ -28,11 +29,11 @@ export default function TemplateSearch({
   onPick,
   onDismiss
 }: {
-  sourceTemplates: SourceTemplateGroup[];
+  sourceTemplates: Template[];
   repositoryCount: number;
   /** Focused and open on mount: the search reopened by Change. */
   autoFocus?: boolean;
-  onPick: (sourceTemplate: SourceTemplateGroup) => void;
+  onPick: (sourceTemplate: Template) => void;
   onDismiss?: (reason: "escape" | "elsewhere") => void;
 }) {
   const [query, setQuery] = useState("");
@@ -69,8 +70,8 @@ export default function TemplateSearch({
           else if (reason === "focus-out" || reason === "outside-press") onDismiss?.("elsewhere");
         }}
         autoHighlight
-        itemToStringLabel={(match) => match.sourceTemplate.name}
-        isItemEqualToValue={(a, b) => a.sourceTemplate.sourceTemplateID === b.sourceTemplate.sourceTemplateID}
+        itemToStringLabel={(match) => match.name}
+        isItemEqualToValue={(a, b) => a.sourceTemplate.id === b.sourceTemplate.id}
       >
         <InputGroup ref={anchorRef} className={cn(searchFieldClass, "pointer-coarse:h-11")}>
           <InputGroupAddon className="pl-2.5">
@@ -102,7 +103,7 @@ export default function TemplateSearch({
             </Link>
           </ComboboxEmpty>
           <ComboboxList className="max-h-96 min-h-0 divide-y divide-divider p-0">
-            {(match: TemplateSearchMatch) => <Choice key={match.sourceTemplate.sourceTemplateID} match={match} />}
+            {(match: TemplateSearchMatch) => <Choice key={match.sourceTemplate.id} match={match} />}
           </ComboboxList>
           {shown.length > 0 && (
             <div className="flex items-center justify-between gap-4 border-t border-divider bg-canvas px-4 py-2 text-xs text-muted-foreground">
@@ -122,24 +123,21 @@ export default function TemplateSearch({
   );
 }
 
-// One match as a ChoiceRow. A template with no active revision cannot be
-// picked, and its StatusLabel says why.
+// One match as a ChoiceRow. Its revisions are read only once it is picked,
+// so it has no revision count or state of its own here.
 function Choice({ match }: { match: TemplateSearchMatch }) {
   const { sourceTemplate } = match;
-  const installable = activeRevisions(sourceTemplate.revisions).length > 0;
   return (
     <Combobox.Item
       value={match}
-      disabled={!installable}
-      className="flex min-h-13 w-full cursor-pointer items-center justify-between gap-4 px-4 py-2 text-left outline-none select-none data-disabled:cursor-not-allowed data-highlighted:bg-primary-tint pointer-coarse:min-h-14"
+      className="flex min-h-13 w-full cursor-pointer items-center justify-between gap-4 px-4 py-2 text-left outline-none select-none data-highlighted:bg-primary-tint pointer-coarse:min-h-14"
     >
       <span className="flex min-w-0 flex-col gap-0.5">
-        <span className={cn("truncate text-sm leading-label font-medium", installable ? "text-foreground" : "text-muted-foreground")}>
-          <Highlighted text={sourceTemplate.name} hits={match.nameHits} markClassName="font-semibold" />
+        <span className="truncate text-sm leading-label font-medium text-foreground">
+          <Highlighted text={match.name} hits={match.nameHits} markClassName="font-semibold" />
         </span>
         <TemplateSource sourceTemplate={sourceTemplate} repositoryHits={match.repositoryHits} pathHits={match.pathHits} className="truncate" />
       </span>
-      <TemplateChoiceState sourceTemplate={sourceTemplate} />
     </Combobox.Item>
   );
 }
@@ -152,38 +150,39 @@ export function TemplateSource({
   pathHits = [],
   className
 }: {
-  sourceTemplate: SourceTemplateGroup;
+  sourceTemplate: Template;
   repositoryHits?: number[];
   pathHits?: number[];
   className?: string;
 }) {
-  const { repo_owner, repo_name } = sourceTemplate.latestRevision;
+  const { repo_owner, repo_name, root_path, source_ref } = sourceTemplate;
   // The root path adds nothing at the repository root, or when it is the name.
-  const showPath = templateRootPathLabel(sourceTemplate.rootPath, sourceTemplate.name) !== "";
+  const showPath = templateRootPathLabel(root_path, templateDisplayName(sourceTemplate)) !== "";
   return (
     <span className={cn("font-mono text-xs text-muted-foreground", className)}>
       <Highlighted text={`${repo_owner}/${repo_name}`} hits={repositoryHits} markClassName="font-medium" />
       {showPath && (
         <>
           <Separator />
-          <Highlighted text={sourceTemplate.rootPath} hits={pathHits} markClassName="font-medium" />
+          <Highlighted text={root_path} hits={pathHits} markClassName="font-medium" />
         </>
       )}
-      {sourceTemplate.sourceRef && (
+      {source_ref && (
         <>
           <Separator />
-          {sourceTemplate.sourceRef}
+          {source_ref}
         </>
       )}
     </span>
   );
 }
 
-/** A ChoiceRow's right side: a StatusLabel when the newest revision is not
-    active, and how many revisions can be installed. */
-export function TemplateChoiceState({ sourceTemplate }: { sourceTemplate: SourceTemplateGroup }) {
-  const latestState = revisionIndicator(sourceTemplate.latestRevision.status);
-  const installableCount = activeRevisions(sourceTemplate.revisions).length;
+/** The picked ChoiceRow's right side, from the template's revisions, newest
+    first: a StatusLabel when the newest is not active, and how many can be
+    installed. */
+export function TemplateChoiceState({ revisions }: { revisions: TemplateRevision[] }) {
+  const latestState = revisions.length > 0 ? revisionIndicator(revisions[0].status) : null;
+  const installableCount = activeRevisions(revisions).length;
   return (
     <span className="flex shrink-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
       {latestState && (

@@ -1,89 +1,13 @@
-import type { TemplateRevision } from "../../api/types";
+import type { Template, TemplateRevision } from "../../api/types";
 
 /**
- * One source template: the stable identity that revisions accumulate under.
- *
- * The backend keys `source_templates` on (tenant, repo owner, repo name, root
- * path, source ref) and stamps every revision with the resulting
- * `source_template_id`, so bucketing on that one field reproduces the server's
- * identity exactly — there is no need to rebuild the tuple here.
- *
- * The consequence that shapes both screens: `sourceRef` cannot vary within a
- * group (it is part of the key), while `resolved_commit_sha` is the only thing
- * that does. So the ref belongs on the template row and the commits belong on
- * the revisions behind it.
+ * The templates the registry and Add template show: those a sync has produced
+ * a revision for. A template whose first sync is still running, or failed, has
+ * nothing to show or install yet, so it stays out of both, as it did before
+ * templates were read on their own.
  */
-export interface SourceTemplateGroup {
-  /** Also the React key and the `:sourceTemplateId` route param. */
-  sourceTemplateID: string;
-  name: string;
-  rootPath: string;
-  sourceRef: string;
-  /**
-   * First in API order, which is `created_at desc, id desc` — most recently
-   * registered, not necessarily the newest commit. `SourceTemplate`'s own
-   * `latest_template_revision_id` is not exposed to the client.
-   */
-  latestRevision: TemplateRevision;
-  revisions: TemplateRevision[];
-}
-
-export interface TemplateRepositoryGroup {
-  /** "owner/name" — stable within a tenant, so it doubles as the React key. */
-  key: string;
-  repoOwner: string;
-  repoName: string;
-  sourceTemplates: SourceTemplateGroup[];
-}
-
-/**
- * Buckets revisions into templates, then templates into the repositories they
- * came from. One repository can hold several templates — a different root path
- * or a different ref is a different template.
- *
- * Insertion order is preserved at both levels. The API returns revisions
- * newest-first, so a template sorts by its most recent revision, a repository
- * by its most recently touched template, and a freshly registered revision
- * surfaces its template at the top.
- */
-export function groupTemplatesByRepository(templateRevisions: TemplateRevision[]): TemplateRepositoryGroup[] {
-  const repositories = new Map<string, TemplateRepositoryGroup>();
-  const sourceTemplates = new Map<string, SourceTemplateGroup>();
-
-  for (const templateRevision of templateRevisions) {
-    const sourceTemplateID = sourceTemplateKey(templateRevision);
-    const existing = sourceTemplates.get(sourceTemplateID);
-    if (existing) {
-      existing.revisions.push(templateRevision);
-      continue;
-    }
-
-    // First sighting is the newest revision, so it names the template.
-    const sourceTemplate: SourceTemplateGroup = {
-      sourceTemplateID,
-      name: templateDisplayName(templateRevision),
-      rootPath: templateRevision.root_path,
-      sourceRef: templateRevision.source_ref,
-      latestRevision: templateRevision,
-      revisions: [templateRevision]
-    };
-    sourceTemplates.set(sourceTemplateID, sourceTemplate);
-
-    const repositoryKey = `${templateRevision.repo_owner}/${templateRevision.repo_name}`;
-    const repository = repositories.get(repositoryKey);
-    if (repository) {
-      repository.sourceTemplates.push(sourceTemplate);
-      continue;
-    }
-    repositories.set(repositoryKey, {
-      key: repositoryKey,
-      repoOwner: templateRevision.repo_owner,
-      repoName: templateRevision.repo_name,
-      sourceTemplates: [sourceTemplate]
-    });
-  }
-
-  return Array.from(repositories.values());
+export function templatesWithRevision(templates: Template[]): Template[] {
+  return templates.filter((template) => template.latest_template_revision_id !== "");
 }
 
 /**
@@ -91,10 +15,10 @@ export function groupTemplatesByRepository(templateRevisions: TemplateRevision[]
  * for a template by what it is; its repository is a detail of it, so it is
  * not a heading. Ties keep the API's order, newest first.
  */
-export function listSourceTemplates(templateRevisions: TemplateRevision[]): SourceTemplateGroup[] {
-  return groupTemplatesByRepository(templateRevisions)
-    .flatMap((repository) => repository.sourceTemplates)
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true }));
+export function templatesByName(templates: Template[]): Template[] {
+  return [...templates].sort((a, b) =>
+    templateDisplayName(a).localeCompare(templateDisplayName(b), undefined, { sensitivity: "base", numeric: true })
+  );
 }
 
 /**
@@ -124,39 +48,25 @@ export function latestActiveRevision(templateRevisions: TemplateRevision[]): Tem
 }
 
 /**
- * Every revision of one source template, newest-first. Reads from the same
- * tenant-wide list the registry screen renders — `canUpgradeStackTemplate`
- * already filters that list the same way, and no per-template endpoint exists.
- */
-export function revisionsForSourceTemplate(
-  templateRevisions: TemplateRevision[],
-  sourceTemplateID: string
-): TemplateRevision[] {
-  if (sourceTemplateID === "") {
-    return [];
-  }
-  return templateRevisions.filter((templateRevision) => sourceTemplateKey(templateRevision) === sourceTemplateID);
-}
-
-/**
  * Whether a template matches what someone typed in the list's filter: its
  * name, repository, root path, description or tags, ignoring case and the
  * spaces around the query. An empty query matches everything.
  */
-export function matchesTemplateFilter(sourceTemplate: SourceTemplateGroup, query: string): boolean {
+export function matchesTemplateFilter(template: Template, query: string): boolean {
   const needle = query.trim().toLowerCase();
   if (needle === "") {
     return true;
   }
-  const latest = sourceTemplate.latestRevision;
-  return [sourceTemplate.name, `${latest.repo_owner}/${latest.repo_name}`, latest.root_path, latest.description, ...latest.tags].some(
+  return [templateDisplayName(template), `${template.repo_owner}/${template.repo_name}`, template.root_path, template.description, ...template.tags].some(
     (text) => text.toLowerCase().includes(needle)
   );
 }
 
 /** A template found by searchTemplates, and which characters of it matched. */
 export interface TemplateSearchMatch {
-  sourceTemplate: SourceTemplateGroup;
+  sourceTemplate: Template;
+  /** What the template is called, as templateDisplayName says it. */
+  name: string;
   /** "owner/name". */
   repository: string;
   /** Indices into the name, the repository and the root path, for highlighting. */
@@ -172,15 +82,15 @@ export interface TemplateSearchMatch {
  * only as a run of letters, so a short word cannot light up every long path.
  * With nothing typed, every template, by name.
  */
-export function searchTemplates(sourceTemplates: SourceTemplateGroup[], query: string): TemplateSearchMatch[] {
+export function searchTemplates(sourceTemplates: Template[], query: string): TemplateSearchMatch[] {
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const scored: Array<{ match: TemplateSearchMatch; score: number }> = [];
 
   for (const sourceTemplate of sourceTemplates) {
-    const latest = sourceTemplate.latestRevision;
     const match: TemplateSearchMatch = {
       sourceTemplate,
-      repository: `${latest.repo_owner}/${latest.repo_name}`,
+      name: templateDisplayName(sourceTemplate),
+      repository: `${sourceTemplate.repo_owner}/${sourceTemplate.repo_name}`,
       nameHits: [],
       repositoryHits: [],
       pathHits: []
@@ -191,9 +101,9 @@ export function searchTemplates(sourceTemplates: SourceTemplateGroup[], query: s
       // A word found only in the repository or the path ranks below one found
       // in the name, since the name is what people search for.
       const candidates = [
-        { hits: match.nameHits, found: scoreWord(word, sourceTemplate.name, true), penalty: 0 },
+        { hits: match.nameHits, found: scoreWord(word, match.name, true), penalty: 0 },
         { hits: match.repositoryHits, found: scoreWord(word, match.repository, false), penalty: 60 },
-        { hits: match.pathHits, found: scoreWord(word, sourceTemplate.rootPath, false), penalty: 60 }
+        { hits: match.pathHits, found: scoreWord(word, sourceTemplate.root_path, false), penalty: 60 }
       ];
       let best: (typeof candidates)[number] | null = null;
       for (const candidate of candidates) {
@@ -214,11 +124,11 @@ export function searchTemplates(sourceTemplates: SourceTemplateGroup[], query: s
   }
 
   if (words.length === 0) {
-    return scored.map(({ match }) => match).sort((a, b) => a.sourceTemplate.name.localeCompare(b.sourceTemplate.name));
+    return scored.map(({ match }) => match).sort((a, b) => a.name.localeCompare(b.name));
   }
   // Ties go to the shorter name: "redis" before "redis-operator".
   return scored
-    .sort((a, b) => b.score - a.score || a.match.sourceTemplate.name.length - b.match.sourceTemplate.name.length)
+    .sort((a, b) => b.score - a.score || a.match.name.length - b.match.name.length)
     .map(({ match }) => match);
 }
 
@@ -262,20 +172,20 @@ function scoreWord(word: string, text: string, fuzzy: boolean): { score: number;
 }
 
 /**
- * What to call a template. `name` is inferred per revision and can be blank, so
- * fall through to the root path and finally the repository. A root path of "."
- * names nothing and is skipped.
+ * What to call a template, or a revision of one. `name` comes from a
+ * revision and can be blank, so fall through to the root path and finally
+ * the repository. A root path of "." names nothing and is skipped.
  */
-export function templateDisplayName(templateRevision: TemplateRevision): string {
-  const name = templateRevision.name.trim();
+export function templateDisplayName(named: Pick<Template, "name" | "root_path" | "repo_name">): string {
+  const name = named.name.trim();
   if (name !== "") {
     return name;
   }
-  const rootPath = templateRevision.root_path.trim();
+  const rootPath = named.root_path.trim();
   if (rootPath !== "" && rootPath !== ".") {
     return rootPath;
   }
-  return templateRevision.repo_name;
+  return named.repo_name;
 }
 
 /**
@@ -311,23 +221,4 @@ export function templateRevisionLabel(templateRevision: TemplateRevision): strin
 
 export function shortCommitSHA(commitSHA: string): string {
   return commitSHA.trim().slice(0, 7);
-}
-
-/**
- * `source_template_id` is `not null default ''`, so a row written before the
- * backfill would carry an empty id. Falling back to the identity tuple the
- * backend keys on keeps those rows apart instead of collapsing every template
- * in the tenant into one. JSON encoding the tuple keeps the parts unambiguous
- * without picking a separator a repository name or path might contain.
- */
-export function sourceTemplateKey(templateRevision: TemplateRevision): string {
-  if (templateRevision.source_template_id !== "") {
-    return templateRevision.source_template_id;
-  }
-  return JSON.stringify([
-    templateRevision.repo_owner,
-    templateRevision.repo_name,
-    templateRevision.root_path,
-    templateRevision.source_ref
-  ]);
 }

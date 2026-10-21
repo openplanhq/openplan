@@ -1,20 +1,19 @@
 import { describe, expect, it } from "vitest";
-import type { TemplateRevision } from "../../api/types";
+import type { Template, TemplateRevision } from "../../api/types";
 import {
   activeRevisions,
-  groupTemplatesByRepository,
   latestActiveRevision,
   matchesTemplateFilter,
   revisionCountLabel,
   revisionSourceLabel,
-  revisionsForSourceTemplate,
   searchTemplates,
-  sourceTemplateKey,
   templateDisplayName,
   templateRevisionLabel,
-  templateRootPathLabel
+  templateRootPathLabel,
+  templatesByName,
+  templatesWithRevision
 } from "./templateWorkflow";
-import { revision } from "./testSupport";
+import { template } from "./testSupport";
 
 describe("template workflow helpers", () => {
   it("formats menu labels from persisted template revision rows", () => {
@@ -67,74 +66,28 @@ describe("revisionCountLabel", () => {
   });
 });
 
-describe("groupTemplatesByRepository", () => {
-  it("returns no groups for an empty list", () => {
-    expect(groupTemplatesByRepository([])).toEqual([]);
+describe("templatesWithRevision", () => {
+  it("leaves out a template no sync has produced a revision for", () => {
+    const templates = [template({ id: "tpl_1" }), template({ id: "tpl_2", latest_template_revision_id: "" })];
+    expect(templatesWithRevision(templates).map((candidate) => candidate.id)).toEqual(["tpl_1"]);
+  });
+});
+
+describe("templatesByName", () => {
+  it("sorts by the name shown, ignoring case and reading numbers as numbers", () => {
+    const templates = [
+      template({ id: "tpl_1", name: "redis-10" }),
+      template({ id: "tpl_2", name: "", root_path: "aws/eks" }),
+      template({ id: "tpl_3", name: "Network" }),
+      template({ id: "tpl_4", name: "redis-9" })
+    ];
+    expect(templatesByName(templates).map((candidate) => candidate.id)).toEqual(["tpl_2", "tpl_3", "tpl_4", "tpl_1"]);
   });
 
-  it("collapses every revision of one source template into a single template", () => {
-    const groups = groupTemplatesByRepository([
-      templateRevision({ id: "rev_2", source_template_id: "src_1", resolved_commit_sha: "bbbbbbb" }),
-      templateRevision({ id: "rev_1", source_template_id: "src_1", resolved_commit_sha: "aaaaaaa" })
-    ]);
-
-    expect(groups).toHaveLength(1);
-    expect(groups[0].sourceTemplates).toHaveLength(1);
-    expect(groups[0].sourceTemplates[0].revisions.map((revision) => revision.id)).toEqual(["rev_2", "rev_1"]);
-  });
-
-  it("keeps different refs of one repository apart, because the ref is part of the identity", () => {
-    const groups = groupTemplatesByRepository([
-      templateRevision({ id: "rev_1", source_template_id: "src_main", source_ref: "main" }),
-      templateRevision({ id: "rev_2", source_template_id: "src_v2", source_ref: "v2" })
-    ]);
-
-    expect(groups).toHaveLength(1);
-    expect(groups[0].sourceTemplates.map((template) => template.sourceRef)).toEqual(["main", "v2"]);
-  });
-
-  it("separates repositories that share a name under different owners", () => {
-    const groups = groupTemplatesByRepository([
-      templateRevision({ id: "rev_1", source_template_id: "src_1", repo_owner: "acme", repo_name: "infra" }),
-      templateRevision({ id: "rev_2", source_template_id: "src_2", repo_owner: "globex", repo_name: "infra" })
-    ]);
-
-    expect(groups.map((group) => group.key)).toEqual(["acme/infra", "globex/infra"]);
-  });
-
-  it("takes the newest revision as the template's name and latest", () => {
-    // The API returns revisions created_at desc, so the first sighting is the
-    // newest — and `name` is per-revision, so it can drift between them.
-    const groups = groupTemplatesByRepository([
-      templateRevision({ id: "rev_2", source_template_id: "src_1", name: "Renamed", resolved_commit_sha: "f17f983a" }),
-      templateRevision({ id: "rev_1", source_template_id: "src_1", name: "Original", resolved_commit_sha: "c17860ca" })
-    ]);
-
-    const template = groups[0].sourceTemplates[0];
-    expect(template.name).toBe("Renamed");
-    expect(template.latestRevision.id).toBe("rev_2");
-  });
-
-  it("preserves the incoming newest-first order across templates and repositories", () => {
-    const groups = groupTemplatesByRepository([
-      templateRevision({ id: "rev_3", source_template_id: "src_a", repo_owner: "acme", repo_name: "newest" }),
-      templateRevision({ id: "rev_2", source_template_id: "src_b", repo_owner: "acme", repo_name: "older" }),
-      templateRevision({ id: "rev_1", source_template_id: "src_a", repo_owner: "acme", repo_name: "newest" })
-    ]);
-
-    expect(groups.map((group) => group.key)).toEqual(["acme/newest", "acme/older"]);
-    expect(groups[0].sourceTemplates[0].revisions.map((revision) => revision.id)).toEqual(["rev_3", "rev_1"]);
-  });
-
-  it("keeps templates apart when the source template id is missing", () => {
-    // `source_template_id` is `not null default ''`; without the tuple fallback
-    // every such row would collapse into one bogus template.
-    const groups = groupTemplatesByRepository([
-      templateRevision({ id: "rev_1", source_template_id: "", root_path: "a" }),
-      templateRevision({ id: "rev_2", source_template_id: "", root_path: "b" })
-    ]);
-
-    expect(groups[0].sourceTemplates).toHaveLength(2);
+  it("keeps the API's order for equal names, and leaves the list it was given alone", () => {
+    const templates = [template({ id: "tpl_b", name: "eks" }), template({ id: "tpl_a", name: "eks" })];
+    expect(templatesByName(templates).map((candidate) => candidate.id)).toEqual(["tpl_b", "tpl_a"]);
+    expect(templates.map((candidate) => candidate.id)).toEqual(["tpl_b", "tpl_a"]);
   });
 });
 
@@ -171,23 +124,6 @@ describe("latestActiveRevision", () => {
   });
 });
 
-describe("revisionsForSourceTemplate", () => {
-  const revisions = [
-    templateRevision({ id: "rev_3", source_template_id: "src_1" }),
-    templateRevision({ id: "rev_2", source_template_id: "src_2" }),
-    templateRevision({ id: "rev_1", source_template_id: "src_1" })
-  ];
-
-  it("returns only that template's revisions, in the order received", () => {
-    expect(revisionsForSourceTemplate(revisions, "src_1").map((revision) => revision.id)).toEqual(["rev_3", "rev_1"]);
-  });
-
-  it("returns nothing for an unknown or empty id", () => {
-    expect(revisionsForSourceTemplate(revisions, "src_missing")).toEqual([]);
-    expect(revisionsForSourceTemplate(revisions, "")).toEqual([]);
-  });
-});
-
 function templateRevision(overrides: Partial<TemplateRevision>): TemplateRevision {
   return {
     id: "template_123",
@@ -220,9 +156,7 @@ describe("revisionSourceLabel", () => {
 });
 
 describe("matchesTemplateFilter", () => {
-  const [network] = groupTemplatesByRepository([
-    revision({ name: "network", root_path: "aws/network", description: "A VPC with public and private subnets.", tags: ["networking"] })
-  ])[0].sourceTemplates;
+  const network = template({ name: "network", root_path: "aws/network", description: "A VPC with public and private subnets.", tags: ["networking"] });
 
   it.each(["network", "acme/infra", "aws/net", "private subnets", "networking", ""])("matches %j", (query) => {
     expect(matchesTemplateFilter(network, query)).toBe(true);
@@ -240,12 +174,8 @@ describe("matchesTemplateFilter", () => {
 
 describe("searchTemplates", () => {
   // One template per spec, each its own source template.
-  const templates = (...specs: Array<Partial<TemplateRevision>>) =>
-    groupTemplatesByRepository(specs.map((spec, index) => revision({ id: `rev_${index}`, source_template_id: `tpl_${index}`, ...spec }))).flatMap(
-      (group) => group.sourceTemplates
-    );
-  const names = (query: string, ...specs: Array<Partial<TemplateRevision>>) =>
-    searchTemplates(templates(...specs), query).map((match) => match.sourceTemplate.name);
+  const templates = (...specs: Array<Partial<Template>>) => specs.map((spec, index) => template({ id: `tpl_${index}`, ...spec }));
+  const names = (query: string, ...specs: Array<Partial<Template>>) => searchTemplates(templates(...specs), query).map((match) => match.name);
 
   it("lists every template by name when nothing is typed", () => {
     expect(names("  ", { name: "redis" }, { name: "network" }, { name: "eks" })).toEqual(["eks", "network", "redis"]);
@@ -286,14 +216,5 @@ describe("searchTemplates", () => {
 
   it("ignores case and the spaces around what was typed", () => {
     expect(names("  REDIS ", { name: "redis" }, { name: "network" })).toEqual(["redis"]);
-  });
-});
-
-describe("sourceTemplateKey", () => {
-  it("is the source template id, or the identity tuple when there is none", () => {
-    expect(sourceTemplateKey(revision({ source_template_id: "tpl_9" }))).toBe("tpl_9");
-    expect(sourceTemplateKey(revision({ source_template_id: "", root_path: "." }))).toBe(
-      JSON.stringify(["acme", "infra-modules", ".", "main"])
-    );
   });
 });

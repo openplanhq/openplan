@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../../auth/AuthContext";
 import { queryKeys } from "../../api/queryKeys";
 import type { TemplateRevision } from "../../api/types";
 import TemplatePanel from "./TemplatePanel";
-import { authValue, revision, TENANT, testQueryClient, variable } from "./testSupport";
+import { authValue, jsonResponse, revision, seedTemplates, template, TENANT, testQueryClient, variable } from "./testSupport";
 
 const latest = revision({ id: "rev_2", resolved_commit_sha: "9e7d3b2aaaabbbbccccddddeeeeffff000011112", created_at: "2026-10-05T09:30:00Z" });
 const older = revision({ id: "rev_1" });
@@ -17,7 +17,7 @@ const cdn = revision({ id: "rev_cdn", source_template_id: "tpl_cdn", repo_name: 
 
 function seed(revisions: TemplateRevision[] = [latest, older, rds, cdn]): QueryClient {
   const queryClient = testQueryClient();
-  queryClient.setQueryData(queryKeys.templateRevisions(TENANT), revisions);
+  seedTemplates(queryClient, revisions);
   // Three variables against two revisions, so swapped counts would show.
   queryClient.setQueryData(queryKeys.templateRevisionVariables(TENANT, "rev_2"), [
     variable({ template_revision_id: "rev_2" }),
@@ -114,6 +114,30 @@ describe("TemplatePanel header", () => {
   it("says so when the URL names no registered template", () => {
     renderPanel(seed(), "/templates/gone/variables");
     expect(screen.getByTestId("template-missing").textContent).toBe("That template is not registered.");
+  });
+
+  it("reads as missing while no sync has produced a revision for it", () => {
+    const queryClient = seed();
+    seedTemplates(queryClient, [latest, older], [template({ id: "tpl_new", latest_template_revision_id: "" })]);
+    renderPanel(queryClient, "/templates/tpl_new/variables");
+    expect(screen.getByTestId("template-missing").textContent).toBe("That template is not registered.");
+  });
+
+  it("says it is loading while the template's revisions load", () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.templates(TENANT), [template()]);
+    renderPanel(queryClient, "/templates/tpl_1/variables");
+    expect(screen.getByTestId("template-loading").textContent).toContain("Loading template…");
+  });
+
+  it("offers a retry when the template's revisions fail to load", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.templates(TENANT), [template()]);
+    vi.mocked(globalThis.fetch).mockImplementation(async () => jsonResponse({ type: "about:blank", title: "Internal Server Error", detail: "boom" }, 500));
+    renderPanel(queryClient, "/templates/tpl_1/variables");
+
+    await waitFor(() => expect(screen.getByTestId("template-error").textContent).toContain("Something went wrong while loading this template."));
+    expect(within(screen.getByTestId("template-error")).getByRole("button", { name: "Retry" })).toBeTruthy();
   });
 });
 

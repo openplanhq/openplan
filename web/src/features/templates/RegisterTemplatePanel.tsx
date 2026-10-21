@@ -3,10 +3,10 @@ import type { FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { isTerminalRegistrationStatus } from "../../api/polling";
+import { isSyncSettled } from "../../api/polling";
 import { apiErrorMessage } from "../../api/problems";
 import { queryKeys } from "../../api/queryKeys";
-import { useRegisterTemplateMutation, useTemplateRegistrationQuery, useTemplateRevisionsQuery } from "../../api/queries";
+import { useRegisterTemplateMutation, useTemplateQuery, useTemplatesQuery } from "../../api/queries";
 import { tenantID } from "../../config";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorPanel from "../../shared/ErrorPanel";
@@ -16,72 +16,68 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { rootPathOf } from "./templateLinks";
 import { templatePath } from "./templateRoutes";
-import { sourceTemplateKey } from "./templateWorkflow";
 
 const DEFAULTS = { owner: "hashicorp", repo: "", ref: "main", path: "." };
 
 // /templates/new: Register template, inside the page's panel, in place of a
-// template's header. Registration is asynchronous: the POST returns a
-// registration, which is polled until it settles. While it runs the fields
-// are locked and a status row says what is happening. When it completes, the
-// template opens once the refreshed list holds its revision; an identity that
-// was registered already opens that template. A failure keeps the fields as
-// typed and says so in an ErrorPanel, the server's reason as written in it.
+// template's header. Registration is asynchronous: the POST returns the
+// template, whose latest_sync is followed until it settles. While it runs the
+// fields are locked and a status row says what is happening. When it
+// succeeds, the template opens once the refreshed list holds it with a
+// revision; registering a source again syncs it again and opens the same
+// template. A failure keeps the fields as typed and says so in an
+// ErrorPanel, the server's reason as written in it.
 export default function RegisterTemplatePanel() {
   const [repoOwner, setRepoOwner] = useState(DEFAULTS.owner);
   const [repoName, setRepoName] = useState(DEFAULTS.repo);
   const [sourceRef, setSourceRef] = useState(DEFAULTS.ref);
   const [rootPath, setRootPath] = useState(DEFAULTS.path);
-  const [registrationID, setRegistrationID] = useState("");
+  const [templateID, setTemplateID] = useState("");
   const [requestError, setRequestError] = useState("");
 
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const registerTemplateMutation = useRegisterTemplateMutation(tenantID);
-  const registrationQuery = useTemplateRegistrationQuery(tenantID, registrationID);
-  const revisions = useTemplateRevisionsQuery(tenantID).data ?? [];
+  const templateQuery = useTemplateQuery(tenantID, templateID);
+  const templates = useTemplatesQuery(tenantID).data ?? [];
 
-  const registration = registrationQuery.data ?? null;
-  const status = registration?.status ?? null;
-  const settled = status !== null && isTerminalRegistrationStatus(status);
-  const pollError =
-    registrationID !== "" && registrationQuery.isError
-      ? apiErrorMessage(registrationQuery.error, "Request failed")
-      : "";
-  const registeredRevisionID = status === "completed" ? registration?.template_revision_id ?? "" : "";
-  const registered = registeredRevisionID === "" ? null : revisions.find((templateRevision) => templateRevision.id === registeredRevisionID) ?? null;
-  const registeredKey = registered ? sourceTemplateKey(registered) : "";
-  // Completed, but the refetched list does not hold the revision yet, so the
-  // template cannot open: still registering, as far as anyone can tell.
+  const sync = templateQuery.data?.latest_sync ?? null;
+  const status = sync?.status ?? null;
+  const settled = status !== null && isSyncSettled(status);
+  const pollError = templateID !== "" && templateQuery.isError ? apiErrorMessage(templateQuery.error, "Request failed") : "";
+  const succeeded = status === "synced" || status === "up_to_date";
+  const opened = succeeded && templates.some((template) => template.id === templateID && template.latest_template_revision_id !== "");
+  // Synced, but the refetched list does not hold the template with its
+  // revision yet, so it cannot open: still registering, as far as anyone can
+  // tell.
   //
-  // One refetch is enough to end it. The sync workflow writes the revision
-  // before it records the registration completed with that revision's id, so
-  // a list fetched after this poll reads completed holds it. A refetch that
-  // fails puts the list query in error, and TemplatesPage draws its error and
-  // Retry in place of this panel.
-  const opening = registeredRevisionID !== "" && registered === null;
+  // One refetch is enough to end it. The sync writes the revision before it
+  // records itself done, so a list fetched after this poll reads synced holds
+  // it. A refetch that fails puts the list query in error, and TemplatesPage
+  // draws its error and Retry in place of this panel.
+  const opening = succeeded && !opened;
 
-  const busy = registerTemplateMutation.isPending || (registrationID !== "" && !settled && pollError === "") || opening;
-  // A registration that completes without a revision registered nothing.
-  const failed = settled && (status !== "completed" || registeredRevisionID === "");
-  const failure = requestError || pollError || (failed ? registration?.error_summary || "Registration failed" : "");
+  const busy = registerTemplateMutation.isPending || (templateID !== "" && !settled && pollError === "") || opening;
+  // Stalled counts as failed: the sync did not finish.
+  const failed = settled && !succeeded;
+  const failure = requestError || pollError || (failed ? sync?.error_summary || "Registration failed" : "");
   // A poll that fails says nothing about the registration itself, which may
   // still finish; registering again now could race it.
   const unchecked = requestError === "" && pollError !== "";
 
   useEffect(() => {
-    if (registeredRevisionID === "") {
+    if (!succeeded) {
       return;
     }
-    // The workflow writes the revision; only a refetch of the list shows it.
-    void queryClient.invalidateQueries({ queryKey: queryKeys.templateRevisions(tenantID) });
-  }, [registeredRevisionID, queryClient]);
+    // The sync writes the revision; only a refetch of the list shows it.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.templates(tenantID), exact: true });
+  }, [succeeded, queryClient]);
 
   useEffect(() => {
-    if (registeredKey !== "") {
-      navigate(templatePath(registeredKey), { replace: true });
+    if (opened) {
+      navigate(templatePath(templateID), { replace: true });
     }
-  }, [registeredKey, navigate]);
+  }, [opened, templateID, navigate]);
 
   // Read by SessionProvider's proactive re-auth timer: it defers navigating
   // away while a `[data-unsaved='true']` element is mounted, so a half-filled
@@ -96,11 +92,11 @@ export default function RegisterTemplatePanel() {
       return;
     }
     setRequestError("");
-    // Drop any earlier attempt, so a retry polls its own registration.
-    setRegistrationID("");
+    // Drop any earlier attempt, so a retry follows its own sync.
+    setTemplateID("");
     try {
-      const next = await registerTemplateMutation.mutateAsync({ repo_owner: repoOwner, repo_name: repoName, source_ref: sourceRef, root_path: rootPath });
-      setRegistrationID(next.id);
+      const registered = await registerTemplateMutation.mutateAsync({ repo_owner: repoOwner, repo_name: repoName, source_ref: sourceRef, root_path: rootPath });
+      setTemplateID(registered.id);
     } catch (error) {
       setRequestError(apiErrorMessage(error, "Request failed"));
     }

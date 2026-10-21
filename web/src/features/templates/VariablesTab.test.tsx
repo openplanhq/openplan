@@ -9,11 +9,11 @@ import { queryKeys } from "../../api/queryKeys";
 import type { TemplateVariable } from "../../api/types";
 import TemplatePanel from "./TemplatePanel";
 import VariablesTab from "./VariablesTab";
-import { authValue, jsonResponse, revision, TENANT, testQueryClient, variable } from "./testSupport";
+import { authValue, jsonResponse, revision, TENANT, testQueryClient, variable, seedTemplates } from "./testSupport";
 
 function seed(variables?: TemplateVariable[]): QueryClient {
   const queryClient = testQueryClient();
-  queryClient.setQueryData(queryKeys.templateRevisions(TENANT), [revision()]);
+  seedTemplates(queryClient, [revision()]);
   if (variables) {
     queryClient.setQueryData(queryKeys.templateRevisionVariables(TENANT, "rev_1"), variables);
   }
@@ -113,7 +113,7 @@ describe("VariablesTab", () => {
     expect(screen.getByTestId("template-variable-cluster_name")).toBeTruthy();
 
     act(() => {
-      queryClient.setQueryData(queryKeys.templateRevisions(TENANT), [
+      seedTemplates(queryClient, [
         revision({ id: "rev_2", resolved_commit_sha: "9e7d3b2aaaa" }),
         revision()
       ]);

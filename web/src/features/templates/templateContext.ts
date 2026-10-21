@@ -1,11 +1,11 @@
 import { createContext, useContext } from "react";
-import type { TemplateRevision } from "../../api/types";
+import type { Template, TemplateRevision } from "../../api/types";
 
 export interface TemplateContextValue {
-  sourceTemplateId: string;
+  template: Template;
   /** Every revision of the template, newest first. */
   revisions: TemplateRevision[];
-  /** The newest revision, which names and describes the template. */
+  /** The template's latest revision, which names and describes it. */
   latest: TemplateRevision;
 }
 

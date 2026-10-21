@@ -3,26 +3,30 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { TemplateRun, TemplateRunStatus } from "./types";
+import type { Template, TemplateRun, TemplateRunStatus, TemplateSyncStatus } from "./types";
 import {
-  registrationRefetchInterval,
+  POLL_INTERVAL_MS,
   runRefetchInterval,
   runsRefetchInterval,
   useAddTemplateToStackMutation,
   useApproveRunMutation,
   useDiscardRunMutation,
   useCreateStackMutation,
+  useDeleteTemplateMutation,
   useRegisterTemplateMutation,
   useStacksQuery,
   useStackQuery,
   useStartTemplateRunMutation,
-  useTemplateRegistrationQuery,
+  useSyncTemplateMutation,
+  useTemplateQuery,
   useTemplateRevisionVariablesQuery,
   useTemplateRevisionsQuery,
   useTemplateRunLogQuery,
   useTemplateRunLogsQuery,
   useTemplateRunQuery,
   useTemplateRunsQuery,
+  useTemplatesQuery,
+  templateRefetchInterval,
   useUpdateStackTemplateConfigMutation,
   useUpgradeStackTemplateMutation
 } from "./queries";
@@ -32,6 +36,24 @@ import { asListBody } from "./listTestSupport";
 function wrapper(queryClient: QueryClient) {
   return function Wrapper({ children }: { children: ReactNode }) {
     return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  };
+}
+
+// A template whose latest sync reads status.
+function syncingTemplate(status: TemplateSyncStatus): Template {
+  return {
+    id: "tpl_1",
+    tenant_id: "tenant_123",
+    repo_owner: "acme",
+    repo_name: "infra",
+    source_ref: "main",
+    root_path: ".",
+    name: "infra",
+    description: "",
+    tags: [],
+    latest_template_revision_id: "rev_1",
+    latest_sync: { status, error_summary: "", resolved_commit_sha: "", requested_at: "2026-10-21T09:00:00Z" },
+    created_at: "2026-10-21T09:00:00Z"
   };
 }
 
@@ -56,16 +78,27 @@ describe("read-only query hooks", () => {
     expect(fetch).toHaveBeenCalledWith("/v1/tenants/tenant_123/stacks", expect.objectContaining({ method: "GET" }));
   });
 
-  it("fetches the tenant's template revisions", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([{ id: "rev_1" }]));
-    const { result } = renderHook(() => useTemplateRevisionsQuery("tenant_123"), { wrapper: wrapper(testQueryClient()) });
+  it("fetches the tenant's templates", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([{ id: "tpl_1" }]));
+    const { result } = renderHook(() => useTemplatesQuery("tenant_123"), { wrapper: wrapper(testQueryClient()) });
 
-    // The client fills in tags a server leaves out.
-    await waitFor(() => expect(result.current.data).toEqual([{ id: "rev_1", tags: [] }]));
-    expect(fetch).toHaveBeenCalledWith(
-      "/v1/tenants/tenant_123/template-revisions?limit=100",
-      expect.objectContaining({ method: "GET" })
-    );
+    await waitFor(() => expect(result.current.data).toEqual([{ id: "tpl_1" }]));
+    expect(fetch).toHaveBeenCalledWith("/v1/tenants/tenant_123/templates?limit=100", expect.objectContaining({ method: "GET" }));
+  });
+
+  it("fetches a template's revisions only when a template id is given", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([{ id: "rev_1" }]));
+    const { result, rerender } = renderHook(({ templateID }: { templateID: string }) => useTemplateRevisionsQuery("tenant_123", templateID), {
+      wrapper: wrapper(testQueryClient()),
+      initialProps: { templateID: "" }
+    });
+
+    expect(result.current.fetchStatus).toBe("idle");
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    rerender({ templateID: "tpl_1" });
+    await waitFor(() => expect(result.current.data).toEqual([{ id: "rev_1" }]));
+    expect(fetchMock).toHaveBeenCalledWith("/v1/tenants/tenant_123/templates/tpl_1/revisions?limit=100", expect.objectContaining({ method: "GET" }));
   });
 
   it("fetches stack detail only when a stack id is given", async () => {
@@ -118,14 +151,33 @@ describe("polling-aware query hooks", () => {
     vi.restoreAllMocks();
   });
 
-  it("fetches template registration status", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: "reg_1", status: "running" }));
-    const { result } = renderHook(() => useTemplateRegistrationQuery("tenant_123", "reg_1"), {
-      wrapper: wrapper(testQueryClient())
-    });
+  it("does not fetch a template until it is given an id", () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: "tpl_1" }));
+    const { result } = renderHook(() => useTemplateQuery("tenant_123", ""), { wrapper: wrapper(testQueryClient()) });
 
-    await waitFor(() => expect(result.current.data).toEqual({ id: "reg_1", status: "running" }));
+    expect(result.current.fetchStatus).toBe("idle");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  // One case per status a sync can settle on, stalled included: the hook
+  // reads syncing, then the settled status, then never asks again.
+  it.each<TemplateSyncStatus>(["synced", "up_to_date", "invalid", "failed", "stalled"])(
+    "polls a template while it syncs and stops once it reads %s",
+    async (settled) => {
+      const fetchMock = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValueOnce(jsonResponse(syncingTemplate("syncing")))
+        .mockResolvedValue(jsonResponse(syncingTemplate(settled)));
+      const { result } = renderHook(() => useTemplateQuery("tenant_123", "tpl_1"), { wrapper: wrapper(testQueryClient()) });
+
+      await waitFor(() => expect(result.current.data?.latest_sync?.status).toBe(settled), { timeout: POLL_INTERVAL_MS * 3 });
+      expect(fetchMock).toHaveBeenCalledWith("/v1/tenants/tenant_123/templates/tpl_1", expect.objectContaining({ method: "GET" }));
+      // Two intervals more without a third request.
+      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS * 2));
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    },
+    POLL_INTERVAL_MS * 8
+  );
 
   it("fetches a template run's status regardless of poll option", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(() =>
@@ -143,10 +195,14 @@ describe("polling-aware query hooks", () => {
   });
 
   describe("refetch interval selectors", () => {
-    it("polls a non-terminal registration and stops once terminal", () => {
-      expect(registrationRefetchInterval("running")).toBe(1500);
-      expect(registrationRefetchInterval("completed")).toBe(false);
-      expect(registrationRefetchInterval(undefined)).toBe(1500);
+    it("polls a template only while its latest sync is syncing", () => {
+      expect(templateRefetchInterval(syncingTemplate("syncing"))).toBe(1500);
+      for (const settled of ["synced", "up_to_date", "invalid", "failed", "stalled"] as const) {
+        expect(templateRefetchInterval(syncingTemplate(settled))).toBe(false);
+      }
+      // Nothing to follow: not read yet, or never synced.
+      expect(templateRefetchInterval(undefined)).toBe(false);
+      expect(templateRefetchInterval({ ...syncingTemplate("syncing"), latest_sync: null })).toBe(false);
     });
 
     it("only polls a run when told to, and stops on terminal status", () => {
@@ -270,8 +326,9 @@ describe("mutation hooks", () => {
     vi.restoreAllMocks();
   });
 
-  it("registers a template and seeds the registration query cache", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: "reg_1", status: "pending" }));
+  it("registers a template and seeds its query with the sync it queued", async () => {
+    const registered = syncingTemplate("syncing");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(registered));
     const queryClient = testQueryClient();
     const { result } = renderHook(() => useRegisterTemplateMutation("tenant_123"), { wrapper: wrapper(queryClient) });
 
@@ -279,10 +336,40 @@ describe("mutation hooks", () => {
       await result.current.mutateAsync({ repo_owner: "acme", repo_name: "infra", source_ref: "main", root_path: "." });
     });
 
-    expect(queryClient.getQueryData(queryKeys.templateRegistration("tenant_123", "reg_1"))).toEqual({
-      id: "reg_1",
-      status: "pending"
+    expect(queryClient.getQueryData(queryKeys.template("tenant_123", "tpl_1"))).toEqual(registered);
+  });
+
+  it("syncs a template and seeds its query with the sync it queued", async () => {
+    const synced = syncingTemplate("syncing");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(synced));
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.template("tenant_123", "tpl_1"), syncingTemplate("failed"));
+    const { result } = renderHook(() => useSyncTemplateMutation("tenant_123"), { wrapper: wrapper(queryClient) });
+
+    await act(async () => {
+      await result.current.mutateAsync("tpl_1");
     });
+
+    expect(fetchMock).toHaveBeenCalledWith("/v1/tenants/tenant_123/templates/tpl_1/syncs", expect.objectContaining({ method: "POST" }));
+    expect(queryClient.getQueryData(queryKeys.template("tenant_123", "tpl_1"))).toEqual(synced);
+  });
+
+  it("deletes a template, drops its reads and refetches the list", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.template("tenant_123", "tpl_1"), syncingTemplate("synced"));
+    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123", "tpl_1"), []);
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    const { result } = renderHook(() => useDeleteTemplateMutation("tenant_123"), { wrapper: wrapper(queryClient) });
+
+    await act(async () => {
+      await result.current.mutateAsync("tpl_1");
+    });
+
+    expect(fetch).toHaveBeenCalledWith("/v1/tenants/tenant_123/templates/tpl_1", expect.objectContaining({ method: "DELETE" }));
+    expect(queryClient.getQueryData(queryKeys.template("tenant_123", "tpl_1"))).toBeUndefined();
+    expect(queryClient.getQueryData(queryKeys.templateRevisions("tenant_123", "tpl_1"))).toBeUndefined();
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.templates("tenant_123"), exact: true });
   });
 
   it("creates a stack and invalidates the stacks list", async () => {

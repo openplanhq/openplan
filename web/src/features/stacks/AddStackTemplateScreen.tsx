@@ -6,16 +6,17 @@ import {
   useAddTemplateToStackMutation,
   useStackQuery,
   useTemplateRevisionVariablesQuery,
-  useTemplateRevisionsQuery
+  useTemplateRevisionsQuery,
+  useTemplatesQuery
 } from "../../api/queries";
+import type { Template } from "../../api/types";
 import { tenantID } from "../../config";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
 import { fieldLabelClass, selectTriggerClass } from "../../shared/fieldClass";
 import { formatTimestamp } from "../../shared/formatTimestamp";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
-import { activeRevisions, groupTemplatesByRepository, latestActiveRevision, shortCommitSHA } from "../templates/templateWorkflow";
-import type { SourceTemplateGroup } from "../templates/templateWorkflow";
+import { activeRevisions, latestActiveRevision, shortCommitSHA, templateDisplayName, templatesWithRevision } from "../templates/templateWorkflow";
 import { configFromVariableValues } from "./stackWorkflow";
 import { stackTemplatePath } from "./templateSelection";
 import TemplateSearch, { TemplateChoiceState, TemplateSource } from "./TemplateSearch";
@@ -32,12 +33,15 @@ import { cn } from "@/lib/utils";
 // stack page's panel, under a header of its own in place of a template's.
 // The registry can hold hundreds of templates, so they are searched rather
 // than listed (TemplateSearch). A pick closes the search, shows the template
-// in its place with Change, and resolves to its newest *active* revision; the
-// Revision select offers the rest. Installing almost always wants the newest
-// validated commit; moving between commits afterwards is Change revision's job.
+// in its place with Change, reads its revisions and resolves to the newest
+// *active* one; the Revision select offers the rest. Installing almost always
+// wants the newest validated commit; moving between commits afterwards is
+// Change revision's job.
 export default function AddStackTemplateScreen() {
   const { stackId = "" } = useParams<{ stackId: string }>();
   const navigate = useNavigate();
+  const [chosenTemplateID, setChosenTemplateID] = useState("");
+  // "" until someone picks a revision in the select: the newest active one.
   const [chosenRevisionID, setChosenRevisionID] = useState("");
   const [values, setValues] = useState<Record<string, string>>({});
   const [errorMessage, setErrorMessage] = useState("");
@@ -49,17 +53,21 @@ export default function AddStackTemplateScreen() {
   const configureHeadingId = useId();
 
   const stackName = useStackQuery(tenantID, stackId).data?.stack.name ?? "";
-  const templateRevisionsQuery = useTemplateRevisionsQuery(tenantID);
-  const boundary = useQueryErrorBoundary(templateRevisionsQuery.error);
-  const templateRevisions = templateRevisionsQuery.data ?? [];
-  const chosenRevision = templateRevisions.find((revision) => revision.id === chosenRevisionID) ?? null;
+  const templatesQuery = useTemplatesQuery(tenantID);
+  const boundary = useQueryErrorBoundary(templatesQuery.error);
+  const sourceTemplates = templatesWithRevision(templatesQuery.data ?? []);
+  const repositoryCount = new Set(sourceTemplates.map((template) => `${template.repo_owner}/${template.repo_name}`)).size;
+  const chosenTemplate = sourceTemplates.find((template) => template.id === chosenTemplateID) ?? null;
 
-  const repositoryGroups = groupTemplatesByRepository(templateRevisions);
-  const sourceTemplates = repositoryGroups.flatMap((group) => group.sourceTemplates);
-  const chosenTemplate = sourceTemplates.find((sourceTemplate) => sourceTemplate.revisions.some((revision) => revision.id === chosenRevisionID)) ?? null;
+  const chosenRevisionsQuery = useTemplateRevisionsQuery(tenantID, chosenTemplate?.id ?? "");
+  const chosenRevisions = chosenRevisionsQuery.data ?? [];
+  const revisionsLoading = chosenTemplate !== null && chosenRevisionsQuery.isPending;
+  const revisionsFailed = chosenTemplate !== null && chosenRevisionsQuery.status === "error";
   // Newest registered first, in the API's order (see activeRevisions), so the
-  // select's first option is the one a row pick already chose.
-  const chosenTemplateRevisions = chosenTemplate ? activeRevisions(chosenTemplate.revisions) : [];
+  // select's first option is the one a pick resolves to.
+  const chosenTemplateRevisions = activeRevisions(chosenRevisions);
+  const chosenRevision =
+    chosenTemplateRevisions.find((revision) => revision.id === chosenRevisionID) ?? (chosenRevisionID === "" ? latestActiveRevision(chosenRevisions) : null);
 
   const variablesQuery = useTemplateRevisionVariablesQuery(tenantID, chosenRevision?.id ?? "");
   const variables = variablesQuery.data ?? [];
@@ -75,7 +83,8 @@ export default function AddStackTemplateScreen() {
   // here are never wiped out by a background sign-in redirect.
   const hasUnsavedValues = Object.keys(values).length > 0;
 
-  function handleChoose(revisionID: string) {
+  function handleChoose(templateID: string, revisionID: string) {
+    setChosenTemplateID(templateID);
     setChosenRevisionID(revisionID);
     setValues({});
     setErrorMessage("");
@@ -91,19 +100,16 @@ export default function AddStackTemplateScreen() {
   const installButtonRef = useRef<HTMLButtonElement>(null);
   const changeButtonRef = useRef<HTMLButtonElement>(null);
 
-  function handlePick(sourceTemplate: SourceTemplateGroup) {
+  function handlePick(sourceTemplate: Template) {
     setChangingTemplate(false);
     // The template already chosen, picked again after Change, is a second
     // look, not a new choice: its revision and values stay.
-    if (sourceTemplate === chosenTemplate) {
+    if (sourceTemplate.id === chosenTemplate?.id) {
       focusChangeRef.current = true;
       return;
     }
-    const installable = latestActiveRevision(sourceTemplate.revisions);
-    if (installable) {
-      focusAfterPickRef.current = true;
-      handleChoose(installable.id);
-    }
+    focusAfterPickRef.current = true;
+    handleChoose(sourceTemplate.id, "");
   }
 
   useEffect(() => {
@@ -113,16 +119,17 @@ export default function AddStackTemplateScreen() {
     }
   }, [changingTemplate]);
 
-  // Waits for the variables, since the first one is the target.
+  // Waits for the revisions and the variables, since the first variable is
+  // the target.
   useEffect(() => {
-    if (!focusAfterPickRef.current || variablesLoading) {
+    if (!focusAfterPickRef.current || revisionsLoading || variablesLoading) {
       return;
     }
     focusAfterPickRef.current = false;
     const firstVariable = variableFieldsRef.current?.querySelector<HTMLElement>("input, textarea");
     const installButton = installButtonRef.current?.disabled ? null : installButtonRef.current;
     (firstVariable ?? installButton ?? changeButtonRef.current)?.focus();
-  }, [variablesLoading, chosenRevisionID]);
+  }, [revisionsLoading, variablesLoading, chosenTemplateID, chosenRevisionID]);
 
   async function handleInstall() {
     // variablesFailed guards the request itself, not just the button: without
@@ -152,7 +159,7 @@ export default function AddStackTemplateScreen() {
     }
   }
 
-  if (templateRevisionsQuery.status === "error" && boundary !== null) {
+  if (templatesQuery.status === "error" && boundary !== null) {
     return <>{boundary}</>;
   }
 
@@ -164,29 +171,29 @@ export default function AddStackTemplateScreen() {
   }));
 
   let content: ReactNode;
-  if (templateRevisionsQuery.status === "pending") {
+  if (templatesQuery.status === "pending") {
     content = (
       <p className="flex items-center gap-2 text-meta text-muted-foreground" data-testid="add-stack-template-loading">
         <Loader2 aria-hidden="true" className="size-3.5 animate-spin" /> Loading templates…
       </p>
     );
-  } else if (templateRevisionsQuery.status === "error") {
+  } else if (templatesQuery.status === "error") {
     content = (
       <div className="flex flex-col items-start gap-3" data-testid="add-stack-template-load-error">
         <ErrorLine live={false}>Something went wrong while loading templates.</ErrorLine>
-        <RequestIdNote error={templateRevisionsQuery.error} />
+        <RequestIdNote error={templatesQuery.error} />
         <button
           type="button"
           className={cn(buttonClass("outline"), "pointer-coarse:h-11")}
           data-testid="add-stack-template-retry"
-          onClick={() => void templateRevisionsQuery.refetch()}
+          onClick={() => void templatesQuery.refetch()}
         >
           <RefreshCw data-icon="inline-start" aria-hidden="true" />
           Retry
         </button>
       </div>
     );
-  } else if (templateRevisions.length === 0) {
+  } else if (sourceTemplates.length === 0) {
     content = (
       <Empty className="gap-3 rounded-lg border border-dashed border-dashed-border px-5 py-10" data-testid="add-stack-template-none">
         <EmptyHeader className="gap-2">
@@ -211,11 +218,11 @@ export default function AddStackTemplateScreen() {
             <div className="overflow-hidden rounded-lg border" data-testid="add-template-picked">
               <div className="flex min-h-13 flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-primary-soft py-2 pr-2.5 pl-4">
                 <span className="flex min-w-0 flex-col gap-0.5">
-                  <span className="text-sm leading-label font-medium text-primary-strong wrap-anywhere">{chosenTemplate.name}</span>
+                  <span className="text-sm leading-label font-medium text-primary-strong wrap-anywhere">{templateDisplayName(chosenTemplate)}</span>
                   <TemplateSource sourceTemplate={chosenTemplate} className="wrap-anywhere" />
                 </span>
                 <span className="flex shrink-0 items-center gap-3">
-                  <TemplateChoiceState sourceTemplate={chosenTemplate} />
+                  <TemplateChoiceState revisions={chosenRevisions} />
                   <button
                     ref={changeButtonRef}
                     type="button"
@@ -230,7 +237,7 @@ export default function AddStackTemplateScreen() {
           ) : (
             <TemplateSearch
               sourceTemplates={sourceTemplates}
-              repositoryCount={repositoryGroups.length}
+              repositoryCount={repositoryCount}
               autoFocus={changingTemplate}
               onPick={handlePick}
               onDismiss={(reason) => {
@@ -241,10 +248,24 @@ export default function AddStackTemplateScreen() {
             />
           )}
         </section>
+        {revisionsLoading && (
+          <p className="flex items-center gap-2 text-meta text-muted-foreground" data-testid="add-stack-template-revisions-loading">
+            <Loader2 aria-hidden="true" className="size-3.5 animate-spin" /> Loading revisions…
+          </p>
+        )}
+        {revisionsFailed && (
+          <div className="flex flex-col items-start gap-3" data-testid="add-stack-template-revisions-error">
+            <ErrorLine>Could not load this template's revisions.</ErrorLine>
+            <button type="button" className={cn(buttonClass("outline"), "pointer-coarse:h-11")} onClick={() => void chosenRevisionsQuery.refetch()}>
+              <RefreshCw data-icon="inline-start" aria-hidden="true" />
+              Retry
+            </button>
+          </div>
+        )}
         {chosenRevision && chosenTemplate && (
           <section aria-labelledby={configureHeadingId} className="flex max-w-140 flex-col gap-4" data-testid="add-stack-template-variables">
             <h3 id={configureHeadingId} className="text-sm font-semibold wrap-anywhere">
-              Configure {chosenTemplate.name}
+              Configure {templateDisplayName(chosenTemplate)}
             </h3>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="add-template-revision" className={fieldLabelClass}>
@@ -252,10 +273,10 @@ export default function AddStackTemplateScreen() {
               </Label>
               <Select
                 items={revisionItems}
-                value={chosenRevisionID}
+                value={chosenRevision.id}
                 onValueChange={(revisionID) => {
                   // Base UI types the value as nullable; a revision is always chosen.
-                  if (revisionID !== null) handleChoose(revisionID);
+                  if (revisionID !== null) handleChoose(chosenTemplate.id, revisionID);
                 }}
               >
                 <SelectTrigger id="add-template-revision" data-testid="add-template-revision-select" className={selectTriggerClass}>

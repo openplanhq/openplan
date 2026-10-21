@@ -5,6 +5,7 @@ import { createMemoryRouter, Outlet, RouterProvider } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../auth/AuthContext";
 import type { AuthContextValue } from "../auth/AuthContext";
+import { seedTemplates } from "../features/templates/testSupport";
 
 vi.mock("../auth/SessionProvider");
 
@@ -230,7 +231,7 @@ describe("routeConfig", () => {
     name: "VPC",
     description: "",
     tags: [],
-    status: "active",
+    status: "active" as const,
     created_at: "2026-07-19T00:00:00Z"
   };
 
@@ -266,7 +267,7 @@ describe("routeConfig", () => {
 
     // retry: false + staleTime: Infinity: seeded data never triggers a real fetch().
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [registeredRevision]);
+    seedTemplates(queryClient, [registeredRevision]);
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), []);
 
     const testRouter = createMemoryRouter(routeConfig, { initialEntries: [path] });
@@ -469,7 +470,7 @@ describe("routeConfig", () => {
       },
       templates: []
     });
-    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), []);
+    seedTemplates(queryClient, []);
 
     const testRouter = createMemoryRouter(routeConfig, { initialEntries: ["/stacks/stack_1/templates/new"] });
     const markup = renderToStaticMarkup(
@@ -488,7 +489,7 @@ describe("routeConfig", () => {
     const { routeConfig } = await import("./router");
     const { queryKeys } = await import("../api/queryKeys");
     const queryClient = stackQueryClient(queryKeys, { templates: [installedTemplate] });
-    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), []);
+    seedTemplates(queryClient, []);
 
     const testRouter = createMemoryRouter(routeConfig, {
       initialEntries: ["/stacks/stack_1/templates/st_1/upgrade"]

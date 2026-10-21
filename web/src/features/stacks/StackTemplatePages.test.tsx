@@ -16,6 +16,7 @@ import TemplateEnvironmentTab from "./TemplateEnvironmentTab";
 import TemplateRunsTab from "./TemplateRunsTab";
 import TemplateSettingsTab from "./TemplateSettingsTab";
 import TemplateVariablesTab from "./TemplateVariablesTab";
+import { seedTemplates } from "../templates/testSupport";
 
 // The panel for one template and its tabs, rendered through the same route
 // shape as router.tsx so tab links and the index redirect are exercised the
@@ -105,7 +106,7 @@ function testQueryClient(): QueryClient {
 function seedDefaultData(queryClient: QueryClient, capabilities: StackCapabilities = allAllowed) {
   queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(capabilities, [stackTemplate()]));
   queryClient.setQueryData(queryKeys.attention("tenant_123"), []);
-  queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [
+  seedTemplates(queryClient, [
     templateRevision(),
     templateRevision({ id: "rev_2", source_ref: "v2", resolved_commit_sha: "1234567abcdef" })
   ]);
@@ -455,7 +456,7 @@ describe("TemplateVariablesTab", () => {
   it("does not need the revisions query to render", async () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);
-    queryClient.removeQueries({ queryKey: queryKeys.templateRevisions("tenant_123") });
+    queryClient.removeQueries({ queryKey: ["templateRevisions", "tenant_123"] });
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/variables");
 
@@ -633,7 +634,7 @@ describe("TemplateSettingsTab", () => {
   it("names the revision it runs, its commit, and where that comes from", () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);
-    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [templateRevision({ root_path: "aws/eks" })]);
+    seedTemplates(queryClient, [templateRevision({ root_path: "aws/eks" })]);
     queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, [stackTemplate({ source_ref: "v1.4.0" })]));
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/settings");
@@ -654,7 +655,7 @@ describe("TemplateSettingsTab", () => {
     vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);
-    queryClient.removeQueries({ queryKey: queryKeys.templateRevisions("tenant_123") });
+    queryClient.removeQueries({ queryKey: ["templateRevisions", "tenant_123"] });
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/settings");
 

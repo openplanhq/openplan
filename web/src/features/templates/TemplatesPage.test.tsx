@@ -5,10 +5,9 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../../auth/AuthContext";
-import { queryKeys } from "../../api/queryKeys";
 import type { TemplateRevision } from "../../api/types";
 import TemplatesPage from "./TemplatesPage";
-import { authValue, jsonResponse, revision, TENANT, testQueryClient } from "./testSupport";
+import { authValue, jsonResponse, revision, seedTemplates, template, testQueryClient } from "./testSupport";
 
 // The page through the same route shape as router.tsx, with the panel's
 // routes stubbed: these tests are about the frame, the header and the list.
@@ -27,7 +26,7 @@ const cdn = revision({ id: "rev_cdn", source_template_id: "tpl_cdn", repo_name: 
 
 function seed(revisions: TemplateRevision[] = [eks, network, cdn]): QueryClient {
   const queryClient = testQueryClient();
-  queryClient.setQueryData(queryKeys.templateRevisions(TENANT), revisions);
+  seedTemplates(queryClient, revisions);
   return queryClient;
 }
 
@@ -151,33 +150,15 @@ describe("TemplatesPage list", () => {
     expect(screen.getByTestId("page-count").textContent).toBe("0");
   });
 
-  // Review focus 1: a template from before source ids is keyed on its
-  // identity tuple, which is JSON, so its link must be encoded and must come
-  // back to the same template.
-  it("links and selects a template whose id is its identity tuple", () => {
-    const legacy = revision({ id: "rev_old", source_template_id: "", repo_name: "legacy", root_path: "." });
-    const id = JSON.stringify(["acme", "legacy", ".", "main"]);
-    renderPage(seed([eks, legacy]), "/templates");
+  // Until the registry draws one, a template whose first sync has not
+  // produced a revision stays out of the list and the count.
+  it("leaves out a template no sync has produced a revision for yet", () => {
+    const queryClient = testQueryClient();
+    seedTemplates(queryClient, [eks], [template({ id: "tpl_new", name: "fresh", latest_template_revision_id: "" })]);
+    renderPage(queryClient, "/templates");
 
-    const row = screen.getByTestId(`template-link-${id}`);
-    expect(row.getAttribute("href")).toBe(`/templates/${encodeURIComponent(id)}/variables`);
-    fireEvent.click(row);
-    expect(screen.getByTestId(`template-link-${id}`).getAttribute("aria-current")).toBe("true");
-  });
-
-  // A slash in the tuple is encoded too, so the id stays one path segment.
-  it("links and selects a template whose identity tuple has a slash in its root path", () => {
-    const legacy = revision({ id: "rev_old", source_template_id: "", repo_name: "legacy", root_path: "modules/eks" });
-    const id = JSON.stringify(["acme", "legacy", "modules/eks", "main"]);
-    renderPage(seed([eks, legacy]), "/templates");
-
-    const row = screen.getByTestId(`template-link-${id}`);
-    expect(row.getAttribute("href")).toBe(`/templates/${encodeURIComponent(id)}/variables`);
-    expect(row.getAttribute("href")).toContain("modules%2Feks");
-    fireEvent.click(row);
-    expect(screen.getByTestId(`template-link-${id}`).getAttribute("aria-current")).toBe("true");
-    expect(screen.getByTestId("template-link-tpl_eks").getAttribute("aria-current")).toBeNull();
-    expect(screen.getByTestId("variables-content")).toBeTruthy();
+    expect(screen.queryByTestId("template-link-tpl_new")).toBeNull();
+    expect(screen.getByTestId("page-count").textContent).toBe("1");
   });
 });
 
