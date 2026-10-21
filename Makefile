@@ -10,19 +10,18 @@ SPEC := docs/openapi.yaml
 #   make differential-test TEST_DSN=postgres://…
 TEST_DSN ?= postgres://openplan:openplan@localhost:55432/openplan_test?sslmode=disable
 
-# Redocly is pinned per target, deliberately.
+# The preview is a static `build-docs` page, not Redocly v1's live-reload
+# `preview-docs`: that one loads Redoc from cdn.redocly.com/redoc/latest, which
+# now serves an ES-module build its classic <script> tag can't run, so it shows
+# a blank page. `build-docs` pins its Redoc version and pre-renders the HTML.
+# Re-run the target to see spec edits.
 #
-# `preview-docs` was removed in Redocly CLI v2, and v2 has no live-reload
-# preview for a plain description file -- `openapi preview` expects a Redocly
-# project. So the preview stays on v1 until there is a v2 equivalent, while
-# linting tracks v2, which is the version the spec is written against.
-#
-# Both are exact versions, not ranges like `@2`. npx never counts a range as
+# An exact version, not a range like `@2`. npx never counts a range as
 # installed: it resolves the range against the registry and prompts to install
-# on every run, even when that version is already in its cache. Bump these by
+# on every run, even when that version is already in its cache. Bump it by
 # hand.
-REDOCLY_PREVIEW := @redocly/cli@1.34.20
-REDOCLY_LINT    := @redocly/cli@2.53.0
+REDOCLY := @redocly/cli@2.53.0
+API_DOCS_PORT ?= 8080
 
 # Pinned and run through `go run`, like Redocly through npx: no global install,
 # and everyone lints with the same version. The first run builds it (~30s);
@@ -41,11 +40,13 @@ help: ## List the available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 
-api-docs-preview: ## Serve the API reference (docs/openapi.yaml) with live reload
-	npx $(REDOCLY_PREVIEW) preview-docs $(SPEC)
+api-docs-preview: ## Build and serve the API reference (docs/openapi.yaml)
+	npx $(REDOCLY) build-docs $(SPEC) -o tmp/api-docs/index.html
+	@echo "API reference at http://127.0.0.1:$(API_DOCS_PORT)"
+	python3 -m http.server $(API_DOCS_PORT) --bind 127.0.0.1 --directory tmp/api-docs
 
 api-docs-lint: ## Validate docs/openapi.yaml against the OpenAPI spec
-	npx $(REDOCLY_LINT) lint $(SPEC)
+	npx $(REDOCLY) lint $(SPEC)
 
 # The collection is generated, never edited by hand: TestCollectionMatchesSpec
 # fails CI when postman/ and the spec disagree, and this is the fix.

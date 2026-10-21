@@ -2,7 +2,7 @@
 # executor image first and passes it in.
 ARG EXECUTOR_IMAGE=openplan-executor:sandbox
 
-FROM golang:1.26.9-alpine3.23 AS build
+FROM golang:1.26.10-alpine3.23 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
