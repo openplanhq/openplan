@@ -30,11 +30,12 @@
     <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "e93881027b4c4ef99c377908d9f44d19"}'></script>
   </head>
   <body class="bg-canvas">
-    <!-- The app's top bar (web/src/app/AppShell.tsx): 12px padding, a white
-         background and 28px outline buttons, so the bar is 52px in both. It spans
-         the window; its contents sit in the page's own column, so the logo and the
-         GitHub button line up with the headline and the hero drawing. -->
-    <header class="border-b bg-background">
+    <!-- The app's top bar's height (web/src/app/AppShell.tsx: 12px padding, 52px),
+         but on the page's own background with no border: it doesn't stick, so a
+         white band would only split the top of the page. Its contents sit in the
+         page's column, so the logo and the GitHub mark line up with the headline
+         and the hero drawing. -->
+    <header>
       <div class="mx-auto flex max-w-[1216px] items-center justify-between px-5 py-3">
         <!-- The brand kit's horizontal lockup (brand/svg), never the name retyped. At
              19px tall its wordmark matches the app header's 18px Geist "openplan":
