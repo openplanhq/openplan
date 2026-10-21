@@ -56,4 +56,16 @@ describe("buttonClass", () => {
     expect(subtle).not.toContain("bg-background");
     expect(subtle).not.toContain("border-border");
   });
+
+  it("draws a small button 28px tall in 13px text, padded 8px on the icon's side and 10px on the other, with 8px corners", () => {
+    const small = classes(buttonClass("subtle", "sm"));
+    expect(small).toEqual(
+      expect.arrayContaining(["h-7", "text-meta", "px-2.5", "has-data-[icon=inline-start]:pl-2", "rounded-md", "gap-1.5", "text-muted-foreground"])
+    );
+    expect(small).not.toContain("h-8");
+    expect(small).not.toContain("px-3");
+    expect(small).not.toContain("has-data-[icon=inline-start]:pl-2.5");
+    expect(small).not.toContain("rounded-lg");
+    expect(small).not.toContain("text-sm");
+  });
 });

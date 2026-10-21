@@ -51,7 +51,14 @@ const VARIANTS = {
   )
 };
 
-/** The classes of an openplan UI button: 36px tall at "lg", 32px otherwise. */
-export function buttonClass(variant: keyof typeof VARIANTS = "primary", size: "default" | "lg" = "default"): string {
-  return cn(VARIANTS[variant], size === "lg" && "h-9");
+// The small size is openplan UI's control-sm, the top bar's 28px: for an
+// action that sits on a title's line without outgrowing it, such as a
+// template's Sync. 13px words, 8px on the icon's side and 10px on the
+// other, 8px corners. Its icon is drawn 13px by the caller (size-3.25, at
+// stroke 2.42 so its line stays icon-sm's 1.31px).
+const SMALL = "h-7 gap-1.5 rounded-md px-2.5 text-meta has-data-[icon=inline-start]:pl-2 has-data-[icon=inline-end]:pr-2";
+
+/** The classes of an openplan UI button: 36px tall at "lg", 28px at "sm", 32px otherwise. */
+export function buttonClass(variant: keyof typeof VARIANTS = "primary", size: "default" | "lg" | "sm" = "default"): string {
+  return cn(VARIANTS[variant], size === "lg" && "h-9", size === "sm" && SMALL);
 }
