@@ -58,6 +58,11 @@ func createTemplateRegistration(ctx context.Context, exec pgxExecutor, registrat
 		registration.ErrorSummary,
 		registration.SourceTemplateID,
 	)
+	// The template was deleted between the caller reading it and this
+	// insert: a Sync of a template that no longer exists.
+	if foreignKeyViolation(err, "template_registrations_source_template_id_fkey") {
+		return app.ErrNotFound
+	}
 	if err != nil {
 		return fmt.Errorf("create template registration: %w", err)
 	}
@@ -560,6 +565,26 @@ func (store *Store) GetSourceTemplate(ctx context.Context, tenantID domain.Tenan
 		return domain.SourceTemplate{}, fmt.Errorf("get source template: %w", err)
 	}
 	return template, nil
+}
+
+// DeleteSourceTemplate deletes the tenant's template; its revisions, their
+// variables and its syncs cascade with it. The stack templates' key refuses
+// the delete while any stack template names the template, whatever its
+// lifecycle, and because the key's check locks and sees concurrent commits,
+// an install racing this delete either lands first and refuses it, or finds
+// the template gone.
+func (store *Store) DeleteSourceTemplate(ctx context.Context, tenantID domain.TenantID, id domain.SourceTemplateID) error {
+	result, err := store.pool.Exec(ctx, `delete from source_templates where tenant_id = $1 and id = $2`, tenantID, id)
+	if foreignKeyViolation(err, "stack_templates_source_template_id_fkey") {
+		return app.ErrTemplateInUse
+	}
+	if err != nil {
+		return fmt.Errorf("delete source template: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return app.ErrNotFound
+	}
+	return nil
 }
 
 // ListSourceTemplatesPage returns up to limit templates after the cursor,

@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/vishu42/openplan/internal/app"
+	"github.com/vishu42/openplan/internal/authentication"
 	"github.com/vishu42/openplan/internal/domain"
 	"github.com/vishu42/openplan/internal/logsink"
 	"github.com/vishu42/openplan/internal/queue"
@@ -4438,5 +4439,210 @@ func TestSourceTemplateKeys(t *testing.T) {
 	_, err := pool.Exec(ctx, `delete from source_templates where id = 'source_template_vpc'`)
 	if !violates(err, "23503", "stack_templates_source_template_id_fkey") {
 		t.Fatalf("delete an installed template error = %v, want the stack templates key to refuse it", err)
+	}
+}
+
+// A template no stack has installed is deleted; one any stack template names,
+// destroyed or not, is refused; another tenant's or an unknown id is not
+// found.
+func TestDeleteSourceTemplate(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := NewStore(pool)
+	seedStackWithTemplate(t, ctx, store)
+	seedSourceTemplate(t, ctx, store, "tenant_123", "source_template_unused")
+	seedSourceTemplate(t, ctx, store, "tenant_123", "source_template_destroyed")
+	if err := store.CreateStackTemplate(ctx, domain.StackTemplate{
+		ID: "stack_template_destroyed", TenantID: "tenant_123", StackID: "stack_123",
+		SourceTemplateID: "source_template_destroyed", WorkspaceName: "mtp_acme_prod_destroyed",
+		CreatedBy: "installer_123", Lifecycle: domain.StackTemplateDestroyed,
+	}); err != nil {
+		t.Fatalf("CreateStackTemplate returned error: %v", err)
+	}
+
+	if err := store.DeleteSourceTemplate(ctx, "tenant_other", "source_template_unused"); !errors.Is(err, app.ErrNotFound) {
+		t.Fatalf("delete another tenant's template error = %v, want app.ErrNotFound", err)
+	}
+	if err := store.DeleteSourceTemplate(ctx, "tenant_123", "source_template_unused"); err != nil {
+		t.Fatalf("delete an uninstalled template returned error: %v", err)
+	}
+	if _, err := store.GetSourceTemplate(ctx, "tenant_123", "source_template_unused"); !errors.Is(err, app.ErrNotFound) {
+		t.Fatalf("read after delete error = %v, want app.ErrNotFound", err)
+	}
+	if err := store.DeleteSourceTemplate(ctx, "tenant_123", "source_template_unused"); !errors.Is(err, app.ErrNotFound) {
+		t.Fatalf("second delete error = %v, want app.ErrNotFound", err)
+	}
+
+	for _, installed := range []domain.SourceTemplateID{"source_template_vpc", "source_template_destroyed"} {
+		if err := store.DeleteSourceTemplate(ctx, "tenant_123", installed); !errors.Is(err, app.ErrTemplateInUse) {
+			t.Fatalf("delete %s error = %v, want app.ErrTemplateInUse", installed, err)
+		}
+		if _, err := store.GetSourceTemplate(ctx, "tenant_123", installed); err != nil {
+			t.Fatalf("refused delete of %s still removed it: %v", installed, err)
+		}
+	}
+}
+
+// An install and a delete racing each other can't both succeed, whichever
+// commits first. Each case holds one side's transaction open, starts the
+// store call under test against it, waits until that call is blocked on the
+// held row lock, then commits the held side.
+func TestDeleteSourceTemplateRacesAnInstall(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := NewStore(pool)
+	seedStackWithTemplate(t, ctx, store)
+
+	t.Run("install commits first, the delete is refused", func(t *testing.T) {
+		seedSourceTemplate(t, ctx, store, "tenant_123", "source_template_install_first")
+		install := holdTx(t, ctx, pool, `
+			insert into stack_templates (id, tenant_id, stack_id, component_key, source_template_id, workspace_name, created_by, lifecycle)
+			values ('stack_template_install_first', 'tenant_123', 'stack_123', 'install_first', 'source_template_install_first', 'mtp_install_first', 'installer_123', 'active')
+		`)
+
+		deleted := make(chan error, 1)
+		go func() { deleted <- store.DeleteSourceTemplate(ctx, "tenant_123", "source_template_install_first") }()
+		waitForStatementBlockedOnLock(t, ctx, pool, "delete from source_templates")
+		install.commit()
+
+		if err := <-deleted; !errors.Is(err, app.ErrTemplateInUse) {
+			t.Fatalf("delete racing a committed install error = %v, want app.ErrTemplateInUse", err)
+		}
+		if _, err := store.GetStackTemplate(ctx, "tenant_123", "stack_template_install_first"); err != nil {
+			t.Fatalf("the install that won is gone: %v", err)
+		}
+	})
+
+	t.Run("delete commits first, the install is refused", func(t *testing.T) {
+		seedSourceTemplate(t, ctx, store, "tenant_123", "source_template_delete_first")
+		deletion := holdTx(t, ctx, pool, `delete from source_templates where id = 'source_template_delete_first'`)
+
+		installed := make(chan error, 1)
+		go func() {
+			installed <- store.CreateStackTemplate(ctx, domain.StackTemplate{
+				ID: "stack_template_delete_first", TenantID: "tenant_123", StackID: "stack_123",
+				SourceTemplateID: "source_template_delete_first", WorkspaceName: "mtp_delete_first",
+				CreatedBy: "installer_123", Lifecycle: domain.StackTemplateActive,
+			})
+		}()
+		waitForStatementBlockedOnLock(t, ctx, pool, "insert into stack_templates")
+		deletion.commit()
+
+		if err := <-installed; !errors.Is(err, app.ErrNotFound) {
+			t.Fatalf("install racing a committed delete error = %v, want app.ErrNotFound", err)
+		}
+		if _, err := store.GetSourceTemplate(ctx, "tenant_123", "source_template_delete_first"); !errors.Is(err, app.ErrNotFound) {
+			t.Fatalf("the delete that won left the template behind: %v", err)
+		}
+	})
+}
+
+// heldTx is a transaction a race test keeps open until it commits it.
+type heldTx struct {
+	commit func()
+}
+
+// holdTx runs statement in a transaction it leaves open until commit is
+// called. Cleanup rolls back one the test never committed, so a failed wait
+// can't hang the pool's cleanup on a held connection.
+func holdTx(t *testing.T, ctx context.Context, pool *pgxpool.Pool, statement string) heldTx {
+	t.Helper()
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin held transaction: %v", err)
+	}
+	t.Cleanup(func() { _ = tx.Rollback(context.WithoutCancel(ctx)) })
+	if _, err := tx.Exec(ctx, statement); err != nil {
+		t.Fatalf("held statement: %v", err)
+	}
+	return heldTx{commit: func() {
+		if err := tx.Commit(ctx); err != nil {
+			t.Fatalf("commit held transaction: %v", err)
+		}
+	}}
+}
+
+// A sync can't be queued for a template that is gone: the key on the sync's
+// row refuses it, and the store says not found rather than failing.
+func TestCreateTemplateRegistrationOfAGoneTemplateIsNotFound(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := NewStore(pool)
+
+	err := store.CreateTemplateRegistration(ctx, domain.TemplateRegistration{
+		ID: "template_registration_gone", TenantID: "tenant_123", SourceTemplateID: "source_template_gone",
+		RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc",
+		Status: domain.TemplateRegistrationPending, RequestedBy: "user_123", RequestedAt: time.Now().UTC(),
+	})
+	if !errors.Is(err, app.ErrNotFound) {
+		t.Fatalf("CreateTemplateRegistration error = %v, want app.ErrNotFound", err)
+	}
+}
+
+// staleTemplateReader answers every template read with the template as it was
+// read before a delete committed: the window in which a Sync read its
+// template and a delete then removed it.
+type staleTemplateReader struct {
+	*Store
+	template domain.SourceTemplate
+}
+
+func (reader staleTemplateReader) GetSourceTemplate(context.Context, domain.TenantID, domain.SourceTemplateID) (domain.SourceTemplate, error) {
+	return reader.template, nil
+}
+
+// Through the app over the real schema: deleting an installed template is
+// refused, deleting an uninstalled one succeeds, and a Sync that read the
+// template before the delete is not found rather than an internal error.
+func TestDeleteTemplateThroughTheApp(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	specs, err := queue.NewSpecRegistry(app.QueueSpecs()...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := NewStore(pool, WithQueueSpecs(specs))
+	seedStackWithTemplate(t, ctx, store)
+	actx := authentication.ContextWithPrincipal(ctx, authentication.Principal{Subject: "user-1"})
+	authz := platformAdminAuthorization(t, "user-1")
+	service := app.NewService(app.Service{Authorization: authz, Work: store, SourceTemplates: store})
+
+	err = service.DeleteTemplate(actx, app.DeleteTemplateCommand{TenantID: "tenant_123", TemplateID: "source_template_vpc"})
+	if !errors.Is(err, app.ErrTemplateInUse) {
+		t.Fatalf("delete an installed template error = %v, want app.ErrTemplateInUse", err)
+	}
+
+	registered, err := service.RegisterTemplate(actx, app.RegisterTemplateCommand{
+		TenantID: "tenant_123", RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/db",
+	})
+	if err != nil {
+		t.Fatalf("RegisterTemplate returned error: %v", err)
+	}
+	if err := service.DeleteTemplate(actx, app.DeleteTemplateCommand{TenantID: "tenant_123", TemplateID: registered.Template.ID}); err != nil {
+		t.Fatalf("delete an uninstalled template returned error: %v", err)
+	}
+
+	stale := app.NewService(app.Service{
+		Authorization: authz, Work: store, SourceTemplates: staleTemplateReader{Store: store, template: registered.Template},
+	})
+	_, err = stale.StartTemplateSync(actx, app.StartTemplateSyncCommand{TenantID: "tenant_123", TemplateID: registered.Template.ID})
+	if !errors.Is(err, app.ErrNotFound) {
+		t.Fatalf("Sync of a template deleted after it was read error = %v, want app.ErrNotFound", err)
+	}
+	var queued int
+	if err := pool.QueryRow(ctx, `select count(*) from work_queue where kind = 'start_template_sync'`).Scan(&queued); err != nil {
+		t.Fatal(err)
+	}
+	if queued != 1 {
+		t.Fatalf("queued syncs = %d, want only the register's", queued)
 	}
 }

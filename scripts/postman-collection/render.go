@@ -439,4 +439,7 @@ var environment = []environmentValue{
 	// Unset unless the person running the collection names someone it is
 	// safe to change the platform role of.
 	{platformGrantSubVariable, "", plainVariable},
+	// Unset unless the person running the collection names a template it is
+	// safe to delete.
+	{deleteTemplateIDVariable, "", plainVariable},
 }

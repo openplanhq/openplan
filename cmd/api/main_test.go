@@ -915,6 +915,10 @@ func (recordingStore) GetSourceTemplate(context.Context, domain.TenantID, domain
 	return domain.SourceTemplate{}, nil
 }
 
+func (recordingStore) DeleteSourceTemplate(context.Context, domain.TenantID, domain.SourceTemplateID) error {
+	return nil
+}
+
 func (recordingStore) ListSourceTemplatesPage(context.Context, domain.TenantID, *app.SourceTemplateCursor, int) ([]domain.SourceTemplate, error) {
 	return nil, nil
 }

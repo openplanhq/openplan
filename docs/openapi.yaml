@@ -424,6 +424,28 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
+    delete:
+      tags: [Templates]
+      summary: Delete a template
+      description: |
+        Deletes the template with its revisions and syncs. Refused while any
+        stack has installed it, including an install since destroyed: its run
+        history still points at the template's revisions.
+
+        A sync still running ends without recording anything.
+      operationId: deleteTemplate
+      responses:
+        "204":
+          description: Deleted.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: A stack has installed the template (`template-in-use`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "500": { $ref: "#/components/responses/InternalError" }
 
   /v1/tenants/{tenant_id}/templates/{template_id}/syncs:
     parameters:

@@ -95,6 +95,15 @@ var overrides = map[string]override{
 		}),
 		test: save("template_id", "pm.response.json().id"),
 	},
+	// A run's later requests install the template it registered, so deleting
+	// it would break them: the delete targets delete_template_id instead,
+	// which nothing sets, and skips while it is empty.
+	"deleteTemplate": {
+		pathVars:   map[string]string{"template_id": deleteTemplateIDVariable},
+		preRequest: skipUnlessDeleteTemplateID,
+		expect:     []int{204, 409},
+		note:       "Skipped unless you set delete_template_id. `409` when a stack has installed it.",
+	},
 	"createTemplateRegistration": {
 		jsonBody: jsonObject([][2]string{
 			{"repo_owner", "{{template_repo_owner}}"}, {"repo_name", "{{template_repo_name}}"},
@@ -217,6 +226,12 @@ const (
 // skipUnlessPlatformGrantSub keeps a collection run from changing anyone's
 // platform role unless the person running it named who.
 const skipUnlessPlatformGrantSub = "if (!pm.environment.get('" + platformGrantSubVariable + "')) { pm.execution.skipRequest(); }"
+
+// deleteTemplateIDVariable holds the template the delete request may remove,
+// and nothing sets it.
+const deleteTemplateIDVariable = "delete_template_id"
+
+const skipUnlessDeleteTemplateID = "if (!pm.environment.get('" + deleteTemplateIDVariable + "')) { pm.execution.skipRequest(); }"
 
 // requestTest asserts the expected status, then runs the override's script.
 func requestTest(expected []int, extra string) string {

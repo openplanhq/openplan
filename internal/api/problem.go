@@ -133,6 +133,11 @@ var problemTypes = []problemType{
 		detail: "The revision is still syncing, or its sync failed. Wait for it, or pick another revision.",
 	},
 	{
+		sentinel: app.ErrTemplateInUse, status: http.StatusConflict, slug: "template-in-use",
+		title:  "The template is in use",
+		detail: "A stack has installed this template, so it can't be deleted.",
+	},
+	{
 		sentinel: app.ErrDuplicateStackSlug, status: http.StatusConflict, slug: "duplicate-slug",
 		title:  "The slug is taken",
 		detail: "Another stack already uses this slug.", field: "slug",

@@ -80,3 +80,7 @@ values:
     value: ""
     enabled: true
     type: default
+  - key: delete_template_id
+    value: ""
+    enabled: true
+    type: default

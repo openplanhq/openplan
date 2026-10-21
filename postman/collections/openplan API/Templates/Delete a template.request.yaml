@@ -1,0 +1,19 @@
+$kind: http-request
+description: |-
+  Deletes the template with its revisions and syncs. Refused while any
+  stack has installed it, including an install since destroyed: its run
+  history still points at the template's revisions.
+
+  A sync still running ends without recording anything.
+
+  Skipped unless you set delete_template_id. `409` when a stack has installed it.
+method: DELETE
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/templates/{{delete_template_id}}'
+scripts:
+  - type: beforeRequest
+    code: if (!pm.environment.get('delete_template_id')) { pm.execution.skipRequest(); }
+    language: text/javascript
+  - type: afterResponse
+    code: pm.test('status is one of 204, 409', () => pm.expect(pm.response.code).to.be.oneOf([204, 409]));
+    language: text/javascript
+order: 4000
