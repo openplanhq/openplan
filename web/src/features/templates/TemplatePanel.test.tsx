@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
-import { createMemoryRouter, RouterProvider } from "react-router-dom";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { createMemoryRouter, RouterProvider, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../../auth/AuthContext";
 import { queryKeys } from "../../api/queryKeys";
+import { problemTypes } from "../../api/types";
 import type { TemplateLatestSync, TemplateRevision } from "../../api/types";
 import TemplatePanel from "./TemplatePanel";
 import { authValue, jsonResponse, latestSync, revision, seedTemplates, template, templateReadResponse, TENANT, testQueryClient, variable } from "./testSupport";
@@ -30,6 +31,8 @@ function seed(revisions: TemplateRevision[] = [latest, older, rds, cdn]): QueryC
 function renderPanel(queryClient: QueryClient, path: string, canPublishTemplate = true) {
   const router = createMemoryRouter(
     [
+      // Where a delete lands, showing what it carried.
+      { path: "/templates", element: <LandedOn /> },
       {
         path: "/templates/:sourceTemplateId",
         element: <TemplatePanel />,
@@ -49,6 +52,10 @@ function renderPanel(queryClient: QueryClient, path: string, canPublishTemplate 
     </QueryClientProvider>
   );
   return router;
+}
+
+function LandedOn() {
+  return <p data-testid="templates-index">{JSON.stringify(useLocation().state)}</p>;
 }
 
 beforeEach(() => {
@@ -225,5 +232,139 @@ describe("TemplatePanel before a first revision", () => {
     renderPanel(unsynced(latestSync({ status: "failed", error_summary: "ref not found" })), "/templates/tpl_new/variables", false);
     expect(screen.queryByTestId("template-sync")).toBeNull();
     expect(screen.getByTestId("template-sync-error").textContent).toContain("ref not found");
+  });
+});
+
+describe("TemplatePanel delete", () => {
+  function problem(status: number, type: string, detail: string): Response {
+    return new Response(JSON.stringify({ type, title: "Refused", status, detail }), {
+      status,
+      headers: { "content-type": "application/problem+json" }
+    });
+  }
+
+  // Answers the DELETE with this response and records it; reads stay
+  // pending, as everything is seeded.
+  function answerDelete(response: () => Response) {
+    const calls: string[] = [];
+    vi.mocked(globalThis.fetch).mockImplementation(async (input, init) => {
+      if (init?.method === "DELETE") {
+        calls.push(String(input));
+        return response();
+      }
+      return templateReadResponse(input, [latest, older, rds, cdn]) ?? new Promise<Response>(() => {});
+    });
+    return calls;
+  }
+
+  it("is not offered to people who cannot publish templates", () => {
+    renderPanel(seed(), "/templates/tpl_1/variables", false);
+    expect(screen.queryByTestId("template-delete")).toBeNull();
+  });
+
+  it("asks first, in place, and sends nothing until confirmed", () => {
+    const calls = answerDelete(() => new Response(null, { status: 204 }));
+    renderPanel(seed(), "/templates/tpl_1/variables");
+
+    const trigger = screen.getByTestId("template-delete");
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(trigger);
+
+    const confirm = screen.getByTestId("template-delete-confirm");
+    expect(confirm.textContent).toContain("Delete eks?");
+    expect(confirm.textContent).toContain("Stacks can no longer add it, and its revisions go with it.");
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    // A stray Enter cancels rather than deletes.
+    expect(document.activeElement).toBe(within(confirm).getByRole("button", { name: "Cancel" }));
+    expect(calls).toHaveLength(0);
+  });
+
+  it("puts focus back on Delete when cancelled, by Cancel or Escape", () => {
+    renderPanel(seed(), "/templates/tpl_1/variables");
+    const trigger = screen.getByTestId("template-delete");
+
+    fireEvent.click(trigger);
+    fireEvent.click(within(screen.getByTestId("template-delete-confirm")).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByTestId("template-delete-confirm")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+
+    fireEvent.click(trigger);
+    fireEvent.keyDown(screen.getByTestId("template-delete-confirm"), { key: "Escape" });
+    expect(screen.queryByTestId("template-delete-confirm")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("deletes once confirmed and goes to /templates, saying which template went", async () => {
+    const calls = answerDelete(() => new Response(null, { status: 204 }));
+    const router = renderPanel(seed(), "/templates/tpl_1/variables");
+
+    fireEvent.click(screen.getByTestId("template-delete"));
+    fireEvent.click(within(screen.getByTestId("template-delete-confirm")).getByRole("button", { name: "Delete template" }));
+
+    await waitFor(() => expect(screen.getByTestId("templates-index").textContent).toBe(JSON.stringify({ deletedTemplate: "eks" })));
+    expect(calls).toEqual([`/v1/tenants/${TENANT}/templates/tpl_1`]);
+    // Replaced, so Back doesn't return to a template that is gone.
+    expect(router.state.historyAction).toBe("REPLACE");
+  });
+
+  it("asks without listing what goes with it when there is no revision yet", () => {
+    const queryClient = seed();
+    queryClient.setQueryData(queryKeys.templates(TENANT), [template({ id: "tpl_new", name: "eks-typo", latest_template_revision_id: "", latest_sync: null })]);
+    queryClient.setQueryData(queryKeys.templateRevisions(TENANT, "tpl_new"), []);
+    renderPanel(queryClient, "/templates/tpl_new/variables");
+
+    fireEvent.click(screen.getByTestId("template-delete"));
+    const confirm = screen.getByTestId("template-delete-confirm");
+    expect(within(confirm).getByText("Delete eks-typo?")).toBeTruthy();
+    expect(confirm.textContent).not.toContain("revisions");
+  });
+
+  it("says a stack has installed it when the server refuses with template-in-use", async () => {
+    answerDelete(() => problem(409, problemTypes.templateInUse, "A stack has installed this template, so it can't be deleted."));
+    renderPanel(seed(), "/templates/tpl_1/variables");
+
+    fireEvent.click(screen.getByTestId("template-delete"));
+    fireEvent.click(within(screen.getByTestId("template-delete-confirm")).getByRole("button", { name: "Delete template" }));
+
+    const error = await screen.findByTestId("template-delete-error");
+    expect(within(error).getByText("Can't delete this template")).toBeTruthy();
+    expect(error.textContent).toContain("A stack has installed it");
+    expect(screen.queryByTestId("template-delete-confirm")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByTestId("template-delete"));
+    expect(screen.queryByTestId("templates-index")).toBeNull();
+  });
+
+  it("shows any other refusal in the server's words", async () => {
+    answerDelete(() => problem(403, "about:blank", "You may not publish templates."));
+    renderPanel(seed(), "/templates/tpl_1/variables");
+
+    fireEvent.click(screen.getByTestId("template-delete"));
+    fireEvent.click(within(screen.getByTestId("template-delete-confirm")).getByRole("button", { name: "Delete template" }));
+
+    const error = await screen.findByTestId("template-delete-error");
+    expect(within(error).getByText("Could not delete this template")).toBeTruthy();
+    expect(error.textContent).toContain("You may not publish templates.");
+  });
+
+  it("ends where a delete does when someone else deleted it first", async () => {
+    answerDelete(() => problem(404, "about:blank", "Not found."));
+    renderPanel(seed(), "/templates/tpl_1/variables");
+
+    fireEvent.click(screen.getByTestId("template-delete"));
+    fireEvent.click(within(screen.getByTestId("template-delete-confirm")).getByRole("button", { name: "Delete template" }));
+
+    await waitFor(() => expect(screen.getByTestId("templates-index").textContent).toContain("eks"));
+  });
+
+  it("drops a question asked about another template", () => {
+    const router = renderPanel(seed(), "/templates/tpl_1/variables");
+    fireEvent.click(screen.getByTestId("template-delete"));
+    expect(screen.getByTestId("template-delete-confirm")).toBeTruthy();
+
+    void router.navigate("/templates/tpl_rds/variables");
+    return waitFor(() => {
+      expect(screen.getByRole("heading", { level: 2, name: "rds" })).toBeTruthy();
+      expect(screen.queryByTestId("template-delete-confirm")).toBeNull();
+    });
   });
 });

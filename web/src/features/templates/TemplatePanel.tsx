@@ -1,27 +1,34 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { BookMarked, Folder, GitBranch, GitCommitHorizontal, Loader2, RefreshCw } from "lucide-react";
+import { BookMarked, Folder, GitBranch, GitCommitHorizontal, Loader2, RefreshCw, Trash2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Outlet, useLocation, useParams } from "react-router-dom";
+import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
+import { ApiRequestError } from "../../api/client";
+import { apiErrorMessage } from "../../api/problems";
 import { queryKeys } from "../../api/queryKeys";
-import { useTemplateRevisionsQuery, useTemplateRevisionVariablesQuery, useTemplatesQuery } from "../../api/queries";
+import { useDeleteTemplateMutation, useTemplateRevisionsQuery, useTemplateRevisionVariablesQuery, useTemplatesQuery } from "../../api/queries";
+import { problemTypes } from "../../api/types";
 import RequireCapability from "../../auth/RequireCapability";
 import { tenantID } from "../../config";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
+import ErrorPanel from "../../shared/ErrorPanel";
 import ExternalLink from "../../shared/ExternalLink";
+import InlineConfirm from "../../shared/InlineConfirm";
 import RequestIdNote from "../../shared/RequestIdNote";
 import UnderlineTabs from "../../shared/UnderlineTabs";
 import { TemplateContext } from "./templateContext";
 import { githubLinks, rootPathOf } from "./templateLinks";
 import { templatePath, templateTabOf } from "./templateRoutes";
+import type { TemplatesLocationState } from "./templatesPageOutlet";
 import TemplateSync from "./TemplateSync";
 import { shortCommitSHA, templateDisplayName } from "./templateWorkflow";
 import { cn } from "@/lib/utils";
 
 // The right side of /templates: one template, and its latest revision for
-// the commit and the variables. Its name, where it lives on GitHub (the
+// the commit and the variables. People who can publish get Sync and Delete
+// on the name's line. Its name, where it lives on GitHub (the
 // source line), what it is for, then
 // its Variables and Revisions tabs. The route below draws the tab into <Outlet />, except on
 // /templates itself, which passes the first template's Variables tab as
@@ -59,6 +66,7 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
   const variablesQuery = useTemplateRevisionVariablesQuery(tenantID, latest?.id ?? "");
   const variableCount = variablesQuery.isPlaceholderData ? undefined : variablesQuery.data?.length;
   const tab = templateTabOf(useLocation().pathname);
+  const remove = useTemplateDelete(id);
 
   if (template !== null && revisionsQuery.isPending) {
     return (
@@ -97,7 +105,51 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
   const links = githubLinks(latest ?? { ...template, resolved_commit_sha: "" });
   const rootPath = rootPathOf(template.root_path);
 
-  const heading = <h2 className="min-w-0 font-heading text-panel-title font-semibold tracking-title wrap-anywhere">{templateDisplayName(template)}</h2>;
+  const name = templateDisplayName(template);
+  // Delete sits on the name's line beside Sync, a Small Subtle button like
+  // it. TemplateSync lays the line out as the heading and Sync, 24px apart,
+  // so Delete ends the heading and is pulled 20px right, to sit 4px from
+  // Sync as one pair. Both are for people who can publish, so they come and
+  // go together.
+  const heading = (
+    <div className="flex min-w-0 flex-1 items-start justify-between gap-6">
+      <h2 className="min-w-0 font-heading text-panel-title font-semibold tracking-title wrap-anywhere">{name}</h2>
+      <RequireCapability capability="can_publish_template">
+        <button
+          ref={remove.triggerRef}
+          type="button"
+          className={cn(buttonClass("subtle", "sm"), "-my-px -mr-5 pointer-coarse:h-11")}
+          aria-expanded={remove.confirming}
+          onClick={remove.ask}
+          data-testid="template-delete"
+        >
+          <Trash2 data-icon="inline-start" aria-hidden="true" strokeWidth={2.42} className="size-3.25" />
+          Delete
+        </button>
+      </RequireCapability>
+    </div>
+  );
+  // The question, or why the server refused, under the source line: close
+  // to Delete, and above the description it would otherwise push away.
+  const deleteStep = remove.confirming ? (
+    <InlineConfirm
+      testId="template-delete-confirm"
+      question={`Delete ${name}?`}
+      confirmLabel="Delete template"
+      confirmIcon={Trash2}
+      busy={remove.busy}
+      onConfirm={() => void remove.confirm(name)}
+      onCancel={remove.cancel}
+    >
+      {latest ? "Stacks can no longer add it, and its revisions go with it." : undefined}
+    </InlineConfirm>
+  ) : remove.refusal === "in-use" ? (
+    <ErrorPanel testId="template-delete-error" title="Can't delete this template">
+      A stack has installed it, so it stays registered, even after that stack destroys it.
+    </ErrorPanel>
+  ) : remove.refusal !== null ? (
+    <ErrorPanel testId="template-delete-error" title="Could not delete this template" details={remove.refusal.message} />
+  ) : null;
   const source = (
     <ul aria-label="Source on GitHub" className="grid min-w-0 grid-cols-4 items-start gap-x-6 text-meta leading-5" data-testid="template-source">
       <SourceFact icon={BookMarked} term="Repository" href={links.repository}>
@@ -120,8 +172,11 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
   );
   // Before a revision there is no template.yaml read yet, so no
   // description to miss.
-  const about = !latest ? null : (
+  const about = !latest ? (
+    deleteStep
+  ) : (
     <>
+      {deleteStep}
       {description !== "" ? (
         <p className="max-w-170 text-sm text-foreground" data-testid="template-description">
           {description}
@@ -174,6 +229,70 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
       </div>
     </TemplateContext.Provider>
   );
+}
+
+type DeleteRefusal = "in-use" | { message: string };
+
+// Deleting a template: Delete asks first, in place, then calls the server.
+// Gone, it sends the person to /templates, which says what was deleted and
+// shows the first template left. Refused because a stack has installed it
+// (409 template-in-use), it says so; nothing on screen could have told, since
+// the API doesn't say whether a stack uses a template. A template someone
+// else deleted first (404) ends where a delete does.
+//
+// The state belongs to the template it was asked about, so moving to another
+// template drops a question or a refusal rather than carrying it over.
+function useTemplateDelete(id: string) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const deleteTemplateMutation = useDeleteTemplateMutation(tenantID);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [askedFor, setAskedFor] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<{ id: string; refusal: DeleteRefusal } | null>(null);
+  const busy = deleteTemplateMutation.isPending;
+
+  function done(name: string) {
+    // Replace: Back must not return to the address of a template that is gone.
+    const state: TemplatesLocationState = { deletedTemplate: name };
+    navigate("/templates", { replace: true, state });
+  }
+
+  return {
+    triggerRef,
+    confirming: askedFor === id,
+    busy,
+    refusal: refusal?.id === id ? refusal.refusal : null,
+    ask() {
+      setRefusal(null);
+      setAskedFor(id);
+    },
+    cancel() {
+      setAskedFor(null);
+      triggerRef.current?.focus();
+    },
+    async confirm(name: string) {
+      if (busy) {
+        return;
+      }
+      try {
+        await deleteTemplateMutation.mutateAsync(id);
+        done(name);
+      } catch (error) {
+        if (error instanceof ApiRequestError && error.status === 404) {
+          // The mutation only clears its reads on success; the list must
+          // drop the template here too.
+          await queryClient.invalidateQueries({ queryKey: queryKeys.templates(tenantID), exact: true });
+          done(name);
+          return;
+        }
+        const inUse = error instanceof ApiRequestError && error.type === problemTypes.templateInUse;
+        setAskedFor(null);
+        setRefusal({ id, refusal: inUse ? "in-use" : { message: apiErrorMessage(error, "Request failed") } });
+        // The confirm that held focus is gone; Delete is where to try again.
+        triggerRef.current?.focus();
+      }
+    }
+  };
 }
 
 // One fact of the source line: an icon saying what it is (its word is in a
