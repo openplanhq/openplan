@@ -40,10 +40,12 @@ export function useAttentionQuery(tenantID: string) {
   });
 }
 
+/** Every template, polled while any of them is syncing. */
 export function useTemplatesQuery(tenantID: string) {
   return useQuery({
     queryKey: queryKeys.templates(tenantID),
-    queryFn: () => client.listTemplates(tenantID)
+    queryFn: () => client.listTemplates(tenantID),
+    refetchInterval: (query: { state: { data?: Template[] } }) => templatesRefetchInterval(query.state.data)
   });
 }
 
@@ -126,6 +128,12 @@ export const POLL_INTERVAL_MS = 1500;
 export function templateRefetchInterval(template: Template | undefined): number | false {
   const status = template?.latest_sync?.status;
   return status && !isSyncSettled(status) ? POLL_INTERVAL_MS : false;
+}
+
+// The list carries every template's latest sync, so a sync started anywhere,
+// or before a reload, is followed to its outcome without a Sync press here.
+export function templatesRefetchInterval(templates: Template[] | undefined): number | false {
+  return templates?.some((template) => templateRefetchInterval(template) !== false) ? POLL_INTERVAL_MS : false;
 }
 
 export function runRefetchInterval(status: TemplateRunStatus | undefined, poll: boolean): number | false {
