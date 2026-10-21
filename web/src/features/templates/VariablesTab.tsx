@@ -9,10 +9,19 @@ import { cn } from "@/lib/utils";
 import { useTemplate } from "./templateContext";
 import { shortCommitSHA } from "./templateWorkflow";
 import RequestIdNote from "../../shared/RequestIdNote";
+import { Breakable, piecesAfter } from "../../shared/breakAfter";
 
 // 8px either side of a column boundary makes the 16px between columns, and
 // 16px at the row's ends. Name 200, type 120 and value 90, plus that padding.
 const cellClass = "px-2 py-2 first:pl-4 last:pr-4";
+
+// A type expression wraps only at its structure: after an opening bracket, a
+// comma or a space (which the browser already breaks at), never inside a
+// word, so optional(map(string)) reads "optional(" then "map(string))". Only
+// a single word wider than the column breaks where it must.
+function typePieces(typeExpression: string): string[] {
+  return piecesAfter(typeExpression, "({[,");
+}
 
 // /templates/:id/variables: what the template asks for, read from its newest
 // revision. The API says whether a variable has a default, not what it is, so
@@ -91,7 +100,7 @@ export default function VariablesTab() {
               <TableRow key={templateVariable.name} className="h-12 border-divider hover:bg-transparent" data-testid={`template-variable-${templateVariable.name}`}>
                 <TableCell className={cn(cellClass, "font-mono text-meta whitespace-normal wrap-anywhere")}>{templateVariable.name}</TableCell>
                 <TableCell className={cn(cellClass, "font-mono text-xs whitespace-normal text-muted-foreground wrap-anywhere")}>
-                  {templateVariable.type_expression || "any"}
+                  <Breakable pieces={typePieces(templateVariable.type_expression || "any")} />
                 </TableCell>
                 <TableCell className={cn(cellClass, "text-meta", templateVariable.required ? "font-medium text-foreground" : "text-muted-foreground")}>
                   {templateVariable.required ? "required" : "optional"}

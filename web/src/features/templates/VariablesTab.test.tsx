@@ -66,6 +66,15 @@ describe("VariablesTab", () => {
     expect(screen.getByRole("table").querySelector("colgroup")).not.toBeNull();
   });
 
+  it("wraps a long type only at its structure, never inside a word (#459)", () => {
+    renderTab(seed([variable({ name: "node_pools", type_expression: "map(object({ size = optional(number), labels = optional(map(string)) }))" })]));
+    const cell = within(screen.getByTestId("template-variable-node_pools")).getByText(/^map\(object/);
+    expect(cell.textContent).toBe("map(object({ size = optional(number), labels = optional(map(string)) }))");
+    // A break after each "(", "{" and ",": "optional(" then "map(string))".
+    expect(cell.querySelectorAll("wbr")).toHaveLength(7);
+    expect(cell.childNodes[cell.childNodes.length - 1].textContent).toBe("string)) }))");
+  });
+
   it("says when the template takes no variables", () => {
     renderTab(seed([]));
     expect(screen.getByTestId("template-variables-none").textContent).toBe("This template takes no variables.");
