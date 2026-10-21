@@ -9,7 +9,7 @@ import { queryKeys } from "../../api/queryKeys";
 import { useRegisterTemplateMutation, useTemplateRegistrationQuery, useTemplateRevisionsQuery } from "../../api/queries";
 import { tenantID } from "../../config";
 import { buttonClass } from "../../shared/buttonClass";
-import ErrorLine from "../../shared/ErrorLine";
+import ErrorPanel from "../../shared/ErrorPanel";
 import { fieldLabelClass, inputClass } from "../../shared/fieldClass";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,7 +26,7 @@ const DEFAULTS = { owner: "hashicorp", repo: "", ref: "main", path: "." };
 // are locked and a status row says what is happening. When it completes, the
 // template opens once the refreshed list holds its revision; an identity that
 // was registered already opens that template. A failure keeps the fields as
-// typed, says so, and shows the server's reason as written.
+// typed and says so in an ErrorPanel, the server's reason as written in it.
 export default function RegisterTemplatePanel() {
   const [repoOwner, setRepoOwner] = useState(DEFAULTS.owner);
   const [repoName, setRepoName] = useState(DEFAULTS.repo);
@@ -169,16 +169,13 @@ export default function RegisterTemplatePanel() {
           </div>
         </div>
         {failure !== "" && !busy && (
-          <div className="flex flex-col gap-2" data-testid="register-template-error">
-            <ErrorLine>
-              {unchecked
-                ? "openplan could not check on this registration, so it may still finish. Reload the page before registering it again."
-                : "This template could not be registered. Check the fields and register it again."}
-            </ErrorLine>
-            <pre className="m-0 rounded-lg border bg-canvas px-3 py-2.5 font-mono text-xs leading-relaxed whitespace-pre-wrap text-code-foreground wrap-anywhere">
-              {failure}
-            </pre>
-          </div>
+          <ErrorPanel
+            testId="register-template-error"
+            title={unchecked ? "Could not check on this registration" : "Could not register this template"}
+            details={failure}
+          >
+            {unchecked ? "It may still finish. Reload the page before registering it again." : "Check the fields and register it again."}
+          </ErrorPanel>
         )}
       </form>
     </section>

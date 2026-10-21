@@ -80,7 +80,7 @@ describe("TemplatePanel header", () => {
     expect(screen.queryByTestId("template-no-description")).toBeNull();
   });
 
-  it("links the repository, root path, ref and latest commit on GitHub, with the commit's registration date", () => {
+  it("links the repository, root path, ref and latest commit on GitHub, with no date: the revision's is not the commit's", () => {
     renderPanel(seed(), "/templates/tpl_1/variables");
     const details = within(screen.getByTestId("template-details"));
 
@@ -89,7 +89,8 @@ describe("TemplatePanel header", () => {
     expect(details.getByRole("link", { name: /^main,/ }).getAttribute("href")).toBe("https://github.com/acme/infra-modules/tree/main");
     const commit = details.getByRole("link", { name: /^9e7d3b2,/ });
     expect(commit.getAttribute("href")).toBe("https://github.com/acme/infra-modules/commit/9e7d3b2aaaabbbbccccddddeeeeffff000011112");
-    expect(screen.getByTestId("template-details").textContent).toMatch(/5 Oct(ober)? 2026/);
+    expect(screen.getByTestId("template-details").textContent).not.toMatch(/Oct/);
+    expect(screen.getByTestId("template-details").querySelector("time")).toBeNull();
     for (const link of details.getAllByRole("link")) {
       expect(link.getAttribute("target")).toBe("_blank");
     }

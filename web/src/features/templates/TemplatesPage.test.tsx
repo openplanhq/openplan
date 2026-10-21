@@ -86,22 +86,21 @@ describe("TemplatesPage header", () => {
 });
 
 describe("TemplatesPage list", () => {
-  it("lists templates under their repository, each with its path and ref", () => {
+  it("lists templates by name in one list, each with its repository and ref", () => {
     renderPage(seed(), "/templates");
 
-    const infra = screen.getByTestId("template-group-acme/infra-modules");
-    expect(within(infra).getByRole("heading", { name: "acme/infra-modules" })).toBeTruthy();
-    expect(within(infra).getAllByRole("link")).toHaveLength(2);
-    expect(screen.getByTestId("template-link-tpl_eks").textContent).toContain("aws/eks · main");
-    // A module at the root shows its ref alone.
-    expect(screen.getByTestId("template-link-tpl_cdn").textContent).toBe("cloudfront-sitev2.0.1");
+    const list = screen.getByRole("list", { name: "Templates" });
+    expect(within(list).getAllByRole("link").map((link) => link.dataset.testid)).toEqual(["template-link-tpl_cdn", "template-link-tpl_eks", "template-link-tpl_net"]);
+    expect(screen.queryByRole("heading", { name: "acme/infra-modules" })).toBeNull();
+    expect(screen.getByTestId("template-link-tpl_eks").textContent).toBe("eksacme/infra-modules·main");
+    expect(screen.getByTestId("template-link-tpl_cdn").textContent).toBe("cloudfront-siteacme/edge·v2.0.1");
   });
 
   it("opens on the first template without changing the URL", () => {
     const router = renderPage(seed(), "/templates");
 
-    expect(screen.getByTestId("template-link-tpl_eks").getAttribute("aria-current")).toBe("true");
-    expect(screen.getByTestId("template-link-tpl_net").getAttribute("aria-current")).toBeNull();
+    expect(screen.getByTestId("template-link-tpl_cdn").getAttribute("aria-current")).toBe("true");
+    expect(screen.getByTestId("template-link-tpl_eks").getAttribute("aria-current")).toBeNull();
     expect(screen.getByTestId("index-content")).toBeTruthy();
     expect(router.state.location.pathname).toBe("/templates");
   });

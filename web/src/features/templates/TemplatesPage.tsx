@@ -10,12 +10,12 @@ import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import { cn } from "@/lib/utils";
 import TemplateList from "./TemplateList";
 import type { TemplatesPageOutletContext } from "./templatesPageOutlet";
-import { groupTemplatesByRepository } from "./templateWorkflow";
+import { listSourceTemplates } from "./templateWorkflow";
 import RequestIdNote from "../../shared/RequestIdNote";
 
 const registerLinkClass = cn(buttonClass("primary", "lg"), "w-full pointer-coarse:h-11 md:w-auto");
 
-// /templates: every registered template on the left, grouped by repository;
+// /templates: every registered template on the left, by name;
 // on the right, the selected template's panel, which is the route below
 // rendered into <Outlet />. With no template in the URL, the index draws the
 // first one without changing the URL.
@@ -64,9 +64,9 @@ export default function TemplatesPage() {
     );
   }
 
-  const groups = groupTemplatesByRepository(templateRevisionsQuery.data);
-  const count = groups.reduce((total, group) => total + group.sourceTemplates.length, 0);
-  const first = groups[0]?.sourceTemplates[0] ?? null;
+  const templates = listSourceTemplates(templateRevisionsQuery.data);
+  const count = templates.length;
+  const first = templates[0] ?? null;
   const onPanel = templateMatch !== null;
   const registering = templateMatch?.params.sourceTemplateId === "new";
   const selectedId = onPanel ? (registering ? null : templateMatch.params.sourceTemplateId ?? null) : first?.sourceTemplateID ?? null;
@@ -88,7 +88,7 @@ export default function TemplatesPage() {
       />
       <div className="flex flex-col overflow-clip rounded-panel border bg-card md:flex-row">
         <div className={cn("min-w-0 flex-col md:flex md:w-90 md:shrink-0 md:border-r", onPanel ? "hidden" : "flex")} data-testid="templates-list-column">
-          <TemplateList groups={groups} selectedId={selectedId} />
+          <TemplateList templates={templates} selectedId={selectedId} />
         </div>
         <div className={cn("min-w-0 flex-1 flex-col md:flex", onPanel ? "flex" : "hidden")} data-testid="templates-panel-column">
           {onPanel && (
