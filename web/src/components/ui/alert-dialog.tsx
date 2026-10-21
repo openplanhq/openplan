@@ -32,10 +32,13 @@ function AlertDialogContent({ className, ...props }: React.ComponentProps<typeof
     <AlertDialogPortal>
       <AlertDialogBackdrop />
       <AlertDialogViewport>
+        {/* grid gap-4, as shadcn's base-nova AlertDialogContent has: the gap
+            between the header (title and description) and the footer's
+            buttons belongs to the popup, so every AlertDialog gets it. */}
         <AlertDialogPrimitive.Popup
           data-slot="alert-dialog-content"
           className={cn(
-            "relative w-full max-w-lg rounded-xl border bg-card p-6 text-card-foreground shadow-lg ring-1 ring-foreground/10 outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+            "relative grid w-full max-w-lg gap-4 rounded-xl border bg-card p-6 text-card-foreground shadow-lg ring-1 ring-foreground/10 outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
             className
           )}
           {...props}
