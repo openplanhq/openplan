@@ -3,5 +3,25 @@
 @import "@fontsource-variable/geist-mono";
 /* The app's theme, read only: every colour, radius and type step on the page is the app's. */
 @import "../../web/src/styles/theme.css";
+
+/* The site's own type steps, for its prose only. The app's steps are sized
+   for a dense console read up close; on a page of wide drawings and big
+   section spacing they read as captions, so headings and copy here step up
+   one scale (about 1.2 per step from 15px copy). Anything that copies the
+   app (the hero's run, chips, buttons, code) keeps the app's steps. */
+@theme {
+  --text-copy: 0.9375rem;
+  --text-copy--line-height: 1.6;
+  --text-lead: 1.0625rem;
+  --text-lead--line-height: 1.55;
+  --text-feature: 1.125rem;
+  --text-feature--line-height: 1.35;
+  --text-section: 1.875rem;
+  --text-section--line-height: 1.2;
+  --text-hero-phone: 2rem;
+  --text-hero-phone--line-height: 1.12;
+  --text-hero: 2.375rem;
+  --text-hero--line-height: 1.12;
+}
 /* The feature drawings' dot grid and animations. */
 @import "./drawings.css";
