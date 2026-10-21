@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -597,5 +598,101 @@ func TestUnauthenticatedFetchHint(t *testing.T) {
 				t.Fatalf("hint = %q, must not contain %q", hint, testCase.absent)
 			}
 		})
+	}
+}
+
+// echoingCloneGit fails a clone the way git does, naming the destination it
+// was cloning into, so a test can see whether the workspace path reaches the
+// stored error.
+type echoingCloneGit struct{}
+
+func (echoingCloneGit) Run(_ context.Context, _ string, _ []string, stdout io.Writer, _ io.Writer, _ string, args ...string) error {
+	dest := args[len(args)-1]
+	fmt.Fprintf(stdout, "Cloning into '%s'...\nfatal: Remote branch nope not found in upstream origin\n", dest)
+	return errors.New("exit status 128")
+}
+
+// The sync workspace is a server-side temp directory: it means nothing to the
+// person reading the stored error, and it differs on every attempt. Every
+// outcome and error that leaves the activity reads relative to the
+// repository instead.
+func TestSyncTemplateStripsWorkspacePathFromInvalidOutcomes(t *testing.T) {
+	t.Parallel()
+
+	brokenHCL := &fakeGit{head: "abc123", populate: func(repoPath string) error {
+		root := filepath.Join(repoPath, "modules", "vpc")
+		if err := os.MkdirAll(root, 0o700); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(root, "main.tf"), []byte("variable \"region\" {\n"), 0o600)
+	}}
+	tests := []struct {
+		name     string
+		git      gitrunner.CommandExecutor
+		rootPath string
+		want     string
+	}{
+		{name: "clone failure", git: echoingCloneGit{}, rootPath: "modules/vpc", want: "Cloning into '.'"},
+		{name: "missing root path", git: &fakeGit{head: "abc123"}, rootPath: "modules/absent", want: `root path "modules/absent"`},
+		{name: "unparseable variables", git: brokenHCL, rootPath: "modules/vpc", want: "modules/vpc/main.tf:"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			activities := NewTemplateSyncActivities(&recordingTemplateSyncStore{}, WithTemplateSyncTempRoot(t.TempDir()))
+			activities.git = gitrunner.NewLocalGitRunnerWithExecutor(test.git)
+
+			output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
+				TenantID:  domain.TenantID("tenant_123"),
+				RepoOwner: "acme",
+				RepoName:  "infra-templates",
+				SourceRef: "nope",
+				RootPath:  test.rootPath,
+			})
+			if err != nil {
+				t.Fatalf("SyncTemplate returned error: %v", err)
+			}
+			if output.Status != domain.TemplateRegistrationInvalid {
+				t.Fatalf("status = %q, want invalid", output.Status)
+			}
+			if strings.Contains(output.ErrorSummary, "openplan-template-sync-") {
+				t.Fatalf("summary = %q, must not name the sync workspace", output.ErrorSummary)
+			}
+			if !strings.Contains(output.ErrorSummary, test.want) {
+				t.Fatalf("summary = %q, want it to contain %q", output.ErrorSummary, test.want)
+			}
+		})
+	}
+}
+
+// A returned error is stored as the failed registration's summary, so it is
+// stripped too -- and still wraps its cause.
+func TestSyncTemplateStripsWorkspacePathFromReturnedError(t *testing.T) {
+	t.Parallel()
+
+	lookupErr := errors.New("resolve installation: unexpected status 503 Service Unavailable")
+	activities := NewTemplateSyncActivities(&recordingTemplateSyncStore{}, WithTemplateSyncTempRoot(t.TempDir()), WithTemplateSyncTokenSource(stubTokenSource{err: lookupErr}))
+	activities.git = gitrunner.NewLocalGitRunnerWithExecutor(echoingCloneGit{})
+
+	_, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
+		TenantID:  domain.TenantID("tenant_123"),
+		RepoOwner: "acme",
+		RepoName:  "private-infra",
+		SourceRef: "nope",
+		RootPath:  "modules/vpc",
+	})
+	if err == nil {
+		t.Fatal("SyncTemplate returned nil error; want a retryable failure")
+	}
+	if strings.Contains(err.Error(), "openplan-template-sync-") {
+		t.Fatalf("error = %q, must not name the sync workspace", err)
+	}
+	if !strings.Contains(err.Error(), "Cloning into '.'") {
+		t.Fatalf("error = %q, want git's output relative to the repository", err)
+	}
+	var gitErr *gitrunner.GitCommandError
+	if !errors.As(err, &gitErr) {
+		t.Fatalf("error = %v, want it to still wrap the git failure", err)
 	}
 }

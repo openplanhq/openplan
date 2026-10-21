@@ -87,7 +87,7 @@ func (activities *TemplateSyncActivities) RecordTemplateRegistrationStep(ctx con
 	return nil
 }
 
-func (activities *TemplateSyncActivities) SyncTemplate(ctx context.Context, input domain.TemplateSyncActivityInput) (domain.TemplateSyncActivityOutput, error) {
+func (activities *TemplateSyncActivities) SyncTemplate(ctx context.Context, input domain.TemplateSyncActivityInput) (output domain.TemplateSyncActivityOutput, err error) {
 	rootPath, err := safeTemplateRootPath(input.RootPath)
 	if err != nil {
 		return invalidTemplateSyncOutput("%v", err), nil
@@ -100,6 +100,10 @@ func (activities *TemplateSyncActivities) SyncTemplate(ctx context.Context, inpu
 	defer os.RemoveAll(workspace)
 
 	repoPath := filepath.Join(workspace, "repo")
+	// Both the invalid summary and a returned error are stored on the
+	// registration and shown to the user, so neither may carry this
+	// server-side temp path: git and the HCL parser both put it in messages.
+	defer func() { output, err = withoutRepoPath(repoPath, output, err) }()
 	repoURL, err := gitHubRepoURL(input.RepoOwner, input.RepoName)
 	if err != nil {
 		return invalidTemplateSyncOutput("%v", err), nil
@@ -275,6 +279,27 @@ func invalidTemplateSyncOutput(format string, args ...any) domain.TemplateSyncAc
 		ErrorSummary: fmt.Sprintf(format, args...),
 	}
 }
+
+// withoutRepoPath rewrites the sync's messages to read relative to the
+// repository: a file inside it loses the prefix, the clone itself becomes ".".
+func withoutRepoPath(repoPath string, output domain.TemplateSyncActivityOutput, err error) (domain.TemplateSyncActivityOutput, error) {
+	relative := strings.NewReplacer(repoPath+string(filepath.Separator), "", repoPath, ".")
+	output.ErrorSummary = relative.Replace(output.ErrorSummary)
+	if err != nil {
+		err = &repoRelativeError{message: relative.Replace(err.Error()), err: err}
+	}
+	return output, err
+}
+
+// repoRelativeError keeps the cause unwrappable while showing the rewritten
+// message.
+type repoRelativeError struct {
+	message string
+	err     error
+}
+
+func (e *repoRelativeError) Error() string { return e.message }
+func (e *repoRelativeError) Unwrap() error { return e.err }
 
 func safeTemplateRootPath(rootPath string) (string, error) {
 	rootPath = strings.TrimSpace(rootPath)
