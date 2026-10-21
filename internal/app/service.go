@@ -330,6 +330,7 @@ type Service struct {
 	TemplateRegistrations    TemplateRegistrationRepository
 	TemplateRevisionMetadata TemplateRevisionMetadataRepository
 	TemplateRevisions        TemplateRevisionRepository
+	SourceTemplates          SourceTemplateRepository
 	StackTemplateInstaller   StackTemplateInstaller
 	TemplateRunLogs          TemplateRunLogReader
 	TemplateRunLogMetadata   TemplateRunLogRepository
@@ -413,6 +414,40 @@ type RegisterTemplateCommand struct {
 	RepoName  string
 	SourceRef string
 	RootPath  string
+}
+
+// StartTemplateSyncCommand asks the app to sync a registered template again.
+type StartTemplateSyncCommand struct {
+	TenantID   domain.TenantID
+	TemplateID domain.SourceTemplateID
+}
+
+// StartedTemplateSync is a template and the sync that registering it, or
+// syncing it again, just queued. The sync is a registration row: the
+// template-registrations routes answer with it until they are retired.
+type StartedTemplateSync struct {
+	Template domain.SourceTemplate
+	Sync     domain.TemplateRegistration
+}
+
+// ListTemplatesCommand asks the app for one page of the tenant's templates.
+type ListTemplatesCommand struct {
+	TenantID domain.TenantID
+	Page     PageRequest
+}
+
+// GetTemplateCommand asks the app to read one tenant-owned template.
+type GetTemplateCommand struct {
+	TenantID   domain.TenantID
+	TemplateID domain.SourceTemplateID
+}
+
+// ListTemplateRevisionsForTemplateCommand asks the app for one page of a
+// template's revisions.
+type ListTemplateRevisionsForTemplateCommand struct {
+	TenantID   domain.TenantID
+	TemplateID domain.SourceTemplateID
+	Page       PageRequest
 }
 
 // CreateStackCommand asks the app to create a logical infrastructure stack.
@@ -618,58 +653,120 @@ type GetTemplateRevisionVariablesCommand struct {
 	TemplateRevisionID domain.TemplateRevisionID
 }
 
-// RegisterTemplate creates a pending registration attempt and dispatches its sync workflow.
-func (service *Service) RegisterTemplate(ctx context.Context, command RegisterTemplateCommand) (domain.TemplateRegistration, error) {
+// RegisterTemplate stores the template a source names, or finds the one
+// already stored for it, and queues a sync of it. Every register syncs, so
+// registering a source again retries a sync that failed (owner decision,
+// 2026-10-21). The template, its sync and the sync's intent commit together:
+// a sync never runs for a template that was not stored.
+func (service *Service) RegisterTemplate(ctx context.Context, command RegisterTemplateCommand) (StartedTemplateSync, error) {
 	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanPublishTemplate); err != nil {
-		return domain.TemplateRegistration{}, err
+		return StartedTemplateSync{}, err
 	}
 	actor, err := authenticatedActor(ctx)
 	if err != nil {
-		return domain.TemplateRegistration{}, err
+		return StartedTemplateSync{}, err
 	}
 	if err := validateRegisterTemplateCommand(command); err != nil {
-		return domain.TemplateRegistration{}, err
+		return StartedTemplateSync{}, err
 	}
 
-	registration := domain.TemplateRegistration{
-		ID:          service.RegistrationIDs.NewTemplateRegistrationID(),
-		TenantID:    command.TenantID,
-		RepoOwner:   strings.TrimSpace(command.RepoOwner),
-		RepoName:    strings.TrimSpace(command.RepoName),
-		SourceRef:   strings.TrimSpace(command.SourceRef),
-		RootPath:    filepath.Clean(strings.TrimSpace(command.RootPath)),
-		Status:      domain.TemplateRegistrationPending,
-		RequestedBy: actor,
-		RequestedAt: service.Clock.Now(),
+	source := domain.SourceTemplate{
+		TenantID:  command.TenantID,
+		RepoOwner: strings.TrimSpace(command.RepoOwner),
+		RepoName:  strings.TrimSpace(command.RepoName),
+		SourceRef: strings.TrimSpace(command.SourceRef),
+		RootPath:  filepath.Clean(strings.TrimSpace(command.RootPath)),
+		CreatedAt: service.Clock.Now(),
+	}
+	source.ID = domain.SourceTemplateIDFor(source.TenantID, source.RepoOwner, source.RepoName, source.RootPath, source.SourceRef)
+
+	var started StartedTemplateSync
+	if err := service.Work.InTx(ctx, func(ctx context.Context, repository TxRepo, enqueuer queue.Enqueuer) error {
+		template, err := repository.CreateSourceTemplate(ctx, source)
+		if err != nil {
+			return err
+		}
+		templateSync, err := service.queueTemplateSync(ctx, repository, enqueuer, template, actor)
+		if err != nil {
+			return err
+		}
+		started = StartedTemplateSync{Template: template, Sync: templateSync}
+		return nil
+	}); err != nil {
+		return StartedTemplateSync{}, fmt.Errorf("register template: %w", err)
+	}
+	return started, nil
+}
+
+// StartTemplateSync queues a sync of a registered template, to pick up a new
+// commit on its ref or retry a sync that failed.
+func (service *Service) StartTemplateSync(ctx context.Context, command StartTemplateSyncCommand) (StartedTemplateSync, error) {
+	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanPublishTemplate); err != nil {
+		return StartedTemplateSync{}, err
+	}
+	actor, err := authenticatedActor(ctx)
+	if err != nil {
+		return StartedTemplateSync{}, err
+	}
+	if err := validateTemplateCommand(command.TenantID, command.TemplateID); err != nil {
+		return StartedTemplateSync{}, err
 	}
 
-	input := domain.TemplateSyncWorkflowInput{
-		RegistrationID: registration.ID,
-		TenantID:       registration.TenantID,
-		RepoOwner:      registration.RepoOwner,
-		RepoName:       registration.RepoName,
-		SourceRef:      registration.SourceRef,
-		RootPath:       registration.RootPath,
+	template, err := service.SourceTemplates.GetSourceTemplate(ctx, command.TenantID, command.TemplateID)
+	if err != nil {
+		return StartedTemplateSync{}, fmt.Errorf("get template: %w", err)
 	}
-	payload, err := json.Marshal(StartTemplateSyncPayload(input))
+	var templateSync domain.TemplateRegistration
+	if err := service.Work.InTx(ctx, func(ctx context.Context, repository TxRepo, enqueuer queue.Enqueuer) error {
+		templateSync, err = service.queueTemplateSync(ctx, repository, enqueuer, template, actor)
+		return err
+	}); err != nil {
+		return StartedTemplateSync{}, fmt.Errorf("start template sync: %w", err)
+	}
+	return StartedTemplateSync{Template: template, Sync: templateSync}, nil
+}
+
+// queueTemplateSync records a pending sync of the template and queues the
+// workflow that runs it, inside the caller's transaction. The sync takes its
+// source from the stored template, not the request, so it clones exactly
+// what the template names.
+func (service *Service) queueTemplateSync(ctx context.Context, repository TxRepo, enqueuer queue.Enqueuer, template domain.SourceTemplate, actor domain.UserID) (domain.TemplateRegistration, error) {
+	templateSync := domain.TemplateRegistration{
+		ID:               service.RegistrationIDs.NewTemplateRegistrationID(),
+		TenantID:         template.TenantID,
+		SourceTemplateID: template.ID,
+		RepoOwner:        template.RepoOwner,
+		RepoName:         template.RepoName,
+		SourceRef:        template.SourceRef,
+		RootPath:         template.RootPath,
+		Status:           domain.TemplateRegistrationPending,
+		RequestedBy:      actor,
+		RequestedAt:      service.Clock.Now(),
+	}
+	payload, err := json.Marshal(StartTemplateSyncPayload(domain.TemplateSyncWorkflowInput{
+		RegistrationID:   templateSync.ID,
+		TenantID:         templateSync.TenantID,
+		SourceTemplateID: templateSync.SourceTemplateID,
+		RepoOwner:        templateSync.RepoOwner,
+		RepoName:         templateSync.RepoName,
+		SourceRef:        templateSync.SourceRef,
+		RootPath:         templateSync.RootPath,
+	}))
 	if err != nil {
 		return domain.TemplateRegistration{}, fmt.Errorf("encode start template sync payload: %w", err)
 	}
-	if err := service.Work.InTx(ctx, func(ctx context.Context, repository TxRepo, enqueuer queue.Enqueuer) error {
-		if err := repository.CreateTemplateRegistration(ctx, registration); err != nil {
-			return err
-		}
-		return enqueuer.Enqueue(ctx, queue.Request{
-			Kind:         KindStartTemplateSync,
-			Payload:      payload,
-			ActorSubject: string(actor),
-			TenantID:     string(registration.TenantID),
-		})
-	}); err != nil {
-		return domain.TemplateRegistration{}, fmt.Errorf("create template registration: %w", err)
+	if err := repository.CreateTemplateRegistration(ctx, templateSync); err != nil {
+		return domain.TemplateRegistration{}, err
 	}
-
-	return registration, nil
+	if err := enqueuer.Enqueue(ctx, queue.Request{
+		Kind:         KindStartTemplateSync,
+		Payload:      payload,
+		ActorSubject: string(actor),
+		TenantID:     string(templateSync.TenantID),
+	}); err != nil {
+		return domain.TemplateRegistration{}, err
+	}
+	return templateSync, nil
 }
 
 // CreateStack creates a tenant-owned infrastructure stack.
@@ -1316,6 +1413,84 @@ func (service *Service) ListTemplateRevisions(ctx context.Context, command ListT
 		return Page[domain.TemplateRevision]{}, fmt.Errorf("list template revisions: %w", err)
 	}
 	return pageFrom(templateRevisions, command.Page.Limit, templateRevisionsList, func(revision domain.TemplateRevision) cursorKey {
+		return TemplateRevisionCursor{CreatedAt: revision.CreatedAt, ID: revision.ID}
+	}), nil
+}
+
+// templatesList and templateRevisionsOfTemplateList name the cursors of the
+// templates list and of one template's revisions list.
+const (
+	templatesList                   = "templates"
+	templateRevisionsOfTemplateList = "template-revisions-of-template"
+)
+
+// ListTemplates returns one page of the tenant's templates, newest first.
+func (service *Service) ListTemplates(ctx context.Context, command ListTemplatesCommand) (Page[domain.SourceTemplate], error) {
+	if command.TenantID == "" {
+		return Page[domain.SourceTemplate]{}, fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
+	}
+	if err := validatePageRequest(command.Page); err != nil {
+		return Page[domain.SourceTemplate]{}, err
+	}
+	after, err := DecodeCursor[SourceTemplateCursor](templatesList, command.Page.Cursor)
+	if err != nil {
+		return Page[domain.SourceTemplate]{}, err
+	}
+	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanReadTemplate); err != nil {
+		return Page[domain.SourceTemplate]{}, err
+	}
+
+	templates, err := service.SourceTemplates.ListSourceTemplatesPage(ctx, command.TenantID, after, command.Page.Limit+1)
+	if err != nil {
+		return Page[domain.SourceTemplate]{}, fmt.Errorf("list templates: %w", err)
+	}
+	return pageFrom(templates, command.Page.Limit, templatesList, func(template domain.SourceTemplate) cursorKey {
+		return SourceTemplateCursor{CreatedAt: template.CreatedAt, ID: template.ID}
+	}), nil
+}
+
+// GetTemplate returns one tenant-owned template.
+func (service *Service) GetTemplate(ctx context.Context, command GetTemplateCommand) (domain.SourceTemplate, error) {
+	if err := validateTemplateCommand(command.TenantID, command.TemplateID); err != nil {
+		return domain.SourceTemplate{}, err
+	}
+	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanReadTemplate); err != nil {
+		return domain.SourceTemplate{}, err
+	}
+
+	template, err := service.SourceTemplates.GetSourceTemplate(ctx, command.TenantID, command.TemplateID)
+	if err != nil {
+		return domain.SourceTemplate{}, fmt.Errorf("get template: %w", err)
+	}
+	return template, nil
+}
+
+// ListTemplateRevisionsForTemplate returns one page of a template's
+// revisions, newest first. An unknown template is ErrNotFound, not an empty
+// page, so a caller can tell a template with no revision yet from a wrong id.
+func (service *Service) ListTemplateRevisionsForTemplate(ctx context.Context, command ListTemplateRevisionsForTemplateCommand) (Page[domain.TemplateRevision], error) {
+	if err := validateTemplateCommand(command.TenantID, command.TemplateID); err != nil {
+		return Page[domain.TemplateRevision]{}, err
+	}
+	if err := validatePageRequest(command.Page); err != nil {
+		return Page[domain.TemplateRevision]{}, err
+	}
+	after, err := DecodeCursor[TemplateRevisionCursor](templateRevisionsOfTemplateList, command.Page.Cursor)
+	if err != nil {
+		return Page[domain.TemplateRevision]{}, err
+	}
+	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanReadTemplate); err != nil {
+		return Page[domain.TemplateRevision]{}, err
+	}
+
+	if _, err := service.SourceTemplates.GetSourceTemplate(ctx, command.TenantID, command.TemplateID); err != nil {
+		return Page[domain.TemplateRevision]{}, fmt.Errorf("get template: %w", err)
+	}
+	revisions, err := service.SourceTemplates.ListTemplateRevisionsBySourcePage(ctx, command.TenantID, command.TemplateID, after, command.Page.Limit+1)
+	if err != nil {
+		return Page[domain.TemplateRevision]{}, fmt.Errorf("list template revisions: %w", err)
+	}
+	return pageFrom(revisions, command.Page.Limit, templateRevisionsOfTemplateList, func(revision domain.TemplateRevision) cursorKey {
 		return TemplateRevisionCursor{CreatedAt: revision.CreatedAt, ID: revision.ID}
 	}), nil
 }
@@ -2523,6 +2698,18 @@ func validateDiscardRunCommand(command DiscardRunCommand) error {
 		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
 	case command.RunID == "":
 		return fmt.Errorf("%w: run id is required", ErrInvalidCommand)
+	default:
+		return nil
+	}
+}
+
+// validateTemplateCommand checks the ids every command on one template names.
+func validateTemplateCommand(tenantID domain.TenantID, templateID domain.SourceTemplateID) error {
+	switch {
+	case tenantID == "":
+		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
+	case templateID == "":
+		return fmt.Errorf("%w: template id is required", ErrInvalidCommand)
 	default:
 		return nil
 	}

@@ -111,12 +111,26 @@ func TestPlatformViewerReadsTheCatalogButCannotPublishToIt(t *testing.T) {
 	service := NewService(Service{
 		TemplateRevisions:     &recordingTemplateRepository{},
 		TemplateRegistrations: &recordingTemplateRegistrationRepository{},
+		SourceTemplates:       &recordingSourceTemplateRepository{template: domain.SourceTemplate{ID: "source_template_1", TenantID: "tenant_1"}},
+		Work:                  &recordingUnitOfWork{},
 		Authorization:         newPlatformAuthorizer(t, platformViewer("viewer-subject")),
 	})
 	ctx := platformContext("viewer-subject")
 
 	if _, err := service.ListTemplateRevisions(ctx, ListTemplateRevisionsCommand{TenantID: domain.TenantID("tenant_1"), Page: FirstPage()}); err != nil {
 		t.Fatalf("ListTemplateRevisions error = %v, want nil", err)
+	}
+	if _, err := service.ListTemplates(ctx, ListTemplatesCommand{TenantID: "tenant_1", Page: FirstPage()}); err != nil {
+		t.Fatalf("ListTemplates error = %v, want nil", err)
+	}
+	if _, err := service.GetTemplate(ctx, GetTemplateCommand{TenantID: "tenant_1", TemplateID: "source_template_1"}); err != nil {
+		t.Fatalf("GetTemplate error = %v, want nil", err)
+	}
+	if _, err := service.ListTemplateRevisionsForTemplate(ctx, ListTemplateRevisionsForTemplateCommand{TenantID: "tenant_1", TemplateID: "source_template_1", Page: FirstPage()}); err != nil {
+		t.Fatalf("ListTemplateRevisionsForTemplate error = %v, want nil", err)
+	}
+	if _, err := service.StartTemplateSync(ctx, StartTemplateSyncCommand{TenantID: "tenant_1", TemplateID: "source_template_1"}); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("StartTemplateSync error = %v, want ErrForbidden", err)
 	}
 	_, err := service.RegisterTemplate(ctx, RegisterTemplateCommand{
 		TenantID:  domain.TenantID("tenant_1"),

@@ -465,7 +465,7 @@ func (server *Server) handleRegisterTemplate(response http.ResponseWriter, reque
 		return
 	}
 
-	registration, err := server.service.RegisterTemplate(request.Context(), app.RegisterTemplateCommand{
+	started, err := server.service.RegisterTemplate(request.Context(), app.RegisterTemplateCommand{
 		TenantID:  domain.TenantID(request.PathValue("tenant_id")),
 		RepoOwner: body.RepoOwner,
 		RepoName:  body.RepoName,
@@ -477,8 +477,8 @@ func (server *Server) handleRegisterTemplate(response http.ResponseWriter, reque
 		return
 	}
 
-	setLocation(response, request, "template-registrations", string(registration.ID))
-	writeJSON(response, http.StatusAccepted, newTemplateRegistrationResponse(registration))
+	setLocation(response, request, "template-registrations", string(started.Sync.ID))
+	writeJSON(response, http.StatusAccepted, newTemplateRegistrationResponse(started.Sync))
 }
 
 func (server *Server) handleListTemplateRevisions(response http.ResponseWriter, request *http.Request) {

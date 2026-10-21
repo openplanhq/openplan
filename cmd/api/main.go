@@ -52,6 +52,7 @@ type appRepositories interface {
 	app.TemplateRegistrationRepository
 	app.TemplateRevisionMetadataRepository
 	app.TemplateRevisionRepository
+	app.SourceTemplateRepository
 	app.TemplateRunLogRepository
 	app.AuditRepository
 	app.UserRepository
@@ -417,6 +418,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 		TemplateRegistrations:    store,
 		TemplateRevisionMetadata: store,
 		TemplateRevisions:        store,
+		SourceTemplates:          store,
 		TemplateRunLogs:          logReader,
 		TemplateRunLogMetadata:   store,
 		PlanChanges:              planChangeRepository(store),
