@@ -1,5 +1,6 @@
-import { ArrowLeft, Loader2, Plus, RefreshCw } from "lucide-react";
-import { Link, Outlet, useMatch } from "react-router-dom";
+import { useEffect, useRef } from "react";
+import { ArrowLeft, Info, Loader2, Plus, RefreshCw } from "lucide-react";
+import { Link, Outlet, useLocation, useMatch } from "react-router-dom";
 import { useTemplatesQuery } from "../../api/queries";
 import RequireCapability from "../../auth/RequireCapability";
 import { tenantID } from "../../config";
@@ -9,7 +10,7 @@ import PageHeader from "../../shared/PageHeader";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import { cn } from "@/lib/utils";
 import TemplateList from "./TemplateList";
-import type { TemplatesPageOutletContext } from "./templatesPageOutlet";
+import type { TemplatesLocationState, TemplatesPageOutletContext } from "./templatesPageOutlet";
 import { templatesByName } from "./templateWorkflow";
 import RequestIdNote from "../../shared/RequestIdNote";
 
@@ -29,6 +30,7 @@ export default function TemplatesPage() {
   const templatesQuery = useTemplatesQuery(tenantID);
   const boundary = useQueryErrorBoundary(templatesQuery.error);
   const templateMatch = useMatch("/templates/:sourceTemplateId/*");
+  const deleted = (useLocation().state as TemplatesLocationState | null)?.deletedTemplate ?? null;
 
   if (templatesQuery.status === "pending") {
     return (
@@ -87,7 +89,9 @@ export default function TemplatesPage() {
             </Link>
           </RequireCapability>
         }
-      />
+      >
+        {deleted !== null && <DeletedNote name={deleted} />}
+      </PageHeader>
       <div className="flex flex-col overflow-clip rounded-panel border bg-card md:flex-row">
         <div className={cn("min-w-0 flex-col md:flex md:w-90 md:shrink-0 md:border-r", onPanel ? "hidden" : "flex")} data-testid="templates-list-column">
           <TemplateList templates={templates} selectedId={selectedId} />
@@ -106,5 +110,29 @@ export default function TemplatesPage() {
         </div>
       </div>
     </section>
+  );
+}
+
+// After a delete the panel that asked for it is gone and the first template
+// left is showing, so the header says what happened, in a meta line led by
+// info, as openplan UI does where a page sends someone on. Focus moves to it:
+// the Delete that held focus has gone, and a screen reader hears the line.
+// It lasts as long as the history entry: picking a template moves on.
+function DeletedNote({ name }: { name: string }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    ref.current?.focus();
+  }, []);
+  return (
+    <p
+      ref={ref}
+      tabIndex={-1}
+      role="status"
+      className="flex items-center gap-1.5 text-meta text-muted-foreground outline-none"
+      data-testid="template-deleted"
+    >
+      <Info aria-hidden="true" className="size-3.5 shrink-0" />
+      <span className="wrap-anywhere">Deleted {name}.</span>
+    </p>
   );
 }

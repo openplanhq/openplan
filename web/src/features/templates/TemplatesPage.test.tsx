@@ -231,3 +231,20 @@ describe("TemplatesPage loading and errors", () => {
     await waitFor(() => expect(screen.getByTestId("route-access-denied")).toBeTruthy());
   });
 });
+
+describe("TemplatesPage after a delete", () => {
+  it("says which template was deleted, and moves focus there", async () => {
+    const router = renderPage(seed(), "/templates");
+    await router.navigate("/templates", { replace: true, state: { deletedTemplate: "eks-typo" } });
+
+    const note = await screen.findByTestId("template-deleted");
+    expect(note.textContent).toBe("Deleted eks-typo.");
+    expect(note.getAttribute("role")).toBe("status");
+    expect(document.activeElement).toBe(note);
+  });
+
+  it("says nothing on an ordinary visit", () => {
+    renderPage(seed(), "/templates");
+    expect(screen.queryByTestId("template-deleted")).toBeNull();
+  });
+});
