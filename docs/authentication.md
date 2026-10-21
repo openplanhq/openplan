@@ -592,9 +592,6 @@ visibility is never an authorization boundary.
 | `DELETE /v1/tenants/{tenant_id}/templates/{template_id}` | Platform `can_publish_template` |
 | `POST /v1/tenants/{tenant_id}/templates/{template_id}/syncs` | Platform `can_publish_template` |
 | `GET /v1/tenants/{tenant_id}/templates/{template_id}/revisions` | Platform `can_read_template` |
-| `POST /v1/tenants/{tenant_id}/template-registrations` | Platform `can_publish_template` |
-| `GET /v1/tenants/{tenant_id}/template-revisions` | Platform `can_read_template` |
-| `GET /v1/tenants/{tenant_id}/template-registrations/{registration_id}` | Platform `can_read_template` |
 | `GET /v1/tenants/{tenant_id}/template-revisions/{template_revision_id}/variables` | Platform `can_read_template` |
 | `POST /v1/tenants/{tenant_id}/stacks` | Global `platform-admin` or `stack-creator` |
 | `GET /v1/tenants/{tenant_id}/stacks` | Tenant stack scan with bounded OpenFGA `BatchCheck(can_view)` calls, stopping once the page is full; `platform-admin` bypasses the ordinary stack list check |

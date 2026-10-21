@@ -410,32 +410,6 @@ func TestListStacksPassesTenantAndNormalizesNilStacks(t *testing.T) {
 	}
 }
 
-func TestListTemplateRevisionsPassesTenantAndNormalizesNilTemplateRevisions(t *testing.T) {
-	t.Parallel()
-
-	templates := &recordingTemplateRepository{templates: nil}
-	service := NewService(Service{TemplateRevisions: templates, Authorization: testPlatformAuthorizer(t)})
-
-	page, err := service.ListTemplateRevisions(authenticatedContext(), ListTemplateRevisionsCommand{
-		TenantID: domain.TenantID("tenant_123"),
-		Page:     FirstPage(),
-	})
-	got := page.Items
-	if err != nil {
-		t.Fatalf("ListTemplateRevisions returned error: %v", err)
-	}
-
-	if templates.gotListTenantID != domain.TenantID("tenant_123") {
-		t.Fatalf("tenant list lookup = %q, want tenant_123", templates.gotListTenantID)
-	}
-	if got == nil {
-		t.Fatal("templates = nil, want empty slice")
-	}
-	if len(got) != 0 {
-		t.Fatalf("len(templates) = %d, want 0", len(got))
-	}
-}
-
 func TestAddTemplateToStackValidatesVariablesAndPersistsStackTemplate(t *testing.T) {
 	t.Parallel()
 
@@ -1576,11 +1550,10 @@ func TestRegisterTemplateCreatesPendingRegistrationAndDispatchesWorkflow(t *test
 	work := &recordingUnitOfWork{templateRegistrations: registrations}
 
 	service := NewService(Service{
-		Authorization:         testPlatformAuthorizer(t),
-		Work:                  work,
-		TemplateRegistrations: registrations,
-		RegistrationIDs:       fixedTemplateRegistrationIDGenerator{id: domain.TemplateRegistrationID("template_registration_123")},
-		Clock:                 fixedClock{now: now},
+		Authorization:   testPlatformAuthorizer(t),
+		Work:            work,
+		RegistrationIDs: fixedTemplateRegistrationIDGenerator{id: domain.TemplateRegistrationID("template_registration_123")},
+		Clock:           fixedClock{now: now},
 	})
 
 	started, err := service.RegisterTemplate(ctx, RegisterTemplateCommand{
@@ -1643,8 +1616,7 @@ func TestRegisterTemplateRejectsMissingSourceRef(t *testing.T) {
 	t.Parallel()
 
 	service := NewService(Service{
-		Authorization:         testPlatformAuthorizer(t),
-		TemplateRegistrations: &recordingTemplateRegistrationRepository{},
+		Authorization: testPlatformAuthorizer(t),
 	})
 
 	_, err := service.RegisterTemplate(authenticatedContext(), RegisterTemplateCommand{
@@ -1665,10 +1637,9 @@ func TestRegisterTemplateDoesNotDispatchWhenPersistenceFails(t *testing.T) {
 	registrations := &recordingTemplateRegistrationRepository{createErr: persistErr}
 	work := &recordingUnitOfWork{templateRegistrations: registrations}
 	service := NewService(Service{
-		Authorization:         testPlatformAuthorizer(t),
-		Work:                  work,
-		TemplateRegistrations: registrations,
-		RegistrationIDs:       fixedTemplateRegistrationIDGenerator{id: domain.TemplateRegistrationID("template_registration_123")},
+		Authorization:   testPlatformAuthorizer(t),
+		Work:            work,
+		RegistrationIDs: fixedTemplateRegistrationIDGenerator{id: domain.TemplateRegistrationID("template_registration_123")},
 	})
 
 	_, err := service.RegisterTemplate(authenticatedContext(), RegisterTemplateCommand{
@@ -2217,34 +2188,6 @@ func TestGetTemplateRunRejectsMissingRunID(t *testing.T) {
 	})
 	if !errors.Is(err, ErrInvalidCommand) {
 		t.Fatalf("error = %v, want ErrInvalidCommand", err)
-	}
-}
-
-func TestGetTemplateRegistrationReturnsTenantScopedRegistration(t *testing.T) {
-	t.Parallel()
-
-	registrations := &recordingTemplateRegistrationRepository{
-		registration: domain.TemplateRegistration{
-			ID:       domain.TemplateRegistrationID("template_registration_123"),
-			TenantID: domain.TenantID("tenant_123"),
-			Status:   domain.TemplateRegistrationCompleted,
-		},
-	}
-	service := NewService(Service{TemplateRegistrations: registrations, Authorization: testPlatformAuthorizer(t)})
-
-	registration, err := service.GetTemplateRegistration(authenticatedContext(), GetTemplateRegistrationCommand{
-		TenantID:       domain.TenantID("tenant_123"),
-		RegistrationID: domain.TemplateRegistrationID("template_registration_123"),
-	})
-	if err != nil {
-		t.Fatalf("GetTemplateRegistration returned error: %v", err)
-	}
-
-	if registration.ID != domain.TemplateRegistrationID("template_registration_123") {
-		t.Fatalf("registration ID = %q, want template_registration_123", registration.ID)
-	}
-	if registrations.gotGetTenantID != domain.TenantID("tenant_123") {
-		t.Fatalf("tenant lookup = %q, want tenant_123", registrations.gotGetTenantID)
 	}
 }
 
@@ -3150,14 +3093,8 @@ func (repository *recordingTemplateRunLogRepository) ListTemplateRunLogs(_ conte
 }
 
 type recordingTemplateRegistrationRepository struct {
-	created        domain.TemplateRegistration
-	registration   domain.TemplateRegistration
-	gotGetTenantID domain.TenantID
-	gotGetID       domain.TemplateRegistrationID
-	createErr      error
-	getErr         error
-	statusInput    domain.TemplateRegistrationStatusActivityInput
-	statusErr      error
+	created   domain.TemplateRegistration
+	createErr error
 }
 
 func (repository *recordingTemplateRegistrationRepository) CreateTemplateRegistration(_ context.Context, registration domain.TemplateRegistration) error {
@@ -3165,23 +3102,6 @@ func (repository *recordingTemplateRegistrationRepository) CreateTemplateRegistr
 		return repository.createErr
 	}
 	repository.created = registration
-	return nil
-}
-
-func (repository *recordingTemplateRegistrationRepository) GetTemplateRegistration(_ context.Context, tenantID domain.TenantID, id domain.TemplateRegistrationID) (domain.TemplateRegistration, error) {
-	repository.gotGetTenantID = tenantID
-	repository.gotGetID = id
-	if repository.getErr != nil {
-		return domain.TemplateRegistration{}, repository.getErr
-	}
-	return repository.registration, nil
-}
-
-func (repository *recordingTemplateRegistrationRepository) RecordTemplateRegistrationStatus(_ context.Context, input domain.TemplateRegistrationStatusActivityInput) error {
-	if repository.statusErr != nil {
-		return repository.statusErr
-	}
-	repository.statusInput = input
 	return nil
 }
 
@@ -3306,25 +3226,6 @@ func (repository *recordingTemplateRepository) ListTemplateRevisions(_ context.C
 	return repository.templates, nil
 }
 
-// ListTemplateRevisionsPage pages templates, which tests give newest first.
-func (repository *recordingTemplateRepository) ListTemplateRevisionsPage(_ context.Context, tenantID domain.TenantID, after *TemplateRevisionCursor, limit int) ([]domain.TemplateRevision, error) {
-	repository.gotListTenantID = tenantID
-	if repository.listErr != nil {
-		return nil, repository.listErr
-	}
-	start := 0
-	if after != nil {
-		for i, revision := range repository.templates {
-			if revision.ID == after.ID {
-				start = i + 1
-				break
-			}
-		}
-	}
-	end := min(start+limit, len(repository.templates))
-	return append([]domain.TemplateRevision{}, repository.templates[start:end]...), nil
-}
-
 func (repository *recordingTemplateRepository) GetTemplateRevisionVariables(_ context.Context, tenantID domain.TenantID, templateRevisionID domain.TemplateRevisionID) ([]domain.TemplateVariable, error) {
 	repository.gotVariablesTenantID = tenantID
 	repository.gotVariablesTemplateRevisionID = templateRevisionID
@@ -3419,7 +3320,7 @@ func (clock fixedClock) Now() time.Time {
 type recordingUnitOfWork struct {
 	stacks                StackRepository
 	templateRuns          TemplateRunRepository
-	templateRegistrations TemplateRegistrationRepository
+	templateRegistrations *recordingTemplateRegistrationRepository
 	audits                []domain.SecurityAuditEvent
 	requests              []queue.Request
 	err                   error
@@ -3513,11 +3414,10 @@ func TestRegisterTemplatePairsRegistrationWithSyncIntentInTransaction(t *testing
 	registrations := &recordingTemplateRegistrationRepository{}
 	work := &recordingUnitOfWork{templateRegistrations: registrations}
 	service := NewService(Service{
-		Authorization:         testPlatformAuthorizer(t),
-		Work:                  work,
-		TemplateRegistrations: registrations,
-		RegistrationIDs:       fixedTemplateRegistrationIDGenerator{id: "registration_123"},
-		Clock:                 fixedClock{now: time.Date(2026, 8, 11, 10, 0, 0, 0, time.UTC)},
+		Authorization:   testPlatformAuthorizer(t),
+		Work:            work,
+		RegistrationIDs: fixedTemplateRegistrationIDGenerator{id: "registration_123"},
+		Clock:           fixedClock{now: time.Date(2026, 8, 11, 10, 0, 0, 0, time.UTC)},
 	})
 
 	started, err := service.RegisterTemplate(authenticatedContext(), RegisterTemplateCommand{

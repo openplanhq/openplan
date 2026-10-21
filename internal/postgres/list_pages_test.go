@@ -48,44 +48,6 @@ func TestListStacksPageQuery(t *testing.T) {
 	assert.Len(t, ids(""), 4, "no q is every stack")
 }
 
-func TestListTemplateRevisionsPageKeyset(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	store := NewStore(openMigratedTestPool(t, ctx))
-	seedSourceTemplate(t, ctx, store, "tenant_123", "source_1")
-	at := time.Date(2026, 10, 17, 9, 0, 0, 0, time.UTC)
-	for i := range 5 {
-		_, err := store.UpsertTemplateRevisionWithVariables(ctx, domain.TemplateRevision{
-			ID: domain.TemplateRevisionID(fmt.Sprintf("rev_%d", i)), TenantID: "tenant_123", RepoOwner: "acme",
-			RepoName: "infra", SourceRef: "main", ResolvedCommitSHA: fmt.Sprintf("sha_%d", i), RootPath: ".",
-			SourceTemplateID: "source_1", Name: "n", Status: domain.TemplateRevisionActive,
-			// Two share a created_at, so the id has to break the tie.
-			CreatedAt: at.Add(-time.Duration(i/2*2) * time.Minute),
-		}, nil)
-		require.NoError(t, err)
-	}
-
-	var seen []domain.TemplateRevisionID
-	var after *app.TemplateRevisionCursor
-	for range 5 {
-		page, err := store.ListTemplateRevisionsPage(ctx, "tenant_123", after, 2)
-		require.NoError(t, err)
-		if len(page) == 0 {
-			break
-		}
-		for _, revision := range page {
-			seen = append(seen, revision.ID)
-		}
-		last := page[len(page)-1]
-		after = &app.TemplateRevisionCursor{CreatedAt: last.CreatedAt, ID: last.ID}
-	}
-	assert.Equal(t, []domain.TemplateRevisionID{"rev_1", "rev_0", "rev_3", "rev_2", "rev_4"}, seen)
-
-	_, err := store.ListTemplateRevisionsPage(ctx, "tenant_123", nil, 0)
-	require.Error(t, err)
-}
-
 func TestListTemplateRunsPageAndGetByNumber(t *testing.T) {
 	t.Parallel()
 

@@ -1,6 +1,6 @@
 $kind: http-request
 description: |-
-  The asynchronous work the caller queued — template registration,
+  The asynchronous work the caller queued — template syncs,
   template runs. Scoped by actor alone, so no new permission concept is
   involved: a caller only ever sees their own items. Newest first, a
   page at a time.

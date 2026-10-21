@@ -128,24 +128,6 @@ func TestTemplateRunLogResponseSizeBytes(t *testing.T) {
 	assert.NotContains(t, jsonKeys(t, newTemplateRunLogResponse(live)), "size_bytes")
 }
 
-func TestTemplateRegistrationResponseFields(t *testing.T) {
-	t.Parallel()
-
-	at := time.Date(2026, 10, 17, 9, 0, 0, 0, time.UTC)
-	response := newTemplateRegistrationResponse(domain.TemplateRegistration{
-		ID: "reg-1", TenantID: "tenant-1", RepoOwner: "o", RepoName: "r", SourceRef: "main",
-		RootPath: ".", Status: domain.TemplateRegistrationCompleted, Step: domain.TemplateRegistrationStepSyncing,
-		TemplateRevisionID: "rev-1", ResolvedCommitSHA: "abc", RequestedBy: "alice",
-		RequestedAt: at, CompletedAt: at, ErrorSummary: "none",
-	})
-
-	assert.Equal(t, []string{
-		"completed_at", "error_summary", "id", "repo_name", "repo_owner", "requested_at",
-		"requested_by", "resolved_commit_sha", "root_path", "source_ref", "status", "step",
-		"template_revision_id", "tenant_id",
-	}, jsonKeys(t, response))
-}
-
 func TestTemplateRevisionResponseFields(t *testing.T) {
 	t.Parallel()
 

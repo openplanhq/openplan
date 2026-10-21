@@ -71,7 +71,7 @@ type StackPageCursor struct {
 
 func (cursor StackPageCursor) Valid() bool { return !cursor.CreatedAt.IsZero() && cursor.ID != "" }
 
-// TemplateRevisionCursor is a position in the template revisions list,
+// TemplateRevisionCursor is a position in a template's revisions list,
 // newest first.
 type TemplateRevisionCursor struct {
 	CreatedAt time.Time                 `json:"created_at"`
@@ -167,20 +167,10 @@ type TemplateRunRepository interface {
 	ListTemplateRunExecutions(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) ([]domain.TemplateRunWorkflowExecution, error)
 }
 
-// TemplateRegistrationRepository persists template registration attempts.
-type TemplateRegistrationRepository interface {
-	CreateTemplateRegistration(ctx context.Context, registration domain.TemplateRegistration) error
-	GetTemplateRegistration(ctx context.Context, tenantID domain.TenantID, id domain.TemplateRegistrationID) (domain.TemplateRegistration, error)
-	RecordTemplateRegistrationStatus(ctx context.Context, input domain.TemplateRegistrationStatusActivityInput) error
-}
-
 // TemplateRevisionRepository persists immutable template metadata and inferred variables.
 type TemplateRevisionRepository interface {
 	UpsertTemplateRevisionWithVariables(ctx context.Context, templateRevision domain.TemplateRevision, variables []domain.TemplateVariable) (domain.TemplateRevision, error)
 	ListTemplateRevisions(ctx context.Context, tenantID domain.TenantID) ([]domain.TemplateRevision, error)
-	// ListTemplateRevisionsPage returns up to limit revisions after the
-	// cursor, newest first.
-	ListTemplateRevisionsPage(ctx context.Context, tenantID domain.TenantID, after *TemplateRevisionCursor, limit int) ([]domain.TemplateRevision, error)
 	GetTemplateRevisionVariables(ctx context.Context, tenantID domain.TenantID, templateRevisionID domain.TemplateRevisionID) ([]domain.TemplateVariable, error)
 }
 
@@ -334,7 +324,6 @@ type Service struct {
 	Credentials              CredentialRepository
 	CredentialEncryptor      CredentialEncryptor
 	TemplateRuns             TemplateRunRepository
-	TemplateRegistrations    TemplateRegistrationRepository
 	TemplateRevisionMetadata TemplateRevisionMetadataRepository
 	TemplateRevisions        TemplateRevisionRepository
 	SourceTemplates          SourceTemplateRepository
@@ -430,8 +419,8 @@ type StartTemplateSyncCommand struct {
 }
 
 // StartedTemplateSync is a template and the sync that registering it, or
-// syncing it again, just queued. The sync is a registration row: the
-// template-registrations routes answer with it until they are retired.
+// syncing it again, just queued. The sync is the registration row the
+// sync workflow records its progress into.
 type StartedTemplateSync struct {
 	Template domain.SourceTemplate
 	Sync     domain.TemplateRegistration
@@ -602,12 +591,6 @@ type ListStacksCommand struct {
 	Query string
 }
 
-// ListTemplateRevisionsCommand asks the app to list tenant-owned registered template revisions.
-type ListTemplateRevisionsCommand struct {
-	TenantID domain.TenantID
-	Page     PageRequest
-}
-
 // GetTemplateRunCommand asks the app to read one tenant-owned run.
 type GetTemplateRunCommand struct {
 	TenantID domain.TenantID
@@ -652,12 +635,6 @@ type GetTemplateRunLogCommand struct {
 type ListTemplateRunLogsCommand struct {
 	TenantID domain.TenantID
 	RunID    domain.TemplateRunID
-}
-
-// GetTemplateRegistrationCommand asks the app to read one tenant-owned registration attempt.
-type GetTemplateRegistrationCommand struct {
-	TenantID       domain.TenantID
-	RegistrationID domain.TemplateRegistrationID
 }
 
 // GetTemplateRevisionVariablesCommand asks the app to read inferred variables for one tenant-owned template revision.
@@ -1403,32 +1380,6 @@ func (service *Service) ListStacks(ctx context.Context, command ListStacksComman
 	return page, nil
 }
 
-// templateRevisionsList names the template revisions list's cursors.
-const templateRevisionsList = "template-revisions"
-
-// ListTemplateRevisions returns one page of the tenant's registered template
-// revisions, newest first.
-func (service *Service) ListTemplateRevisions(ctx context.Context, command ListTemplateRevisionsCommand) (Page[domain.TemplateRevision], error) {
-	if err := validateListTemplateRevisionsCommand(command); err != nil {
-		return Page[domain.TemplateRevision]{}, err
-	}
-	after, err := DecodeCursor[TemplateRevisionCursor](templateRevisionsList, command.Page.Cursor)
-	if err != nil {
-		return Page[domain.TemplateRevision]{}, err
-	}
-	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanReadTemplate); err != nil {
-		return Page[domain.TemplateRevision]{}, err
-	}
-
-	templateRevisions, err := service.TemplateRevisions.ListTemplateRevisionsPage(ctx, command.TenantID, after, command.Page.Limit+1)
-	if err != nil {
-		return Page[domain.TemplateRevision]{}, fmt.Errorf("list template revisions: %w", err)
-	}
-	return pageFrom(templateRevisions, command.Page.Limit, templateRevisionsList, func(revision domain.TemplateRevision) cursorKey {
-		return TemplateRevisionCursor{CreatedAt: revision.CreatedAt, ID: revision.ID}
-	}), nil
-}
-
 // templatesList and templateRevisionsOfTemplateList name the cursors of the
 // templates list and of one template's revisions list.
 const (
@@ -1523,23 +1474,6 @@ func (service *Service) ListTemplateRevisionsForTemplate(ctx context.Context, co
 	return pageFrom(revisions, command.Page.Limit, templateRevisionsOfTemplateList, func(revision domain.TemplateRevision) cursorKey {
 		return TemplateRevisionCursor{CreatedAt: revision.CreatedAt, ID: revision.ID}
 	}), nil
-}
-
-// GetTemplateRegistration returns one tenant-owned registration attempt.
-func (service *Service) GetTemplateRegistration(ctx context.Context, command GetTemplateRegistrationCommand) (domain.TemplateRegistration, error) {
-	if err := validateGetTemplateRegistrationCommand(command); err != nil {
-		return domain.TemplateRegistration{}, err
-	}
-	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanReadTemplate); err != nil {
-		return domain.TemplateRegistration{}, err
-	}
-
-	registration, err := service.TemplateRegistrations.GetTemplateRegistration(ctx, command.TenantID, command.RegistrationID)
-	if err != nil {
-		return domain.TemplateRegistration{}, fmt.Errorf("get template registration: %w", err)
-	}
-
-	return registration, nil
 }
 
 // PlatformCapabilities answers the global half of GET /v1/me from OpenFGA.
@@ -2621,13 +2555,6 @@ func validateListStacksCommand(command ListStacksCommand) error {
 	return errors.Join(problems...)
 }
 
-func validateListTemplateRevisionsCommand(command ListTemplateRevisionsCommand) error {
-	if command.TenantID == "" {
-		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
-	}
-	return validatePageRequest(command.Page)
-}
-
 func validateAddTemplateToStackCommand(command AddTemplateToStackCommand) error {
 	switch {
 	case command.TenantID == "":
@@ -2740,17 +2667,6 @@ func validateTemplateCommand(tenantID domain.TenantID, templateID domain.SourceT
 		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
 	case templateID == "":
 		return fmt.Errorf("%w: template id is required", ErrInvalidCommand)
-	default:
-		return nil
-	}
-}
-
-func validateGetTemplateRegistrationCommand(command GetTemplateRegistrationCommand) error {
-	switch {
-	case command.TenantID == "":
-		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
-	case command.RegistrationID == "":
-		return fmt.Errorf("%w: template registration id is required", ErrInvalidCommand)
 	default:
 		return nil
 	}

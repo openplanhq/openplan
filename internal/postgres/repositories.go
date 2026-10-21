@@ -17,10 +17,6 @@ import (
 	"github.com/vishu42/openplan/internal/domain"
 )
 
-func (store *Store) CreateTemplateRegistration(ctx context.Context, registration domain.TemplateRegistration) error {
-	return createTemplateRegistration(ctx, store.pool, registration)
-}
-
 func createTemplateRegistration(ctx context.Context, exec pgxExecutor, registration domain.TemplateRegistration) error {
 	_, err := exec.Exec(ctx, `
 		insert into template_registrations (
@@ -162,58 +158,6 @@ func scanCredentials(rows credentialRows) ([]domain.CredentialSet, error) {
 		return nil, fmt.Errorf("iterate credentials: %w", err)
 	}
 	return credentials, nil
-}
-
-func (store *Store) GetTemplateRegistration(ctx context.Context, tenantID domain.TenantID, id domain.TemplateRegistrationID) (domain.TemplateRegistration, error) {
-	var registration domain.TemplateRegistration
-	var completedAt sql.NullTime
-	err := store.pool.QueryRow(ctx, `
-		select
-			id,
-			tenant_id,
-			repo_owner,
-			repo_name,
-			source_ref,
-			root_path,
-			status,
-			step,
-			template_revision_id,
-			resolved_commit_sha,
-			requested_by,
-			requested_at,
-			completed_at,
-			error_summary,
-			coalesce(source_template_id, '')
-		from template_registrations
-		where tenant_id = $1
-			and id = $2
-	`, tenantID, id).Scan(
-		&registration.ID,
-		&registration.TenantID,
-		&registration.RepoOwner,
-		&registration.RepoName,
-		&registration.SourceRef,
-		&registration.RootPath,
-		&registration.Status,
-		&registration.Step,
-		&registration.TemplateRevisionID,
-		&registration.ResolvedCommitSHA,
-		&registration.RequestedBy,
-		&registration.RequestedAt,
-		&completedAt,
-		&registration.ErrorSummary,
-		&registration.SourceTemplateID,
-	)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.TemplateRegistration{}, app.ErrNotFound
-	}
-	if err != nil {
-		return domain.TemplateRegistration{}, fmt.Errorf("get template registration: %w", err)
-	}
-	if completedAt.Valid {
-		registration.CompletedAt = completedAt.Time
-	}
-	return registration, nil
 }
 
 // RecordTemplateRegistrationStep records the step a running sync has started.
@@ -444,31 +388,6 @@ func (store *Store) GetTemplateRevisionVariables(ctx context.Context, tenantID d
 
 // ListTemplateRevisions returns every revision of the tenant, newest first.
 func (store *Store) ListTemplateRevisions(ctx context.Context, tenantID domain.TenantID) ([]domain.TemplateRevision, error) {
-	return store.listTemplateRevisions(ctx, tenantID, nil, 0)
-}
-
-// ListTemplateRevisionsPage returns up to limit revisions after the cursor,
-// newest first.
-func (store *Store) ListTemplateRevisionsPage(ctx context.Context, tenantID domain.TenantID, after *app.TemplateRevisionCursor, limit int) ([]domain.TemplateRevision, error) {
-	if limit <= 0 {
-		return nil, fmt.Errorf("template revision page limit must be positive")
-	}
-	return store.listTemplateRevisions(ctx, tenantID, after, limit)
-}
-
-// listTemplateRevisions reads from after, newest first; limit 0 is no limit,
-// which Postgres spells "limit null".
-func (store *Store) listTemplateRevisions(ctx context.Context, tenantID domain.TenantID, after *app.TemplateRevisionCursor, limit int) ([]domain.TemplateRevision, error) {
-	var afterCreatedAt any
-	var afterID domain.TemplateRevisionID
-	if after != nil {
-		afterCreatedAt = after.CreatedAt
-		afterID = after.ID
-	}
-	var limitOrNull any
-	if limit > 0 {
-		limitOrNull = limit
-	}
 	rows, err := store.pool.Query(ctx, `
 		select
 			id,
@@ -486,10 +405,8 @@ func (store *Store) listTemplateRevisions(ctx context.Context, tenantID domain.T
 			created_at
 		from template_revisions
 		where tenant_id = $1
-			and ($2::timestamptz is null or (created_at, id) < ($2, $3))
 		order by created_at desc, id desc
-		limit $4::integer
-	`, tenantID, afterCreatedAt, afterID, limitOrNull)
+	`, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("list template revisions: %w", err)
 	}

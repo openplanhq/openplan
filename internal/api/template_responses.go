@@ -153,23 +153,6 @@ type templateRunLogResponse struct {
 	UploadedAt  time.Time `json:"uploaded_at,omitzero"`
 }
 
-type templateRegistrationResponse struct {
-	ID                 string    `json:"id"`
-	TenantID           string    `json:"tenant_id"`
-	RepoOwner          string    `json:"repo_owner"`
-	RepoName           string    `json:"repo_name"`
-	SourceRef          string    `json:"source_ref"`
-	RootPath           string    `json:"root_path"`
-	Status             string    `json:"status"`
-	Step               string    `json:"step"`
-	TemplateRevisionID string    `json:"template_revision_id"`
-	ResolvedCommitSHA  string    `json:"resolved_commit_sha"`
-	RequestedBy        string    `json:"requested_by"`
-	RequestedAt        time.Time `json:"requested_at"`
-	CompletedAt        time.Time `json:"completed_at,omitzero"`
-	ErrorSummary       string    `json:"error_summary"`
-}
-
 // templateResponse is a registered source. Name, description and tags are
 // its latest revision's; before the first sync records one, the name is the
 // fallback the sync would use and the revision id is "". LatestSync is null
@@ -203,7 +186,7 @@ type latestSyncResponse struct {
 type templateRevisionResponse struct {
 	ID       string `json:"id"`
 	TenantID string `json:"tenant_id"`
-	// SourceTemplateID is what the web groups a template's revisions by.
+	// SourceTemplateID names the template the revision belongs to.
 	SourceTemplateID  string    `json:"source_template_id"`
 	RepoOwner         string    `json:"repo_owner"`
 	RepoName          string    `json:"repo_name"`
@@ -297,25 +280,6 @@ func newTemplateRunLogResponse(log domain.TemplateRunLog) templateRunLogResponse
 		ContentType: log.ContentType,
 		SizeBytes:   size,
 		UploadedAt:  log.UploadedAt,
-	}
-}
-
-func newTemplateRegistrationResponse(registration domain.TemplateRegistration) templateRegistrationResponse {
-	return templateRegistrationResponse{
-		ID:                 string(registration.ID),
-		TenantID:           string(registration.TenantID),
-		RepoOwner:          registration.RepoOwner,
-		RepoName:           registration.RepoName,
-		SourceRef:          registration.SourceRef,
-		RootPath:           registration.RootPath,
-		Status:             string(registration.Status),
-		Step:               string(registration.Step),
-		TemplateRevisionID: string(registration.TemplateRevisionID),
-		ResolvedCommitSHA:  registration.ResolvedCommitSHA,
-		RequestedBy:        string(registration.RequestedBy),
-		RequestedAt:        registration.RequestedAt,
-		CompletedAt:        registration.CompletedAt,
-		ErrorSummary:       registration.ErrorSummary,
 	}
 }
 

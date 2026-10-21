@@ -176,14 +176,7 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	// Lists one template's revisions, newest first, a page at a time.
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/templates/{template_id}/revisions", server.handleListTemplateRevisionsForTemplate)
 
-	// Template revision registration routes, retired once the web reads
-	// templates.
-	// Starts async registration for a public GitHub Terraform template source.
-	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/template-registrations", server.handleRegisterTemplate)
-	// Lists registered template revision metadata for the tenant.
-	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/template-revisions", server.handleListTemplateRevisions)
-	// Reads the current state of a template registration attempt.
-	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/template-registrations/{registration_id}", server.handleGetTemplateRegistration)
+	// Template revision routes.
 	// Lists variables inferred from an immutable registered template revision.
 	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/template-revisions/{template_revision_id}/variables", server.handleGetTemplateRevisionVariables)
 
@@ -581,58 +574,6 @@ func (server *Server) handleListTemplateRevisionsForTemplate(response http.Respo
 	}
 
 	writeJSON(response, http.StatusOK, newListResponse(mapItems(revisions.Items, newTemplateRevisionResponse), revisions.NextCursor))
-}
-
-func (server *Server) handleRegisterTemplate(response http.ResponseWriter, request *http.Request) {
-	var body registerTemplateRequest
-	if !decodeRequestBody(response, request, &body) {
-		return
-	}
-
-	started, err := server.service.RegisterTemplate(request.Context(), app.RegisterTemplateCommand{
-		TenantID:  domain.TenantID(request.PathValue("tenant_id")),
-		RepoOwner: body.RepoOwner,
-		RepoName:  body.RepoName,
-		SourceRef: body.SourceRef,
-		RootPath:  body.RootPath,
-	})
-	if err != nil {
-		writeAppError(response, err)
-		return
-	}
-
-	setLocation(response, request, "template-registrations", string(started.Sync.ID))
-	writeJSON(response, http.StatusAccepted, newTemplateRegistrationResponse(started.Sync))
-}
-
-func (server *Server) handleListTemplateRevisions(response http.ResponseWriter, request *http.Request) {
-	page, ok := readPageRequest(response, request)
-	if !ok {
-		return
-	}
-	templateRevisions, err := server.service.ListTemplateRevisions(request.Context(), app.ListTemplateRevisionsCommand{
-		TenantID: domain.TenantID(request.PathValue("tenant_id")),
-		Page:     page,
-	})
-	if err != nil {
-		writeAppError(response, err)
-		return
-	}
-
-	writeJSON(response, http.StatusOK, newListResponse(mapItems(templateRevisions.Items, newTemplateRevisionResponse), templateRevisions.NextCursor))
-}
-
-func (server *Server) handleGetTemplateRegistration(response http.ResponseWriter, request *http.Request) {
-	registration, err := server.service.GetTemplateRegistration(request.Context(), app.GetTemplateRegistrationCommand{
-		TenantID:       domain.TenantID(request.PathValue("tenant_id")),
-		RegistrationID: domain.TemplateRegistrationID(request.PathValue("registration_id")),
-	})
-	if err != nil {
-		writeAppError(response, err)
-		return
-	}
-
-	writeJSON(response, http.StatusOK, newTemplateRegistrationResponse(registration))
 }
 
 func (server *Server) handleGetTemplateRevisionVariables(response http.ResponseWriter, request *http.Request) {

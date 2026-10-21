@@ -145,9 +145,6 @@ func TestRunWiresStoreAndService(t *testing.T) {
 	if deps.service.TemplateRuns != deps.store {
 		t.Fatal("service TemplateRuns is not the store")
 	}
-	if deps.service.TemplateRegistrations != deps.store {
-		t.Fatal("service TemplateRegistrations is not the store")
-	}
 	if deps.service.TemplateRevisionMetadata != deps.store {
 		t.Fatal("service TemplateRevisionMetadata is not the store")
 	}
@@ -895,10 +892,6 @@ func (recordingStore) ListTemplateRevisions(context.Context, domain.TenantID) ([
 	return nil, nil
 }
 
-func (recordingStore) ListTemplateRevisionsPage(context.Context, domain.TenantID, *app.TemplateRevisionCursor, int) ([]domain.TemplateRevision, error) {
-	return nil, nil
-}
-
 func (recordingStore) CreateTemplateRun(context.Context, domain.TemplateRun) (int, error) {
 	return 0, nil
 }
@@ -977,10 +970,6 @@ func (recordingStore) GetTemplateRunLog(context.Context, domain.TenantID, domain
 
 func (recordingStore) ListTemplateRunLogs(context.Context, domain.TenantID, domain.TemplateRunID) ([]domain.TemplateRunLog, error) {
 	return nil, nil
-}
-
-func (recordingStore) GetTemplateRegistration(context.Context, domain.TenantID, domain.TemplateRegistrationID) (domain.TemplateRegistration, error) {
-	return domain.TemplateRegistration{}, nil
 }
 
 func (recordingStore) RecordTemplateRegistrationStatus(context.Context, domain.TemplateRegistrationStatusActivityInput) error {

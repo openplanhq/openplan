@@ -12,6 +12,9 @@ queryParams:
       integer, a `400` (`invalid-query`).
 scripts:
   - type: afterResponse
-    code: pm.test('status is 200', () => pm.response.to.have.status(200));
+    code: |-
+      pm.test('status is 200', () => pm.response.to.have.status(200));
+      const revisions = pm.response.json().items;
+      if (!pm.environment.get('template_revision_id') && revisions.length) { pm.environment.set('template_revision_id', revisions[0].id); }
     language: text/javascript
 order: 6000

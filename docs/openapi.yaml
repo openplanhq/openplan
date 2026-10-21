@@ -514,97 +514,6 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
 
-  /v1/tenants/{tenant_id}/template-registrations:
-    parameters:
-      - $ref: "#/components/parameters/TenantID"
-    post:
-      tags: [Templates]
-      summary: Register a template revision
-      description: |
-        Points openplan at a GitHub repository and a revision, and starts an
-        asynchronous registration: resolve the ref to a commit, fetch the
-        source, and infer the root module's input variables.
-
-        Returns `202` with a registration record, not a revision. Poll
-        `GET /v1/tenants/{tenant_id}/template-registrations/{registration_id}`
-        until its `status` is terminal; on `completed` it carries the
-        `template_revision_id` the rest of the API takes.
-      operationId: createTemplateRegistration
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/RegisterTemplateRevisionRequest" }
-            example:
-              repo_owner: vishu42
-              repo_name: terraform-modules
-              source_ref: v1.4.0
-              root_path: modules/vpc
-      responses:
-        "202":
-          description: Registration accepted and queued.
-          headers:
-            Location:
-              description: Where to poll it, `/v1/tenants/{tenant_id}/template-registrations/{registration_id}`.
-              schema: { type: string }
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/TemplateRegistration" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "413": { $ref: "#/components/responses/RequestTooLarge" }
-        "422": { $ref: "#/components/responses/ValidationFailed" }
-        "500": { $ref: "#/components/responses/InternalError" }
-
-  /v1/tenants/{tenant_id}/template-revisions:
-    parameters:
-      - $ref: "#/components/parameters/TenantID"
-    get:
-      tags: [Templates]
-      summary: List registered template revisions
-      description: Newest first, a page at a time.
-      operationId: listTemplateRevisions
-      parameters:
-        - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Cursor"
-      responses:
-        "200":
-          description: A page of the tenant's registered revisions.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/TemplateRevisionList" }
-        "400": { $ref: "#/components/responses/InvalidQuery" }
-        "422": { $ref: "#/components/responses/InvalidPaging" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "500": { $ref: "#/components/responses/InternalError" }
-
-  /v1/tenants/{tenant_id}/template-registrations/{registration_id}:
-    parameters:
-      - $ref: "#/components/parameters/TenantID"
-      - name: registration_id
-        in: path
-        required: true
-        schema: { type: string }
-    get:
-      tags: [Templates]
-      summary: Read a template registration
-      description: Poll this after `POST /v1/tenants/{tenant_id}/template-registrations`.
-      operationId: getTemplateRegistration
-      responses:
-        "200":
-          description: The registration's current state.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/TemplateRegistration" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "500": { $ref: "#/components/responses/InternalError" }
-
   /v1/tenants/{tenant_id}/template-revisions/{template_revision_id}/variables:
     parameters:
       - $ref: "#/components/parameters/TenantID"
@@ -1760,7 +1669,7 @@ paths:
       tags: [Queue]
       summary: List the caller's queued work items
       description: |
-        The asynchronous work the caller queued — template registration,
+        The asynchronous work the caller queued — template syncs,
         template runs. Scoped by actor alone, so no new permission concept is
         involved: a caller only ever sees their own items. Newest first, a
         page at a time.
@@ -2315,64 +2224,13 @@ components:
           type: string
           description: |
             A branch, tag, or commit SHA. It is resolved to an immutable commit
-            at registration time and recorded as `resolved_commit_sha`.
+            by each sync and recorded as `resolved_commit_sha`.
         root_path:
           type: string
           description: |
             Path to the Terraform root module within the repository. Empty for
             the repository root.
       required: [repo_owner, repo_name, source_ref]
-
-    TemplateRegistration:
-      type: object
-      description: One asynchronous registration attempt.
-      properties:
-        id: { type: string }
-        tenant_id: { type: string }
-        repo_owner: { type: string }
-        repo_name: { type: string }
-        source_ref: { type: string }
-        root_path: { type: string }
-        status: { $ref: "#/components/schemas/TemplateRegistrationStatus" }
-        step: { $ref: "#/components/schemas/TemplateRegistrationStep" }
-        template_revision_id:
-          type: string
-          description: Populated once `status` is `completed`. Empty before that.
-        resolved_commit_sha:
-          type: string
-          description: The commit `source_ref` resolved to.
-        requested_by: { type: string }
-        requested_at: { type: string, format: date-time }
-        completed_at:
-          type: string
-          format: date-time
-          description: Absent until the registration ends.
-        error_summary:
-          type: string
-          description: Why registration failed. Empty otherwise.
-      required:
-        [id, tenant_id, repo_owner, repo_name, source_ref, root_path, status,
-         step, template_revision_id, resolved_commit_sha, requested_by,
-         requested_at, error_summary]
-
-    TemplateRegistrationStatus:
-      type: string
-      enum: [pending, running, completed, invalid, failed]
-      description: |
-        `pending` and `running` are in flight. `completed` carries a
-        `template_revision_id`. `invalid` means the source was rejected;
-        `failed` means registration itself broke.
-
-    TemplateRegistrationStep:
-      type: string
-      description: |
-        What a running sync is doing right now, or, once it ended, what it was
-        doing last, so a failed sync says where it failed. Empty until the sync
-        starts its first step. It is for people: nothing about what a
-        registration may do next depends on it.
-      enum:
-        - ""
-        - syncing
 
     Template:
       type: object
