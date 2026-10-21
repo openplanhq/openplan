@@ -600,8 +600,9 @@ func (store *Store) ListSourceTemplatesPage(ctx context.Context, tenantID domain
 }
 
 // selectSourceTemplatesSQL reads templates with their latest revision's name,
-// description and tags; the left join keeps a template no sync has produced
-// a revision for yet.
+// description and tags, and their newest sync. The left joins keep a template
+// no sync has produced a revision for, or been requested for, yet. The
+// newest sync is one probe of the registrations index per template.
 const selectSourceTemplatesSQL = `
 	select
 		st.id,
@@ -615,17 +616,41 @@ const selectSourceTemplatesSQL = `
 		coalesce(tr.tags_json, '[]'::jsonb),
 		st.latest_template_revision_id,
 		st.created_at,
-		st.updated_at
+		st.updated_at,
+		ls.status,
+		ls.error_summary,
+		ls.resolved_commit_sha,
+		ls.requested_at,
+		ls.completed_at,
+		ls.revision_predates_request
 	from source_templates st
 	left join template_revisions tr
 		on tr.tenant_id = st.tenant_id
 		and tr.id = st.latest_template_revision_id
+	left join lateral (
+		select
+			r.status,
+			r.error_summary,
+			r.resolved_commit_sha,
+			r.requested_at,
+			r.completed_at,
+			coalesce(rr.created_at < r.requested_at, false) as revision_predates_request
+		from template_registrations r
+		left join template_revisions rr
+			on rr.tenant_id = r.tenant_id
+			and rr.id = r.template_revision_id
+		where r.source_template_id = st.id
+			and r.tenant_id = st.tenant_id
+		order by r.requested_at desc, r.id desc
+		limit 1
+	) ls on true
 `
 
 func scanSourceTemplate(scanner templateScanner) (domain.SourceTemplate, error) {
 	var template domain.SourceTemplate
 	var name sql.NullString
 	var tagsJSON []byte
+	var sync latestTemplateSyncColumns
 	if err := scanner.Scan(
 		&template.ID,
 		&template.TenantID,
@@ -639,9 +664,16 @@ func scanSourceTemplate(scanner templateScanner) (domain.SourceTemplate, error) 
 		&template.LatestTemplateRevisionID,
 		&template.CreatedAt,
 		&template.UpdatedAt,
+		&sync.status,
+		&sync.errorSummary,
+		&sync.resolvedCommitSHA,
+		&sync.requestedAt,
+		&sync.completedAt,
+		&sync.revisionPredatesRequest,
 	); err != nil {
 		return domain.SourceTemplate{}, err
 	}
+	template.LatestSync = sync.latestSync()
 	template.Name = name.String
 	if !name.Valid {
 		template.Name = domain.FallbackTemplateName(template.RepoName, template.RootPath)
@@ -652,6 +684,31 @@ func scanSourceTemplate(scanner templateScanner) (domain.SourceTemplate, error) 
 	}
 	template.Tags = tags
 	return template, nil
+}
+
+// latestTemplateSyncColumns holds a template's newest-sync columns, every one
+// null when no sync has been requested for it.
+type latestTemplateSyncColumns struct {
+	status                  sql.NullString
+	errorSummary            sql.NullString
+	resolvedCommitSHA       sql.NullString
+	requestedAt             sql.NullTime
+	completedAt             sql.NullTime
+	revisionPredatesRequest sql.NullBool
+}
+
+func (columns latestTemplateSyncColumns) latestSync() *domain.LatestTemplateSync {
+	if !columns.status.Valid {
+		return nil
+	}
+	return &domain.LatestTemplateSync{
+		Status:                  domain.TemplateRegistrationStatus(columns.status.String),
+		ErrorSummary:            columns.errorSummary.String,
+		ResolvedCommitSHA:       columns.resolvedCommitSHA.String,
+		RequestedAt:             columns.requestedAt.Time,
+		CompletedAt:             columns.completedAt.Time,
+		RevisionPredatesRequest: columns.revisionPredatesRequest.Bool,
+	}
 }
 
 // ListTemplateRevisionsBySourcePage returns up to limit of one template's

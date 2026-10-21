@@ -101,6 +101,70 @@ type SourceTemplate struct {
 	LatestTemplateRevisionID TemplateRevisionID `json:"latest_template_revision_id"`
 	CreatedAt                time.Time          `json:"created_at"`
 	UpdatedAt                time.Time          `json:"updated_at"`
+	// LatestSync is the newest sync requested for the template, nil until one
+	// is. Not serialised as is: its stored status is not what a reader is
+	// shown (see LatestTemplateSync.StatusAt).
+	LatestSync *LatestTemplateSync `json:"-"`
+}
+
+// TemplateSyncStatus is how a template's latest sync reads to the people
+// looking at the template, derived from the stored registration.
+type TemplateSyncStatus string
+
+const (
+	TemplateSyncSyncing  TemplateSyncStatus = "syncing"
+	TemplateSyncStalled  TemplateSyncStatus = "stalled"
+	TemplateSyncUpToDate TemplateSyncStatus = "up_to_date"
+	TemplateSyncSynced   TemplateSyncStatus = "synced"
+	TemplateSyncInvalid  TemplateSyncStatus = "invalid"
+	TemplateSyncFailed   TemplateSyncStatus = "failed"
+)
+
+// TemplateSyncStallsAfter is how long a sync may stay pending or running
+// before it reads as stalled. Its worst-case retry chain is about 24 minutes
+// (4 attempts of up to 5 minutes, with backoff doubling from 30 seconds to 5
+// minutes) plus queue delay, so a sync still unfinished after 30 minutes is
+// not coming back on its own.
+const TemplateSyncStallsAfter = 30 * time.Minute
+
+// LatestTemplateSync is the newest registration of a template, as stored.
+type LatestTemplateSync struct {
+	Status            TemplateRegistrationStatus
+	ErrorSummary      string
+	ResolvedCommitSHA string
+	RequestedAt       time.Time
+	// CompletedAt is zero until the sync ends.
+	CompletedAt time.Time
+	// RevisionPredatesRequest is true when the revision the sync resolved to
+	// was created before the sync was requested: the commit was already
+	// registered, so the sync found nothing new. The two times come from the
+	// api's and the executor's clocks, so skew between them larger than a
+	// sync's duration would misread it.
+	RevisionPredatesRequest bool
+}
+
+// StatusAt is the sync's status as shown at now. Stalled is derived here,
+// never stored: the row stays pending or running.
+func (sync LatestTemplateSync) StatusAt(now time.Time) TemplateSyncStatus {
+	switch sync.Status {
+	case TemplateRegistrationPending, TemplateRegistrationRunning:
+		if now.Sub(sync.RequestedAt) >= TemplateSyncStallsAfter {
+			return TemplateSyncStalled
+		}
+		return TemplateSyncSyncing
+	case TemplateRegistrationCompleted:
+		if sync.RevisionPredatesRequest {
+			return TemplateSyncUpToDate
+		}
+		return TemplateSyncSynced
+	case TemplateRegistrationInvalid:
+		return TemplateSyncInvalid
+	case TemplateRegistrationFailed:
+		return TemplateSyncFailed
+	}
+	// The status check constraint admits no other status; were one stored,
+	// failed is the reading that asks for another sync.
+	return TemplateSyncFailed
 }
 
 // SourceTemplateIDFor derives the id of the template a source names, so
