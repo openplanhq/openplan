@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { Minus } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { listItemClass } from "../../shared/listItemClass";
 import SearchField from "../../shared/SearchField";
+import StatusLabel from "../../shared/StatusLabel";
 import { cn } from "@/lib/utils";
 import { templatePath, templateTabOf } from "./templateRoutes";
 import type { Template } from "../../api/types";
@@ -48,15 +50,29 @@ export default function TemplateList({ templates, selectedId }: { templates: Tem
 // tracks. Each part is cut with an ellipsis rather than broken, the ref at
 // most half the line so the repository stays readable, and both are whole in
 // the title.
+//
+// A template no sync has recorded a revision for says so at the end of its
+// name's line, "no revision" in the idle tone, as a template never applied
+// does on a stack: it exists, but has nothing to install. Why (still syncing,
+// failed) is the panel's to say. On the selected row the label takes the
+// muted colour, since the idle one on primary-soft falls under AA.
 function TemplateRow({ template, to, selected }: { template: Template; to: string; selected: boolean }) {
   const repository = `${template.repo_owner}/${template.repo_name}`;
   const name = templateDisplayName(template);
+  const unsynced = template.latest_template_revision_id === "";
 
   return (
     <Link to={to} aria-current={selected ? "true" : undefined} className={listItemClass(selected)} data-testid={`template-link-${template.id}`}>
-      <span className="flex min-w-0 flex-col gap-0.5">
-        <span className={cn("truncate text-sm leading-label font-medium", selected && "text-primary-strong")} title={name}>
-          {name}
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex min-w-0 items-baseline justify-between gap-3">
+          <span className={cn("truncate text-sm leading-label font-medium", selected && "text-primary-strong")} title={name}>
+            {name}
+          </span>
+          {unsynced && (
+            <StatusLabel icon={Minus} tone="idle" className={cn("shrink-0", selected && "text-muted-foreground")} data-testid={`template-no-revision-${template.id}`}>
+              no revision
+            </StatusLabel>
+          )}
         </span>
         <span className="flex min-w-0 gap-1.5 font-mono text-xs text-muted-foreground" title={`${repository} · ${template.source_ref}`}>
           <span className="min-w-0 truncate">{repository}</span>

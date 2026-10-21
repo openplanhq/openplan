@@ -150,15 +150,31 @@ describe("TemplatesPage list", () => {
     expect(screen.getByTestId("page-count").textContent).toBe("0");
   });
 
-  // Until the registry draws one, a template whose first sync has not
-  // produced a revision stays out of the list and the count.
-  it("leaves out a template no sync has produced a revision for yet", () => {
+  // A template exists from the moment it is registered, so one whose first
+  // sync has not produced a revision is listed and counted, and says it has
+  // nothing to install.
+  it("lists a template no sync has produced a revision for yet, marked no revision", () => {
     const queryClient = testQueryClient();
     seedTemplates(queryClient, [eks], [template({ id: "tpl_new", name: "fresh", latest_template_revision_id: "" })]);
     renderPage(queryClient, "/templates");
 
-    expect(screen.queryByTestId("template-link-tpl_new")).toBeNull();
-    expect(screen.getByTestId("page-count").textContent).toBe("1");
+    expect(screen.getByTestId("template-link-tpl_new").textContent).toContain("fresh");
+    expect(screen.getByTestId("template-no-revision-tpl_new").textContent).toBe("no revision");
+    expect(screen.queryByTestId("template-no-revision-tpl_eks")).toBeNull();
+    expect(screen.getByTestId("page-count").textContent).toBe("2");
+  });
+
+  // Idle grey on primary-soft is 4.3:1, under AA; the selected row's label
+  // takes the muted colour.
+  it("keeps the no revision label readable on the selected row", () => {
+    const queryClient = testQueryClient();
+    seedTemplates(queryClient, [eks], [template({ id: "tpl_new", name: "fresh", latest_template_revision_id: "" })]);
+    renderPage(queryClient, "/templates/tpl_new/variables");
+
+    expect(screen.getByTestId("template-link-tpl_new").getAttribute("aria-current")).toBe("true");
+    const label = screen.getByTestId("template-no-revision-tpl_new");
+    expect(label.className).toContain("text-muted-foreground");
+    expect(label.className).not.toContain("text-subtle-foreground");
   });
 });
 

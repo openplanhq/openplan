@@ -195,8 +195,9 @@ describe("RegisterTemplatePanel", () => {
     renderPanel(seed());
     submit();
 
-    // The poll has read synced: that is what refetches the list.
-    await waitFor(() => expect(listRequests).toBeGreaterThan(0), { timeout: 3000 });
+    // The list is read once the template is registered, since it exists from
+    // then on, and again once the poll has read synced.
+    await waitFor(() => expect(listRequests).toBeGreaterThan(1), { timeout: 3000 });
     expect(screen.getByTestId("register-template-progress")).toBeTruthy();
     expect((screen.getByTestId("register-template-submit") as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByLabelText("Owner") as HTMLInputElement).disabled).toBe(true);

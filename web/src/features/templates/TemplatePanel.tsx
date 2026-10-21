@@ -81,9 +81,7 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
     );
   }
 
-  // A template no sync has produced a revision for yet reads as missing, as
-  // it did before templates were read on their own.
-  if (template === null || !latest) {
+  if (template === null) {
     return (
       <p className="px-7 py-6 text-meta text-muted-foreground" data-testid="template-missing">
         That template is not registered.
@@ -91,8 +89,12 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
     );
   }
 
+  // Registered, but no sync has recorded a revision yet: its first sync is
+  // still running, or it failed. There is no commit, description, variable or
+  // revision to show, so the panel is its header alone, and TemplateSync says
+  // why, from the template's latest_sync.
   const description = template.description.trim();
-  const links = githubLinks(latest);
+  const links = githubLinks(latest ?? { ...template, resolved_commit_sha: "" });
   const rootPath = rootPathOf(template.root_path);
 
   const heading = <h2 className="min-w-0 font-heading text-panel-title font-semibold tracking-title wrap-anywhere">{templateDisplayName(template)}</h2>;
@@ -107,12 +109,18 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
       <SourceFact icon={GitBranch} term="Ref" href={links.ref}>
         {template.source_ref}
       </SourceFact>
-      <SourceFact icon={GitCommitHorizontal} term="Latest commit" href={links.commit}>
-        {shortCommitSHA(latest.resolved_commit_sha)}
-      </SourceFact>
+      {/* Its column stays empty with no commit, so the other three sit
+          where they sit for every template. */}
+      {latest && (
+        <SourceFact icon={GitCommitHorizontal} term="Latest commit" href={links.commit}>
+          {shortCommitSHA(latest.resolved_commit_sha)}
+        </SourceFact>
+      )}
     </ul>
   );
-  const about = (
+  // Before a revision there is no template.yaml read yet, so no
+  // description to miss.
+  const about = !latest ? null : (
     <>
       {description !== "" ? (
         <p className="max-w-170 text-sm text-foreground" data-testid="template-description">
@@ -138,40 +146,31 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
     </>
   );
 
+  // One tree whether or not there is a revision yet, so TemplateSync stays
+  // mounted when a first sync lands one, and its outcome stays in view.
   return (
-    <TemplateContext.Provider value={{ template, revisions, latest }}>
+    <TemplateContext.Provider value={latest ? { template, revisions, latest } : null}>
       <div className="flex min-w-0 flex-col" data-testid="template-panel">
-        <div className="flex flex-col gap-5 border-b border-divider px-7 pt-6">
+        <div className={cn("flex flex-col gap-5 px-7 pt-6", latest ? "border-b border-divider" : "pb-7")}>
           {/* The name with Sync on its line, the source line under it, then
-              what the template is for. Sync is hidden rather than disabled
-              without the capability: the POST would be refused, so there is
-              nothing anyone could do to make it work. Keyed on the template,
-              so a sync stays with it. */}
-          <RequireCapability
-            capability="can_publish_template"
-            fallback={
-              <div className="flex min-w-0 flex-col gap-3">
-                <div className="flex min-w-0 flex-col gap-2.5">
-                  {heading}
-                  {source}
-                </div>
-                {about}
-              </div>
-            }
-          >
-            <TemplateSync key={id} heading={heading} source={source} about={about} />
-          </RequireCapability>
-          <UnderlineTabs
-            label="Template sections"
-            tabs={[
-              { to: templatePath(id, "variables"), label: "Variables", current: tab === "variables", count: variableCount },
-              { to: templatePath(id, "revisions"), label: "Revisions", current: tab === "revisions", count: revisions.length }
-            ]}
-          />
+              what the template is for. Keyed on the template, so a sync
+              stays with it. */}
+          <TemplateSync key={id} template={template} heading={heading} source={source} about={about} />
+          {latest && (
+            <UnderlineTabs
+              label="Template sections"
+              tabs={[
+                { to: templatePath(id, "variables"), label: "Variables", current: tab === "variables", count: variableCount },
+                { to: templatePath(id, "revisions"), label: "Revisions", current: tab === "revisions", count: revisions.length }
+              ]}
+            />
+          )}
         </div>
-        <div key={id} className="flex min-w-0 flex-col gap-3 px-7 pt-5 pb-7">
-          {children ?? <Outlet />}
-        </div>
+        {latest && (
+          <div key={id} className="flex min-w-0 flex-col gap-3 px-7 pt-5 pb-7">
+            {children ?? <Outlet />}
+          </div>
+        )}
       </div>
     </TemplateContext.Provider>
   );

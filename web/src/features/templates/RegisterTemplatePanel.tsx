@@ -66,12 +66,14 @@ export default function RegisterTemplatePanel() {
   const unchecked = requestError === "" && pollError !== "";
 
   useEffect(() => {
-    if (!succeeded) {
+    if (templateID === "") {
       return;
     }
-    // The sync writes the revision; only a refetch of the list shows it.
+    // The template exists from the moment it is registered, whatever its
+    // sync does, so the list shows it at once; a sync that succeeds writes
+    // the revision, which only a refetch of the list shows.
     void queryClient.invalidateQueries({ queryKey: queryKeys.templates(tenantID), exact: true });
-  }, [succeeded, queryClient]);
+  }, [templateID, succeeded, queryClient]);
 
   useEffect(() => {
     if (opened) {

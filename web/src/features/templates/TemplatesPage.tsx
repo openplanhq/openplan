@@ -10,7 +10,7 @@ import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import { cn } from "@/lib/utils";
 import TemplateList from "./TemplateList";
 import type { TemplatesPageOutletContext } from "./templatesPageOutlet";
-import { templatesByName, templatesWithRevision } from "./templateWorkflow";
+import { templatesByName } from "./templateWorkflow";
 import RequestIdNote from "../../shared/RequestIdNote";
 
 const registerLinkClass = cn(buttonClass("primary", "lg"), "w-full pointer-coarse:h-11 md:w-auto");
@@ -64,7 +64,9 @@ export default function TemplatesPage() {
     );
   }
 
-  const templates = templatesByName(templatesWithRevision(templatesQuery.data));
+  // Every registered template, a first sync still running or failed
+  // included: it exists from the moment it is registered.
+  const templates = templatesByName(templatesQuery.data);
   const count = templates.length;
   const first = templates[0] ?? null;
   const onPanel = templateMatch !== null;
