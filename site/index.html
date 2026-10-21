@@ -129,18 +129,20 @@
            and must not make the page scroll sideways; clip, unlike hidden,
            keeps the rail sticky. -->
       <section id="features" class="overflow-x-clip border-t" aria-labelledby="features-title">
-        <div class="mx-auto max-w-[1180px] px-5 py-24 lg:grid lg:grid-cols-[2px_minmax(0,1fr)] lg:gap-x-12">
-          <div class="mx-auto mb-14 flex max-w-[640px] flex-col items-center gap-4 text-center lg:col-span-2" data-reveal>
+        <div class="mx-auto max-w-[1216px] px-5 py-24 xl:grid xl:grid-cols-[0_minmax(0,1fr)]">
+          <div class="mx-auto mb-14 flex max-w-[640px] flex-col items-center gap-4 text-center xl:col-span-2" data-reveal>
             <span class="rounded-full border bg-card px-3 py-1 text-meta font-medium text-muted-foreground">Features</span>
             <h2 id="features-title" class="text-page-title font-semibold tracking-title sm:text-section">Everything a team needs to share Terraform</h2>
             <p class="text-lead text-muted-foreground">Without sharing a laptop, a state file or anyone's credentials.</p>
           </div>
 
-          <!-- A bar beside the features on wide screens that fills as you scroll
-               through them. Decoration: the headings carry the content. It
-               shows only when src/alive.ts can fill it. -->
-          <div class="hidden lg:block">
-            <div class="rail sticky top-24 h-56 w-0.5 rounded-full bg-divider" aria-hidden="true"><div class="rail-fill w-0.5 rounded-full bg-primary"></div></div>
+          <!-- A bar beside the features that fills as you scroll through them.
+               Decoration: the headings carry the content. It sits in the page
+               margin, in a zero-width column, so the features keep the same
+               edges as every other section; xl and up, where that margin is
+               at least 52px wide. It shows only when src/alive.ts can fill it. -->
+          <div class="hidden xl:block">
+            <div class="rail sticky top-24 h-56 w-0.5 -translate-x-[27px] rounded-full bg-divider" aria-hidden="true"><div class="rail-fill w-0.5 rounded-full bg-primary"></div></div>
           </div>
 
           <!-- Every drawing stands complete without the script. With it, each
