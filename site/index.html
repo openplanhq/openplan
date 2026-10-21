@@ -46,7 +46,7 @@
     </header>
 
     <main>
-      <section class="mx-auto flex max-w-[1216px] flex-wrap items-center gap-10 px-5 py-14">
+      <section class="mx-auto flex max-w-[1216px] flex-wrap items-center gap-10 px-5 py-14 lg:py-24">
         <div class="flex min-w-0 flex-[1_1_440px] flex-col gap-5">
           <h1 data-reveal class="text-hero-phone font-semibold tracking-title sm:text-hero">Terraform for your whole team, on your own infrastructure.</h1>
           <p data-reveal class="d1 text-lead text-muted-foreground">openplan is a self-hosted, open-source alternative to Terraform Cloud. Register a Terraform or OpenTofu module once, and anyone on your team can stand up their own copy from a web UI, with their own variables, their own credentials and a full history of every change.</p>
@@ -361,9 +361,13 @@
       </section>
 
       <section id="run" class="scroll-mt-6 border-t bg-card" aria-labelledby="run-title">
-        <div class="mx-auto flex max-w-[760px] flex-col items-center gap-5 px-5 py-[88px] text-center">
-          <h2 id="run-title" data-reveal class="text-page-title font-semibold tracking-title sm:text-section">Run it on your own machine</h2>
-          <p data-reveal class="d1 text-lead text-muted-foreground">You need Docker and nothing else. Download three files, start it, and open localhost:5173 a minute or two later.</p>
+        <div class="mx-auto flex max-w-[760px] flex-col items-center gap-5 px-5 py-24 text-center">
+          <!-- One rhythm for every section's heading group: 16px inside it,
+               56px from it to what it introduces, as in the features. -->
+          <div class="mb-9 flex flex-col items-center gap-4">
+            <h2 id="run-title" data-reveal class="text-page-title font-semibold tracking-title sm:text-section">Run it on your own machine</h2>
+            <p data-reveal class="d1 text-lead text-muted-foreground">You need Docker and nothing else. Download three files, start it, and open localhost:5173 a minute or two later.</p>
+          </div>
           <!-- The README's "Without a checkout" steps, whole, so they run as pasted. The
                latest/download URLs follow each new release, so the site never pins one.
                tabindex lets a keyboard scroll it where it overflows (phones). Its
