@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -227,12 +228,41 @@ func (store *Store) RecordTemplateRegistrationStep(ctx context.Context, input do
 	if err != nil {
 		return fmt.Errorf("record template registration step: %w", err)
 	}
-	if commandTag.RowsAffected() == 0 {
-		return ErrNotFound
+	if commandTag.RowsAffected() == 1 {
+		return nil
 	}
-	return nil
+	gone, err := templateRegistrationGone(ctx, store.pool, input.TenantID, input.RegistrationID)
+	if err != nil {
+		return fmt.Errorf("record template registration step: %w", err)
+	}
+	if gone {
+		return nil
+	}
+	return ErrNotFound
 }
 
+// templateRegistrationGone reports whether the registration no longer exists.
+// Deleting a template cascades to its registrations while their syncs may
+// still be running; those syncs record into nothing and end, rather than
+// failing and being retried for their whole retry policy.
+func templateRegistrationGone(ctx context.Context, exec pgxExecutor, tenantID domain.TenantID, id domain.TemplateRegistrationID) (bool, error) {
+	var exists bool
+	if err := exec.QueryRow(ctx, `
+		select exists (
+			select 1
+			from template_registrations
+			where tenant_id = $1
+				and id = $2
+		)
+	`, tenantID, id).Scan(&exists); err != nil {
+		return false, err
+	}
+	return !exists, nil
+}
+
+// RecordTemplateRegistrationStatus records a status transition. A
+// registration that is gone, deleted with its template, has nothing left to
+// record and succeeds; see templateRegistrationGone.
 func (store *Store) RecordTemplateRegistrationStatus(ctx context.Context, input domain.TemplateRegistrationStatusActivityInput) error {
 	var err error
 	if terminalTemplateRegistrationStatus(input.Status) {
@@ -276,21 +306,14 @@ func (store *Store) RecordTemplateRegistrationStatus(ctx context.Context, input 
 	if err != nil {
 		return fmt.Errorf("record template registration status: %w", err)
 	}
-
-	registration, err := store.GetTemplateRegistration(ctx, input.TenantID, input.RegistrationID)
-	if err != nil {
-		return err
-	}
-	if registration.ID == "" {
-		return app.ErrNotFound
-	}
 	return nil
 }
 
-// UpsertTemplateRevisionWithVariables records a template revision, deduplicating against
-// an existing revision with the same identity. The source template is resolved or created
-// first so the revision can reference it; variables are only written when this call actually
-// inserts a new revision, since a reused revision already has its variables recorded.
+// UpsertTemplateRevisionWithVariables records a template revision into its existing source
+// template, deduplicating against an existing revision with the same identity. It never
+// creates the template: a sync that outlives its template's delete would bring it back.
+// Variables are only written when this call actually inserts a new revision, since a reused
+// revision already has its variables recorded.
 func (store *Store) UpsertTemplateRevisionWithVariables(ctx context.Context, templateRevision domain.TemplateRevision, variables []domain.TemplateVariable) (domain.TemplateRevision, error) {
 	tx, err := store.pool.Begin(ctx)
 	if err != nil {
@@ -303,11 +326,9 @@ func (store *Store) UpsertTemplateRevisionWithVariables(ctx context.Context, tem
 		return domain.TemplateRevision{}, fmt.Errorf("marshal template revision tags: %w", err)
 	}
 
-	sourceTemplateID, err := upsertSourceTemplate(ctx, tx, templateRevision)
-	if err != nil {
-		return domain.TemplateRevision{}, err
+	if templateRevision.SourceTemplateID == "" {
+		return domain.TemplateRevision{}, errors.New("upsert template revision: source template ID is required")
 	}
-	templateRevision.SourceTemplateID = sourceTemplateID
 
 	inserted, insertedNew, err := insertTemplateRevision(ctx, tx, templateRevision, tagsJSON)
 	if err != nil {
@@ -2123,43 +2144,6 @@ func foreignKeyViolation(err error, constraint string) bool {
 	return errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.ConstraintName == constraint
 }
 
-func upsertSourceTemplate(ctx context.Context, tx pgx.Tx, templateRevision domain.TemplateRevision) (domain.SourceTemplateID, error) {
-	// Identity is minted by the caller (see the deterministic hash in the template sync
-	// activity); the store persists it rather than inventing one, so a missing ID is a
-	// programming error instead of a silently empty primary key.
-	sourceTemplateID := templateRevision.SourceTemplateID
-	if sourceTemplateID == "" {
-		return "", errors.New("upsert source template: source template ID is required")
-	}
-
-	var persistedID domain.SourceTemplateID
-	err := tx.QueryRow(ctx, `
-		insert into source_templates (
-			id,
-			tenant_id,
-			repo_owner,
-			repo_name,
-			source_ref,
-			root_path
-		) values ($1, $2, $3, $4, $5, $6)
-		on conflict (tenant_id, repo_owner, repo_name, root_path, source_ref) do update set
-			updated_at = now()
-		returning id
-	`,
-		sourceTemplateID,
-		templateRevision.TenantID,
-		templateRevision.RepoOwner,
-		templateRevision.RepoName,
-		templateRevision.SourceRef,
-		templateRevision.RootPath,
-	).Scan(&persistedID)
-	if err != nil {
-		return "", fmt.Errorf("upsert source template: %w", err)
-	}
-
-	return persistedID, nil
-}
-
 func recordLatestTemplateRevision(ctx context.Context, tx pgx.Tx, templateRevision domain.TemplateRevision) error {
 	commandTag, err := tx.Exec(ctx, `
 		update source_templates
@@ -2176,11 +2160,21 @@ func recordLatestTemplateRevision(ctx context.Context, tx pgx.Tx, templateRevisi
 	if err != nil {
 		return fmt.Errorf("record latest template revision: %w", err)
 	}
+	// A reused revision takes no lock on its template, so a delete can commit
+	// between the insert and this update.
 	if commandTag.RowsAffected() == 0 {
-		return app.ErrNotFound
+		return sourceTemplateGone(templateRevision.SourceTemplateID)
 	}
 
 	return nil
+}
+
+// sourceTemplateGone is the error for a revision whose template no longer
+// exists. It wraps app.ErrNotFound, the store's not found, and os.ErrNotExist,
+// which the sync activity checks for: the activities package can't import app,
+// because the executor shares it and must not carry app's dependencies.
+func sourceTemplateGone(id domain.SourceTemplateID) error {
+	return fmt.Errorf("source template %s: %w (%w)", id, app.ErrNotFound, os.ErrNotExist)
 }
 
 func defaultJSON(input json.RawMessage) json.RawMessage {
@@ -2274,6 +2268,9 @@ func insertTemplateRevision(ctx context.Context, tx pgx.Tx, templateRevision dom
 		}
 		inserted.Tags = tags
 		return inserted, true, nil
+	}
+	if foreignKeyViolation(err, "template_revisions_source_template_id_fkey") {
+		return domain.TemplateRevision{}, false, sourceTemplateGone(templateRevision.SourceTemplateID)
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return domain.TemplateRevision{}, false, fmt.Errorf("insert template revision: %w", err)

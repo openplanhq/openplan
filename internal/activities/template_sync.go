@@ -34,6 +34,9 @@ type GitHubTokenSource interface {
 type TemplateSyncStore interface {
 	RecordTemplateRegistrationStatus(context.Context, domain.TemplateRegistrationStatusActivityInput) error
 	RecordTemplateRegistrationStep(context.Context, domain.TemplateRegistrationStepActivityInput) error
+	// UpsertTemplateRevisionWithVariables writes the revision into its
+	// existing source template, and fails wrapping os.ErrNotExist when that
+	// template no longer exists.
 	UpsertTemplateRevisionWithVariables(context.Context, domain.TemplateRevision, []domain.TemplateVariable) (domain.TemplateRevision, error)
 }
 
@@ -88,6 +91,11 @@ func (activities *TemplateSyncActivities) RecordTemplateRegistrationStep(ctx con
 }
 
 func (activities *TemplateSyncActivities) SyncTemplate(ctx context.Context, input domain.TemplateSyncActivityInput) (output domain.TemplateSyncActivityOutput, err error) {
+	// The sync never creates a template, so without one it has nothing to
+	// write into. Checked first, so such a sync clones nothing.
+	if input.SourceTemplateID == "" {
+		return invalidTemplateSyncOutput("sync names no template to write into"), nil
+	}
 	rootPath, err := safeTemplateRootPath(input.RootPath)
 	if err != nil {
 		return invalidTemplateSyncOutput("%v", err), nil
@@ -150,7 +158,6 @@ func (activities *TemplateSyncActivities) SyncTemplate(ctx context.Context, inpu
 		return invalidTemplateSyncOutput("read template metadata: %v", err), nil
 	}
 
-	sourceTemplateID := deterministicSourceTemplateID(input, rootPath)
 	templateRevisionID := deterministicTemplateRevisionID(input, rootPath, resolvedSHA)
 	variables, err := inferTemplateVariables(templateRoot, templateRevisionID)
 	if err != nil {
@@ -163,7 +170,7 @@ func (activities *TemplateSyncActivities) SyncTemplate(ctx context.Context, inpu
 	templateRevision := domain.TemplateRevision{
 		ID:                templateRevisionID,
 		TenantID:          input.TenantID,
-		SourceTemplateID:  sourceTemplateID,
+		SourceTemplateID:  input.SourceTemplateID,
 		RepoOwner:         input.RepoOwner,
 		RepoName:          input.RepoName,
 		SourceRef:         input.SourceRef,
@@ -176,6 +183,11 @@ func (activities *TemplateSyncActivities) SyncTemplate(ctx context.Context, inpu
 		CreatedAt:         time.Now().UTC(),
 	}
 	persisted, err := activities.store.UpsertTemplateRevisionWithVariables(ctx, templateRevision, variables)
+	// Deleted while this sync ran. Retrying can only fail the same way, so it
+	// is an outcome, not an error.
+	if errors.Is(err, os.ErrNotExist) {
+		return invalidTemplateSyncOutput("template was deleted"), nil
+	}
 	if err != nil {
 		return domain.TemplateSyncActivityOutput{}, fmt.Errorf("persist synced template revision: %w", err)
 	}
@@ -334,7 +346,7 @@ type parsedTemplateMetadata struct {
 }
 
 func readTemplateMetadata(root string, repoName string, rootPath string) (parsedTemplateMetadata, error) {
-	metadata := parsedTemplateMetadata{Name: fallbackTemplateName(repoName, rootPath)}
+	metadata := parsedTemplateMetadata{Name: domain.FallbackTemplateName(repoName, rootPath)}
 	path := filepath.Join(root, "template.yaml")
 	body, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -358,14 +370,6 @@ func readTemplateMetadata(root string, repoName string, rootPath string) (parsed
 	metadata.Description = strings.TrimSpace(fileMetadata.Description)
 	metadata.Tags = cleanTags(fileMetadata.Tags)
 	return metadata, nil
-}
-
-func fallbackTemplateName(repoName string, rootPath string) string {
-	base := filepath.Base(filepath.Clean(rootPath))
-	if base == "." || base == string(filepath.Separator) || base == "" {
-		return repoName
-	}
-	return base
 }
 
 func cleanTags(tags []string) []string {
@@ -540,20 +544,4 @@ func deterministicTemplateRevisionID(input domain.TemplateSyncActivityInput, roo
 		resolvedSHA,
 	}, "\x00")))
 	return domain.TemplateRevisionID("template_" + hex.EncodeToString(sum[:16]))
-}
-
-// deterministicSourceTemplateID derives a stable SourceTemplateID from the tenant, repo,
-// root path, and source ref, so re-syncing the same source always resolves to the same ID
-// instead of minting a duplicate row.
-// e.g. tenant_123/acme/templates/templates/web/main -> source_template_106bb033369f88d7820a14c2ec059296
-// source_template_327520eeba5223257d8fb1d2d2a39f6d
-func deterministicSourceTemplateID(input domain.TemplateSyncActivityInput, rootPath string) domain.SourceTemplateID {
-	sum := sha256.Sum256([]byte(strings.Join([]string{
-		string(input.TenantID),
-		input.RepoOwner,
-		input.RepoName,
-		rootPath,
-		input.SourceRef,
-	}, "\x00")))
-	return domain.SourceTemplateID("source_template_" + hex.EncodeToString(sum[:16]))
 }

@@ -53,6 +53,7 @@ func TestListTemplateRevisionsPageKeyset(t *testing.T) {
 
 	ctx := context.Background()
 	store := NewStore(openMigratedTestPool(t, ctx))
+	seedSourceTemplate(t, ctx, store, "tenant_123", "source_1")
 	at := time.Date(2026, 10, 17, 9, 0, 0, 0, time.UTC)
 	for i := range 5 {
 		_, err := store.UpsertTemplateRevisionWithVariables(ctx, domain.TemplateRevision{
@@ -176,6 +177,8 @@ func TestListTemplateRevisionsBySourcePageKeyset(t *testing.T) {
 
 	ctx := context.Background()
 	store := NewStore(openMigratedTestPool(t, ctx))
+	seedSourceTemplate(t, ctx, store, "tenant_123", "source_1")
+	seedSourceTemplate(t, ctx, store, "tenant_123", "source_2")
 	at := time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC)
 	for i := range 5 {
 		_, err := store.UpsertTemplateRevisionWithVariables(ctx, domain.TemplateRevision{

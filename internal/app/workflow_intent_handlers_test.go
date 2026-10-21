@@ -48,6 +48,21 @@ func TestStartTemplateApplyHandlerDeliversCompleteInput(t *testing.T) {
 	}
 }
 
+// The queued payload carries the template the sync writes into; without it
+// the sync has nothing to write into.
+func TestStartTemplateSyncHandlerDeliversCompleteInput(t *testing.T) {
+	dispatcher := &recordingWorkflowIntentDispatcher{}
+	handler := NewStartTemplateSyncHandler(dispatcher)
+	payload := StartTemplateSyncPayload{RegistrationID: "registration_1", TenantID: "tenant_1", SourceTemplateID: "source_template_1", RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc"}
+
+	if _, err := handler.Deliver(context.Background(), queue.Item{Payload: marshalWorkflowIntentPayload(t, payload)}); err != nil {
+		t.Fatalf("Deliver() error = %v", err)
+	}
+	if !reflect.DeepEqual(dispatcher.startSyncInput, domain.TemplateSyncWorkflowInput(payload)) {
+		t.Fatalf("started sync = %#v, want %#v", dispatcher.startSyncInput, payload)
+	}
+}
+
 func TestStartTemplateRunHandlerDeliversCompleteInput(t *testing.T) {
 	dispatcher := &recordingWorkflowIntentDispatcher{}
 	handler := NewStartTemplateRunHandler(dispatcher)
