@@ -23,6 +23,11 @@ const FOCUS = "focus-visible:ring-0 focus-visible:outline-solid focus-visible:ou
 // the full log under a log: shadcn's link at its xs size, in muted text with
 // no padding, so it sits with the record instead of competing with it. It
 // turns foreground and underlines on hover.
+//
+// The subtle variant is a secondary action in a panel header that keeps the
+// header about its record, such as a template's Sync: shadcn's ghost at 32px,
+// its label and icon in muted text with no border, filling with muted and
+// turning foreground on hover.
 const VARIANTS = {
   primary: cn(buttonVariants({ variant: "default" }), PADDING, FOCUS, "focus-visible:border-transparent"),
   outline: cn(buttonVariants({ variant: "outline" }), PADDING, FOCUS, "focus-visible:border-border"),
@@ -31,6 +36,12 @@ const VARIANTS = {
     PADDING,
     FOCUS,
     "focus-visible:border-border px-2.5 text-meta has-data-[icon=inline-start]:pl-2.5"
+  ),
+  subtle: cn(
+    buttonVariants({ variant: "ghost" }),
+    PADDING,
+    FOCUS,
+    "focus-visible:border-transparent text-muted-foreground hover:text-foreground"
   ),
   icon: cn(buttonVariants({ variant: "ghost", size: "icon" }), FOCUS, "focus-visible:border-transparent text-muted-foreground"),
   quiet: cn(

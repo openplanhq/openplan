@@ -27,4 +27,17 @@ describe("ExternalLink", () => {
     );
     expect(screen.getByRole("link").className).not.toContain("font-mono");
   });
+
+  it("cuts a long value to one line and keeps it whole in a title", () => {
+    const value = "acme-platform-engineering/terraform-aws-organization-landing-zone-modules";
+    render(
+      <ExternalLink href="https://github.com/x" site="GitHub" truncate>
+        {value}
+      </ExternalLink>
+    );
+    const link = screen.getByRole("link");
+    expect(link.getAttribute("title")).toBe(value);
+    expect(link.className).not.toContain("wrap-anywhere");
+    expect(link.querySelector(".truncate")?.textContent).toBe(value);
+  });
 });
