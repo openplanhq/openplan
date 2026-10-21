@@ -691,8 +691,7 @@ func TestSyncTemplateStripsWorkspacePathFromReturnedError(t *testing.T) {
 	if !strings.Contains(err.Error(), "Cloning into '.'") {
 		t.Fatalf("error = %q, want git's output relative to the repository", err)
 	}
-	var gitErr *gitrunner.GitCommandError
-	if !errors.As(err, &gitErr) {
+	if _, ok := errors.AsType[*gitrunner.GitCommandError](err); !ok {
 		t.Fatalf("error = %v, want it to still wrap the git failure", err)
 	}
 }
