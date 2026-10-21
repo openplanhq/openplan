@@ -191,11 +191,12 @@ describe("TemplatePanel before a first revision", () => {
     expect(error.textContent).toContain("no .tf files in aws/ekss");
   });
 
-  it("names a first sync that stalled, without repeating its headline", () => {
+  it("names a first sync that stalled, without repeating its headline, and offers to sync again", () => {
     renderPanel(unsynced(latestSync({ status: "stalled", error_summary: "" })), "/templates/tpl_new/variables");
 
     const error = screen.getByTestId("template-sync-error");
-    expect(within(error).getByText("Sync stalled")).toBeTruthy();
+    expect(error.textContent).toContain("Sync stalled");
+    expect(error.textContent).toContain("No revision yet, so stacks can't add this template. Sync again.");
     expect(error.textContent).not.toContain("Sync failed");
     expect(error.querySelector("pre")).toBeNull();
   });
@@ -217,7 +218,7 @@ describe("TemplatePanel before a first revision", () => {
     });
     renderPanel(unsynced(latestSync({ status: "syncing" })), "/templates/tpl_new/variables");
 
-    expect(screen.getByTestId("template-sync-result").textContent).toBe("syncing");
+    expect(screen.getByTestId("template-sync-result").textContent).toMatch(/^syncing · started /);
     await waitFor(() => expect(screen.getByRole("navigation", { name: "Template sections" })).toBeTruthy(), { timeout: 4000 });
     expect(screen.getByTestId("template-sync-result").textContent).toBe("synced commit abc1234");
   });

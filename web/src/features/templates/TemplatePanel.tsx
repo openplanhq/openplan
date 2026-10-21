@@ -106,28 +106,24 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
   const rootPath = rootPathOf(template.root_path);
 
   const name = templateDisplayName(template);
-  // Delete sits on the name's line beside Sync, a Small Subtle button like
-  // it. TemplateSync lays the line out as the heading and Sync, 24px apart,
-  // so Delete ends the heading and is pulled 20px right, to sit 4px from
-  // Sync as one pair. Both are for people who can publish, so they come and
-  // go together.
-  const heading = (
-    <div className="flex min-w-0 flex-1 items-start justify-between gap-6">
-      <h2 className="min-w-0 font-heading text-panel-title font-semibold tracking-title wrap-anywhere">{name}</h2>
-      <RequireCapability capability="can_publish_template">
-        <button
-          ref={remove.triggerRef}
-          type="button"
-          className={cn(buttonClass("subtle", "sm"), "-my-px -mr-5 pointer-coarse:h-11")}
-          aria-expanded={remove.confirming}
-          onClick={remove.ask}
-          data-testid="template-delete"
-        >
-          <Trash2 data-icon="inline-start" aria-hidden="true" strokeWidth={2.42} className="size-3.25" />
-          Delete
-        </button>
-      </RequireCapability>
-    </div>
+  const heading = <h2 className="min-w-0 font-heading text-panel-title font-semibold tracking-title wrap-anywhere">{name}</h2>;
+  // Delete sits on the name's line just before Sync, a Small Subtle button
+  // like it, as one pair. Both are for people who can publish, so they come
+  // and go together.
+  const actions = (
+    <RequireCapability capability="can_publish_template">
+      <button
+        ref={remove.triggerRef}
+        type="button"
+        className={cn(buttonClass("subtle", "sm"), "pointer-coarse:h-11")}
+        aria-expanded={remove.confirming}
+        onClick={remove.ask}
+        data-testid="template-delete"
+      >
+        <Trash2 data-icon="inline-start" aria-hidden="true" strokeWidth={2.42} className="size-3.25" />
+        Delete
+      </button>
+    </RequireCapability>
   );
   // The question, or why the server refused, under the source line: close
   // to Delete, and above the description it would otherwise push away.
@@ -210,7 +206,7 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
           {/* The name with Sync on its line, the source line under it, then
               what the template is for. Keyed on the template, so a sync
               stays with it. */}
-          <TemplateSync key={id} template={template} heading={heading} source={source} about={about} />
+          <TemplateSync key={id} template={template} heading={heading} actions={actions} source={source} about={about} />
           {latest && (
             <UnderlineTabs
               label="Template sections"

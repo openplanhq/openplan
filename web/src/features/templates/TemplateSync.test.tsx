@@ -4,6 +4,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { formatDateTime } from "../../shared/formatTimestamp";
 import { AuthContext } from "../../auth/AuthContext";
 import { queryKeys } from "../../api/queryKeys";
 import type { TemplateLatestSync, TemplateRevision } from "../../api/types";
@@ -134,7 +135,7 @@ describe("TemplateSync", () => {
   it.each([
     [{ status: "failed", error_summary: "ref not found: main" }, "ref not found: main"],
     [{ status: "invalid", error_summary: "" }, "Sync failed"],
-    [{ status: "stalled", error_summary: "" }, "Sync failed"]
+    [{ status: "stalled", error_summary: "" }, "Sync stalled"]
   ] as const)("shows why a sync failed, and offers Sync again (%o)", async (failed, message) => {
     serve({ polled: [failed] });
     renderPanel(seed());
@@ -201,9 +202,70 @@ describe("TemplateSync", () => {
     renderPanel(queryClient);
 
     expect(syncing()).toBe(true);
-    expect(screen.getByTestId("template-sync-result").textContent).toBe("syncing");
+    expect(screen.getByTestId("template-sync-result").textContent).toMatch(/^syncing · started /);
     await waitFor(() => expect(screen.getByTestId("template-sync-result").textContent).toBe("synced commit f17f983"), { timeout: 4000 });
     await waitFor(() => expect(screen.getAllByTestId(/^revision-row-/)[0].getAttribute("data-testid")).toBe("revision-row-rev_2"));
+  });
+
+  // An outcome read on a later day is not news: each says when it ended,
+  // and one still running or stalled says when it started.
+  it.each([
+    [{ status: "synced", resolved_commit_sha: "f17f983444455556666", completed_at: "2026-10-05T09:01:00Z" }, "template-sync-result", `synced commit f17f983 · ${formatDateTime("2026-10-05T09:01:00Z")}`],
+    [{ status: "up_to_date", completed_at: "2026-10-05T09:01:00Z" }, "template-sync-result", `up to date · ${formatDateTime("2026-10-05T09:01:00Z")}`],
+    [{ status: "syncing" }, "template-sync-result", `syncing · started ${formatDateTime("2026-10-05T09:00:00Z")}`],
+    [{ status: "failed", error_summary: "ref not found: main", completed_at: "2026-10-05T09:01:00Z" }, "template-sync-error", `Sync failed · ${formatDateTime("2026-10-05T09:01:00Z")}`],
+    [{ status: "stalled" }, "template-sync-error", `Sync stalled · started ${formatDateTime("2026-10-05T09:00:00Z")}`]
+  ] as const)("says when the latest sync happened (%o)", (latest, testId, text) => {
+    const queryClient = seed();
+    queryClient.setQueryData(queryKeys.templates(TENANT), [template({ latest_sync: latestSync(latest) })]);
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise(() => {}));
+    renderPanel(queryClient);
+
+    expect(screen.getByTestId(testId).textContent).toContain(text);
+    const when = screen.getByTestId("template-sync-when").querySelector("time");
+    expect(when?.getAttribute("dateTime")).toBe(latest.status === "syncing" || latest.status === "stalled" ? "2026-10-05T09:00:00Z" : "2026-10-05T09:01:00Z");
+  });
+
+  // A stall has no words of its own and nothing broke that a person must fix
+  // first: it says so once, and the way on is to sync again, offered only to
+  // people who can.
+  it.each([
+    [true, "It didn't finish. Sync again."],
+    [false, "It didn't finish."]
+  ] as const)("says a stalled sync didn't finish, without repeating its headline (can publish: %s)", (canPublish, nextStep) => {
+    const queryClient = seed();
+    queryClient.setQueryData(queryKeys.templates(TENANT), [template({ latest_sync: latestSync({ status: "stalled", error_summary: "" }) })]);
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise(() => {}));
+    renderPanel(queryClient, canPublish);
+
+    const error = screen.getByTestId("template-sync-error");
+    expect(error.textContent).toContain("Sync stalled");
+    expect(error.textContent?.endsWith(nextStep)).toBe(true);
+    expect(error.textContent).not.toContain("Sync failed");
+    expect(error.querySelector("pre")).toBeNull();
+  });
+
+  // A failure that came without words says it once, in its headline.
+  it("leaves out the details of a failure that came without any", () => {
+    const queryClient = seed();
+    queryClient.setQueryData(queryKeys.templates(TENANT), [template({ latest_sync: latestSync({ status: "invalid", error_summary: "" }) })]);
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise(() => {}));
+    renderPanel(queryClient);
+
+    const error = screen.getByTestId("template-sync-error");
+    expect(error.textContent).toContain("Sync failed");
+    expect(error.querySelector("pre")).toBeNull();
+  });
+
+  // The template's other actions sit on the name's line just before Sync,
+  // as one group.
+  it("puts the actions it is given just before Sync", () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise(() => {}));
+    renderPanel(seed());
+
+    const remove = screen.getByTestId("template-delete");
+    expect(remove.parentElement).toBe(syncButton().parentElement);
+    expect(remove.nextElementSibling).toBe(syncButton());
   });
 
   it("is not offered to people who cannot publish templates", () => {
