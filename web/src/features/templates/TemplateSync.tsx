@@ -6,11 +6,12 @@ import { isSyncSettled } from "../../api/polling";
 import { apiErrorMessage } from "../../api/problems";
 import { queryKeys } from "../../api/queryKeys";
 import { useSyncTemplateMutation, useTemplateQuery } from "../../api/queries";
-import type { Template } from "../../api/types";
+import type { Template, TemplateLatestSync } from "../../api/types";
 import RequireCapability from "../../auth/RequireCapability";
 import { tenantID } from "../../config";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorPanel from "../../shared/ErrorPanel";
+import { formatDateTime } from "../../shared/formatTimestamp";
 import StatusLabel from "../../shared/StatusLabel";
 import { cn } from "@/lib/utils";
 import { shortCommitSHA } from "./templateWorkflow";
@@ -32,13 +33,29 @@ import { shortCommitSHA } from "./templateWorkflow";
 // template with no revision yet, that first sync says why nothing can be
 // installed (still syncing, failed, stalled).
 //
+// Each outcome says when it happened: one read on a later day is not news,
+// and a stalled sync is told from a slow one by when it started.
+//
 // Sync is hidden rather than disabled for people who cannot publish: the
 // POST would be refused, so there is nothing anyone could do to make it
-// work. They still see a first sync's outcome.
+// work. They still see the latest sync's outcome. The template's other
+// actions (Delete) come in as actions, and sit just before Sync.
 //
 // The panel mounts one per template (key), so a sync never follows the person
 // to another template.
-export default function TemplateSync({ template, heading, source, about }: { template: Template; heading: ReactNode; source: ReactNode; about: ReactNode }) {
+export default function TemplateSync({
+  template,
+  heading,
+  actions,
+  source,
+  about
+}: {
+  template: Template;
+  heading: ReactNode;
+  actions?: ReactNode;
+  source: ReactNode;
+  about: ReactNode;
+}) {
   const queryClient = useQueryClient();
   const syncTemplateMutation = useSyncTemplateMutation(tenantID);
   // Read once, at mount: once the first sync lands a revision the panel
@@ -66,14 +83,17 @@ export default function TemplateSync({ template, heading, source, about }: { tem
   // Stalled is a failure too: the sync did not finish, and pressing Sync
   // again is the way on.
   const failed = settled && !completed;
-  // A first sync that never finished has no words of its own; its headline
-  // says so, rather than repeating "Sync failed" under itself.
-  const stalledFirst = unsynced && status === "stalled";
-  const errorMessage = requestError || pollError || (failed ? sync?.error_summary || (stalledFirst ? "" : "Sync failed") : "");
+  // A stalled sync has no words of its own, and a failure may come without
+  // any: the headline says it, so the details are left out rather than
+  // repeating it under itself.
+  const stalled = status === "stalled";
+  const errorMessage = requestError || pollError || (failed ? (sync?.error_summary ?? "") : "");
   const showError = !syncing && (errorMessage !== "" || failed);
   // A poll that fails says nothing about the sync itself, which may still
   // finish.
   const unchecked = requestError === "" && pollError !== "";
+  // A refused request or a lost poll has no sync to date.
+  const when = requestError !== "" || pollError !== "" ? null : syncTime(sync);
 
   useEffect(() => {
     // An outcome already in when the panel opened changed nothing since the
@@ -113,28 +133,31 @@ export default function TemplateSync({ template, heading, source, about }: { tem
         <div className="flex min-w-0 flex-col gap-2.5">
           <div className="flex min-w-0 items-start justify-between gap-6">
             {heading}
-            {/* The small size, so it sits on the name's line without
-                outgrowing it. Pulled out by its own padding, so its words end
-                on the content's edge and the name's line keeps its height.
-                While a sync runs it stays focusable, marked aria-disabled,
-                and ignores presses: disabling it would drop a keyboard
-                user's focus. */}
-            <RequireCapability capability="can_publish_template">
-              <button
-                type="button"
-                className={cn(buttonClass("subtle", "sm"), "-my-px -mr-2.5 pointer-coarse:h-11")}
-                aria-disabled={syncing ? "true" : undefined}
-                onClick={() => void handleSync()}
-                data-testid="template-sync"
-              >
-                {syncing ? (
-                  <Loader2 data-icon="inline-start" aria-hidden="true" strokeWidth={2.42} className="size-3.25 animate-spin" />
-                ) : (
-                  <RefreshCw data-icon="inline-start" aria-hidden="true" strokeWidth={2.42} className="size-3.25" />
-                )}
-                Sync
-              </button>
-            </RequireCapability>
+            {/* The actions, then Sync, 4px apart, at the small size, so they
+                sit on the name's line without outgrowing it. Pulled out by
+                their own padding, so Sync's words end on the content's edge
+                and the name's line keeps its height. While a sync runs Sync
+                stays focusable, marked aria-disabled, and ignores presses:
+                disabling it would drop a keyboard user's focus. */}
+            <div className="-my-px -mr-2.5 flex shrink-0 items-start gap-1">
+              {actions}
+              <RequireCapability capability="can_publish_template">
+                <button
+                  type="button"
+                  className={cn(buttonClass("subtle", "sm"), "pointer-coarse:h-11")}
+                  aria-disabled={syncing ? "true" : undefined}
+                  onClick={() => void handleSync()}
+                  data-testid="template-sync"
+                >
+                  {syncing ? (
+                    <Loader2 data-icon="inline-start" aria-hidden="true" strokeWidth={2.42} className="size-3.25 animate-spin" />
+                  ) : (
+                    <RefreshCw data-icon="inline-start" aria-hidden="true" strokeWidth={2.42} className="size-3.25" />
+                  )}
+                  Sync
+                </button>
+              </RequireCapability>
+            </div>
           </div>
           {source}
         </div>
@@ -144,19 +167,27 @@ export default function TemplateSync({ template, heading, source, about }: { tem
         {syncing ? (
           <p className="mt-5">
             <StatusLabel icon={LoaderCircle} tone="settled">
-              syncing
+              <span>
+                syncing
+                <When at={when} />
+              </span>
             </StatusLabel>
           </p>
         ) : completed ? (
           <p className="mt-5">
             <StatusLabel icon={Check} tone="settled">
-              {somethingNew ? (
-                <span>
-                  synced commit <span className="font-mono text-foreground">{shortCommitSHA(sync?.resolved_commit_sha ?? "")}</span>
-                </span>
-              ) : (
-                "up to date"
-              )}
+              {/* One run of text, so the time follows the words at a space,
+                  not at the label's wider icon gap. */}
+              <span>
+                {somethingNew ? (
+                  <>
+                    synced commit <span className="font-mono text-foreground">{shortCommitSHA(sync?.resolved_commit_sha ?? "")}</span>
+                  </>
+                ) : (
+                  "up to date"
+                )}
+                <When at={when} />
+              </span>
             </StatusLabel>
           </p>
         ) : unsynced && !showError ? (
@@ -172,16 +203,60 @@ export default function TemplateSync({ template, heading, source, about }: { tem
       {showError && (
         <ErrorPanel
           testId="template-sync-error"
-          title={unchecked ? "Could not check on this sync" : stalledFirst ? "Sync stalled" : "Sync failed"}
+          title={
+            unchecked ? (
+              "Could not check on this sync"
+            ) : (
+              <>
+                {stalled ? "Sync stalled" : "Sync failed"}
+                <When at={when} />
+              </>
+            )
+          }
           details={errorMessage}
         >
-          {unchecked
-            ? "It may still finish. Reload the page to see what it registered."
-            : unsynced && failed
-              ? "No revision yet, so stacks can't add this template."
-              : undefined}
+          {unchecked ? (
+            "It may still finish. Reload the page to see what it registered."
+          ) : stalled || (unsynced && failed) ? (
+            // What the failure leaves behind; for a stall, also the way on:
+            // nothing broke that a person must fix first, so syncing again is
+            // it. Only people who can press Sync are told to.
+            <>
+              {unsynced ? "No revision yet, so stacks can't add this template." : "It didn't finish."}
+              {stalled && <RequireCapability capability="can_publish_template"> Sync again.</RequireCapability>}
+            </>
+          ) : undefined}
         </ErrorPanel>
       )}
     </>
+  );
+}
+
+// When a sync ended; for one still running, or stalled, when it started,
+// since it has not ended.
+function syncTime(sync: TemplateLatestSync | null | undefined): { at: string; started: boolean } | null {
+  if (!sync) {
+    return null;
+  }
+  if (sync.status === "syncing" || sync.status === "stalled") {
+    return sync.requested_at ? { at: sync.requested_at, started: true } : null;
+  }
+  return sync.completed_at ? { at: sync.completed_at, started: false } : null;
+}
+
+// The time after an outcome's words, " · 21 Oct, 09:13", muted and at weight
+// 400 whatever the words around it, as the stack page's "Applied <date>" is.
+function When({ at }: { at: { at: string; started: boolean } | null }) {
+  if (at === null) {
+    return null;
+  }
+  return (
+    <span className="font-normal text-muted-foreground" data-testid="template-sync-when">
+      {" · "}
+      {at.started && "started "}
+      <time dateTime={at.at} title={at.at}>
+        {formatDateTime(at.at)}
+      </time>
+    </span>
   );
 }
