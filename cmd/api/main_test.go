@@ -911,6 +911,18 @@ func (recordingStore) CreateSourceTemplate(_ context.Context, template domain.So
 	return template, nil
 }
 
+func (recordingStore) GetSourceTemplate(context.Context, domain.TenantID, domain.SourceTemplateID) (domain.SourceTemplate, error) {
+	return domain.SourceTemplate{}, nil
+}
+
+func (recordingStore) ListSourceTemplatesPage(context.Context, domain.TenantID, *app.SourceTemplateCursor, int) ([]domain.SourceTemplate, error) {
+	return nil, nil
+}
+
+func (recordingStore) ListTemplateRevisionsBySourcePage(context.Context, domain.TenantID, domain.SourceTemplateID, *app.TemplateRevisionCursor, int) ([]domain.TemplateRevision, error) {
+	return nil, nil
+}
+
 func (recordingStore) ApproveTemplateRun(context.Context, domain.TemplateRunApproval) error {
 	return nil
 }

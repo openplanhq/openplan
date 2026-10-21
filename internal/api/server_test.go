@@ -682,6 +682,20 @@ func TestRegisterTemplateCallsService(t *testing.T) {
 	if len(deps.work.requests) != 1 || deps.work.requests[0].Kind != app.KindStartTemplateSync {
 		t.Fatalf("queued requests = %#v, want one start_template_sync request", deps.work.requests)
 	}
+	// The sync writes into the template the register stored and never makes
+	// one, so this route (the web's Register and Sync) works only while the
+	// registration and its sync both name it.
+	wantTemplateID := domain.SourceTemplateIDFor("tenant_123", "acme", "infra-templates", "modules/vpc", "v0.0.1")
+	if deps.registrations.created.SourceTemplateID != wantTemplateID {
+		t.Fatalf("registration source template id = %q, want %q", deps.registrations.created.SourceTemplateID, wantTemplateID)
+	}
+	var syncInput app.StartTemplateSyncPayload
+	if err := json.Unmarshal(deps.work.requests[0].Payload, &syncInput); err != nil {
+		t.Fatalf("decode sync intent: %v", err)
+	}
+	if syncInput.SourceTemplateID != wantTemplateID {
+		t.Fatalf("sync source template id = %q, want %q", syncInput.SourceTemplateID, wantTemplateID)
+	}
 
 	var body templateRegistrationResponse
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
@@ -3453,7 +3467,7 @@ func (unit *apiUnitOfWork) CreateStack(ctx context.Context, stack domain.Stack) 
 	return unit.stacks.CreateStack(ctx, stack)
 }
 
-// CreateSourceTemplate stores nothing: no use case writes a template yet.
+// CreateSourceTemplate returns the template as given: no test here reads it back.
 func (unit *apiUnitOfWork) CreateSourceTemplate(_ context.Context, template domain.SourceTemplate) (domain.SourceTemplate, error) {
 	return template, nil
 }

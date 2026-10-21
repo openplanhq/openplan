@@ -288,6 +288,67 @@ func TestListTemplateRevisionsPaging(t *testing.T) {
 	require.ErrorIs(t, err, ErrInvalidQuery)
 }
 
+func TestListTemplatesPaging(t *testing.T) {
+	t.Parallel()
+
+	templates := make([]domain.SourceTemplate, 5)
+	for i := range templates {
+		templates[i] = domain.SourceTemplate{ID: domain.SourceTemplateID(fmt.Sprintf("source_template_%d", i)), CreatedAt: time.Unix(int64(100-i), 0)}
+	}
+	repository := &recordingSourceTemplateRepository{templates: templates}
+	service := NewService(Service{SourceTemplates: repository, Authorization: testPlatformAuthorizer(t)})
+
+	var seen []domain.SourceTemplateID
+	cursor := ""
+	for {
+		page, err := service.ListTemplates(authenticatedContext(), ListTemplatesCommand{TenantID: "tenant_123", Page: PageRequest{Limit: 2, Cursor: cursor}})
+		require.NoError(t, err)
+		for _, template := range page.Items {
+			seen = append(seen, template.ID)
+		}
+		if page.NextCursor == "" {
+			break
+		}
+		cursor = page.NextCursor
+	}
+	assert.Equal(t, []domain.SourceTemplateID{"source_template_0", "source_template_1", "source_template_2", "source_template_3", "source_template_4"}, seen)
+	assert.Equal(t, domain.TenantID("tenant_123"), repository.gotTenantID)
+
+	_, err := service.ListTemplates(authenticatedContext(), ListTemplatesCommand{
+		TenantID: "tenant_123", Page: PageRequest{Limit: 2, Cursor: EncodeCursor(templateRevisionsList, TemplateRevisionCursor{CreatedAt: time.Now(), ID: "r"})},
+	})
+	require.ErrorIs(t, err, ErrInvalidQuery)
+}
+
+func TestListTemplateRevisionsForTemplatePaging(t *testing.T) {
+	t.Parallel()
+
+	revisions := make([]domain.TemplateRevision, 3)
+	for i := range revisions {
+		revisions[i] = domain.TemplateRevision{ID: domain.TemplateRevisionID(fmt.Sprintf("rev_%d", i)), CreatedAt: time.Unix(int64(100-i), 0)}
+	}
+	repository := &recordingSourceTemplateRepository{template: domain.SourceTemplate{ID: "source_template_vpc"}, revisions: revisions}
+	service := NewService(Service{SourceTemplates: repository, Authorization: testPlatformAuthorizer(t)})
+	command := ListTemplateRevisionsForTemplateCommand{TenantID: "tenant_123", TemplateID: "source_template_vpc", Page: PageRequest{Limit: 2}}
+
+	first, err := service.ListTemplateRevisionsForTemplate(authenticatedContext(), command)
+	require.NoError(t, err)
+	assert.Equal(t, revisions[:2], first.Items)
+	assert.Equal(t, domain.SourceTemplateID("source_template_vpc"), repository.gotID)
+	require.NotEmpty(t, first.NextCursor)
+
+	command.Page.Cursor = first.NextCursor
+	last, err := service.ListTemplateRevisionsForTemplate(authenticatedContext(), command)
+	require.NoError(t, err)
+	assert.Equal(t, revisions[2:], last.Items)
+	assert.Empty(t, last.NextCursor)
+
+	// A cursor from the tenant-wide revisions list is another list's.
+	command.Page.Cursor = EncodeCursor(templateRevisionsList, TemplateRevisionCursor{CreatedAt: time.Now(), ID: "rev_0"})
+	_, err = service.ListTemplateRevisionsForTemplate(authenticatedContext(), command)
+	require.ErrorIs(t, err, ErrInvalidQuery)
+}
+
 func TestSearchUsersPaging(t *testing.T) {
 	t.Parallel()
 
