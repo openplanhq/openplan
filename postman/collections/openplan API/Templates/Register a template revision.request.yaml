@@ -28,4 +28,4 @@ scripts:
       pm.test('status is 202', () => pm.response.to.have.status(202));
       if (pm.response.code < 300) { pm.environment.set('registration_id', pm.response.json().id); }
     language: text/javascript
-order: 1000
+order: 6000

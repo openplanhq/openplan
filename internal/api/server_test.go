@@ -774,6 +774,250 @@ func TestRegisterTemplateOnTheRevisionsPathIsMethodNotAllowed(t *testing.T) {
 	}
 }
 
+// Registering answers with the template, under its own URL, and queues the
+// sync that fills it in.
+func TestCreateTemplateAnswersTheTemplate(t *testing.T) {
+	t.Parallel()
+
+	createdAt := time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC)
+	deps := newAPITestDependencies(t)
+	deps.now = createdAt
+	server := NewServer(deps.service(), configuredTenantID)
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, authenticatedRequest(
+		http.MethodPost,
+		"/v1/tenants/tenant_123/templates",
+		strings.NewReader(`{"repo_owner":"acme","repo_name":"infra-templates","source_ref":"v0.0.1","root_path":"modules/vpc"}`),
+	))
+
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusAccepted, response.Body.String())
+	}
+	wantID := string(domain.SourceTemplateIDFor("tenant_123", "acme", "infra-templates", "modules/vpc", "v0.0.1"))
+	if got, want := response.Header().Get("Location"), "/v1/tenants/tenant_123/templates/"+wantID; got != want {
+		t.Fatalf("Location = %q, want %q", got, want)
+	}
+	var body templateResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.ID != wantID || body.RepoOwner != "acme" || body.RootPath != "modules/vpc" || !body.CreatedAt.Equal(createdAt) {
+		t.Fatalf("template = %#v", body)
+	}
+	if len(deps.work.requests) != 1 || deps.work.requests[0].Kind != app.KindStartTemplateSync {
+		t.Fatalf("queued requests = %#v, want one start_template_sync request", deps.work.requests)
+	}
+	if deps.registrations.created.SourceTemplateID != domain.SourceTemplateID(wantID) {
+		t.Fatalf("sync template id = %q, want %q", deps.registrations.created.SourceTemplateID, wantID)
+	}
+}
+
+func TestCreateTemplateMapsMissingSourceRefToValidationFailed(t *testing.T) {
+	t.Parallel()
+
+	deps := newAPITestDependencies(t)
+	server := NewServer(deps.service(), configuredTenantID)
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, authenticatedRequest(
+		http.MethodPost,
+		"/v1/tenants/tenant_123/templates",
+		strings.NewReader(`{"repo_owner":"acme","repo_name":"infra-templates","root_path":"modules/vpc"}`),
+	))
+
+	assertValidationFailed(t, response, "#/source_ref required")
+	if len(deps.work.requests) != 0 {
+		t.Fatalf("queued requests = %#v, want none", deps.work.requests)
+	}
+}
+
+func TestGetTemplate(t *testing.T) {
+	t.Parallel()
+
+	deps := newAPITestDependencies(t)
+	deps.sourceTemplates.templates = []domain.SourceTemplate{{
+		ID: "source_template_vpc", TenantID: "tenant_123", RepoOwner: "acme", RepoName: "infra-templates",
+		SourceRef: "main", RootPath: "modules/vpc", Name: "vpc", LatestTemplateRevisionID: "rev_1",
+	}}
+	server := NewServer(deps.service(), configuredTenantID)
+
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/templates/source_template_vpc", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	var body templateResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.ID != "source_template_vpc" || body.LatestTemplateRevisionID != "rev_1" {
+		t.Fatalf("template = %#v", body)
+	}
+
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/templates/source_template_missing", nil))
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("unknown template status = %d, want %d; body = %s", response.Code, http.StatusNotFound, response.Body.String())
+	}
+}
+
+// A sync answers with the template it syncs, takes {} or no body at all, and
+// queues a sync of exactly the source the template names.
+func TestStartTemplateSync(t *testing.T) {
+	t.Parallel()
+
+	for name, body := range map[string]io.Reader{"no body": nil, "empty object": strings.NewReader(`{}`)} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			deps := newAPITestDependencies(t)
+			deps.sourceTemplates.templates = []domain.SourceTemplate{{
+				ID: "source_template_vpc", TenantID: "tenant_123", RepoOwner: "acme", RepoName: "infra-templates",
+				SourceRef: "main", RootPath: "modules/vpc", Name: "vpc",
+			}}
+			server := NewServer(deps.service(), configuredTenantID)
+			response := httptest.NewRecorder()
+
+			server.ServeHTTP(response, authenticatedRequest(http.MethodPost, "/v1/tenants/tenant_123/templates/source_template_vpc/syncs", body))
+
+			if response.Code != http.StatusAccepted {
+				t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusAccepted, response.Body.String())
+			}
+			if got, want := response.Header().Get("Location"), "/v1/tenants/tenant_123/templates/source_template_vpc"; got != want {
+				t.Fatalf("Location = %q, want %q", got, want)
+			}
+			var template templateResponse
+			if err := json.Unmarshal(response.Body.Bytes(), &template); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if template.ID != "source_template_vpc" {
+				t.Fatalf("template id = %q, want source_template_vpc", template.ID)
+			}
+			if len(deps.work.requests) != 1 || deps.work.requests[0].Kind != app.KindStartTemplateSync {
+				t.Fatalf("queued requests = %#v, want one start_template_sync request", deps.work.requests)
+			}
+			synced := deps.registrations.created
+			if synced.SourceTemplateID != "source_template_vpc" || synced.RepoOwner != "acme" || synced.RootPath != "modules/vpc" {
+				t.Fatalf("sync = %#v, want the template's source", synced)
+			}
+		})
+	}
+}
+
+func TestStartTemplateSyncRefusals(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name   string
+		tier   string
+		path   string
+		body   string
+		status int
+	}{
+		{name: "unknown template", tier: "admin", path: "source_template_missing", status: http.StatusNotFound},
+		{name: "unknown field", tier: "admin", path: "source_template_vpc", body: `{"ref":"main"}`, status: http.StatusBadRequest},
+		{name: "platform viewer", tier: "viewer", path: "source_template_vpc", status: http.StatusForbidden},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			deps := newAPITestDependencies(t).withPlatformTier(test.tier)
+			deps.sourceTemplates.templates = []domain.SourceTemplate{{ID: "source_template_vpc", TenantID: "tenant_123"}}
+			server := NewServer(deps.service(), configuredTenantID)
+			response := httptest.NewRecorder()
+
+			server.ServeHTTP(response, authenticatedRequest(http.MethodPost, "/v1/tenants/tenant_123/templates/"+test.path+"/syncs", strings.NewReader(test.body)))
+
+			if response.Code != test.status {
+				t.Fatalf("status = %d, want %d; body = %s", response.Code, test.status, response.Body.String())
+			}
+			if len(deps.work.requests) != 0 {
+				t.Fatalf("queued requests = %#v, want none", deps.work.requests)
+			}
+		})
+	}
+}
+
+// A template's revisions are read under it; an unknown template is a 404,
+// not an empty list, so a wrong id is told apart from a template no sync has
+// filled in yet.
+func TestListTemplateRevisionsForTemplate(t *testing.T) {
+	t.Parallel()
+
+	deps := newAPITestDependencies(t)
+	deps.sourceTemplates.templates = []domain.SourceTemplate{
+		{ID: "source_template_vpc", TenantID: "tenant_123"},
+		{ID: "source_template_new", TenantID: "tenant_123"},
+	}
+	deps.sourceTemplates.revisions = []domain.TemplateRevision{
+		{ID: "rev_vpc", TenantID: "tenant_123", SourceTemplateID: "source_template_vpc"},
+		{ID: "rev_db", TenantID: "tenant_123", SourceTemplateID: "source_template_db"},
+	}
+	server := NewServer(deps.service(), configuredTenantID)
+
+	page := getListPage[templateRevisionResponse](t, server, "/v1/tenants/tenant_123/templates/source_template_vpc/revisions")
+	if len(page.Items) != 1 || page.Items[0].ID != "rev_vpc" {
+		t.Fatalf("revisions = %#v, want rev_vpc alone", page.Items)
+	}
+
+	page = getListPage[templateRevisionResponse](t, server, "/v1/tenants/tenant_123/templates/source_template_new/revisions")
+	if len(page.Items) != 0 {
+		t.Fatalf("revisions of a template with none = %#v", page.Items)
+	}
+
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/templates/source_template_missing/revisions", nil))
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("unknown template status = %d, want %d; body = %s", response.Code, http.StatusNotFound, response.Body.String())
+	}
+}
+
+// A platform viewer reads templates but can't register or sync them.
+func TestTemplateRoutesAuthorization(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		method string
+		path   string
+		body   string
+		want   int
+	}{
+		{http.MethodGet, "/v1/tenants/tenant_123/templates", "", http.StatusOK},
+		{http.MethodGet, "/v1/tenants/tenant_123/templates/source_template_vpc", "", http.StatusOK},
+		{http.MethodGet, "/v1/tenants/tenant_123/templates/source_template_vpc/revisions", "", http.StatusOK},
+		{http.MethodPost, "/v1/tenants/tenant_123/templates", `{"repo_owner":"acme","repo_name":"r","source_ref":"main","root_path":"."}`, http.StatusForbidden},
+	} {
+		t.Run(test.method+" "+test.path, func(t *testing.T) {
+			t.Parallel()
+
+			deps := newBareAPITestDependencies(t).withPlatformTier("viewer")
+			deps.sourceTemplates.templates = []domain.SourceTemplate{{ID: "source_template_vpc", TenantID: "tenant_123"}}
+			server := NewServer(deps.service(), configuredTenantID)
+			response := httptest.NewRecorder()
+
+			server.ServeHTTP(response, authenticatedRequest(test.method, test.path, strings.NewReader(test.body)))
+
+			if response.Code != test.want {
+				t.Fatalf("status = %d, want %d; body = %s", response.Code, test.want, response.Body.String())
+			}
+		})
+	}
+	t.Run("no platform role", func(t *testing.T) {
+		t.Parallel()
+
+		deps := newBareAPITestDependencies(t)
+		server := NewServer(deps.service(), configuredTenantID)
+		response := httptest.NewRecorder()
+
+		server.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/templates", nil))
+
+		if response.Code != http.StatusForbidden {
+			t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusForbidden, response.Body.String())
+		}
+	})
+}
+
 func TestCreateStackCallsService(t *testing.T) {
 	t.Parallel()
 
@@ -3220,6 +3464,7 @@ type apiTestDependencies struct {
 	templateRuns           recordingTemplateRunRepository
 	registrations          recordingTemplateRegistrationRepository
 	templates              recordingTemplateRepository
+	sourceTemplates        apiSourceTemplateRepository
 	logs                   recordingTemplateRunLogReader
 	logMetadata            recordingTemplateRunLogRepository
 	planChanges            apiPlanChangeRepository
@@ -3393,6 +3638,7 @@ func (deps *apiTestDependencies) service() *app.Service {
 		TemplateRegistrations:    &deps.registrations,
 		TemplateRevisionMetadata: &deps.templates,
 		TemplateRevisions:        &deps.templates,
+		SourceTemplates:          &deps.sourceTemplates,
 		TemplateRunLogs:          &deps.logs,
 		TemplateRunLogMetadata:   &deps.logMetadata,
 		PlanChanges:              &deps.planChanges,
@@ -3901,6 +4147,52 @@ func (repository *recordingTemplateRepository) GetTemplateRevisionVariables(_ co
 		return nil, repository.variablesErr
 	}
 	return repository.variables, nil
+}
+
+// apiSourceTemplateRepository holds templates and their revisions in memory,
+// each list newest first, as the store pages them.
+type apiSourceTemplateRepository struct {
+	templates []domain.SourceTemplate
+	revisions []domain.TemplateRevision
+}
+
+func (repository *apiSourceTemplateRepository) GetSourceTemplate(_ context.Context, tenantID domain.TenantID, id domain.SourceTemplateID) (domain.SourceTemplate, error) {
+	for _, template := range repository.templates {
+		if template.TenantID == tenantID && template.ID == id {
+			return template, nil
+		}
+	}
+	return domain.SourceTemplate{}, app.ErrNotFound
+}
+
+func (repository *apiSourceTemplateRepository) ListSourceTemplatesPage(_ context.Context, tenantID domain.TenantID, after *app.SourceTemplateCursor, limit int) ([]domain.SourceTemplate, error) {
+	var page []domain.SourceTemplate
+	reached := after == nil
+	for _, template := range repository.templates {
+		if !reached {
+			reached = template.ID == after.ID
+			continue
+		}
+		if template.TenantID == tenantID && len(page) < limit {
+			page = append(page, template)
+		}
+	}
+	return page, nil
+}
+
+func (repository *apiSourceTemplateRepository) ListTemplateRevisionsBySourcePage(_ context.Context, tenantID domain.TenantID, sourceTemplateID domain.SourceTemplateID, after *app.TemplateRevisionCursor, limit int) ([]domain.TemplateRevision, error) {
+	var page []domain.TemplateRevision
+	reached := after == nil
+	for _, revision := range repository.revisions {
+		if !reached {
+			reached = revision.ID == after.ID
+			continue
+		}
+		if revision.TenantID == tenantID && revision.SourceTemplateID == sourceTemplateID && len(page) < limit {
+			page = append(page, revision)
+		}
+	}
+	return page, nil
 }
 
 type recordingWorkflowDispatcher struct {

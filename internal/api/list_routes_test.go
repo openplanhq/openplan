@@ -128,6 +128,8 @@ func TestPagedListsRejectBadPaging(t *testing.T) {
 	for _, path := range []string{
 		"/v1/tenants/tenant_123/stacks",
 		"/v1/tenants/tenant_123/template-revisions",
+		"/v1/tenants/tenant_123/templates",
+		"/v1/tenants/tenant_123/templates/source_template_123/revisions",
 		"/v1/tenants/tenant_123/stack-templates/stack_template_123/runs",
 		"/v1/tenants/tenant_123/queue",
 	} {
@@ -163,6 +165,45 @@ func TestListTemplateRevisionsPaging(t *testing.T) {
 	server := NewServer(deps.service(), configuredTenantID)
 
 	pages := walkPages[templateRevisionResponse](t, server, "/v1/tenants/tenant_123/template-revisions?limit=2")
+
+	require.Len(t, pages, 2)
+	assert.Equal(t, "rev_0", pages[0][0].ID)
+	assert.Equal(t, "rev_2", pages[1][0].ID)
+}
+
+func TestListTemplatesPaging(t *testing.T) {
+	t.Parallel()
+
+	deps := newAPITestDependencies(t)
+	for i := range 3 {
+		deps.sourceTemplates.templates = append(deps.sourceTemplates.templates, domain.SourceTemplate{
+			ID: domain.SourceTemplateID(fmt.Sprintf("source_template_%d", i)), TenantID: "tenant_123", CreatedAt: time.Unix(int64(100-i), 0),
+		})
+	}
+	server := NewServer(deps.service(), configuredTenantID)
+
+	pages := walkPages[templateResponse](t, server, "/v1/tenants/tenant_123/templates?limit=2")
+
+	require.Len(t, pages, 2)
+	assert.Equal(t, "source_template_0", pages[0][0].ID)
+	assert.Equal(t, "source_template_1", pages[0][1].ID)
+	assert.Equal(t, "source_template_2", pages[1][0].ID)
+}
+
+func TestListTemplateRevisionsForTemplatePaging(t *testing.T) {
+	t.Parallel()
+
+	deps := newAPITestDependencies(t)
+	deps.sourceTemplates.templates = []domain.SourceTemplate{{ID: "source_template_123", TenantID: "tenant_123"}}
+	for i := range 3 {
+		deps.sourceTemplates.revisions = append(deps.sourceTemplates.revisions, domain.TemplateRevision{
+			ID: domain.TemplateRevisionID(fmt.Sprintf("rev_%d", i)), TenantID: "tenant_123",
+			SourceTemplateID: "source_template_123", CreatedAt: time.Unix(int64(100-i), 0),
+		})
+	}
+	server := NewServer(deps.service(), configuredTenantID)
+
+	pages := walkPages[templateRevisionResponse](t, server, "/v1/tenants/tenant_123/templates/source_template_123/revisions?limit=2")
 
 	require.Len(t, pages, 2)
 	assert.Equal(t, "rev_0", pages[0][0].ID)
@@ -287,6 +328,7 @@ func TestEveryListRouteAnswersEnvelope(t *testing.T) {
 	fixture := strings.NewReplacer(
 		"{tenant_id}", "tenant_123", "{stack_id}", "stack_123", "{stack_template_id}", "stack_template_123",
 		"{run_id}", "run_123", "{template_revision_id}", "template_123",
+		"{template_id}", "source_template_123",
 	)
 	// Search needs q; the rest take no parameters.
 	queries := map[string]string{"/v1/tenants/{tenant_id}/users/search": "?q=a"}
@@ -302,7 +344,7 @@ func TestEveryListRouteAnswersEnvelope(t *testing.T) {
 		}
 		lists = append(lists, pattern)
 	}
-	require.GreaterOrEqual(t, len(lists), 11, "the route parse found too few lists: %v", lists)
+	require.GreaterOrEqual(t, len(lists), 13, "the route parse found too few lists: %v", lists)
 
 	for _, pattern := range lists {
 		t.Run(pattern, func(t *testing.T) {
@@ -310,6 +352,7 @@ func TestEveryListRouteAnswersEnvelope(t *testing.T) {
 
 			deps := newAPITestDependencies(t)
 			deps.stackTemplates.stackTemplate.StackID = "stack_123"
+			deps.sourceTemplates.templates = []domain.SourceTemplate{{ID: "source_template_123", TenantID: "tenant_123"}}
 			service := deps.service()
 			service.Credentials = apiCredentialRepository{}
 			server := NewServer(service, configuredTenantID, WithQueueReader(&stubQueueReader{}))

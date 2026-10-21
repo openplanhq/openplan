@@ -170,6 +170,23 @@ type templateRegistrationResponse struct {
 	ErrorSummary       string    `json:"error_summary"`
 }
 
+// templateResponse is a registered source. Name, description and tags are
+// its latest revision's; before the first sync records one, the name is the
+// fallback the sync would use and the revision id is "".
+type templateResponse struct {
+	ID                       string    `json:"id"`
+	TenantID                 string    `json:"tenant_id"`
+	RepoOwner                string    `json:"repo_owner"`
+	RepoName                 string    `json:"repo_name"`
+	SourceRef                string    `json:"source_ref"`
+	RootPath                 string    `json:"root_path"`
+	Name                     string    `json:"name"`
+	Description              string    `json:"description"`
+	Tags                     []string  `json:"tags"`
+	LatestTemplateRevisionID string    `json:"latest_template_revision_id"`
+	CreatedAt                time.Time `json:"created_at"`
+}
+
 type templateRevisionResponse struct {
 	ID       string `json:"id"`
 	TenantID string `json:"tenant_id"`
@@ -286,6 +303,26 @@ func newTemplateRegistrationResponse(registration domain.TemplateRegistration) t
 		RequestedAt:        registration.RequestedAt,
 		CompletedAt:        registration.CompletedAt,
 		ErrorSummary:       registration.ErrorSummary,
+	}
+}
+
+func newTemplateResponse(template domain.SourceTemplate) templateResponse {
+	tags := template.Tags
+	if tags == nil {
+		tags = []string{}
+	}
+	return templateResponse{
+		ID:                       string(template.ID),
+		TenantID:                 string(template.TenantID),
+		RepoOwner:                template.RepoOwner,
+		RepoName:                 template.RepoName,
+		SourceRef:                template.SourceRef,
+		RootPath:                 template.RootPath,
+		Name:                     template.Name,
+		Description:              template.Description,
+		Tags:                     tags,
+		LatestTemplateRevisionID: string(template.LatestTemplateRevisionID),
+		CreatedAt:                template.CreatedAt,
 	}
 }
 

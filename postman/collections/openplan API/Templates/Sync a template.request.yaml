@@ -1,0 +1,20 @@
+$kind: http-request
+description: |-
+  Queues a sync of the template's source, to pick up a new commit on its
+  ref or to retry a sync that failed.
+
+  Takes no fields: send `{}` or no body at all. Returns `202` with the
+  template; a sync has no read of its own.
+method: POST
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/templates/{{template_id}}/syncs'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: '{}'
+scripts:
+  - type: afterResponse
+    code: pm.test('status is 202', () => pm.response.to.have.status(202));
+    language: text/javascript
+order: 4000

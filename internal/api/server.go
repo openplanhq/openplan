@@ -162,7 +162,20 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	// Returns the authenticated principal's identity, global capabilities, and configured tenant.
 	server.mux.HandleFunc("GET /v1/me", server.handleMe)
 
-	// Template revision registration routes.
+	// Template routes.
+	// Registers a GitHub Terraform source as a template and starts syncing it.
+	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/templates", server.handleCreateTemplate)
+	// Lists the tenant's templates, newest first, a page at a time.
+	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/templates", server.handleListTemplates)
+	// Reads one template.
+	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/templates/{template_id}", server.handleGetTemplate)
+	// Syncs a template again, to pick up a new commit or retry a failed sync.
+	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/templates/{template_id}/syncs", server.handleStartTemplateSync)
+	// Lists one template's revisions, newest first, a page at a time.
+	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/templates/{template_id}/revisions", server.handleListTemplateRevisionsForTemplate)
+
+	// Template revision registration routes, retired once the web reads
+	// templates.
 	// Starts async registration for a public GitHub Terraform template source.
 	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/template-registrations", server.handleRegisterTemplate)
 	// Lists registered template revision metadata for the tenant.
@@ -457,6 +470,100 @@ func (server *Server) handleSearchUsers(response http.ResponseWriter, request *h
 	}
 
 	writeJSON(response, http.StatusOK, newListResponse(users.Items, users.NextCursor))
+}
+
+// handleCreateTemplate answers 202 with the template, whether the source was
+// new or already registered: either way a sync of it was just queued.
+func (server *Server) handleCreateTemplate(response http.ResponseWriter, request *http.Request) {
+	var body registerTemplateRequest
+	if !decodeRequestBody(response, request, &body) {
+		return
+	}
+
+	started, err := server.service.RegisterTemplate(request.Context(), app.RegisterTemplateCommand{
+		TenantID:  domain.TenantID(request.PathValue("tenant_id")),
+		RepoOwner: body.RepoOwner,
+		RepoName:  body.RepoName,
+		SourceRef: body.SourceRef,
+		RootPath:  body.RootPath,
+	})
+	if err != nil {
+		writeAppError(response, err)
+		return
+	}
+
+	setLocation(response, request, "templates", string(started.Template.ID))
+	writeJSON(response, http.StatusAccepted, newTemplateResponse(started.Template))
+}
+
+func (server *Server) handleListTemplates(response http.ResponseWriter, request *http.Request) {
+	page, ok := readPageRequest(response, request)
+	if !ok {
+		return
+	}
+	templates, err := server.service.ListTemplates(request.Context(), app.ListTemplatesCommand{
+		TenantID: domain.TenantID(request.PathValue("tenant_id")),
+		Page:     page,
+	})
+	if err != nil {
+		writeAppError(response, err)
+		return
+	}
+
+	writeJSON(response, http.StatusOK, newListResponse(mapItems(templates.Items, newTemplateResponse), templates.NextCursor))
+}
+
+func (server *Server) handleGetTemplate(response http.ResponseWriter, request *http.Request) {
+	template, err := server.service.GetTemplate(request.Context(), app.GetTemplateCommand{
+		TenantID:   domain.TenantID(request.PathValue("tenant_id")),
+		TemplateID: domain.SourceTemplateID(request.PathValue("template_id")),
+	})
+	if err != nil {
+		writeAppError(response, err)
+		return
+	}
+
+	writeJSON(response, http.StatusOK, newTemplateResponse(template))
+}
+
+// handleStartTemplateSync answers 202 with the template, not the sync: a sync
+// has no read of its own, and the template is what a client follows (owner
+// decision, 2026-10-21).
+func (server *Server) handleStartTemplateSync(response http.ResponseWriter, request *http.Request) {
+	var body startTemplateSyncRequest
+	if !decodeOptionalRequestBody(response, request, &body) {
+		return
+	}
+
+	started, err := server.service.StartTemplateSync(request.Context(), app.StartTemplateSyncCommand{
+		TenantID:   domain.TenantID(request.PathValue("tenant_id")),
+		TemplateID: domain.SourceTemplateID(request.PathValue("template_id")),
+	})
+	if err != nil {
+		writeAppError(response, err)
+		return
+	}
+
+	setLocation(response, request, "templates", string(started.Template.ID))
+	writeJSON(response, http.StatusAccepted, newTemplateResponse(started.Template))
+}
+
+func (server *Server) handleListTemplateRevisionsForTemplate(response http.ResponseWriter, request *http.Request) {
+	page, ok := readPageRequest(response, request)
+	if !ok {
+		return
+	}
+	revisions, err := server.service.ListTemplateRevisionsForTemplate(request.Context(), app.ListTemplateRevisionsForTemplateCommand{
+		TenantID:   domain.TenantID(request.PathValue("tenant_id")),
+		TemplateID: domain.SourceTemplateID(request.PathValue("template_id")),
+		Page:       page,
+	})
+	if err != nil {
+		writeAppError(response, err)
+		return
+	}
+
+	writeJSON(response, http.StatusOK, newListResponse(mapItems(revisions.Items, newTemplateRevisionResponse), revisions.NextCursor))
 }
 
 func (server *Server) handleRegisterTemplate(response http.ResponseWriter, request *http.Request) {
@@ -1039,6 +1146,8 @@ type credentialRequest struct {
 }
 
 type approveRunRequest struct{}
+
+type startTemplateSyncRequest struct{}
 
 type discardRunRequest struct {
 	Reason string `json:"reason"`

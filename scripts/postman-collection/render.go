@@ -427,6 +427,7 @@ var environment = []environmentValue{
 	{"user_search", "a", plainVariable},
 	{"my_sub", "", plainVariable},
 	{"registration_id", "", plainVariable},
+	{"template_id", "", plainVariable},
 	{"template_revision_id", "", plainVariable},
 	{"stack_id", "", plainVariable},
 	{"stack_template_id", "", plainVariable},

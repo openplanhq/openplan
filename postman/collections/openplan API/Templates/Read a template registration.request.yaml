@@ -20,4 +20,4 @@ scripts:
         pm.environment.unset('poll_tries');
       }
     language: text/javascript
-order: 3000
+order: 8000

@@ -40,6 +40,10 @@ values:
     value: ""
     enabled: true
     type: default
+  - key: template_id
+    value: ""
+    enabled: true
+    type: default
   - key: template_revision_id
     value: ""
     enabled: true
