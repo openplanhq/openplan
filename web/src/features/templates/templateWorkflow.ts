@@ -87,6 +87,17 @@ export function groupTemplatesByRepository(templateRevisions: TemplateRevision[]
 }
 
 /**
+ * Every template in one list, by name, for the templates page. People look
+ * for a template by what it is; its repository is a detail of it, so it is
+ * not a heading. Ties keep the API's order, newest first.
+ */
+export function listSourceTemplates(templateRevisions: TemplateRevision[]): SourceTemplateGroup[] {
+  return groupTemplatesByRepository(templateRevisions)
+    .flatMap((repository) => repository.sourceTemplates)
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true }));
+}
+
+/**
  * The revisions of a template that can actually be installed.
  *
  * Order is the order received, which is the API's `created_at desc, id desc` —

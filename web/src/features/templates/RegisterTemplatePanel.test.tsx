@@ -225,8 +225,8 @@ describe("RegisterTemplatePanel", () => {
     submit();
 
     await waitFor(() => expect(screen.getByTestId("register-template-error")).toBeTruthy());
-    const error = within(screen.getByTestId("register-template-error"));
-    expect(error.getByRole("alert").textContent).toContain("This template could not be registered. Check the fields and register it again.");
+    expect(screen.getByTestId("register-template-error").getAttribute("role")).toBe("alert");
+    expect(screen.getByTestId("register-template-error").textContent).toContain("Could not register this templateCheck the fields and register it again.");
     expect(screen.getByTestId("register-template-error").querySelector("pre")?.textContent).toBe(reason);
     expect((screen.getByLabelText("Root path") as HTMLInputElement).value).toBe("aws/sqs-queues");
     expect((screen.getByTestId("register-template-submit") as HTMLButtonElement).disabled).toBe(false);
@@ -251,9 +251,7 @@ describe("RegisterTemplatePanel", () => {
     submit();
 
     await waitFor(() => expect(screen.getByTestId("register-template-error").textContent).toContain("repo_name is required"));
-    expect(within(screen.getByTestId("register-template-error")).getByRole("alert").textContent).toBe(
-      "This template could not be registered. Check the fields and register it again."
-    );
+    expect(screen.getByTestId("register-template-error").textContent).toContain("Could not register this templateCheck the fields and register it again.");
     expect((screen.getByTestId("register-template-submit") as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -269,9 +267,8 @@ describe("RegisterTemplatePanel", () => {
 
     await waitFor(() => expect(screen.getByTestId("register-template-error")).toBeTruthy(), { timeout: 3000 });
     // It may still finish, so the lead says so rather than blame the fields.
-    const error = within(screen.getByTestId("register-template-error"));
-    expect(error.getByRole("alert").textContent).toBe(
-      "openplan could not check on this registration, so it may still finish. Reload the page before registering it again."
+    expect(screen.getByTestId("register-template-error").textContent).toContain(
+      "Could not check on this registrationIt may still finish. Reload the page before registering it again."
     );
     expect(screen.getByTestId("register-template-error").querySelector("pre")?.textContent).toBe("forbidden");
     expect(screen.queryByTestId("register-template-progress")).toBeNull();

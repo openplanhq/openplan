@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Check, Loader2, LoaderCircle, RefreshCw } from "lucide-react";
 import { isTerminalRegistrationStatus } from "../../api/polling";
 import { apiErrorMessage } from "../../api/problems";
 import { queryKeys } from "../../api/queryKeys";
 import { useRegisterTemplateMutation, useTemplateRegistrationQuery } from "../../api/queries";
 import { tenantID } from "../../config";
 import { buttonClass } from "../../shared/buttonClass";
-import ErrorLine from "../../shared/ErrorLine";
+import ErrorPanel from "../../shared/ErrorPanel";
+import StatusLabel from "../../shared/StatusLabel";
 import { cn } from "@/lib/utils";
 import { useTemplate } from "./templateContext";
 import { shortCommitSHA } from "./templateWorkflow";
@@ -17,16 +19,18 @@ import { shortCommitSHA } from "./templateWorkflow";
 // second template from a typo; the panel already holds every field the POST
 // needs.
 //
-// It polls the registration until it settles, then says what happened in
-// words, in a status line mounted empty so the words are announced when they
-// arrive: the commit it registered, or that nothing was new. A new commit can
+// It sits at the right of the template's name, a small subtle button over
+// the source line (source) and the description and tags (about): it keeps the
+// template current, but the header is about the template. It polls the
+// registration until it settles, then says what happened under them: the commit it
+// registered, that nothing was new, or, in an ErrorPanel, that it failed. A new commit can
 // only be told from an old one by the revisions on screen when Sync was
 // pressed: a registration that resolves to a commit the template has reuses
 // that revision, and both read "completed".
 //
 // The panel mounts one per template (key), so a sync never follows the person
 // to another template.
-export default function TemplateSync() {
+export default function TemplateSync({ heading, source, about }: { heading: ReactNode; source: ReactNode; about: ReactNode }) {
   const { revisions, latest } = useTemplate();
   const queryClient = useQueryClient();
   const registerTemplateMutation = useRegisterTemplateMutation(tenantID);
@@ -50,6 +54,9 @@ export default function TemplateSync() {
   const somethingNew = completed && !revisionIDsBefore.current.has(syncedRevisionID);
   const failed = settled && status !== "completed";
   const errorMessage = requestError || pollError || (failed ? registration?.error_summary || "Sync failed" : "");
+  // A poll that fails says nothing about the sync itself, which may still
+  // finish.
+  const unchecked = requestError === "" && pollError !== "";
 
   useEffect(() => {
     if (status !== "completed") {
@@ -81,33 +88,71 @@ export default function TemplateSync() {
     }
   }
 
+  // One place for every outcome, under the template's name, source line,
+  // description and tags, so the Latest commit it may have changed is in view. The status
+  // region is mounted empty, so its words are announced when they arrive; its
+  // negative margin cancels the header's gap while it is empty.
   return (
-    <div className="flex max-w-sm shrink-0 flex-col items-end gap-1.5">
-      <button
-        type="button"
-        className={cn(buttonClass("outline", "lg"), "pointer-coarse:h-11")}
-        disabled={syncing}
-        onClick={() => void handleSync()}
-        data-testid="template-sync"
-      >
+    <>
+      <div className="flex min-w-0 flex-col gap-3">
+        <div className="flex min-w-0 flex-col gap-2.5">
+          <div className="flex min-w-0 items-start justify-between gap-6">
+            {heading}
+            {/* The small size, so it sits on the name's line without
+                outgrowing it. Pulled out by its own padding, so its words end
+                on the content's edge and the name's line keeps its height.
+                While a sync runs it stays focusable, marked aria-disabled,
+                and ignores presses: disabling it would drop a keyboard
+                user's focus. */}
+            <button
+              type="button"
+              className={cn(buttonClass("subtle", "sm"), "-my-px -mr-2.5 pointer-coarse:h-11")}
+              aria-disabled={syncing ? "true" : undefined}
+              onClick={() => void handleSync()}
+              data-testid="template-sync"
+            >
+              {syncing ? (
+                <Loader2 data-icon="inline-start" aria-hidden="true" strokeWidth={2.42} className="size-3.25 animate-spin" />
+              ) : (
+                <RefreshCw data-icon="inline-start" aria-hidden="true" strokeWidth={2.42} className="size-3.25" />
+              )}
+              Sync
+            </button>
+          </div>
+          {source}
+        </div>
+        {about}
+      </div>
+      <div className="-mt-5 flex flex-col" role="status" aria-live="polite" data-testid="template-sync-result">
         {syncing ? (
-          <Loader2 data-icon="inline-start" aria-hidden="true" className="animate-spin" />
-        ) : (
-          <RefreshCw data-icon="inline-start" aria-hidden="true" />
-        )}
-        Sync
-      </button>
-      <p className="min-h-4 text-right text-meta text-muted-foreground" role="status" aria-live="polite" data-testid="template-sync-result">
-        {completed &&
-          (somethingNew ? (
-            <>
-              Registered commit <span className="font-mono text-code-foreground">{shortCommitSHA(registration?.resolved_commit_sha ?? "")}</span>.
-            </>
-          ) : (
-            "Already up to date."
-          ))}
-      </p>
-      {errorMessage !== "" && <ErrorLine testId="template-sync-error">{errorMessage}</ErrorLine>}
-    </div>
+          <p className="mt-5">
+            <StatusLabel icon={LoaderCircle} tone="settled">
+              syncing
+            </StatusLabel>
+          </p>
+        ) : completed ? (
+          <p className="mt-5">
+            <StatusLabel icon={Check} tone="settled">
+              {somethingNew ? (
+                <span>
+                  synced commit <span className="font-mono text-foreground">{shortCommitSHA(registration?.resolved_commit_sha ?? "")}</span>
+                </span>
+              ) : (
+                "up to date"
+              )}
+            </StatusLabel>
+          </p>
+        ) : null}
+      </div>
+      {!syncing && errorMessage !== "" && (
+        <ErrorPanel
+          testId="template-sync-error"
+          title={unchecked ? "Could not check on this sync" : "Sync failed"}
+          details={errorMessage}
+        >
+          {unchecked ? "It may still finish. Reload the page to see what it registered." : undefined}
+        </ErrorPanel>
+      )}
+    </>
   );
 }

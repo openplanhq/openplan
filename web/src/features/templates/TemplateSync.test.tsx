@@ -40,6 +40,12 @@ function syncButton(): HTMLButtonElement {
   return screen.getByTestId("template-sync") as HTMLButtonElement;
 }
 
+// Busy, not disabled: the button keeps focus while a sync runs.
+function syncing(): boolean {
+  expect(syncButton().disabled).toBe(false);
+  return syncButton().getAttribute("aria-disabled") === "true";
+}
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -61,17 +67,17 @@ describe("TemplateSync", () => {
     expect(JSON.parse(String(post?.[1]?.body))).toEqual({ repo_owner: "acme", repo_name: "infra-modules", source_ref: "main", root_path: "aws/eks" });
   });
 
-  it("disables Sync while one runs, so clicks do not queue workflows", async () => {
+  it("marks Sync busy while one runs, keeping focus, so clicks do not queue workflows", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       if (init?.method === "POST") return jsonResponse(registration({ status: "pending" }));
       if (String(input).includes("/template-registrations/")) return jsonResponse(registration({ status: "running" }));
       return jsonResponse([current, other]);
     });
     renderPanel(seed());
-    expect(syncButton().disabled).toBe(false);
+    expect(syncing()).toBe(false);
 
     fireEvent.click(syncButton());
-    await waitFor(() => expect(syncButton().disabled).toBe(true));
+    await waitFor(() => expect(syncing()).toBe(true));
     fireEvent.click(syncButton());
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
   });
@@ -90,7 +96,7 @@ describe("TemplateSync", () => {
 
     // The real flow: a pending POST, then a poll POLL_INTERVAL_MS later.
     await waitFor(() => expect(screen.getByTestId("revision-row-rev_2")).toBeTruthy(), { timeout: 3000 });
-    expect(screen.getByTestId("template-sync-result").textContent).toBe("Registered commit f17f983.");
+    expect(screen.getByTestId("template-sync-result").textContent).toBe("synced commit f17f983");
     expect(screen.getAllByTestId(/^revision-row-/)[0].getAttribute("data-testid")).toBe("revision-row-rev_2");
   });
 
@@ -103,7 +109,7 @@ describe("TemplateSync", () => {
     expect(screen.getByTestId("template-sync-result").textContent).toBe("");
 
     fireEvent.click(syncButton());
-    await waitFor(() => expect(screen.getByTestId("template-sync-result").textContent).toBe("Already up to date."));
+    await waitFor(() => expect(screen.getByTestId("template-sync-result").textContent).toBe("up to date"));
   });
 
   it.each([
@@ -117,7 +123,7 @@ describe("TemplateSync", () => {
     fireEvent.click(syncButton());
 
     await waitFor(() => expect(screen.getByTestId("template-sync-error").textContent).toContain(message));
-    expect(syncButton().disabled).toBe(false);
+    expect(syncing()).toBe(false);
   });
 
   it("shows a refused request rather than leaving the button spinning", async () => {
@@ -128,7 +134,7 @@ describe("TemplateSync", () => {
     fireEvent.click(syncButton());
 
     await waitFor(() => expect(screen.getByTestId("template-sync-error").textContent).toContain("forbidden"));
-    expect(syncButton().disabled).toBe(false);
+    expect(syncing()).toBe(false);
   });
 
   it("shows a failing poll rather than leaving the button spinning", async () => {
@@ -141,7 +147,7 @@ describe("TemplateSync", () => {
     fireEvent.click(syncButton());
 
     await waitFor(() => expect(screen.getByTestId("template-sync-error").textContent).toContain("forbidden"), { timeout: 3000 });
-    expect(syncButton().disabled).toBe(false);
+    expect(syncing()).toBe(false);
   });
 
   it("is not offered to people who cannot publish templates", () => {
@@ -160,13 +166,13 @@ describe("TemplateSync", () => {
     });
     const router = renderPanel(seed());
     fireEvent.click(syncButton());
-    await waitFor(() => expect(syncButton().disabled).toBe(true));
+    await waitFor(() => expect(syncing()).toBe(true));
 
     await act(async () => {
       await router.navigate("/templates/tpl_net/revisions");
     });
     expect(screen.getByRole("heading", { level: 2, name: "network" })).toBeTruthy();
-    expect(syncButton().disabled).toBe(false);
+    expect(syncing()).toBe(false);
     expect(screen.getByTestId("template-sync-result").textContent).toBe("");
   });
   // A sync the person walked away from can finish while they read another
@@ -183,7 +189,7 @@ describe("TemplateSync", () => {
     });
     const router = renderPanel(seed());
     fireEvent.click(syncButton());
-    await waitFor(() => expect(syncButton().disabled).toBe(true));
+    await waitFor(() => expect(syncing()).toBe(true));
 
     await act(async () => {
       await router.navigate("/templates/tpl_net/revisions");
@@ -195,6 +201,6 @@ describe("TemplateSync", () => {
     });
 
     await waitFor(() => expect(screen.getAllByTestId(/^revision-row-/)[0].getAttribute("data-testid")).toBe("revision-row-rev_2"));
-    expect(within(screen.getByTestId("template-details")).getByRole("link", { name: /^f17f983,/ })).toBeTruthy();
+    expect(within(screen.getByTestId("template-source")).getByRole("link", { name: /^Latest commit: ?f17f983,/ })).toBeTruthy();
   });
 });

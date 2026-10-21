@@ -80,16 +80,17 @@ describe("TemplatePanel header", () => {
     expect(screen.queryByTestId("template-no-description")).toBeNull();
   });
 
-  it("links the repository, root path, ref and latest commit on GitHub, with the commit's registration date", () => {
+  it("links the repository, root path, ref and latest commit on GitHub, each named for a screen reader, with no date: the revision's is not the commit's", () => {
     renderPanel(seed(), "/templates/tpl_1/variables");
-    const details = within(screen.getByTestId("template-details"));
+    const details = within(screen.getByRole("list", { name: "Source on GitHub" }));
 
-    expect(details.getByRole("link", { name: /^acme\/infra-modules,/ }).getAttribute("href")).toBe("https://github.com/acme/infra-modules");
-    expect(details.getByRole("link", { name: /^aws\/eks,/ }).getAttribute("href")).toBe("https://github.com/acme/infra-modules/tree/main/aws/eks");
-    expect(details.getByRole("link", { name: /^main,/ }).getAttribute("href")).toBe("https://github.com/acme/infra-modules/tree/main");
-    const commit = details.getByRole("link", { name: /^9e7d3b2,/ });
+    expect(details.getByRole("link", { name: /^Repository: ?acme\/infra-modules,/ }).getAttribute("href")).toBe("https://github.com/acme/infra-modules");
+    expect(details.getByRole("link", { name: /^Root path: ?aws\/eks,/ }).getAttribute("href")).toBe("https://github.com/acme/infra-modules/tree/main/aws/eks");
+    expect(details.getByRole("link", { name: /^Ref: ?main,/ }).getAttribute("href")).toBe("https://github.com/acme/infra-modules/tree/main");
+    const commit = details.getByRole("link", { name: /^Latest commit: ?9e7d3b2,/ });
     expect(commit.getAttribute("href")).toBe("https://github.com/acme/infra-modules/commit/9e7d3b2aaaabbbbccccddddeeeeffff000011112");
-    expect(screen.getByTestId("template-details").textContent).toMatch(/5 Oct(ober)? 2026/);
+    expect(screen.getByTestId("template-source").textContent).not.toMatch(/Oct/);
+    expect(screen.getByTestId("template-source").querySelector("time")).toBeNull();
     for (const link of details.getAllByRole("link")) {
       expect(link.getAttribute("target")).toBe("_blank");
     }
@@ -97,8 +98,17 @@ describe("TemplatePanel header", () => {
 
   it("calls a module at the root the repository root", () => {
     renderPanel(seed(), "/templates/tpl_cdn/variables");
-    const root = within(screen.getByTestId("template-details")).getByRole("link", { name: /^the repository root,/ });
+    const root = within(screen.getByTestId("template-source")).getByRole("link", { name: /^Root path: ?repository root,/ });
     expect(root.getAttribute("href")).toBe("https://github.com/acme/edge/tree/v2.0.1");
+  });
+
+  it("lays the four facts out as one row of equal columns under the name, none cut short", () => {
+    renderPanel(seed(), "/templates/tpl_1/variables");
+    const source = screen.getByTestId("template-source");
+    expect(source.className).toContain("grid-cols-4");
+    expect(source.querySelectorAll("li")).toHaveLength(4);
+    expect(source.querySelector(".truncate")).toBeNull();
+    expect(screen.getByRole("heading", { level: 2 }).compareDocumentPosition(source) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("says so when the URL names no registered template", () => {
