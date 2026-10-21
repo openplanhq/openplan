@@ -1,34 +1,41 @@
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { BookMarked, Folder, GitBranch, GitCommitHorizontal } from "lucide-react";
+import { BookMarked, Folder, GitBranch, GitCommitHorizontal, Loader2, RefreshCw } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Outlet, useLocation, useParams } from "react-router-dom";
 import { queryKeys } from "../../api/queryKeys";
-import { useTemplateRevisionsQuery, useTemplateRevisionVariablesQuery } from "../../api/queries";
+import { useTemplateRevisionsQuery, useTemplateRevisionVariablesQuery, useTemplatesQuery } from "../../api/queries";
 import RequireCapability from "../../auth/RequireCapability";
 import { tenantID } from "../../config";
+import { buttonClass } from "../../shared/buttonClass";
+import ErrorLine from "../../shared/ErrorLine";
 import ExternalLink from "../../shared/ExternalLink";
+import RequestIdNote from "../../shared/RequestIdNote";
 import UnderlineTabs from "../../shared/UnderlineTabs";
 import { TemplateContext } from "./templateContext";
 import { githubLinks, rootPathOf } from "./templateLinks";
 import { templatePath, templateTabOf } from "./templateRoutes";
 import TemplateSync from "./TemplateSync";
-import { revisionsForSourceTemplate, shortCommitSHA, templateDisplayName } from "./templateWorkflow";
+import { shortCommitSHA, templateDisplayName } from "./templateWorkflow";
+import { cn } from "@/lib/utils";
 
-// The right side of /templates: one template, read from its newest revision.
-// Its name, where it lives on GitHub (the source line), what it is for, then
+// The right side of /templates: one template, and its latest revision for
+// the commit and the variables. Its name, where it lives on GitHub (the
+// source line), what it is for, then
 // its Variables and Revisions tabs. The route below draws the tab into <Outlet />, except on
 // /templates itself, which passes the first template's Variables tab as
 // children.
 //
-// TemplatesPage has loaded the revisions before any panel renders, so the
-// template is read from cache. The content is keyed on the template, so a
-// tab's local state never carries over to another.
+// TemplatesPage has loaded the templates before any panel renders, so the
+// template is read from cache; its revisions are read here. The content is
+// keyed on the template, so a tab's local state never carries over to
+// another.
 //
-// The list is refetched each time the panel moves to another template. A Sync
-// or a registration only refreshes it while it is on screen, so one the
-// person walked away from can finish unseen; coming back must show its commit.
+// The list is refetched each time the panel moves to another template, and
+// its revisions are read again. A Sync or a registration only
+// refreshes them while it is on screen, so one the person walked away from can
+// finish unseen; coming back must show its commit.
 export default function TemplatePanel({ sourceTemplateId, children }: { sourceTemplateId?: string; children?: ReactNode }) {
   const params = useParams<{ sourceTemplateId: string }>();
   const id = sourceTemplateId ?? params.sourceTemplateId ?? "";
@@ -41,16 +48,42 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
       return;
     }
     shownId.current = id;
-    void queryClient.invalidateQueries({ queryKey: queryKeys.templateRevisions(tenantID) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.templates(tenantID), exact: true });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.templateRevisions(tenantID, id) });
   }, [id, queryClient]);
-  const revisions = revisionsForSourceTemplate(useTemplateRevisionsQuery(tenantID).data ?? [], id);
-  const latest = revisions[0];
+  const template = useTemplatesQuery(tenantID).data?.find((candidate) => candidate.id === id) ?? null;
+  const revisionsQuery = useTemplateRevisionsQuery(tenantID, template?.id ?? "");
+  const revisions = revisionsQuery.data ?? [];
+  const latest = revisions.find((revision) => revision.id === template?.latest_template_revision_id) ?? revisions[0];
   // No count while the previous revision's variables stand in for the newest.
   const variablesQuery = useTemplateRevisionVariablesQuery(tenantID, latest?.id ?? "");
   const variableCount = variablesQuery.isPlaceholderData ? undefined : variablesQuery.data?.length;
   const tab = templateTabOf(useLocation().pathname);
 
-  if (!latest) {
+  if (template !== null && revisionsQuery.isPending) {
+    return (
+      <p className="flex items-center gap-2 px-7 py-6 text-meta text-muted-foreground" role="status" data-testid="template-loading">
+        <Loader2 aria-hidden="true" className="size-3.5 animate-spin" /> Loading template…
+      </p>
+    );
+  }
+
+  if (revisionsQuery.isError) {
+    return (
+      <div className="flex flex-col items-start gap-3 px-7 py-6" data-testid="template-error">
+        <ErrorLine live={false}>Something went wrong while loading this template.</ErrorLine>
+        <RequestIdNote error={revisionsQuery.error} />
+        <button type="button" className={cn(buttonClass("outline"), "pointer-coarse:h-11")} onClick={() => void revisionsQuery.refetch()}>
+          <RefreshCw data-icon="inline-start" aria-hidden="true" />
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  // A template no sync has produced a revision for yet reads as missing, as
+  // it did before templates were read on their own.
+  if (template === null || !latest) {
     return (
       <p className="px-7 py-6 text-meta text-muted-foreground" data-testid="template-missing">
         That template is not registered.
@@ -58,21 +91,21 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
     );
   }
 
-  const description = latest.description.trim();
+  const description = template.description.trim();
   const links = githubLinks(latest);
-  const rootPath = rootPathOf(latest.root_path);
+  const rootPath = rootPathOf(template.root_path);
 
-  const heading = <h2 className="min-w-0 font-heading text-panel-title font-semibold tracking-title wrap-anywhere">{templateDisplayName(latest)}</h2>;
+  const heading = <h2 className="min-w-0 font-heading text-panel-title font-semibold tracking-title wrap-anywhere">{templateDisplayName(template)}</h2>;
   const source = (
     <ul aria-label="Source on GitHub" className="grid min-w-0 grid-cols-4 items-start gap-x-6 text-meta leading-5" data-testid="template-source">
       <SourceFact icon={BookMarked} term="Repository" href={links.repository}>
-        {`${latest.repo_owner}/${latest.repo_name}`}
+        {`${template.repo_owner}/${template.repo_name}`}
       </SourceFact>
       <SourceFact icon={Folder} term="Root path" href={links.tree} mono={rootPath !== null}>
         {rootPath ?? "repository root"}
       </SourceFact>
       <SourceFact icon={GitBranch} term="Ref" href={links.ref}>
-        {latest.source_ref}
+        {template.source_ref}
       </SourceFact>
       <SourceFact icon={GitCommitHorizontal} term="Latest commit" href={links.commit}>
         {shortCommitSHA(latest.resolved_commit_sha)}
@@ -93,9 +126,9 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
           </p>
         </RequireCapability>
       )}
-      {latest.tags.length > 0 && (
+      {template.tags.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {latest.tags.map((tag) => (
+          {template.tags.map((tag) => (
             <span key={tag} className="rounded-sm border bg-canvas px-1.75 py-px font-mono text-xs text-tag-foreground">
               {tag}
             </span>
@@ -106,7 +139,7 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
   );
 
   return (
-    <TemplateContext.Provider value={{ sourceTemplateId: id, revisions, latest }}>
+    <TemplateContext.Provider value={{ template, revisions, latest }}>
       <div className="flex min-w-0 flex-col" data-testid="template-panel">
         <div className="flex flex-col gap-5 border-b border-divider px-7 pt-6">
           {/* The name with Sync on its line, the source line under it, then

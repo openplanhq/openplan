@@ -2,8 +2,8 @@ import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClie
 import type { InfiniteData, QueryClient } from "@tanstack/react-query";
 import * as client from "./client";
 import { queryKeys } from "./queryKeys";
-import { isTerminalRegistrationStatus, isTerminalRunStatus } from "./polling";
-import type { ListPage, PlanChangesState, TemplateRegistration, TemplateRegistrationStatus, TemplateRun, TemplateRunStatus } from "./types";
+import { isSyncSettled, isTerminalRunStatus } from "./polling";
+import type { ListPage, PlanChangesState, Template, TemplateRun, TemplateRunStatus } from "./types";
 
 // What getNextPageParam gives back: the next page's cursor, or undefined on
 // the last page, which is how TanStack Query knows there is no next page.
@@ -40,10 +40,32 @@ export function useAttentionQuery(tenantID: string) {
   });
 }
 
-export function useTemplateRevisionsQuery(tenantID: string) {
+export function useTemplatesQuery(tenantID: string) {
   return useQuery({
-    queryKey: queryKeys.templateRevisions(tenantID),
-    queryFn: () => client.listTemplateRevisions(tenantID)
+    queryKey: queryKeys.templates(tenantID),
+    queryFn: () => client.listTemplates(tenantID)
+  });
+}
+
+/**
+ * One template, polled while its latest sync is syncing. Disabled for an
+ * empty id, so a screen enables it once there is a sync to follow.
+ */
+export function useTemplateQuery(tenantID: string, templateID: string) {
+  return useQuery({
+    queryKey: queryKeys.template(tenantID, templateID),
+    queryFn: () => client.getTemplate(tenantID, templateID),
+    enabled: templateID !== "",
+    refetchInterval: (query: { state: { data?: Template } }) => templateRefetchInterval(query.state.data)
+  });
+}
+
+/** Every revision of one template, newest first. */
+export function useTemplateRevisionsQuery(tenantID: string, templateID: string) {
+  return useQuery({
+    queryKey: queryKeys.templateRevisions(tenantID, templateID),
+    queryFn: () => client.listTemplateRevisions(tenantID, templateID),
+    enabled: templateID !== ""
   });
 }
 
@@ -100,8 +122,10 @@ export function useTemplateRevisionVariablesQuery(tenantID: string, templateRevi
 
 export const POLL_INTERVAL_MS = 1500;
 
-export function registrationRefetchInterval(status: TemplateRegistrationStatus | undefined): number | false {
-  return status && isTerminalRegistrationStatus(status) ? false : POLL_INTERVAL_MS;
+// A template with no sync, or one not yet read, has nothing to follow.
+export function templateRefetchInterval(template: Template | undefined): number | false {
+  const status = template?.latest_sync?.status;
+  return status && !isSyncSettled(status) ? POLL_INTERVAL_MS : false;
 }
 
 export function runRefetchInterval(status: TemplateRunStatus | undefined, poll: boolean): number | false {
@@ -109,16 +133,6 @@ export function runRefetchInterval(status: TemplateRunStatus | undefined, poll: 
     return false;
   }
   return status && isTerminalRunStatus(status) ? false : POLL_INTERVAL_MS;
-}
-
-export function useTemplateRegistrationQuery(tenantID: string, registrationID: string) {
-  return useQuery({
-    queryKey: queryKeys.templateRegistration(tenantID, registrationID),
-    queryFn: () => client.getTemplateRegistration(tenantID, registrationID),
-    enabled: registrationID !== "",
-    refetchInterval: (query: { state: { data?: TemplateRegistration } }) =>
-      registrationRefetchInterval(query.state.data?.status)
-  });
 }
 
 export function useTemplateRunQuery(tenantID: string, runID: string, options: { poll: boolean }) {
@@ -244,12 +258,38 @@ export function useTemplateRunLogQuery(tenantID: string, runID: string, name: st
   });
 }
 
+// Register and Sync answer with the template, its latest_sync the sync they
+// queued, so useTemplateQuery starts from it rather than from an older read.
 export function useRegisterTemplateMutation(tenantID: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: Parameters<typeof client.registerTemplate>[1]) => client.registerTemplate(tenantID, body),
-    onSuccess: (registration) => {
-      queryClient.setQueryData(queryKeys.templateRegistration(tenantID, registration.id), registration);
+    onSuccess: (template) => {
+      queryClient.setQueryData(queryKeys.template(tenantID, template.id), template);
+    }
+  });
+}
+
+export function useSyncTemplateMutation(tenantID: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (templateID: string) => client.syncTemplate(tenantID, templateID),
+    onSuccess: (template) => {
+      queryClient.setQueryData(queryKeys.template(tenantID, template.id), template);
+    }
+  });
+}
+
+// A deleted template leaves the list; its own reads are dropped rather than
+// refetched into a 404.
+export function useDeleteTemplateMutation(tenantID: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (templateID: string) => client.deleteTemplate(tenantID, templateID),
+    onSuccess: (_, templateID) => {
+      queryClient.removeQueries({ queryKey: queryKeys.template(tenantID, templateID) });
+      queryClient.removeQueries({ queryKey: queryKeys.templateRevisions(tenantID, templateID) });
+      return queryClient.invalidateQueries({ queryKey: queryKeys.templates(tenantID), exact: true });
     }
   });
 }

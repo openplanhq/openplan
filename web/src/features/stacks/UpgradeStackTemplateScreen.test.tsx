@@ -10,6 +10,7 @@ import { queryKeys } from "../../api/queryKeys";
 import type { StackTemplate, StackView, TemplateRevision, TemplateVariable } from "../../api/types";
 import { AuthContext } from "../../auth/AuthContext";
 import type { AuthContextValue } from "../../auth/AuthContext";
+import { seedTemplates } from "../templates/testSupport";
 
 function stackTemplate(overrides: Partial<StackTemplate> = {}): StackTemplate {
   return {
@@ -103,7 +104,7 @@ function testQueryClient(): QueryClient {
 /** Installed rev_current has region + legacy_flag; rev_next drops legacy_flag and adds new_var. */
 function seedUpgradeable(queryClient: QueryClient) {
   queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([stackTemplate()]));
-  queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [
+  seedTemplates(queryClient, [
     templateRevision({ id: "rev_next", source_ref: "main", resolved_commit_sha: "9f21abc0000000" }),
     templateRevision({ id: "rev_current" })
   ]);
@@ -181,7 +182,7 @@ describe("UpgradeStackTemplateScreen", () => {
   it("allows selecting an active same-source revision even when its commit is older", async () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([stackTemplate()]));
-    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [
+    seedTemplates(queryClient, [
       templateRevision({
         id: "rev_older",
         resolved_commit_sha: "0000000000000000",
@@ -202,7 +203,7 @@ describe("UpgradeStackTemplateScreen", () => {
   it("excludes the installed revision and other source templates from the candidates", async () => {
     const queryClient = testQueryClient();
     seedUpgradeable(queryClient);
-    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [
+    seedTemplates(queryClient, [
       templateRevision({ id: "rev_next" }),
       templateRevision({ id: "rev_current" }),
       templateRevision({ id: "rev_elsewhere", source_template_id: "tmpl_src_2" }),
@@ -257,7 +258,7 @@ describe("UpgradeStackTemplateScreen", () => {
   it("renders the loading state instead of a false diff while the target revision's variables have not loaded", () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([stackTemplate()]));
-    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [
+    seedTemplates(queryClient, [
       templateRevision({ id: "rev_next", source_ref: "main", resolved_commit_sha: "9f21abc0000000" }),
       templateRevision({ id: "rev_current" })
     ]);
@@ -281,7 +282,7 @@ describe("UpgradeStackTemplateScreen", () => {
   it("suppresses the previous target's fields and diff notes while switching to a target whose variables have not loaded", async () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([stackTemplate()]));
-    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [
+    seedTemplates(queryClient, [
       templateRevision({ id: "rev_next", source_ref: "main", resolved_commit_sha: "9f21abc0000000" }),
       templateRevision({ id: "rev_next_2", source_ref: "main", resolved_commit_sha: "aa00bb1111111" }),
       templateRevision({ id: "rev_current" })
@@ -325,7 +326,7 @@ describe("UpgradeStackTemplateScreen", () => {
   it("changes the target from the keyboard", async () => {
     const queryClient = testQueryClient();
     seedUpgradeable(queryClient);
-    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [
+    seedTemplates(queryClient, [
       templateRevision({ id: "rev_next", resolved_commit_sha: "9f21abc0000000" }),
       templateRevision({ id: "rev_next_2", resolved_commit_sha: "aa00bb1111111" }),
       templateRevision({ id: "rev_current" })
@@ -374,7 +375,7 @@ describe("UpgradeStackTemplateScreen", () => {
   it("reports when no other active revisions are available", () => {
     const queryClient = testQueryClient();
     seedUpgradeable(queryClient);
-    queryClient.setQueryData(queryKeys.templateRevisions("tenant_123"), [templateRevision({ id: "rev_current" })]);
+    seedTemplates(queryClient, [templateRevision({ id: "rev_current" })]);
 
     renderScreen(queryClient);
 

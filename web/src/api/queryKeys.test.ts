@@ -4,12 +4,13 @@ import { queryKeys } from "./queryKeys";
 describe("queryKeys", () => {
   it("builds tenant-scoped list keys", () => {
     expect(queryKeys.stacks("tenant_123")).toEqual(["stacks", "tenant_123"]);
-    expect(queryKeys.templateRevisions("tenant_123")).toEqual(["templateRevisions", "tenant_123"]);
+    expect(queryKeys.templates("tenant_123")).toEqual(["templates", "tenant_123"]);
   });
 
   it("builds resource detail keys", () => {
     expect(queryKeys.stack("tenant_123", "stack_1")).toEqual(["stack", "tenant_123", "stack_1"]);
-    expect(queryKeys.templateRegistration("tenant_123", "reg_1")).toEqual(["templateRegistration", "tenant_123", "reg_1"]);
+    expect(queryKeys.template("tenant_123", "tpl_1")).toEqual(["templates", "tenant_123", "tpl_1"]);
+    expect(queryKeys.templateRevisions("tenant_123", "tpl_1")).toEqual(["templateRevisions", "tenant_123", "tpl_1"]);
     expect(queryKeys.templateRevisionVariables("tenant_123", "rev_1")).toEqual(["templateRevisionVariables", "tenant_123", "rev_1"]);
     expect(queryKeys.templateRun("tenant_123", "run_1")).toEqual(["templateRun", "tenant_123", "run_1"]);
     expect(queryKeys.templateRuns("tenant_123", "stpl_1")).toEqual(["templateRuns", "tenant_123", "stpl_1"]);

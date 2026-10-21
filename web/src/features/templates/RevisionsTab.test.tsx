@@ -8,7 +8,7 @@ import { AuthContext } from "../../auth/AuthContext";
 import { queryKeys } from "../../api/queryKeys";
 import RevisionsTab from "./RevisionsTab";
 import TemplatePanel from "./TemplatePanel";
-import { authValue, revision, TENANT, testQueryClient } from "./testSupport";
+import { authValue, revision, TENANT, testQueryClient, seedTemplates } from "./testSupport";
 
 const newest = revision({ id: "rev_3", resolved_commit_sha: "e3a7c4d000", created_at: "2026-09-30T10:00:00Z" });
 const middle = revision({ id: "rev_2", resolved_commit_sha: "b51f08a000", created_at: "2026-09-14T10:00:00Z", status: "validating" });
@@ -16,7 +16,7 @@ const oldest = revision({ id: "rev_1", resolved_commit_sha: "0c9d2e6000", create
 
 function seed(): QueryClient {
   const queryClient = testQueryClient();
-  queryClient.setQueryData(queryKeys.templateRevisions(TENANT), [newest, middle, oldest]);
+  seedTemplates(queryClient, [newest, middle, oldest]);
   return queryClient;
 }
 

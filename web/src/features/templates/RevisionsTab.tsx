@@ -14,12 +14,12 @@ const cellClass = "px-2 py-2 first:pl-4 last:pr-4";
 // in the API's order, newest first. Each commit links to GitHub. An active
 // revision needs no word; any other state says what it is.
 export default function RevisionsTab() {
-  const { revisions, latest } = useTemplate();
+  const { template, revisions, latest } = useTemplate();
 
   return (
     <section className="flex min-w-0 flex-col gap-3" data-testid="template-revisions">
       <p className="text-meta text-muted-foreground">
-        Every commit registered from <span className="font-mono text-code-foreground">{latest.source_ref}</span>, newest first. A stack keeps the
+        Every commit registered from <span className="font-mono text-code-foreground">{template.source_ref}</span>, newest first. A stack keeps the
         revision it was added with until someone changes it.
       </p>
       <div className="overflow-x-auto rounded-lg border">
@@ -38,7 +38,7 @@ export default function RevisionsTab() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {revisions.map((templateRevision, index) => {
+            {revisions.map((templateRevision) => {
               const indicator = revisionIndicator(templateRevision.status);
               return (
                 <TableRow key={templateRevision.id} className="h-12 border-divider hover:bg-transparent" data-testid={`revision-row-${templateRevision.id}`}>
@@ -47,7 +47,7 @@ export default function RevisionsTab() {
                       <ExternalLink href={githubLinks(templateRevision).commit} site="GitHub">
                         {shortCommitSHA(templateRevision.resolved_commit_sha)}
                       </ExternalLink>
-                      {index === 0 && (
+                      {templateRevision.id === latest.id && (
                         <span className="rounded-sm border bg-canvas px-1.75 py-px font-mono text-xs text-tag-foreground" data-testid="revision-latest">
                           latest
                         </span>

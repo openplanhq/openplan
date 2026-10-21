@@ -39,7 +39,7 @@ export default function UpgradeStackTemplateScreen() {
   const [errorMessage, setErrorMessage] = useState("");
   const variableErrors = useFieldErrors("#/config/");
 
-  const templateRevisionsQuery = useTemplateRevisionsQuery(tenantID);
+  const templateRevisionsQuery = useTemplateRevisionsQuery(tenantID, stackTemplate.source_template_id);
   const candidates = upgradeCandidateRevisions(templateRevisionsQuery.data ?? [], stackTemplate);
   const targetRevision = candidates.find((revision) => revision.id === chosenTargetID) ?? candidates[0] ?? null;
 

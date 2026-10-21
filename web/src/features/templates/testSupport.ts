@@ -1,6 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
+import { queryKeys } from "../../api/queryKeys";
 import type { AuthContextValue } from "../../auth/AuthContext";
-import type { TemplateRegistration, TemplateRevision, TemplateVariable } from "../../api/types";
+import type { Template, TemplateLatestSync, TemplateRevision, TemplateVariable } from "../../api/types";
 import { asListBody } from "../../api/listTestSupport";
 
 // Fixtures for the templates tests. Not a test file itself, so it carries no
@@ -41,23 +42,87 @@ export function variable(overrides: Partial<TemplateVariable> = {}): TemplateVar
   };
 }
 
-export function registration(overrides: Partial<TemplateRegistration> = {}): TemplateRegistration {
+// The template rev_1 belongs to, never synced unless latest_sync is given.
+export function template(overrides: Partial<Template> = {}): Template {
   return {
-    id: "reg_1",
+    id: "tpl_1",
     tenant_id: TENANT,
     repo_owner: "acme",
     repo_name: "infra-modules",
     source_ref: "main",
     root_path: "aws/eks",
-    status: "completed",
-    step: "syncing",
-    template_revision_id: "rev_1",
-    resolved_commit_sha: "3f9c2a1d8e7b6a5c4d3e2f1a0b9c8d7e6f5a4b3c",
-    requested_by: "user_1",
-    requested_at: "2026-10-05T09:00:00Z",
-    error_summary: "",
+    name: "eks",
+    description: "An EKS cluster with one managed node group.",
+    tags: ["aws", "kubernetes"],
+    latest_template_revision_id: "rev_1",
+    latest_sync: null,
+    created_at: "2026-09-22T10:00:00Z",
     ...overrides
   };
+}
+
+export function latestSync(overrides: Partial<TemplateLatestSync> = {}): TemplateLatestSync {
+  return {
+    status: "synced",
+    error_summary: "",
+    resolved_commit_sha: "3f9c2a1d8e7b6a5c4d3e2f1a0b9c8d7e6f5a4b3c",
+    requested_at: "2026-10-05T09:00:00Z",
+    ...overrides
+  };
+}
+
+// The templates these revisions belong to, in the order first seen, each
+// named and described by its first revision (the API lists them newest
+// first).
+export function templatesOf(revisions: TemplateRevision[]): Template[] {
+  const templates = new Map<string, Template>();
+  for (const candidate of revisions) {
+    if (templates.has(candidate.source_template_id)) {
+      continue;
+    }
+    templates.set(
+      candidate.source_template_id,
+      template({
+        id: candidate.source_template_id,
+        repo_owner: candidate.repo_owner,
+        repo_name: candidate.repo_name,
+        source_ref: candidate.source_ref,
+        root_path: candidate.root_path,
+        name: candidate.name,
+        description: candidate.description,
+        tags: candidate.tags,
+        latest_template_revision_id: candidate.id
+      })
+    );
+  }
+  return [...templates.values()];
+}
+
+// Seeds what the templates screens read: the list, and each template's
+// revisions.
+export function seedTemplates(queryClient: QueryClient, revisions: TemplateRevision[], extra: Template[] = []): void {
+  const templates = [...templatesOf(revisions), ...extra];
+  queryClient.setQueryData(queryKeys.templates(TENANT), templates);
+  for (const seeded of templates) {
+    queryClient.setQueryData(
+      queryKeys.templateRevisions(TENANT, seeded.id),
+      revisions.filter((candidate) => candidate.source_template_id === seeded.id)
+    );
+  }
+}
+
+// Answers a GET of the templates list or of one template's revisions from
+// these revisions, or null for any other request.
+export function templateReadResponse(input: unknown, revisions: TemplateRevision[]): Response | null {
+  const path = String(input).split("?")[0];
+  if (path === `/v1/tenants/${TENANT}/templates`) {
+    return jsonResponse(templatesOf(revisions));
+  }
+  const revisionsOf = path.match(/\/templates\/([^/]+)\/revisions$/);
+  if (revisionsOf) {
+    return jsonResponse(revisions.filter((candidate) => candidate.source_template_id === decodeURIComponent(revisionsOf[1])));
+  }
+  return null;
 }
 
 // retry: false and staleTime: Infinity: seeded data never triggers a refetch,

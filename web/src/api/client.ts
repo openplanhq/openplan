@@ -13,7 +13,7 @@ import type {
   StackListItem,
   StackTemplate,
   StackView,
-  TemplateRegistration,
+  Template,
   TemplateRevision,
   TemplateRun,
   TemplateRunLog,
@@ -93,21 +93,36 @@ export function getMe(): Promise<Me> {
   return requestJSON("/v1/me");
 }
 
-export function registerTemplate(tenantID: string, body: RegisterTemplateRequest): Promise<TemplateRegistration> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/template-registrations`, {
+function templatePath(tenantID: string, templateID: string): string {
+  return `/v1/tenants/${encodeURIComponent(tenantID)}/templates/${encodeURIComponent(templateID)}`;
+}
+
+// Registering answers with the template, whose latest_sync is the sync it
+// queued. A source registered already answers with its template, syncing
+// again.
+export function registerTemplate(tenantID: string, body: RegisterTemplateRequest): Promise<Template> {
+  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/templates`, {
     method: "POST",
     body: JSON.stringify(body)
   });
 }
 
-export function getTemplateRegistration(tenantID: string, registrationID: string): Promise<TemplateRegistration> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/template-registrations/${encodeURIComponent(registrationID)}`);
+export function getTemplate(tenantID: string, templateID: string): Promise<Template> {
+  return requestJSON(templatePath(tenantID, templateID));
 }
 
-// A Go nil slice is JSON null. Servers before the fix store and serve a
-// template registered without tags as "tags": null; every screen reads them
-// as a list.
-type TemplateRevisionResponse = Omit<TemplateRevision, "tags"> & { tags?: string[] | null };
+// Answers with the template, whose latest_sync is the sync just queued.
+export function syncTemplate(tenantID: string, templateID: string): Promise<Template> {
+  return requestJSON(`${templatePath(tenantID, templateID)}/syncs`, {
+    method: "POST",
+    body: JSON.stringify({})
+  });
+}
+
+// Refused with template-in-use while any stack uses the template.
+export function deleteTemplate(tenantID: string, templateID: string): Promise<void> {
+  return requestNoContent(templatePath(tenantID, templateID), { method: "DELETE" });
+}
 
 export async function getTemplateRevisionVariables(tenantID: string, templateRevisionID: string): Promise<TemplateVariable[]> {
   return listItems<TemplateVariable>(
@@ -158,17 +173,19 @@ async function listItems<T>(path: string): Promise<T[]> {
   return page.items ?? [];
 }
 
-// Every revision, read a page at a time. Screens group revisions by source
-// template and look them up by id, which needs the whole set; a
-// source-templates endpoint would let each ask for what it shows (issue 405
-// on openplanhq/openplan).
-export async function listTemplateRevisions(tenantID: string): Promise<TemplateRevision[]> {
-  const templateRevisions = await listAll((cursor) =>
-    requestJSON<ListPage<TemplateRevisionResponse>>(
-      `/v1/tenants/${encodeURIComponent(tenantID)}/template-revisions${pageQuery({ cursor, limit: MAX_PAGE_LIMIT })}`
-    )
+// Every template, read a page at a time: the registry sorts them by name
+// and filters them as someone types, which needs the whole set.
+export function listTemplates(tenantID: string): Promise<Template[]> {
+  return listAll((cursor) =>
+    requestJSON<ListPage<Template>>(`/v1/tenants/${encodeURIComponent(tenantID)}/templates${pageQuery({ cursor, limit: MAX_PAGE_LIMIT })}`)
   );
-  return templateRevisions.map((templateRevision) => ({ ...templateRevision, tags: templateRevision.tags ?? [] }));
+}
+
+// Every revision of one template, newest first, read a page at a time.
+export function listTemplateRevisions(tenantID: string, templateID: string): Promise<TemplateRevision[]> {
+  return listAll((cursor) =>
+    requestJSON<ListPage<TemplateRevision>>(`${templatePath(tenantID, templateID)}/revisions${pageQuery({ cursor, limit: MAX_PAGE_LIMIT })}`)
+  );
 }
 
 export function createStack(tenantID: string, body: CreateStackRequest): Promise<Stack> {

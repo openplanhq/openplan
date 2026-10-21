@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { isTerminalRegistrationStatus, isTerminalRunStatus, nextPollDelayMs } from "./polling";
+import { isSyncSettled, isTerminalRunStatus, nextPollDelayMs } from "./polling";
 
 describe("polling helpers", () => {
-  it("identifies terminal registration states", () => {
-    expect(isTerminalRegistrationStatus("completed")).toBe(true);
-    expect(isTerminalRegistrationStatus("invalid")).toBe(true);
-    expect(isTerminalRegistrationStatus("failed")).toBe(true);
-    expect(isTerminalRegistrationStatus("running")).toBe(false);
+  it("settles a sync on every status but syncing, stalled included", () => {
+    expect(isSyncSettled("syncing")).toBe(false);
+    for (const status of ["synced", "up_to_date", "invalid", "failed", "stalled"] as const) {
+      expect(isSyncSettled(status)).toBe(true);
+    }
   });
 
   it("identifies terminal run states", () => {
