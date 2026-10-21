@@ -943,7 +943,7 @@ func mustBegin(t *testing.T, ctx context.Context, pool *pgxpool.Pool) pgx.Tx {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
+	t.Cleanup(func() { _ = tx.Rollback(context.WithoutCancel(ctx)) })
 	return tx
 }
 
