@@ -110,7 +110,7 @@ describe("VariablesTab", () => {
       ]);
     });
     await waitFor(() => expect(screen.getByTestId("template-variables-loading").textContent).toContain("Loading variables…"));
-    expect(within(screen.getByTestId("template-details")).getByRole("link", { name: /^9e7d3b2,/ })).toBeTruthy();
+    expect(within(screen.getByTestId("template-source")).getByRole("link", { name: /^Latest commit: ?9e7d3b2,/ })).toBeTruthy();
     expect(screen.queryByTestId("template-variable-cluster_name")).toBeNull();
     // Nor does the tab count rev_1's variables.
     expect(within(screen.getByRole("navigation", { name: "Template sections" })).getByRole("link", { name: "Variables" })).toBeTruthy();

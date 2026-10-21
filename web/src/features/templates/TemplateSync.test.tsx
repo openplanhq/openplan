@@ -201,6 +201,6 @@ describe("TemplateSync", () => {
     });
 
     await waitFor(() => expect(screen.getAllByTestId(/^revision-row-/)[0].getAttribute("data-testid")).toBe("revision-row-rev_2"));
-    expect(within(screen.getByTestId("template-details")).getByRole("link", { name: /^f17f983,/ })).toBeTruthy();
+    expect(within(screen.getByTestId("template-source")).getByRole("link", { name: /^Latest commit: ?f17f983,/ })).toBeTruthy();
   });
 });

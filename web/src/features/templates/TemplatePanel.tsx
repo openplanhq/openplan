@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { BookMarked, Folder, GitBranch, GitCommitHorizontal } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Outlet, useLocation, useParams } from "react-router-dom";
 import { queryKeys } from "../../api/queryKeys";
 import { useTemplateRevisionsQuery, useTemplateRevisionVariablesQuery } from "../../api/queries";
@@ -15,8 +17,8 @@ import TemplateSync from "./TemplateSync";
 import { revisionsForSourceTemplate, shortCommitSHA, templateDisplayName } from "./templateWorkflow";
 
 // The right side of /templates: one template, read from its newest revision.
-// Its name, what it is for, where it lives on GitHub, then its Variables and
-// Revisions tabs. The route below draws the tab into <Outlet />, except on
+// Its name, where it lives on GitHub (the source line), what it is for, then
+// its Variables and Revisions tabs. The route below draws the tab into <Outlet />, except on
 // /templates itself, which passes the first template's Variables tab as
 // children.
 //
@@ -60,9 +62,25 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
   const links = githubLinks(latest);
   const rootPath = rootPathOf(latest.root_path);
 
-  const intro = (
+  const heading = <h2 className="min-w-0 font-heading text-panel-title font-semibold tracking-title wrap-anywhere">{templateDisplayName(latest)}</h2>;
+  const source = (
+    <ul aria-label="Source on GitHub" className="grid min-w-0 grid-cols-4 items-start gap-x-6 text-meta leading-5" data-testid="template-source">
+      <SourceFact icon={BookMarked} term="Repository" href={links.repository}>
+        {`${latest.repo_owner}/${latest.repo_name}`}
+      </SourceFact>
+      <SourceFact icon={Folder} term="Root path" href={links.tree} mono={rootPath !== null}>
+        {rootPath ?? "repository root"}
+      </SourceFact>
+      <SourceFact icon={GitBranch} term="Ref" href={links.ref}>
+        {latest.source_ref}
+      </SourceFact>
+      <SourceFact icon={GitCommitHorizontal} term="Latest commit" href={links.commit}>
+        {shortCommitSHA(latest.resolved_commit_sha)}
+      </SourceFact>
+    </ul>
+  );
+  const about = (
     <>
-      <h2 className="font-heading text-panel-title font-semibold tracking-title wrap-anywhere">{templateDisplayName(latest)}</h2>
       {description !== "" ? (
         <p className="max-w-170 text-sm text-foreground" data-testid="template-description">
           {description}
@@ -91,20 +109,25 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
     <TemplateContext.Provider value={{ sourceTemplateId: id, revisions, latest }}>
       <div className="flex min-w-0 flex-col" data-testid="template-panel">
         <div className="flex flex-col gap-5 border-b border-divider px-7 pt-6">
-          {/* Sync draws the intro beside its button; without it, the intro
-              stands alone. Hidden rather than disabled without the
-              capability: the POST would be refused, so there is nothing
-              anyone could do to make it work. Keyed on the template, so a
-              sync stays with it. */}
-          <RequireCapability capability="can_publish_template" fallback={<div className="flex min-w-0 flex-col gap-3">{intro}</div>}>
-            <TemplateSync key={id} intro={intro} />
+          {/* The name with Sync on its line, the source line under it, then
+              what the template is for. Sync is hidden rather than disabled
+              without the capability: the POST would be refused, so there is
+              nothing anyone could do to make it work. Keyed on the template,
+              so a sync stays with it. */}
+          <RequireCapability
+            capability="can_publish_template"
+            fallback={
+              <div className="flex min-w-0 flex-col gap-3">
+                <div className="flex min-w-0 flex-col gap-2.5">
+                  {heading}
+                  {source}
+                </div>
+                {about}
+              </div>
+            }
+          >
+            <TemplateSync key={id} heading={heading} source={source} about={about} />
           </RequireCapability>
-          <dl className="flex flex-col gap-2 rounded-lg border px-5 py-4" data-testid="template-details">
-            <Detail term="Repository" value={`${latest.repo_owner}/${latest.repo_name}`} href={links.repository} />
-            <Detail term="Root path" value={rootPath ?? "the repository root"} href={links.tree} mono={rootPath !== null} />
-            <Detail term="Ref" value={latest.source_ref} href={links.ref} />
-            <Detail term="Latest commit" value={shortCommitSHA(latest.resolved_commit_sha)} href={links.commit} />
-          </dl>
           <UnderlineTabs
             label="Template sections"
             tabs={[
@@ -121,19 +144,20 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
   );
 }
 
-// One fact about the template, as openplan UI's DetailList draws a template's:
-// a row with its term at the left and its value beside it, a link to GitHub.
-// Rows give each value the panel's width, and a value longer still is cut
-// with an ellipsis, its full text in a title, rather than broken mid-name.
-function Detail({ term, value, href, mono = true }: { term: string; value: string; href: string; mono?: boolean }) {
+// One fact of the source line: an icon saying what it is (its word is in a
+// tooltip and, for a screen reader, in the link), then its value as a link to
+// GitHub. The four sit in equal columns, as one row of a table, so each starts
+// at the same place whatever the others hold. A long value wraps inside its
+// column after a "/" or "-", never cut, never mid-name.
+function SourceFact({ icon: Icon, term, href, mono = true, children }: { icon: LucideIcon; term: string; href: string; mono?: boolean; children: string }) {
   return (
-    <div className="flex min-w-0 items-baseline gap-4">
-      <dt className="w-24 shrink-0 text-xs text-muted-foreground">{term}</dt>
-      <dd className="flex min-w-0 text-meta">
-        <ExternalLink href={href} site="GitHub" mono={mono} truncate>
-          {value}
-        </ExternalLink>
-      </dd>
-    </div>
+    <li className="flex min-w-0 items-start gap-1.5">
+      <span title={term} className="mt-0.75 flex shrink-0 text-subtle-foreground">
+        <Icon aria-hidden="true" className="size-3.5" />
+      </span>
+      <ExternalLink href={href} site="GitHub" term={term} mono={mono}>
+        {children}
+      </ExternalLink>
+    </li>
   );
 }

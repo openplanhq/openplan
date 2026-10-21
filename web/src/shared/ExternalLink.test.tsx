@@ -28,16 +28,20 @@ describe("ExternalLink", () => {
     expect(screen.getByRole("link").className).not.toContain("font-mono");
   });
 
-  it("cuts a long value to one line and keeps it whole in a title", () => {
-    const value = "acme-platform-engineering/terraform-aws-organization-landing-zone-modules";
+  it("wraps a long value only after a slash or hyphen, never cuts it, and keeps the arrow with its last piece", () => {
+    const value = "acme-platform-engineering/terraform-aws-modules";
     render(
-      <ExternalLink href="https://github.com/x" site="GitHub" truncate>
+      <ExternalLink href="https://github.com/x" site="GitHub" term="Repository">
         {value}
       </ExternalLink>
     );
-    const link = screen.getByRole("link");
-    expect(link.getAttribute("title")).toBe(value);
-    expect(link.className).not.toContain("wrap-anywhere");
-    expect(link.querySelector(".truncate")?.textContent).toBe(value);
+    // jsdom's name drops the space a browser keeps after "Repository:".
+    const link = screen.getByRole("link", { name: /^Repository: ?acme-platform-engineering\/terraform-aws-modules, on GitHub \(opens in a new tab\)$/ });
+    expect(link.getAttribute("title")).toBeNull();
+    expect(link.querySelector(".truncate")).toBeNull();
+    expect(link.querySelectorAll("wbr")).toHaveLength(5);
+    const tail = link.querySelector(".whitespace-nowrap");
+    expect(tail?.textContent).toBe("modules");
+    expect(tail?.querySelector("svg")).not.toBeNull();
   });
 });

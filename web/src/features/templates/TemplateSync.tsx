@@ -19,10 +19,10 @@ import { shortCommitSHA } from "./templateWorkflow";
 // second template from a typo; the panel already holds every field the POST
 // needs.
 //
-// It sits at the right of the header's top row, beside the template's name,
-// description and tags (intro), as a subtle button: it keeps the template
-// current, but the header is about the template. It polls the registration
-// until it settles, then says what happened under that row: the commit it
+// It sits at the right of the template's name, a small subtle button over
+// the source line (source) and the description and tags (about): it keeps the
+// template current, but the header is about the template. It polls the
+// registration until it settles, then says what happened under them: the commit it
 // registered, that nothing was new, or, in an ErrorPanel, that it failed. A new commit can
 // only be told from an old one by the revisions on screen when Sync was
 // pressed: a registration that resolves to a commit the template has reuses
@@ -30,7 +30,7 @@ import { shortCommitSHA } from "./templateWorkflow";
 //
 // The panel mounts one per template (key), so a sync never follows the person
 // to another template.
-export default function TemplateSync({ intro }: { intro: ReactNode }) {
+export default function TemplateSync({ heading, source, about }: { heading: ReactNode; source: ReactNode; about: ReactNode }) {
   const { revisions, latest } = useTemplate();
   const queryClient = useQueryClient();
   const registerTemplateMutation = useRegisterTemplateMutation(tenantID);
@@ -88,29 +88,40 @@ export default function TemplateSync({ intro }: { intro: ReactNode }) {
     }
   }
 
-  // One place for every outcome, under the header's top row and over the
-  // template's facts, beside the Latest commit it may have changed. The status
+  // One place for every outcome, under the template's name, source line,
+  // description and tags, so the Latest commit it may have changed is in view. The status
   // region is mounted empty, so its words are announced when they arrive; its
   // negative margin cancels the header's gap while it is empty.
   return (
     <>
-      <div className="flex items-start justify-between gap-6">
-        <div className="flex min-w-0 flex-1 flex-col gap-3">{intro}</div>
-        {/* Pulled out by its own padding, so its words end on the content's
-            edge and it centres on the name's line, not the row's top. While
-            a sync runs it stays focusable, marked aria-disabled, and ignores
-            presses: disabling it would drop a keyboard user's focus. */}
-        <button type="button" className={cn(buttonClass("subtle"), "-my-0.75 -mr-3 shrink-0 pointer-coarse:h-11")} aria-disabled={syncing ? "true" : undefined}
-          onClick={() => void handleSync()}
-          data-testid="template-sync"
-        >
-          {syncing ? (
-            <Loader2 data-icon="inline-start" aria-hidden="true" className="animate-spin" />
-          ) : (
-            <RefreshCw data-icon="inline-start" aria-hidden="true" />
-          )}
-          Sync
-        </button>
+      <div className="flex min-w-0 flex-col gap-3">
+        <div className="flex min-w-0 flex-col gap-2.5">
+          <div className="flex min-w-0 items-start justify-between gap-6">
+            {heading}
+            {/* The small size, so it sits on the name's line without
+                outgrowing it. Pulled out by its own padding, so its words end
+                on the content's edge and the name's line keeps its height.
+                While a sync runs it stays focusable, marked aria-disabled,
+                and ignores presses: disabling it would drop a keyboard
+                user's focus. */}
+            <button
+              type="button"
+              className={cn(buttonClass("subtle", "sm"), "-my-px -mr-2.5 pointer-coarse:h-11")}
+              aria-disabled={syncing ? "true" : undefined}
+              onClick={() => void handleSync()}
+              data-testid="template-sync"
+            >
+              {syncing ? (
+                <Loader2 data-icon="inline-start" aria-hidden="true" strokeWidth={2.42} className="size-3.25 animate-spin" />
+              ) : (
+                <RefreshCw data-icon="inline-start" aria-hidden="true" strokeWidth={2.42} className="size-3.25" />
+              )}
+              Sync
+            </button>
+          </div>
+          {source}
+        </div>
+        {about}
       </div>
       <div className="-mt-5 flex flex-col" role="status" aria-live="polite" data-testid="template-sync-result">
         {syncing ? (
