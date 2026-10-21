@@ -907,6 +907,10 @@ func (recordingStore) CreateTemplateRegistration(context.Context, domain.Templat
 	return nil
 }
 
+func (recordingStore) CreateSourceTemplate(_ context.Context, template domain.SourceTemplate) (domain.SourceTemplate, error) {
+	return template, nil
+}
+
 func (recordingStore) ApproveTemplateRun(context.Context, domain.TemplateRunApproval) error {
 	return nil
 }

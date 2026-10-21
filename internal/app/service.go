@@ -79,11 +79,26 @@ func (cursor TemplateRevisionCursor) Valid() bool {
 	return !cursor.CreatedAt.IsZero() && cursor.ID != ""
 }
 
+// SourceTemplateCursor is a position in the templates list, newest first:
+// the created_at and id of the last template a page held.
+type SourceTemplateCursor struct {
+	CreatedAt time.Time               `json:"created_at"`
+	ID        domain.SourceTemplateID `json:"id"`
+}
+
+func (cursor SourceTemplateCursor) Valid() bool {
+	return !cursor.CreatedAt.IsZero() && cursor.ID != ""
+}
+
 // TxRepo is the transaction-scoped repository surface handed to a unit of
 // work. It is deliberately tiny and grows only when a new dual-write point
 // appears; every other repository method keeps opening its own transaction.
 type TxRepo interface {
 	CreateStack(ctx context.Context, stack domain.Stack) error
+	// CreateSourceTemplate stores the template unless one with its source
+	// already exists, and returns whichever is stored, so registering a
+	// source twice lands on one template.
+	CreateSourceTemplate(ctx context.Context, template domain.SourceTemplate) (domain.SourceTemplate, error)
 	AppendAuditEvent(ctx context.Context, event domain.SecurityAuditEvent) error
 	CreateTemplateRun(ctx context.Context, run domain.TemplateRun) (int, error)
 	CreateTemplateRegistration(ctx context.Context, registration domain.TemplateRegistration) error
@@ -164,6 +179,18 @@ type TemplateRevisionRepository interface {
 	// cursor, newest first.
 	ListTemplateRevisionsPage(ctx context.Context, tenantID domain.TenantID, after *TemplateRevisionCursor, limit int) ([]domain.TemplateRevision, error)
 	GetTemplateRevisionVariables(ctx context.Context, tenantID domain.TenantID, templateRevisionID domain.TemplateRevisionID) ([]domain.TemplateVariable, error)
+}
+
+// SourceTemplateRepository reads templates and the revisions their syncs
+// recorded.
+type SourceTemplateRepository interface {
+	GetSourceTemplate(ctx context.Context, tenantID domain.TenantID, id domain.SourceTemplateID) (domain.SourceTemplate, error)
+	// ListSourceTemplatesPage returns up to limit templates after the cursor,
+	// newest first.
+	ListSourceTemplatesPage(ctx context.Context, tenantID domain.TenantID, after *SourceTemplateCursor, limit int) ([]domain.SourceTemplate, error)
+	// ListTemplateRevisionsBySourcePage returns up to limit of one template's
+	// revisions after the cursor, newest first; none for an unknown template.
+	ListTemplateRevisionsBySourcePage(ctx context.Context, tenantID domain.TenantID, sourceTemplateID domain.SourceTemplateID, after *TemplateRevisionCursor, limit int) ([]domain.TemplateRevision, error)
 }
 
 // TemplateRevisionMetadataRepository reads immutable template metadata.
