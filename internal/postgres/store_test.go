@@ -4222,6 +4222,153 @@ func TestCreateTemplateRegistrationRecordsItsTemplate(t *testing.T) {
 	}
 }
 
+// A template reads its newest sync: a later success replaces an earlier
+// failure, a sync that resolves to a revision the template already had says
+// so, and a template nobody has synced reads none.
+func TestSourceTemplateReadsItsLatestSync(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store := NewStore(openMigratedTestPool(t, ctx))
+	template := vpcSourceTemplate("tenant_123")
+	if _, err := store.CreateSourceTemplate(ctx, template); err != nil {
+		t.Fatalf("CreateSourceTemplate returned error: %v", err)
+	}
+	seedSourceTemplate(t, ctx, store, "tenant_123", "source_template_never_synced")
+	base := time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC)
+
+	requestSync := func(id domain.TemplateRegistrationID, requestedAt time.Time) {
+		t.Helper()
+		if err := store.CreateTemplateRegistration(ctx, domain.TemplateRegistration{
+			ID: id, TenantID: "tenant_123", SourceTemplateID: template.ID,
+			RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc",
+			Status: domain.TemplateRegistrationPending, RequestedBy: "user_123", RequestedAt: requestedAt,
+		}); err != nil {
+			t.Fatalf("CreateTemplateRegistration(%s) returned error: %v", id, err)
+		}
+	}
+	endSync := func(input domain.TemplateRegistrationStatusActivityInput) {
+		t.Helper()
+		input.TenantID = "tenant_123"
+		if err := store.RecordTemplateRegistrationStatus(ctx, input); err != nil {
+			t.Fatalf("RecordTemplateRegistrationStatus(%s) returned error: %v", input.RegistrationID, err)
+		}
+	}
+	syncRevision := func(id domain.TemplateRevisionID, createdAt time.Time) domain.TemplateRevision {
+		t.Helper()
+		revision, err := store.UpsertTemplateRevisionWithVariables(ctx, domain.TemplateRevision{
+			ID: id, TenantID: "tenant_123", SourceTemplateID: template.ID,
+			RepoOwner: "acme", RepoName: "infra", SourceRef: "main", ResolvedCommitSHA: "sha_1",
+			RootPath: "modules/vpc", Name: "Network", Status: domain.TemplateRevisionActive, CreatedAt: createdAt,
+		}, nil)
+		if err != nil {
+			t.Fatalf("UpsertTemplateRevisionWithVariables(%s) returned error: %v", id, err)
+		}
+		return revision
+	}
+	latestSync := func() *domain.LatestTemplateSync {
+		t.Helper()
+		got, err := store.GetSourceTemplate(ctx, "tenant_123", template.ID)
+		if err != nil {
+			t.Fatalf("GetSourceTemplate returned error: %v", err)
+		}
+		if got.LatestSync == nil {
+			t.Fatal("template LatestSync = nil, want its newest sync")
+		}
+		return got.LatestSync
+	}
+
+	requestSync("template_registration_1", base)
+	endSync(domain.TemplateRegistrationStatusActivityInput{
+		RegistrationID: "template_registration_1", Status: domain.TemplateRegistrationFailed,
+		ErrorSummary: "clone failed",
+	})
+	requestSync("template_registration_2", base.Add(time.Minute))
+	if got := latestSync(); got.Status != domain.TemplateRegistrationPending || !got.CompletedAt.IsZero() {
+		t.Fatalf("latest sync while the second runs = %#v, want it pending with no completed_at", got)
+	}
+
+	revision := syncRevision("template_rev_1", base.Add(2*time.Minute))
+	endSync(domain.TemplateRegistrationStatusActivityInput{
+		RegistrationID: "template_registration_2", Status: domain.TemplateRegistrationCompleted,
+		TemplateRevisionID: revision.ID, ResolvedCommitSHA: "sha_1",
+	})
+	got := latestSync()
+	if got.Status != domain.TemplateRegistrationCompleted || got.ErrorSummary != "" ||
+		got.ResolvedCommitSHA != "sha_1" || !got.RequestedAt.Equal(base.Add(time.Minute)) ||
+		got.CompletedAt.IsZero() || got.RevisionPredatesRequest {
+		t.Fatalf("latest sync after a success = %#v, want the second sync, completed on a new revision", got)
+	}
+
+	// The same commit again: the upsert hands back the revision the second
+	// sync created, so this sync found nothing new.
+	requestSync("template_registration_3", base.Add(3*time.Minute))
+	reused := syncRevision("template_rev_again", base.Add(4*time.Minute))
+	if reused.ID != revision.ID {
+		t.Fatalf("upsert of a known commit returned %s, want the existing %s", reused.ID, revision.ID)
+	}
+	endSync(domain.TemplateRegistrationStatusActivityInput{
+		RegistrationID: "template_registration_3", Status: domain.TemplateRegistrationCompleted,
+		TemplateRevisionID: reused.ID, ResolvedCommitSHA: "sha_1",
+	})
+	if got := latestSync(); !got.RequestedAt.Equal(base.Add(3*time.Minute)) || !got.RevisionPredatesRequest ||
+		got.StatusAt(base.Add(5*time.Minute)) != domain.TemplateSyncUpToDate {
+		t.Fatalf("latest sync of a known commit = %#v, want the third sync, up to date", got)
+	}
+
+	page, err := store.ListSourceTemplatesPage(ctx, "tenant_123", nil, 10)
+	if err != nil {
+		t.Fatalf("ListSourceTemplatesPage returned error: %v", err)
+	}
+	latestByTemplate := map[domain.SourceTemplateID]*domain.LatestTemplateSync{}
+	for _, listed := range page {
+		latestByTemplate[listed.ID] = listed.LatestSync
+	}
+	if listed := latestByTemplate[template.ID]; listed == nil || !listed.RequestedAt.Equal(base.Add(3*time.Minute)) {
+		t.Fatalf("listed latest sync = %#v, want the third sync", listed)
+	}
+	if listed, ok := latestByTemplate["source_template_never_synced"]; !ok || listed != nil {
+		t.Fatalf("listed latest sync of a template never synced = %#v (listed %v), want none", listed, ok)
+	}
+}
+
+// Two syncs requested at the same instant: the greater id is the latest, so
+// every read gives the same answer.
+func TestSourceTemplateLatestSyncBreaksTiesByID(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store := NewStore(openMigratedTestPool(t, ctx))
+	template := vpcSourceTemplate("tenant_123")
+	if _, err := store.CreateSourceTemplate(ctx, template); err != nil {
+		t.Fatalf("CreateSourceTemplate returned error: %v", err)
+	}
+	requestedAt := time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC)
+	for _, registration := range []struct {
+		id     domain.TemplateRegistrationID
+		status domain.TemplateRegistrationStatus
+	}{
+		{id: "template_registration_b", status: domain.TemplateRegistrationFailed},
+		{id: "template_registration_a", status: domain.TemplateRegistrationInvalid},
+	} {
+		if err := store.CreateTemplateRegistration(ctx, domain.TemplateRegistration{
+			ID: registration.id, TenantID: "tenant_123", SourceTemplateID: template.ID,
+			RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc",
+			Status: registration.status, RequestedBy: "user_123", RequestedAt: requestedAt,
+		}); err != nil {
+			t.Fatalf("CreateTemplateRegistration(%s) returned error: %v", registration.id, err)
+		}
+	}
+
+	got, err := store.GetSourceTemplate(ctx, "tenant_123", template.ID)
+	if err != nil {
+		t.Fatalf("GetSourceTemplate returned error: %v", err)
+	}
+	if got.LatestSync == nil || got.LatestSync.Status != domain.TemplateRegistrationFailed {
+		t.Fatalf("latest sync = %#v, want template_registration_b's failure", got.LatestSync)
+	}
+}
+
 // Installing a template that is gone (deleted between the caller reading it
 // and the insert) is not found, not an internal error.
 func TestCreateStackTemplateOfAMissingTemplateIsNotFound(t *testing.T) {

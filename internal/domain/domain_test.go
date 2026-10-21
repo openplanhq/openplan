@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestOperationTypeValid(t *testing.T) {
@@ -477,5 +478,43 @@ func TestFallbackTemplateName(t *testing.T) {
 		if got := FallbackTemplateName("infra", test.rootPath); got != test.want {
 			t.Fatalf("FallbackTemplateName(%q) = %q, want %q", test.rootPath, got, test.want)
 		}
+	}
+}
+
+func TestLatestTemplateSyncStatusAt(t *testing.T) {
+	t.Parallel()
+
+	requestedAt := time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC)
+	justUnderStall := requestedAt.Add(TemplateSyncStallsAfter - time.Second)
+	atStall := requestedAt.Add(TemplateSyncStallsAfter)
+
+	for _, test := range []struct {
+		name                    string
+		status                  TemplateRegistrationStatus
+		revisionPredatesRequest bool
+		now                     time.Time
+		want                    TemplateSyncStatus
+	}{
+		{name: "pending, fresh", status: TemplateRegistrationPending, now: justUnderStall, want: TemplateSyncSyncing},
+		{name: "running, fresh", status: TemplateRegistrationRunning, now: justUnderStall, want: TemplateSyncSyncing},
+		{name: "pending, at the threshold", status: TemplateRegistrationPending, now: atStall, want: TemplateSyncStalled},
+		{name: "running, past the threshold", status: TemplateRegistrationRunning, now: atStall.Add(time.Hour), want: TemplateSyncStalled},
+		{name: "completed on a new revision", status: TemplateRegistrationCompleted, now: atStall, want: TemplateSyncSynced},
+		{name: "completed on a revision it already had", status: TemplateRegistrationCompleted, revisionPredatesRequest: true, now: justUnderStall, want: TemplateSyncUpToDate},
+		{name: "invalid", status: TemplateRegistrationInvalid, now: atStall, want: TemplateSyncInvalid},
+		{name: "failed", status: TemplateRegistrationFailed, now: justUnderStall, want: TemplateSyncFailed},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			sync := LatestTemplateSync{
+				Status:                  test.status,
+				RequestedAt:             requestedAt,
+				RevisionPredatesRequest: test.revisionPredatesRequest,
+			}
+			if got := sync.StatusAt(test.now); got != test.want {
+				t.Fatalf("StatusAt() = %q, want %q", got, test.want)
+			}
+		})
 	}
 }
