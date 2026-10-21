@@ -381,20 +381,25 @@ type BeginApplyActivityOutput struct {
 type TemplateSyncWorkflowInput struct {
 	RegistrationID TemplateRegistrationID
 	TenantID       TenantID
-	RepoOwner      string
-	RepoName       string
-	SourceRef      string
-	RootPath       string
+	// SourceTemplateID is the template the sync writes its revision into. The
+	// API made it when the template was registered; the sync never creates
+	// one, so a template deleted mid-sync stays deleted.
+	SourceTemplateID SourceTemplateID
+	RepoOwner        string
+	RepoName         string
+	SourceRef        string
+	RootPath         string
 }
 
 // TemplateSyncActivityInput asks the control plane to sync one template registration source.
 type TemplateSyncActivityInput struct {
-	RegistrationID TemplateRegistrationID
-	TenantID       TenantID
-	RepoOwner      string
-	RepoName       string
-	SourceRef      string
-	RootPath       string
+	RegistrationID   TemplateRegistrationID
+	TenantID         TenantID
+	SourceTemplateID SourceTemplateID
+	RepoOwner        string
+	RepoName         string
+	SourceRef        string
+	RootPath         string
 }
 
 // TemplateSyncActivityOutput reports the sync result for one registration source.

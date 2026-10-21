@@ -684,8 +684,8 @@ func TestRecordTemplateRegistrationStepAcceptsEveryDomainStep(t *testing.T) {
 }
 
 // Only a running registration has a step to start: a pending or finished one
-// is not found, and neither is another tenant's.
-func TestRecordTemplateRegistrationStepNeedsARunningRegistrationOfTheTenant(t *testing.T) {
+// is not found.
+func TestRecordTemplateRegistrationStepNeedsARunningRegistration(t *testing.T) {
 	t.Parallel()
 
 	for _, testCase := range []struct {
@@ -696,7 +696,6 @@ func TestRecordTemplateRegistrationStepNeedsARunningRegistrationOfTheTenant(t *t
 		{name: "pending", status: domain.TemplateRegistrationPending, tenant: "tenant_123"},
 		{name: "completed", status: domain.TemplateRegistrationCompleted, tenant: "tenant_123"},
 		{name: "failed", status: domain.TemplateRegistrationFailed, tenant: "tenant_123"},
-		{name: "other tenant", status: domain.TemplateRegistrationRunning, tenant: "tenant_456"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
@@ -713,6 +712,49 @@ func TestRecordTemplateRegistrationStepNeedsARunningRegistrationOfTheTenant(t *t
 				t.Fatalf("error = %v, want ErrNotFound", err)
 			}
 		})
+	}
+}
+
+// A registration deleted with its template is done: recording its step or its
+// status succeeds and changes nothing, so its sync ends instead of retrying.
+// Another tenant's registration is as absent as a deleted one, and stays as it
+// was.
+func TestRecordingIntoAGoneTemplateRegistrationSucceeds(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := NewStore(pool)
+	seedTemplateRegistration(t, ctx, store, "tenant_123", domain.TemplateRegistrationRunning)
+
+	for _, testCase := range []struct {
+		name           string
+		tenant         domain.TenantID
+		registrationID domain.TemplateRegistrationID
+	}{
+		{name: "deleted", tenant: "tenant_123", registrationID: "template_registration_deleted"},
+		{name: "other tenant", tenant: "tenant_456", registrationID: "template_registration_123"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if err := store.RecordTemplateRegistrationStep(ctx, domain.TemplateRegistrationStepActivityInput{
+				TenantID: testCase.tenant, RegistrationID: testCase.registrationID, Step: domain.TemplateRegistrationStepSyncing,
+			}); err != nil {
+				t.Fatalf("RecordTemplateRegistrationStep returned error: %v", err)
+			}
+			if err := store.RecordTemplateRegistrationStatus(ctx, domain.TemplateRegistrationStatusActivityInput{
+				TenantID: testCase.tenant, RegistrationID: testCase.registrationID, Status: domain.TemplateRegistrationCompleted,
+			}); err != nil {
+				t.Fatalf("RecordTemplateRegistrationStatus returned error: %v", err)
+			}
+		})
+	}
+
+	got, err := store.GetTemplateRegistration(ctx, "tenant_123", "template_registration_123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.TemplateRegistrationRunning || got.Step != "" {
+		t.Fatalf("tenant_123's registration = %q at step %q, want running with no step", got.Status, got.Step)
 	}
 }
 
@@ -757,6 +799,7 @@ func TestUpsertTemplateRevisionWithVariablesCreatesAndReusesImmutableRevision(t 
 	ctx := context.Background()
 	pool := openMigratedTestPool(t, ctx)
 	store := NewStore(pool)
+	seedSourceTemplate(t, ctx, store, "tenant_123", "source_template_vpc")
 	createdAt := time.Date(2026, 7, 6, 12, 0, 0, 123456000, time.UTC)
 	template := domain.TemplateRevision{
 		ID:                domain.TemplateRevisionID("template_123"),
@@ -829,12 +872,88 @@ func TestUpsertTemplateRevisionWithVariablesCreatesAndReusesImmutableRevision(t 
 	}
 }
 
+// A sync writes into the template the API registered and never creates one:
+// a template deleted while its sync ran stays deleted, and the sync is told
+// it is gone.
+func TestUpsertTemplateRevisionWithVariablesNeedsItsTemplate(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := NewStore(pool)
+	revision := domain.TemplateRevision{
+		ID:                "template_123",
+		TenantID:          "tenant_123",
+		SourceTemplateID:  "source_template_deleted",
+		RepoOwner:         "acme",
+		RepoName:          "infra",
+		SourceRef:         "main",
+		ResolvedCommitSHA: "abc123",
+		RootPath:          "source_template_deleted",
+		Name:              "vpc",
+		Status:            domain.TemplateRevisionActive,
+	}
+
+	_, err := store.UpsertTemplateRevisionWithVariables(ctx, revision, []domain.TemplateVariable{
+		{TemplateRevisionID: "template_123", Name: "region", TypeExpression: "string", Required: true},
+	})
+	if !errors.Is(err, os.ErrNotExist) || !errors.Is(err, app.ErrNotFound) {
+		t.Fatalf("error = %v, want os.ErrNotExist and app.ErrNotFound", err)
+	}
+	var templates, revisions int
+	if err := pool.QueryRow(ctx, `select count(*) from source_templates`).Scan(&templates); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `select count(*) from template_revisions`).Scan(&revisions); err != nil {
+		t.Fatal(err)
+	}
+	if templates != 0 || revisions != 0 {
+		t.Fatalf("templates = %d, revisions = %d after a sync into a deleted template, want 0 and 0", templates, revisions)
+	}
+}
+
+// A template deleted between a reused revision's lookup and the template's
+// latest-revision update is gone too, not a retried error.
+func TestUpsertTemplateRevisionWithVariablesReusingIntoADeletedTemplate(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	revision := domain.TemplateRevision{
+		ID:                "template_123",
+		TenantID:          "tenant_123",
+		SourceTemplateID:  "source_template_vpc",
+		RepoOwner:         "acme",
+		RepoName:          "infra",
+		SourceRef:         "main",
+		ResolvedCommitSHA: "abc123",
+		RootPath:          "source_template_vpc",
+		Name:              "vpc",
+		Status:            domain.TemplateRevisionActive,
+	}
+	err := recordLatestTemplateRevision(ctx, mustBegin(t, ctx, pool), revision)
+	if !errors.Is(err, os.ErrNotExist) || !errors.Is(err, app.ErrNotFound) {
+		t.Fatalf("error = %v, want os.ErrNotExist and app.ErrNotFound", err)
+	}
+}
+
+func mustBegin(t *testing.T, ctx context.Context, pool *pgxpool.Pool) pgx.Tx {
+	t.Helper()
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
+	return tx
+}
+
 func TestGetTemplateRevisionVariablesReturnsNotFoundForOtherTenant(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	pool := openMigratedTestPool(t, ctx)
 	store := NewStore(pool)
+	seedSourceTemplate(t, ctx, store, "tenant_123", "source_template_vpc")
 	_, err := store.UpsertTemplateRevisionWithVariables(ctx, domain.TemplateRevision{
 		ID:                domain.TemplateRevisionID("template_123"),
 		TenantID:          domain.TenantID("tenant_123"),
@@ -1134,6 +1253,7 @@ func TestGetTemplateRevisionReturnsTenantScopedRevision(t *testing.T) {
 	ctx := context.Background()
 	pool := openMigratedTestPool(t, ctx)
 	store := NewStore(pool)
+	seedSourceTemplate(t, ctx, store, "tenant_123", "source_template_vpc")
 	createdAt := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
 	template := domain.TemplateRevision{
 		ID:                domain.TemplateRevisionID("template_123"),
@@ -1173,6 +1293,9 @@ func TestListTemplateRevisionsReturnsTenantScopedRevisionsNewestFirst(t *testing
 	ctx := context.Background()
 	pool := openMigratedTestPool(t, ctx)
 	store := NewStore(pool)
+	seedSourceTemplate(t, ctx, store, "tenant_123", "source_template_older")
+	seedSourceTemplate(t, ctx, store, "tenant_123", "source_template_newer")
+	seedSourceTemplate(t, ctx, store, "tenant_456", "source_template_other")
 	older := domain.TemplateRevision{
 		ID:                domain.TemplateRevisionID("template_older"),
 		TenantID:          domain.TenantID("tenant_123"),
@@ -1240,6 +1363,7 @@ func TestTemplateRevisionWithoutTagsIsStoredAndReadAsNoTags(t *testing.T) {
 	ctx := context.Background()
 	pool := openMigratedTestPool(t, ctx)
 	store := NewStore(pool)
+	seedSourceTemplate(t, ctx, store, "tenant_123", "source_template_untagged")
 	revision := domain.TemplateRevision{
 		ID:                domain.TemplateRevisionID("template_untagged"),
 		TenantID:          domain.TenantID("tenant_123"),
@@ -1304,6 +1428,7 @@ func TestGetTemplateRevisionVariablesReturnsAnEmptySliceForNoVariables(t *testin
 	ctx := context.Background()
 	pool := openMigratedTestPool(t, ctx)
 	store := NewStore(pool)
+	seedSourceTemplate(t, ctx, store, "tenant_123", "source_template_123")
 	created, err := store.UpsertTemplateRevisionWithVariables(ctx, domain.TemplateRevision{
 		ID:                domain.TemplateRevisionID("template_123"),
 		TenantID:          domain.TenantID("tenant_123"),
@@ -1393,6 +1518,7 @@ func TestCreateStackTemplateAllowsRepeatedSourceWithDistinctComponentKeys(t *tes
 	store := NewStore(pool)
 	tenantID := domain.TenantID("tenant_123")
 	sourceTemplateID := domain.SourceTemplateID("source_template_vpc")
+	seedSourceTemplate(t, ctx, store, tenantID, sourceTemplateID)
 
 	stack := domain.Stack{
 		ID:        domain.StackID("stack_123"),
@@ -1468,6 +1594,7 @@ func TestCreateStackTemplateRejectsDuplicateActiveComponentKey(t *testing.T) {
 	store := NewStore(pool)
 	tenantID := domain.TenantID("tenant_123")
 	sourceTemplateID := domain.SourceTemplateID("source_template_vpc")
+	seedSourceTemplate(t, ctx, store, tenantID, sourceTemplateID)
 
 	stack := domain.Stack{
 		ID:        domain.StackID("stack_123"),

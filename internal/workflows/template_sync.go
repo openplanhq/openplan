@@ -58,12 +58,13 @@ func newRegistration(ctx workflow.Context, input domain.TemplateSyncWorkflowInpu
 func (r *registration) sync() (domain.TemplateSyncActivityOutput, error) {
 	var synced domain.TemplateSyncActivityOutput
 	err := ExecuteStep(r.ctx, r, domain.TemplateRegistrationStepSyncing, domain.SyncTemplateActivityName, domain.TemplateSyncActivityInput{
-		RegistrationID: r.input.RegistrationID,
-		TenantID:       r.input.TenantID,
-		RepoOwner:      r.input.RepoOwner,
-		RepoName:       r.input.RepoName,
-		SourceRef:      r.input.SourceRef,
-		RootPath:       r.input.RootPath,
+		RegistrationID:   r.input.RegistrationID,
+		TenantID:         r.input.TenantID,
+		SourceTemplateID: r.input.SourceTemplateID,
+		RepoOwner:        r.input.RepoOwner,
+		RepoName:         r.input.RepoName,
+		SourceRef:        r.input.SourceRef,
+		RootPath:         r.input.RootPath,
 	}).Get(r.ctx, &synced)
 	return synced, err
 }
