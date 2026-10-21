@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../../auth/AuthContext";
 import type { TemplateRevision } from "../../api/types";
 import TemplatesPage from "./TemplatesPage";
-import { authValue, jsonResponse, revision, seedTemplates, template, testQueryClient } from "./testSupport";
+import { authValue, jsonResponse, latestSync, revision, seedTemplates, template, testQueryClient } from "./testSupport";
 
 // The page through the same route shape as router.tsx, with the panel's
 // routes stubbed: these tests are about the frame, the header and the list.
@@ -175,6 +175,43 @@ describe("TemplatesPage list", () => {
     const label = screen.getByTestId("template-no-revision-tpl_new");
     expect(label.className).toContain("text-muted-foreground");
     expect(label.className).not.toContain("text-subtle-foreground");
+  });
+
+  // A sync that failed, was invalid or stalled waits on a platform engineer,
+  // so the row says so in the panel's words; one still running, or one that
+  // ended well, needs no one and marks nothing.
+  it.each([
+    ["failed", "sync failed"],
+    ["invalid", "sync failed"],
+    ["stalled", "sync stalled"],
+    ["syncing", null],
+    ["synced", null],
+    ["up_to_date", null]
+  ] as const)("marks a template whose latest sync is %s", (status, words) => {
+    const queryClient = testQueryClient();
+    seedTemplates(queryClient, [], [template({ id: "tpl_x", name: "x", latest_sync: latestSync({ status }) })]);
+    renderPage(queryClient, "/templates");
+
+    const mark = screen.queryByTestId("template-sync-trouble-tpl_x");
+    expect(mark?.textContent ?? null).toBe(words);
+    if (words) {
+      expect(within(screen.getByTestId("template-link-tpl_x")).getByText(words)).toBeTruthy();
+    }
+  });
+
+  // No revision is what a failed first sync leaves behind: the row tells it
+  // once, by the failure. One still syncing has nothing to install yet.
+  it.each([
+    ["failed", "sync failed", false],
+    ["stalled", "sync stalled", false],
+    ["syncing", null, true]
+  ] as const)("shows one mark on a template with no revision whose sync is %s", (status, words, noRevision) => {
+    const queryClient = testQueryClient();
+    seedTemplates(queryClient, [], [template({ id: "tpl_new", name: "fresh", latest_template_revision_id: "", latest_sync: latestSync({ status }) })]);
+    renderPage(queryClient, "/templates");
+
+    expect(screen.queryByTestId("template-sync-trouble-tpl_new")?.textContent ?? null).toBe(words);
+    expect(screen.queryByTestId("template-no-revision-tpl_new") !== null).toBe(noRevision);
   });
 });
 
