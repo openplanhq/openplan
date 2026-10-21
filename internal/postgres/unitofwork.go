@@ -20,6 +20,10 @@ func (repo *txRepo) CreateStack(ctx context.Context, stack domain.Stack) error {
 	return insertStack(ctx, repo.tx, stack)
 }
 
+func (repo *txRepo) CreateSourceTemplate(ctx context.Context, template domain.SourceTemplate) (domain.SourceTemplate, error) {
+	return createSourceTemplate(ctx, repo.tx, template)
+}
+
 func (repo *txRepo) AppendAuditEvent(ctx context.Context, event domain.SecurityAuditEvent) error {
 	return appendAuditEvent(ctx, repo.tx, event)
 }

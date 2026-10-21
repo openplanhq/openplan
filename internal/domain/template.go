@@ -3,7 +3,11 @@ package domain
 // The template catalogue: sources, revisions, registrations, variables.
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -79,16 +83,50 @@ func (step TemplateRegistrationStep) Valid() bool {
 }
 
 // SourceTemplate is the stable logical identity tracked by template revisions.
+// It exists from registration on, before any sync has produced a revision.
 type SourceTemplate struct {
-	ID                       SourceTemplateID   `json:"id"`
-	TenantID                 TenantID           `json:"tenant_id"`
-	RepoOwner                string             `json:"repo_owner"`
-	RepoName                 string             `json:"repo_name"`
-	SourceRef                string             `json:"source_ref"`
-	RootPath                 string             `json:"root_path"`
+	ID        SourceTemplateID `json:"id"`
+	TenantID  TenantID         `json:"tenant_id"`
+	RepoOwner string           `json:"repo_owner"`
+	RepoName  string           `json:"repo_name"`
+	SourceRef string           `json:"source_ref"`
+	RootPath  string           `json:"root_path"`
+	// Name, Description and Tags are the latest revision's. Before the first
+	// revision, Name is FallbackTemplateName, Description is empty and Tags
+	// is empty.
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Tags        []string `json:"tags"`
+	// LatestTemplateRevisionID is empty until a sync records a revision.
 	LatestTemplateRevisionID TemplateRevisionID `json:"latest_template_revision_id"`
 	CreatedAt                time.Time          `json:"created_at"`
 	UpdatedAt                time.Time          `json:"updated_at"`
+}
+
+// SourceTemplateIDFor derives the id of the template a source names, so
+// registering the same source twice lands on the same template. rootPath is
+// the cleaned root path. The hash is over the values joined by NUL, which no
+// value may contain, so two different sources never join to the same input.
+func SourceTemplateIDFor(tenantID TenantID, repoOwner, repoName, rootPath, sourceRef string) SourceTemplateID {
+	sum := sha256.Sum256([]byte(strings.Join([]string{
+		string(tenantID),
+		repoOwner,
+		repoName,
+		rootPath,
+		sourceRef,
+	}, "\x00")))
+	return SourceTemplateID("source_template_" + hex.EncodeToString(sum[:16]))
+}
+
+// FallbackTemplateName names a template whose source does not name itself:
+// the last element of its root path, or the repository name for a template
+// at the repository root.
+func FallbackTemplateName(repoName string, rootPath string) string {
+	base := filepath.Base(filepath.Clean(rootPath))
+	if base == "." || base == string(filepath.Separator) || base == "" {
+		return repoName
+	}
+	return base
 }
 
 // TemplateRevision is one resolved GitHub-sourced Terraform template revision.
@@ -110,8 +148,11 @@ type TemplateRevision struct {
 
 // TemplateRegistration records one async template registration request.
 type TemplateRegistration struct {
-	ID                 TemplateRegistrationID     `json:"id"`
-	TenantID           TenantID                   `json:"tenant_id"`
+	ID       TemplateRegistrationID `json:"id"`
+	TenantID TenantID               `json:"tenant_id"`
+	// SourceTemplateID is the template the registration syncs. It is empty on
+	// registrations made before templates were created at registration.
+	SourceTemplateID   SourceTemplateID           `json:"source_template_id"`
 	RepoOwner          string                     `json:"repo_owner"`
 	RepoName           string                     `json:"repo_name"`
 	SourceRef          string                     `json:"source_ref"`

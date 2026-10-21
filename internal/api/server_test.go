@@ -3453,6 +3453,11 @@ func (unit *apiUnitOfWork) CreateStack(ctx context.Context, stack domain.Stack) 
 	return unit.stacks.CreateStack(ctx, stack)
 }
 
+// CreateSourceTemplate stores nothing: no use case writes a template yet.
+func (unit *apiUnitOfWork) CreateSourceTemplate(_ context.Context, template domain.SourceTemplate) (domain.SourceTemplate, error) {
+	return template, nil
+}
+
 func (unit *apiUnitOfWork) AppendAuditEvent(_ context.Context, event domain.SecurityAuditEvent) error {
 	unit.audits = append(unit.audits, event)
 	return nil

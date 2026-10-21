@@ -219,8 +219,10 @@ func TestRecordTemplateRunEventMovesADestroyedTemplateThroughItsLifecycle(t *tes
 	}); err != nil {
 		t.Fatal(err)
 	}
+	seedSourceTemplate(t, ctx, store, "tenant_destroy_1", "source_template_vpc")
 	if err := store.CreateStackTemplate(ctx, domain.StackTemplate{
-		ID: "st_destroy_1", TenantID: "tenant_destroy_1", StackID: "stack_destroy_1", Lifecycle: domain.StackTemplateActive,
+		ID: "st_destroy_1", TenantID: "tenant_destroy_1", StackID: "stack_destroy_1", SourceTemplateID: "source_template_vpc",
+		Lifecycle: domain.StackTemplateActive,
 	}); err != nil {
 		t.Fatal(err)
 	}
