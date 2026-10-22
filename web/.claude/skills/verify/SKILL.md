@@ -7,8 +7,8 @@ description: Build, launch, and drive the openplan web frontend to observe a cha
 
 The frontend is a Vite SPA (`npm run dev` in `web/`, port 5173) that proxies
 `/v1` and `/healthz` to a backend on `http://localhost:8081` (see
-`vite.config.ts`). In dev mode the tenant defaults to `tenant_123`
-(`src/config.ts`), and auth comes from `MockAuthProvider` (default role
+`vite.config.ts`). The tenant is always `default`, read from
+`GET /v1/me`, and auth comes from `MockAuthProvider` (default role
 "operator"; override with `VITE_OPENPLAN_MOCK_USER_ROLE`).
 
 The Go backend does not yet return `effectiveCapabilities` on stack responses
@@ -18,9 +18,9 @@ backend on 8081 that returns the AUTH-017 contract shape — a stack object
 with `effectiveCapabilities: { canView, canOperate, canApprove,
 canManageAccess }`. Endpoints the stack screens hit:
 
-- `GET /v1/tenants/tenant_123/stacks` → `[stack]`
-- `GET /v1/tenants/tenant_123/stacks/:id` → `{ stack, templates: [] }`
-- `GET /v1/tenants/tenant_123/templates` → `[]`
+- `GET /v1/tenants/default/stacks` → `[stack]`
+- `GET /v1/tenants/default/stacks/:id` → `{ stack, templates: [] }`
+- `GET /v1/tenants/default/templates` → `[]`
 
 Recipe that works:
 

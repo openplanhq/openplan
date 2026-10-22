@@ -17,6 +17,12 @@ import (
 // is configuration rather than an identifier anyone has to record.
 const DefaultOpenFGAStoreName = "openplan"
 
+// defaultTenant is the one tenant every install serves. openplan is
+// single-tenant by the owner's decision, so the id is built in rather than
+// configured; it still goes into every row, path and workflow id, so a hosted,
+// multi-tenant openplan later needs no data migration.
+const defaultTenant domain.TenantID = "default"
+
 type RuntimeMode string
 
 const (
@@ -121,14 +127,6 @@ func loadSecurityConfig(getenv func(string) string) (SecurityConfig, error) {
 		return SecurityConfig{}, err
 	}
 
-	tenantID := strings.TrimSpace(getenv("OPENPLAN_TENANT_ID"))
-	if tenantID == "" {
-		return SecurityConfig{}, authConfigError("OPENPLAN_TENANT_ID is required")
-	}
-	if !validTenantID(tenantID) {
-		return SecurityConfig{}, authConfigError("OPENPLAN_TENANT_ID must start with an ASCII alphanumeric character, contain only ASCII alphanumerics, underscore, or hyphen, and be at most 128 characters")
-	}
-
 	oidc, err := loadOIDCConfig(getenv)
 	if err != nil {
 		return SecurityConfig{}, err
@@ -199,7 +197,7 @@ func loadSecurityConfig(getenv func(string) string) (SecurityConfig, error) {
 
 	return SecurityConfig{
 		Mode:     mode,
-		TenantID: domain.TenantID(tenantID),
+		TenantID: defaultTenant,
 		OIDC:     oidc,
 		Root:     root,
 
@@ -320,25 +318,6 @@ func parseAbsoluteURL(name, raw string) (*url.URL, error) {
 		return nil, authConfigError("%s must not include a fragment", name)
 	}
 	return parsed, nil
-}
-
-func validTenantID(value string) bool {
-	if value == "" || len(value) > 128 || !asciiAlphanumeric(value[0]) {
-		return false
-	}
-	for index := 1; index < len(value); index++ {
-		character := value[index]
-		if !asciiAlphanumeric(character) && character != '_' && character != '-' {
-			return false
-		}
-	}
-	return true
-}
-
-func asciiAlphanumeric(character byte) bool {
-	return character >= 'a' && character <= 'z' ||
-		character >= 'A' && character <= 'Z' ||
-		character >= '0' && character <= '9'
 }
 
 func optionalPositiveDuration(getenv func(string) string, name string, fallback time.Duration) (time.Duration, error) {

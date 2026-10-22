@@ -69,8 +69,8 @@ func TestLoadAPIConfigReadsAPISettings(t *testing.T) {
 	if cfg.LiveLogURL != "redis://valkey:6379/0" {
 		t.Fatalf("LiveLogURL = %q", cfg.LiveLogURL)
 	}
-	if cfg.Security.TenantID != "tenant_123" {
-		t.Fatalf("Security.TenantID = %q, want tenant_123", cfg.Security.TenantID)
+	if cfg.Security.TenantID != "default" {
+		t.Fatalf("Security.TenantID = %q, want default", cfg.Security.TenantID)
 	}
 	assertArtifactStoreConfig(t, cfg.ArtifactStore)
 }

@@ -36,7 +36,6 @@ function envValue(name) {
 
 for (const [name, value] of Object.entries({
   OPENPLAN_ENVIRONMENT: "development",
-  OPENPLAN_TENANT_ID: "tenant_123",
   OPENPLAN_PUBLIC_URL: "http://localhost:5173",
 })) {
   assert.equal(envValue(name), value, `${name} has the wrong local example value`);

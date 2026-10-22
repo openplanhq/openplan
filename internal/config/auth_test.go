@@ -27,8 +27,8 @@ func TestLoadSecurityConfigDevelopmentModes(t *testing.T) {
 			if cfg.Mode != RuntimeDevelopment {
 				t.Fatalf("Mode = %q, want %q", cfg.Mode, RuntimeDevelopment)
 			}
-			if cfg.TenantID != "tenant_123" {
-				t.Fatalf("TenantID = %q, want tenant_123", cfg.TenantID)
+			if cfg.TenantID != "default" {
+				t.Fatalf("TenantID = %q, want default", cfg.TenantID)
 			}
 			if got := cfg.OIDC.IssuerURL.String(); got != "http://localhost:8082/realms/openplan" {
 				t.Fatalf("IssuerURL = %q", got)
@@ -98,10 +98,6 @@ func TestLoadSecurityConfigRejectsMissingAndMalformedValues(t *testing.T) {
 	}{
 		{name: "unsafe store name", key: "OPENFGA_STORE_NAME", value: "store name", want: "OPENFGA_STORE_NAME must not contain whitespace or control characters"},
 		{name: "unknown environment", key: "OPENPLAN_ENVIRONMENT", value: "staging", want: "OPENPLAN_ENVIRONMENT must be development or production"},
-		{name: "missing tenant", key: "OPENPLAN_TENANT_ID", value: "", want: "OPENPLAN_TENANT_ID is required"},
-		{name: "tenant prefix", key: "OPENPLAN_TENANT_ID", value: "-tenant", want: "OPENPLAN_TENANT_ID must start"},
-		{name: "tenant slash", key: "OPENPLAN_TENANT_ID", value: "tenant/123", want: "OPENPLAN_TENANT_ID must start"},
-		{name: "tenant too long", key: "OPENPLAN_TENANT_ID", value: strings.Repeat("a", 129), want: "OPENPLAN_TENANT_ID must start"},
 		// The identity provider is the only way in, so there is no
 		// deployment without one.
 		{name: "missing issuer", key: "OIDC_ISSUER_URL", value: "", want: "OIDC_ISSUER_URL is required"},
@@ -322,7 +318,6 @@ func loadSecurityConfigWith(t *testing.T, overrides map[string]string) (Security
 func validSecurityValues() map[string]string {
 	return map[string]string{
 		"OPENPLAN_ENVIRONMENT":   "development",
-		"OPENPLAN_TENANT_ID":     "tenant_123",
 		"OPENPLAN_PUBLIC_URL":    "http://localhost:5173",
 		"OIDC_ISSUER_URL":        "http://localhost:8082/realms/openplan",
 		"OIDC_CLIENT_ID":         "openplan-api",

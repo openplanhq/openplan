@@ -1712,8 +1712,8 @@ components:
       in: path
       required: true
       description: |
-        The tenant. A deployment serves one configured tenant; any other value
-        returns `404`. Read yours from `GET /v1/me`.
+        The tenant. Every deployment serves the one tenant `default`; any other
+        value returns `404`. `GET /v1/me` returns it as `tenant_id`.
       schema: { type: string }
     TemplateID:
       name: template_id
