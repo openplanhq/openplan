@@ -106,7 +106,7 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
   const rootPath = rootPathOf(template.root_path);
 
   const name = templateDisplayName(template);
-  const heading = <h2 className="min-w-0 font-heading text-panel-title font-semibold tracking-title wrap-anywhere">{name}</h2>;
+  const heading = <h2 className="min-w-0 font-heading text-lg leading-title font-semibold tracking-title wrap-anywhere">{name}</h2>;
   // Delete sits on the name's line just before Sync, a Small Subtle button
   // like it, as one pair. Both are for people who can publish, so they come
   // and go together.
@@ -147,7 +147,7 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
     <ErrorPanel testId="template-delete-error" title="Could not delete this template" details={remove.refusal.message} />
   ) : null;
   const source = (
-    <ul aria-label="Source on GitHub" className="grid min-w-0 grid-cols-4 items-start gap-x-6 text-meta leading-5" data-testid="template-source">
+    <ul aria-label="Source on GitHub" className="grid min-w-0 grid-cols-4 items-start gap-x-6 text-xs leading-4.5" data-testid="template-source">
       <SourceFact icon={BookMarked} term="Repository" href={links.repository}>
         {`${template.repo_owner}/${template.repo_name}`}
       </SourceFact>
@@ -174,12 +174,12 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
     <>
       {deleteStep}
       {description !== "" ? (
-        <p className="max-w-170 text-sm text-foreground" data-testid="template-description">
+        <p className="max-w-170 text-meta text-foreground" data-testid="template-description">
           {description}
         </p>
       ) : (
         <RequireCapability capability="can_publish_template">
-          <p className="max-w-170 text-meta text-muted-foreground" data-testid="template-no-description">
+          <p className="max-w-170 text-xs text-muted-foreground" data-testid="template-no-description">
             No description. Add a <span className="font-mono text-code-foreground">template.yaml</span> beside the module with a name, a description
             and tags.
           </p>
@@ -299,10 +299,10 @@ function useTemplateDelete(id: string) {
 function SourceFact({ icon: Icon, term, href, mono = true, children }: { icon: LucideIcon; term: string; href: string; mono?: boolean; children: string }) {
   return (
     <li className="flex min-w-0 items-start gap-1.5">
-      <span title={term} className="mt-0.75 flex shrink-0 text-subtle-foreground">
+      <span title={term} className="mt-0.5 flex shrink-0 text-subtle-foreground">
         <Icon aria-hidden="true" className="size-3.5" />
       </span>
-      <ExternalLink href={href} site="GitHub" term={term} mono={mono}>
+      <ExternalLink href={href} site="GitHub" term={term} mono={mono} className="text-xs leading-4.5">
         {children}
       </ExternalLink>
     </li>

@@ -18,6 +18,7 @@ export default function ExternalLink({
   term,
   mono = true,
   testId,
+  className,
   children
 }: {
   href: string;
@@ -27,6 +28,8 @@ export default function ExternalLink({
   term?: string;
   mono?: boolean;
   testId?: string;
+  /** Overrides the meta size where the line around it is set smaller. */
+  className?: string;
   children: string;
 }) {
   const pieces = piecesAfter(children, "/-");
@@ -37,7 +40,7 @@ export default function ExternalLink({
       target="_blank"
       rel="noreferrer"
       data-testid={testId}
-      className={cn("min-w-0 text-meta text-foreground wrap-anywhere hover:text-primary hover:underline", mono && "font-mono")}
+      className={cn("min-w-0 text-meta text-foreground wrap-anywhere hover:text-primary hover:underline", mono && "font-mono", className)}
     >
       {term && <span className="sr-only">{term}: </span>}
       <Breakable pieces={pieces} />
