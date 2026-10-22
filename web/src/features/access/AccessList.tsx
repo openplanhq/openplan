@@ -306,7 +306,7 @@ export default function AccessList({
       {ready && rows.length === 0 && !lead && (
         <div className="p-5">
           <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-dashed-border px-5 py-10 text-center" data-testid="access-empty">
-            <p className="text-sm leading-label font-medium">{copy.emptyTitle}</p>
+            <p className="text-label">{copy.emptyTitle}</p>
           </div>
         </div>
       )}

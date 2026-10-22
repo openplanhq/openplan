@@ -9,10 +9,10 @@ describe("cn", () => {
   // theme.css's own steps conflict with Tailwind's like the built-in ones do.
   it.each([
     ["text-sm", "text-meta"],
-    ["text-2xl", "text-page-title"],
+    ["text-xs", "text-caption"],
+    ["text-meta", "text-title"],
     ["rounded-xl", "rounded-panel"],
-    ["leading-snug", "leading-label"],
-    ["tracking-tight", "tracking-title"]
+    ["leading-none", "leading-label"]
   ])("lets %s give way to %s", (earlier, later) => {
     expect(cn(earlier, later)).toBe(later);
   });

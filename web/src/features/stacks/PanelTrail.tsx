@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 // view as plain text, the current page. `name` names the navigation.
 export default function PanelTrail({ name, parent, current }: { name: string; parent: { label: string; to: string }; current: string }) {
   return (
-    <nav aria-label={name} className="flex items-center gap-1.5 text-sm text-muted-foreground">
+    <nav aria-label={name} className="flex items-center gap-1.5 text-body text-muted-foreground">
       <Link to={parent.to} className="hover:text-foreground hover:underline">
         {parent.label}
       </Link>

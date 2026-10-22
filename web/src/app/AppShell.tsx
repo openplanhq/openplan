@@ -32,7 +32,7 @@ export default function AppShell() {
     <div className={cn("min-h-screen", canvas && "bg-canvas")} data-canvas={canvas || undefined}>
       <a
         href="#main-content"
-        className="fixed top-2 left-2 z-50 -translate-y-16 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-transform focus:translate-y-0"
+        className="fixed top-2 left-2 z-50 -translate-y-16 rounded-lg bg-primary px-3 py-2 text-label text-primary-foreground transition-transform focus:translate-y-0"
       >
         Skip to content
       </a>
@@ -41,7 +41,7 @@ export default function AppShell() {
           AppShell.test.tsx checks the order. */}
       <header className="sticky top-0 z-5 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b bg-background px-4 py-3 md:px-6">
         <div className="flex items-center gap-4 md:gap-8">
-          <span className="text-lg leading-none font-semibold tracking-title">openplan</span>
+          <span className="text-wordmark">openplan</span>
           <nav className="flex items-center gap-1" aria-label="Primary">
             {/* The section you are in is marked, with the muted fill its
                 hover shows; NavLink sets aria-current="page" on it. */}
@@ -56,7 +56,7 @@ export default function AppShell() {
             ))}
           </nav>
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-3 text-sm">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-3 text-body">
           <div className="flex min-w-0 items-center gap-3 text-muted-foreground" data-testid="identity-menu">
             {status === "loading" && <span data-testid="identity-loading">Loading...</span>}
             {me && (
@@ -79,7 +79,7 @@ export default function AppShell() {
           <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
             <span>Tenant</span>
             <span
-              className="min-w-0 rounded-md bg-muted px-2 py-0.5 font-mono text-xs text-foreground wrap-anywhere"
+              className="min-w-0 rounded-md bg-muted px-2 py-0.5 font-mono text-caption text-foreground wrap-anywhere"
               data-testid="shell-tenant-context"
             >
               {tenantID}
@@ -108,7 +108,7 @@ function DebugPanel() {
   ];
 
   return (
-    <details className="mx-4 my-8 border-t pt-4 font-mono text-xs md:mx-6" data-testid="debug-panel">
+    <details className="mx-4 my-8 border-t pt-4 font-mono text-caption md:mx-6" data-testid="debug-panel">
       <summary className="cursor-pointer tracking-wide text-muted-foreground uppercase">IDs (debug)</summary>
       <dl className="mt-4 grid gap-2">
         {rows.map(([label, testId, value]) => (

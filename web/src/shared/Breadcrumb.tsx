@@ -67,14 +67,14 @@ export default function Breadcrumb({
           <h1
             aria-current="page"
             data-testid={current.testId}
-            className="font-sans text-sm font-normal tracking-normal text-foreground"
+            className="font-sans text-body font-normal tracking-normal text-foreground"
           >
             {current.label}
           </h1>
         </BreadcrumbItem>
       </BreadcrumbList>
       {detail && (
-        <span data-slot="breadcrumb-detail" className="font-mono text-xs text-muted-foreground wrap-anywhere">
+        <span data-slot="breadcrumb-detail" className="font-mono text-caption text-muted-foreground wrap-anywhere">
           {detail}
         </span>
       )}

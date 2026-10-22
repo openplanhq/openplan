@@ -205,7 +205,7 @@ function LiveRunLogStream({ url, log, onLoadFull }: { url: string; log: Template
         </LogStatus>
       )}
       {outcome === "complete" && streamFellShort(live, log) && (
-        <span className="mt-2 flex items-center gap-1.5 font-sans text-xs text-muted-foreground">
+        <span className="mt-2 flex items-center gap-1.5 font-sans text-caption text-muted-foreground">
           {/* A truncated log has said why above. */}
           {!live.truncated && "Some output didn't stream."}
           <button type="button" className={buttonClass("quiet")} onClick={onLoadFull}>

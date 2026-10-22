@@ -80,7 +80,20 @@ const COLOUR_TOKENS = THEME_SWATCHES.map(({ name }) => `--${name}`);
 
 const RADIUS_TOKENS = ["--radius", "--radius-sm", "--radius-md", "--radius-lg", "--radius-xl"];
 
-const TYPE_STEPS = ["--text-xs", "--text-sm", "--text-base", "--text-lg", "--text-xl", "--text-2xl", "--text-3xl"];
+// The type scale, largest first: each role's class, as theme.css defines it.
+// Classes are written out whole so Tailwind finds them.
+const TYPE_ROLES = [
+  { role: "page-title", className: "text-page-title" },
+  { role: "title", className: "text-title" },
+  { role: "wordmark", className: "text-wordmark" },
+  { role: "section-title", className: "text-section-title" },
+  { role: "label", className: "text-label" },
+  { role: "body", className: "text-body" },
+  { role: "meta", className: "text-meta" },
+  { role: "caption", className: "text-caption" },
+  { role: "log", className: "font-mono text-log" }
+];
+const TYPE_STEPS = TYPE_ROLES.map(({ role }) => `--text-${role}`);
 
 const FONT_TOKENS = ["--font-sans", "--font-mono"];
 
@@ -106,8 +119,8 @@ function useTokenValues(names: string[]): Record<string, string> {
 function Section({ id, title, note, children }: { id: string; title: string; note?: string; children: ReactNode }) {
   return (
     <section className="grid gap-6 border-t pt-6" id={id}>
-      <h2 className="font-heading text-xl leading-snug font-medium tracking-normal">{title}</h2>
-      {note && <p className="max-w-3xl text-sm text-muted-foreground">{note}</p>}
+      <h2 className="font-heading text-title">{title}</h2>
+      {note && <p className="max-w-3xl text-body text-muted-foreground">{note}</p>}
       {children}
     </section>
   );
@@ -127,8 +140,8 @@ function Specimen({
   return (
     <div className="grid gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <span className="text-xs font-medium">{label}</span>
-        {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
+        <span className="text-caption font-medium">{label}</span>
+        {hint && <span className="text-caption text-muted-foreground">{hint}</span>}
       </div>
       <div className={cn("flex flex-wrap items-center gap-3", stack && "flex-col items-start")}>{children}</div>
     </div>
@@ -170,16 +183,16 @@ export default function StyleGuide() {
   return (
     <div className="min-h-svh md:flex" data-testid="styleguide">
       <aside className="border-b bg-card p-6 md:sticky md:top-0 md:max-h-svh md:w-60 md:shrink-0 md:self-start md:overflow-y-auto md:border-r md:border-b-0">
-        <div className="mb-6 font-heading text-xl leading-tight">
+        <div className="mb-6 font-heading text-wordmark">
           openplan
-          <span className="block font-mono text-xs tracking-wide text-muted-foreground uppercase">Design system</span>
+          <span className="block font-mono text-caption font-normal tracking-wide text-muted-foreground uppercase">Design system</span>
         </div>
         <nav aria-label="Design system sections">
           <ol className="m-0 grid list-none gap-1 p-0">
             {SECTIONS.map((section) => (
               <li key={section.id}>
                 <a
-                  className="block rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  className="block rounded-md px-3 py-2 text-body text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   href={`#${section.id}`}
                 >
                   {section.title}
@@ -192,8 +205,8 @@ export default function StyleGuide() {
 
       <main className="grid min-w-0 flex-1 content-start gap-10 p-6 md:p-10">
         <div className="grid gap-3">
-          <h1 className="font-heading text-2xl leading-tight font-medium tracking-tight sm:text-4xl">Design system</h1>
-          <p className="max-w-3xl text-sm text-muted-foreground">
+          <h1 className="font-heading text-page-title">Design system</h1>
+          <p className="max-w-3xl text-body text-muted-foreground">
             Every example below renders the real component and reads its theme values out of the cascade, so this page
             cannot drift from the implementation. It is registered only in development builds, and it mounts outside the
             auth provider so it works with no backend.
@@ -211,8 +224,8 @@ export default function StyleGuide() {
                 {THEME_SWATCHES.map(({ name, className }) => (
                   <div key={name} data-swatch={name} className="flex flex-col gap-1.5">
                     <div className={cn("h-10 rounded-md border", className)} />
-                    <code className="font-mono text-xs text-muted-foreground">--{name}</code>
-                    <code className="font-mono text-xs text-muted-foreground">{colours[`--${name}`] || "—"}</code>
+                    <code className="font-mono text-caption text-muted-foreground">--{name}</code>
+                    <code className="font-mono text-caption text-muted-foreground">{colours[`--${name}`] || "—"}</code>
                   </div>
                 ))}
               </div>
@@ -359,7 +372,7 @@ export default function StyleGuide() {
                         <TableCell className="truncate font-medium" title={name}>
                           {name}
                         </TableCell>
-                        <TableCell className="truncate font-mono text-xs text-muted-foreground" title={slug}>
+                        <TableCell className="truncate font-mono text-caption text-muted-foreground" title={slug}>
                           {slug}
                         </TableCell>
                       </TableRow>
@@ -396,7 +409,7 @@ export default function StyleGuide() {
               <ScrollArea className="max-h-40 w-full max-w-md rounded-lg border bg-foreground" data-testid="styleguide-scroll-area">
                 <ScrollAreaViewport className="max-h-40 overflow-auto">
                   <ScrollAreaContent className="p-4">
-                    <pre className="m-0 font-mono text-xs whitespace-pre-wrap text-background">
+                    <pre className="m-0 font-mono text-caption whitespace-pre-wrap text-background">
                       {Array.from({ length: 16 }, (_, index) => `plan-${index + 1}: Terraform resource details`).join("\n")}
                     </pre>
                   </ScrollAreaContent>
@@ -476,8 +489,8 @@ export default function StyleGuide() {
                 {COLOUR_TOKENS.map((token) => (
                   <dl className="m-0 grid gap-1" key={token}>
                     <div className="h-12 rounded-md border" style={{ background: `var(${token})` }} aria-hidden="true" />
-                    <dt className="font-mono text-xs">{token}</dt>
-                    <dd className="m-0 font-mono text-xs text-muted-foreground">{colours[token] || "—"}</dd>
+                    <dt className="font-mono text-caption">{token}</dt>
+                    <dd className="m-0 font-mono text-caption text-muted-foreground">{colours[token] || "—"}</dd>
                   </dl>
                 ))}
               </div>
@@ -490,14 +503,14 @@ export default function StyleGuide() {
             note="Geist carries headings, body and UI; Geist Mono carries every technical signal — labels, IDs, timestamps, status and logs."
           >
             <Specimen label="Families" stack>
-              <p className="m-0 font-heading text-2xl">Geist display</p>
-              <p className="m-0 text-lg">Geist body — the quick brown fox jumps over the lazy dog, 0123456789</p>
-              <p className="m-0 font-mono text-sm">Geist Mono — stack_1a2b3c · 2026-08-11T09:14:22Z</p>
+              <p className="m-0 font-heading text-page-title">Geist display</p>
+              <p className="m-0 text-body">Geist body — the quick brown fox jumps over the lazy dog, 0123456789</p>
+              <p className="m-0 font-mono text-body">Geist Mono — stack_1a2b3c · 2026-08-11T09:14:22Z</p>
               <dl className="m-0 grid gap-1">
                 {FONT_TOKENS.map((token) => (
                   <div className="flex flex-wrap gap-2" key={token}>
-                    <dt className="font-mono text-xs">{token}</dt>
-                    <dd className="m-0 font-mono text-xs text-muted-foreground">{fonts[token] || "—"}</dd>
+                    <dt className="font-mono text-caption">{token}</dt>
+                    <dd className="m-0 font-mono text-caption text-muted-foreground">{fonts[token] || "—"}</dd>
                   </div>
                 ))}
               </dl>
@@ -505,14 +518,12 @@ export default function StyleGuide() {
 
             <Specimen label="Scale" stack>
               <dl className="m-0 grid w-full gap-2">
-                {TYPE_STEPS.map((step) => (
-                  <div className="flex flex-wrap items-baseline gap-4 border-b pb-2" key={step}>
-                    <dt className="w-56 shrink-0 font-mono text-xs text-muted-foreground">
-                      {step} · {type[step] || "—"}
+                {TYPE_ROLES.map(({ role, className }) => (
+                  <div className="flex flex-wrap items-baseline gap-4 border-b pb-2" key={role}>
+                    <dt className="w-56 shrink-0 font-mono text-caption text-muted-foreground">
+                      --text-{role} · {type[`--text-${role}`] || "—"}
                     </dt>
-                    <dd className="m-0" style={{ fontSize: `var(${step})` }}>
-                      Terraform
-                    </dd>
+                    <dd className={`m-0 ${className}`}>Terraform</dd>
                   </div>
                 ))}
               </dl>
@@ -528,8 +539,8 @@ export default function StyleGuide() {
               {RADIUS_TOKENS.map((token) => (
                 <div key={token} className="grid justify-items-center gap-2">
                   <div className="size-16 border bg-muted" style={{ borderRadius: `var(${token})` }} />
-                  <span className="font-mono text-xs">{token}</span>
-                  <span className="font-mono text-xs text-muted-foreground">{radii[token] || "—"}</span>
+                  <span className="font-mono text-caption">{token}</span>
+                  <span className="font-mono text-caption text-muted-foreground">{radii[token] || "—"}</span>
                 </div>
               ))}
             </Specimen>

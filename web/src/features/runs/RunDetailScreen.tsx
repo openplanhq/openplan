@@ -193,7 +193,7 @@ export default function RunDetailScreen() {
         <>
           <header className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex min-w-0 flex-wrap items-center gap-3">
-              <h3 className="font-heading text-lg leading-title font-semibold tracking-title">Run #{run.run_number}</h3>
+              <h3 className="font-heading text-title">Run #{run.run_number}</h3>
               <RunStatusLabel run={run} data-testid="run-detail-status" />
             </div>
             {canApprove && (
@@ -247,7 +247,7 @@ export default function RunDetailScreen() {
 function Fact({ term, mono = false, children }: { term: string; mono?: boolean; children: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <dt className="text-xs text-muted-foreground">{term}</dt>
+      <dt className="text-caption text-muted-foreground">{term}</dt>
       <dd className={cn("text-meta wrap-anywhere", mono && "font-mono")}>{children}</dd>
     </div>
   );

@@ -26,7 +26,7 @@ describe("AuthCardTitle", () => {
   it("is a level-one heading that sets its own type", () => {
     render(<AuthCardTitle>Sign in</AuthCardTitle>);
     const heading = screen.getByRole("heading", { level: 1, name: "Sign in" });
-    for (const name of ["font-heading", "text-base", "font-medium", "tracking-normal"]) {
+    for (const name of ["font-heading", "text-title"]) {
       expect(heading.classList).toContain(name);
     }
   });

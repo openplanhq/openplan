@@ -33,7 +33,7 @@ export default function TemplateRunNotices({ stackId, stackTemplate }: { stackId
       {waiting && (
         <div className="flex flex-col gap-4 rounded-lg border px-5 py-4 md:flex-row md:items-center md:gap-6" data-testid="template-waiting-plan">
           <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <span className="flex items-center gap-2 text-sm leading-label font-medium">
+            <span className="flex items-center gap-2 text-label">
               <Hourglass aria-hidden="true" className="size-4 shrink-0 text-warning" />
               {waiting.operation === "destroy" ? "Destroy plan waiting for approval" : "Plan waiting for approval"}
             </span>
@@ -60,7 +60,7 @@ export default function TemplateRunNotices({ stackId, stackTemplate }: { stackId
       {failed && (
         <div className="flex flex-col gap-4 rounded-lg border px-5 py-4 md:flex-row md:items-center md:gap-6" data-testid="template-failed-destroy">
           <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <span className="flex items-center gap-2 text-sm leading-label font-medium">
+            <span className="flex items-center gap-2 text-label">
               <TriangleAlert aria-hidden="true" className="size-4 shrink-0 text-destructive" />
               Destroy failed
             </span>

@@ -24,6 +24,6 @@ export default function AuthCard({ className, ...props }: ComponentProps<typeof 
  */
 export function AuthCardTitle({ className, ...props }: ComponentProps<"h1">) {
   return (
-    <h1 className={cn("font-heading text-base leading-snug font-medium tracking-normal", className)} {...props} />
+    <h1 className={cn("font-heading text-title", className)} {...props} />
   );
 }

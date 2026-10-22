@@ -70,7 +70,7 @@ export default function StackTemplateList({
           <Link
             to={`/stacks/${stackId}/templates/new`}
             aria-current={adding ? "true" : undefined}
-            className={cn(listItemClass(adding), "min-h-11 justify-start gap-2 text-sm font-medium", adding ? "text-primary-strong" : "text-primary")}
+            className={cn(listItemClass(adding), "min-h-11 justify-start gap-2 text-label", adding ? "text-primary-strong" : "text-primary")}
             data-testid="add-stack-template-link"
           >
             <Plus aria-hidden="true" className="size-4 shrink-0" />
@@ -109,7 +109,7 @@ function StackTemplateRow({
         {/* A branch can be a long ref. It gives way, cut with its full text in
             a title, so what last happened (a failed destroy's time, say)
             stays readable and nothing runs under the chips. */}
-        <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="flex min-w-0 items-center gap-1.5 text-caption text-muted-foreground">
           <span className="min-w-0 truncate font-mono" title={stackTemplate.source_ref}>
             {stackTemplate.source_ref}
           </span>

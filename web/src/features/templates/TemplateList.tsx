@@ -78,7 +78,7 @@ function TemplateRow({ template, to, selected }: { template: Template; to: strin
     <Link to={to} aria-current={selected ? "true" : undefined} className={listItemClass(selected)} data-testid={`template-link-${template.id}`}>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex h-5 min-w-0 items-baseline justify-between gap-3">
-          <span className={cn("truncate text-sm leading-label font-medium", selected && "text-primary-strong")} title={name}>
+          <span className={cn("truncate text-label", selected && "text-primary-strong")} title={name}>
             {name}
           </span>
           {unsynced && (
@@ -94,7 +94,7 @@ function TemplateRow({ template, to, selected }: { template: Template; to: strin
             </span>
           )}
         </span>
-        <span className="flex min-w-0 gap-1.5 font-mono text-xs text-muted-foreground" title={`${repository} · ${template.source_ref}`}>
+        <span className="flex min-w-0 gap-1.5 font-mono text-caption text-muted-foreground" title={`${repository} · ${template.source_ref}`}>
           <span className="min-w-0 truncate">{repository}</span>
           <span aria-hidden="true">·</span>
           <span className="max-w-1/2 shrink-0 truncate">{template.source_ref}</span>

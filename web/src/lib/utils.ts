@@ -7,10 +7,9 @@ import { createCn } from "cn/config"
 export const cn = createCn({
   extend: {
     theme: {
-      text: ["meta", "row-title", "panel-title", "page-title"],
+      text: ["page-title", "title", "wordmark", "section-title", "label", "body", "meta", "caption", "log"],
       radius: ["panel"],
-      leading: ["label", "title"],
-      tracking: ["title"],
+      leading: ["label"],
       container: ["beside-slug"],
     },
   },

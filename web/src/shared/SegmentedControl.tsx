@@ -49,7 +49,7 @@ export default function SegmentedControl<Value extends string>({
             )}
           >
             {option.label}
-            {option.count !== undefined && <span className="text-xs font-medium text-subtle-foreground">{option.count}</span>}
+            {option.count !== undefined && <span className="text-caption font-medium text-subtle-foreground">{option.count}</span>}
           </button>
         );
       })}

@@ -113,7 +113,7 @@ export default function SignInScreen() {
   return (
     <AuthCard>
       <CardHeader>
-        <p className="font-mono text-xs tracking-wide text-muted-foreground uppercase">openplan</p>
+        <p className="font-mono text-caption tracking-wide text-muted-foreground uppercase">openplan</p>
         <AuthCardTitle>Sign in</AuthCardTitle>
       </CardHeader>
       <CardContent>

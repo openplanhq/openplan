@@ -19,7 +19,7 @@ export function LogSteps({ children }: { children: ReactNode }) {
 export function LogPhase({ title, detail, children }: { title: string; detail?: ReactNode; children: ReactNode }) {
   return (
     <div>
-      <h5 className="flex items-baseline gap-1.5 border-b border-divider bg-canvas px-4 py-2 text-xs leading-4 font-normal text-muted-foreground">
+      <h5 className="flex items-baseline gap-1.5 border-b border-divider bg-canvas px-4 py-2 text-caption font-normal text-muted-foreground">
         <span className="font-medium text-foreground">{title}</span>
         {detail && <span>· {detail}</span>}
       </h5>
@@ -59,7 +59,7 @@ export function LogStep({ name, label, open, onOpenChange, children }: LogStepPr
         <ScrollArea data-testid={`log-scroll-area-${name}`} className="max-h-115">
           <ScrollAreaViewport className="max-h-115 overflow-auto">
             <ScrollAreaContent>
-              <pre className="m-0 py-3 pr-4 pl-9.5 font-mono text-xs leading-relaxed whitespace-pre-wrap wrap-anywhere text-code-foreground">{children}</pre>
+              <pre className="m-0 py-3 pr-4 pl-9.5 font-mono text-log whitespace-pre-wrap wrap-anywhere text-code-foreground">{children}</pre>
             </ScrollAreaContent>
           </ScrollAreaViewport>
           <ScrollAreaScrollbar>

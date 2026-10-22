@@ -153,7 +153,7 @@ export default function StacksListScreen() {
             <EmptyMedia>
               <Layers aria-hidden="true" className="size-5 text-muted-foreground" />
             </EmptyMedia>
-            <h2 className="font-heading text-sm font-medium">No stacks yet</h2>
+            <h2 className="font-heading text-label">No stacks yet</h2>
             <EmptyDescription className="text-meta">
               {canCreateStack
                 ? "Create a stack for each environment you deploy to, such as prod or staging."
@@ -219,7 +219,7 @@ function AttentionSummary({ items }: { items: AttentionItem[] }) {
   return (
     <Link
       to="/stacks/attention"
-      className="group inline-flex min-h-7 w-fit flex-wrap items-center gap-x-2 text-sm text-muted-foreground"
+      className="group inline-flex min-h-7 w-fit flex-wrap items-center gap-x-2 text-body text-muted-foreground"
       data-testid="attention-summary"
     >
       <Hourglass aria-hidden="true" className="size-4 shrink-0 text-warning" />
@@ -253,7 +253,7 @@ function StackRow({ stack, selected, attention }: { stack: StackListItem; select
               when a slug follows, so the slug is what gets cut. */}
           <span
             className={cn(
-              "shrink-0 truncate text-sm leading-label font-medium",
+              "shrink-0 truncate text-label",
               stack.slug_is_derived ? "max-w-full" : "max-w-beside-slug",
               selected && "text-primary-strong"
             )}
@@ -263,7 +263,7 @@ function StackRow({ stack, selected, attention }: { stack: StackListItem; select
           </span>
           {/* A slug the name already gives would only repeat it. */}
           {!stack.slug_is_derived && (
-            <span className="min-w-0 truncate font-mono text-xs text-muted-foreground" title={stack.slug}>
+            <span className="min-w-0 truncate font-mono text-caption text-muted-foreground" title={stack.slug}>
               {stack.slug}
             </span>
           )}
@@ -295,7 +295,7 @@ function TemplateCount({ templates, selected }: { templates: number; selected: b
   const empty = templates === 0;
   return (
     <span
-      className={cn("flex items-center gap-1.25 text-xs", empty && !selected ? "text-subtle-foreground" : "text-muted-foreground")}
+      className={cn("flex items-center gap-1.25 text-caption", empty && !selected ? "text-subtle-foreground" : "text-muted-foreground")}
       data-testid="stack-row-templates"
     >
       <Layers aria-hidden="true" className="size-3 shrink-0" strokeWidth={2.25} />

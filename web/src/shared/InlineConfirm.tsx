@@ -58,7 +58,7 @@ export default function InlineConfirm({
       }}
     >
       <div className="flex min-w-0 flex-col gap-1">
-        <p className="text-sm leading-label font-medium text-foreground wrap-anywhere">{question}</p>
+        <p className="text-label text-foreground wrap-anywhere">{question}</p>
         {children !== undefined && <p className="text-meta text-muted-foreground">{children}</p>}
       </div>
       <div className="flex shrink-0 items-center gap-2">

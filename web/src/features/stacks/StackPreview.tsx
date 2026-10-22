@@ -47,7 +47,7 @@ export default function StackPreview({
     <div className="flex min-w-0 flex-col" data-testid="stack-preview">
       <div className="flex flex-col gap-4 border-b border-divider px-7 py-6 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 flex-col gap-2">
-          <h2 className="font-heading text-panel-title font-semibold tracking-title wrap-anywhere">{stack.name}</h2>
+          <h2 className="font-heading text-title wrap-anywhere">{stack.name}</h2>
           {/* A derived slug only repeats the name; with no tags either, the
               line goes. */}
           {(!stack.slug_is_derived || Object.keys(stack.tags).length > 0) && (
@@ -75,7 +75,7 @@ export default function StackPreview({
 
       <section aria-labelledby="stack-preview-templates" className="flex flex-col gap-3 px-7 pt-5 pb-7">
         <div className="flex items-center justify-between gap-3">
-          <h3 id="stack-preview-templates" className="text-sm font-semibold">
+          <h3 id="stack-preview-templates" className="text-section-title">
             Templates
           </h3>
           <RequireCapability capability="can_operate" stackId={stack.id}>

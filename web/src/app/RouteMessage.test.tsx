@@ -45,7 +45,7 @@ describe("RouteMessage", () => {
   it("sets its own type", () => {
     renderMessage();
     const heading = screen.getByRole("heading", { level: 1 }).classList;
-    for (const name of ["font-heading", "text-lg", "font-medium", "tracking-tight"]) {
+    for (const name of ["font-heading", "text-title"]) {
       expect(heading).toContain(name);
     }
   });

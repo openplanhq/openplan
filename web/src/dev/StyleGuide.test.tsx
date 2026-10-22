@@ -117,11 +117,10 @@ describe("StyleGuide", () => {
     expect(screen.queryByText("No templates yet")).toBeNull();
   });
 
-  it("sizes its intro heading down on phones", () => {
+  it("sets its intro heading as a page title", () => {
     render(<StyleGuide />);
     const heading = screen.getByRole("heading", { level: 1, name: "Design system" });
-    expect(heading.classList).toContain("text-2xl");
-    expect(heading.classList).toContain("sm:text-4xl");
+    expect(heading.classList).toContain("text-page-title");
   });
 
   it("swatches every theme colour", () => {

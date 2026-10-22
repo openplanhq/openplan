@@ -92,7 +92,7 @@ export default function CredentialsPanel({ note, emptyTitle, emptyDescription, c
       ) : credentials.length === 0 ? (
         <Empty className="gap-2 rounded-lg border border-dashed border-dashed-border px-5 py-7">
           <EmptyHeader className="gap-2">
-            <p className="text-sm font-medium">{emptyTitle}</p>
+            <p className="text-label">{emptyTitle}</p>
             <EmptyDescription className="text-meta">{emptyDescription}</EmptyDescription>
           </EmptyHeader>
         </Empty>
