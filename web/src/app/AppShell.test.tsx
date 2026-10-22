@@ -103,14 +103,15 @@ describe("AppShell", () => {
     expect(within(screen.getByRole("navigation", { name: "Primary" })).getByRole("link", { name: "Access" }).getAttribute("href")).toBe("/access");
   });
 
-  it("renders nav, an identity slot, a static tenant indicator, and routed content", async () => {
+  it("renders nav, an identity slot, and routed content, with no tenant in the header", async () => {
+    await renderShell();
+    expect(within(screen.getByRole("banner")).queryByText(/tenant/i)).toBeNull();
+
     const markup = await shellMarkup();
 
     expect(markup).toContain('href="/stacks"');
     expect(markup).toContain('href="/templates"');
     expect(markup).toContain('data-testid="identity-menu"');
-    expect(markup).toContain('data-testid="shell-tenant-context"');
-    expect(markup).toContain(">tenant_123<");
     expect(markup).not.toContain("<input");
     expect(markup).toContain('data-testid="outlet-content"');
   });
@@ -170,13 +171,11 @@ describe("AppShell", () => {
     }
   });
 
-  // config.ts allows a 128-character tenant ID, and some IdPs make the email
-  // the display name. Each must wrap inside the header instead of pushing the
-  // page sideways on a phone.
-  it("lets a long tenant ID or display name wrap", async () => {
+  // Some IdPs make the email the display name. It must wrap inside the
+  // header instead of pushing the page sideways.
+  it("lets a long display name wrap", async () => {
     await renderShell();
 
-    expect(screen.getByTestId("shell-tenant-context").classList).toContain("wrap-anywhere");
     expect(screen.getByTestId("identity-display-name").classList).toContain("wrap-anywhere");
   });
 });

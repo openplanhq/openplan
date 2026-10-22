@@ -56,35 +56,26 @@ export default function AppShell() {
             ))}
           </nav>
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-3 text-body">
-          <div className="flex min-w-0 items-center gap-3 text-muted-foreground" data-testid="identity-menu">
-            {status === "loading" && <span data-testid="identity-loading">Loading...</span>}
-            {me && (
-              <>
-                <span className="min-w-0 wrap-anywhere" data-testid="identity-display-name">
-                  {me.display_name}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="pointer-coarse:h-11"
-                  data-testid="logout-button"
-                  onClick={logout}
-                >
-                  Log out
-                </Button>
-              </>
-            )}
-          </div>
-          <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
-            <span>Tenant</span>
-            <span
-              className="min-w-0 rounded-md bg-muted px-2 py-0.5 font-mono text-caption text-foreground wrap-anywhere"
-              data-testid="shell-tenant-context"
-            >
-              {tenantID}
-            </span>
-          </div>
+        {/* openplan has one tenant, so the header names no tenant: the
+            right side is who you are and the way out (#488). */}
+        <div className="flex min-w-0 items-center gap-3 text-body text-muted-foreground" data-testid="identity-menu">
+          {status === "loading" && <span data-testid="identity-loading">Loading...</span>}
+          {me && (
+            <>
+              <span className="min-w-0 wrap-anywhere" data-testid="identity-display-name">
+                {me.display_name}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="pointer-coarse:h-11"
+                data-testid="logout-button"
+                onClick={logout}
+              >
+                Log out
+              </Button>
+            </>
+          )}
         </div>
       </header>
       <main className={cn("mx-auto w-full max-w-7xl px-4 py-6", canvas && "md:p-8")} id="main-content" tabIndex={-1}>
