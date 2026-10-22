@@ -164,94 +164,94 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 
 	// Template routes.
 	// Registers a GitHub Terraform source as a template and starts syncing it.
-	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/templates", server.handleCreateTemplate)
+	server.handleTenantRoute("POST", "/templates", server.handleCreateTemplate)
 	// Lists the tenant's templates, newest first, a page at a time.
-	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/templates", server.handleListTemplates)
+	server.handleTenantRoute("GET", "/templates", server.handleListTemplates)
 	// Reads one template.
-	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/templates/{template_id}", server.handleGetTemplate)
+	server.handleTenantRoute("GET", "/templates/{template_id}", server.handleGetTemplate)
 	// Deletes a template no stack has installed.
-	server.handleTenantRoute("DELETE /v1/tenants/{tenant_id}/templates/{template_id}", server.handleDeleteTemplate)
+	server.handleTenantRoute("DELETE", "/templates/{template_id}", server.handleDeleteTemplate)
 	// Syncs a template again, to pick up a new commit or retry a failed sync.
-	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/templates/{template_id}/syncs", server.handleStartTemplateSync)
+	server.handleTenantRoute("POST", "/templates/{template_id}/syncs", server.handleStartTemplateSync)
 	// Lists one template's revisions, newest first, a page at a time.
-	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/templates/{template_id}/revisions", server.handleListTemplateRevisionsForTemplate)
+	server.handleTenantRoute("GET", "/templates/{template_id}/revisions", server.handleListTemplateRevisionsForTemplate)
 
 	// Template revision routes.
 	// Lists variables inferred from an immutable registered template revision.
-	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/template-revisions/{template_revision_id}/variables", server.handleGetTemplateRevisionVariables)
+	server.handleTenantRoute("GET", "/template-revisions/{template_revision_id}/variables", server.handleGetTemplateRevisionVariables)
 
 	// Stack routes.
 	// Creates a logical infrastructure stack.
-	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/stacks", server.handleCreateStack)
+	server.handleTenantRoute("POST", "/stacks", server.handleCreateStack)
 	// Lists tenant-owned stacks.
-	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/stacks", server.handleListStacks)
+	server.handleTenantRoute("GET", "/stacks", server.handleListStacks)
 	// Lists the plans waiting for approval and the failed destroys across
 	// every stack the caller can view.
-	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/attention", server.handleListAttention)
+	server.handleTenantRoute("GET", "/attention", server.handleListAttention)
 	// Reads one stack with installed templates.
-	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/stacks/{stack_id}", server.handleGetStack)
-	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/stacks/{stack_id}/credentials", server.handleCreateStackCredential)
-	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/stacks/{stack_id}/credentials", server.handleListStackCredentials)
-	server.handleTenantRoute("DELETE /v1/tenants/{tenant_id}/stacks/{stack_id}/credentials/{credential_id}", server.handleDeleteStackCredential)
+	server.handleTenantRoute("GET", "/stacks/{stack_id}", server.handleGetStack)
+	server.handleTenantRoute("POST", "/stacks/{stack_id}/credentials", server.handleCreateStackCredential)
+	server.handleTenantRoute("GET", "/stacks/{stack_id}/credentials", server.handleListStackCredentials)
+	server.handleTenantRoute("DELETE", "/stacks/{stack_id}/credentials/{credential_id}", server.handleDeleteStackCredential)
 	// Installs a registered template into a stack.
-	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/stacks/{stack_id}/templates", server.handleAddTemplateToStack)
+	server.handleTenantRoute("POST", "/stacks/{stack_id}/templates", server.handleAddTemplateToStack)
 	// Replaces the whole desired config for an installed stack template.
-	server.handleTenantRoute("PUT /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/config", server.handleUpdateStackTemplateConfig)
+	server.handleTenantRoute("PUT", "/stack-templates/{stack_template_id}/config", server.handleUpdateStackTemplateConfig)
 	// Stages an installed stack template to a newer template revision.
-	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/upgrade", server.handleUpgradeStackTemplate)
+	server.handleTenantRoute("POST", "/stack-templates/{stack_template_id}/upgrade", server.handleUpgradeStackTemplate)
 
 	// Template run routes.
 	// Starts a Terraform operation for an installed stack template.
-	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/runs", server.handleStartTemplateRun)
-	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/credentials", server.handleCreateStackTemplateCredential)
-	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/credentials", server.handleListStackTemplateCredentials)
-	server.handleTenantRoute("DELETE /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/credentials/{credential_id}", server.handleDeleteStackTemplateCredential)
+	server.handleTenantRoute("POST", "/stack-templates/{stack_template_id}/runs", server.handleStartTemplateRun)
+	server.handleTenantRoute("POST", "/stack-templates/{stack_template_id}/credentials", server.handleCreateStackTemplateCredential)
+	server.handleTenantRoute("GET", "/stack-templates/{stack_template_id}/credentials", server.handleListStackTemplateCredentials)
+	server.handleTenantRoute("DELETE", "/stack-templates/{stack_template_id}/credentials/{credential_id}", server.handleDeleteStackTemplateCredential)
 	// Lists runs for an installed stack template, most recent first, a page at a time.
-	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/runs", server.handleListTemplateRuns)
+	server.handleTenantRoute("GET", "/stack-templates/{stack_template_id}/runs", server.handleListTemplateRuns)
 	// Reads one run by its number within the stack template, which is how a
 	// run's page is addressed.
-	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/runs/{run_number}", server.handleGetTemplateRunByNumber)
+	server.handleTenantRoute("GET", "/stack-templates/{stack_template_id}/runs/{run_number}", server.handleGetTemplateRunByNumber)
 	// Reads the current state of a template run.
-	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/template-runs/{run_id}", server.handleGetTemplateRun)
+	server.handleTenantRoute("GET", "/template-runs/{run_id}", server.handleGetTemplateRun)
 	// Lists the resources a run's plan changes, removals first, a page at a time.
-	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/template-runs/{run_id}/changes", server.handleListTemplateRunResourceChanges)
+	server.handleTenantRoute("GET", "/template-runs/{run_id}/changes", server.handleListTemplateRunResourceChanges)
 	// Lists persisted log metadata for all phases of a template run.
-	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs", server.handleListTemplateRunLogs)
+	server.handleTenantRoute("GET", "/template-runs/{run_id}/logs", server.handleListTemplateRunLogs)
 	// Reads one persisted log body by the log's name, such as plan-1.
-	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{name}", server.handleGetTemplateRunLog)
+	server.handleTenantRoute("GET", "/template-runs/{run_id}/logs/{name}", server.handleGetTemplateRunLog)
 	// Follows one log live, as server-sent events, while its command runs.
-	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{name}/events", server.handleStreamTemplateRunLog)
+	server.handleTenantRoute("GET", "/template-runs/{run_id}/logs/{name}/events", server.handleStreamTemplateRunLog)
 
 	// User search routes.
 	// Searches signed-in users by display name or email.
-	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/users/search", server.handleSearchUsers)
+	server.handleTenantRoute("GET", "/users/search", server.handleSearchUsers)
 
 	// Queue route.
 	// Lists the work items the caller queued.
-	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/queue", server.handleListQueue)
+	server.handleTenantRoute("GET", "/queue", server.handleListQueue)
 
 	// Stack grant routes.
 	// Lists grants for a stack.
-	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/stacks/{stack_id}/grants", server.handleListStackGrants)
+	server.handleTenantRoute("GET", "/stacks/{stack_id}/grants", server.handleListStackGrants)
 	// Sets one person's role on a stack, creating or replacing their grant.
-	server.handleTenantRoute("PUT /v1/tenants/{tenant_id}/stacks/{stack_id}/grants/{user_sub}", server.handleAssignStackRole)
+	server.handleTenantRoute("PUT", "/stacks/{stack_id}/grants/{user_sub}", server.handleAssignStackRole)
 	// Revokes a role from a stack.
-	server.handleTenantRoute("DELETE /v1/tenants/{tenant_id}/stacks/{stack_id}/grants/{user_sub}", server.handleRevokeStackRole)
+	server.handleTenantRoute("DELETE", "/stacks/{stack_id}/grants/{user_sub}", server.handleRevokeStackRole)
 
 	// Platform grant routes, the stack grant routes on the platform singleton.
 	// Tenant-scoped like every resource route: an api serves one tenant.
 	// Lists who holds a platform role.
-	server.handleTenantRoute("GET /v1/tenants/{tenant_id}/platform/grants", server.handleListPlatformGrants)
+	server.handleTenantRoute("GET", "/platform/grants", server.handleListPlatformGrants)
 	// Sets one person's platform role, creating or replacing their grant.
-	server.handleTenantRoute("PUT /v1/tenants/{tenant_id}/platform/grants/{user_sub}", server.handleAssignPlatformRole)
+	server.handleTenantRoute("PUT", "/platform/grants/{user_sub}", server.handleAssignPlatformRole)
 	// Revokes a person's platform role.
-	server.handleTenantRoute("DELETE /v1/tenants/{tenant_id}/platform/grants/{user_sub}", server.handleRevokePlatformRole)
+	server.handleTenantRoute("DELETE", "/platform/grants/{user_sub}", server.handleRevokePlatformRole)
 
 	// Template run decision routes.
 	// Records approval for a waiting template run.
-	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/template-runs/{run_id}/approve", server.handleApproveRun)
+	server.handleTenantRoute("POST", "/template-runs/{run_id}/approve", server.handleApproveRun)
 	// Discards a template run's plan waiting for approval.
-	server.handleTenantRoute("POST /v1/tenants/{tenant_id}/template-runs/{run_id}/discard", server.handleDiscardRun)
+	server.handleTenantRoute("POST", "/template-runs/{run_id}/discard", server.handleDiscardRun)
 	server.handler = withErrorEnvelope(server.mux)
 	return server
 }
@@ -333,8 +333,12 @@ func (server *Server) handleMe(response http.ResponseWriter, request *http.Reque
 	}))
 }
 
-func (server *Server) handleTenantRoute(pattern string, handler http.HandlerFunc) {
-	server.mux.Handle(pattern, server.requireConfiguredTenant(handler))
+// tenantPrefix roots every tenant route. handleTenantRoute adds it, so no
+// route can carry the prefix without the configured-tenant check.
+const tenantPrefix = "/v1/tenants/{tenant_id}"
+
+func (server *Server) handleTenantRoute(method, path string, handler http.HandlerFunc) {
+	server.mux.Handle(method+" "+tenantPrefix+path, server.requireConfiguredTenant(handler))
 }
 
 func (server *Server) requireConfiguredTenant(next http.Handler) http.Handler {
