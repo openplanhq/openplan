@@ -49,7 +49,7 @@ per stack.
 **Credentials.** Cloud credentials are write-only and injected only while
 Terraform runs.
 
-![The environment credentials tab](docs/ss/environment-credentials.png)
+![A stack's environment credentials](docs/ss/environment-credentials.png)
 
 **Access.** Grant people a role on the stacks they need, not on everything.
 
