@@ -1,6 +1,6 @@
 import { Loader2, RefreshCw } from "lucide-react";
 import { useTemplateRevisionVariablesQuery } from "../../api/queries";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
@@ -27,6 +27,7 @@ function typePieces(typeExpression: string): string[] {
 // revision. The API says whether a variable has a default, not what it is, so
 // a variable is required or optional.
 export default function VariablesTab() {
+  const tenantID = useTenantID();
   const { latest } = useTemplate();
   const variablesQuery = useTemplateRevisionVariablesQuery(tenantID, latest.id);
   const boundary = useQueryErrorBoundary(variablesQuery.error);

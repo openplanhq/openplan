@@ -2,7 +2,7 @@ import { RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTemplateRunsQuery } from "../../api/queries";
 import type { TemplateRun } from "../../api/types";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
 import { formatDateTime } from "../../shared/formatTimestamp";
@@ -33,6 +33,7 @@ interface TemplateRunHistoryProps {
 // rows take no actions: a plan is approved or discarded on its run, after
 // someone has read it, and a run planning or applying cannot be stopped.
 export default function TemplateRunHistory({ stackId, stackTemplateId }: TemplateRunHistoryProps) {
+  const tenantID = useTenantID();
   const runsQuery = useTemplateRunsQuery(tenantID, stackTemplateId);
   const runs = runsQuery.data;
   const boundary = useQueryErrorBoundary(runsQuery.error);

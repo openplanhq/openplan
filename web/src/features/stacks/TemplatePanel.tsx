@@ -4,7 +4,7 @@ import { Check } from "lucide-react";
 import { Outlet, useParams } from "react-router-dom";
 import { useAttentionQuery, useStackQuery } from "../../api/queries";
 import type { StackTemplate } from "../../api/types";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 import StatusLabel from "../../shared/StatusLabel";
 import { useRefreshStackOnRunChange } from "../runs/useRefreshStackOnRunChange";
 import { attentionByStackTemplate } from "./attention";
@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 // read from cache. The content is keyed on the template, so a tab's local
 // state, such as unsaved variable edits, never carries over to another.
 export default function TemplatePanel({ stackTemplateId, children }: { stackTemplateId?: string; children?: ReactNode }) {
+  const tenantID = useTenantID();
   const params = useParams<{ stackId: string; stackTemplateId: string }>();
   const stackId = params.stackId ?? "";
   const id = stackTemplateId ?? params.stackTemplateId ?? "";

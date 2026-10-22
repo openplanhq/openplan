@@ -3,7 +3,7 @@ import { ArrowLeft, KeyRound, Users } from "lucide-react";
 import { Link, Outlet, useMatch, useParams } from "react-router-dom";
 import { useAttentionQuery, useStackQuery } from "../../api/queries";
 import RequireCapability from "../../auth/RequireCapability";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import PageHeader from "../../shared/PageHeader";
 import { cn } from "@/lib/utils";
@@ -33,6 +33,7 @@ const sectionLinkClass = cn(buttonClass("outline", "lg"), "pointer-coarse:h-11")
 // The canView guard above this route has loaded the stack.
 // TemplatesPage mirrors this list-and-panel frame and its phone rules.
 export default function StackPage() {
+  const tenantID = useTenantID();
   const { stackId = "" } = useParams<{ stackId: string }>();
   const stackView = useStackQuery(tenantID, stackId).data;
   const attention = attentionByStackTemplate((useAttentionQuery(tenantID).data ?? []).filter((item) => item.stack.id === stackId));

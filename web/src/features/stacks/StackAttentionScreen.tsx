@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useAttentionQuery } from "../../api/queries";
 import type { AttentionItem } from "../../api/types";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 import { formatDateTime } from "../../shared/formatTimestamp";
 import PageHeader from "../../shared/PageHeader";
 import PlanDiff from "../../shared/PlanDiff";
@@ -26,6 +26,7 @@ const trail = [{ label: "Stacks", to: "/stacks" }];
 // Built to openplan UI: PageHeader with a Breadcrumb trail, a section title
 // per kind over a card of AttentionRows, and the page-level EmptyState.
 export default function StackAttentionScreen() {
+  const tenantID = useTenantID();
   const { data: items, status, error, refetch } = useAttentionQuery(tenantID);
   const boundary = useQueryErrorBoundary(error);
 

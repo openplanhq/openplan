@@ -10,7 +10,7 @@ import {
   useTemplatesQuery
 } from "../../api/queries";
 import type { Template } from "../../api/types";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
 import { fieldLabelClass, selectTriggerClass } from "../../shared/fieldClass";
@@ -38,6 +38,7 @@ import { cn } from "@/lib/utils";
 // wants the newest validated commit; moving between commits afterwards is
 // Change revision's job.
 export default function AddStackTemplateScreen() {
+  const tenantID = useTenantID();
   const { stackId = "" } = useParams<{ stackId: string }>();
   const navigate = useNavigate();
   const [chosenTemplateID, setChosenTemplateID] = useState("");

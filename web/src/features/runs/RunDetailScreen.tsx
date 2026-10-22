@@ -14,7 +14,7 @@ import {
 import { ApiRequestError } from "../../api/client";
 import { isTerminalRunStatus } from "../../api/polling";
 import { apiErrorMessage } from "../../api/problems";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 import { formatDateTime } from "../../shared/formatTimestamp";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
@@ -42,6 +42,7 @@ import RequestIdNote from "../../shared/RequestIdNote";
 // extra request. A run beyond them, or one started since, is read by number.
 // The run's logs stack in the order their commands ran.
 export default function RunDetailScreen() {
+  const tenantID = useTenantID();
   const {
     stackId = "",
     stackTemplateId = "",

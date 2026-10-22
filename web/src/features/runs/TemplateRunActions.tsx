@@ -6,7 +6,7 @@ import { queryKeys } from "../../api/queryKeys";
 import { useStartTemplateRunMutation } from "../../api/queries";
 import type { StackTemplate } from "../../api/types";
 import RequireCapability from "../../auth/RequireCapability";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
 import { cn } from "@/lib/utils";
@@ -28,6 +28,7 @@ interface TemplateRunActionsProps {
 // local state, so it is the same for everyone who can view the stack. The
 // stack refresh when a run settles is the panel's: useRefreshStackOnRunChange.
 export default function TemplateRunActions({ stackId, stackTemplate }: TemplateRunActionsProps) {
+  const tenantID = useTenantID();
   const [errorMessage, setErrorMessage] = useState("");
   const [autoApprove, setAutoApprove] = useState(false);
   const queryClient = useQueryClient();

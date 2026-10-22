@@ -7,7 +7,7 @@ import { isSyncSettled } from "../../api/polling";
 import { apiErrorMessage } from "../../api/problems";
 import { queryKeys } from "../../api/queryKeys";
 import { useRegisterTemplateMutation, useTemplateQuery, useTemplatesQuery } from "../../api/queries";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorPanel from "../../shared/ErrorPanel";
 import { fieldLabelClass, inputClass } from "../../shared/fieldClass";
@@ -28,6 +28,7 @@ const DEFAULTS = { owner: "hashicorp", repo: "", ref: "main", path: "." };
 // template. A failure keeps the fields as typed and says so in an
 // ErrorPanel, the server's reason as written in it.
 export default function RegisterTemplatePanel() {
+  const tenantID = useTenantID();
   const [repoOwner, setRepoOwner] = useState(DEFAULTS.owner);
   const [repoName, setRepoName] = useState(DEFAULTS.repo);
   const [sourceRef, setSourceRef] = useState(DEFAULTS.ref);

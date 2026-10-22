@@ -5,7 +5,7 @@ import {
   useSearchUsersQuery
 } from "../../api/queries";
 import { useAuth } from "../../auth/AuthContext";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 import PageHeader from "../../shared/PageHeader";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import AccessList from "./AccessList";
@@ -17,6 +17,7 @@ import { PLATFORM_ROLES } from "./roles";
 // can_manage_platform_access; a role change re-reads /v1/me (the mutations
 // do), so losing your own admin turns this page into its refusal.
 export default function PlatformAccessScreen() {
+  const tenantID = useTenantID();
   const grants = usePlatformGrantsQuery(tenantID);
   const assign = useAssignPlatformRoleMutation(tenantID);
   const revoke = useRevokePlatformRoleMutation(tenantID);

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTemplateRevisionVariablesQuery, useTemplateRevisionsQuery, useUpgradeStackTemplateMutation } from "../../api/queries";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
 import { fieldLabelClass, selectTriggerClass } from "../../shared/fieldClass";
@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 // config is stated outright. The panel around it names the template and
 // handles one the stack does not have.
 export default function UpgradeStackTemplateScreen() {
+  const tenantID = useTenantID();
   const { stackId, stackTemplate } = useStackTemplate();
   const navigate = useNavigate();
   const [chosenTargetID, setChosenTargetID] = useState("");

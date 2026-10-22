@@ -3,13 +3,25 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { AuthContext } from "./AuthContext";
 import { useStackCapabilities } from "./useStackCapabilities";
 import { queryKeys } from "../api/queryKeys";
 import type { StackView } from "../api/types";
 
 function wrapper(queryClient: QueryClient) {
   return function Wrapper({ children }: { children: ReactNode }) {
-    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+    return (
+      <AuthContext.Provider
+        value={{
+          me: { sub: "s1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_publish_template: false, can_manage_platform_access: false } },
+          status: "authenticated",
+          login: () => {},
+          logout: () => {}
+        }}
+      >
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      </AuthContext.Provider>
+    );
   };
 }
 

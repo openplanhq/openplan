@@ -7,7 +7,7 @@ import { apiErrorMessage } from "../../api/problems";
 import { queryKeys } from "../../api/queryKeys";
 import { cachedTemplateRuns, useStartTemplateRunMutation } from "../../api/queries";
 import type { StackTemplate } from "../../api/types";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
 import { cn } from "@/lib/utils";
@@ -30,6 +30,7 @@ interface TemplateDestroyPanelProps {
 // destroy is never auto-approved, so that confirmation is always the
 // irreversible click.
 export default function TemplateDestroyPanel({ stackId, stackTemplate }: TemplateDestroyPanelProps) {
+  const tenantID = useTenantID();
   const [errorMessage, setErrorMessage] = useState("");
   const queryClient = useQueryClient();
   const navigate = useNavigate();
