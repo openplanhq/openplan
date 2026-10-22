@@ -44,7 +44,7 @@ export default function ErrorPanel({
     <div role="alert" className="flex min-w-0 items-start gap-3 rounded-lg border px-5 py-4" data-testid={testId}>
       <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-destructive" />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <p className="text-sm leading-label font-medium text-foreground">{title}</p>
+        <p className="text-label text-foreground">{title}</p>
         {children !== undefined && <p className="text-meta text-muted-foreground">{children}</p>}
         {hasDetails && detailsCollapsed && (
           <button
@@ -61,7 +61,7 @@ export default function ErrorPanel({
         {hasDetails && open && (
           <pre
             id={detailsId}
-            className="m-0 mt-1 font-mono text-xs leading-relaxed whitespace-pre-wrap text-code-foreground wrap-anywhere"
+            className="m-0 mt-1 font-mono text-log whitespace-pre-wrap text-code-foreground wrap-anywhere"
           >
             {details}
           </pre>

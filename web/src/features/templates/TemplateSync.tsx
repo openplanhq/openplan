@@ -166,7 +166,7 @@ export default function TemplateSync({
       <div className="-mt-5 flex flex-col" role="status" aria-live="polite" data-testid="template-sync-result">
         {syncing ? (
           <p className="mt-5">
-            <StatusLabel icon={LoaderCircle} tone="settled" className="text-xs">
+            <StatusLabel icon={LoaderCircle} tone="settled" className="text-caption">
               <span>
                 syncing
                 <When at={when} />
@@ -175,7 +175,7 @@ export default function TemplateSync({
           </p>
         ) : completed ? (
           <p className="mt-5">
-            <StatusLabel icon={Check} tone="settled" className="text-xs">
+            <StatusLabel icon={Check} tone="settled" className="text-caption">
               {/* One run of text, so the time follows the words at a space,
                   not at the label's wider icon gap. */}
               <span>
@@ -194,7 +194,7 @@ export default function TemplateSync({
           // No sync to speak of (none requested, or one that ended without
           // a revision): the template simply has nothing to install yet.
           <p className="mt-5">
-            <StatusLabel icon={Minus} tone="idle" className="text-xs" data-testid="template-no-revision">
+            <StatusLabel icon={Minus} tone="idle" className="text-caption" data-testid="template-no-revision">
               no revision
             </StatusLabel>
           </p>

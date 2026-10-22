@@ -19,20 +19,60 @@
   --color-*: initial;
   --color-black: #000000;
   --color-white: #ffffff;
-  /* openplan UI's type steps that Tailwind's scale lacks (12, 14, 18 it has):
-     meta 13px, row-title 15px/1.3, panel-title 22px/1.2, page-title 24px/1.2.
-     Titles track at -0.02em; names and labels sit at 1.3. src/lib/utils.ts
-     tells cn about each, so they replace a component's own steps. */
-  --text-meta: 0.8125rem;
-  --text-row-title: 0.9375rem;
-  --text-row-title--line-height: 1.3;
-  --text-panel-title: 1.375rem;
-  --text-panel-title--line-height: 1.2;
+  /* The type scale: the only text sizes there are. Five sizes (24, 18, 14,
+     13, 12px), each named for its role, and each role carries its own line
+     height, so a child that sets its own size never inherits a parent's
+     leading; titles carry weight and tracking too. Sizes and line heights
+     are Tailwind's text-2xl/lg/sm/xs and Geist's copy-13 (13/18); the
+     -0.02em title tracking and 1.2/1.3 leadings are openplan UI's.
+     The steps Tailwind ships (text-base, text-xl...) are cleared so nothing
+     off the scale can render; tailwind.guard.test.ts holds app code to these
+     names, and src/lib/utils.ts tells cn about each. */
+  --text-*: initial;
+  /* The one h1 of a page. */
   --text-page-title: 1.5rem;
   --text-page-title--line-height: 1.2;
+  --text-page-title--font-weight: 600;
+  --text-page-title--letter-spacing: -0.02em;
+  /* A panel's item, a dialog's question, a view nested in a tab (Run #14). */
+  --text-title: 1.125rem;
+  --text-title--line-height: 1.2;
+  --text-title--font-weight: 600;
+  --text-title--letter-spacing: -0.02em;
+  /* The product name in the top bar, on one line box. */
+  --text-wordmark: 1.125rem;
+  --text-wordmark--line-height: 1;
+  --text-wordmark--font-weight: 600;
+  --text-wordmark--letter-spacing: -0.02em;
+  /* A section's heading inside a page, panel or tab. */
+  --text-section-title: 0.875rem;
+  --text-section-title--line-height: calc(1.25 / 0.875);
+  --text-section-title--font-weight: 600;
+  /* A name in a list, a tab, a notice's or empty state's title. */
+  --text-label: 0.875rem;
+  --text-label--line-height: 1.3;
+  --text-label--font-weight: 500;
+  /* Default interface text. */
+  --text-body: 0.875rem;
+  --text-body--line-height: calc(1.25 / 0.875);
+  /* Metadata, table cells, field labels, code values (in mono). */
+  --text-meta: 0.8125rem;
+  --text-meta--line-height: calc(1.125 / 0.8125);
+  /* A row's second line, hints, chips, table headers, slugs (in mono). */
+  --text-caption: 0.75rem;
+  --text-caption--line-height: calc(1 / 0.75);
+  /* Log and error text, in mono: caption size, open leading for reading. */
+  --text-log: 0.75rem;
+  --text-log--line-height: 1.625;
+  /* Vendored shadcn components keep their own names for two of the steps;
+     these are caption and body exactly. App code uses the role names. */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: calc(1 / 0.75);
+  --text-sm: 0.875rem;
+  --text-sm--line-height: calc(1.25 / 0.875);
+  /* A name or label set on one line in a row, at any size: openplan UI's
+     1.3. The only line height a class may set apart from a size's own. */
   --leading-label: 1.3;
-  --leading-title: 1.2;
-  --tracking-title: -0.02em;
   /* openplan UI's ListItem: a name with a slug after it stops 48px short of
      the line (an 8px gap and about five mono characters), so the slug is cut
      first and never vanishes. max-w-beside-slug. */
@@ -152,12 +192,12 @@
   * {
     @apply border-border outline-ring/50;
   }
-  /* Interface text is 14px, the size every shadcn component sets for itself;
-     text that sets no size of its own (loading and error lines) matches it.
+  /* Interface text is body, 14px on 20px, the size every shadcn component
+     sets for itself; text that sets no size of its own matches it.
      320px is the narrowest viewport the app supports: below it the page
      scrolls rather than squeezing the grids. Both were base.css's. */
   body {
-    @apply bg-background text-sm leading-normal text-foreground;
+    @apply bg-background text-body text-foreground;
     min-width: 320px;
   }
   /* text-rendering was base.css's, and is a type decision rather than a

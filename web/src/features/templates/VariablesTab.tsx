@@ -89,7 +89,7 @@ export default function VariablesTab() {
           <TableHeader>
             <TableRow className="border-divider hover:bg-transparent">
               {["Name", "Type", "Value", "Description"].map((heading) => (
-                <TableHead key={heading} scope="col" className={cn(cellClass, "h-10 text-xs font-medium text-muted-foreground")}>
+                <TableHead key={heading} scope="col" className={cn(cellClass, "h-10 text-caption font-medium text-muted-foreground")}>
                   {heading}
                 </TableHead>
               ))}
@@ -99,7 +99,7 @@ export default function VariablesTab() {
             {variables.map((templateVariable) => (
               <TableRow key={templateVariable.name} className="h-12 border-divider hover:bg-transparent" data-testid={`template-variable-${templateVariable.name}`}>
                 <TableCell className={cn(cellClass, "font-mono text-meta whitespace-normal wrap-anywhere")}>{templateVariable.name}</TableCell>
-                <TableCell className={cn(cellClass, "font-mono text-xs whitespace-normal text-muted-foreground wrap-anywhere")}>
+                <TableCell className={cn(cellClass, "font-mono text-caption whitespace-normal text-muted-foreground wrap-anywhere")}>
                   <Breakable pieces={typePieces(templateVariable.type_expression || "any")} />
                 </TableCell>
                 <TableCell className={cn(cellClass, "text-meta", templateVariable.required ? "font-medium text-foreground" : "text-muted-foreground")}>

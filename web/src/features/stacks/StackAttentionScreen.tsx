@@ -68,7 +68,7 @@ export default function StackAttentionScreen() {
             <EmptyMedia>
               <Check aria-hidden="true" className="size-5 text-muted-foreground" />
             </EmptyMedia>
-            <h2 className="text-sm font-medium">Nothing needs attention</h2>
+            <h2 className="text-label">Nothing needs attention</h2>
             <EmptyDescription className="text-meta">No plans are waiting for approval and no destroys have failed.</EmptyDescription>
           </EmptyHeader>
           <Link to="/stacks" className={cn(buttonClass("outline"), "pointer-coarse:h-11")}>
@@ -114,7 +114,7 @@ function AttentionGroup({
 }) {
   return (
     <section aria-labelledby={`attention-${id}`} className="flex flex-col gap-3" data-testid={`attention-group-${id}`}>
-      <h2 id={`attention-${id}`} className="flex items-center gap-2 text-sm font-semibold">
+      <h2 id={`attention-${id}`} className="flex items-center gap-2 text-section-title">
         <Icon aria-hidden="true" className={cn("size-4", iconClass)} />
         {title}
         <span className="font-medium text-subtle-foreground">{count}</span>
@@ -141,7 +141,7 @@ function AttentionRow({ item }: { item: AttentionItem }) {
           aria-label={`${item.stack.name} / ${templateName}`}
           className="group flex min-w-0 flex-wrap items-baseline gap-x-1.5 text-foreground focus-visible:-outline-offset-2"
         >
-          <span className="text-row-title font-medium transition-colors group-hover:text-primary">{item.stack.name}</span>
+          <span className="text-label transition-colors group-hover:text-primary">{item.stack.name}</span>
           <span aria-hidden="true" className="text-separator">
             /
           </span>

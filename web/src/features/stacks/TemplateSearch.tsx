@@ -106,7 +106,7 @@ export default function TemplateSearch({
             {(match: TemplateSearchMatch) => <Choice key={match.sourceTemplate.id} match={match} />}
           </ComboboxList>
           {shown.length > 0 && (
-            <div className="flex items-center justify-between gap-4 border-t border-divider bg-canvas px-4 py-2 text-xs text-muted-foreground">
+            <div className="flex items-center justify-between gap-4 border-t border-divider bg-canvas px-4 py-2 text-caption text-muted-foreground">
               <span>{countLabel(matches.length, shown.length, query.trim() !== "")}</span>
               <span aria-hidden="true" className="whitespace-nowrap pointer-coarse:hidden">
                 ↑ ↓ to move · Enter to choose · Esc to close
@@ -115,7 +115,7 @@ export default function TemplateSearch({
           )}
         </ComboboxContent>
       </Combobox.Root>
-      <p id={hintId} className="text-xs text-muted-foreground">
+      <p id={hintId} className="text-caption text-muted-foreground">
         {sourceTemplates.length === 1 ? "1 template" : `${sourceTemplates.length} templates`} in{" "}
         {repositoryCount === 1 ? "1 repository" : `${repositoryCount} repositories`}.
       </p>
@@ -133,7 +133,7 @@ function Choice({ match }: { match: TemplateSearchMatch }) {
       className="flex min-h-13 w-full cursor-pointer items-center justify-between gap-4 px-4 py-2 text-left outline-none select-none data-highlighted:bg-primary-tint pointer-coarse:min-h-14"
     >
       <span className="flex min-w-0 flex-col gap-0.5">
-        <span className="truncate text-sm leading-label font-medium text-foreground">
+        <span className="truncate text-label text-foreground">
           <Highlighted text={match.name} hits={match.nameHits} markClassName="font-semibold" />
         </span>
         <TemplateSource sourceTemplate={sourceTemplate} repositoryHits={match.repositoryHits} pathHits={match.pathHits} className="truncate" />
@@ -159,7 +159,7 @@ export function TemplateSource({
   // The root path adds nothing at the repository root, or when it is the name.
   const showPath = templateRootPathLabel(root_path, templateDisplayName(sourceTemplate)) !== "";
   return (
-    <span className={cn("font-mono text-xs text-muted-foreground", className)}>
+    <span className={cn("font-mono text-caption text-muted-foreground", className)}>
       <Highlighted text={`${repo_owner}/${repo_name}`} hits={repositoryHits} markClassName="font-medium" />
       {showPath && (
         <>

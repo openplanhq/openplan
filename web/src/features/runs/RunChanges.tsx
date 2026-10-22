@@ -136,7 +136,7 @@ export default function RunChanges({ run, changes, failed, onRetry, toolbar }: R
           <TableHeader>
             <TableRow className="border-divider hover:bg-transparent">
               {["Action", "Resource", "Why"].map((heading) => (
-                <TableHead key={heading} scope="col" className="h-10 px-4 text-xs font-medium text-muted-foreground">
+                <TableHead key={heading} scope="col" className="h-10 px-4 text-caption font-medium text-muted-foreground">
                   {heading}
                 </TableHead>
               ))}
@@ -221,7 +221,7 @@ function FilterButton({
         </span>
       )}
       {label}
-      <span className="text-xs text-subtle-foreground">{count}</span>
+      <span className="text-caption text-subtle-foreground">{count}</span>
     </button>
   );
 }
@@ -284,7 +284,7 @@ const SIGN_WORDS = { "+": "added", "-": "removed", "~": "changed", " ": "" } as 
 function ChangeDetail({ id, change }: { id: string; change: PlanResourceChange }) {
   const { lines, unchanged } = diffLines(change);
   return (
-    <div id={id} className="py-3 pr-4 pl-39 font-mono text-xs leading-relaxed whitespace-pre-wrap text-code-foreground">
+    <div id={id} className="py-3 pr-4 pl-39 font-mono text-log whitespace-pre-wrap text-code-foreground">
       {lines.length === 0 && unchanged === 0 && <p>No attributes to show.</p>}
       {lines.map((line) => (
         <p key={line.key} className="wrap-anywhere">

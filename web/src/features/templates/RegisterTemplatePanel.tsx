@@ -108,7 +108,7 @@ export default function RegisterTemplatePanel() {
     <section className="flex min-w-0 flex-col" data-testid="register-template-panel" data-unsaved={hasUnsaved ? "true" : undefined}>
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b border-divider px-7 py-6">
         <div className="flex min-w-0 flex-col gap-2">
-          <h2 className="font-heading text-panel-title font-semibold tracking-title">Register template</h2>
+          <h2 className="font-heading text-title">Register template</h2>
           <p className="text-meta text-muted-foreground">from a Git repository</p>
         </div>
         <Link to="/templates" className={cn(buttonClass("outline", "lg"), "pointer-coarse:h-11")} data-testid="register-template-cancel">
@@ -155,7 +155,7 @@ export default function RegisterTemplatePanel() {
               <div className="mt-5 flex items-start gap-3 rounded-lg border px-5 py-4" data-testid="register-template-progress">
                 <Loader2 aria-hidden="true" className="mt-0.5 size-4 shrink-0 animate-spin text-muted-foreground" />
                 <span className="flex min-w-0 flex-col gap-1">
-                  <span className="text-sm leading-label font-medium">
+                  <span className="text-label">
                     Registering <span className="font-mono text-meta wrap-anywhere">{target}</span>
                   </span>
                   <span className="text-meta text-muted-foreground">
@@ -205,7 +205,7 @@ function Field({
         {label}
       </Label>
       <Input id={id} value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} aria-describedby={`${id}-hint`} className={inputClass} />
-      <p id={`${id}-hint`} className="text-xs text-muted-foreground">
+      <p id={`${id}-hint`} className="text-caption text-muted-foreground">
         {hint}
       </p>
     </div>

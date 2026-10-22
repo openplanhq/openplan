@@ -72,7 +72,7 @@ export default function VariableFields({
               {structured && (
                 // Kept as the template wrote it: a multi-line object() type
                 // keeps its line breaks and indentation. No type means any.
-                <pre id={typeId} className="m-0 font-mono text-xs leading-relaxed whitespace-pre-wrap text-muted-foreground wrap-anywhere">
+                <pre id={typeId} className="m-0 font-mono text-log whitespace-pre-wrap text-muted-foreground wrap-anywhere">
                   {typeExpression || "any"}
                 </pre>
               )}
@@ -109,7 +109,7 @@ export default function VariableFields({
               </ErrorLine>
             )}
             {description && (
-              <p id={descriptionId} className="text-xs text-muted-foreground">
+              <p id={descriptionId} className="text-caption text-muted-foreground">
                 {description}
               </p>
             )}

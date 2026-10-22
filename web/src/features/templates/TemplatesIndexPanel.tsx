@@ -20,7 +20,7 @@ export default function TemplatesIndexPanel() {
       <div className="p-7">
         <Empty className="gap-3 rounded-lg border border-dashed border-dashed-border px-5 py-10" data-testid="templates-empty">
           <EmptyHeader className="gap-3">
-            <h2 className="text-sm font-medium">No templates yet</h2>
+            <h2 className="text-label">No templates yet</h2>
             <RequireCapability
               capability="can_publish_template"
               fallback={<EmptyDescription className="text-meta">Templates appear here once someone who can publish registers one.</EmptyDescription>}

@@ -197,7 +197,7 @@ export default function AddStackTemplateScreen() {
     content = (
       <Empty className="gap-3 rounded-lg border border-dashed border-dashed-border px-5 py-10" data-testid="add-stack-template-none">
         <EmptyHeader className="gap-2">
-          <p className="text-sm font-medium">No templates registered yet</p>
+          <p className="text-label">No templates registered yet</p>
           <EmptyDescription className="text-meta">Register a template, then add it to this stack.</EmptyDescription>
         </EmptyHeader>
         <Link to="/templates/new" className={cn(buttonClass("primary"), "pointer-coarse:h-11")} data-testid="register-template-link">
@@ -210,7 +210,7 @@ export default function AddStackTemplateScreen() {
     content = (
       <>
         <section aria-labelledby={chooseHeadingId} className="flex max-w-140 flex-col gap-3">
-          <h3 id={chooseHeadingId} className="text-sm font-semibold">
+          <h3 id={chooseHeadingId} className="text-section-title">
             Choose a template
           </h3>
           {chosenTemplate && !changingTemplate ? (
@@ -218,7 +218,7 @@ export default function AddStackTemplateScreen() {
             <div className="overflow-hidden rounded-lg border" data-testid="add-template-picked">
               <div className="flex min-h-13 flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-primary-soft py-2 pr-2.5 pl-4">
                 <span className="flex min-w-0 flex-col gap-0.5">
-                  <span className="text-sm leading-label font-medium text-primary-strong wrap-anywhere">{templateDisplayName(chosenTemplate)}</span>
+                  <span className="text-label text-primary-strong wrap-anywhere">{templateDisplayName(chosenTemplate)}</span>
                   <TemplateSource sourceTemplate={chosenTemplate} className="wrap-anywhere" />
                 </span>
                 <span className="flex shrink-0 items-center gap-3">
@@ -264,7 +264,7 @@ export default function AddStackTemplateScreen() {
         )}
         {chosenRevision && chosenTemplate && (
           <section aria-labelledby={configureHeadingId} className="flex max-w-140 flex-col gap-4" data-testid="add-stack-template-variables">
-            <h3 id={configureHeadingId} className="text-sm font-semibold wrap-anywhere">
+            <h3 id={configureHeadingId} className="text-section-title wrap-anywhere">
               Configure {templateDisplayName(chosenTemplate)}
             </h3>
             <div className="flex flex-col gap-1.5">
@@ -345,7 +345,7 @@ export default function AddStackTemplateScreen() {
     <section className="flex min-w-0 flex-col" data-testid="add-stack-template-screen" data-unsaved={hasUnsavedValues ? "true" : undefined}>
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b border-divider px-7 py-6">
         <div className="flex min-w-0 flex-col gap-2">
-          <h2 className="font-heading text-panel-title font-semibold tracking-title">Add template</h2>
+          <h2 className="font-heading text-title">Add template</h2>
           {stackName && <p className="text-meta text-muted-foreground wrap-anywhere">to {stackName}</p>}
         </div>
         <Link to={`/stacks/${stackId}`} className={cn(buttonClass("outline", "lg"), "pointer-coarse:h-11")}>

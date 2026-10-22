@@ -19,7 +19,7 @@ describe("PageHeader", () => {
     renderHeader({ title: "Stacks" });
 
     const title = screen.getByRole("heading", { level: 1, name: "Stacks" }).classList;
-    for (const name of ["text-page-title", "font-semibold", "tracking-title"]) {
+    for (const name of ["text-page-title"]) {
       expect(title).toContain(name);
     }
   });

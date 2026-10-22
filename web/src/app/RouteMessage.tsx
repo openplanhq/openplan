@@ -27,7 +27,7 @@ export default function RouteMessage({
         <EmptyMedia variant="icon">
           <Icon aria-hidden="true" />
         </EmptyMedia>
-        <h1 className="font-heading text-lg font-medium tracking-tight">{title}</h1>
+        <h1 className="font-heading text-title">{title}</h1>
         <EmptyDescription>{description}</EmptyDescription>
       </EmptyHeader>
     </Empty>

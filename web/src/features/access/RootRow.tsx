@@ -13,10 +13,10 @@ export default function RootRow({ me }: { me?: { display_name: string; email?: s
       <div className="flex min-h-14 items-center gap-4 py-2 pr-3 pl-5">
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="flex min-w-0 items-baseline">
-            <span className="truncate text-sm leading-label font-medium text-foreground">{me ? me.display_name : "Root"}</span>
-            {me && <span className="shrink-0 text-sm leading-label whitespace-pre text-muted-foreground">{" (you)"}</span>}
+            <span className="truncate text-label text-foreground">{me ? me.display_name : "Root"}</span>
+            {me && <span className="shrink-0 text-label font-normal whitespace-pre text-muted-foreground">{" (you)"}</span>}
           </span>
-          {me?.email && <span className="truncate text-xs text-muted-foreground">{me.email}</span>}
+          {me?.email && <span className="truncate text-caption text-muted-foreground">{me.email}</span>}
         </div>
         {/* A quiet RoleSelect pulls back by its own padding, so a plain label
             at the cell's edge lines up with the roles below. */}

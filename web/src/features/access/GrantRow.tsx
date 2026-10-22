@@ -46,22 +46,22 @@ export default function GrantRow({
       <div className="flex min-h-14 items-center gap-4 py-2 pr-3 pl-5">
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="flex min-w-0 items-baseline">
-            <span title={name} className={cn("truncate text-sm leading-label font-medium", unknown ? "text-muted-foreground" : "text-foreground")}>
+            <span title={name} className={cn("truncate text-label", unknown ? "text-muted-foreground" : "text-foreground")}>
               {name}
             </span>
             {/* "Name (you)", the way share lists mark you (owner's pick,
                 2026-10-19): the name's size, normal weight, muted, joined
                 by a plain space so it reads as part of the name. It never
                 shrinks, so a long name is cut before it. */}
-            {isMe && <span className="shrink-0 text-sm leading-label whitespace-pre text-muted-foreground">{" (you)"}</span>}
+            {isMe && <span className="shrink-0 text-label font-normal whitespace-pre text-muted-foreground">{" (you)"}</span>}
           </span>
           {unknown ? (
-            <span title={grant.user_sub} className="truncate font-mono text-xs text-muted-foreground">
+            <span title={grant.user_sub} className="truncate font-mono text-caption text-muted-foreground">
               {grant.user_sub}
             </span>
           ) : (
             grant.email && (
-              <span title={grant.email} className="truncate text-xs text-muted-foreground">
+              <span title={grant.email} className="truncate text-caption text-muted-foreground">
                 {grant.email}
               </span>
             )

@@ -64,8 +64,8 @@ export default function PersonPicker({
         className="flex h-9 min-w-0 items-center gap-2 rounded-lg border border-primary/35 bg-primary-soft pr-1 pl-3 pointer-coarse:h-11"
         data-testid="person-picked"
       >
-        <span className="truncate text-sm leading-label font-medium text-primary-strong">{picked.display_name}</span>
-        {picked.email && <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{picked.email}</span>}
+        <span className="truncate text-label text-primary-strong">{picked.display_name}</span>
+        {picked.email && <span className="min-w-0 flex-1 truncate text-caption text-muted-foreground">{picked.email}</span>}
         <button
           type="button"
           aria-label={`Clear ${picked.display_name}`}
@@ -136,7 +136,7 @@ export default function PersonPicker({
           {(user: UserProfile) => <PersonChoice key={user.sub} user={user} query={debounced} roles={roles} held={heldRole(user.sub)} isMe={user.sub === meSub} />}
         </ComboboxList>
         {shown.length > 0 && (
-          <div className="flex items-center justify-between gap-4 border-t border-divider bg-canvas px-4 py-2 text-xs text-muted-foreground">
+          <div className="flex items-center justify-between gap-4 border-t border-divider bg-canvas px-4 py-2 text-caption text-muted-foreground">
             <span>{matchCount(results?.length ?? 0, shown.length)}</span>
             <span aria-hidden="true" className="whitespace-nowrap pointer-coarse:hidden">
               ↑ ↓ to move · Enter to choose · Esc to close
@@ -160,12 +160,12 @@ function PersonChoice({ user, query, roles, held, isMe }: { user: UserProfile; q
       className="flex min-h-13 w-full cursor-pointer items-center justify-between gap-4 px-4 py-2 text-left outline-none select-none data-disabled:cursor-not-allowed data-highlighted:bg-primary-tint pointer-coarse:min-h-14"
     >
       <span className="flex min-w-0 flex-col gap-0.5">
-        <span className={cn("truncate text-sm leading-label font-medium", held ? "text-muted-foreground" : "text-foreground")}>
+        <span className={cn("truncate text-label", held ? "text-muted-foreground" : "text-foreground")}>
           {lead > 0 && <mark className="bg-transparent font-semibold text-foreground">{user.display_name.slice(0, lead)}</mark>}
           {user.display_name.slice(lead)}
           {isMe && <span className="font-normal text-muted-foreground"> (you)</span>}
         </span>
-        {user.email && <span className="truncate text-xs text-muted-foreground">{user.email}</span>}
+        {user.email && <span className="truncate text-caption text-muted-foreground">{user.email}</span>}
       </span>
       {held && (
         <RoleLabel roles={roles} role={held} className="shrink-0 text-muted-foreground">

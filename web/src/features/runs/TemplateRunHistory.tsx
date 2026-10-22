@@ -71,7 +71,7 @@ export default function TemplateRunHistory({ stackId, stackTemplateId }: Templat
       {runs.length === 0 ? (
         <Empty className="gap-2 rounded-lg border border-dashed border-dashed-border px-5 py-10" data-testid="template-run-history-empty">
           <EmptyHeader className="gap-2">
-            <h3 className="text-sm font-medium">No runs yet</h3>
+            <h3 className="text-label">No runs yet</h3>
             <EmptyDescription className="text-meta">Plan to see what this template would create.</EmptyDescription>
           </EmptyHeader>
         </Empty>
@@ -90,7 +90,7 @@ export default function TemplateRunHistory({ stackId, stackTemplateId }: Templat
             <TableHeader>
               <TableRow className="border-divider hover:bg-transparent">
                 {["Run", "Status", "Changes", "Started by", "Time"].map((heading) => (
-                  <TableHead key={heading} scope="col" className={cn(cellClass, "h-10 text-xs font-medium text-muted-foreground")}>
+                  <TableHead key={heading} scope="col" className={cn(cellClass, "h-10 text-caption font-medium text-muted-foreground")}>
                     {heading}
                   </TableHead>
                 ))}

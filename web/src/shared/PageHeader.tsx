@@ -37,7 +37,7 @@ export default function PageHeader({
       <div className="flex min-w-0 flex-col gap-1.5">
         {trail && trail.length > 0 && (
           <BreadcrumbNav aria-label="Breadcrumb" className="mb-1">
-            <BreadcrumbList className="gap-1.5 text-sm wrap-anywhere sm:gap-1.5">
+            <BreadcrumbList className="gap-1.5 text-body wrap-anywhere sm:gap-1.5">
               {trail.map((crumb, index) => (
                 <Fragment key={index}>
                   <BreadcrumbItem>
@@ -62,7 +62,7 @@ export default function PageHeader({
           </BreadcrumbNav>
         )}
         <div className="flex min-w-0 items-center gap-2.5">
-          <h1 className="font-heading text-page-title font-semibold tracking-title wrap-anywhere">{title}</h1>
+          <h1 className="font-heading text-page-title wrap-anywhere">{title}</h1>
           {count !== undefined && (
             <Badge variant="muted" className="bg-muted-strong" data-testid="page-count">
               {count}

@@ -56,7 +56,7 @@ export default function TemplatePanel({ stackTemplateId, children }: { stackTemp
       <div className="flex min-w-0 flex-col" data-testid="template-panel">
         <div className={cn("flex flex-col gap-5 border-b border-divider px-7 pt-6", destroyed && "pb-6")}>
           <div className="flex min-w-0 flex-col gap-2">
-            <h2 className="font-heading text-panel-title font-semibold tracking-title wrap-anywhere">{stackTemplateLabel(stackTemplate)}</h2>
+            <h2 className="font-heading text-title wrap-anywhere">{stackTemplateLabel(stackTemplate)}</h2>
             <div className="flex flex-wrap items-center gap-2 text-meta text-muted-foreground">
               {destroyed ? (
                 <StatusLabel icon={Check} tone="settled">
@@ -68,7 +68,7 @@ export default function TemplatePanel({ stackTemplateId, children }: { stackTemp
               <span aria-hidden="true" className="text-separator">
                 ·
               </span>
-              <span className="font-mono text-xs">{stackTemplate.source_ref}</span>
+              <span className="font-mono text-caption">{stackTemplate.source_ref}</span>
               {activity && !destroyed && (
                 <>
                   <span aria-hidden="true" className="text-separator">

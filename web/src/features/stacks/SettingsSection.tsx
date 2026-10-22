@@ -32,7 +32,7 @@ export default function SettingsSection({
       data-testid={testId}
     >
       <div className="flex min-w-0 flex-1 basis-60 flex-col gap-1">
-        <h3 id={headingId} className="text-sm font-semibold">
+        <h3 id={headingId} className="text-section-title">
           {title}
         </h3>
         <p className="text-meta text-muted-foreground wrap-anywhere">{description}</p>

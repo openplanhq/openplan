@@ -31,7 +31,7 @@ export default function RevisionsTab() {
           <TableHeader>
             <TableRow className="border-divider hover:bg-transparent">
               {["Commit", "Registered"].map((heading) => (
-                <TableHead key={heading} scope="col" className={cn(cellClass, "h-10 text-xs font-medium text-muted-foreground")}>
+                <TableHead key={heading} scope="col" className={cn(cellClass, "h-10 text-caption font-medium text-muted-foreground")}>
                   {heading}
                 </TableHead>
               ))}
@@ -48,7 +48,7 @@ export default function RevisionsTab() {
                         {shortCommitSHA(templateRevision.resolved_commit_sha)}
                       </ExternalLink>
                       {templateRevision.id === latest.id && (
-                        <span className="rounded-sm border bg-canvas px-1.75 py-px font-mono text-xs text-tag-foreground" data-testid="revision-latest">
+                        <span className="rounded-sm border bg-canvas px-1.75 py-px font-mono text-caption text-tag-foreground" data-testid="revision-latest">
                           latest
                         </span>
                       )}

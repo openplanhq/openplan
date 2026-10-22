@@ -6,9 +6,9 @@ import type { Stack } from "../../api/types";
 export default function StackMeta({ stack, hideSlug = false }: { stack: Pick<Stack, "slug" | "tags">; hideSlug?: boolean }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {!hideSlug && <span className="font-mono text-xs text-muted-foreground">{stack.slug}</span>}
+      {!hideSlug && <span className="font-mono text-caption text-muted-foreground">{stack.slug}</span>}
       {Object.entries(stack.tags).map(([key, value]) => (
-        <span key={key} className="rounded-sm border bg-canvas px-1.75 py-px font-mono text-xs text-tag-foreground">
+        <span key={key} className="rounded-sm border bg-canvas px-1.75 py-px font-mono text-caption text-tag-foreground">
           {key}: {value}
         </span>
       ))}

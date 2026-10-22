@@ -8,14 +8,14 @@ const FOCUS = cn(
   "focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
 );
 
-/** For shadcn's Input. md:text-meta outranks the Input's own md:text-sm. */
-export const inputClass = cn("h-9 px-3 font-mono text-meta md:text-meta placeholder:text-subtle-foreground pointer-coarse:h-11", FOCUS);
+/** For shadcn's Input. */
+export const inputClass = cn("h-9 px-3 font-mono text-meta placeholder:text-subtle-foreground pointer-coarse:h-11", FOCUS);
 
 /** For shadcn's Textarea, holding a JSON value: the Input's mono text and
     inset, two lines tall when empty, growing with its content to about
-    fourteen, then scrolling, so a long value can't push Save off the page. */
+    seventeen, then scrolling, so a long value can't push Save off the page. */
 export const textareaClass = cn(
-  "max-h-80 resize-y px-3 py-2 font-mono text-meta leading-relaxed md:text-meta",
+  "max-h-80 resize-y px-3 py-2 font-mono text-meta",
   FOCUS
 );
 

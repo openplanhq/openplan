@@ -11,7 +11,7 @@ export default function NoTemplatesState({ stackId, heading: Heading, testId }: 
   return (
     <Empty className="gap-3 rounded-lg border border-dashed border-dashed-border px-5 py-10" data-testid={testId}>
       <EmptyHeader className="gap-3">
-        <Heading className="text-sm font-medium">No templates in this stack yet</Heading>
+        <Heading className="text-label">No templates in this stack yet</Heading>
         <EmptyDescription className="text-meta">Add a template to plan and apply its infrastructure here.</EmptyDescription>
       </EmptyHeader>
       <RequireCapability capability="can_operate" stackId={stackId}>

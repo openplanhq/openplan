@@ -6,7 +6,7 @@ import { statusTone } from "./statusTone";
 export default function StatusRow({ label, value }: { label: string; value: string }) {
   return (
     <div
-      className="mt-4 flex items-center justify-between gap-3 border-t pt-3 text-sm text-muted-foreground"
+      className="mt-4 flex items-center justify-between gap-3 border-t pt-3 text-body text-muted-foreground"
       data-status={value}
     >
       <span>{label}</span>
