@@ -55,8 +55,8 @@ Terraform runs.
 
 ![The stack access tab, showing grants and role assignment](docs/ss/stack-access.png)
 
-**Settings.** Which revision a stack is on, which one it has applied, and where
-it differs.
+**Settings.** The revision a template runs, where you change it, and Destroy,
+which plans the removal of everything the template manages.
 
 ![A template's settings](docs/ss/run-history-and-destroy.png)
 
