@@ -146,10 +146,9 @@ carry the same `sub`. No access token crosses the API boundary.
 
 ## Tenant Boundary
 
-openplan has one configured tenant identifier. Startup validation rejects an
-empty or malformed tenant value. Every tenant-scoped handler compares
-`{tenant_id}` with the configured tenant before repository access, OpenFGA
-calls, object-key construction, or workflow dispatch.
+openplan has one tenant, the built-in `default`; nothing configures it. Every
+tenant-scoped handler compares `{tenant_id}` with that tenant before repository
+access, OpenFGA calls, object-key construction, or workflow dispatch.
 
 A missing route value, malformed tenant value, or mismatch returns the protected
 not-found contract. The response does not reveal whether a resource exists in

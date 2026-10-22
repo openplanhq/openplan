@@ -5,7 +5,7 @@ values:
     enabled: true
     type: default
   - key: tenant_id
-    value: tenant_123
+    value: default
     enabled: true
     type: default
   - key: session_cookie

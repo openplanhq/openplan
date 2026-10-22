@@ -63,7 +63,7 @@ func TestRunRejectsSecurityConfigBeforeDependencies(t *testing.T) {
 	t.Parallel()
 
 	values := apiTestValues()
-	delete(values, "OPENPLAN_TENANT_ID")
+	delete(values, "OIDC_ISSUER_URL")
 	postgresCalled := false
 	deps := apiDependencies{
 		newPostgresPool: func(context.Context, string) (postgresPool, error) {
@@ -73,8 +73,8 @@ func TestRunRejectsSecurityConfigBeforeDependencies(t *testing.T) {
 	}
 
 	err := runWithDependencies(context.Background(), apiTestGetenv(values), deps)
-	if !errors.Is(err, config.ErrInvalidConfig) || err == nil || !strings.Contains(err.Error(), "OPENPLAN_TENANT_ID is required") {
-		t.Fatalf("error = %v, want tenant ErrInvalidConfig", err)
+	if !errors.Is(err, config.ErrInvalidConfig) || err == nil || !strings.Contains(err.Error(), "OIDC_ISSUER_URL is required") {
+		t.Fatalf("error = %v, want issuer ErrInvalidConfig", err)
 	}
 	if postgresCalled {
 		t.Fatal("Postgres initialization ran after invalid security configuration")
@@ -333,21 +333,27 @@ func assertAPIQueueSpecs(t *testing.T, registry *queue.SpecRegistry) {
 	}
 }
 
-func TestRunWiresConfiguredTenantBoundary(t *testing.T) {
+func TestRunWiresDefaultTenantBoundary(t *testing.T) {
 	t.Parallel()
 
-	values := apiTestValues()
-	values["OPENPLAN_TENANT_ID"] = "tenant_configured"
 	deps := newRecordingAPIDependencies(t)
-	if err := runWithDependencies(context.Background(), apiTestGetenv(values), deps.apiDependencies); err != nil {
+	if err := runWithDependencies(context.Background(), apiTestGetenv(apiTestValues()), deps.apiDependencies); err != nil {
 		t.Fatalf("runWithDependencies returned error: %v", err)
 	}
+	get := func(path string) *httptest.ResponseRecorder {
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		request.AddCookie(&http.Cookie{Name: authentication.SessionCookieName, Value: recordingSessionRaw})
+		response := httptest.NewRecorder()
+		deps.serverHandler.ServeHTTP(response, request)
+		return response
+	}
 
-	request := httptest.NewRequest(http.MethodGet, "/v1/tenants/tenant_other/stacks", nil)
-	request.AddCookie(&http.Cookie{Name: authentication.SessionCookieName, Value: recordingSessionRaw})
-	response := httptest.NewRecorder()
-	deps.serverHandler.ServeHTTP(response, request)
-
+	if response := get("/v1/tenants/default/stacks"); response.Code != http.StatusOK {
+		t.Fatalf("default tenant status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	// The tenant the API used to be configured with is now just another
+	// tenant it doesn't serve.
+	response := get("/v1/tenants/tenant_123/stacks")
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusNotFound, response.Body.String())
 	}
@@ -605,7 +611,6 @@ func apiTestValues() map[string]string {
 		"ARTIFACT_STORE_KIND":            "filesystem",
 		"ARTIFACT_STORE_FILESYSTEM_ROOT": "/var/lib/openplan/artifacts",
 		"OPENPLAN_ENVIRONMENT":           "development",
-		"OPENPLAN_TENANT_ID":             "tenant_123",
 		"OPENPLAN_PUBLIC_URL":            "http://localhost:5173",
 		"OIDC_ISSUER_URL":                "http://localhost:8082/realms/openplan",
 		"OIDC_CLIENT_ID":                 "openplan-api",

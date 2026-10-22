@@ -236,7 +236,6 @@ services:
       VALKEY_URL: redis://api:${VALKEY_API_PASSWORD:-api-local-only}@valkey:6379/0
       TEMPORAL_ADDRESS: temporal:7233
       OPENPLAN_ENVIRONMENT: development
-      OPENPLAN_TENANT_ID: ${OPENPLAN_TENANT_ID:-tenant_123}
       CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:-717cb4d0fd1db07a30442806c2987599580f6d7c6e63b9bddf509bc183a086d3}
       # Dex by default. The secret must match what Dex registers for the
       # client, which reads the same variable.

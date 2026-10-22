@@ -186,7 +186,6 @@ services:
       VALKEY_URL: redis://api:${VALKEY_API_PASSWORD:-api-local-only}@valkey:6379/0
       TEMPORAL_ADDRESS: temporal:7233
       OPENPLAN_ENVIRONMENT: development
-      OPENPLAN_TENANT_ID: tenant_123
       # Local evaluation defaults, duplicated from .env.example. Replace before
       # keeping anything here.
       CREDENTIAL_ENCRYPTION_KEY: 717cb4d0fd1db07a30442806c2987599580f6d7c6e63b9bddf509bc183a086d3

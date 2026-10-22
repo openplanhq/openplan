@@ -418,7 +418,7 @@ const (
 // pastes in, and never belongs in this file.
 var environment = []environmentValue{
 	{"base_url", "http://localhost:8081", plainVariable},
-	{"tenant_id", "tenant_123", plainVariable},
+	{"tenant_id", "default", plainVariable},
 	{"session_cookie", "", secretVariable},
 	{"template_repo_owner", "openplanhq", plainVariable},
 	{"template_repo_name", "demo-templates", plainVariable},
