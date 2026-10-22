@@ -2,7 +2,7 @@ import { Hourglass, TriangleAlert } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTemplateRunsQuery } from "../../api/queries";
 import type { StackTemplate, TemplateRun } from "../../api/types";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import { formatDateTime } from "../../shared/formatTimestamp";
 import PlanDiff from "../../shared/PlanDiff";
@@ -18,6 +18,7 @@ const separator = (
 // approval, which Review plan opens, and a destroy that stopped before it
 // finished, which View run opens. Nothing when neither is true.
 export default function TemplateRunNotices({ stackId, stackTemplate }: { stackId: string; stackTemplate: StackTemplate }) {
+  const tenantID = useTenantID();
   const runs = useTemplateRunsQuery(tenantID, stackTemplate.id).data ?? [];
   const waiting = runs.find((run) => run.status === "waiting_approval") ?? null;
   const failed = stackTemplate.lifecycle === "failed";

@@ -2,7 +2,7 @@ import { isTerminalRunStatus } from "../../api/polling";
 import { useTemplateRunsQuery } from "../../api/queries";
 import type { StackTemplate, TemplateRun } from "../../api/types";
 import { useStackCapabilities } from "../../auth/useStackCapabilities";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 
 /** What decides whether a template's controls can be used now. */
 export interface LockState {
@@ -18,6 +18,7 @@ export interface LockState {
 // discarded, nothing may change the config or the revision, and no other run
 // may start. The server refuses; the controls say why before anyone tries.
 export function useLockState(stackId: string, stackTemplate: Pick<StackTemplate, "id" | "lifecycle">): LockState {
+  const tenantID = useTenantID();
   const canOperate = useStackCapabilities(stackId)?.can_operate === true;
   const runsQuery = useTemplateRunsQuery(tenantID, stackTemplate.id);
   // A failed refetch keeps the runs it had, so a run known to be in flight

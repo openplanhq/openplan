@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useTemplateRevisionsQuery } from "../../api/queries";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import TemplateDestroyPanel from "../runs/TemplateDestroyPanel";
 import { revisionLockReason, useLockState } from "../runs/lockReasons";
@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 // and destroying it. They live here, a tab away from Plan, so the
 // irreversible one is never under the cursor of routine work.
 export default function TemplateSettingsTab() {
+  const tenantID = useTenantID();
   const { stackId, stackTemplate } = useStackTemplate();
   const reason = revisionLockReason(useLockState(stackId, stackTemplate));
   // Read only to name the commit and where it comes from. Every revision of a

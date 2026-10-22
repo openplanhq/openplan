@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { isTerminalRunStatus } from "../../api/polling";
 import { queryKeys } from "../../api/queryKeys";
 import { useTemplateRunsQuery } from "../../api/queries";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 
 // plan_state, live_state and the pending plan live on the stack template, but
 // what changes them is a run finishing or starting to wait, and only the runs
@@ -11,6 +11,7 @@ import { tenantID } from "../../config";
 // the panel's header and the list's chips. The panel calls it, so it runs on
 // every tab.
 export function useRefreshStackOnRunChange(stackId: string, stackTemplateId: string): void {
+  const tenantID = useTenantID();
   const queryClient = useQueryClient();
   const runsQuery = useTemplateRunsQuery(tenantID, stackTemplateId);
   const latestRun = runsQuery.status === "success" ? runsQuery.data?.[0] ?? null : null;

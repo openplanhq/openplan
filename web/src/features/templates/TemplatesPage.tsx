@@ -3,7 +3,7 @@ import { ArrowLeft, Info, Loader2, Plus, RefreshCw } from "lucide-react";
 import { Link, Outlet, useLocation, useMatch } from "react-router-dom";
 import { useTemplatesQuery } from "../../api/queries";
 import RequireCapability from "../../auth/RequireCapability";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
 import PageHeader from "../../shared/PageHeader";
@@ -27,6 +27,7 @@ const registerLinkClass = cn(buttonClass("primary", "lg"), "w-full pointer-coars
 // their guards, ids and outlet contexts, so they share the look, not a
 // component.
 export default function TemplatesPage() {
+  const tenantID = useTenantID();
   const templatesQuery = useTemplatesQuery(tenantID);
   const boundary = useQueryErrorBoundary(templatesQuery.error);
   const templateMatch = useMatch("/templates/:sourceTemplateId/*");

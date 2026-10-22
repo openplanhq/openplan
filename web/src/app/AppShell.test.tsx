@@ -31,7 +31,6 @@ function TestAuthWrapper({ value = authValue(), children }: { value?: AuthContex
 }
 
 async function shellRouter() {
-  vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
   const { default: AppShell } = await import("./AppShell");
   return createMemoryRouter(
     [
@@ -66,12 +65,10 @@ async function renderShell(value = authValue()) {
 describe("AppShell", () => {
   afterEach(() => {
     cleanup();
-    vi.unstubAllEnvs();
   });
 
   // openplan UI's TopBar marks the section you are in, below it too.
   it("marks the current section in the nav", async () => {
-    vi.stubEnv("VITE_OPENPLAN_TENANT_ID", "tenant_123");
     const { default: AppShell } = await import("./AppShell");
     const router = createMemoryRouter([{ path: "/", element: <AppShell />, children: [{ path: "stacks/*", element: <div /> }] }], {
       initialEntries: ["/stacks/stack_1/templates"]

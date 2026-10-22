@@ -10,7 +10,7 @@ import { queryKeys } from "../../api/queryKeys";
 import { useDeleteTemplateMutation, useTemplateRevisionsQuery, useTemplateRevisionVariablesQuery, useTemplatesQuery } from "../../api/queries";
 import { problemTypes } from "../../api/types";
 import RequireCapability from "../../auth/RequireCapability";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
 import ErrorPanel from "../../shared/ErrorPanel";
@@ -44,6 +44,7 @@ import { cn } from "@/lib/utils";
 // refreshes them while it is on screen, so one the person walked away from can
 // finish unseen; coming back must show its commit.
 export default function TemplatePanel({ sourceTemplateId, children }: { sourceTemplateId?: string; children?: ReactNode }) {
+  const tenantID = useTenantID();
   const params = useParams<{ sourceTemplateId: string }>();
   const id = sourceTemplateId ?? params.sourceTemplateId ?? "";
   const queryClient = useQueryClient();
@@ -239,6 +240,7 @@ type DeleteRefusal = "in-use" | { message: string };
 // The state belongs to the template it was asked about, so moving to another
 // template drops a question or a refusal rather than carrying it over.
 function useTemplateDelete(id: string) {
+  const tenantID = useTenantID();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const deleteTemplateMutation = useDeleteTemplateMutation(tenantID);

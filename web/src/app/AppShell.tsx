@@ -1,6 +1,5 @@
 import { NavLink, Outlet, useMatches } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { tenantID } from "../config";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -92,7 +91,7 @@ function DebugPanel() {
     ["Auth status", "debug-auth-status", status],
     ["User sub", "debug-user-sub", me?.sub ?? "-"],
     ["Display name", "debug-display-name", me?.display_name ?? "-"],
-    ["Tenant", "debug-tenant", tenantID],
+    ["Tenant", "debug-tenant", me?.tenant_id ?? "-"],
     ["can_create_stack", "debug-can-create-stack", me?.global_capabilities.can_create_stack.toString() ?? "-"],
     ["can_publish_template", "debug-can-publish-template", me?.global_capabilities.can_publish_template.toString() ?? "-"],
     ["can_manage_platform_access", "debug-can-manage-platform-access", me?.global_capabilities.can_manage_platform_access.toString() ?? "-"]

@@ -104,7 +104,6 @@ connects to Postgres or Temporal or starts its HTTP listener.
 |---|---:|---|
 | `OPENPLAN_ENVIRONMENT` | No | Optional runtime mode; empty defaults to `development`; valid values are `development` and `production` |
 | `OPENPLAN_TENANT_ID` | No | Required single configured tenant identifier |
-| `VITE_OPENPLAN_TENANT_ID` | No | Frontend build-time tenant context; must exactly match `OPENPLAN_TENANT_ID`; local development falls back to `tenant_123` |
 | `OIDC_ISSUER_URL` | No | Required exact issuer URL of Dex |
 | `OIDC_CLIENT_ID` | No | Required OAuth client ID; also the ID token audience the verifier checks against |
 | `OIDC_CLIENT_SECRET` | Yes | Required; the API is a confidential client and authenticates as one when it exchanges a code |
@@ -122,10 +121,8 @@ logs, artifacts, or authorization data. Missing, malformed, and mismatched
 tenant paths return `404` without disclosing whether a referenced resource
 exists.
 
-The React application reads `VITE_OPENPLAN_TENANT_ID` as non-editable build-time
-context. Deployments must set it to the same value as `OPENPLAN_TENANT_ID`; a
-mismatch is safe but prevents tenant-scoped requests from succeeding. Changing
-this value requires rebuilding and redeploying the frontend bundle.
+The React application reads the tenant from `GET /v1/me` (`tenant_id`) and
+scopes every request to it, so the frontend has no tenant setting of its own.
 
 Development permits the documented loopback HTTP issuer. Production must be
 selected explicitly with `OPENPLAN_ENVIRONMENT=production`; it requires HTTPS for

@@ -5,7 +5,7 @@ import type { LucideIcon } from "lucide-react";
 import { templateRunLogEventsURL } from "../../api/client";
 import { useTemplateRunLogQuery } from "../../api/queries";
 import type { RunPhase, TemplateRunExecution, TemplateRunLog, TemplateRunLogLostReason } from "../../api/types";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import { formatDateTime } from "../../shared/formatTimestamp";
 import { LogPhase, LogStep } from "../../shared/LogSteps";
@@ -152,6 +152,7 @@ const LOST_REASONS: Record<TemplateRunLogLostReason, string> = {
 };
 
 function CompleteRunLogBody({ runId, log }: { runId: string; log: TemplateRunLog }) {
+  const tenantID = useTenantID();
   const logQuery = useTemplateRunLogQuery(tenantID, runId, log.name);
   if (logQuery.data !== undefined) {
     return <>{logQuery.data || "No log body"}</>;
@@ -169,6 +170,7 @@ function CompleteRunLogBody({ runId, log }: { runId: string; log: TemplateRunLog
 // Loading the full log swaps the stream out for the stored body, which closes
 // the stream: nothing it still carried is shown any more.
 function LiveRunLogBody({ runId, log }: { runId: string; log: TemplateRunLog }) {
+  const tenantID = useTenantID();
   const [loadFull, setLoadFull] = useState(false);
   if (loadFull) {
     return <CompleteRunLogBody runId={runId} log={log} />;

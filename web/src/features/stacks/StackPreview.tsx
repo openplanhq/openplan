@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useStackQuery } from "../../api/queries";
 import type { AttentionItem, StackListItem } from "../../api/types";
 import RequireCapability from "../../auth/RequireCapability";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 import { attentionRunPath } from "./attention";
 import NoTemplatesState from "./NoTemplatesState";
 import StackMeta from "./StackMeta";
@@ -39,6 +39,7 @@ export default function StackPreview({
   /** Items keyed by stack template id, for the waiting plans' run links. */
   attention: Map<string, AttentionItem>;
 }) {
+  const tenantID = useTenantID();
   const stackQuery = useStackQuery(tenantID, stack.id);
   const templates = stackQuery.data?.templates ?? [];
   const base = `/stacks/${stack.id}`;

@@ -4,7 +4,7 @@ import {
   useDeleteStackTemplateCredentialMutation,
   useStackTemplateCredentialsQuery
 } from "../../api/queries";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 // override the stack's environment for this template only. The route itself is
 // gated on canManageAccess, the same capability the stack Environment tab needs.
 export default function TemplateEnvironmentTab() {
+  const tenantID = useTenantID();
   const { stackTemplate } = useStackTemplate();
   const credentialsQuery = useStackTemplateCredentialsQuery(tenantID, stackTemplate.id);
   const createMutation = useCreateStackTemplateCredentialMutation(tenantID, stackTemplate.id);

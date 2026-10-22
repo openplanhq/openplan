@@ -8,7 +8,7 @@ import { queryKeys } from "../../api/queryKeys";
 import { useSyncTemplateMutation, useTemplateQuery } from "../../api/queries";
 import type { Template, TemplateLatestSync } from "../../api/types";
 import RequireCapability from "../../auth/RequireCapability";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorPanel from "../../shared/ErrorPanel";
 import { formatDateTime } from "../../shared/formatTimestamp";
@@ -56,6 +56,7 @@ export default function TemplateSync({
   source: ReactNode;
   about: ReactNode;
 }) {
+  const tenantID = useTenantID();
   const queryClient = useQueryClient();
   const syncTemplateMutation = useSyncTemplateMutation(tenantID);
   // Read once, at mount: once the first sync lands a revision the panel

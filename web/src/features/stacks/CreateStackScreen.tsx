@@ -3,7 +3,7 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiErrorMessage, fieldsShown } from "../../api/problems";
 import { useCreateStackMutation } from "../../api/queries";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 import Breadcrumb from "../../shared/Breadcrumb";
 import ErrorLine from "../../shared/ErrorLine";
 import { useFieldErrors } from "../../shared/useFieldErrors";
@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function CreateStackScreen() {
+  const tenantID = useTenantID();
   const navigate = useNavigate();
   const mutation = useCreateStackMutation(tenantID);
   const [name, setName] = useState("");

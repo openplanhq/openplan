@@ -9,7 +9,7 @@ import {
 } from "../../api/queries";
 import { queryKeys } from "../../api/queryKeys";
 import { useAuth } from "../../auth/AuthContext";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 import PageHeader from "../../shared/PageHeader";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import AccessList from "../access/AccessList";
@@ -20,6 +20,7 @@ import { STACK_ROLES } from "../access/roles";
 // the platform's Access screen shares; this page gives it the stack's roles,
 // words and API calls.
 export default function StackAccessScreen() {
+  const tenantID = useTenantID();
   const { stackId = "" } = useParams<{ stackId: string }>();
   const stackName = useStackQuery(tenantID, stackId).data?.stack.name ?? stackId;
   const grants = useStackGrantsQuery(tenantID, stackId);

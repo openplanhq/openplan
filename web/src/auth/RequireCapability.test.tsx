@@ -103,17 +103,6 @@ describe("RequireCapability — gate mode (component-level)", () => {
     expect(markup).not.toContain('data-testid="protected"');
   });
 
-  it("renders nothing while the global capability is loading", () => {
-    const markup = renderGate(
-      <RequireCapability capability="can_create_stack" fallback={<span data-testid="reason">shown</span>}>
-        <span data-testid="protected">shown</span>
-      </RequireCapability>,
-      { auth: authValue({ status: "loading", me: null }) }
-    );
-
-    expect(markup).toBe("");
-  });
-
   it("reads a stack capability from the query cache using an explicit stackId, with no fetch", () => {
     const markup = renderGate(
       <RequireCapability capability="can_operate" stackId="stack_1">

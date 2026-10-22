@@ -5,13 +5,14 @@ import {
   useDeleteStackCredentialMutation,
   useStackCredentialsQuery
 } from "../../api/queries";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import CredentialsPanel from "./CredentialsPanel";
 import RequestIdNote from "../../shared/RequestIdNote";
 import { Button } from "@/components/ui/button";
 
 export default function EnvironmentScreen() {
+  const tenantID = useTenantID();
   const { stackId = "" } = useParams<{ stackId: string }>();
   const credentialsQuery = useStackCredentialsQuery(tenantID, stackId);
   const createMutation = useCreateStackCredentialMutation(tenantID, stackId);

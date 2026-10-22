@@ -5,7 +5,7 @@ import { useAttentionQuery, useStacksQuery } from "../../api/queries";
 import type { AttentionItem, StackListItem } from "../../api/types";
 import { useAuth } from "../../auth/AuthContext";
 import RequireCapability from "../../auth/RequireCapability";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 import ErrorLine from "../../shared/ErrorLine";
 import PageHeader from "../../shared/PageHeader";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
@@ -50,6 +50,7 @@ import { cn } from "@/lib/utils";
 const FILTER_DEBOUNCE_MS = 250;
 
 export default function StacksListScreen() {
+  const tenantID = useTenantID();
   const [filter, setFilter] = useState("");
   const query = useDebounce(filter.trim(), FILTER_DEBOUNCE_MS);
   const stacksQuery = useStacksQuery(tenantID, query);

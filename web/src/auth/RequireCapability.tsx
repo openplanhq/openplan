@@ -2,7 +2,7 @@ import { RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
 import { Outlet, useOutletContext, useParams } from "react-router-dom";
 import { useStackQuery } from "../api/queries";
-import { tenantID } from "../config";
+import { useTenantID } from "./useTenantID";
 import { buttonClass } from "../shared/buttonClass";
 import ErrorLine from "../shared/ErrorLine";
 import { classifyQueryError, useQueryErrorBoundary } from "../shared/queryErrorBoundary";
@@ -40,15 +40,12 @@ export interface RequireCapabilityProps {
 type CapabilityState = "loading" | "allowed" | "denied";
 
 function useCapabilityState(capability: CapabilityKey, stackId: string | undefined): CapabilityState {
-  const { me, status } = useAuth();
+  const { me } = useAuth();
   const params = useParams<{ stackId?: string }>();
   const resolvedStackId = stackId ?? params.stackId ?? "";
   const stackCapabilities = useStackCapabilities(resolvedStackId);
 
   if (isGlobalCapability(capability)) {
-    if (status === "loading") {
-      return "loading";
-    }
     return me?.global_capabilities[capability] ? "allowed" : "denied";
   }
 
@@ -96,6 +93,7 @@ export default function RequireCapability({ capability, stackId, mode = "gate", 
 // that the person may not see, or that failed to load would be an empty page
 // for good, with nothing to say why or to try again.
 function StackRoutePending({ stackId }: { stackId: string }) {
+  const tenantID = useTenantID();
   const stackQuery = useStackQuery(tenantID, stackId);
   const boundary = useQueryErrorBoundary(stackQuery.error);
   // A stack that is not there, or that the person may not see, answers the

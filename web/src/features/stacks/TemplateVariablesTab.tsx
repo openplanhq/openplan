@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import { useTemplateRevisionVariablesQuery, useUpdateStackTemplateConfigMutation } from "../../api/queries";
 import { apiErrorMessage, fieldsShown } from "../../api/problems";
-import { tenantID } from "../../config";
+import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 // template's configuration. Choosing another revision is a separate view
 // (upgrade), reached from Settings, so this form has exactly one action.
 export default function TemplateVariablesTab() {
+  const tenantID = useTenantID();
   const { stackId, stackTemplate } = useStackTemplate();
   const [editedValues, setEditedValues] = useState<Record<string, string>>({});
   const [errorMessage, setErrorMessage] = useState("");
