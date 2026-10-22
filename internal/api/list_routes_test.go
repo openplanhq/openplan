@@ -296,7 +296,7 @@ func (apiCredentialRepository) ListCredentialsForStackTemplate(context.Context, 
 }
 
 // tenantGETRoute matches a GET route registered in server.go.
-var tenantGETRoute = regexp.MustCompile(`handleTenantRoute\("GET (/v1/tenants/[^"]+)"`)
+var tenantGETRoute = regexp.MustCompile(`handleTenantRoute\("GET", "(/[^"]*)"`)
 
 // TestEveryListRouteAnswersEnvelope reads the routes from server.go, so a list
 // route added later can't answer with a bare array: every GET whose path ends
@@ -319,7 +319,7 @@ func TestEveryListRouteAnswersEnvelope(t *testing.T) {
 
 	var lists []string
 	for _, match := range tenantGETRoute.FindAllStringSubmatch(string(source), -1) {
-		pattern := match[1]
+		pattern := tenantPrefix + match[1]
 		if strings.HasSuffix(pattern, "}") || notLists[pattern] {
 			continue // one resource, not a list
 		}
