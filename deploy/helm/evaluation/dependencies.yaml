@@ -259,7 +259,7 @@ data:
   # users and their userIDs are unchanged, so the admin's OIDC sub (and so
   # OPENPLAN_ROOT_SUBJECT) is the compose value.
   config.yaml: |
-    # The browser and the api both reach this through ingress-nginx: the
+    # The browser and the api both reach this through Traefik: the
     # browser at dex.localhost on loopback, the api through setup.sh's CoreDNS
     # rewrite. The api compares the discovered issuer to OIDC_ISSUER_URL byte
     # for byte, so there is one string for both.
@@ -386,7 +386,7 @@ metadata:
   labels:
     app.kubernetes.io/part-of: openplan-evaluation
 spec:
-  ingressClassName: nginx
+  ingressClassName: traefik
   tls:
     # The one evaluation certificate covers openplan.localhost and
     # dex.localhost.

@@ -12,9 +12,11 @@
 # all of it.
 set -eu
 
-# Pinned, so a rerun installs what was evaluated. Keep in step with
-# teardown.sh, which deletes by the same manifest.
-INGRESS_NGINX_MANIFEST=https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.15.1/deploy/static/provider/cloud/deploy.yaml
+# Traefik is the ingress controller: ingress-nginx was retired in March 2026
+# and gets no more security fixes. Pinned, so a rerun installs what was
+# evaluated. Helm is already needed to install openplan's chart, so this adds
+# no tool. Keep in step with teardown.sh.
+TRAEFIK_CHART_VERSION=41.7.0
 NAMESPACE=openplan
 # The sub Dex issues for admin@openplan.local, from the userID in
 # dependencies.yaml and the "local" connector; the compose value.
@@ -41,9 +43,14 @@ secret_exists() { kube get secret "$1" >/dev/null 2>&1; }
 secret_value() { kube get secret "$1" -o "jsonpath={.data.$2}" | base64 -d; }
 fresh() { openssl rand -hex 32; }
 
-echo "==> ingress-nginx"
-kubectl apply -f "$INGRESS_NGINX_MANIFEST" >/dev/null
-kubectl -n ingress-nginx rollout status deployment/ingress-nginx-controller --timeout=300s
+# Only the Ingress provider: openplan's chart and the Dex Ingress are standard
+# Ingresses. Without the IngressRoute provider the chart's CRDs aren't needed,
+# so none are installed and none outlive teardown (helm never deletes CRDs).
+echo "==> Traefik"
+helm upgrade --install traefik traefik --repo https://traefik.github.io/charts \
+	--version "$TRAEFIK_CHART_VERSION" -n traefik --create-namespace \
+	--skip-crds --set providers.kubernetesCRD.enabled=false --wait --timeout 300s >/dev/null
+kubectl -n traefik rollout status deployment/traefik --timeout=300s
 
 echo "==> namespace $NAMESPACE"
 kubectl apply -f "$here/dependencies.yaml" -l app.kubernetes.io/component=namespace
@@ -141,15 +148,15 @@ fi
 
 # The api discovers Dex at https://dex.localhost/dex while it boots, the same
 # URL the browser uses. In the browser that is loopback, where Docker Desktop
-# publishes ingress-nginx; in a pod, this rewrite sends it to the controller's
-# Service. answer auto renames the reply back, or a resolver that checks the
+# publishes Traefik's LoadBalancer Service; in a pod, this rewrite sends it to
+# that Service. answer auto renames the reply back, or a resolver that checks the
 # answer's name (Go's does) would discard it.
 echo "==> CoreDNS rewrite for dex.localhost"
 kubectl -n kube-system get configmap coredns -o 'jsonpath={.data.Corefile}' >"$work/Corefile"
 if grep -q 'dex\.localhost' "$work/Corefile"; then
 	echo "kept: rewrite already present"
 else
-	awk '{ print } NR == 1 { print "    rewrite name exact dex.localhost ingress-nginx-controller.ingress-nginx.svc.cluster.local answer auto" }' \
+	awk '{ print } NR == 1 { print "    rewrite name exact dex.localhost traefik.traefik.svc.cluster.local answer auto" }' \
 		"$work/Corefile" >"$work/Corefile.new"
 	{ printf 'data:\n  Corefile: |\n'; sed 's/^/    /' "$work/Corefile.new"; } >"$work/coredns-patch.yaml"
 	kubectl -n kube-system patch configmap coredns --type merge --patch-file "$work/coredns-patch.yaml" >/dev/null

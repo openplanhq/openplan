@@ -1,11 +1,9 @@
 #!/bin/sh
 # EVALUATION ONLY. Undoes setup.sh: deletes the openplan namespace (the chart's
 # release, the dependencies, their volumes and every Secret with it),
-# ingress-nginx, and the CoreDNS rewrite. Nothing is kept.
+# Traefik, and the CoreDNS rewrite. Nothing is kept.
 set -eu
 
-# Keep in step with setup.sh.
-INGRESS_NGINX_MANIFEST=https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.15.1/deploy/static/provider/cloud/deploy.yaml
 NAMESPACE=openplan
 
 context=$(kubectl config current-context)
@@ -20,8 +18,9 @@ trap 'rm -rf "$work"' EXIT
 echo "==> namespace $NAMESPACE"
 kubectl delete namespace "$NAMESPACE" --ignore-not-found --wait --timeout=300s
 
-echo "==> ingress-nginx"
-kubectl delete -f "$INGRESS_NGINX_MANIFEST" --ignore-not-found --wait --timeout=300s >/dev/null
+echo "==> Traefik"
+helm uninstall traefik -n traefik --ignore-not-found --wait --timeout 300s >/dev/null
+kubectl delete namespace traefik --ignore-not-found --wait --timeout=300s
 
 echo "==> CoreDNS rewrite for dex.localhost"
 kubectl -n kube-system get configmap coredns -o 'jsonpath={.data.Corefile}' >"$work/Corefile"

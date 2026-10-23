@@ -15,6 +15,6 @@ executor:
   existingSecret: openplan-executor-env
 
 ingress:
-  className: nginx
+  className: traefik
   host: openplan.localhost
   tlsSecretName: openplan-tls
