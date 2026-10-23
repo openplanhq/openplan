@@ -1,0 +1,9 @@
+# The required values with placeholder names, so CI can lint and render the
+# chart. Nothing here is a real Secret or host; an install needs its own.
+api:
+  existingSecret: openplan-api
+executor:
+  existingSecret: openplan-executor
+ingress:
+  host: openplan.example.com
+  tlsSecretName: openplan-tls
