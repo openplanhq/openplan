@@ -399,8 +399,8 @@ describe("EnvironmentScreen", () => {
     const user = userEvent.setup();
 
     const switcher = screen.getByRole("group", { name: "Environment" });
-    const secretsOption = within(switcher).getByRole("button", { name: "Secrets 1" });
-    const variablesOption = within(switcher).getByRole("button", { name: "Variables 1" });
+    const secretsOption = within(switcher).getByRole("button", { name: "Secrets" });
+    const variablesOption = within(switcher).getByRole("button", { name: "Variables" });
     // It opens on Secrets.
     expect(secretsOption.getAttribute("aria-pressed")).toBe("true");
     expect(within(screen.getByRole("list")).getAllByRole("listitem").map((row) => row.textContent)).toEqual(["TF_VAR_TESTAdded 19 Jul 2026"]);
@@ -440,7 +440,7 @@ describe("EnvironmentScreen", () => {
     renderScreen(queryClient);
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole("button", { name: "Variables 0" }));
+    await user.click(screen.getByRole("button", { name: "Variables" }));
     const value = variables().getByLabelText<HTMLInputElement>("Value");
     // A plain box: no mask and no Show value button.
     expect(value.type).toBe("text");
@@ -468,14 +468,14 @@ describe("EnvironmentScreen", () => {
 
     await user.type(secrets().getByLabelText("Name"), "GITHUB_TOKEN");
     await user.type(secrets().getByLabelText("Value"), "ghp_secret");
-    await user.click(screen.getByRole("button", { name: "Variables 0" }));
+    await user.click(screen.getByRole("button", { name: "Variables" }));
 
     expect(variables().getByLabelText<HTMLInputElement>("Name").value).toBe("");
     expect(variables().getByLabelText<HTMLInputElement>("Value").value).toBe("");
     // Hidden, the draft still holds off the re-auth redirect.
     expect(document.querySelector("[data-unsaved='true']")).not.toBeNull();
 
-    await user.click(screen.getByRole("button", { name: "Secrets 0" }));
+    await user.click(screen.getByRole("button", { name: "Secrets" }));
     const value = secrets().getByLabelText<HTMLInputElement>("Value");
     expect(value.value).toBe("ghp_secret");
     expect(value.type).toBe("password");

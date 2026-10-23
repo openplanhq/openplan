@@ -48,9 +48,9 @@ export default function EnvironmentTabs({ secrets, variables, credentials, loadi
         value={tab}
         onChange={setTab}
         options={[
-          // Counts are left out until the list is known, as a tab's are.
-          { value: "secrets", label: "Secrets", count: loading ? undefined : secretEntries.length },
-          { value: "variables", label: "Variables", count: loading ? undefined : variableEntries.length }
+          // No counts: the owner keeps numbers out of tab and section headers.
+          { value: "secrets", label: "Secrets" },
+          { value: "variables", label: "Variables" }
         ]}
       />
       <div hidden={tab !== "secrets"} data-testid="environment-secrets">

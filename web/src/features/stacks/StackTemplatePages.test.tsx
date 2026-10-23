@@ -572,8 +572,8 @@ describe("TemplateEnvironmentTab", () => {
     expect(secrets.getByText("Write-only: a value can't be read back once added. Overrides the stack environment for this template only.")).toBeTruthy();
     expect(variables.getByText("eu-west-1")).toBeTruthy();
     expect(variables.getByText("Values are shown here, so keep credentials in Secrets. Overrides the stack environment for this template only.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Secrets 1" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "Variables 1" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Secrets" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Variables" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Delete TEMPLATE_ONLY" })).toBeTruthy();
   });
 
