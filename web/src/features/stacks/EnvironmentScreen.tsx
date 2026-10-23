@@ -7,7 +7,7 @@ import {
 } from "../../api/queries";
 import { useTenantID } from "../../auth/useTenantID";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
-import CredentialsPanel from "./CredentialsPanel";
+import EnvironmentTabs from "./EnvironmentTabs";
 import RequestIdNote from "../../shared/RequestIdNote";
 import { Button } from "@/components/ui/button";
 
@@ -45,10 +45,17 @@ export default function EnvironmentScreen() {
 
   return (
     <section data-testid="environment-screen">
-      <CredentialsPanel
-        note="Values are write-only and injected only when Terraform runs. Use TF_VAR_NAME for Terraform variables; provider credentials keep their provider-specific names."
-        emptyTitle="No variables in this environment"
-        emptyDescription="Variables added here are available to every template in this stack."
+      <EnvironmentTabs
+        secrets={{
+          note: "Set as environment variables when Terraform runs. Write-only: a value can't be read back once added.",
+          emptyTitle: "No secrets in this environment",
+          emptyDescription: "Secrets added here are available to every template in this stack."
+        }}
+        variables={{
+          note: "Set as environment variables when Terraform runs. Values are shown here, so keep credentials in Secrets.",
+          emptyTitle: "No variables in this environment",
+          emptyDescription: "Variables added here are available to every template in this stack."
+        }}
         credentials={credentialsQuery.data ?? []}
         loading={credentialsQuery.isPending}
         busy={createMutation.isPending || deleteMutation.isPending}
