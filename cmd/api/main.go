@@ -126,9 +126,9 @@ func planChangeRepository(store appRepositories) app.PlanChangeRepository {
 	return repository
 }
 
-func credentialEncryptor(store appRepositories) app.CredentialEncryptor {
-	encryptor, _ := store.(app.CredentialEncryptor)
-	return encryptor
+func storeCredentialCipher(store appRepositories) app.CredentialCipher {
+	cipher, _ := store.(app.CredentialCipher)
+	return cipher
 }
 
 // controlPlaneStore mirrors sessionStore: the queue loop and control activities
@@ -411,7 +411,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 		StackOverview:            store,
 		StackTemplates:           store,
 		Credentials:              credentialRepository(store),
-		CredentialEncryptor:      credentialEncryptor(store),
+		CredentialCipher:         storeCredentialCipher(store),
 		StackTemplateInstaller:   store,
 		TemplateRuns:             store,
 		TemplateRevisionMetadata: store,

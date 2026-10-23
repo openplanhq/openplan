@@ -666,7 +666,7 @@
     },
     {
       "name": "Credentials",
-      "description": "Write-only cloud credentials, injected only while Terraform runs.",
+      "description": "Cloud credentials and other environment variables, injected only while\nTerraform runs. Sensitive values, the default, are write-only.\n",
       "item": [
         {
           "name": "Add a stack-scoped credential",
@@ -713,7 +713,7 @@
                 "credentials"
               ]
             },
-            "description": "Credentials are write-only. The value is encrypted on the way in and is\nnever readable back through the API — it is injected into the process\nenvironment only while Terraform runs. To change one, delete it and\ncreate it again.\n\n`name` is the provider environment variable name, such as\n`AWS_SECRET_ACCESS_KEY`."
+            "description": "The value is encrypted on the way in and injected into the process\nenvironment only while Terraform runs. A credential is sensitive unless\nthe request sets `sensitive` to `false`: a sensitive value is never\nreadable back through the API, and one that is not sensitive comes back\non this response and on every list. Sensitivity is set on create and\ncan't change. To change a value, delete it and create it again.\n\n`name` is the provider environment variable name, such as\n`AWS_SECRET_ACCESS_KEY`."
           }
         },
         {
@@ -746,7 +746,7 @@
                 "credentials"
               ]
             },
-            "description": "Metadata only. Values are never returned."
+            "description": "Metadata for every credential, and the value of each one that is not\nsensitive. Sensitive values are never returned."
           }
         },
         {
@@ -827,7 +827,7 @@
                 "credentials"
               ]
             },
-            "description": "Same write-only contract as a stack credential, scoped to one installed\ncomponent. Use this to override a stack-wide credential for a single\ncomponent."
+            "description": "Same contract as a stack credential, sensitivity included, scoped to\none installed component. Use this to override a stack-wide credential\nfor a single component; the override's own `sensitive` decides whether\nits value is shown."
           }
         },
         {
@@ -860,7 +860,7 @@
                 "credentials"
               ]
             },
-            "description": "Metadata only. Values are never returned."
+            "description": "Metadata for every credential, and the value of each one that is not\nsensitive. Sensitive values are never returned."
           }
         },
         {

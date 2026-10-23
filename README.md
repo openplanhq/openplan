@@ -46,8 +46,9 @@ per stack.
 
 ![A template's input variables](docs/ss/variables.png)
 
-**Credentials.** Cloud credentials are write-only and injected only while
-Terraform runs.
+**Credentials.** Cloud credentials and other environment variables are
+injected only while Terraform runs. Secrets are write-only; a value marked
+not sensitive, such as a region, can be read back.
 
 ![A stack's environment credentials](docs/ss/environment-credentials.png)
 

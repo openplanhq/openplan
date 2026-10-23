@@ -689,7 +689,8 @@ func (server *Server) handleGetStack(response http.ResponseWriter, request *http
 	writeJSON(response, http.StatusOK, newStackViewResponse(view))
 }
 
-// handleCreateStackCredential accepts a write-only Stack-scoped credential value.
+// handleCreateStackCredential stores a Stack-scoped credential value; only a
+// value marked not sensitive comes back.
 func (server *Server) handleCreateStackCredential(response http.ResponseWriter, request *http.Request) {
 	var body credentialRequest
 	if !decodeRequestBody(response, request, &body) {
@@ -698,7 +699,7 @@ func (server *Server) handleCreateStackCredential(response http.ResponseWriter, 
 	server.debugf("credential create request scope=stack tenant_id=%s stack_id=%s name=%s value_present=%t", request.PathValue("tenant_id"), request.PathValue("stack_id"), body.Name, body.Value != "")
 	credential, err := server.service.CreateCredential(request.Context(), app.CreateCredentialCommand{
 		TenantID: domain.TenantID(request.PathValue("tenant_id")), Scope: domain.CredentialScopeStack,
-		StackID: domain.StackID(request.PathValue("stack_id")), Name: body.Name, Value: body.Value,
+		StackID: domain.StackID(request.PathValue("stack_id")), Name: body.Name, Value: body.Value, Sensitive: body.Sensitive,
 	})
 	if err != nil {
 		server.debugf("credential create failed scope=stack tenant_id=%s stack_id=%s name=%s error=%v", request.PathValue("tenant_id"), request.PathValue("stack_id"), body.Name, err)
@@ -709,7 +710,8 @@ func (server *Server) handleCreateStackCredential(response http.ResponseWriter, 
 	writeJSON(response, http.StatusCreated, credential)
 }
 
-// handleListStackCredentials returns Stack credential metadata without secret values.
+// handleListStackCredentials returns Stack credential metadata, with values
+// only for credentials that are not sensitive.
 func (server *Server) handleListStackCredentials(response http.ResponseWriter, request *http.Request) {
 	server.debugf("credential list request scope=stack tenant_id=%s stack_id=%s", request.PathValue("tenant_id"), request.PathValue("stack_id"))
 	credentials, err := server.service.ListCredentials(request.Context(), app.ListCredentialsCommand{
@@ -743,7 +745,8 @@ func (server *Server) handleDeleteStackCredential(response http.ResponseWriter, 
 	response.WriteHeader(http.StatusNoContent)
 }
 
-// handleCreateStackTemplateCredential accepts a write-only StackTemplate-scoped credential value.
+// handleCreateStackTemplateCredential stores a StackTemplate-scoped credential
+// value; only a value marked not sensitive comes back.
 func (server *Server) handleCreateStackTemplateCredential(response http.ResponseWriter, request *http.Request) {
 	var body credentialRequest
 	if !decodeRequestBody(response, request, &body) {
@@ -752,7 +755,7 @@ func (server *Server) handleCreateStackTemplateCredential(response http.Response
 	server.debugf("credential create request scope=stack_template tenant_id=%s stack_template_id=%s name=%s value_present=%t", request.PathValue("tenant_id"), request.PathValue("stack_template_id"), body.Name, body.Value != "")
 	credential, err := server.service.CreateCredential(request.Context(), app.CreateCredentialCommand{
 		TenantID: domain.TenantID(request.PathValue("tenant_id")), Scope: domain.CredentialScopeStackTemplate,
-		StackTemplateID: domain.StackTemplateID(request.PathValue("stack_template_id")), Name: body.Name, Value: body.Value,
+		StackTemplateID: domain.StackTemplateID(request.PathValue("stack_template_id")), Name: body.Name, Value: body.Value, Sensitive: body.Sensitive,
 	})
 	if err != nil {
 		server.debugf("credential create failed scope=stack_template tenant_id=%s stack_template_id=%s name=%s error=%v", request.PathValue("tenant_id"), request.PathValue("stack_template_id"), body.Name, err)
@@ -763,7 +766,8 @@ func (server *Server) handleCreateStackTemplateCredential(response http.Response
 	writeJSON(response, http.StatusCreated, credential)
 }
 
-// handleListStackTemplateCredentials returns StackTemplate credential metadata without secret values.
+// handleListStackTemplateCredentials returns StackTemplate credential metadata,
+// with values only for credentials that are not sensitive.
 func (server *Server) handleListStackTemplateCredentials(response http.ResponseWriter, request *http.Request) {
 	server.debugf("credential list request scope=stack_template tenant_id=%s stack_template_id=%s", request.PathValue("tenant_id"), request.PathValue("stack_template_id"))
 	credentials, err := server.service.ListCredentials(request.Context(), app.ListCredentialsCommand{
@@ -1105,6 +1109,9 @@ type credentialRequest struct {
 	// Name is the provider environment variable name; Value is accepted only on create.
 	Name  string `json:"name"`
 	Value string `json:"value"`
+	// Sensitive is nil when the field is left out, which the app stores as
+	// sensitive: a missing value must never mean "show it back".
+	Sensitive *bool `json:"sensitive"`
 }
 
 type approveRunRequest struct{}

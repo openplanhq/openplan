@@ -161,13 +161,13 @@ func newWriteFixture(auth *authorization.Authorization) writeFixture {
 		Status:          domain.TemplateRunWaitingApproval,
 	}}
 	service := NewService(Service{
-		Authorization:       auth,
-		StackTemplates:      templates,
-		TemplateRuns:        runs,
-		Credentials:         refusingCredentialRepository{},
-		CredentialEncryptor: refusingCredentialEncryptor{},
-		Audit:               &recordingAuditRepository{},
-		Clock:               fixedClock{now: time.Now()},
+		Authorization:    auth,
+		StackTemplates:   templates,
+		TemplateRuns:     runs,
+		Credentials:      refusingCredentialRepository{},
+		CredentialCipher: refusingCredentialCipher{},
+		Audit:            &recordingAuditRepository{},
+		Clock:            fixedClock{now: time.Now()},
 	})
 	return writeFixture{service: service, templates: templates, runs: runs}
 }
@@ -243,7 +243,7 @@ func TestStartTemplateRunAutoApproveWithoutApproveIsForbidden(t *testing.T) {
 	}
 }
 
-// refusingCredentialRepository and refusingCredentialEncryptor exist only so the
+// refusingCredentialRepository and refusingCredentialCipher exist only so the
 // credential commands get past their wiring checks to authorization. Every
 // test that uses them is refused before either is called, so a call fails.
 type refusingCredentialRepository struct{}
@@ -266,8 +266,12 @@ func (refusingCredentialRepository) ListCredentialsForStackTemplate(context.Cont
 	return nil, errCredentialCalled
 }
 
-type refusingCredentialEncryptor struct{}
+type refusingCredentialCipher struct{}
 
-func (refusingCredentialEncryptor) Encrypt(string) (string, error) {
+func (refusingCredentialCipher) Encrypt(string) (string, error) {
+	return "", errCredentialCalled
+}
+
+func (refusingCredentialCipher) Decrypt(string) (string, error) {
 	return "", errCredentialCalled
 }
