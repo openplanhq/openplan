@@ -223,7 +223,18 @@ export interface CredentialMetadata {
   scope: "stack" | "stack_template";
   stack_id?: string;
   stack_template_id?: string;
+  /** Whether the value is write-only. The server never returns a sensitive value. */
+  sensitive: boolean;
+  /** Present only when `sensitive` is false. */
+  value?: string;
   created_at: string;
+}
+
+/** One new credential. The server treats a missing `sensitive` as true. */
+export interface CredentialRequest {
+  name: string;
+  value: string;
+  sensitive: boolean;
 }
 
 export interface PlanSummary {

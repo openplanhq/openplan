@@ -8,6 +8,8 @@ import {
   assignStackRole,
   discardRun,
   createStack,
+  createStackCredential,
+  createStackTemplateCredential,
   deleteTemplate,
   getTemplate,
   getTemplateRevisionVariables,
@@ -15,6 +17,7 @@ import {
   getTemplateRunLog,
   listAll,
   listPlatformGrants,
+  listStackCredentials,
   listStacks,
   listTemplateRevisions,
   listTemplateRuns,
@@ -401,6 +404,45 @@ describe("api client", () => {
     const error = await listStacks("tenant_123").catch((caught: unknown) => caught);
 
     expect(error).toMatchObject({ type: "about:blank", status: 400 });
+  });
+
+  // The server reads a missing `sensitive` as true, so the field is always
+  // sent: a Variables entry that dropped it would be stored as a secret.
+  it("sends sensitive with every new credential, on both scopes", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(() => Promise.resolve(jsonResponse({ id: "c1" }, 201)));
+
+    await createStackCredential("tenant_123", "stack_1", { name: "AWS_REGION", value: "us-east-1", sensitive: false });
+    await createStackTemplateCredential("tenant_123", "st_1", { name: "TOKEN", value: "s3cret", sensitive: true });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/v1/tenants/tenant_123/stacks/stack_1/credentials",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ name: "AWS_REGION", value: "us-east-1", sensitive: false }) })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/v1/tenants/tenant_123/stack-templates/st_1/credentials",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ name: "TOKEN", value: "s3cret", sensitive: true }) })
+    );
+  });
+
+  it("lists credentials with the value of each one that is not sensitive", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({
+        items: [
+          { id: "c1", name: "AWS_REGION", scope: "stack", stack_id: "stack_1", sensitive: false, value: "us-east-1", created_at: "2026-10-23T00:00:00Z" },
+          { id: "c2", name: "TOKEN", scope: "stack", stack_id: "stack_1", sensitive: true, created_at: "2026-10-23T00:00:00Z" }
+        ],
+        next_cursor: null
+      })
+    );
+
+    const credentials = await listStackCredentials("tenant_123", "stack_1");
+
+    expect(credentials.map(({ name, sensitive, value }) => ({ name, sensitive, value }))).toEqual([
+      { name: "AWS_REGION", sensitive: false, value: "us-east-1" },
+      { name: "TOKEN", sensitive: true, value: undefined }
+    ]);
   });
 
   it("never includes actor identity fields in request bodies", async () => {

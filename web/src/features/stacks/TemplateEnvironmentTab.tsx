@@ -58,8 +58,8 @@ export default function TemplateEnvironmentTab() {
         credentials={credentialsQuery.data ?? []}
         loading={credentialsQuery.isPending}
         busy={createMutation.isPending || deleteMutation.isPending}
-        onCreate={async (name, value) => {
-          await createMutation.mutateAsync({ name, value });
+        onCreate={async (credential) => {
+          await createMutation.mutateAsync(credential);
         }}
         onDelete={(id) => deleteMutation.mutateAsync(id)}
       />

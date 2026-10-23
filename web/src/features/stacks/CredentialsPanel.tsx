@@ -1,7 +1,7 @@
 import { useId, useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 import { apiErrorMessage, fieldErrors } from "../../api/problems";
-import type { CredentialMetadata } from "../../api/types";
+import type { CredentialMetadata, CredentialRequest } from "../../api/types";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
 import SecretInput from "../../shared/SecretInput";
@@ -21,16 +21,17 @@ interface CredentialsPanelProps {
   credentials: CredentialMetadata[];
   loading: boolean;
   busy: boolean;
-  onCreate: (name: string, value: string) => Promise<void>;
+  onCreate: (credential: CredentialRequest) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }
 
 /**
  * Write-only credentials for a stack or for one of its templates: a note on
  * what they are for, the list (the name, when it was added, and delete), and
- * the form that adds one. A value never comes back from the server, so the
- * list has only names. The copy comes from the caller: the template's tab and
- * the stack's Environment page share this panel.
+ * the form that adds one. The list shows names only: a sensitive value never
+ * comes back from the server, and every entry this panel adds is sensitive.
+ * The copy comes from the caller: the template's tab and the stack's
+ * Environment page share this panel.
  */
 export default function CredentialsPanel({ note, emptyTitle, emptyDescription, credentials, loading, busy, onCreate, onDelete }: CredentialsPanelProps) {
   const [name, setName] = useState("");
@@ -57,7 +58,8 @@ export default function CredentialsPanel({ note, emptyTitle, emptyDescription, c
     const sentName = name;
     const sentValue = value;
     try {
-      await onCreate(name.trim(), value);
+      // Sensitive until the Variables tab adds entries that are not.
+      await onCreate({ name: name.trim(), value, sensitive: true });
       // The fields stay editable while the request is out. Clear only what
       // still holds what was sent, so the next credential, half typed, stays.
       setName((current) => (current === sentName ? "" : current));
