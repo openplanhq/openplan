@@ -25,6 +25,15 @@ spec:
           command: ["sysctl", "-w", "net.ipv4.ip_forward=1"]
           securityContext:
             privileged: true
+          # A pod is Guaranteed only if every container, init included, has
+          # requests equal to limits; sysctl needs next to nothing.
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
       containers:
         - name: executor
           image: {{ include "openplan.image" $component }}
