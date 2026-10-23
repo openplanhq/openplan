@@ -25,3 +25,12 @@ type CredentialSet struct {
 	Sensitive       bool            // A sensitive value is never shown back and is redacted from run logs.
 	CreatedAt       time.Time       // Creation timestamp used for metadata display and auditing.
 }
+
+// RunCredentials is what the control plane seals to a run's key: the resolved
+// environment and the names in it whose values are not sensitive. The
+// executor redacts every value whose name is not in Plain, so a payload that
+// lists no names redacts everything.
+type RunCredentials struct {
+	Environment map[string]string
+	Plain       []string
+}

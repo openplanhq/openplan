@@ -43,13 +43,13 @@ func newSandboxedActivities(t *testing.T, tofu runner.CommandExecutor) (*Templat
 	return activities, recorder, prepareTestWorkspace(t, activities)
 }
 
-func sealedEnvironment(t *testing.T, activities *TemplateRunActivities, environment map[string]string) []byte {
+func sealedEnvironment(t *testing.T, activities *TemplateRunActivities, credentials domain.RunCredentials) []byte {
 	t.Helper()
 	publicKey, err := activities.keys.Generate(domain.RunKeyID("tenant_123", "run_123"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	sealed, err := runseal.Seal(publicKey, environment)
+	sealed, err := runseal.Seal(publicKey, credentials)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,12 +73,33 @@ func TestRunTerraformRedactsCredentialsInItsLog(t *testing.T) {
 
 	activities, _, workspace := newSandboxedActivities(t, &scriptedExecutor{stdout: "key is s3cr3t-value\n"})
 	input := planInput(workspace)
-	input.SealedEnvironment = sealedEnvironment(t, activities, map[string]string{"AWS_SECRET_ACCESS_KEY": "s3cr3t-value"})
+	input.SealedEnvironment = sealedEnvironment(t, activities, domain.RunCredentials{
+		Environment: map[string]string{"AWS_SECRET_ACCESS_KEY": "s3cr3t-value"},
+	})
 	if _, err := activities.RunTerraform(context.Background(), input); err != nil {
 		t.Fatalf("RunTerraform returned error: %v", err)
 	}
 	if got := runLog(t, workspace, "plan.log"); strings.Contains(got, "s3cr3t-value") {
 		t.Fatalf("plan.log leaks the credential: %q", got)
+	}
+}
+
+// #497: a value marked not sensitive reads as itself in the log, and a
+// sensitive one beside it is still hidden.
+func TestRunTerraformLeavesPlainValuesInItsLog(t *testing.T) {
+	t.Parallel()
+
+	activities, _, workspace := newSandboxedActivities(t, &scriptedExecutor{stdout: "region us-east-1, key s3cr3t-value\n"})
+	input := planInput(workspace)
+	input.SealedEnvironment = sealedEnvironment(t, activities, domain.RunCredentials{
+		Environment: map[string]string{"AWS_REGION": "us-east-1", "AWS_SECRET_ACCESS_KEY": "s3cr3t-value"},
+		Plain:       []string{"AWS_REGION"},
+	})
+	if _, err := activities.RunTerraform(context.Background(), input); err != nil {
+		t.Fatalf("RunTerraform returned error: %v", err)
+	}
+	if got := runLog(t, workspace, "plan.log"); !strings.Contains(got, "region us-east-1, key ******") {
+		t.Fatalf("plan.log = %q", got)
 	}
 }
 
@@ -89,7 +110,9 @@ func TestRunTerraformJobCarriesOnlyTheRunsCredentials(t *testing.T) {
 
 	activities, recorder, workspace := newSandboxedActivities(t, &scriptedExecutor{})
 	input := planInput(workspace)
-	input.SealedEnvironment = sealedEnvironment(t, activities, map[string]string{"AWS_ACCESS_KEY_ID": "AKIA"})
+	input.SealedEnvironment = sealedEnvironment(t, activities, domain.RunCredentials{
+		Environment: map[string]string{"AWS_ACCESS_KEY_ID": "AKIA"},
+	})
 	if _, err := activities.RunTerraform(context.Background(), input); err != nil {
 		t.Fatal(err)
 	}

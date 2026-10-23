@@ -119,7 +119,7 @@ func (r *run) write(t *testing.T, main string) {
 // credentials.
 func (r *run) terraform(ctx context.Context, t *testing.T, command domain.TerraformCommandType, env map[string]string) (domain.RunTerraformActivityOutput, error) {
 	t.Helper()
-	sealed, err := runseal.Seal(r.publicKey, env)
+	sealed, err := runseal.Seal(r.publicKey, domain.RunCredentials{Environment: env})
 	if err != nil {
 		t.Fatal(err)
 	}
