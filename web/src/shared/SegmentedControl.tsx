@@ -49,6 +49,9 @@ export default function SegmentedControl<Value extends string>({
             )}
           >
             {option.label}
+            {/* The space makes the count part of the option's name, "Secrets 2",
+                not "Secrets2"; the flex gap draws the distance, so it adds none. */}
+            {option.count !== undefined && " "}
             {option.count !== undefined && <span className="text-caption font-medium text-subtle-foreground">{option.count}</span>}
           </button>
         );

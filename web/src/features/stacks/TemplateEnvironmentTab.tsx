@@ -8,7 +8,7 @@ import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
-import CredentialsPanel from "./CredentialsPanel";
+import EnvironmentTabs from "./EnvironmentTabs";
 import { useStackTemplate } from "./stackTemplateContext";
 import RequestIdNote from "../../shared/RequestIdNote";
 import { cn } from "@/lib/utils";
@@ -51,10 +51,17 @@ export default function TemplateEnvironmentTab() {
 
   return (
     <div className="flex min-w-0 flex-col" data-testid="template-environment-tab">
-      <CredentialsPanel
-        note="Overrides the stack environment for this template only."
-        emptyTitle="No overrides for this template"
-        emptyDescription="Its runs use the stack environment."
+      <EnvironmentTabs
+        secrets={{
+          note: "Write-only: a value can't be read back once added. Overrides the stack environment for this template only.",
+          emptyTitle: "No secret overrides for this template",
+          emptyDescription: "Its runs use the stack's secrets."
+        }}
+        variables={{
+          note: "Values are shown here, so keep credentials in Secrets. Overrides the stack environment for this template only.",
+          emptyTitle: "No variable overrides for this template",
+          emptyDescription: "Its runs use the stack's variables."
+        }}
         credentials={credentialsQuery.data ?? []}
         loading={credentialsQuery.isPending}
         busy={createMutation.isPending || deleteMutation.isPending}

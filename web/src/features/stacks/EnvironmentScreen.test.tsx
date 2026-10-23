@@ -29,6 +29,11 @@ function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(asListBody(body)), { status, headers: { "content-type": "application/json" } });
 }
 
+// The two tabs' panels are both mounted, so a field is looked up in the
+// panel it belongs to.
+const secrets = () => within(screen.getByTestId("environment-secrets"));
+const variables = () => within(screen.getByTestId("environment-variables"));
+
 function renderScreen(queryClient: QueryClient) {
   return render(
     <QueryClientProvider client={queryClient}>
@@ -59,7 +64,7 @@ describe("EnvironmentScreen", () => {
 
     expect(screen.getByTestId("environment-screen")).toBeTruthy();
     expect(screen.getByText("TF_VAR_TEST")).toBeTruthy();
-    expect(screen.getByText(/Values are write-only/)).toBeTruthy();
+    expect(secrets().getByText(/^Write-only: a value can't be read back once added\./)).toBeTruthy();
     expect(screen.queryByText("secret-value")).toBeNull();
   });
 
@@ -70,7 +75,7 @@ describe("EnvironmentScreen", () => {
     renderScreen(queryClient);
 
     expect(document.querySelector("[data-unsaved='true']")).toBeNull();
-    fireEvent.change(screen.getByLabelText("Value"), { target: { value: "secret-value" } });
+    fireEvent.change(secrets().getByLabelText("Value"), { target: { value: "secret-value" } });
     expect(document.querySelector("[data-unsaved='true']")).not.toBeNull();
   });
 
@@ -85,8 +90,8 @@ describe("EnvironmentScreen", () => {
     );
 
     renderScreen(queryClient);
-    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "TF_VAR_TEST" } });
-    fireEvent.change(screen.getByLabelText("Value"), { target: { value: "secret-value" } });
+    fireEvent.change(secrets().getByLabelText("Name"), { target: { value: "TF_VAR_TEST" } });
+    fireEvent.change(secrets().getByLabelText("Value"), { target: { value: "secret-value" } });
     fireEvent.click(screen.getByRole("button", { name: "Add secret" }));
 
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -129,8 +134,9 @@ describe("EnvironmentScreen", () => {
 
     renderScreen(queryClient);
 
-    expect(screen.getByText("No variables in this environment")).toBeTruthy();
-    expect(screen.getByText("Variables added here are available to every template in this stack.")).toBeTruthy();
+    expect(secrets().getByText("No secrets in this environment")).toBeTruthy();
+    expect(secrets().getByText("Secrets added here are available to every template in this stack.")).toBeTruthy();
+    expect(variables().getByText("No variables in this environment")).toBeTruthy();
     expect(screen.queryByRole("list")).toBeNull();
   });
 
@@ -147,8 +153,8 @@ describe("EnvironmentScreen", () => {
     renderScreen(queryClient);
     const user = userEvent.setup();
 
-    const name = screen.getByLabelText<HTMLInputElement>("Name");
-    const value = screen.getByLabelText<HTMLInputElement>("Value");
+    const name = secrets().getByLabelText<HTMLInputElement>("Name");
+    const value = secrets().getByLabelText<HTMLInputElement>("Value");
     expect(value.type).toBe("password");
     await user.type(name, "TF_VAR_TEST");
     await user.type(value, "secret-value");
@@ -169,7 +175,7 @@ describe("EnvironmentScreen", () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     renderScreen(queryClient);
     const user = userEvent.setup();
-    const value = screen.getByLabelText<HTMLInputElement>("Value");
+    const value = secrets().getByLabelText<HTMLInputElement>("Value");
     const toggle = screen.getByRole("button", { name: "Show value" });
 
     expect(value.type).toBe("password");
@@ -200,9 +206,9 @@ describe("EnvironmentScreen", () => {
     );
     renderScreen(queryClient);
     const user = userEvent.setup();
-    const value = screen.getByLabelText<HTMLInputElement>("Value");
+    const value = secrets().getByLabelText<HTMLInputElement>("Value");
 
-    await user.type(screen.getByLabelText("Name"), "TF_VAR_TEST");
+    await user.type(secrets().getByLabelText("Name"), "TF_VAR_TEST");
     await user.type(value, "secret-value");
     await user.click(screen.getByRole("button", { name: "Show value" }));
     expect(value.type).toBe("text");
@@ -221,9 +227,9 @@ describe("EnvironmentScreen", () => {
     );
     renderScreen(queryClient);
     const user = userEvent.setup();
-    const value = screen.getByLabelText<HTMLInputElement>("Value");
+    const value = secrets().getByLabelText<HTMLInputElement>("Value");
 
-    await user.type(screen.getByLabelText("Name"), "TF_VAR_TEST");
+    await user.type(secrets().getByLabelText("Name"), "TF_VAR_TEST");
     await user.type(value, "secret-value");
     await user.click(screen.getByRole("button", { name: "Show value" }));
     await user.click(screen.getByRole("button", { name: "Add secret" }));
@@ -249,20 +255,20 @@ describe("EnvironmentScreen", () => {
     renderScreen(queryClient);
     const user = userEvent.setup();
 
-    await user.type(screen.getByLabelText("Name"), "TF_VAR_TEST");
-    await user.type(screen.getByLabelText("Value"), "secret-value");
+    await user.type(secrets().getByLabelText("Name"), "TF_VAR_TEST");
+    await user.type(secrets().getByLabelText("Value"), "secret-value");
     await user.click(screen.getByRole("button", { name: "Add secret" }));
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("A credential with this name already exists here.");
     expect(screen.getAllByRole("alert")).toHaveLength(1);
-    expect(screen.getByLabelText<HTMLInputElement>("Value").value).toBe("secret-value");
+    expect(secrets().getByLabelText<HTMLInputElement>("Value").value).toBe("secret-value");
     // The clash is the name's, so the name is the field marked, and it
     // points at the line that says why.
-    const name = screen.getByLabelText("Name");
+    const name = secrets().getByLabelText("Name");
     expect(name.getAttribute("aria-invalid")).toBe("true");
     expect(document.getElementById(name.getAttribute("aria-describedby")!)).toBe(alert);
-    expect(screen.getByLabelText("Value").getAttribute("aria-invalid")).toBeNull();
+    expect(secrets().getByLabelText("Value").getAttribute("aria-invalid")).toBeNull();
   });
 
   // The fields stay editable while an add is out. Clearing them when it lands
@@ -280,8 +286,8 @@ describe("EnvironmentScreen", () => {
     );
     renderScreen(queryClient);
     const user = userEvent.setup();
-    const name = screen.getByLabelText<HTMLInputElement>("Name");
-    const value = screen.getByLabelText<HTMLInputElement>("Value");
+    const name = secrets().getByLabelText<HTMLInputElement>("Name");
+    const value = secrets().getByLabelText<HTMLInputElement>("Value");
 
     await user.type(name, "TF_VAR_TEST");
     await user.type(value, "secret-value");
@@ -319,7 +325,7 @@ describe("EnvironmentScreen", () => {
     renderScreen(queryClient);
     const user = userEvent.setup();
 
-    await user.type(screen.getByLabelText("Name"), "TF_VAR_TEST");
+    await user.type(secrets().getByLabelText("Name"), "TF_VAR_TEST");
     await user.click(screen.getByRole("button", { name: "Add secret" }));
 
     expect((await screen.findByRole("alert")).textContent).toContain("Name and value are required");
@@ -332,9 +338,9 @@ describe("EnvironmentScreen", () => {
 
     renderScreen(queryClient);
 
-    expect(screen.getByLabelText("Name").getAttribute("data-slot")).toBe("input");
+    expect(secrets().getByLabelText("Name").getAttribute("data-slot")).toBe("input");
     // The Value box is shadcn's input group: its input and the reveal button.
-    expect(screen.getByLabelText("Value").getAttribute("data-slot")).toBe("input-group-control");
+    expect(secrets().getByLabelText("Value").getAttribute("data-slot")).toBe("input-group-control");
   });
 
   // Every control takes a 44px target on a coarse pointer.
@@ -344,8 +350,8 @@ describe("EnvironmentScreen", () => {
 
     renderScreen(queryClient);
 
-    expect(screen.getByLabelText("Name").classList).toContain("pointer-coarse:h-11");
-    expect(screen.getByLabelText("Value").closest("[data-slot='input-group']")!.classList).toContain("pointer-coarse:h-11");
+    expect(secrets().getByLabelText("Name").classList).toContain("pointer-coarse:h-11");
+    expect(secrets().getByLabelText("Value").closest("[data-slot='input-group']")!.classList).toContain("pointer-coarse:h-11");
     expect(screen.getByRole("button", { name: "Add secret" }).classList).toContain("pointer-coarse:h-11");
     expect(screen.getByRole("button", { name: "Delete TF_VAR_TEST" }).classList).toContain("pointer-coarse:size-11");
   });
@@ -379,5 +385,99 @@ describe("EnvironmentScreen", () => {
       "/v1/tenants/tenant_123/stacks/stack_1/credentials/credential_1",
       expect.objectContaining({ method: "DELETE" })
     ));
+  });
+
+  // #497: an entry's tab comes from its sensitive flag. Secrets list names
+  // only; Variables show each value.
+  it("splits the environment into Secrets and Variables by the sensitive flag", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), [
+      { ...credential, created_at: "2026-07-19T12:00:00Z" },
+      { ...credential, id: "credential_2", name: "AWS_REGION", sensitive: false, value: "eu-west-1", created_at: "2026-07-19T12:00:00Z" }
+    ]);
+    renderScreen(queryClient);
+    const user = userEvent.setup();
+
+    const switcher = screen.getByRole("group", { name: "Environment" });
+    const secretsOption = within(switcher).getByRole("button", { name: "Secrets 1" });
+    const variablesOption = within(switcher).getByRole("button", { name: "Variables 1" });
+    // It opens on Secrets.
+    expect(secretsOption.getAttribute("aria-pressed")).toBe("true");
+    expect(within(screen.getByRole("list")).getAllByRole("listitem").map((row) => row.textContent)).toEqual(["TF_VAR_TESTAdded 19 Jul 2026"]);
+    expect(screen.getByRole("button", { name: "Add secret" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Add variable" })).toBeNull();
+
+    await user.click(variablesOption);
+
+    expect(variablesOption.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("environment-secrets").hidden).toBe(true);
+    const rows = within(screen.getByRole("list")).getAllByRole("listitem");
+    expect(rows.map((row) => row.textContent)).toEqual(["AWS_REGIONeu-west-1Added 19 Jul 2026"]);
+    expect(within(rows[0]).getByText("eu-west-1").getAttribute("title")).toBe("eu-west-1");
+    expect(screen.getByRole("button", { name: "Add variable" })).toBeTruthy();
+    expect(variables().getByText(/^Values are shown here, so keep credentials in Secrets\./)).toBeTruthy();
+  });
+
+  // An entry whose flag is missing is kept on the side that never shows a value.
+  it("keeps an entry with no sensitive flag in Secrets", () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), [
+      { id: "credential_1", name: "TF_VAR_TEST", scope: "stack", created_at: "2026-07-19T12:00:00Z" }
+    ]);
+    renderScreen(queryClient);
+
+    expect(secrets().getByText("TF_VAR_TEST")).toBeTruthy();
+    expect(variables().getByText("No variables in this environment")).toBeTruthy();
+  });
+
+  it("adds a variable from the Variables tab as not sensitive, typed in plain text", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    const added = { ...credential, id: "credential_2", name: "AWS_REGION", sensitive: false, value: "eu-west-1" };
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) =>
+      init?.method === "POST" ? jsonResponse(added, 201) : jsonResponse([added])
+    );
+    renderScreen(queryClient);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: "Variables 0" }));
+    const value = variables().getByLabelText<HTMLInputElement>("Value");
+    // A plain box: no mask and no Show value button.
+    expect(value.type).toBe("text");
+    expect(variables().queryByRole("button", { name: "Show value" })).toBeNull();
+    expect(value.getAttribute("spellcheck")).toBe("false");
+    await user.type(variables().getByLabelText("Name"), "AWS_REGION");
+    await user.type(value, "eu-west-1");
+    await user.click(screen.getByRole("button", { name: "Add variable" }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining("/stacks/stack_1/credentials"),
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ name: "AWS_REGION", value: "eu-west-1", sensitive: false }) })
+    ));
+    expect(await variables().findByText("eu-west-1")).toBeTruthy();
+    expect(value.value).toBe("");
+  });
+
+  // Each tab keeps its own form: a secret half typed never shows up in the
+  // Variables tab's plain box, and is still there on coming back.
+  it("keeps a half-typed secret in Secrets when switching tabs", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    renderScreen(queryClient);
+    const user = userEvent.setup();
+
+    await user.type(secrets().getByLabelText("Name"), "GITHUB_TOKEN");
+    await user.type(secrets().getByLabelText("Value"), "ghp_secret");
+    await user.click(screen.getByRole("button", { name: "Variables 0" }));
+
+    expect(variables().getByLabelText<HTMLInputElement>("Name").value).toBe("");
+    expect(variables().getByLabelText<HTMLInputElement>("Value").value).toBe("");
+    // Hidden, the draft still holds off the re-auth redirect.
+    expect(document.querySelector("[data-unsaved='true']")).not.toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Secrets 0" }));
+    const value = secrets().getByLabelText<HTMLInputElement>("Value");
+    expect(value.value).toBe("ghp_secret");
+    expect(value.type).toBe("password");
   });
 });

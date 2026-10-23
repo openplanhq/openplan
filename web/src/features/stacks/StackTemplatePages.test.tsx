@@ -559,14 +559,21 @@ describe("TemplateEnvironmentTab", () => {
       { id: "stack_credential", name: "STACK_ONLY", scope: "stack", created_at: "2026-07-19T00:00:00Z" }
     ]);
     queryClient.setQueryData(queryKeys.stackTemplateCredentials("tenant_123", "st_1"), [
-      { id: "template_credential", name: "TEMPLATE_ONLY", scope: "stack_template", created_at: "2026-07-19T00:00:00Z" }
+      { id: "template_credential", name: "TEMPLATE_ONLY", scope: "stack_template", sensitive: true, created_at: "2026-07-19T00:00:00Z" },
+      { id: "template_variable", name: "TEMPLATE_REGION", scope: "stack_template", sensitive: false, value: "eu-west-1", created_at: "2026-07-19T00:00:00Z" }
     ]);
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/environment");
 
-    expect(screen.getByText("TEMPLATE_ONLY")).toBeTruthy();
+    const secrets = within(screen.getByTestId("environment-secrets"));
+    const variables = within(screen.getByTestId("environment-variables"));
+    expect(secrets.getByText("TEMPLATE_ONLY")).toBeTruthy();
     expect(screen.queryByText("STACK_ONLY")).toBeNull();
-    expect(screen.getByText("Overrides the stack environment for this template only.")).toBeTruthy();
+    expect(secrets.getByText("Write-only: a value can't be read back once added. Overrides the stack environment for this template only.")).toBeTruthy();
+    expect(variables.getByText("eu-west-1")).toBeTruthy();
+    expect(variables.getByText("Values are shown here, so keep credentials in Secrets. Overrides the stack environment for this template only.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Secrets 1" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Variables 1" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Delete TEMPLATE_ONLY" })).toBeTruthy();
   });
 
@@ -577,8 +584,9 @@ describe("TemplateEnvironmentTab", () => {
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/environment");
 
-    expect(screen.getByText("No overrides for this template")).toBeTruthy();
-    expect(screen.getByText("Its runs use the stack environment.")).toBeTruthy();
+    expect(within(screen.getByTestId("environment-secrets")).getByText("No secret overrides for this template")).toBeTruthy();
+    expect(screen.getByText("Its runs use the stack's secrets.")).toBeTruthy();
+    expect(within(screen.getByTestId("environment-variables")).getByText("No variable overrides for this template")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Add secret" })).toBeTruthy();
   });
 
@@ -600,7 +608,7 @@ describe("TemplateEnvironmentTab", () => {
 
     const error = await screen.findByTestId("template-environment-error");
     expect(error.textContent).toContain("Something went wrong while loading this template's environment.");
-    expect(screen.queryByText("No overrides for this template")).toBeNull();
+    expect(screen.queryByText("No secret overrides for this template")).toBeNull();
     expect(screen.queryByRole("button", { name: "Add secret" })).toBeNull();
 
     fireEvent.click(screen.getByTestId("template-environment-retry"));
