@@ -64,7 +64,7 @@ describe("EnvironmentScreen", () => {
 
     expect(screen.getByTestId("environment-screen")).toBeTruthy();
     expect(screen.getByText("TF_VAR_TEST")).toBeTruthy();
-    expect(secrets().getByText(/^Write-only: a value can't be read back once added\./)).toBeTruthy();
+    expect(secrets().getByText("Set as environment variables when Terraform runs. Write-only: a value can't be read back once added.")).toBeTruthy();
     expect(screen.queryByText("secret-value")).toBeNull();
   });
 
@@ -415,7 +415,7 @@ describe("EnvironmentScreen", () => {
     expect(rows.map((row) => row.textContent)).toEqual(["AWS_REGIONeu-west-1Added 19 Jul 2026"]);
     expect(within(rows[0]).getByText("eu-west-1").getAttribute("title")).toBe("eu-west-1");
     expect(screen.getByRole("button", { name: "Add variable" })).toBeTruthy();
-    expect(variables().getByText(/^Values are shown here, so keep credentials in Secrets\./)).toBeTruthy();
+    expect(variables().getByText("Set as environment variables when Terraform runs. Values are shown here, so keep credentials in Secrets.")).toBeTruthy();
   });
 
   // An entry whose flag is missing is kept on the side that never shows a value.
@@ -456,6 +456,32 @@ describe("EnvironmentScreen", () => {
     ));
     expect(await variables().findByText("eu-west-1")).toBeTruthy();
     expect(value.value).toBe("");
+  });
+
+  // The row is a form: Enter in a box adds, and Show value only toggles.
+  it("adds on Enter, and Show value never submits", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) =>
+      init?.method === "POST" ? jsonResponse(credential, 201) : jsonResponse([credential])
+    );
+    renderScreen(queryClient);
+    const user = userEvent.setup();
+    const posts = () => fetchSpy.mock.calls.filter(([, init]) => init?.method === "POST").length;
+
+    await user.type(secrets().getByLabelText("Name"), "TF_VAR_TEST");
+    const value = secrets().getByLabelText<HTMLInputElement>("Value");
+    await user.type(value, "secret-value");
+    const toggle = secrets().getByRole("button", { name: "Show value" });
+    await user.click(toggle);
+    toggle.focus();
+    await user.keyboard("{Enter}");
+    expect(posts()).toBe(0);
+    expect(value.value).toBe("secret-value");
+
+    await user.type(value, "{Enter}");
+    await waitFor(() => expect(posts()).toBe(1));
+    await waitFor(() => expect(value.value).toBe(""));
   });
 
   // Each tab keeps its own form: a secret half typed never shows up in the

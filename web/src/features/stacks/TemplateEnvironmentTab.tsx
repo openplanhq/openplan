@@ -53,12 +53,12 @@ export default function TemplateEnvironmentTab() {
     <div className="flex min-w-0 flex-col" data-testid="template-environment-tab">
       <EnvironmentTabs
         secrets={{
-          note: "Write-only: a value can't be read back once added. Overrides the stack environment for this template only.",
+          note: "Overrides the stack environment for this template only. Write-only: a value can't be read back once added.",
           emptyTitle: "No secret overrides for this template",
           emptyDescription: "Its runs use the stack's secrets."
         }}
         variables={{
-          note: "Values are shown here, so keep credentials in Secrets. Overrides the stack environment for this template only.",
+          note: "Overrides the stack environment for this template only. Values are shown here, so keep credentials in Secrets.",
           emptyTitle: "No variable overrides for this template",
           emptyDescription: "Its runs use the stack's variables."
         }}

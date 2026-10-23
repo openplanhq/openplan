@@ -77,6 +77,11 @@
      the line (an 8px gap and about five mono characters), so the slug is cut
      first and never vanishes. max-w-beside-slug. */
   --container-beside-slug: calc(100% - 3rem);
+  /* An environment tab's list and add form: Name and Value share the room,
+     and the last track fits a row's widest date ("Added 28 May 2026",
+     122px), its delete and the inset; the add button fills it.
+     grid-cols-environment. */
+  --grid-template-columns-environment: repeat(2, minmax(0, 1fr)) 11rem;
   /* A live log's dots, counting one to four, 300ms a step: a 4ch run of mono
      dots clipped to 1ch, 2ch, 3ch, then 4ch. animate-log-dots. */
   --animate-log-dots: log-dots 1.2s steps(4, jump-none) infinite;

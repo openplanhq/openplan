@@ -100,104 +100,123 @@ export default function CredentialsPanel({ kind, note, emptyTitle, emptyDescript
   return (
     <div className="flex min-w-0 flex-col gap-5" data-unsaved={hasUnsavedCredential ? "true" : undefined}>
       <p className="text-meta text-muted-foreground">{note}</p>
-      {loading ? (
-        <p className="flex items-center gap-2 text-meta text-muted-foreground">
-          <Loader2 aria-hidden="true" className="size-3.5 animate-spin" /> Loading environment…
-        </p>
-      ) : credentials.length === 0 ? (
-        <Empty className="gap-2 rounded-lg border border-dashed border-dashed-border px-5 py-7">
-          <EmptyHeader className="gap-2">
-            <p className="text-label">{emptyTitle}</p>
-            <EmptyDescription className="text-meta">{emptyDescription}</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : (
-        <ul className="divide-y divide-divider overflow-hidden rounded-lg border">
-          {credentials.map((credential) => (
-            <li key={credential.id} className="flex min-h-12 items-center gap-4 py-2 pr-2 pl-4">
-              <span className={cn("min-w-0 truncate font-mono text-meta", secret ? "flex-1" : "basis-1/3 shrink-0")} title={credential.name}>
-                {credential.name}
-              </span>
-              {!secret && (
-                // The value a variable was saved with, cut to the row; the
-                // whole of it is in the title.
-                <span className="min-w-0 flex-1 truncate font-mono text-meta text-muted-foreground" title={credential.value}>
-                  {credential.value}
+      {/* One grid holds the list and the form, and each row is a subgrid of
+          it, so a saved name and value sit right above the Name and Value
+          boxes; grid-cols-environment's last track fits a row's date and
+          delete, and the add button fills it. */}
+      <div className="grid grid-cols-environment gap-x-2 gap-y-5">
+        {loading ? (
+          <p className="col-span-3 flex items-center gap-2 text-meta text-muted-foreground">
+            <Loader2 aria-hidden="true" className="size-3.5 animate-spin" /> Loading environment…
+          </p>
+        ) : credentials.length === 0 ? (
+          <Empty className="col-span-3 gap-2 rounded-lg border border-dashed border-dashed-border px-5 py-7">
+            <EmptyHeader className="gap-2">
+              <p className="text-label">{emptyTitle}</p>
+              <EmptyDescription className="text-meta">{emptyDescription}</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : (
+          <ul className="col-span-3 grid grid-cols-subgrid divide-y divide-divider overflow-hidden rounded-lg border">
+            {credentials.map((credential) => (
+              // pl-3 inside the list's 1px border starts the name where a
+              // box's text starts: 1px border, 12px inset.
+              <li key={credential.id} className="col-span-3 grid min-h-12 grid-cols-subgrid items-center py-2 pr-2 pl-3">
+                <span className={cn("min-w-0 truncate font-mono text-meta", secret && "col-span-2")} title={credential.name}>
+                  {credential.name}
                 </span>
-              )}
-              <span className="shrink-0 text-meta text-muted-foreground sm:w-45">Added {formatTimestamp(credential.created_at)}</span>
-              <button
-                type="button"
-                className={cn(buttonClass("icon"), "pointer-coarse:size-11")}
-                disabled={busy}
-                onClick={() => void remove(credential.id)}
-                aria-label={`Delete ${credential.name}`}
-              >
-                <Trash2 aria-hidden="true" className="size-3.5" strokeWidth={2.25} />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {/* Name, Value and the add button on one row, wrapping on a phone. */}
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="flex min-w-0 flex-1 basis-50 flex-col gap-1.5">
-          <Label htmlFor={nameId} className={fieldLabelClass}>
-            Name
-          </Label>
-          <Input
-            id={nameId}
-            placeholder={secret ? "AWS_SECRET_ACCESS_KEY" : "AWS_REGION"}
-            autoComplete="off"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            aria-invalid={invalid.name ? true : undefined}
-            aria-describedby={invalid.name ? errorId : undefined}
-            className={inputClass}
-          />
-        </div>
-        <div className="flex min-w-0 flex-1 basis-50 flex-col gap-1.5">
-          <Label htmlFor={valueId} className={fieldLabelClass}>
-            Value
-          </Label>
-          {secret ? (
-            <SecretInput
-              id={valueId}
-              revealed={valueRevealed}
-              onRevealedChange={setValueRevealed}
-              // Not a login: keeps password managers from filling a saved
-              // password in, or offering to save the secret as one, in either
-              // state of the toggle.
-              autoComplete="new-password"
-              placeholder="Secret value"
-              value={value}
-              onChange={(event) => setValue(event.target.value)}
-              aria-invalid={invalid.value ? true : undefined}
-              aria-describedby={invalid.value ? errorId : undefined}
-            />
-          ) : (
-            // A variable is read back anyway, so its box is plain text; it
-            // still keeps the value out of autofill and spellcheck.
+                {!secret && (
+                  // The value a variable was saved with, cut to the row; the
+                  // whole of it is in the title. It is the content here, so
+                  // it takes the name's colour, inset like the Value box's text.
+                  <span className="min-w-0 truncate pl-3.25 font-mono text-meta" title={credential.value}>
+                    {credential.value}
+                  </span>
+                )}
+                <span className="flex min-w-0 items-center justify-end gap-2">
+                  <span className="truncate text-meta text-muted-foreground">Added {formatTimestamp(credential.created_at)}</span>
+                  <button
+                    type="button"
+                    className={cn(buttonClass("icon"), "shrink-0 pointer-coarse:size-11")}
+                    disabled={busy}
+                    onClick={() => void remove(credential.id)}
+                    aria-label={`Delete ${credential.name}`}
+                  >
+                    <Trash2 aria-hidden="true" className="size-3.5" strokeWidth={2.25} />
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {/* A form, so Enter in either box adds the entry. The Show value
+            toggle is type=button and never submits it. */}
+        <form
+          className="col-span-3 grid grid-cols-subgrid items-end"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit();
+          }}
+        >
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <Label htmlFor={nameId} className={fieldLabelClass}>
+              Name
+            </Label>
             <Input
-              id={valueId}
-              placeholder="us-east-1"
+              id={nameId}
+              placeholder={secret ? "AWS_SECRET_ACCESS_KEY" : "AWS_REGION"}
               autoComplete="off"
-              spellCheck={false}
-              autoCorrect="off"
-              autoCapitalize="off"
-              value={value}
-              onChange={(event) => setValue(event.target.value)}
-              aria-invalid={invalid.value ? true : undefined}
-              aria-describedby={invalid.value ? errorId : undefined}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              aria-invalid={invalid.name ? true : undefined}
+              aria-describedby={invalid.name ? errorId : undefined}
               className={inputClass}
             />
-          )}
-        </div>
-        {/* The button names what it adds, so the form says which tab it
-            belongs to right where someone submits it. */}
-        <button type="button" className={cn(buttonClass("outline", "lg"), "min-w-27 pointer-coarse:h-11")} disabled={busy} onClick={() => void submit()}>
-          {secret ? "Add secret" : "Add variable"}
-        </button>
+          </div>
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <Label htmlFor={valueId} className={fieldLabelClass}>
+              Value
+            </Label>
+            {secret ? (
+              <SecretInput
+                id={valueId}
+                revealed={valueRevealed}
+                onRevealedChange={setValueRevealed}
+                // Not a login: keeps password managers from filling a saved
+                // password in, or offering to save the secret as one, in either
+                // state of the toggle.
+                autoComplete="new-password"
+                placeholder="Secret value"
+                value={value}
+                onChange={(event) => setValue(event.target.value)}
+                aria-invalid={invalid.value ? true : undefined}
+                aria-describedby={invalid.value ? errorId : undefined}
+              />
+            ) : (
+              // A variable is read back anyway, so its box is plain text; it
+              // still keeps the value out of autofill and spellcheck.
+              <Input
+                id={valueId}
+                placeholder="us-east-1"
+                autoComplete="off"
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
+                value={value}
+                onChange={(event) => setValue(event.target.value)}
+                aria-invalid={invalid.value ? true : undefined}
+                aria-describedby={invalid.value ? errorId : undefined}
+                className={inputClass}
+              />
+            )}
+          </div>
+          {/* The button names what it adds, so the form says which tab it
+              belongs to right where someone submits it. Disabled while a
+              request is out, which also stops Enter from sending twice. */}
+          <button type="submit" className={cn(buttonClass("outline", "lg"), "w-full pointer-coarse:h-11")} disabled={busy}>
+            {secret ? "Add secret" : "Add variable"}
+          </button>
+        </form>
       </div>
       {error && <ErrorLine id={errorId}>{error}</ErrorLine>}
     </div>
