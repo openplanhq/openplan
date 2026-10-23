@@ -1,0 +1,604 @@
+# EVALUATION ONLY. Not part of the openplan chart and not a way to run
+# openplan's dependencies in production: every component is a single pod with
+# no backups, no replication and no tuning.
+#
+# The services openplan needs, on Docker Desktop's Kubernetes, so the chart can
+# be installed and tried in production mode: Postgres (with the Dex and
+# Temporal databases), Temporal, Dex at https://dex.localhost/dex, Valkey with
+# the api and executor users, and an S3 store (MinIO) with the artifacts
+# bucket. Apply it with setup.sh, which first creates the Secrets every pod
+# here reads; applied on its own, the pods wait for them.
+#
+# Passwords come from the evaluation-dependencies Secret that setup.sh fills
+# with fresh values, because production mode refuses the published ones.
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openplan
+  labels:
+    app.kubernetes.io/part-of: openplan-evaluation
+    app.kubernetes.io/component: namespace
+    # The executor runs gVisor as root with SYS_ADMIN, which every lower
+    # Pod Security level refuses.
+    pod-security.kubernetes.io/enforce: privileged
+
+# --- Postgres -----------------------------------------------------------------
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: openplan
+  labels:
+    app.kubernetes.io/part-of: openplan-evaluation
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: openplan
+  labels:
+    app.kubernetes.io/part-of: openplan-evaluation
+spec:
+  replicas: 1
+  # Two pods on one data directory would corrupt it.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+        app.kubernetes.io/part-of: openplan-evaluation
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16.10-alpine
+          env:
+            - name: POSTGRES_USER
+              value: openplan
+            - name: POSTGRES_DB
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: evaluation-dependencies, key: postgres-password}
+            # A subdirectory, so initdb never meets whatever the volume's root
+            # holds.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "openplan", "-d", "postgres"]
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: postgres-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: openplan
+  labels:
+    app.kubernetes.io/part-of: openplan-evaluation
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: openplan
+  labels:
+    app.kubernetes.io/part-of: openplan-evaluation
+data:
+  # deploy/release/init-databases.sh, with the role passwords read from the
+  # environment instead of written in: production mode needs fresh ones.
+  # Idempotent, so the Job can run again against a populated database.
+  init-databases.sh: |
+    set -eu
+    until pg_isready -q; do sleep 2; done
+    psql -v ON_ERROR_STOP=1 \
+      -v dex_password="$DEX_DB_PASSWORD" \
+      -v temporal_password="$TEMPORAL_DB_PASSWORD" <<'EOSQL'
+    SELECT 'CREATE DATABASE openplan OWNER openplan'
+    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'openplan')\gexec
+
+    SELECT format('CREATE ROLE dex LOGIN PASSWORD %L', :'dex_password')
+    WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'dex')\gexec
+    SELECT 'CREATE DATABASE dex OWNER dex'
+    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'dex')\gexec
+
+    SELECT format('CREATE ROLE temporal LOGIN PASSWORD %L', :'temporal_password')
+    WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'temporal')\gexec
+    SELECT 'CREATE DATABASE temporal OWNER temporal'
+    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'temporal')\gexec
+    SELECT 'CREATE DATABASE temporal_visibility OWNER temporal'
+    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'temporal_visibility')\gexec
+    EOSQL
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgres-init
+  namespace: openplan
+  labels:
+    app.kubernetes.io/part-of: openplan-evaluation
+spec:
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: openplan-evaluation
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: init-databases
+          image: postgres:16.10-alpine
+          command: ["sh", "/scripts/init-databases.sh"]
+          env:
+            - {name: PGHOST, value: postgres}
+            - {name: PGUSER, value: openplan}
+            - {name: PGDATABASE, value: postgres}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef: {name: evaluation-dependencies, key: postgres-password}
+            - name: DEX_DB_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: evaluation-dependencies, key: dex-db-password}
+            - name: TEMPORAL_DB_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: evaluation-dependencies, key: temporal-db-password}
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+      volumes:
+        - name: scripts
+          configMap:
+            name: postgres-init
+
+# --- Temporal -----------------------------------------------------------------
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal
+  namespace: openplan
+  labels:
+    app.kubernetes.io/part-of: openplan-evaluation
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: temporal
+  template:
+    metadata:
+      labels:
+        app: temporal
+        app.kubernetes.io/part-of: openplan-evaluation
+    spec:
+      # Kubernetes has no depends_on: wait for the init Job's last database
+      # here, rather than crash-loop into a long restart backoff.
+      initContainers:
+        - name: wait-for-database
+          image: postgres:16.10-alpine
+          command: ["sh", "-c", "until psql -c 'SELECT 1' >/dev/null 2>&1; do sleep 2; done"]
+          env:
+            - {name: PGHOST, value: postgres}
+            - {name: PGUSER, value: temporal}
+            - {name: PGDATABASE, value: temporal_visibility}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef: {name: evaluation-dependencies, key: temporal-db-password}
+      containers:
+        - name: temporal
+          image: temporalio/auto-setup:1.28.1
+          env:
+            - {name: DB, value: postgres12}
+            - {name: DB_PORT, value: "5432"}
+            - {name: POSTGRES_SEEDS, value: postgres}
+            - {name: POSTGRES_USER, value: temporal}
+            - name: POSTGRES_PWD
+              valueFrom:
+                secretKeyRef: {name: evaluation-dependencies, key: temporal-db-password}
+            # The temporal role has no CREATEDB; the init Job made both
+            # databases.
+            - {name: SKIP_DB_CREATE, value: "true"}
+          ports:
+            - containerPort: 7233
+          readinessProbe:
+            exec:
+              # auto-setup binds the frontend to the pod IP, not loopback.
+              command: ["sh", "-c", "temporal operator cluster health --address $(hostname -i):7233"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: temporal
+  namespace: openplan
+  labels:
+    app.kubernetes.io/part-of: openplan-evaluation
+spec:
+  selector:
+    app: temporal
+  ports:
+    - port: 7233
+
+# --- Dex ----------------------------------------------------------------------
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dex
+  namespace: openplan
+  labels:
+    app.kubernetes.io/part-of: openplan-evaluation
+data:
+  # deploy/dex/config.yaml served over HTTPS: the issuer and redirect move to
+  # the Ingress hosts, because production mode refuses plain HTTP. The static
+  # users and their userIDs are unchanged, so the admin's OIDC sub (and so
+  # OPENPLAN_ROOT_SUBJECT) is the compose value.
+  config.yaml: |
+    # The browser and the api both reach this through ingress-nginx: the
+    # browser at dex.localhost on loopback, the api through setup.sh's CoreDNS
+    # rewrite. The api compares the discovered issuer to OIDC_ISSUER_URL byte
+    # for byte, so there is one string for both.
+    issuer: https://dex.localhost/dex
+
+    storage:
+      type: postgres
+      config:
+        host: postgres
+        port: 5432
+        database: dex
+        user: $DEX_DB_USER
+        password: $DEX_DB_PASSWORD
+        ssl:
+          mode: disable
+
+    web:
+      http: 0.0.0.0:5556
+
+    telemetry:
+      http: 0.0.0.0:5558
+
+    oauth2:
+      responseTypes: ["code"]
+      skipApprovalScreen: true
+
+    staticClients:
+      - id: openplan-api
+        name: openplan
+        secretEnv: OIDC_CLIENT_SECRET
+        redirectURIs:
+          - https://openplan.localhost/v1/auth/callback
+
+    enablePasswordDB: true
+
+    # Passwords "admin-local-only" and "member-local-only". Each hash is
+    # bcrypt, base64-encoded so env expansion leaves its "$" alone.
+    staticPasswords:
+      - email: admin@openplan.local
+        hash: JDJhJDEwJGJwakNYR2JtVTB6NFdPL0JrZFhLUk9pc2NobTM3d2UuTVlmd3J3SjdzQldlMEc1dDdlWWZX
+        username: admin
+        name: openplan admin
+        userID: 7c4b2f0e-3d1a-4e8b-9f6c-2a5d8e1b0c47
+      - email: member@openplan.local
+        hash: JDJhJDEwJDU3THdIREx5ZHZiZnFweHpoY0J1Li5iQWFnRS5GNFN4LzlBNUxiRmZrR29oNHY2WWhYYUku
+        username: member
+        name: openplan member
+        userID: e4208148-b8ee-4dee-8afa-6d433724d5a9
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dex
+  namespace: openplan
+  labels:
+    app.kubernetes.io/part-of: openplan-evaluation
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dex
+  template:
+    metadata:
+      labels:
+        app: dex
+        app.kubernetes.io/part-of: openplan-evaluation
+    spec:
+      initContainers:
+        - name: wait-for-database
+          image: postgres:16.10-alpine
+          command: ["sh", "-c", "until psql -c 'SELECT 1' >/dev/null 2>&1; do sleep 2; done"]
+          env:
+            - {name: PGHOST, value: postgres}
+            - {name: PGUSER, value: dex}
+            - {name: PGDATABASE, value: dex}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef: {name: evaluation-dependencies, key: dex-db-password}
+      containers:
+        - name: dex
+          image: ghcr.io/dexidp/dex:v2.45.1
+          command: ["dex", "serve", "/etc/dex/config.yaml"]
+          env:
+            - {name: DEX_DB_USER, value: dex}
+            - name: DEX_DB_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: evaluation-dependencies, key: dex-db-password}
+            - name: OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: {name: evaluation-dependencies, key: oidc-client-secret}
+          ports:
+            - containerPort: 5556
+          readinessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: 5558
+            periodSeconds: 5
+          volumeMounts:
+            - name: config
+              mountPath: /etc/dex
+      volumes:
+        - name: config
+          configMap:
+            name: dex
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dex
+  namespace: openplan
+  labels:
+    app.kubernetes.io/part-of: openplan-evaluation
+spec:
+  selector:
+    app: dex
+  ports:
+    - port: 5556
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dex
+  namespace: openplan
+  labels:
+    app.kubernetes.io/part-of: openplan-evaluation
+spec:
+  ingressClassName: nginx
+  tls:
+    # The one evaluation certificate covers openplan.localhost and
+    # dex.localhost.
+    - hosts: [dex.localhost]
+      secretName: openplan-tls
+  rules:
+    - host: dex.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dex
+                port:
+                  number: 5556
+
+# --- Valkey -------------------------------------------------------------------
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: valkey
+  namespace: openplan
+  labels:
+    app.kubernetes.io/part-of: openplan-evaluation
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: valkey
+  template:
+    metadata:
+      labels:
+        app: valkey
+        app.kubernetes.io/part-of: openplan-evaluation
+    spec:
+      containers:
+        - name: valkey
+          image: valkey/valkey:8.1.10-alpine
+          # docker-compose.release.yaml's command line: memory only,
+          # noeviction, the default user off, the api allowed to read and
+          # append, the executor only to append. Kubernetes expands $(VAR)
+          # from the env below.
+          args:
+            - valkey-server
+            - --maxmemory
+            - 256mb
+            - --maxmemory-policy
+            - noeviction
+            - --save
+            - ""
+            - --appendonly
+            - "no"
+            - --user
+            - default
+            - "off"
+            - --user
+            - api
+            - "on"
+            - ">$(VALKEY_API_PASSWORD)"
+            - "~runlog:*"
+            - +ping
+            - +xread
+            - +xrange
+            - +xrevrange
+            - +xadd
+            - +expire
+            - --user
+            - executor
+            - "on"
+            - ">$(VALKEY_EXECUTOR_PASSWORD)"
+            - "~runlog:*"
+            - +ping
+            - +xadd
+            - +expire
+          env:
+            - name: VALKEY_API_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: evaluation-dependencies, key: valkey-api-password}
+            - name: VALKEY_EXECUTOR_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: evaluation-dependencies, key: valkey-executor-password}
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "valkey-cli --no-auth-warning --user api --pass \"$VALKEY_API_PASSWORD\" ping | grep -q PONG"]
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: valkey
+  namespace: openplan
+  labels:
+    app.kubernetes.io/part-of: openplan-evaluation
+spec:
+  selector:
+    app: valkey
+  ports:
+    - port: 6379
+
+# --- S3 (MinIO) ---------------------------------------------------------------
+# MinIO no longer publishes images to Docker Hub or Quay (minio/minio and
+# minio/mc are gone), so these are Chainguard's builds, pinned by digest: the
+# free tier tags only :latest.
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minio-data
+  namespace: openplan
+  labels:
+    app.kubernetes.io/part-of: openplan-evaluation
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+  namespace: openplan
+  labels:
+    app.kubernetes.io/part-of: openplan-evaluation
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+        app.kubernetes.io/part-of: openplan-evaluation
+    spec:
+      securityContext:
+        # The image runs as 65532; let it write the volume.
+        fsGroup: 65532
+      containers:
+        - name: minio
+          image: cgr.dev/chainguard/minio@sha256:d88920d6a50bd0b088223b688be3b76c63e6205dbe494437f67ba1240ea12880
+          args: ["server", "/data"]
+          env:
+            - {name: MINIO_ROOT_USER, value: openplan}
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: evaluation-dependencies, key: minio-root-password}
+          ports:
+            - containerPort: 9000
+          readinessProbe:
+            httpGet:
+              path: /minio/health/ready
+              port: 9000
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: minio-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+  namespace: openplan
+  labels:
+    app.kubernetes.io/part-of: openplan-evaluation
+spec:
+  selector:
+    app: minio
+  ports:
+    - port: 9000
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-bucket
+  namespace: openplan
+  labels:
+    app.kubernetes.io/part-of: openplan-evaluation
+spec:
+  # The image has no shell to loop in; until MinIO is ready, the Job's own
+  # retries are the loop.
+  backoffLimit: 10
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: openplan-evaluation
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: make-bucket
+          image: cgr.dev/chainguard/minio-client@sha256:72f9978d415ea8294d78051fb3aee2fd258d449237633f77f100b5367bb5225d
+          args: ["--config-dir", "/tmp/mc", "mb", "--ignore-existing", "evaluation/openplan-artifacts"]
+          env:
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: evaluation-dependencies, key: minio-root-password}
+            # mc's alias from the environment, so no `mc alias set` step.
+            - name: MC_HOST_evaluation
+              value: http://openplan:$(MINIO_ROOT_PASSWORD)@minio:9000
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
