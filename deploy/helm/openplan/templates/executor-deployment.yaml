@@ -14,6 +14,10 @@ spec:
     metadata:
       labels:
         {{- include "openplan.labels" $component | nindent 8 }}
+      annotations:
+        # The executor reads its environment only at start, so a change to the
+        # chart's session defaults rolls the pod.
+        checksum/config: {{ include (print $.Template.BasePath "/executor-configmap.yaml") . | sha256sum }}
     spec:
       # Each sandbox's network is routed through this pod's, which needs
       # forwarding on. Kubernetes treats net.ipv4.ip_forward as an unsafe
@@ -37,7 +41,11 @@ spec:
       containers:
         - name: executor
           image: {{ include "openplan.image" $component }}
+          # A later source wins a duplicate key, so the Secret overrides the
+          # chart's session defaults.
           envFrom:
+            - configMapRef:
+                name: {{ include "openplan.fullname" . }}-executor
             - secretRef:
                 name: {{ required "executor.existingSecret is required: the name of the Secret holding the executor's environment" .Values.executor.existingSecret }}
           # env wins over envFrom, so a stray key in the Secret can't move the

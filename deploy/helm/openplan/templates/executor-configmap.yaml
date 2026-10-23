@@ -1,0 +1,14 @@
+{{- $component := dict "context" $ "component" "executor" -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "openplan.fullname" . }}-executor
+  labels:
+    {{- include "openplan.labels" $component | nindent 4 }}
+data:
+  # One session of 1536 MiB fits the default 2Gi pod with 512Mi for the
+  # executor. The executor's own defaults (20 sessions of 2048 MiB) would need
+  # 40 GiB. More runs at once come from executor.replicas; a key of the same
+  # name in the executor's Secret overrides these.
+  EXECUTOR_MAX_SESSIONS: "1"
+  EXECUTOR_SANDBOX_MEMORY: "1536"
