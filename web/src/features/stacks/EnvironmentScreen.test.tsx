@@ -87,7 +87,7 @@ describe("EnvironmentScreen", () => {
     renderScreen(queryClient);
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "TF_VAR_TEST" } });
     fireEvent.change(screen.getByLabelText("Value"), { target: { value: "secret-value" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add variable" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add secret" }));
 
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
       expect.stringContaining("/stacks/stack_1/credentials"),
@@ -152,7 +152,7 @@ describe("EnvironmentScreen", () => {
     expect(value.type).toBe("password");
     await user.type(name, "TF_VAR_TEST");
     await user.type(value, "secret-value");
-    await user.click(screen.getByRole("button", { name: "Add variable" }));
+    await user.click(screen.getByRole("button", { name: "Add secret" }));
 
     await waitFor(() => expect(value.value).toBe(""));
     expect(name.value).toBe("");
@@ -206,7 +206,7 @@ describe("EnvironmentScreen", () => {
     await user.type(value, "secret-value");
     await user.click(screen.getByRole("button", { name: "Show value" }));
     expect(value.type).toBe("text");
-    await user.click(screen.getByRole("button", { name: "Add variable" }));
+    await user.click(screen.getByRole("button", { name: "Add secret" }));
 
     await waitFor(() => expect(value.value).toBe(""));
     expect(value.type).toBe("password");
@@ -226,7 +226,7 @@ describe("EnvironmentScreen", () => {
     await user.type(screen.getByLabelText("Name"), "TF_VAR_TEST");
     await user.type(value, "secret-value");
     await user.click(screen.getByRole("button", { name: "Show value" }));
-    await user.click(screen.getByRole("button", { name: "Add variable" }));
+    await user.click(screen.getByRole("button", { name: "Add secret" }));
 
     await screen.findByRole("alert");
     expect(value.type).toBe("text");
@@ -251,7 +251,7 @@ describe("EnvironmentScreen", () => {
 
     await user.type(screen.getByLabelText("Name"), "TF_VAR_TEST");
     await user.type(screen.getByLabelText("Value"), "secret-value");
-    await user.click(screen.getByRole("button", { name: "Add variable" }));
+    await user.click(screen.getByRole("button", { name: "Add secret" }));
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("A credential with this name already exists here.");
@@ -285,7 +285,7 @@ describe("EnvironmentScreen", () => {
 
     await user.type(name, "TF_VAR_TEST");
     await user.type(value, "secret-value");
-    await user.click(screen.getByRole("button", { name: "Add variable" }));
+    await user.click(screen.getByRole("button", { name: "Add secret" }));
     await user.clear(name);
     await user.type(name, "TF_VAR_NEXT");
     await user.clear(value);
@@ -320,7 +320,7 @@ describe("EnvironmentScreen", () => {
     const user = userEvent.setup();
 
     await user.type(screen.getByLabelText("Name"), "TF_VAR_TEST");
-    await user.click(screen.getByRole("button", { name: "Add variable" }));
+    await user.click(screen.getByRole("button", { name: "Add secret" }));
 
     expect((await screen.findByRole("alert")).textContent).toContain("Name and value are required");
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -346,7 +346,7 @@ describe("EnvironmentScreen", () => {
 
     expect(screen.getByLabelText("Name").classList).toContain("pointer-coarse:h-11");
     expect(screen.getByLabelText("Value").closest("[data-slot='input-group']")!.classList).toContain("pointer-coarse:h-11");
-    expect(screen.getByRole("button", { name: "Add variable" }).classList).toContain("pointer-coarse:h-11");
+    expect(screen.getByRole("button", { name: "Add secret" }).classList).toContain("pointer-coarse:h-11");
     expect(screen.getByRole("button", { name: "Delete TF_VAR_TEST" }).classList).toContain("pointer-coarse:size-11");
   });
 

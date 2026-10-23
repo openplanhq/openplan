@@ -122,7 +122,7 @@ export default function CredentialsPanel({ note, emptyTitle, emptyDescription, c
           ))}
         </ul>
       )}
-      {/* Name, Value and Add variable on one row, wrapping on a phone. */}
+      {/* Name, Value and the add button on one row, wrapping on a phone. */}
       <div className="flex flex-wrap items-end gap-2">
         <div className="flex min-w-0 flex-1 basis-50 flex-col gap-1.5">
           <Label htmlFor={nameId} className={fieldLabelClass}>
@@ -158,8 +158,11 @@ export default function CredentialsPanel({ note, emptyTitle, emptyDescription, c
             aria-describedby={invalid.value ? errorId : undefined}
           />
         </div>
+        {/* Every entry is a secret today. The label names the kind of entry it
+            adds, so once Secrets and Variables are separate tabs (#497) the
+            Variables tab says "Add variable" and this one keeps "Add secret". */}
         <button type="button" className={cn(buttonClass("outline", "lg"), "pointer-coarse:h-11")} disabled={busy} onClick={() => void submit()}>
-          Add variable
+          Add secret
         </button>
       </div>
       {error && <ErrorLine id={errorId}>{error}</ErrorLine>}

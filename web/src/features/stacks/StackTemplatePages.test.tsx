@@ -579,7 +579,7 @@ describe("TemplateEnvironmentTab", () => {
 
     expect(screen.getByText("No overrides for this template")).toBeTruthy();
     expect(screen.getByText("Its runs use the stack environment.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Add variable" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add secret" })).toBeTruthy();
   });
 
   // A list that failed is not an empty one: saying the runs use the stack
@@ -601,7 +601,7 @@ describe("TemplateEnvironmentTab", () => {
     const error = await screen.findByTestId("template-environment-error");
     expect(error.textContent).toContain("Something went wrong while loading this template's environment.");
     expect(screen.queryByText("No overrides for this template")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Add variable" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add secret" })).toBeNull();
 
     fireEvent.click(screen.getByTestId("template-environment-retry"));
 
