@@ -4,6 +4,7 @@ import { apiErrorMessage, fieldErrors } from "../../api/problems";
 import type { CredentialMetadata } from "../../api/types";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
+import SecretInput from "../../shared/SecretInput";
 import { fieldLabelClass, inputClass } from "../../shared/fieldClass";
 import { formatTimestamp } from "../../shared/formatTimestamp";
 import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty";
@@ -34,6 +35,9 @@ interface CredentialsPanelProps {
 export default function CredentialsPanel({ note, emptyTitle, emptyDescription, credentials, loading, busy, onCreate, onDelete }: CredentialsPanelProps) {
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
+  // Whether the Value box shows what is typed. It starts hidden, and goes
+  // back to hidden after each add, so every new secret starts hidden.
+  const [valueRevealed, setValueRevealed] = useState(false);
   const [error, setError] = useState("");
   // The fields the server refused. The row keeps its one line of error, so
   // a refused field is marked invalid and points at that line.
@@ -58,6 +62,7 @@ export default function CredentialsPanel({ note, emptyTitle, emptyDescription, c
       // still holds what was sent, so the next credential, half typed, stays.
       setName((current) => (current === sentName ? "" : current));
       setValue((current) => (current === sentValue ? "" : current));
+      setValueRevealed(false);
     } catch (nextError) {
       setInvalid(fieldErrors(nextError, "#/"));
       setError(apiErrorMessage(nextError, "Request failed"));
@@ -138,18 +143,19 @@ export default function CredentialsPanel({ note, emptyTitle, emptyDescription, c
           <Label htmlFor={valueId} className={fieldLabelClass}>
             Value
           </Label>
-          <Input
+          <SecretInput
             id={valueId}
-            type="password"
+            revealed={valueRevealed}
+            onRevealedChange={setValueRevealed}
             // Not a login: keeps password managers from filling a saved
-            // password in, or offering to save the secret as one.
+            // password in, or offering to save the secret as one, in either
+            // state of the toggle.
             autoComplete="new-password"
             placeholder="Secret value"
             value={value}
             onChange={(event) => setValue(event.target.value)}
             aria-invalid={invalid.value ? true : undefined}
             aria-describedby={invalid.value ? errorId : undefined}
-            className={inputClass}
           />
         </div>
         <button type="button" className={cn(buttonClass("outline", "lg"), "pointer-coarse:h-11")} disabled={busy} onClick={() => void submit()}>

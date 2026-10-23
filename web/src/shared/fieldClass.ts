@@ -11,6 +11,21 @@ const FOCUS = cn(
 /** For shadcn's Input. */
 export const inputClass = cn("h-9 px-3 font-mono text-meta placeholder:text-subtle-foreground pointer-coarse:h-11", FOCUS);
 
+/** For shadcn's InputGroup holding one InputGroupInput (inputGroupInputClass)
+    and a trailing button: the Input's 36px box and focus
+    ring, drawn on the group when its input has focus. The button keeps its
+    own ring, so the field's isn't drawn while the button is focused. */
+export const inputGroupClass = cn(
+  "h-9 pointer-coarse:h-11",
+  "has-[[data-slot=input-group-control]:focus-visible]:border-input has-[[data-slot=input-group-control]:focus-visible]:ring-0",
+  "has-[[data-slot=input-group-control]:focus-visible]:outline-solid has-[[data-slot=input-group-control]:focus-visible]:outline-2",
+  "has-[[data-slot=input-group-control]:focus-visible]:outline-offset-2 has-[[data-slot=input-group-control]:focus-visible]:outline-ring"
+);
+
+/** For the InputGroupInput in an inputGroupClass group: the Input's text and
+    inset; the group draws the box and the focus. */
+export const inputGroupInputClass = "h-full px-3 font-mono text-meta placeholder:text-subtle-foreground";
+
 /** For shadcn's Textarea, holding a JSON value: the Input's mono text and
     inset, two lines tall when empty, growing with its content to about
     seventeen, then scrolling, so a long value can't push Save off the page. */
