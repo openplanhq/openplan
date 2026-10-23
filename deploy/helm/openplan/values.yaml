@@ -20,6 +20,23 @@ api:
   # addition to the public roots, for an OIDC issuer behind an internal CA.
   trustedCASecret: ""
 
+executor:
+  # Required. The name of an existing Secret in the release namespace. Every
+  # key becomes an environment variable of the executor under the same name
+  # (TEMPORAL_ADDRESS, VALKEY_URL as the append-only executor user, S3_*, ...).
+  # Keep it apart from the api's: the executor gets no database or keys. The
+  # chart sets EXECUTOR_RUN_ROOT and EXECUTOR_SANDBOX_STATE itself.
+  existingSecret: ""
+  replicas: 1
+  # Set a memory limit of at least EXECUTOR_SANDBOX_MEMORY times
+  # EXECUTOR_MAX_SESSIONS, plus the executor's own headroom: every sandbox's
+  # memory is counted in this pod.
+  resources: {}
+  runRoot:
+    # Disk for the workspaces of the runs in flight on one executor. The
+    # kubelet evicts the pod, and every run on it, when they outgrow it.
+    sizeLimit: 8Gi
+
 ingress:
   # The IngressClass to use. Empty means the cluster's default class.
   className: ""
