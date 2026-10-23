@@ -8,3 +8,5 @@
 *~
 .idea/
 .vscode/
+# CI's placeholder values: an install brings its own, so they don't ship.
+ci/
