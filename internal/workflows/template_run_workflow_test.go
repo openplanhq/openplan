@@ -17,9 +17,11 @@ import (
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/converter"
+	"go.temporal.io/sdk/interceptor"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/testsuite"
 	"go.temporal.io/sdk/worker"
+	"go.temporal.io/sdk/workflow"
 )
 
 // TestTemplateWorkflowsUseSessionForWorkspaceActivities protects the executor
@@ -655,6 +657,77 @@ func TestTemplatePlanWorkflowGivesFetchSourceALongerTimeout(t *testing.T) {
 	if fetchSourceTimeout != 3*time.Minute {
 		t.Fatalf("FetchSource StartToCloseTimeout = %v, want 3m", fetchSourceTimeout)
 	}
+}
+
+// With one session per executor, every session busy is the normal case, not a
+// fault, so a plan waits for a free executor as long as an apply does instead
+// of failing a teammate's run after a minute.
+func TestTemplateWorkflowsWaitTenMinutesForAnExecutor(t *testing.T) {
+	for _, testCase := range []struct {
+		name     string
+		workflow any
+		input    domain.TemplateRunWorkflowInput
+	}{
+		{name: "plan", workflow: TemplatePlanWorkflow, input: templateRunWorkflowInput(domain.OperationPlan)},
+		{name: "apply", workflow: TemplateApplyWorkflow, input: templateRunWorkflowInput(domain.OperationApply)},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			env := newTemplateRunWorkflowTestEnvironment(t)
+			var creationTimeouts []time.Duration
+			env.SetWorkerOptions(worker.Options{
+				EnableSessionWorker: true,
+				Interceptors:        []interceptor.WorkerInterceptor{&sessionCreationRecorder{timeouts: &creationTimeouts}},
+			})
+			mockPrepareWorkspace(t, env)
+			mockFetchSource(t, env)
+			var commands []domain.TerraformCommandType
+			mockRunTerraform(t, env, &commands)
+			env.OnActivity(domain.RecordTemplateRunStatusActivityName, mock.Anything, mock.Anything).Return(nil)
+
+			env.ExecuteWorkflow(testCase.workflow, testCase.input)
+
+			assertWorkflowCompleted(t, env)
+			if want := []time.Duration{10 * time.Minute}; !reflect.DeepEqual(creationTimeouts, want) {
+				t.Fatalf("session creation timeouts = %v, want %v", creationTimeouts, want)
+			}
+		})
+	}
+}
+
+// sessionCreationRecorder records the timeout each session is given to find an
+// executor. The SDK passes it as the ScheduleToStartTimeout of its creation
+// activity, which activity.Info does not carry, so it is read from the
+// options the workflow schedules that activity with.
+type sessionCreationRecorder struct {
+	interceptor.WorkerInterceptorBase
+	timeouts *[]time.Duration
+}
+
+func (r *sessionCreationRecorder) InterceptWorkflow(_ workflow.Context, next interceptor.WorkflowInboundInterceptor) interceptor.WorkflowInboundInterceptor {
+	return &sessionCreationInbound{WorkflowInboundInterceptorBase: interceptor.WorkflowInboundInterceptorBase{Next: next}, timeouts: r.timeouts}
+}
+
+type sessionCreationInbound struct {
+	interceptor.WorkflowInboundInterceptorBase
+	timeouts *[]time.Duration
+}
+
+func (i *sessionCreationInbound) Init(outbound interceptor.WorkflowOutboundInterceptor) error {
+	return i.Next.Init(&sessionCreationOutbound{WorkflowOutboundInterceptorBase: interceptor.WorkflowOutboundInterceptorBase{Next: outbound}, timeouts: i.timeouts})
+}
+
+type sessionCreationOutbound struct {
+	interceptor.WorkflowOutboundInterceptorBase
+	timeouts *[]time.Duration
+}
+
+func (o *sessionCreationOutbound) ExecuteActivity(ctx workflow.Context, activityType string, args ...interface{}) workflow.Future {
+	if activityType == sessionCreationActivityName {
+		*o.timeouts = append(*o.timeouts, workflow.GetActivityOptions(ctx).ScheduleToStartTimeout)
+	}
+	return o.Next.ExecuteActivity(ctx, activityType, args...)
 }
 
 // TestTemplatePlanWorkflowBoundsTerraformCommandsByTheConfiguredTimeout pins the

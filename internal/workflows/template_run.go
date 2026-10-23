@@ -20,13 +20,12 @@ import (
 // and hands the executor session to the methods that work in it.
 
 const (
-	// planSessionCreationTimeout fails a plan that finds no executor free in a
-	// minute: nothing has been decided yet, and starting again is cheap.
-	planSessionCreationTimeout = time.Minute
-	// applySessionCreationTimeout is longer, because the run was just
-	// approved: failing it for an executor that was briefly full would send
-	// its approver back through a whole plan.
-	applySessionCreationTimeout = 10 * time.Minute
+	// sessionCreationTimeout is how long a plan or an apply waits for a free
+	// executor before it fails. An executor runs few sessions (one, in the Helm
+	// chart's defaults), so finding them all busy is the normal case, not a
+	// fault: the run waits its turn instead of failing a teammate's plan, or
+	// sending an approved apply back through a whole plan.
+	sessionCreationTimeout = 10 * time.Minute
 )
 
 // defaultRunRetryPolicy is the retry policy applied to activities in the
@@ -148,7 +147,7 @@ func (w *planWorkflow) lifecycle() (err error) {
 		return err
 	}
 	var planned domain.RunTerraformActivityOutput
-	if err := w.inSession(planSessionCreationTimeout, domain.RunPhasePlan, func(s *session) (err error) {
+	if err := w.inSession(sessionCreationTimeout, domain.RunPhasePlan, func(s *session) (err error) {
 		planned, err = w.plan(s)
 		return err
 	}); err != nil {
@@ -211,7 +210,7 @@ func (w *applyWorkflow) lifecycle() (err error) {
 	if !claim.Claimed {
 		return nil
 	}
-	if err := w.inSession(applySessionCreationTimeout, domain.RunPhaseApply, w.apply); err != nil {
+	if err := w.inSession(sessionCreationTimeout, domain.RunPhaseApply, w.apply); err != nil {
 		return err
 	}
 	return w.setStatus(domain.TemplateRunCompleted, "")

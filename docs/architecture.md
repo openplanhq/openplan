@@ -121,7 +121,7 @@ Every executor replica enables Temporal Session Workers. A `TemplateRun` creates
 one session for its filesystem-dependent work, so workspace preparation, source
 checkout, and Terraform activities stay on the same executor replica. The session
 also remains owned by that replica while an apply or destroy workflow waits for
-approval before continuing. The session has a 1-minute creation timeout and a
+approval before continuing. The session has a 10-minute creation timeout and a
 24-hour execution timeout; the execution timeout bounds the entire session,
 including any approval wait. Status activities can run independently. Run
 metadata and status are persisted in Postgres, while completed logs and
