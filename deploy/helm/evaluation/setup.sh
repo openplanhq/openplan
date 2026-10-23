@@ -46,10 +46,15 @@ fresh() { openssl rand -hex 32; }
 # Only the Ingress provider: openplan's chart and the Dex Ingress are standard
 # Ingresses. Without the IngressRoute provider the chart's CRDs aren't needed,
 # so none are installed and none outlive teardown (helm never deletes CRDs).
+# Plain HTTP redirects to HTTPS, as ingress-nginx did for a TLS host: over
+# HTTP the browser drops the Secure sign-in cookies and sign-in fails.
 echo "==> Traefik"
 helm upgrade --install traefik traefik --repo https://traefik.github.io/charts \
 	--version "$TRAEFIK_CHART_VERSION" -n traefik --create-namespace \
-	--skip-crds --set providers.kubernetesCRD.enabled=false --wait --timeout 300s >/dev/null
+	--skip-crds --set providers.kubernetesCRD.enabled=false \
+	--set ports.web.http.redirections.entryPoint.to=websecure \
+	--set ports.web.http.redirections.entryPoint.scheme=https \
+	--wait --timeout 300s >/dev/null
 kubectl -n traefik rollout status deployment/traefik --timeout=300s
 
 echo "==> namespace $NAMESPACE"
