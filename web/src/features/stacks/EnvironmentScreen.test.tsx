@@ -23,7 +23,7 @@ function testQueryClient(): QueryClient {
   return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
 }
 
-const credential = { id: "credential_1", name: "TF_VAR_TEST", scope: "stack" as const, created_at: "2026-07-19T00:00:00Z" };
+const credential = { id: "credential_1", name: "TF_VAR_TEST", scope: "stack" as const, sensitive: true, created_at: "2026-07-19T00:00:00Z" };
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(asListBody(body)), { status, headers: { "content-type": "application/json" } });
@@ -91,7 +91,7 @@ describe("EnvironmentScreen", () => {
 
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
       expect.stringContaining("/stacks/stack_1/credentials"),
-      expect.objectContaining({ method: "POST", body: JSON.stringify({ name: "TF_VAR_TEST", value: "secret-value" }) })
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ name: "TF_VAR_TEST", value: "secret-value", sensitive: true }) })
     ));
   });
 
