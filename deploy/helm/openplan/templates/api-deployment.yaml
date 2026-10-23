@@ -50,6 +50,10 @@ spec:
             httpGet:
               path: /healthz
               port: http
+          {{- with .Values.api.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- if .Values.api.trustedCASecret }}
           volumeMounts:
             - name: trusted-ca

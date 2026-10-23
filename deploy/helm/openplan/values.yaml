@@ -19,6 +19,17 @@ api:
   # Optional. The name of an existing Secret whose ca.crt the api trusts in
   # addition to the public roots, for an OIDC issuer behind an internal CA.
   trustedCASecret: ""
+  # requests equal limits, so the pod is Guaranteed and never uses more than
+  # the node reserved for it. Override requests and limits together: Helm
+  # merges maps, so setting only limits.memory keeps the 2Gi request and the
+  # pod drops to Burstable.
+  resources:
+    requests:
+      cpu: "2"
+      memory: 2Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
 
 executor:
   # Required. The name of an existing Secret in the release namespace. Every
@@ -28,10 +39,20 @@ executor:
   # chart sets EXECUTOR_RUN_ROOT and EXECUTOR_SANDBOX_STATE itself.
   existingSecret: ""
   replicas: 1
-  # Set a memory limit of at least EXECUTOR_SANDBOX_MEMORY times
-  # EXECUTOR_MAX_SESSIONS, plus the executor's own headroom: every sandbox's
-  # memory is counted in this pod.
-  resources: {}
+  # Every sandbox's memory is counted in this pod, so memory must be at least
+  # EXECUTOR_MAX_SESSIONS times EXECUTOR_SANDBOX_MEMORY plus 512Mi for the
+  # executor itself; the default fits the chart's one 1536 MiB session.
+  # requests equal limits, so the pod is Guaranteed and never uses more than
+  # the node reserved for it. Override requests and limits together: Helm
+  # merges maps, so setting only limits.memory keeps the 2Gi request and the
+  # pod drops to Burstable.
+  resources:
+    requests:
+      cpu: "2"
+      memory: 2Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
   runRoot:
     # Disk for the workspaces of the runs in flight on one executor. The
     # kubelet evicts the pod, and every run on it, when they outgrow it.
