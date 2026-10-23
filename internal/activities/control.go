@@ -183,11 +183,11 @@ func validateLogState(log domain.TemplateRunLog) error {
 // the run's key, so they cross Temporal as ciphertext only the executor
 // holding that run can open.
 func (activities *ControlActivities) SealRunCredentials(ctx context.Context, input domain.SealRunCredentialsActivityInput) (domain.SealRunCredentialsActivityOutput, error) {
-	environment, err := resolveCredentialEnvironment(ctx, activities.store, activities.store, input.TenantID, input.StackTemplateID)
+	credentials, err := resolveCredentialEnvironment(ctx, activities.store, activities.store, input.TenantID, input.StackTemplateID)
 	if err != nil {
 		return domain.SealRunCredentialsActivityOutput{}, fmt.Errorf("resolve terraform credentials: %w", err)
 	}
-	sealed, err := runseal.Seal(input.PublicKey, environment)
+	sealed, err := runseal.Seal(input.PublicKey, credentials)
 	if err != nil {
 		return domain.SealRunCredentialsActivityOutput{}, fmt.Errorf("seal terraform credentials: %w", err)
 	}

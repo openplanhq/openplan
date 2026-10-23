@@ -898,7 +898,7 @@ func TestRunCredentialsRoundTripThroughTheRunKey(t *testing.T) {
 	}
 	publicKey := workspace.PublicKey
 	store := &controlStoreStub{credentials: []domain.CredentialSet{
-		{StackID: "stack_123", Name: "AWS_SECRET_ACCESS_KEY", Ciphertext: "canary-7f3a"},
+		{StackID: "stack_123", Name: "AWS_SECRET_ACCESS_KEY", Ciphertext: "canary-7f3a", Sensitive: true},
 	}}
 	sealed, err := NewControlActivities(store, nil, nil).SealRunCredentials(context.Background(), domain.SealRunCredentialsActivityInput{
 		TenantID:        "tenant_123",

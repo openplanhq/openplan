@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -190,9 +191,9 @@ func (activities *TemplateRunActivities) FetchSource(ctx context.Context, input 
 // published to its stream as it grows. UploadLog uploads it afterwards,
 // whether or not the command succeeded.
 func (activities *TemplateRunActivities) RunTerraform(ctx context.Context, input domain.RunTerraformActivityInput) (domain.RunTerraformActivityOutput, error) {
-	var environment map[string]string
+	var credentials domain.RunCredentials
 	if len(input.SealedEnvironment) > 0 {
-		if err := activities.keys.Open(domain.RunKeyID(input.TenantID, input.RunID), input.SealedEnvironment, &environment); err != nil {
+		if err := activities.keys.Open(domain.RunKeyID(input.TenantID, input.RunID), input.SealedEnvironment, &credentials); err != nil {
 			return domain.RunTerraformActivityOutput{}, fmt.Errorf("open terraform credentials: %w", err)
 		}
 	}
@@ -221,7 +222,7 @@ func (activities *TemplateRunActivities) RunTerraform(ctx context.Context, input
 	if err != nil {
 		return domain.RunTerraformActivityOutput{}, fmt.Errorf("open terraform log: %w", err)
 	}
-	spool := newRedactingWriter(newCappedWriter(file, spoolLimit), credentialValues(environment))
+	spool := newRedactingWriter(newCappedWriter(file, spoolLimit), redactedValues(credentials))
 	// The flusher tails the spool file, not the writer, so the command's
 	// output never waits on Valkey, and what it publishes is already
 	// redacted and capped.
@@ -237,7 +238,7 @@ func (activities *TemplateRunActivities) RunTerraform(ctx context.Context, input
 		Activity: bodyRunTerraform,
 		Request: runTerraformRequest{
 			TerraformPath: path, WorkspaceName: input.WorkspaceName, Command: input.Command,
-			ConfigJSON: input.ConfigJSON, Environment: environment,
+			ConfigJSON: input.ConfigJSON, Environment: credentials.Environment,
 		},
 		Mounts: []sandbox.Mount{{Path: workspace}},
 	}, spool)
@@ -464,11 +465,13 @@ func (writer *redactingWriter) Write(body []byte) (int, error) {
 // Close releases the wrapped log destination.
 func (writer *redactingWriter) Close() error { return writer.writer.Close() }
 
-// credentialValues extracts non-empty values so Terraform logs can be scrubbed.
-func credentialValues(environment map[string]string) []string {
-	secrets := make([]string, 0, len(environment))
-	for _, value := range environment {
-		if value != "" {
+// redactedValues lists the values to scrub from Terraform logs, longest first
+// so a value that contains another is replaced whole: every non-empty value
+// except those whose name is marked plain.
+func redactedValues(credentials domain.RunCredentials) []string {
+	secrets := make([]string, 0, len(credentials.Environment))
+	for name, value := range credentials.Environment {
+		if value != "" && !slices.Contains(credentials.Plain, name) && !slices.Contains(secrets, value) {
 			secrets = append(secrets, value)
 		}
 	}
@@ -476,34 +479,38 @@ func credentialValues(environment map[string]string) []string {
 	return secrets
 }
 
-// resolveCredentialEnvironment decrypts inherited Stack credentials and applies StackTemplate overrides.
-func resolveCredentialEnvironment(ctx context.Context, reader CredentialReader, decryptor CredentialDecryptor, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID) (map[string]string, error) {
+// resolveCredentialEnvironment decrypts inherited Stack credentials and applies
+// StackTemplate overrides. The entry that wins a name decides whether that
+// name is plain, so an override changes sensitivity along with the value.
+func resolveCredentialEnvironment(ctx context.Context, reader CredentialReader, decryptor CredentialDecryptor, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID) (domain.RunCredentials, error) {
 	credentials, err := reader.ListCredentialsForStackTemplate(ctx, tenantID, stackTemplateID)
 	if err != nil {
-		return nil, err
+		return domain.RunCredentials{}, err
 	}
 	environment := make(map[string]string, len(credentials))
-	for _, credential := range credentials {
-		if credential.StackTemplateID != "" {
-			continue
+	sensitive := make(map[string]bool, len(credentials))
+	// Stack entries first, then template entries over them.
+	for _, fromTemplate := range []bool{false, true} {
+		for _, credential := range credentials {
+			if (credential.StackTemplateID != "") != fromTemplate {
+				continue
+			}
+			value, err := decryptor.Decrypt(credential.Ciphertext)
+			if err != nil {
+				return domain.RunCredentials{}, fmt.Errorf("decrypt %q: %w", credential.Name, err)
+			}
+			environment[credential.Name] = value
+			sensitive[credential.Name] = credential.Sensitive
 		}
-		value, err := decryptor.Decrypt(credential.Ciphertext)
-		if err != nil {
-			return nil, fmt.Errorf("decrypt %q: %w", credential.Name, err)
-		}
-		environment[credential.Name] = value
 	}
-	for _, credential := range credentials {
-		if credential.StackTemplateID == "" {
-			continue
+	var plain []string
+	for name, isSensitive := range sensitive {
+		if !isSensitive {
+			plain = append(plain, name)
 		}
-		value, err := decryptor.Decrypt(credential.Ciphertext)
-		if err != nil {
-			return nil, fmt.Errorf("decrypt %q: %w", credential.Name, err)
-		}
-		environment[credential.Name] = value
 	}
-	return environment, nil
+	slices.Sort(plain)
+	return domain.RunCredentials{Environment: environment, Plain: plain}, nil
 }
 
 func terraformPath(input domain.RunTerraformActivityInput) string {
