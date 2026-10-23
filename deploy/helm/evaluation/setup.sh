@@ -133,11 +133,8 @@ fi
 if secret_exists openplan-executor-env; then
 	echo "kept: openplan-executor-env"
 else
-	# Two sessions of the default 2 GiB each fit Docker Desktop's VM; values.yaml
-	# sizes the executor's memory limit to match.
 	cat "$work/s3.env" - >"$work/executor.env" <<-EOF
 		VALKEY_URL=redis://executor:$(secret_value evaluation-dependencies valkey-executor-password)@valkey:6379/0
-		EXECUTOR_MAX_SESSIONS=2
 	EOF
 	kube create secret generic openplan-executor-env --from-env-file="$work/executor.env"
 fi

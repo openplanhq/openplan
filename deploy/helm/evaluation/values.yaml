@@ -13,15 +13,6 @@ api:
 
 executor:
   existingSecret: openplan-executor-env
-  # setup.sh sets EXECUTOR_MAX_SESSIONS=2 at the default 2048 MiB a sandbox:
-  # 4 GiB of runs plus 1 GiB for the executor itself. Docker Desktop's VM has
-  # about 8 GiB.
-  resources:
-    requests:
-      cpu: 500m
-      memory: 512Mi
-    limits:
-      memory: 5Gi
 
 ingress:
   className: nginx
