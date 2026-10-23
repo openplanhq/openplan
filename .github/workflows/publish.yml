@@ -1,4 +1,4 @@
-# Publish the openplan images to GHCR.
+# Publish the openplan images, and on a release the Helm chart, to GHCR.
 #
 # Without this, `docker compose up` builds every image from source on a
 # stranger's machine, which takes minutes and is the first thing that makes
@@ -38,6 +38,11 @@
 # image and run it under emulation, or fail outright, which is the slow path
 # this workflow exists to remove. So the builds only ever write staging tags,
 # and the merge job publishes the real ones and then verifies them.
+#
+# The chart is published only for a release, after the merge, because its
+# default image tag is its appVersion: a chart pushed before its images exist
+# installs pods that cannot pull. A `main` build gets no chart; the repo's
+# `0.0.0-dev` placeholder is not a version anyone should install.
 name: publish
 
 on:
@@ -83,6 +88,8 @@ jobs:
     timeout-minutes: 5
     outputs:
       tags: ${{ steps.tags.outputs.tags }}
+      # Empty on a main build, which is how the chart job knows to skip.
+      version: ${{ steps.tags.outputs.version }}
     steps:
       - name: derive tags
         id: tags
@@ -129,6 +136,7 @@ jobs:
           fi
 
           echo "tags=$tags" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
   # Builds one architecture and pushes it under staging tags that record the
   # architecture: `0.1.0-amd64`, `0.1.0-arm64`. The real tags are only ever
@@ -316,3 +324,47 @@ jobs:
               echo "$image:$t is multi-arch"
             done < <(echo "$TAG_LIST" | tr ',' '\n')
           done
+
+  # Packages the chart with the release version as both its version and its
+  # appVersion, so `helm install --version X.Y.Z` pulls images tagged X.Y.Z.
+  # Chart.yaml keeps 0.0.0-dev in the repo; the version only exists here.
+  chart:
+    name: publish chart
+    needs: [plan, merge]
+    if: needs.plan.outputs.version != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # The same Helm release ci.yml lints with, so the chart that is pushed is
+      # packaged by the Helm that checked it.
+      - uses: azure/setup-helm@v4
+        with:
+          version: v4.1.1
+
+      - name: package
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          helm package deploy/helm/openplan \
+            --version "$VERSION" \
+            --app-version "$VERSION" \
+            --destination "$RUNNER_TEMP/chart"
+
+      # The token on stdin, never on the command line, where the process list
+      # and a debug log would show it.
+      - name: log in to ghcr
+        env:
+          ACTOR: ${{ github.actor }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$TOKEN" | helm registry login "$REGISTRY" --username "$ACTOR" --password-stdin
+
+      # helm push appends the chart name, so this lands at
+      # oci://ghcr.io/openplanhq/charts/openplan:X.Y.Z. GHCR creates the package
+      # private on the first push; the owner makes it public once.
+      - name: push
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: helm push "$RUNNER_TEMP/chart/openplan-$VERSION.tgz" "oci://$REGISTRY/$OWNER/charts"
