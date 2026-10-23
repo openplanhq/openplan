@@ -24,7 +24,10 @@ real TLS, real keys and an OIDC provider reachable over HTTPS.
   executor's security settings, so the chart doesn't work there. Use standard
   node pools.
 - **An ingress controller** with an IngressClass, and a TLS certificate for
-  the host you serve openplan on.
+  the host you serve openplan on. The chart creates a standard Ingress with
+  no controller-specific annotations, so any controller that serves one
+  works. Don't start on ingress-nginx: Kubernetes retired it in March 2026,
+  and it gets no more releases or security fixes.
 
 ### The services you bring
 
@@ -121,7 +124,7 @@ api:
 executor:
   existingSecret: openplan-executor-env
 ingress:
-  className: nginx
+  className: <your-ingress-class>   # kubectl get ingressclass; omit for the cluster default
   host: openplan.example.com
   tlsSecretName: openplan-tls
 ```
@@ -257,7 +260,7 @@ how it went.
 
 `deploy/helm/evaluation/` in the repository sets up everything above on
 Docker Desktop's Kubernetes, so you can try the chart without your own
-services: single-pod Postgres, Temporal, Dex, Valkey and MinIO, ingress-nginx,
+services: single-pod Postgres, Temporal, Dex, Valkey and MinIO, Traefik,
 a local CA, fresh keys and the two Secrets. It is for evaluation only: one
 replica of everything, no backups, no persistence you should trust.
 
