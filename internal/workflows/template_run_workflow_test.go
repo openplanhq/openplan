@@ -723,7 +723,7 @@ type sessionCreationOutbound struct {
 	timeouts *[]time.Duration
 }
 
-func (o *sessionCreationOutbound) ExecuteActivity(ctx workflow.Context, activityType string, args ...interface{}) workflow.Future {
+func (o *sessionCreationOutbound) ExecuteActivity(ctx workflow.Context, activityType string, args ...any) workflow.Future {
 	if activityType == sessionCreationActivityName {
 		*o.timeouts = append(*o.timeouts, workflow.GetActivityOptions(ctx).ScheduleToStartTimeout)
 	}
