@@ -144,9 +144,11 @@ type CredentialRepository interface {
 	ListCredentialsForStackTemplate(ctx context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID) ([]domain.CredentialSet, error)
 }
 
-// CredentialEncryptor protects credential values before persistence.
-type CredentialEncryptor interface {
+// CredentialCipher protects credential values before persistence, and opens
+// the ones that are not sensitive so they can be shown back.
+type CredentialCipher interface {
 	Encrypt(string) (string, error)
+	Decrypt(string) (string, error)
 }
 
 // TemplateRunRepository persists TemplateRun records and run decisions.
@@ -322,7 +324,7 @@ type Service struct {
 	StackOverview            StackOverviewRepository
 	StackTemplates           StackTemplateRepository
 	Credentials              CredentialRepository
-	CredentialEncryptor      CredentialEncryptor
+	CredentialCipher         CredentialCipher
 	TemplateRuns             TemplateRunRepository
 	TemplateRevisionMetadata TemplateRevisionMetadataRepository
 	TemplateRevisions        TemplateRevisionRepository
@@ -510,9 +512,13 @@ type CreateCredentialCommand struct {
 	StackTemplateID domain.StackTemplateID
 	Name            string
 	Value           string
+	// Sensitive is a pointer so a caller that says nothing gets the safe
+	// side: nil stores the value as sensitive (#497).
+	Sensitive *bool
 }
 
-// ListCredentialsCommand asks the app for non-sensitive credential metadata.
+// ListCredentialsCommand asks the app for a scope's credentials, with the
+// values of the ones that are not sensitive.
 type ListCredentialsCommand struct {
 	TenantID        domain.TenantID
 	Scope           domain.CredentialScope
@@ -535,7 +541,11 @@ type CredentialMetadata struct {
 	Scope     domain.CredentialScope `json:"scope"`
 	StackID   domain.StackID         `json:"stack_id,omitempty"`
 	Template  domain.StackTemplateID `json:"stack_template_id,omitempty"`
-	CreatedAt time.Time              `json:"created_at"`
+	Sensitive bool                   `json:"sensitive"`
+	// Value is set only when Sensitive is false. Create refuses an empty
+	// value, so omitempty drops the key for sensitive credentials alone.
+	Value     string    `json:"value,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // UpdateStackTemplateConfigCommand asks the app to edit desired config before a run.
@@ -1048,7 +1058,7 @@ func (service *Service) CreateCredential(ctx context.Context, command CreateCred
 	if err != nil {
 		return CredentialMetadata{}, err
 	}
-	if service.Credentials == nil || service.CredentialEncryptor == nil {
+	if service.Credentials == nil || service.CredentialCipher == nil {
 		return CredentialMetadata{}, ErrCredentialEncryptionUnavailable
 	}
 	if err := validateCreateCredentialCommand(command); err != nil {
@@ -1075,7 +1085,7 @@ func (service *Service) CreateCredential(ctx context.Context, command CreateCred
 	default:
 		return CredentialMetadata{}, fmt.Errorf("%w: credential scope is invalid", ErrInvalidCommand)
 	}
-	ciphertext, err := service.CredentialEncryptor.Encrypt(command.Value)
+	ciphertext, err := service.CredentialCipher.Encrypt(command.Value)
 	if err != nil {
 		return CredentialMetadata{}, fmt.Errorf("encrypt credential: %w", err)
 	}
@@ -1086,18 +1096,19 @@ func (service *Service) CreateCredential(ctx context.Context, command CreateCred
 		StackTemplateID: templateID,
 		Name:            strings.TrimSpace(command.Name),
 		Ciphertext:      ciphertext,
-		// No request can mark a value not sensitive yet, and the zero
-		// bool would mark every new value not sensitive.
-		Sensitive: true,
-		CreatedAt: service.Clock.Now(),
+		Sensitive:       command.Sensitive == nil || *command.Sensitive,
+		CreatedAt:       service.Clock.Now(),
 	}
 	if err := service.Credentials.CreateCredential(ctx, credential); err != nil {
 		return CredentialMetadata{}, err
 	}
-	return credentialMetadata(credential), nil
+	// The plaintext is in hand, so the answer never reopens the row it just
+	// stored: a failure there would leave a row behind a 500.
+	return credentialMetadata(credential, command.Value), nil
 }
 
-// ListCredentials returns only credential names and metadata.
+// ListCredentials returns a scope's credential metadata, with the value of
+// each one that is not sensitive.
 func (service *Service) ListCredentials(ctx context.Context, command ListCredentialsCommand) ([]CredentialMetadata, error) {
 	if _, err := authenticatedActor(ctx); err != nil {
 		return nil, err
@@ -1127,7 +1138,11 @@ func (service *Service) ListCredentials(ctx context.Context, command ListCredent
 	}
 	metadata := make([]CredentialMetadata, 0, len(credentials))
 	for _, credential := range credentials {
-		metadata = append(metadata, credentialMetadata(credential))
+		value, err := service.openCredentialValue(credential)
+		if err != nil {
+			return nil, err
+		}
+		metadata = append(metadata, credentialMetadata(credential, value))
 	}
 	return metadata, nil
 }
@@ -1182,9 +1197,32 @@ func (service *Service) DeleteCredential(ctx context.Context, command DeleteCred
 	return service.Credentials.DeleteCredential(ctx, command.TenantID, command.CredentialID)
 }
 
-// credentialMetadata strips ciphertext and exposes only safe credential metadata to API callers.
-func credentialMetadata(credential domain.CredentialSet) CredentialMetadata {
-	return CredentialMetadata{ID: credential.ID, Name: credential.Name, Scope: credentialScope(credential), StackID: credential.StackID, Template: credential.StackTemplateID, CreatedAt: credential.CreatedAt}
+// openCredentialValue decrypts the value of a credential that is not
+// sensitive, and returns "" for one that is: a sensitive value is never opened
+// for a read. A value that won't open means a wrong or missing key, an
+// operator fault, so the caller fails the whole read rather than hide the row.
+func (service *Service) openCredentialValue(credential domain.CredentialSet) (string, error) {
+	if credential.Sensitive {
+		return "", nil
+	}
+	if service.CredentialCipher == nil {
+		return "", ErrCredentialEncryptionUnavailable
+	}
+	value, err := service.CredentialCipher.Decrypt(credential.Ciphertext)
+	if err != nil {
+		return "", fmt.Errorf("decrypt credential %s: %w", credential.ID, err)
+	}
+	return value, nil
+}
+
+// credentialMetadata strips the ciphertext and carries the plaintext value
+// only for a credential that is not sensitive.
+func credentialMetadata(credential domain.CredentialSet, value string) CredentialMetadata {
+	metadata := CredentialMetadata{ID: credential.ID, Name: credential.Name, Scope: credentialScope(credential), StackID: credential.StackID, Template: credential.StackTemplateID, Sensitive: credential.Sensitive, CreatedAt: credential.CreatedAt}
+	if !credential.Sensitive {
+		metadata.Value = value
+	}
+	return metadata
 }
 
 // credentialScope derives the public scope from the populated owner column.

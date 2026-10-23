@@ -269,8 +269,9 @@ func TestListQueuePagesPastFifty(t *testing.T) {
 	assert.Equal(t, 101, reader.gotLimit, "one more than the page, to prove a next one")
 }
 
-// apiCredentialRepository lists one credential per scope, so the credential
-// lists can be read in tests that don't configure encryption.
+// apiCredentialRepository lists one sensitive credential per scope, so the
+// credential lists can be read in tests that don't configure encryption: only a
+// value that is not sensitive needs the cipher to open it.
 type apiCredentialRepository struct{}
 
 func (apiCredentialRepository) CreateCredential(context.Context, domain.CredentialSet) error {
@@ -278,7 +279,7 @@ func (apiCredentialRepository) CreateCredential(context.Context, domain.Credenti
 }
 
 func (apiCredentialRepository) ListCredentials(_ context.Context, _ domain.TenantID, scope domain.CredentialScope, ownerID string) ([]domain.CredentialSet, error) {
-	credential := domain.CredentialSet{ID: "cred_1", Name: "AWS_REGION"}
+	credential := domain.CredentialSet{ID: "cred_1", Name: "AWS_REGION", Sensitive: true}
 	if scope == domain.CredentialScopeStack {
 		credential.StackID = domain.StackID(ownerID)
 	} else {

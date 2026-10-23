@@ -137,7 +137,9 @@ tags:
   - name: Stacks
     description: Grouping installed templates into one environment or service.
   - name: Credentials
-    description: Write-only cloud credentials, injected only while Terraform runs.
+    description: |
+      Cloud credentials and other environment variables, injected only while
+      Terraform runs. Sensitive values, the default, are write-only.
   - name: Runs
     description: Starting, watching, approving and discarding Terraform operations.
   - name: Access
@@ -720,10 +722,12 @@ paths:
       tags: [Credentials]
       summary: Add a stack-scoped credential
       description: |
-        Credentials are write-only. The value is encrypted on the way in and is
-        never readable back through the API — it is injected into the process
-        environment only while Terraform runs. To change one, delete it and
-        create it again.
+        The value is encrypted on the way in and injected into the process
+        environment only while Terraform runs. A credential is sensitive unless
+        the request sets `sensitive` to `false`: a sensitive value is never
+        readable back through the API, and one that is not sensitive comes back
+        on this response and on every list. Sensitivity is set on create and
+        can't change. To change a value, delete it and create it again.
 
         `name` is the provider environment variable name, such as
         `AWS_SECRET_ACCESS_KEY`.
@@ -735,7 +739,7 @@ paths:
             schema: { $ref: "#/components/schemas/CreateCredentialRequest" }
       responses:
         "201":
-          description: Created. Only metadata comes back.
+          description: Created. The value comes back only when it is not sensitive.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Credential" }
@@ -757,7 +761,9 @@ paths:
     get:
       tags: [Credentials]
       summary: List stack-scoped credentials
-      description: Metadata only. Values are never returned.
+      description: |
+        Metadata for every credential, and the value of each one that is not
+        sensitive. Sensitive values are never returned.
       operationId: listStackCredentials
       responses:
         "200":
@@ -1110,9 +1116,10 @@ paths:
       tags: [Credentials]
       summary: Add a component-scoped credential
       description: |
-        Same write-only contract as a stack credential, scoped to one installed
-        component. Use this to override a stack-wide credential for a single
-        component.
+        Same contract as a stack credential, sensitivity included, scoped to
+        one installed component. Use this to override a stack-wide credential
+        for a single component; the override's own `sensitive` decides whether
+        its value is shown.
       operationId: createStackTemplateCredential
       requestBody:
         required: true
@@ -1121,7 +1128,7 @@ paths:
             schema: { $ref: "#/components/schemas/CreateCredentialRequest" }
       responses:
         "201":
-          description: Created. Only metadata comes back.
+          description: Created. The value comes back only when it is not sensitive.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Credential" }
@@ -1143,7 +1150,9 @@ paths:
     get:
       tags: [Credentials]
       summary: List component-scoped credentials
-      description: Metadata only. Values are never returned.
+      description: |
+        Metadata for every credential, and the value of each one that is not
+        sensitive. Sensitive values are never returned.
       operationId: listStackTemplateCredentials
       responses:
         "200":
@@ -2659,14 +2668,24 @@ components:
           type: string
           format: password
           description: |
-            The secret. Accepted only on create, encrypted at rest, and never
-            returned by any endpoint. To rotate one, delete it and create it
-            again.
+            The value. Accepted only on create and encrypted at rest. A
+            sensitive value is never returned by any endpoint. To rotate one,
+            delete it and create it again.
+        sensitive:
+          type: boolean
+          default: true
+          description: |
+            Whether the value is secret. Leave it out, or set it to `true`, and
+            the value is write-only. Set it to `false` for a value that is safe
+            to show, such as `AWS_REGION`, and it comes back on reads. It can't
+            be changed after create.
       required: [name, value]
 
     Credential:
       type: object
-      description: Credential metadata. The value is never part of any response.
+      description: |
+        Credential metadata, and the value when the credential is not
+        sensitive. A sensitive value is never part of any response.
       properties:
         id: { type: string }
         name: { type: string }
@@ -2677,8 +2696,14 @@ components:
         stack_template_id:
           type: string
           description: Present when `scope` is `stack_template`.
+        sensitive:
+          type: boolean
+          description: Whether the value is write-only.
+        value:
+          type: string
+          description: Present only when `sensitive` is `false`.
         created_at: { type: string, format: date-time }
-      required: [id, name, scope, created_at]
+      required: [id, name, scope, sensitive, created_at]
 
     CredentialScope:
       type: string
