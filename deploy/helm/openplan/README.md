@@ -136,7 +136,12 @@ runs the images of that version.
 helm install openplan oci://ghcr.io/openplanhq/charts/openplan \
   --version <version> --namespace openplan -f values.yaml
 kubectl -n openplan rollout status deployment/openplan-api
+kubectl -n openplan rollout status deployment/openplan-executor
 ```
+
+`helm install` succeeds before any pod is up. Wait for the executor too: if
+it can't be scheduled or refuses to start, the UI still works, but every
+plan fails after a minute and every apply after ten, for want of an executor.
 
 **6. Sign in** at `https://<host>` as the user whose `sub` you set in
 `OPENPLAN_ROOT_SUBJECT`.
@@ -167,6 +172,14 @@ memory limit to at least `EXECUTOR_SANDBOX_MEMORY` × `EXECUTOR_MAX_SESSIONS`,
 plus about 1 GiB for the executor itself. The defaults, 2048 MiB × 20
 sessions, need 40 GiB of runs, so a limit around 41 GiB. To fit a smaller
 node, lower `EXECUTOR_MAX_SESSIONS` in the executor's Secret, then the limit.
+
+A limit set without a request is also the request, so the scheduler needs a
+node with that much allocatable memory. With the defaults' 41 GiB limit on a
+smaller node, the executor stays `Pending` ("Insufficient memory"). With no
+`executor.resources` at all, the pod schedules anywhere, but its runs can
+together claim more memory than the node has, and as a `BestEffort` pod the
+executor is the first the kubelet evicts under memory pressure, failing every
+run on it.
 
 The run root holds the checked-out template and providers of every run in
 flight. When it passes `executor.runRoot.sizeLimit`, the kubelet evicts the
@@ -235,8 +248,13 @@ From a checkout, with Docker Desktop's Kubernetes on and selected:
 
 ```sh
 ./deploy/helm/evaluation/setup.sh
-helm install openplan deploy/helm/openplan -n openplan -f deploy/helm/evaluation/values.yaml
+helm install openplan deploy/helm/openplan -n openplan -f deploy/helm/evaluation/values.yaml \
+  --set image.tag=main
 ```
+
+A chart from a checkout carries a placeholder version (`0.0.0-dev`) with no
+images behind it, so set `image.tag`: `main` for the latest build, or the
+release you checked out without its `v`, such as `1.0.0`.
 
 Then open `https://openplan.localhost` and sign in as
 `admin@openplan.local` / `admin-local-only`. `setup.sh` prints how to trust
