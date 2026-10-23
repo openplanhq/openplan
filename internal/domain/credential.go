@@ -22,5 +22,6 @@ type CredentialSet struct {
 	StackTemplateID StackTemplateID // Optional template owner for template-specific overrides.
 	Name            string          // Provider environment variable name.
 	Ciphertext      string          // Encrypted value; plaintext must never be persisted here.
+	Sensitive       bool            // A sensitive value is never shown back and is redacted from run logs.
 	CreatedAt       time.Time       // Creation timestamp used for metadata display and auditing.
 }

@@ -1086,7 +1086,10 @@ func (service *Service) CreateCredential(ctx context.Context, command CreateCred
 		StackTemplateID: templateID,
 		Name:            strings.TrimSpace(command.Name),
 		Ciphertext:      ciphertext,
-		CreatedAt:       service.Clock.Now(),
+		// No request can mark a value not sensitive yet, and the zero
+		// bool would mark every new value not sensitive.
+		Sensitive: true,
+		CreatedAt: service.Clock.Now(),
 	}
 	if err := service.Credentials.CreateCredential(ctx, credential); err != nil {
 		return CredentialMetadata{}, err
