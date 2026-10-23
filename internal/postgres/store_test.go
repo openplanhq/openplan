@@ -1100,6 +1100,118 @@ func TestStackWithoutDefaultCredentialsIsStoredAndReadAsNone(t *testing.T) {
 	}
 }
 
+// Both reads that the list and the run path use must carry the flag back as
+// written, for each scope, so a value marked not sensitive is never read as
+// sensitive or the other way round (#497).
+func TestCredentialSensitivityRoundTrips(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := NewStore(pool)
+	tenantID := domain.TenantID("tenant_123")
+	stackTemplate := seedCredentialOwners(t, ctx, store, tenantID)
+
+	written := []domain.CredentialSet{
+		{ID: "cred_token", TenantID: tenantID, StackID: stackTemplate.StackID, Name: "CLOUD_TOKEN", Ciphertext: "sealed-token", Sensitive: true, CreatedAt: time.Now().UTC()},
+		{ID: "cred_region", TenantID: tenantID, StackID: stackTemplate.StackID, Name: "CLOUD_REGION", Ciphertext: "sealed-region", Sensitive: false, CreatedAt: time.Now().UTC()},
+		{ID: "cred_zone", TenantID: tenantID, StackTemplateID: stackTemplate.ID, Name: "CLOUD_ZONE", Ciphertext: "sealed-zone", Sensitive: false, CreatedAt: time.Now().UTC()},
+	}
+	for _, credential := range written {
+		if err := store.CreateCredential(ctx, credential); err != nil {
+			t.Fatalf("CreateCredential(%s) returned error: %v", credential.ID, err)
+		}
+	}
+
+	stackCredentials, err := store.ListCredentials(ctx, tenantID, domain.CredentialScopeStack, string(stackTemplate.StackID))
+	if err != nil {
+		t.Fatalf("ListCredentials(stack) returned error: %v", err)
+	}
+	templateCredentials, err := store.ListCredentials(ctx, tenantID, domain.CredentialScopeStackTemplate, string(stackTemplate.ID))
+	if err != nil {
+		t.Fatalf("ListCredentials(stack template) returned error: %v", err)
+	}
+	runtimeCredentials, err := store.ListCredentialsForStackTemplate(ctx, tenantID, stackTemplate.ID)
+	if err != nil {
+		t.Fatalf("ListCredentialsForStackTemplate returned error: %v", err)
+	}
+
+	assertSensitivity(t, "stack list", stackCredentials, map[domain.CredentialSetID]bool{"cred_token": true, "cred_region": false})
+	assertSensitivity(t, "stack template list", templateCredentials, map[domain.CredentialSetID]bool{"cred_zone": false})
+	assertSensitivity(t, "runtime list", runtimeCredentials, map[domain.CredentialSetID]bool{"cred_token": true, "cred_region": false, "cred_zone": false})
+}
+
+// A row written without the column, as every row before 0039 was, is
+// sensitive: the safe reading of a missing value.
+func TestCredentialWithoutSensitivityIsSensitive(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := NewStore(pool)
+	tenantID := domain.TenantID("tenant_123")
+	stackTemplate := seedCredentialOwners(t, ctx, store, tenantID)
+
+	if _, err := pool.Exec(ctx, `
+		insert into scoped_credentials (id, tenant_id, stack_id, name, ciphertext, created_at)
+		values ('cred_legacy', $1, $2, 'CLOUD_TOKEN', 'sealed-token', now())
+	`, tenantID, stackTemplate.StackID); err != nil {
+		t.Fatalf("insert credential without sensitivity: %v", err)
+	}
+
+	credentials, err := store.ListCredentials(ctx, tenantID, domain.CredentialScopeStack, string(stackTemplate.StackID))
+	if err != nil {
+		t.Fatalf("ListCredentials returned error: %v", err)
+	}
+	assertSensitivity(t, "stack list", credentials, map[domain.CredentialSetID]bool{"cred_legacy": true})
+}
+
+// seedCredentialOwners stores a stack and one stack template in it, the two
+// owners a credential can have.
+func seedCredentialOwners(t *testing.T, ctx context.Context, store *Store, tenantID domain.TenantID) domain.StackTemplate {
+	t.Helper()
+
+	stack := domain.Stack{
+		ID:        domain.StackID("stack_credentials"),
+		TenantID:  tenantID,
+		Name:      "Credentials",
+		Slug:      "credentials",
+		CreatedBy: domain.UserID("user_123"),
+		CreatedAt: time.Now().UTC(),
+	}
+	if err := store.CreateStack(ctx, stack); err != nil {
+		t.Fatalf("CreateStack returned error: %v", err)
+	}
+	stackTemplate := domain.StackTemplate{
+		ID:                        domain.StackTemplateID("stack_template_credentials"),
+		TenantID:                  tenantID,
+		StackID:                   stack.ID,
+		SourceTemplateID:          domain.SourceTemplateID("source_template_vpc"),
+		DesiredTemplateRevisionID: domain.TemplateRevisionID("template_123"),
+		WorkspaceName:             "credentials_workspace",
+		InstalledConfigJSON:       json.RawMessage(`{}`),
+		CreatedBy:                 domain.UserID("installer_123"),
+		Lifecycle:                 domain.StackTemplateActive,
+	}
+	seedSourceTemplate(t, ctx, store, tenantID, stackTemplate.SourceTemplateID)
+	if err := store.CreateStackTemplate(ctx, stackTemplate); err != nil {
+		t.Fatalf("CreateStackTemplate returned error: %v", err)
+	}
+	return stackTemplate
+}
+
+func assertSensitivity(t *testing.T, read string, credentials []domain.CredentialSet, want map[domain.CredentialSetID]bool) {
+	t.Helper()
+
+	got := make(map[domain.CredentialSetID]bool, len(credentials))
+	for _, credential := range credentials {
+		got[credential.ID] = credential.Sensitive
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("%s sensitivity = %v, want %v", read, got, want)
+	}
+}
+
 func TestCreateStackReturnsDuplicateSlugConflict(t *testing.T) {
 	t.Parallel()
 

@@ -68,9 +68,9 @@ func createTemplateRegistration(ctx context.Context, exec pgxExecutor, registrat
 // CreateCredential stores one already-encrypted credential under exactly one scope owner.
 func (store *Store) CreateCredential(ctx context.Context, credential domain.CredentialSet) error {
 	_, err := store.pool.Exec(ctx, `
-		insert into scoped_credentials (id, tenant_id, stack_id, stack_template_id, name, ciphertext, created_at)
-		values ($1, $2, nullif($3, ''), nullif($4, ''), $5, $6, $7)
-	`, credential.ID, credential.TenantID, credential.StackID, credential.StackTemplateID, credential.Name, credential.Ciphertext, credential.CreatedAt)
+		insert into scoped_credentials (id, tenant_id, stack_id, stack_template_id, name, ciphertext, sensitive, created_at)
+		values ($1, $2, nullif($3, ''), nullif($4, ''), $5, $6, $7, $8)
+	`, credential.ID, credential.TenantID, credential.StackID, credential.StackTemplateID, credential.Name, credential.Ciphertext, credential.Sensitive, credential.CreatedAt)
 	if duplicateConstraint(err, "scoped_credentials_stack_name_idx") || duplicateConstraint(err, "scoped_credentials_template_name_idx") {
 		return app.ErrDuplicateCredentialName
 	}
@@ -90,7 +90,7 @@ func (store *Store) ListCredentials(ctx context.Context, tenantID domain.TenantI
 		return nil, app.ErrInvalidCommand
 	}
 	rows, err := store.pool.Query(ctx, fmt.Sprintf(`
-		select id, tenant_id, stack_id, stack_template_id, name, ciphertext, created_at
+		select id, tenant_id, stack_id, stack_template_id, name, ciphertext, sensitive, created_at
 		from scoped_credentials
 		where tenant_id = $1 and %s = $2
 		order by name
@@ -117,7 +117,7 @@ func (store *Store) DeleteCredential(ctx context.Context, tenantID domain.Tenant
 // ListCredentialsForStackTemplate returns stack credentials plus template credentials for runtime inheritance.
 func (store *Store) ListCredentialsForStackTemplate(ctx context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID) ([]domain.CredentialSet, error) {
 	rows, err := store.pool.Query(ctx, `
-		select c.id, c.tenant_id, c.stack_id, c.stack_template_id, c.name, c.ciphertext, c.created_at
+		select c.id, c.tenant_id, c.stack_id, c.stack_template_id, c.name, c.ciphertext, c.sensitive, c.created_at
 		from scoped_credentials c
 		join stack_templates st on st.id = $2
 		where c.tenant_id = $1 and (c.stack_id = st.stack_id or c.stack_template_id = st.id)
@@ -143,7 +143,7 @@ func scanCredentials(rows credentialRows) ([]domain.CredentialSet, error) {
 		var credential domain.CredentialSet
 		var stackID sql.NullString
 		var stackTemplateID sql.NullString
-		if err := rows.Scan(&credential.ID, &credential.TenantID, &stackID, &stackTemplateID, &credential.Name, &credential.Ciphertext, &credential.CreatedAt); err != nil {
+		if err := rows.Scan(&credential.ID, &credential.TenantID, &stackID, &stackTemplateID, &credential.Name, &credential.Ciphertext, &credential.Sensitive, &credential.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan credential: %w", err)
 		}
 		if stackID.Valid {
