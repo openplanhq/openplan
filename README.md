@@ -70,16 +70,18 @@ Requires Docker. No Go or Node toolchain.
 Download three files and run one command:
 
 ```bash
-curl -LO https://github.com/openplanhq/openplan/releases/download/v0.2.0/docker-compose.release.yaml
-curl -LO https://github.com/openplanhq/openplan/releases/download/v0.2.0/dex.yaml
-curl -LO https://github.com/openplanhq/openplan/releases/download/v0.2.0/init-databases.sh
+url=https://github.com/openplanhq/openplan/releases/latest/download
+curl -LO $url/docker-compose.release.yaml
+curl -LO $url/dex.yaml
+curl -LO $url/init-databases.sh
 docker compose -f docker-compose.release.yaml up -d
 ```
 
 Keep the three files in the same directory. It takes a minute or two.
 
 Every release carries its own copy of these three files, pinned to that release.
-Swap `v0.2.0` in the URLs for the version you want.
+`latest` gets the newest one; for another, use
+`releases/download/<version>` in place of `releases/latest/download`.
 
 **Then open http://localhost:5173** and sign in as
 `admin@openplan.local` / `admin-local-only`.
