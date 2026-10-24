@@ -1,0 +1,20 @@
+# EVALUATION ONLY. Values for installing the chart against setup.sh's
+# dependencies on Docker Desktop:
+#
+#   helm install openplan deploy/helm/openplan -n openplan -f deploy/helm/evaluation/values.yaml
+#
+# Every name here is something setup.sh creates. Nothing in this file is a
+# chart default or adds a key to the chart.
+
+api:
+  existingSecret: openplan-api-env
+  # Dex is served with the evaluation CA's certificate.
+  trustedCASecret: openplan-trusted-ca
+
+executor:
+  existingSecret: openplan-executor-env
+
+ingress:
+  className: traefik
+  host: openplan.localhost
+  tlsSecretName: openplan-tls
