@@ -1,0 +1,32 @@
+# Every key here is contract: it is kept across releases. Settings that are not
+# here are fixed by the chart or come from the components' Secrets.
+
+image:
+  # Where the openplan-api, openplan-executor and openplan-web images are
+  # pulled from. Point it at a mirror in an egress-restricted network.
+  registry: ghcr.io/openplanhq
+  # Empty means the chart's appVersion, so a chart release runs the images it
+  # was released with.
+  tag: ""
+
+api:
+  # Required. The name of an existing Secret in the release namespace. Every
+  # key becomes an environment variable of the api under the same name
+  # (DATABASE_URL, VALKEY_URL, OIDC_CLIENT_SECRET, ...). The chart sets
+  # HTTP_ADDRESS, OPENPLAN_ENVIRONMENT and OPENPLAN_PUBLIC_URL itself, and those
+  # win over the same keys in the Secret.
+  existingSecret: ""
+  # Optional. The name of an existing Secret whose ca.crt the api trusts in
+  # addition to the public roots, for an OIDC issuer behind an internal CA.
+  trustedCASecret: ""
+
+ingress:
+  # The IngressClass to use. Empty means the cluster's default class.
+  className: ""
+  # Required. The host openplan is served on. The api's public URL is
+  # https://<host>, so it must match the redirect URL registered with the
+  # OIDC provider.
+  host: ""
+  # Required. An existing kubernetes.io/tls Secret for the host. Production
+  # mode refuses plain HTTP, so there is no Ingress without TLS.
+  tlsSecretName: ""

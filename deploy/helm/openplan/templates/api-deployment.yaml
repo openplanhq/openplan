@@ -1,0 +1,67 @@
+{{- $component := dict "context" $ "component" "api" -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openplan.fullname" . }}-api
+  labels:
+    {{- include "openplan.labels" $component | nindent 4 }}
+spec:
+  # One api until #318 makes several safe; Recreate keeps an upgrade from
+  # running the old and the new one side by side.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "openplan.selectorLabels" $component | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "openplan.labels" $component | nindent 8 }}
+    spec:
+      containers:
+        - name: api
+          image: {{ include "openplan.image" $component }}
+          ports:
+            - name: http
+              containerPort: 8081
+          envFrom:
+            - secretRef:
+                name: {{ required "api.existingSecret is required: the name of the Secret holding the api's environment" .Values.api.existingSecret }}
+          # env wins over envFrom, so a stray key in the Secret can't move these.
+          env:
+            - name: HTTP_ADDRESS
+              value: ":8081"
+            - name: OPENPLAN_ENVIRONMENT
+              value: production
+            - name: OPENPLAN_PUBLIC_URL
+              value: {{ printf "https://%s" (required "ingress.host is required: the host openplan is served on" .Values.ingress.host) | quote }}
+            {{- if .Values.api.trustedCASecret }}
+            # Go reads the system bundle and then every file in SSL_CERT_DIR,
+            # so the internal CA is added to the public roots, not swapped in.
+            - name: SSL_CERT_DIR
+              value: /etc/openplan/trusted-ca
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          {{- if .Values.api.trustedCASecret }}
+          volumeMounts:
+            - name: trusted-ca
+              mountPath: /etc/openplan/trusted-ca
+              readOnly: true
+          {{- end }}
+      {{- if .Values.api.trustedCASecret }}
+      volumes:
+        - name: trusted-ca
+          secret:
+            secretName: {{ .Values.api.trustedCASecret }}
+            items:
+              - key: ca.crt
+                path: ca.crt
+      {{- end }}
