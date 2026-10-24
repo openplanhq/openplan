@@ -1,0 +1,51 @@
+# Dex for openplan on ECS. Rendered by Terraform and written to disk by the
+# dex container's command, since ECS has no bind mounts from the operator's
+# machine. $VARS are expanded by Dex from its environment (secrets from SSM);
+# $${...} below is Terraform's escape for a literal $.
+
+# The browser and the api both use this exact string, through the ALB. The
+# api compares it to the discovery document's issuer byte for byte.
+issuer: https://${domain}/dex
+
+storage:
+  type: postgres
+  config:
+    host: ${db_host}
+    port: 5432
+    database: dex
+    user: dex
+    password: $DEX_DB_PASSWORD
+    ssl:
+      mode: require
+
+web:
+  http: 0.0.0.0:5556
+
+# The ALB's health check.
+telemetry:
+  http: 0.0.0.0:5558
+
+oauth2:
+  responseTypes: ["code"]
+  skipApprovalScreen: true
+
+staticClients:
+  - id: openplan-api
+    name: openplan
+    secretEnv: OIDC_CLIENT_SECRET
+    redirectURIs:
+      - https://${domain}/v1/auth/callback
+
+enablePasswordDB: true
+
+# The one user openplan's root grant is seeded for. The userID (with the
+# connector ID, "local") is what Dex's sub is derived from, and so what
+# OPENPLAN_ROOT_SUBJECT in tasks.tf encodes: change one, change both. The
+# hash is base64 of bcrypt, because a raw bcrypt hash contains "$", which
+# Dex's env expansion would eat.
+staticPasswords:
+  - email: ${admin_email}
+    hash: ${admin_hash}
+    username: admin
+    name: openplan admin
+    userID: 7c4b2f0e-3d1a-4e8b-9f6c-2a5d8e1b0c47
