@@ -1073,13 +1073,14 @@ func (service *Service) CreateCredential(ctx context.Context, command CreateCred
 			return CredentialMetadata{}, err
 		}
 	case domain.CredentialScopeStackTemplate:
+		// The row has exactly one owner: the owning stack is consulted for
+		// authorization only and never stored with the credential.
 		templateID = command.StackTemplateID
 		stackTemplate, err := service.StackTemplates.GetStackTemplate(ctx, command.TenantID, templateID)
 		if err != nil {
 			return CredentialMetadata{}, err
 		}
-		stackID = stackTemplate.StackID
-		if err := authorizeStack(ctx, service.Authorization, stackID, authorization.RelationCanManageAccess); err != nil {
+		if err := authorizeStack(ctx, service.Authorization, stackTemplate.StackID, authorization.RelationCanManageAccess); err != nil {
 			return CredentialMetadata{}, err
 		}
 	default:
