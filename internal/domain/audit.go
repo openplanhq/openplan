@@ -48,6 +48,7 @@ const (
 	AuditOperationChangeStackTemplateRevision AuditOperation = "change_stack_template_revision"
 	AuditOperationApproveRun                  AuditOperation = "approve_run"
 	AuditOperationDiscardRun                  AuditOperation = "discard_run"
+	AuditOperationEndRun                      AuditOperation = "end_run"
 )
 
 // AuditReason is the stable reason a failure event records. Forbidden and not
