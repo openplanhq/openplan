@@ -1162,6 +1162,10 @@ func (recordingAPIDispatcher) StartTemplateApply(context.Context, domain.Templat
 	return nil
 }
 
+func (recordingAPIDispatcher) DescribeTemplateRunWorkflows(context.Context, domain.TenantID, domain.TemplateRunID) ([]domain.TemplateRunWorkflow, error) {
+	return nil, nil
+}
+
 // TestShutdownContextCancelsOnSIGTERM pins the signal wiring main depends on.
 // Without it the API process dies with the control-plane worker still
 // registered: in-flight control activities are abandoned and Temporal waits out
