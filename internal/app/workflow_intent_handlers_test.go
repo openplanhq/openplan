@@ -35,6 +35,11 @@ func (d *recordingWorkflowIntentDispatcher) StartTemplateApply(_ context.Context
 	return d.startApplyErr
 }
 
+// DescribeTemplateRunWorkflows is never asked by an intent handler.
+func (d *recordingWorkflowIntentDispatcher) DescribeTemplateRunWorkflows(context.Context, domain.TenantID, domain.TemplateRunID) ([]domain.TemplateRunWorkflow, error) {
+	return nil, nil
+}
+
 func TestStartTemplateApplyHandlerDeliversCompleteInput(t *testing.T) {
 	dispatcher := &recordingWorkflowIntentDispatcher{}
 	handler := NewStartTemplateApplyHandler(dispatcher)

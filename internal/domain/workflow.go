@@ -427,3 +427,29 @@ type TemplateRegistrationStepActivityInput struct {
 	TenantID       TenantID
 	Step           TemplateRegistrationStep
 }
+
+// TemplateRunWorkflowState is what Temporal holds for one of a run's
+// workflows: nothing, a workflow still running, or one that has closed.
+type TemplateRunWorkflowState string
+
+const (
+	// TemplateRunWorkflowAbsent is a workflow Temporal has no record of: it
+	// was never started, or Temporal's own store lost it.
+	TemplateRunWorkflowAbsent  TemplateRunWorkflowState = "absent"
+	TemplateRunWorkflowRunning TemplateRunWorkflowState = "running"
+	TemplateRunWorkflowClosed  TemplateRunWorkflowState = "closed"
+)
+
+// TemplateRunWorkflow is Temporal's answer about one of the two workflows
+// that can carry a run. It is read, never stored: an operator ending a run
+// whose workflow is gone needs to know that it is gone, and what Temporal
+// last knew of it.
+type TemplateRunWorkflow struct {
+	Phase      RunPhase
+	WorkflowID string
+	State      TemplateRunWorkflowState
+	// CloseStatus is how a closed workflow ended, in Temporal's words
+	// (completed, failed, terminated, timed_out, canceled). Empty unless State
+	// is closed.
+	CloseStatus string
+}

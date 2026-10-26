@@ -215,6 +215,10 @@ type WorkflowDispatcher interface {
 	// StartTemplateApply starts the workflow that applies an approved run's
 	// saved plan.
 	StartTemplateApply(ctx context.Context, input domain.TemplateRunWorkflowInput) error
+	// DescribeTemplateRunWorkflows reports what Temporal holds for the run's
+	// plan and apply workflows. A workflow Temporal does not have is absent,
+	// not an error; an error means Temporal could not be asked.
+	DescribeTemplateRunWorkflows(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) ([]domain.TemplateRunWorkflow, error)
 }
 
 // AuditRepository appends security audit events. It exposes no update or

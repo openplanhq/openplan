@@ -2,16 +2,23 @@ package temporal
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/vishu42/openplan/internal/domain"
 	enumspb "go.temporal.io/api/enums/v1"
+	"go.temporal.io/api/serviceerror"
+	"go.temporal.io/api/workflowservice/v1"
 	"go.temporal.io/sdk/client"
 )
 
 type workflowClient interface {
 	ExecuteWorkflow(context.Context, client.StartWorkflowOptions, any, ...any) (client.WorkflowRun, error)
+	// DescribeWorkflowExecution with an empty run ID describes the latest run
+	// of the workflow ID.
+	DescribeWorkflowExecution(ctx context.Context, workflowID, runID string) (*workflowservice.DescribeWorkflowExecutionResponse, error)
 }
 
 type Dispatcher struct {
@@ -108,6 +115,60 @@ func (dispatcher *Dispatcher) StartTemplateApply(ctx context.Context, input doma
 	}
 
 	return nil
+}
+
+// DescribeTemplateRunWorkflows reports what Temporal holds for both workflows
+// that can carry a run, its plan and its apply, in that order. A workflow
+// Temporal has never heard of, or has lost, reads as absent rather than as an
+// error: that absence is the fact an operator ending a stuck run acts on. Any
+// other failure to ask is returned, so a caller never mistakes an unreachable
+// Temporal for a gone workflow.
+func (dispatcher *Dispatcher) DescribeTemplateRunWorkflows(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) ([]domain.TemplateRunWorkflow, error) {
+	workflows := []domain.TemplateRunWorkflow{
+		{Phase: domain.RunPhasePlan, WorkflowID: templateRunWorkflowID(tenantID, runID)},
+		{Phase: domain.RunPhaseApply, WorkflowID: templateApplyWorkflowID(tenantID, runID)},
+	}
+	for i := range workflows {
+		described, err := dispatcher.client.DescribeWorkflowExecution(ctx, workflows[i].WorkflowID, "")
+		var notFound *serviceerror.NotFound
+		switch {
+		case errors.As(err, &notFound):
+			workflows[i].State = domain.TemplateRunWorkflowAbsent
+			continue
+		case err != nil:
+			return nil, fmt.Errorf("describe workflow %s: %w", workflows[i].WorkflowID, err)
+		}
+		status := described.GetWorkflowExecutionInfo().GetStatus()
+		if status == enumspb.WORKFLOW_EXECUTION_STATUS_RUNNING {
+			workflows[i].State = domain.TemplateRunWorkflowRunning
+			continue
+		}
+		workflows[i].State = domain.TemplateRunWorkflowClosed
+		workflows[i].CloseStatus = workflowCloseStatus(status)
+	}
+	return workflows, nil
+}
+
+// workflowCloseStatus names how a closed workflow ended, in the words
+// Temporal's own UI uses. Spelled out rather than derived from the enum's
+// String, which is CamelCase ("TimedOut") and would lose the word break.
+func workflowCloseStatus(status enumspb.WorkflowExecutionStatus) string {
+	switch status {
+	case enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED:
+		return "completed"
+	case enumspb.WORKFLOW_EXECUTION_STATUS_FAILED:
+		return "failed"
+	case enumspb.WORKFLOW_EXECUTION_STATUS_CANCELED:
+		return "canceled"
+	case enumspb.WORKFLOW_EXECUTION_STATUS_TERMINATED:
+		return "terminated"
+	case enumspb.WORKFLOW_EXECUTION_STATUS_CONTINUED_AS_NEW:
+		return "continued_as_new"
+	case enumspb.WORKFLOW_EXECUTION_STATUS_TIMED_OUT:
+		return "timed_out"
+	default:
+		return strings.ToLower(status.String())
+	}
 }
 
 func templateRunWorkflowID(tenantID domain.TenantID, runID domain.TemplateRunID) string {

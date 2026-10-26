@@ -3240,6 +3240,16 @@ type recordingWorkflowDispatcher struct {
 	startTemplateRunCalls int
 	syncInput             domain.TemplateSyncWorkflowInput
 	approvalRunID         domain.TemplateRunID
+	// workflows is what DescribeTemplateRunWorkflows answers; describedRunID
+	// records which run was asked about.
+	workflows      []domain.TemplateRunWorkflow
+	describeErr    error
+	describedRunID domain.TemplateRunID
+}
+
+func (dispatcher *recordingWorkflowDispatcher) DescribeTemplateRunWorkflows(_ context.Context, _ domain.TenantID, runID domain.TemplateRunID) ([]domain.TemplateRunWorkflow, error) {
+	dispatcher.describedRunID = runID
+	return dispatcher.workflows, dispatcher.describeErr
 }
 
 func (dispatcher *recordingWorkflowDispatcher) StartTemplateRun(_ context.Context, input domain.TemplateRunWorkflowInput) error {

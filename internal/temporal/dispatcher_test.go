@@ -11,6 +11,9 @@ import (
 	"github.com/vishu42/openplan/internal/app"
 	"github.com/vishu42/openplan/internal/domain"
 	enumspb "go.temporal.io/api/enums/v1"
+	"go.temporal.io/api/serviceerror"
+	workflowpb "go.temporal.io/api/workflow/v1"
+	"go.temporal.io/api/workflowservice/v1"
 	"go.temporal.io/sdk/client"
 )
 
@@ -230,11 +233,120 @@ func TestTemplateSyncWorkflowID(t *testing.T) {
 	}
 }
 
+// A run's two workflow ids are both asked about, in plan then apply order,
+// and each answer is read on its own: a plan that closed and an apply Temporal
+// never had is the shape of a restore that lost the apply.
+func TestDescribeTemplateRunWorkflowsReadsEachWorkflow(t *testing.T) {
+	t.Parallel()
+
+	workflowClient := &recordingWorkflowClient{described: map[string]describeAnswer{
+		"template-run/tenant_123/run_123":       {status: enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED},
+		"template-run/tenant_123/run_123/apply": {err: serviceerror.NewNotFound("no such workflow")},
+	}}
+	dispatcher := newDispatcher(workflowClient)
+
+	got, err := dispatcher.DescribeTemplateRunWorkflows(context.Background(), "tenant_123", "run_123")
+	if err != nil {
+		t.Fatalf("DescribeTemplateRunWorkflows returned error: %v", err)
+	}
+	want := []domain.TemplateRunWorkflow{
+		{Phase: domain.RunPhasePlan, WorkflowID: "template-run/tenant_123/run_123", State: domain.TemplateRunWorkflowClosed, CloseStatus: "completed"},
+		{Phase: domain.RunPhaseApply, WorkflowID: "template-run/tenant_123/run_123/apply", State: domain.TemplateRunWorkflowAbsent},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("workflows = %#v, want %#v", got, want)
+	}
+	if workflowClient.describedRunIDs["template-run/tenant_123/run_123"] != "" {
+		t.Fatalf("run id = %q, want empty so the latest run is described", workflowClient.describedRunIDs["template-run/tenant_123/run_123"])
+	}
+}
+
+func TestDescribeTemplateRunWorkflowsReportsARunningWorkflow(t *testing.T) {
+	t.Parallel()
+
+	workflowClient := &recordingWorkflowClient{described: map[string]describeAnswer{
+		"template-run/tenant_123/run_123":       {err: serviceerror.NewNotFound("gone")},
+		"template-run/tenant_123/run_123/apply": {status: enumspb.WORKFLOW_EXECUTION_STATUS_RUNNING},
+	}}
+
+	got, err := newDispatcher(workflowClient).DescribeTemplateRunWorkflows(context.Background(), "tenant_123", "run_123")
+	if err != nil {
+		t.Fatalf("DescribeTemplateRunWorkflows returned error: %v", err)
+	}
+	if got[1].State != domain.TemplateRunWorkflowRunning || got[1].CloseStatus != "" {
+		t.Fatalf("apply workflow = %#v, want running with no close status", got[1])
+	}
+}
+
+// Timed out is the enum name with its prefix gone and lowercased, so the
+// word Temporal's own UI shows is the word the run's summary will carry.
+func TestDescribeTemplateRunWorkflowsNamesTheCloseStatus(t *testing.T) {
+	t.Parallel()
+
+	workflowClient := &recordingWorkflowClient{described: map[string]describeAnswer{
+		"template-run/tenant_123/run_123":       {status: enumspb.WORKFLOW_EXECUTION_STATUS_TIMED_OUT},
+		"template-run/tenant_123/run_123/apply": {status: enumspb.WORKFLOW_EXECUTION_STATUS_TERMINATED},
+	}}
+
+	got, err := newDispatcher(workflowClient).DescribeTemplateRunWorkflows(context.Background(), "tenant_123", "run_123")
+	if err != nil {
+		t.Fatalf("DescribeTemplateRunWorkflows returned error: %v", err)
+	}
+	if got[0].CloseStatus != "timed_out" || got[1].CloseStatus != "terminated" {
+		t.Fatalf("close statuses = %q, %q; want timed_out, terminated", got[0].CloseStatus, got[1].CloseStatus)
+	}
+}
+
+// Only not-found reads as absent. Anything else is Temporal failing to
+// answer, and an operator must not end a run on the strength of that.
+func TestDescribeTemplateRunWorkflowsSurfacesOtherErrors(t *testing.T) {
+	t.Parallel()
+
+	clientErr := errors.New("temporal unavailable")
+	workflowClient := &recordingWorkflowClient{described: map[string]describeAnswer{
+		"template-run/tenant_123/run_123": {err: clientErr},
+	}}
+
+	got, err := newDispatcher(workflowClient).DescribeTemplateRunWorkflows(context.Background(), "tenant_123", "run_123")
+	if !errors.Is(err, clientErr) {
+		t.Fatalf("error = %v, want wrapped client error", err)
+	}
+	if got != nil {
+		t.Fatalf("workflows = %#v, want none on error", got)
+	}
+}
+
+type describeAnswer struct {
+	status enumspb.WorkflowExecutionStatus
+	err    error
+}
+
 type recordingWorkflowClient struct {
 	executeOptions  client.StartWorkflowOptions
 	executeWorkflow any
 	executeArgs     []any
 	executeErr      error
+	// described answers DescribeWorkflowExecution by workflow id; an id with
+	// no answer is not found. describedRunIDs records the run id asked with.
+	described       map[string]describeAnswer
+	describedRunIDs map[string]string
+}
+
+func (workflowClient *recordingWorkflowClient) DescribeWorkflowExecution(_ context.Context, workflowID, runID string) (*workflowservice.DescribeWorkflowExecutionResponse, error) {
+	if workflowClient.describedRunIDs == nil {
+		workflowClient.describedRunIDs = map[string]string{}
+	}
+	workflowClient.describedRunIDs[workflowID] = runID
+	answer, ok := workflowClient.described[workflowID]
+	if !ok {
+		return nil, serviceerror.NewNotFound("workflow not found")
+	}
+	if answer.err != nil {
+		return nil, answer.err
+	}
+	return &workflowservice.DescribeWorkflowExecutionResponse{
+		WorkflowExecutionInfo: &workflowpb.WorkflowExecutionInfo{Status: answer.status},
+	}, nil
 }
 
 func (workflowClient *recordingWorkflowClient) ExecuteWorkflow(
