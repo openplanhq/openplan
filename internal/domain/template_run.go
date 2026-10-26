@@ -406,3 +406,20 @@ type TemplateRunDiscard struct {
 	Reason      string
 	RequestedAt time.Time
 }
+
+// TemplateRunEnd records an operator ending a queued or running run by hand,
+// because no workflow is left to end it: Temporal lost the workflow, or has
+// it closed without this database ever hearing. An ended run fails. Summary
+// is why, for the people reading the run; Reason is what the operator said,
+// if anything.
+type TemplateRunEnd struct {
+	RunID    TemplateRunID
+	TenantID TenantID
+	EndedBy  UserID
+	Reason   string
+	EndedAt  time.Time
+	Summary  string
+	// WorkflowID is the workflow that should have carried the run, for a run
+	// no workflow ever claimed: its failed execution is recorded under it.
+	WorkflowID string
+}

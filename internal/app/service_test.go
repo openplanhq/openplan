@@ -2936,6 +2936,7 @@ type recordingTemplateRunRepository struct {
 	createErr              error
 	approvalErr            error
 	discarded              domain.TemplateRunDiscard
+	ended                  domain.TemplateRunEnd
 	// createdRunNumber is what CreateTemplateRun reports it assigned.
 	createdRunNumber int
 }
@@ -3038,6 +3039,15 @@ func (repository *recordingTemplateRunRepository) DiscardTemplateRun(_ context.C
 		return false, nil
 	}
 	repository.discarded = discard
+	return true, nil
+}
+
+// EndTemplateRun ends only a queued or running run, as the real store does.
+func (repository *recordingTemplateRunRepository) EndTemplateRun(_ context.Context, end domain.TemplateRunEnd) (bool, error) {
+	if repository.run.Status != domain.TemplateRunQueued && repository.run.Status != domain.TemplateRunRunning {
+		return false, nil
+	}
+	repository.ended = end
 	return true, nil
 }
 
@@ -3411,6 +3421,16 @@ func (unit *recordingUnitOfWork) DiscardTemplateRun(ctx context.Context, discard
 		return false, nil
 	}
 	return discarder.DiscardTemplateRun(ctx, discard)
+}
+
+func (unit *recordingUnitOfWork) EndTemplateRun(ctx context.Context, end domain.TemplateRunEnd) (bool, error) {
+	ender, ok := unit.templateRuns.(interface {
+		EndTemplateRun(context.Context, domain.TemplateRunEnd) (bool, error)
+	})
+	if !ok {
+		return false, nil
+	}
+	return ender.EndTemplateRun(ctx, end)
 }
 
 func (unit *recordingUnitOfWork) Enqueue(_ context.Context, requests ...queue.Request) error {

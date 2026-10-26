@@ -109,6 +109,9 @@ type TxRepo interface {
 	// DiscardTemplateRun discards a run waiting for approval, or approved but
 	// not yet claimed by its apply, and reports whether it did.
 	DiscardTemplateRun(ctx context.Context, discard domain.TemplateRunDiscard) (bool, error)
+	// EndTemplateRun ends a queued or running run as failed, by an
+	// operator's hand, and reports whether it did.
+	EndTemplateRun(ctx context.Context, end domain.TemplateRunEnd) (bool, error)
 }
 
 // UnitOfWork commits a domain write and a queued intent atomically. This is

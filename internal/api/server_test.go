@@ -3718,6 +3718,15 @@ func (unit *apiUnitOfWork) DiscardTemplateRun(ctx context.Context, discard domai
 	return false, nil
 }
 
+func (unit *apiUnitOfWork) EndTemplateRun(ctx context.Context, end domain.TemplateRunEnd) (bool, error) {
+	if repository, ok := unit.templateRuns.(interface {
+		EndTemplateRun(context.Context, domain.TemplateRunEnd) (bool, error)
+	}); ok {
+		return repository.EndTemplateRun(ctx, end)
+	}
+	return false, nil
+}
+
 func (unit *apiUnitOfWork) Enqueue(_ context.Context, requests ...queue.Request) error {
 	unit.requests = append(unit.requests, requests...)
 	return nil
@@ -3859,6 +3868,7 @@ type recordingTemplateRunRepository struct {
 	executions             []domain.TemplateRunWorkflowExecution
 	approval               domain.TemplateRunApproval
 	discarded              domain.TemplateRunDiscard
+	ended                  domain.TemplateRunEnd
 	gotGetTenantID         domain.TenantID
 	gotGetRunID            domain.TemplateRunID
 	gotListTenantID        domain.TenantID
@@ -3934,6 +3944,15 @@ func (repository *recordingTemplateRunRepository) DiscardTemplateRun(_ context.C
 		return false, nil
 	}
 	repository.discarded = discard
+	return true, nil
+}
+
+// EndTemplateRun ends only a queued or running run, as the real store does.
+func (repository *recordingTemplateRunRepository) EndTemplateRun(_ context.Context, end domain.TemplateRunEnd) (bool, error) {
+	if repository.run.Status != domain.TemplateRunQueued && repository.run.Status != domain.TemplateRunRunning {
+		return false, nil
+	}
+	repository.ended = end
 	return true, nil
 }
 

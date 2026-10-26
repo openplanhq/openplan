@@ -275,3 +275,87 @@ func discardTemplateRun(ctx context.Context, exec pgxExecutor, discard domain.Te
 	}
 	return true, nil
 }
+
+// endTemplateRun ends a queued or running run by hand, as failed, for an
+// operator whose run has no workflow left to end it. It is the one write a
+// workflow's own failure makes (RecordTemplateRunStatus with failed), made
+// from outside the workflow: the running execution and its step end failed
+// with the summary, whatever phase they are, or a run no workflow ever
+// claimed gets a failed execution of the phase that should have carried it;
+// the run's saved plan is released; a destroy that had begun destroying
+// leaves its stack template failed. Who ended it and when go in the same
+// columns a discard writes.
+//
+// It reports whether it ended the run; false means the run is not queued or
+// running, so it is someone else's to end (discard) or already over. The
+// caller checked Temporal first; this write cannot, so it locks the row and
+// trusts the caller's answer.
+func endTemplateRun(ctx context.Context, exec pgxExecutor, end domain.TemplateRunEnd) (bool, error) {
+	var (
+		status          domain.TemplateRunStatus
+		operation       domain.OperationType
+		stackTemplateID domain.StackTemplateID
+		autoApprove     bool
+	)
+	err := exec.QueryRow(ctx, `
+		select status, operation, stack_template_id, auto_approve
+		from template_runs
+		where tenant_id = $1 and id = $2
+		for update
+	`, end.TenantID, end.RunID).Scan(&status, &operation, &stackTemplateID, &autoApprove)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("read run to end: %w", err)
+	}
+	if status != domain.TemplateRunQueued && status != domain.TemplateRunRunning {
+		return false, nil
+	}
+
+	var runningPhase domain.RunPhase
+	err = exec.QueryRow(ctx, `
+		select phase from template_run_workflow_executions
+		where tenant_id = $1 and run_id = $2 and status = 'running'
+	`, end.TenantID, end.RunID).Scan(&runningPhase)
+	switch {
+	case err == nil:
+		if _, err := finishRunningExecution(ctx, exec, end.TenantID, end.RunID, runningPhase, domain.TemplateRunExecutionFailed, end.Summary); err != nil {
+			return false, err
+		}
+	case errors.Is(err, pgx.ErrNoRows):
+		// Only the plan workflow carries a run from queued, except an
+		// auto-approved apply, which the apply workflow claims directly.
+		phase := domain.RunPhasePlan
+		if autoApprove {
+			phase = domain.RunPhaseApply
+		}
+		if _, err := insertWorkflowExecution(ctx, exec, end.TenantID, end.RunID, phase, end.WorkflowID, domain.TemplateRunExecutionFailed, end.Summary); err != nil {
+			return false, err
+		}
+	default:
+		return false, fmt.Errorf("read running workflow execution: %w", err)
+	}
+
+	if _, err := exec.Exec(ctx, `
+		update template_runs
+		set
+			status = $1,
+			cancellation_requested_by = $2,
+			cancellation_reason = $3,
+			cancellation_requested_at = $4,
+			completed_at = coalesce(completed_at, now())
+		where tenant_id = $5 and id = $6
+	`, domain.TemplateRunFailed, end.EndedBy, end.Reason, end.EndedAt, end.TenantID, end.RunID); err != nil {
+		return false, fmt.Errorf("end run: %w", err)
+	}
+	if operation == domain.OperationDestroy {
+		if err := recordInterruptedDestroyLifecycle(ctx, exec, end.TenantID, stackTemplateID); err != nil {
+			return false, err
+		}
+	}
+	if err := releaseRunPlan(ctx, exec, end.TenantID, end.RunID); err != nil {
+		return false, err
+	}
+	return true, nil
+}

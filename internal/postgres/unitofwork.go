@@ -44,6 +44,10 @@ func (repo *txRepo) DiscardTemplateRun(ctx context.Context, discard domain.Templ
 	return discardTemplateRun(ctx, repo.tx, discard)
 }
 
+func (repo *txRepo) EndTemplateRun(ctx context.Context, end domain.TemplateRunEnd) (bool, error) {
+	return endTemplateRun(ctx, repo.tx, end)
+}
+
 // txEnqueuer enqueues inside the caller's transaction. This is the entire
 // reason the queue is an outbox rather than a message broker: the intent and
 // the domain write commit or roll back together, so a crash can never leave
