@@ -6,13 +6,14 @@ import RouteMessage from "./RouteMessage";
 
 afterEach(cleanup);
 
-function renderMessage() {
+function renderMessage(action?: React.ReactNode) {
   return render(
     <RouteMessage
       icon={SearchX}
       title="Page not found"
       description="The page you were looking for doesn't exist."
       testId="route-not-found"
+      action={action}
     />
   );
 }
@@ -34,6 +35,26 @@ describe("RouteMessage", () => {
   it("is shadcn's Empty, carrying the screen's test id", () => {
     renderMessage();
     expect(screen.getByTestId("route-not-found").getAttribute("data-slot")).toBe("empty");
+  });
+
+  // A page-level EmptyState draws its icon plain in muted, not on shadcn's tile.
+  it("draws the icon plain, not on a tile", () => {
+    const { container } = renderMessage();
+    expect(container.querySelector('[data-slot="empty-icon"]')?.getAttribute("data-variant")).toBe("default");
+    expect(container.querySelector("svg")?.classList).toContain("text-muted-foreground");
+  });
+
+  it("renders the action after the message", () => {
+    renderMessage(<a href="/stacks">Back to stacks</a>);
+    const link = screen.getByRole("link", { name: "Back to stacks" });
+    const description = screen.getByText("The page you were looking for doesn't exist.");
+    expect(description.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("offers nothing when no action is given", () => {
+    renderMessage();
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.queryByRole("button")).toBeNull();
   });
 
   it("hides the icon from assistive technology", () => {
