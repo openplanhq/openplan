@@ -128,6 +128,9 @@ export interface Template {
   description: string;
   tags: string[];
   latest_template_revision_id: string;
+  // True once any stack has installed the template, destroyed installs
+  // included; the server refuses to delete such a template.
+  installed: boolean;
   // Null until a sync is requested.
   latest_sync: TemplateLatestSync | null;
   created_at: string;

@@ -55,6 +55,7 @@ export function template(overrides: Partial<Template> = {}): Template {
     description: "An EKS cluster with one managed node group.",
     tags: ["aws", "kubernetes"],
     latest_template_revision_id: "rev_1",
+    installed: false,
     latest_sync: null,
     created_at: "2026-09-22T10:00:00Z",
     ...overrides

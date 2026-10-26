@@ -53,6 +53,7 @@ function syncingTemplate(status: TemplateSyncStatus): Template {
     description: "",
     tags: [],
     latest_template_revision_id: "rev_1",
+    installed: false,
     latest_sync: { status, error_summary: "", resolved_commit_sha: "", requested_at: "2026-10-21T09:00:00Z" },
     created_at: "2026-10-21T09:00:00Z"
   };

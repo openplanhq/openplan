@@ -110,20 +110,24 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
   const heading = <h2 className="min-w-0 font-heading text-title wrap-anywhere">{name}</h2>;
   // Delete sits on the name's line just before Sync, a Small Subtle button
   // like it, as one pair. Both are for people who can publish, so they come
-  // and go together.
+  // and go together. A template a stack has installed, even one since
+  // destroyed, can't be deleted, so it is left out rather than offered and
+  // refused: nobody could use it here.
   const actions = (
     <RequireCapability capability="can_publish_template">
-      <button
-        ref={remove.triggerRef}
-        type="button"
-        className={cn(buttonClass("subtle", "sm"), "pointer-coarse:h-11")}
-        aria-expanded={remove.confirming}
-        onClick={remove.ask}
-        data-testid="template-delete"
-      >
-        <Trash2 data-icon="inline-start" aria-hidden="true" strokeWidth={2.42} className="size-3.25" />
-        Delete
-      </button>
+      {!template.installed && (
+        <button
+          ref={remove.triggerRef}
+          type="button"
+          className={cn(buttonClass("subtle", "sm"), "pointer-coarse:h-11")}
+          aria-expanded={remove.confirming}
+          onClick={remove.ask}
+          data-testid="template-delete"
+        >
+          <Trash2 data-icon="inline-start" aria-hidden="true" strokeWidth={2.42} className="size-3.25" />
+          Delete
+        </button>
+      )}
     </RequireCapability>
   );
   // The question, or why the server refused, under the source line: close
@@ -233,9 +237,10 @@ type DeleteRefusal = "in-use" | { message: string };
 // Deleting a template: Delete asks first, in place, then calls the server.
 // Gone, it sends the person to /templates, which says what was deleted and
 // shows the first template left. Refused because a stack has installed it
-// (409 template-in-use), it says so; nothing on screen could have told, since
-// the API doesn't say whether a stack uses a template. A template someone
-// else deleted first (404) ends where a delete does.
+// (409 template-in-use), it says so: Delete is only offered while the
+// template read says no stack has, so this is a stack that installed it
+// after the page loaded. A template someone else deleted first (404) ends
+// where a delete does.
 //
 // The state belongs to the template it was asked about, so moving to another
 // template drops a question or a refusal rather than carrying it over.

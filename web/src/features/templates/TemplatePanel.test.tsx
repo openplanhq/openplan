@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../../auth/AuthContext";
 import { queryKeys } from "../../api/queryKeys";
 import { problemTypes } from "../../api/types";
-import type { TemplateLatestSync, TemplateRevision } from "../../api/types";
+import type { Template, TemplateLatestSync, TemplateRevision } from "../../api/types";
 import TemplatePanel from "./TemplatePanel";
 import { authValue, jsonResponse, latestSync, revision, seedTemplates, template, templateReadResponse, TENANT, testQueryClient, variable } from "./testSupport";
 
@@ -25,6 +25,17 @@ function seed(revisions: TemplateRevision[] = [latest, older, rds, cdn]): QueryC
     variable({ template_revision_id: "rev_2", name: "node_desired_size", type_expression: "number", required: false, has_default: true }),
     variable({ template_revision_id: "rev_2", name: "subnet_ids", type_expression: "list(string)" })
   ]);
+  return queryClient;
+}
+
+// The seeded list with one template marked as installed by a stack.
+function seedInstalled(id: string): QueryClient {
+  const queryClient = seed();
+  const templates = queryClient.getQueryData<Template[]>(queryKeys.templates(TENANT)) ?? [];
+  queryClient.setQueryData(
+    queryKeys.templates(TENANT),
+    templates.map((candidate) => (candidate.id === id ? { ...candidate, installed: true } : candidate))
+  );
   return queryClient;
 }
 
@@ -263,6 +274,14 @@ describe("TemplatePanel delete", () => {
     expect(screen.queryByTestId("template-delete")).toBeNull();
   });
 
+  it("is not offered on a template a stack has installed, which the server would refuse", () => {
+    renderPanel(seedInstalled("tpl_1"), "/templates/tpl_1/variables");
+
+    expect(screen.queryByTestId("template-delete")).toBeNull();
+    expect(screen.getByTestId("template-sync")).toBeTruthy();
+    expect(screen.queryByTestId("template-delete-confirm")).toBeNull();
+  });
+
   it("asks first, in place, and sends nothing until confirmed", () => {
     const calls = answerDelete(() => new Response(null, { status: 204 }));
     renderPanel(seed(), "/templates/tpl_1/variables");
@@ -320,6 +339,8 @@ describe("TemplatePanel delete", () => {
     expect(confirm.textContent).not.toContain("revisions");
   });
 
+  // The template read said no stack had installed it, so Delete was offered;
+  // a stack installed it before the delete reached the server.
   it("says a stack has installed it when the server refuses with template-in-use", async () => {
     answerDelete(() => problem(409, problemTypes.templateInUse, "A stack has installed this template, so it can't be deleted."));
     renderPanel(seed(), "/templates/tpl_1/variables");
