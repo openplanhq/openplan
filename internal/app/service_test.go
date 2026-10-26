@@ -1996,6 +1996,147 @@ func TestDiscardRunRefusesARunWithNoPlanWaiting(t *testing.T) {
 	}
 }
 
+// endRunFixture is a service whose run run_123 is in status, with Temporal
+// answering workflows about it.
+func endRunFixture(t *testing.T, status domain.TemplateRunStatus, operation domain.OperationType, executions []domain.TemplateRunWorkflowExecution, workflows []domain.TemplateRunWorkflow, describeErr error) (*Service, *recordingTemplateRunRepository, *recordingWorkflowDispatcher, *recordingUnitOfWork) {
+	t.Helper()
+	runs := &recordingTemplateRunRepository{run: domain.TemplateRun{
+		ID: "run_123", TenantID: "tenant_123", StackTemplateID: "stack_template_123", RunNumber: 7, Operation: operation, Status: status,
+	}, executions: executions}
+	work := &recordingUnitOfWork{templateRuns: runs}
+	dispatcher := &recordingWorkflowDispatcher{workflows: workflows, describeErr: describeErr}
+	service := NewService(Service{
+		Authorization:  testPlatformAuthorizer(t),
+		Work:           work,
+		TemplateRuns:   runs,
+		Workflows:      dispatcher,
+		StackTemplates: &recordingStackTemplateRepository{stackTemplate: domain.StackTemplate{ID: "stack_template_123", TenantID: "tenant_123", StackID: "stack_123"}},
+		Clock:          fixedClock{now: time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)},
+	})
+	return service, runs, dispatcher, work
+}
+
+// applyPhaseExecutions is a run in its apply: the plan ended, the apply runs.
+var applyPhaseExecutions = []domain.TemplateRunWorkflowExecution{
+	{Phase: domain.RunPhasePlan, Status: domain.TemplateRunExecutionSucceeded},
+	{Phase: domain.RunPhaseApply, Status: domain.TemplateRunExecutionRunning},
+}
+
+var (
+	planWorkflowGone     = domain.TemplateRunWorkflow{Phase: domain.RunPhasePlan, WorkflowID: "template-run/tenant_123/run_123", State: domain.TemplateRunWorkflowAbsent}
+	planWorkflowDone     = domain.TemplateRunWorkflow{Phase: domain.RunPhasePlan, WorkflowID: "template-run/tenant_123/run_123", State: domain.TemplateRunWorkflowClosed, CloseStatus: "completed"}
+	applyWorkflowGone    = domain.TemplateRunWorkflow{Phase: domain.RunPhaseApply, WorkflowID: "template-run/tenant_123/run_123/apply", State: domain.TemplateRunWorkflowAbsent}
+	applyWorkflowRunning = domain.TemplateRunWorkflow{Phase: domain.RunPhaseApply, WorkflowID: "template-run/tenant_123/run_123/apply", State: domain.TemplateRunWorkflowRunning}
+	applyWorkflowKilled  = domain.TemplateRunWorkflow{Phase: domain.RunPhaseApply, WorkflowID: "template-run/tenant_123/run_123/apply", State: domain.TemplateRunWorkflowClosed, CloseStatus: "terminated"}
+)
+
+// A running apply whose plan workflow finished and whose apply workflow
+// Temporal never had is ended as failed, by the caller, with a summary that
+// says the workflow was not found and that the infrastructure may have
+// changed. Nothing is queued: there is no workflow left to tell.
+func TestEndRunEndsARunWhoseWorkflowIsGone(t *testing.T) {
+	t.Parallel()
+
+	service, runs, dispatcher, work := endRunFixture(t, domain.TemplateRunRunning, domain.OperationApply, applyPhaseExecutions, []domain.TemplateRunWorkflow{planWorkflowDone, applyWorkflowGone}, nil)
+
+	if err := service.EndRun(authenticatedContext(), EndRunCommand{TenantID: "tenant_123", RunID: "run_123", Reason: "restored from backup"}); err != nil {
+		t.Fatalf("EndRun returned error: %v", err)
+	}
+
+	if dispatcher.describedRunID != "run_123" {
+		t.Fatalf("described run = %q, want run_123", dispatcher.describedRunID)
+	}
+	ended := runs.ended
+	if ended.RunID != "run_123" || ended.EndedBy != domain.UserID(oidcSubject) || ended.Reason != "restored from backup" || ended.EndedAt.IsZero() {
+		t.Fatalf("ended = %#v, want run_123 by the caller with the reason", ended)
+	}
+	want := "Ended by an operator: its workflow was not found in Temporal, so nothing could finish it. If its apply had started, the infrastructure may have changed: plan again before relying on this stack."
+	if ended.Summary != want {
+		t.Fatalf("summary = %q, want %q", ended.Summary, want)
+	}
+	if ended.WorkflowID != "template-run/tenant_123/run_123/apply" {
+		t.Fatalf("carrier = %q, want the apply workflow, whose execution was running", ended.WorkflowID)
+	}
+	if len(work.requests) != 0 {
+		t.Fatalf("queued = %#v, want nothing queued", work.requests)
+	}
+}
+
+// A workflow Temporal has as closed is named with how it closed, under the
+// workflow that carried the run last. A plan run cannot have changed
+// anything, so its summary does not say to plan again.
+func TestEndRunNamesHowAClosedWorkflowEnded(t *testing.T) {
+	t.Parallel()
+
+	service, runs, _, _ := endRunFixture(t, domain.TemplateRunRunning, domain.OperationApply, applyPhaseExecutions, []domain.TemplateRunWorkflow{planWorkflowDone, applyWorkflowKilled}, nil)
+	if err := service.EndRun(authenticatedContext(), EndRunCommand{TenantID: "tenant_123", RunID: "run_123"}); err != nil {
+		t.Fatalf("EndRun returned error: %v", err)
+	}
+	if !strings.HasPrefix(runs.ended.Summary, "Ended by an operator: its workflow had already ended in Temporal (terminated), but the run never recorded that.") || runs.ended.WorkflowID != applyWorkflowKilled.WorkflowID {
+		t.Fatalf("ended = %#v, want the terminated apply named", runs.ended)
+	}
+
+	service, runs, _, _ = endRunFixture(t, domain.TemplateRunQueued, domain.OperationPlan, nil, []domain.TemplateRunWorkflow{planWorkflowGone, applyWorkflowGone}, nil)
+	if err := service.EndRun(authenticatedContext(), EndRunCommand{TenantID: "tenant_123", RunID: "run_123"}); err != nil {
+		t.Fatalf("EndRun returned error: %v", err)
+	}
+	if strings.Contains(runs.ended.Summary, "plan again") || runs.ended.WorkflowID != planWorkflowGone.WorkflowID {
+		t.Fatalf("ended plan run = %#v, want no warning to plan again, under the plan workflow", runs.ended)
+	}
+}
+
+// A workflow Temporal still runs will end the run itself; ending it from
+// here would race that workflow, so the end is refused and names the run.
+func TestEndRunRefusesWhileAWorkflowRuns(t *testing.T) {
+	t.Parallel()
+
+	service, runs, _, _ := endRunFixture(t, domain.TemplateRunRunning, domain.OperationApply, applyPhaseExecutions, []domain.TemplateRunWorkflow{planWorkflowDone, applyWorkflowRunning}, nil)
+
+	err := service.EndRun(authenticatedContext(), EndRunCommand{TenantID: "tenant_123", RunID: "run_123"})
+	if !errors.Is(err, ErrRunWorkflowRunning) {
+		t.Fatalf("error = %v, want ErrRunWorkflowRunning", err)
+	}
+	var running *RunWorkflowRunningError
+	if !errors.As(err, &running) || running.RunNumber != 7 {
+		t.Fatalf("error = %v, want to name run #7", err)
+	}
+	if runs.ended.RunID != "" {
+		t.Fatalf("ended = %#v, want nothing", runs.ended)
+	}
+}
+
+// A plan waiting for approval is discarded, not ended, and Temporal is not
+// even asked about it.
+func TestEndRunRefusesARunThatIsNotQueuedOrRunning(t *testing.T) {
+	t.Parallel()
+
+	service, runs, dispatcher, _ := endRunFixture(t, domain.TemplateRunWaitingApproval, domain.OperationApply, nil, []domain.TemplateRunWorkflow{planWorkflowDone, applyWorkflowGone}, nil)
+
+	err := service.EndRun(authenticatedContext(), EndRunCommand{TenantID: "tenant_123", RunID: "run_123"})
+	if !errors.Is(err, ErrRunNotEndable) {
+		t.Fatalf("error = %v, want ErrRunNotEndable", err)
+	}
+	if dispatcher.describedRunID != "" || runs.ended.RunID != "" {
+		t.Fatalf("described %q, ended %#v; want neither", dispatcher.describedRunID, runs.ended)
+	}
+}
+
+// An unreachable Temporal and a gone workflow look the same from here, and
+// only one is safe to act on: no answer ends nothing.
+func TestEndRunFailsClosedWhenWorkflowsCannotBeAsked(t *testing.T) {
+	t.Parallel()
+
+	service, runs, _, _ := endRunFixture(t, domain.TemplateRunRunning, domain.OperationApply, applyPhaseExecutions, nil, errors.New("temporal: connection refused"))
+
+	err := service.EndRun(authenticatedContext(), EndRunCommand{TenantID: "tenant_123", RunID: "run_123"})
+	if !errors.Is(err, ErrWorkflowsUnavailable) {
+		t.Fatalf("error = %v, want ErrWorkflowsUnavailable", err)
+	}
+	if runs.ended.RunID != "" {
+		t.Fatalf("ended = %#v, want nothing", runs.ended)
+	}
+}
+
 func TestGetTemplateRunReturnsTenantScopedRun(t *testing.T) {
 	t.Parallel()
 

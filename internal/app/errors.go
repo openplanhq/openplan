@@ -99,6 +99,18 @@ func (e *RunInFlightError) Error() string {
 
 func (e *RunInFlightError) Unwrap() error { return ErrTemplateRunInFlight }
 
+// RunWorkflowRunningError names the run whose workflow Temporal still runs,
+// so the refusal can say which run to wait for. It wraps ErrRunWorkflowRunning.
+type RunWorkflowRunningError struct {
+	RunNumber int
+}
+
+func (e *RunWorkflowRunningError) Error() string {
+	return fmt.Sprintf("%v: run #%d", ErrRunWorkflowRunning, e.RunNumber)
+}
+
+func (e *RunWorkflowRunningError) Unwrap() error { return ErrRunWorkflowRunning }
+
 // PlanStaleError names the run whose plan no longer describes the template's
 // desired state. It wraps ErrStackTemplatePlanStale.
 type PlanStaleError struct {
@@ -133,6 +145,9 @@ func Sentinels() []error {
 		ErrTemplateRunInFlight,
 		ErrRunNotApprovable,
 		ErrRunNotDiscardable,
+		ErrRunNotEndable,
+		ErrRunWorkflowRunning,
+		ErrWorkflowsUnavailable,
 		ErrLastOwner,
 		ErrCredentialNameInvalid,
 		ErrDuplicateCredentialName,
