@@ -81,7 +81,8 @@ interface StartRunRequest {
   auto_approve?: boolean;
 }
 
-interface DiscardRunRequest {
+// The optional body of a discard or an end: why, recorded with the run.
+interface RunReasonRequest {
   reason: string;
 }
 
@@ -325,8 +326,18 @@ export function approveRun(tenantID: string, runID: string): Promise<TemplateRun
 
 // discardRun throws away a plan waiting for approval. A run that is planning
 // or applying cannot be stopped.
-export function discardRun(tenantID: string, runID: string, body: DiscardRunRequest): Promise<void> {
+export function discardRun(tenantID: string, runID: string, body: RunReasonRequest): Promise<void> {
   return requestNoContent(tenantPath(tenantID, "template-runs", runID, "discard"), {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+}
+
+// endRun ends a queued or running run whose workflow is gone, as failed. A
+// run that is still working cannot be stopped: the server refuses while its
+// workflow runs (409), and when it can't ask Temporal (503).
+export function endRun(tenantID: string, runID: string, body: RunReasonRequest): Promise<void> {
+  return requestNoContent(tenantPath(tenantID, "template-runs", runID, "end"), {
     method: "POST",
     body: JSON.stringify(body)
   });
