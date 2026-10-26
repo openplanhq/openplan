@@ -544,7 +544,10 @@ func (store *Store) ListSourceTemplatesPage(ctx context.Context, tenantID domain
 // selectSourceTemplatesSQL reads templates with their latest revision's name,
 // description and tags, and their newest sync. The left joins keep a template
 // no sync has produced a revision for, or been requested for, yet. The
-// newest sync is one probe of the registrations index per template.
+// newest sync is one probe of the registrations index per template, and
+// installed one probe of the stack templates' key index: it asks exactly
+// what the restrict key checks on delete (the id alone, every lifecycle),
+// so a client reading it knows whether a delete would be refused.
 const selectSourceTemplatesSQL = `
 	select
 		st.id,
@@ -564,7 +567,8 @@ const selectSourceTemplatesSQL = `
 		ls.resolved_commit_sha,
 		ls.requested_at,
 		ls.completed_at,
-		ls.revision_predates_request
+		ls.revision_predates_request,
+		exists (select 1 from stack_templates x where x.source_template_id = st.id) as installed
 	from source_templates st
 	left join template_revisions tr
 		on tr.tenant_id = st.tenant_id
@@ -612,6 +616,7 @@ func scanSourceTemplate(scanner templateScanner) (domain.SourceTemplate, error) 
 		&sync.requestedAt,
 		&sync.completedAt,
 		&sync.revisionPredatesRequest,
+		&template.Installed,
 	); err != nil {
 		return domain.SourceTemplate{}, err
 	}

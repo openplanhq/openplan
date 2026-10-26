@@ -4656,6 +4656,59 @@ func TestDeleteSourceTemplate(t *testing.T) {
 	}
 }
 
+// A template reads as installed once any stack template names it, a destroyed
+// one included: exactly when DeleteSourceTemplate refuses it.
+func TestSourceTemplateReadsSayWhetherInstalled(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := NewStore(pool)
+	seedStackWithTemplate(t, ctx, store)
+	seedSourceTemplate(t, ctx, store, "tenant_123", "source_template_unused")
+	seedSourceTemplate(t, ctx, store, "tenant_123", "source_template_destroyed")
+	if err := store.CreateStackTemplate(ctx, domain.StackTemplate{
+		ID: "stack_template_destroyed", TenantID: "tenant_123", StackID: "stack_123",
+		SourceTemplateID: "source_template_destroyed", WorkspaceName: "mtp_acme_prod_destroyed",
+		CreatedBy: "installer_123", Lifecycle: domain.StackTemplateDestroyed,
+	}); err != nil {
+		t.Fatalf("CreateStackTemplate returned error: %v", err)
+	}
+
+	want := map[domain.SourceTemplateID]bool{
+		"source_template_vpc":       true,
+		"source_template_destroyed": true,
+		"source_template_unused":    false,
+	}
+	for id, installed := range want {
+		template, err := store.GetSourceTemplate(ctx, "tenant_123", id)
+		if err != nil {
+			t.Fatalf("GetSourceTemplate(%s) returned error: %v", id, err)
+		}
+		if template.Installed != installed {
+			t.Fatalf("GetSourceTemplate(%s).Installed = %t, want %t", id, template.Installed, installed)
+		}
+	}
+
+	listed, err := store.ListSourceTemplatesPage(ctx, "tenant_123", nil, 10)
+	if err != nil {
+		t.Fatalf("ListSourceTemplatesPage returned error: %v", err)
+	}
+	seen := map[domain.SourceTemplateID]bool{}
+	for _, template := range listed {
+		seen[template.ID] = template.Installed
+	}
+	for id, installed := range want {
+		got, ok := seen[id]
+		if !ok {
+			t.Fatalf("ListSourceTemplatesPage left out %s", id)
+		}
+		if got != installed {
+			t.Fatalf("listed %s Installed = %t, want %t", id, got, installed)
+		}
+	}
+}
+
 // An install and a delete racing each other can't both succeed, whichever
 // commits first. Each case holds one side's transaction open, starts the
 // store call under test against it, waits until that call is blocked on the

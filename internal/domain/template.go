@@ -99,8 +99,12 @@ type SourceTemplate struct {
 	Tags        []string `json:"tags"`
 	// LatestTemplateRevisionID is empty until a sync records a revision.
 	LatestTemplateRevisionID TemplateRevisionID `json:"latest_template_revision_id"`
-	CreatedAt                time.Time          `json:"created_at"`
-	UpdatedAt                time.Time          `json:"updated_at"`
+	// Installed is true once any stack template names the template, in any
+	// lifecycle, destroyed included: the state in which deleting it is refused.
+	// It never goes back to false, since stack templates are never deleted.
+	Installed bool      `json:"installed"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 	// LatestSync is the newest sync requested for the template, nil until one
 	// is. Not serialised as is: its stored status is not what a reader is
 	// shown (see LatestTemplateSync.StatusAt).
