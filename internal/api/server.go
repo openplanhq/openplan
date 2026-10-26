@@ -252,6 +252,8 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	server.handleTenantRoute("POST", "/template-runs/{run_id}/approve", server.handleApproveRun)
 	// Discards a template run's plan waiting for approval.
 	server.handleTenantRoute("POST", "/template-runs/{run_id}/discard", server.handleDiscardRun)
+	// Ends a queued or running template run whose workflow is gone.
+	server.handleTenantRoute("POST", "/template-runs/{run_id}/end", server.handleEndRun)
 	server.handler = withErrorEnvelope(server.mux)
 	return server
 }
@@ -1047,6 +1049,25 @@ func (server *Server) handleDiscardRun(response http.ResponseWriter, request *ht
 	response.WriteHeader(http.StatusNoContent)
 }
 
+func (server *Server) handleEndRun(response http.ResponseWriter, request *http.Request) {
+	var body endRunRequest
+	if !decodeOptionalRequestBody(response, request, &body) {
+		return
+	}
+
+	err := server.service.EndRun(request.Context(), app.EndRunCommand{
+		TenantID: domain.TenantID(request.PathValue("tenant_id")),
+		RunID:    domain.TemplateRunID(request.PathValue("run_id")),
+		Reason:   body.Reason,
+	})
+	if err != nil {
+		writeAppError(response, err)
+		return
+	}
+
+	response.WriteHeader(http.StatusNoContent)
+}
+
 // setLocation points a 201 or 202 at the URL that reads back the resource it
 // created or set working, under the request's tenant. An installed template and a credential have no
 // read of their own, so their responses carry none.
@@ -1119,6 +1140,10 @@ type approveRunRequest struct{}
 type startTemplateSyncRequest struct{}
 
 type discardRunRequest struct {
+	Reason string `json:"reason"`
+}
+
+type endRunRequest struct {
 	Reason string `json:"reason"`
 }
 

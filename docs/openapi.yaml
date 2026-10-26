@@ -1610,6 +1610,62 @@ paths:
         "413": { $ref: "#/components/responses/RequestTooLarge" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /v1/tenants/{tenant_id}/template-runs/{run_id}/end:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/RunID"
+    post:
+      tags: [Runs]
+      summary: End a run whose workflow is gone
+      description: |
+        Ends a run that is `queued` or `running` but whose workflow Temporal
+        no longer runs: it was lost (a crash that took Temporal's store, a
+        restore from before it started) or it closed without the run ever
+        recording that (a restore from before it finished). Such a run would
+        stay in flight forever and block its component. Ending it marks it
+        `failed`, with an `error_summary` that says an operator ended it and
+        what Temporal held of its workflow, and the component takes a new run.
+
+        Temporal is asked first. A workflow still running refuses the end
+        (`run-workflow-running`): it will finish the run itself, or an
+        operator terminates it in Temporal first. No answer from Temporal
+        refuses too (`workflows-unavailable`), since a gone workflow and an
+        unreachable Temporal look the same and only one is safe to act on.
+
+        Ending a run does not undo anything it did. If its apply had started,
+        the infrastructure may have changed: plan again before relying on
+        the component. Needs `can_operate` on the stack, as discarding does.
+
+        The body is optional: send no body to end without a reason.
+      operationId: endRun
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EndRunRequest" }
+            example: { reason: Temporal was restored from a backup taken before this run }
+      responses:
+        "204":
+          description: The run was ended.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: |
+            The run is not queued or running (`run-not-endable`), or its
+            workflow is still running in Temporal (`run-workflow-running`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503":
+          description: Temporal didn't answer, so nothing was changed (`workflows-unavailable`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
   /v1/tenants/{tenant_id}/users/search:
     parameters:
       - $ref: "#/components/parameters/TenantID"
@@ -2101,6 +2157,9 @@ components:
             - https://openplan.run/problems/plan-stale
             - https://openplan.run/problems/run-not-approvable
             - https://openplan.run/problems/run-not-discardable
+            - https://openplan.run/problems/run-not-endable
+            - https://openplan.run/problems/run-workflow-running
+            - https://openplan.run/problems/workflows-unavailable
             - https://openplan.run/problems/template-not-runnable
             - https://openplan.run/problems/template-not-editable
             - https://openplan.run/problems/template-not-upgradable
@@ -2742,6 +2801,14 @@ components:
           type: string
           description: Recorded with the discard. Optional.
 
+    EndRunRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          description: Recorded with the end. Optional.
+
     TemplateRun:
       type: object
       description: One Terraform operation against one installed component.
@@ -2849,7 +2916,9 @@ components:
       description: |
         A run's lifecycle state: what may happen to it next. Terminal states
         are `completed`, `failed` and `canceled`, which is how a discarded
-        plan ends; anything else means the run is still in flight.
+        plan ends; anything else means the run is still in flight. A run an
+        operator ended because its workflow was gone is `failed`, and its
+        `error_summary` says so.
 
         `waiting_approval` is the one that needs a person — post to the run's
         `approve` endpoint to release it. What a `running` run is doing is its

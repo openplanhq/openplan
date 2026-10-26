@@ -1,0 +1,37 @@
+$kind: http-request
+description: |-
+  Ends a run that is `queued` or `running` but whose workflow Temporal
+  no longer runs: it was lost (a crash that took Temporal's store, a
+  restore from before it started) or it closed without the run ever
+  recording that (a restore from before it finished). Such a run would
+  stay in flight forever and block its component. Ending it marks it
+  `failed`, with an `error_summary` that says an operator ended it and
+  what Temporal held of its workflow, and the component takes a new run.
+
+  Temporal is asked first. A workflow still running refuses the end
+  (`run-workflow-running`): it will finish the run itself, or an
+  operator terminates it in Temporal first. No answer from Temporal
+  refuses too (`workflows-unavailable`), since a gone workflow and an
+  unreachable Temporal look the same and only one is safe to act on.
+
+  Ending a run does not undo anything it did. If its apply had started,
+  the infrastructure may have changed: plan again before relying on
+  the component. Needs `can_operate` on the stack, as discarding does.
+
+  The body is optional: send no body to end without a reason.
+method: POST
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/template-runs/{{run_id}}/end'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "reason": "Temporal was restored from a backup taken before this run"
+    }
+scripts:
+  - type: afterResponse
+    code: pm.test('status is 204', () => pm.response.to.have.status(204));
+    language: text/javascript
+order: 11000

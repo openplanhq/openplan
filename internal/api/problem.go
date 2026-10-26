@@ -113,6 +113,22 @@ var problemTypes = []problemType{
 		detail: "The run has no plan waiting to discard.",
 	},
 	{
+		sentinel: app.ErrRunNotEndable, status: http.StatusConflict, slug: "run-not-endable",
+		title:  "The run can't be ended",
+		detail: "Only a run that is queued or running can be ended. A plan waiting for approval is discarded instead, and a finished run needs nothing.",
+	},
+	{
+		sentinel: app.ErrRunWorkflowRunning, status: http.StatusConflict, slug: "run-workflow-running",
+		title:      "The run's workflow is still running",
+		detail:     "The run's workflow is still running in Temporal, so it will finish the run itself. Wait for it, or terminate the workflow in Temporal first.",
+		occurrence: runWorkflowRunningDetail,
+	},
+	{
+		sentinel: app.ErrWorkflowsUnavailable, status: http.StatusServiceUnavailable, slug: "workflows-unavailable",
+		title:  "Workflows can't be reached",
+		detail: "Temporal didn't answer, so whether the run's workflow is gone can't be known. Nothing was changed; try again in a moment.",
+	},
+	{
 		sentinel: app.ErrStackTemplateNotRunnable, status: http.StatusConflict, slug: "template-not-runnable",
 		title:  "The template can't run",
 		detail: "The template is being torn down, or has no revision to run.",
@@ -332,6 +348,15 @@ func runInFlightDetail(err error) (string, bool) {
 	default:
 		return run + " hasn't finished. Wait for it to finish or discard it.", true
 	}
+}
+
+// runWorkflowRunningDetail names the run whose workflow Temporal still runs.
+func runWorkflowRunningDetail(err error) (string, bool) {
+	running, ok := errors.AsType[*app.RunWorkflowRunningError](err)
+	if !ok {
+		return "", false
+	}
+	return fmt.Sprintf("Run #%d's workflow is still running in Temporal, so it will finish the run itself. Wait for it, or terminate the workflow in Temporal first.", running.RunNumber), true
 }
 
 func planStaleDetail(err error) (string, bool) {

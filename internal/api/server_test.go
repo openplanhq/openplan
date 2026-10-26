@@ -2385,6 +2385,142 @@ func TestDiscardRunCallsService(t *testing.T) {
 	}
 }
 
+// endableRun makes run_123 a running run whose workflows Temporal has lost,
+// which is the one shape EndRun ends.
+func endableRun(deps *apiTestDependencies) {
+	deps.templateRuns.run.Status = domain.TemplateRunRunning
+	deps.workflows.workflows = []domain.TemplateRunWorkflow{
+		{Phase: domain.RunPhasePlan, WorkflowID: "template-run/tenant_123/run_123", State: domain.TemplateRunWorkflowAbsent},
+		{Phase: domain.RunPhaseApply, WorkflowID: "template-run/tenant_123/run_123/apply", State: domain.TemplateRunWorkflowAbsent},
+	}
+}
+
+func TestEndRunCallsService(t *testing.T) {
+	t.Parallel()
+
+	deps := newAPITestDependencies(t)
+	endableRun(deps)
+	server := NewServer(deps.service(), configuredTenantID)
+	response := httptest.NewRecorder()
+	request := authenticatedRequest(
+		http.MethodPost,
+		"/v1/tenants/tenant_123/template-runs/run_123/end",
+		strings.NewReader(`{"reason":"lost in the restore"}`),
+	)
+
+	server.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusNoContent, response.Body.String())
+	}
+	ended := deps.templateRuns.ended
+	if ended.TenantID != domain.TenantID("tenant_123") || ended.RunID != domain.TemplateRunID("run_123") {
+		t.Fatalf("ended = %#v, want run_123 of tenant_123", ended)
+	}
+	if ended.EndedBy != domain.UserID(apiOIDCSubject) || ended.Reason != "lost in the restore" {
+		t.Fatalf("ended by %q for %q, want the caller and the reason", ended.EndedBy, ended.Reason)
+	}
+	if ended.Summary == "" {
+		t.Fatal("ended run has no summary")
+	}
+	if len(deps.work.requests) != 0 {
+		t.Fatalf("queued requests = %#v, want none", deps.work.requests)
+	}
+}
+
+func TestEndRunTakesAnEmptyBody(t *testing.T) {
+	t.Parallel()
+
+	deps := newAPITestDependencies(t)
+	endableRun(deps)
+	server := NewServer(deps.service(), configuredTenantID)
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, authenticatedRequest(http.MethodPost, "/v1/tenants/tenant_123/template-runs/run_123/end", nil))
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusNoContent, response.Body.String())
+	}
+	if deps.templateRuns.ended.RunID != domain.TemplateRunID("run_123") || deps.templateRuns.ended.Reason != "" {
+		t.Fatalf("ended = %#v, want run_123 with no reason", deps.templateRuns.ended)
+	}
+}
+
+// Each refusal to end a run is its own problem type, so a client and the
+// runbook can tell "discard it instead" from "its workflow is alive" from
+// "Temporal didn't answer".
+func TestEndRunRefusalsAreTheirOwnProblems(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		configure  func(*apiTestDependencies)
+		statusCode int
+		slug       string
+		detail     string
+	}{
+		{
+			name:       "waiting for approval",
+			configure:  func(deps *apiTestDependencies) {},
+			statusCode: http.StatusConflict,
+			slug:       "run-not-endable",
+		},
+		{
+			name: "workflow running",
+			configure: func(deps *apiTestDependencies) {
+				endableRun(deps)
+				deps.templateRuns.run.RunNumber = 4
+				deps.workflows.workflows[1].State = domain.TemplateRunWorkflowRunning
+			},
+			statusCode: http.StatusConflict,
+			slug:       "run-workflow-running",
+			detail:     "Run #4's workflow is still running in Temporal, so it will finish the run itself. Wait for it, or terminate the workflow in Temporal first.",
+		},
+		{
+			name: "temporal unreachable",
+			configure: func(deps *apiTestDependencies) {
+				endableRun(deps)
+				deps.workflows.describeErr = errors.New("connection refused")
+			},
+			statusCode: http.StatusServiceUnavailable,
+			slug:       "workflows-unavailable",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			deps := newAPITestDependencies(t)
+			tt.configure(deps)
+			server := NewServer(deps.service(), configuredTenantID)
+			response := httptest.NewRecorder()
+
+			server.ServeHTTP(response, authenticatedRequest(http.MethodPost, "/v1/tenants/tenant_123/template-runs/run_123/end", strings.NewReader(`{}`)))
+
+			if response.Code != tt.statusCode {
+				t.Fatalf("status = %d, want %d; body = %s", response.Code, tt.statusCode, response.Body.String())
+			}
+			var problem struct {
+				Type   string `json:"type"`
+				Detail string `json:"detail"`
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &problem); err != nil {
+				t.Fatalf("body = %s: %v", response.Body.String(), err)
+			}
+			if !strings.HasSuffix(problem.Type, "/problems/"+tt.slug) {
+				t.Fatalf("type = %q, want %s", problem.Type, tt.slug)
+			}
+			if tt.detail != "" && problem.Detail != tt.detail {
+				t.Fatalf("detail = %q, want %q", problem.Detail, tt.detail)
+			}
+			if deps.templateRuns.ended.RunID != "" {
+				t.Fatalf("ended = %#v, want nothing ended", deps.templateRuns.ended)
+			}
+		})
+	}
+}
+
 func TestDiscardRunTakesAnEmptyBody(t *testing.T) {
 	t.Parallel()
 

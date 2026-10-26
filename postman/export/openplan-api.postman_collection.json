@@ -1359,6 +1359,53 @@
             },
             "description": "Throws away a run's saved plan while it waits for approval (or is\napproved and not yet applying). The run ends `canceled` straight away\nand its plan can never be applied. A run that is planning or applying\ncannot be stopped.\n\nThe body is optional: send no body to discard without a reason.\n\nDiscards the approved plan if its apply has not started yet; `409` once it has."
           }
+        },
+        {
+          "name": "End a run whose workflow is gone",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 204', () =\u003e pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Temporal was restored from a backup taken before this run\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/template-runs/{{run_id}}/end",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "{{tenant_id}}",
+                "template-runs",
+                "{{run_id}}",
+                "end"
+              ]
+            },
+            "description": "Ends a run that is `queued` or `running` but whose workflow Temporal\nno longer runs: it was lost (a crash that took Temporal's store, a\nrestore from before it started) or it closed without the run ever\nrecording that (a restore from before it finished). Such a run would\nstay in flight forever and block its component. Ending it marks it\n`failed`, with an `error_summary` that says an operator ended it and\nwhat Temporal held of its workflow, and the component takes a new run.\n\nTemporal is asked first. A workflow still running refuses the end\n(`run-workflow-running`): it will finish the run itself, or an\noperator terminates it in Temporal first. No answer from Temporal\nrefuses too (`workflows-unavailable`), since a gone workflow and an\nunreachable Temporal look the same and only one is safe to act on.\n\nEnding a run does not undo anything it did. If its apply had started,\nthe infrastructure may have changed: plan again before relying on\nthe component. Needs `can_operate` on the stack, as discarding does.\n\nThe body is optional: send no body to end without a reason."
+          }
         }
       ]
     },
