@@ -524,6 +524,7 @@ func startControlPlane(ctx context.Context, cfg config.APIConfig, deps apiDepend
 	deps.registerControl(worker, control, gitHubTokens, live, planChanges)
 	controller, err := deps.newQueueController(control, deps.newDispatcher(temporalClient, temporal.DispatcherOptions{
 		TerraformTimeout: cfg.TerraformTimeout,
+		TerraformBinary:  cfg.TerraformBinary,
 	}))
 	if err != nil {
 		temporalClient.Close()

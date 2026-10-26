@@ -106,6 +106,56 @@ func TestStartTemplateRunWithoutAConfiguredTimeoutLeavesItToTheWorkflow(t *testi
 	}
 }
 
+// TestStartTemplateRunStampsTheConfiguredTerraformBinary pins the binary's
+// entry point beside the timeout's: a queued run picks up the deployment's
+// current binary when it starts and keeps it, so its logs name what ran even
+// if the deployment is switched while it is in flight. An apply is stamped
+// too, since it may start long after its plan.
+func TestStartTemplateRunStampsTheConfiguredTerraformBinary(t *testing.T) {
+	t.Parallel()
+
+	for name, start := range map[string]func(*Dispatcher, domain.TemplateRunWorkflowInput) error{
+		"run": func(d *Dispatcher, input domain.TemplateRunWorkflowInput) error {
+			return d.StartTemplateRun(context.Background(), input)
+		},
+		"apply": func(d *Dispatcher, input domain.TemplateRunWorkflowInput) error {
+			return d.StartTemplateApply(context.Background(), input)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			workflowClient := &recordingWorkflowClient{}
+			dispatcher := newDispatcher(workflowClient, DispatcherOptions{TerraformBinary: domain.TerraformBinaryTerraform})
+
+			if err := start(dispatcher, domain.TemplateRunWorkflowInput{
+				RunID:    domain.TemplateRunID("run_123"),
+				TenantID: domain.TenantID("tenant_123"),
+			}); err != nil {
+				t.Fatalf("start returned error: %v", err)
+			}
+
+			started := workflowClient.executeArgs[0].(domain.TemplateRunWorkflowInput)
+			if started.TerraformBinary != domain.TerraformBinaryTerraform {
+				t.Fatalf("TerraformBinary = %q, want terraform", started.TerraformBinary)
+			}
+		})
+	}
+
+	// Unconfigured, the dispatcher stamps nothing: the workflow owns the
+	// default, as it does for the timeout.
+	workflowClient := &recordingWorkflowClient{}
+	if err := newDispatcher(workflowClient).StartTemplateRun(context.Background(), domain.TemplateRunWorkflowInput{
+		RunID:    domain.TemplateRunID("run_123"),
+		TenantID: domain.TenantID("tenant_123"),
+	}); err != nil {
+		t.Fatalf("StartTemplateRun returned error: %v", err)
+	}
+	if started := workflowClient.executeArgs[0].(domain.TemplateRunWorkflowInput); started.TerraformBinary != "" {
+		t.Fatalf("TerraformBinary = %q, want empty so the workflow applies its default", started.TerraformBinary)
+	}
+}
+
 func TestStartTemplateSyncExecutesWorkflow(t *testing.T) {
 	t.Parallel()
 

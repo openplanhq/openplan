@@ -397,9 +397,10 @@ type TemplateRunLog struct {
 	Seq      int                  `json:"seq"`
 	Command  TerraformCommandType `json:"command"`
 	// Binary is the one Command ran under, recorded with the row so a
-	// deployment that switches binaries leaves earlier logs truthful. Not
-	// on the wire: CommandLine carries it.
-	Binary TerraformBinary `json:"-"`
+	// deployment that switches binaries leaves earlier logs truthful. The
+	// tag is for Temporal, which carries the row to the control plane as
+	// JSON; /v1 maps its own response and shows the binary in CommandLine.
+	Binary TerraformBinary `json:"binary"`
 	// State is where the output lives. LostReason is set only when State is
 	// lost.
 	State      TemplateRunLogState      `json:"state"`

@@ -572,6 +572,7 @@ func (s *session) terraform(command domain.TerraformCommandType) (domain.RunTerr
 		RunPhase: s.ws.phase,
 		Seq:      seq,
 		Command:  command,
+		Binary:   s.run.terraformBinary(),
 	}); err != nil {
 		workflow.GetLogger(s.run.ctx).Warn("record live run log", "log", logName, "error", err)
 	}
@@ -597,6 +598,7 @@ func (s *session) terraform(command domain.TerraformCommandType) (domain.RunTerr
 		TerraformPath:     s.ws.terraformPath,
 		WorkspaceName:     s.run.input.WorkspaceName,
 		Command:           command,
+		Binary:            s.run.terraformBinary(),
 		ConfigJSON:        s.run.input.ConfigJSON,
 		LogName:           logName,
 		SealedEnvironment: credentials.SealedEnvironment,
@@ -623,7 +625,7 @@ func (s *session) terraform(command domain.TerraformCommandType) (domain.RunTerr
 // written, is logged; the run's outcome stays the command's.
 func (s *session) saveLog(name string, seq int, command domain.TerraformCommandType, runErr error) {
 	logger := workflow.GetLogger(s.ctx)
-	log := domain.TemplateRunLog{RunPhase: s.ws.phase, Seq: seq, Command: command}
+	log := domain.TemplateRunLog{RunPhase: s.ws.phase, Seq: seq, Command: command, Binary: s.run.terraformBinary()}
 
 	ctx := workflow.WithStartToCloseTimeout(s.ctx, 5*time.Minute)
 	ctx = workflow.WithRetryPolicy(ctx, *uploadLogRetryPolicy)
@@ -724,6 +726,17 @@ func (r *run) terraformTimeout() time.Duration {
 		return r.input.TerraformTimeout
 	}
 	return domain.DefaultTerraformTimeout
+}
+
+// terraformBinary is the CLI this run's commands execute, stamped onto the
+// input at dispatch like the timeout, so a deployment switched mid-run
+// finishes the run under the binary it started with. Empty means nothing
+// configured it, which is the default.
+func (r *run) terraformBinary() domain.TerraformBinary {
+	if r.input.TerraformBinary != "" {
+		return r.input.TerraformBinary
+	}
+	return domain.DefaultTerraformBinary
 }
 
 // terraformCommandSteps is the step each Terraform command is. Planning a

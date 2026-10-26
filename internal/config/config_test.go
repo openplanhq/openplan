@@ -192,6 +192,82 @@ func TestLoadAPIConfigRejectsUnusableTerraformTimeout(t *testing.T) {
 	}
 }
 
+// TestLoadAPIConfigReadsTerraformBinary covers which CLI runs every command:
+// unset is tofu, the one openplan ships, and terraform is the operator's
+// choice once they have put the binary into the executor image.
+func TestLoadAPIConfigReadsTerraformBinary(t *testing.T) {
+	t.Parallel()
+
+	for _, testCase := range []struct {
+		name  string
+		value string
+		want  domain.TerraformBinary
+	}{
+		{name: "unset", value: "", want: domain.TerraformBinaryTofu},
+		{name: "tofu", value: "tofu", want: domain.TerraformBinaryTofu},
+		{name: "terraform", value: " terraform ", want: domain.TerraformBinaryTerraform},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg, err := LoadAPIConfig(withValidSecurity(func(key string) string {
+				switch key {
+				case "DATABASE_URL":
+					return "postgres://user:pass@localhost:5432/db?sslmode=disable"
+				case "TEMPORAL_ADDRESS":
+					return "localhost:7233"
+				case "VALKEY_URL":
+					return "redis://localhost:6379"
+				case "OPENPLAN_TERRAFORM_BINARY":
+					return testCase.value
+				default:
+					return ""
+				}
+			}))
+			if err != nil {
+				t.Fatalf("LoadAPIConfig returned error: %v", err)
+			}
+			if cfg.TerraformBinary != testCase.want {
+				t.Fatalf("TerraformBinary = %q, want %q", cfg.TerraformBinary, testCase.want)
+			}
+		})
+	}
+}
+
+// TestLoadAPIConfigRejectsAnUnknownTerraformBinary keeps the setting to the
+// two names the executor may run: a path, a typo or another program fails at
+// startup rather than reaching a sandbox as the thing to exec.
+func TestLoadAPIConfigRejectsAnUnknownTerraformBinary(t *testing.T) {
+	t.Parallel()
+
+	for _, value := range []string{"tf", "/usr/local/bin/terraform", "Terraform", "sh"} {
+		t.Run(value, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := LoadAPIConfig(withValidSecurity(func(key string) string {
+				switch key {
+				case "DATABASE_URL":
+					return "postgres://user:pass@localhost:5432/db?sslmode=disable"
+				case "TEMPORAL_ADDRESS":
+					return "localhost:7233"
+				case "VALKEY_URL":
+					return "redis://localhost:6379"
+				case "OPENPLAN_TERRAFORM_BINARY":
+					return value
+				default:
+					return ""
+				}
+			}))
+			if !errors.Is(err, ErrInvalidConfig) {
+				t.Fatalf("error = %v, want ErrInvalidConfig", err)
+			}
+			if err == nil || !strings.Contains(err.Error(), "OPENPLAN_TERRAFORM_BINARY") {
+				t.Fatalf("error = %v, want it to name OPENPLAN_TERRAFORM_BINARY", err)
+			}
+		})
+	}
+}
+
 func TestLoadAPIConfigRequiresDatabaseURL(t *testing.T) {
 	t.Parallel()
 

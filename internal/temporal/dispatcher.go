@@ -25,6 +25,9 @@ type DispatcherOptions struct {
 	// TerraformTimeout bounds each Terraform command the run issues. Zero
 	// leaves the workflow's own default in place.
 	TerraformTimeout time.Duration
+	// TerraformBinary is the CLI the run's commands execute. Empty leaves
+	// the workflow's own default in place.
+	TerraformBinary domain.TerraformBinary
 }
 
 func NewDispatcher(temporalClient client.Client, options DispatcherOptions) *Dispatcher {
@@ -51,6 +54,12 @@ func (dispatcher *Dispatcher) StartTemplateRun(ctx context.Context, input domain
 	// value for its whole life, because it is in the workflow's input.
 	if input.TerraformTimeout <= 0 {
 		input.TerraformTimeout = dispatcher.options.TerraformTimeout
+	}
+	// The binary is stamped for the same reasons, and an apply started later
+	// re-stamps it too: a saved plan is applied by whichever binary the
+	// deployment runs then, and the run's logs say which that was.
+	if input.TerraformBinary == "" {
+		input.TerraformBinary = dispatcher.options.TerraformBinary
 	}
 	_, err := dispatcher.client.ExecuteWorkflow(
 		ctx,
@@ -92,6 +101,9 @@ func (dispatcher *Dispatcher) StartTemplateSync(ctx context.Context, input domai
 func (dispatcher *Dispatcher) StartTemplateApply(ctx context.Context, input domain.TemplateRunWorkflowInput) error {
 	if input.TerraformTimeout <= 0 {
 		input.TerraformTimeout = dispatcher.options.TerraformTimeout
+	}
+	if input.TerraformBinary == "" {
+		input.TerraformBinary = dispatcher.options.TerraformBinary
 	}
 	_, err := dispatcher.client.ExecuteWorkflow(
 		ctx,

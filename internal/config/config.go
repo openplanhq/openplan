@@ -49,7 +49,12 @@ type APIConfig struct {
 	// plane owns it because the control plane is what schedules the command and
 	// tells Temporal how long to wait; the executor never sees the value.
 	TerraformTimeout time.Duration
-	Debug            bool
+	// TerraformBinary is the CLI every run's commands execute, tofu or
+	// terraform. The control plane owns it for the same reason as the
+	// timeout, and so that there is one source of truth: the executor runs
+	// what each command names, and the run's logs record it.
+	TerraformBinary domain.TerraformBinary
+	Debug           bool
 }
 
 // ExecutorConfig is the whole of the executor's configuration. It runs next to
@@ -162,6 +167,11 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 		return APIConfig{}, err
 	}
 	cfg.TerraformTimeout = terraformTimeout
+	terraformBinary, err := loadTerraformBinary(getenv)
+	if err != nil {
+		return APIConfig{}, err
+	}
+	cfg.TerraformBinary = terraformBinary
 
 	if cfg.DatabaseURL == "" {
 		return APIConfig{}, fmt.Errorf("%w: DATABASE_URL is required", ErrInvalidConfig)
@@ -282,6 +292,26 @@ func loadTerraformTimeout(getenv func(string) string) (time.Duration, error) {
 		return 0, fmt.Errorf("%w: OPENPLAN_TERRAFORM_TIMEOUT must be greater than zero", ErrInvalidConfig)
 	}
 	return timeout, nil
+}
+
+// loadTerraformBinary reads OPENPLAN_TERRAFORM_BINARY, which CLI runs every
+// Terraform command: tofu, the one openplan ships, or terraform, which the
+// operator puts into the executor image themselves (README, "Running
+// HashiCorp Terraform").
+//
+// Only the two names are accepted, not a path: the value travels to the
+// executor as data and names a program in a sandbox, so the allowlist here
+// and in the runner is what keeps that from being any program. Anything
+// else fails at startup, where the operator who set it is looking.
+func loadTerraformBinary(getenv func(string) string) (domain.TerraformBinary, error) {
+	value := domain.TerraformBinary(strings.TrimSpace(getenv("OPENPLAN_TERRAFORM_BINARY")))
+	if value == "" {
+		return domain.DefaultTerraformBinary, nil
+	}
+	if !value.Valid() {
+		return "", fmt.Errorf("%w: OPENPLAN_TERRAFORM_BINARY must be tofu or terraform, got %q", ErrInvalidConfig, value)
+	}
+	return value, nil
 }
 
 // loadCredentialEncryptionKey validates CREDENTIAL_ENCRYPTION_KEY the same

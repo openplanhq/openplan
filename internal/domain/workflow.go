@@ -108,6 +108,9 @@ type TemplateRunWorkflowInput struct {
 	// run was started with stays visible in its workflow history; zero means
 	// DefaultTerraformTimeout.
 	TerraformTimeout time.Duration
+	// TerraformBinary is the CLI this run's commands execute, stamped by the
+	// dispatcher the same way; empty means DefaultTerraformBinary.
+	TerraformBinary TerraformBinary
 }
 
 // TemplateRunStatusActivityInput asks the control plane to move a run along

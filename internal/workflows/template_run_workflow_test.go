@@ -711,6 +711,54 @@ func TestTemplatePlanWorkflowBoundsTerraformCommandsByTheConfiguredTimeout(t *te
 	}
 }
 
+// TestTemplatePlanWorkflowRunsTheConfiguredBinary pins that the binary the
+// run was dispatched with reaches every command and every log row, and that
+// an input without one runs tofu, the one openplan ships.
+func TestTemplatePlanWorkflowRunsTheConfiguredBinary(t *testing.T) {
+	for _, testCase := range []struct {
+		name       string
+		configured domain.TerraformBinary
+		want       domain.TerraformBinary
+	}{
+		{name: "configured", configured: domain.TerraformBinaryTerraform, want: domain.TerraformBinaryTerraform},
+		{name: "unset", configured: "", want: domain.TerraformBinaryTofu},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			env := newTemplateRunWorkflowTestEnvironment(t)
+			input := templateRunWorkflowInput(domain.OperationPlan)
+			input.TerraformBinary = testCase.configured
+			var commands, rows []domain.TerraformBinary
+
+			mockPrepareWorkspace(t, env)
+			env.OnActivity(domain.FetchSourceActivityName, mock.Anything, mock.Anything).
+				Return(domain.FetchSourceActivityOutput{TerraformPath: "run/workspace/source"}, nil)
+			env.OnActivity(domain.RunTerraformActivityName, mock.Anything, mock.Anything).
+				Return(func(_ context.Context, input domain.RunTerraformActivityInput) (domain.RunTerraformActivityOutput, error) {
+					commands = append(commands, input.Binary)
+					return domain.RunTerraformActivityOutput{}, nil
+				})
+			env.OnActivity(domain.RecordTemplateRunLogActivityName, mock.Anything, mock.Anything).
+				Return(func(_ context.Context, log domain.TemplateRunLog) error {
+					rows = append(rows, log.Binary)
+					return nil
+				})
+			env.OnActivity(domain.RecordTemplateRunStatusActivityName, mock.Anything, mock.Anything).Return(nil)
+
+			env.ExecuteWorkflow(TemplatePlanWorkflow, input)
+
+			assertWorkflowCompleted(t, env)
+			if len(commands) == 0 || len(rows) == 0 {
+				t.Fatal("no Terraform command ran or no log row was recorded")
+			}
+			for _, binary := range append(commands, rows...) {
+				if binary != testCase.want {
+					t.Fatalf("binary = %q, want %q", binary, testCase.want)
+				}
+			}
+		})
+	}
+}
+
 func TestTemplatePlanWorkflowRecordsPlanSteps(t *testing.T) {
 	t.Parallel()
 
