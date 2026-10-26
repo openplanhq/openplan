@@ -387,6 +387,21 @@ export function useDiscardRunMutation(tenantID: string) {
   });
 }
 
+// An ended run fails, which frees its template: the run, the template's
+// runs (what locks Plan and Apply) and the attention list all move.
+export function useEndRunMutation(tenantID: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (variables: { runID: string; stackTemplateID: string; body: Parameters<typeof client.endRun>[2] }) =>
+      client.endRun(tenantID, variables.runID, variables.body),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.templateRun(tenantID, variables.runID) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.templateRuns(tenantID, variables.stackTemplateID) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.attention(tenantID) });
+    }
+  });
+}
+
 export function useStackGrantsQuery(tenantID: string, stackID: string) {
   return useQuery({
     queryKey: queryKeys.stackGrants(tenantID, stackID),

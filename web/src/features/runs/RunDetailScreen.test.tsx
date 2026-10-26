@@ -895,9 +895,10 @@ describe("RunDetailScreen", () => {
     expect(screen.queryByRole("button", { name: /^Approve$/ })).toBeNull();
   });
 
-  // A run planning or applying cannot be stopped, so it offers no action,
-  // whatever the viewer may do.
-  it.each(["queued", "running"] as const)("offers nothing on a run that is %s", (status) => {
+  // A run planning or applying cannot be stopped, so it offers neither
+  // Approve nor Discard. It offers End run to an operator, for the case where
+  // its workflow is gone; the server refuses a run still working.
+  it.each(["queued", "running"] as const)("offers only End run on a run that is %s", (status) => {
     const queryClient = testQueryClient();
     seedCapabilities(queryClient, allAllowed);
     queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), run({ status }));
@@ -906,6 +907,108 @@ describe("RunDetailScreen", () => {
     renderScreen(queryClient);
 
     expect(screen.queryByRole("button", { name: /Cancel|Discard|Approve/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "End run" }).getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("offers End run only to someone who can operate the stack", () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, { ...allAllowed, can_operate: false, can_approve: false, can_manage_access: false });
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), run({ status: "running" }));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([]));
+
+    renderScreen(queryClient);
+
+    expect(screen.queryByRole("button", { name: "End run" })).toBeNull();
+  });
+
+  it("asks before ending a run, and says what ending an apply means", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), run({ status: "running", operation: "apply", run_number: 4 }));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (init?.method === "POST" && url.endsWith("/template-runs/run_1/end")) {
+        return new Response(null, { status: 204 });
+      }
+      if (url.endsWith("/template-runs/run_1")) {
+        return jsonResponse(run({ status: "failed", operation: "apply", run_number: 4, error_summary: "Ended by an operator." }));
+      }
+      return jsonResponse([]);
+    });
+
+    renderScreen(queryClient);
+
+    const opener = screen.getByRole("button", { name: "End run" });
+    fireEvent.click(opener);
+    const confirm = screen.getByTestId("run-end-confirm");
+    expect(opener.getAttribute("aria-expanded")).toBe("true");
+    expect(within(confirm).getByText("End run #4?")).toBeTruthy();
+    expect(within(confirm).getByText(/the infrastructure may have changed: plan again/)).toBeTruthy();
+    // Focus lands on Cancel, so a stray Enter cancels.
+    expect(document.activeElement).toBe(within(confirm).getByRole("button", { name: "Cancel" }));
+    // Nothing was sent by opening the question.
+    expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/end"), expect.anything());
+
+    fireEvent.click(within(confirm).getByRole("button", { name: "End run" }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/template-runs/run_1/end"),
+        expect.objectContaining({ method: "POST", body: JSON.stringify({ reason: "ended from run detail" }) })
+      )
+    );
+    await waitFor(() => expect(screen.queryByTestId("run-end-confirm")).toBeNull());
+  });
+
+  it("cancelling the question returns focus to End run", () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), run({ status: "running", operation: "plan" }));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([]));
+
+    renderScreen(queryClient);
+
+    const opener = screen.getByRole("button", { name: "End run" });
+    fireEvent.click(opener);
+    const confirm = screen.getByTestId("run-end-confirm");
+    // A plan changes nothing, so its sentence doesn't warn about the infrastructure.
+    expect(within(confirm).queryByText(/infrastructure/)).toBeNull();
+    fireEvent.click(within(confirm).getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByTestId("run-end-confirm")).toBeNull();
+    expect(document.activeElement).toBe(opener);
+  });
+
+  // The server tells a gone workflow from a live one; its reason is what the
+  // person reads, under the header, and the question closes.
+  it("shows the server's refusal when the run's workflow is still running", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), run({ status: "running", operation: "apply", run_number: 4 }));
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (init?.method === "POST" && url.endsWith("/template-runs/run_1/end")) {
+        return new Response(
+          JSON.stringify({
+            type: "https://openplan.run/problems/run-workflow-running",
+            title: "The run's workflow is still running",
+            status: 409,
+            detail: "Run #4's workflow is still running in Temporal, so it will finish the run itself. Wait for it, or terminate the workflow in Temporal first."
+          }),
+          { status: 409, headers: { "Content-Type": "application/problem+json" } }
+        );
+      }
+      return jsonResponse([]);
+    });
+
+    renderScreen(queryClient);
+
+    fireEvent.click(screen.getByRole("button", { name: "End run" }));
+    fireEvent.click(within(screen.getByTestId("run-end-confirm")).getByRole("button", { name: "End run" }));
+
+    await waitFor(() => expect(screen.getByText(/Run #4's workflow is still running in Temporal/)).toBeTruthy());
+    expect(screen.queryByTestId("run-end-confirm")).toBeNull();
+    expect(screen.getByRole("button", { name: "End run" })).toBeTruthy();
   });
 
   it("discards a plan waiting for approval", async () => {

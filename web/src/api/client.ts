@@ -85,6 +85,10 @@ interface DiscardRunRequest {
   reason: string;
 }
 
+interface EndRunRequest {
+  reason: string;
+}
+
 export function getMe(): Promise<Me> {
   return requestJSON("/v1/me");
 }
@@ -315,6 +319,16 @@ export function approveRun(tenantID: string, runID: string): Promise<TemplateRun
 // or applying cannot be stopped.
 export function discardRun(tenantID: string, runID: string, body: DiscardRunRequest): Promise<void> {
   return requestNoContent(`/v1/tenants/${encodeURIComponent(tenantID)}/template-runs/${encodeURIComponent(runID)}/discard`, {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+}
+
+// endRun ends a queued or running run whose workflow is gone, as failed. A
+// run that is still working cannot be stopped: the server refuses while its
+// workflow runs (409), and when it can't ask Temporal (503).
+export function endRun(tenantID: string, runID: string, body: EndRunRequest): Promise<void> {
+  return requestNoContent(`/v1/tenants/${encodeURIComponent(tenantID)}/template-runs/${encodeURIComponent(runID)}/end`, {
     method: "POST",
     body: JSON.stringify(body)
   });

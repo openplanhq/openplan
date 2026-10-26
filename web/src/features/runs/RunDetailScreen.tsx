@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Ban, Loader2, RefreshCw } from "lucide-react";
 import { useParams } from "react-router-dom";
 import {
   useApproveRunMutation,
   useDiscardRunMutation,
+  useEndRunMutation,
   useTemplateRunChangesQuery,
   useTemplateRunByNumberQuery,
   useTemplateRunLogsQuery,
@@ -14,10 +15,12 @@ import {
 import { ApiRequestError } from "../../api/client";
 import { isTerminalRunStatus } from "../../api/polling";
 import { apiErrorMessage } from "../../api/problems";
+import RequireCapability from "../../auth/RequireCapability";
 import { useTenantID } from "../../auth/useTenantID";
 import { formatDateTime } from "../../shared/formatTimestamp";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
+import InlineConfirm from "../../shared/InlineConfirm";
 import PlanDiff from "../../shared/PlanDiff";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import { cn } from "@/lib/utils";
@@ -75,10 +78,16 @@ export default function RunDetailScreen() {
 
   const approveRunMutation = useApproveRunMutation(tenantID);
   const discardRunMutation = useDiscardRunMutation(tenantID);
+  const endRunMutation = useEndRunMutation(tenantID);
 
-  // Only a plan waiting for approval can be acted on: a run planning or
-  // applying cannot be stopped.
+  // A plan waiting for approval is approved or discarded. A run planning or
+  // applying cannot be stopped, but one whose workflow is gone can be ended;
+  // the server tells the two apart, so the action is offered on both and
+  // refused for a run still working.
   const canApprove = Boolean(run && run.status === "waiting_approval");
+  const canEnd = Boolean(run && (run.status === "queued" || run.status === "running"));
+  const [confirmingEnd, setConfirmingEnd] = useState(false);
+  const endButtonRef = useRef<HTMLButtonElement>(null);
 
   async function runAction(action: () => Promise<void>) {
     setErrorMessage("");
@@ -99,6 +108,24 @@ export default function RunDetailScreen() {
     await runAction(async () => {
       await discardRunMutation.mutateAsync({ runID: runId, body: { reason: "discarded from run detail" } });
     });
+  }
+
+  // The confirm closes either way: ended, the run polls into failed and the
+  // action goes with it; refused, the server's reason shows under the header
+  // and focus returns to the button that asked.
+  async function handleEnd() {
+    await runAction(async () => {
+      try {
+        await endRunMutation.mutateAsync({ runID: runId, stackTemplateID: stackTemplateId, body: { reason: "ended from run detail" } });
+      } finally {
+        closeEndConfirm();
+      }
+    });
+  }
+
+  function closeEndConfirm() {
+    setConfirmingEnd(false);
+    endButtonRef.current?.focus();
   }
 
   // The switch appears once the run has loaded; the logs show before that,
@@ -209,7 +236,35 @@ export default function RunDetailScreen() {
                 />
               </div>
             )}
+            {canEnd && (
+              <RequireCapability capability="can_operate" stackId={stackId}>
+                <button
+                  ref={endButtonRef}
+                  type="button"
+                  className={cn(buttonClass("outline"), "text-destructive hover:text-destructive pointer-coarse:h-11")}
+                  aria-expanded={confirmingEnd}
+                  onClick={() => setConfirmingEnd(true)}
+                >
+                  End run
+                </button>
+              </RequireCapability>
+            )}
           </header>
+          {canEnd && confirmingEnd && (
+            <InlineConfirm
+              question={`End run #${run.run_number}?`}
+              confirmLabel="End run"
+              confirmIcon={Ban}
+              busy={endRunMutation.isPending}
+              onConfirm={() => void handleEnd()}
+              onCancel={closeEndConfirm}
+              testId="run-end-confirm"
+            >
+              {run.operation === "plan"
+                ? "Only for a run whose workflow is gone; a run still working is refused."
+                : "Only for a run whose workflow is gone. If its apply had started, the infrastructure may have changed: plan again before relying on this stack."}
+            </InlineConfirm>
+          )}
           {errorMessage && <ErrorLine>{errorMessage}</ErrorLine>}
           <dl className="grid min-w-0 gap-x-6 gap-y-4 rounded-lg border px-5 py-4 sm:grid-cols-3">
             <Fact term="Started">
