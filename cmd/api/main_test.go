@@ -933,6 +933,10 @@ func (recordingStore) DiscardTemplateRun(context.Context, domain.TemplateRunDisc
 	return false, nil
 }
 
+func (recordingStore) EndTemplateRun(context.Context, domain.TemplateRunEnd) (bool, error) {
+	return false, nil
+}
+
 func (recordingStore) CreatePlanKey(context.Context, domain.TenantID, domain.TemplateRunID) ([]byte, error) {
 	return nil, nil
 }
@@ -1172,6 +1176,10 @@ func (recordingAPIDispatcher) StartTemplateSync(context.Context, domain.Template
 
 func (recordingAPIDispatcher) StartTemplateApply(context.Context, domain.TemplateRunWorkflowInput) error {
 	return nil
+}
+
+func (recordingAPIDispatcher) DescribeTemplateRunWorkflows(context.Context, domain.TenantID, domain.TemplateRunID) ([]domain.TemplateRunWorkflow, error) {
+	return nil, nil
 }
 
 // TestShutdownContextCancelsOnSIGTERM pins the signal wiring main depends on.
