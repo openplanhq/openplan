@@ -255,6 +255,8 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	server.handleTenantRoute("POST", "/template-runs/{run_id}/approve", server.handleApproveRun)
 	// Discards a template run's plan waiting for approval.
 	server.handleTenantRoute("POST", "/template-runs/{run_id}/discard", server.handleDiscardRun)
+	// Ends a queued or running template run whose workflow is gone.
+	server.handleTenantRoute("POST", "/template-runs/{run_id}/end", server.handleEndRun)
 	server.handler = withErrorEnvelope(server.mux)
 	return server
 }
@@ -977,12 +979,26 @@ func (server *Server) handleApproveRun(response http.ResponseWriter, request *ht
 }
 
 func (server *Server) handleDiscardRun(response http.ResponseWriter, request *http.Request) {
-	var body discardRunRequest
+	var body runReasonRequest
 	if !decodeOptionalRequestBody(response, request, &body) {
 		return
 	}
 
 	err := server.service.DiscardRun(request.Context(), app.DiscardRunCommand{
+		TenantID: domain.TenantID(request.PathValue("tenant_id")),
+		RunID:    domain.TemplateRunID(request.PathValue("run_id")),
+		Reason:   body.Reason,
+	})
+	writeNoContent(response, err)
+}
+
+func (server *Server) handleEndRun(response http.ResponseWriter, request *http.Request) {
+	var body runReasonRequest
+	if !decodeOptionalRequestBody(response, request, &body) {
+		return
+	}
+
+	err := server.service.EndRun(request.Context(), app.EndRunCommand{
 		TenantID: domain.TenantID(request.PathValue("tenant_id")),
 		RunID:    domain.TemplateRunID(request.PathValue("run_id")),
 		Reason:   body.Reason,
@@ -1091,7 +1107,9 @@ type updateTemplateRequest struct {
 	SourceRef string `json:"source_ref"`
 }
 
-type discardRunRequest struct {
+// runReasonRequest is the optional body of a discard or an end: why, in the
+// caller's words, recorded with the run.
+type runReasonRequest struct {
 	Reason string `json:"reason"`
 }
 
