@@ -186,6 +186,7 @@ one before it left.
 - [Local development](docs/development.md)
 - [Architecture and product model](docs/architecture.md)
 - [Apply run sequence](docs/apply-run-sequence.md)
+- [Operations runbook](docs/operations.md)
 - [Authentication and authorization](docs/authentication.md)
 - [Authentication and authorization security architecture](docs/security-architecture.md)
 - [API reference](docs/openapi.yaml)
