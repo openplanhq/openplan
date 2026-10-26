@@ -121,6 +121,36 @@ a published image cannot shadow your edit:
 OPENPLAN_PULL_POLICY=build docker compose up -d --build
 ```
 
+### Running HashiCorp Terraform
+
+openplan ships OpenTofu and runs every template with it by default. To run
+your templates with HashiCorp Terraform instead, put the binary into the
+executor image and tell the api to use it.
+
+openplan doesn't distribute Terraform: it is under the Business Source
+License, and running it inside your own openplan is your organisation's
+internal use, which the license allows. Build an executor image from the
+release you run, with the Terraform release you want, verified against its
+`SHA256SUMS` from https://releases.hashicorp.com/terraform/:
+
+```dockerfile
+FROM ghcr.io/openplanhq/openplan-executor:v0.4.0
+COPY terraform /opt/openplan/guest/usr/local/bin/terraform
+```
+
+Point the `executor` service at that image, and set on the `api`:
+
+```bash
+OPENPLAN_TERRAFORM_BINARY=terraform
+```
+
+Every run started from then on runs `terraform init`, `terraform plan` and
+so on, and its logs say so; earlier runs keep saying `tofu`. If the setting
+says `terraform` but the executor image has no such binary, the run's first
+command fails and its log says exactly that. Both tools read the same state
+format, so a template built for one usually runs on the other; check with a
+plan before you apply.
+
 ### Try it with the demo templates
 
 [`openplanhq/demo-templates`](https://github.com/openplanhq/demo-templates)

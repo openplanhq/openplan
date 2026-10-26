@@ -132,7 +132,12 @@ completes, so an executor crash can lose in-flight local output.
 Each Terraform command inside that session is bounded separately by
 `OPENPLAN_TERRAFORM_TIMEOUT` (default 45 minutes), read by the API and stamped
 onto the workflow input when the run is dispatched, so the budget a run started
-with stays visible in its history. The ceiling is per command, not per run: a
+with stays visible in its history. `OPENPLAN_TERRAFORM_BINARY` (`tofu`, the
+default, or `terraform`) is read and stamped the same way: it names the CLI
+every command of the run executes, each command's log row records it, and a
+run keeps the binary it started with. openplan ships only OpenTofu; an
+operator who wants Terraform copies the binary into the executor image's
+guest root themselves (README, "Running HashiCorp Terraform"). The ceiling is per command, not per run: a
 run issues `init`, workspace selection, and then `plan`, `apply`, or `destroy`,
 and each gets the full budget. While a command runs, the executor heartbeats
 every 20 seconds, and Temporal fails the activity if two minutes pass without
@@ -157,16 +162,17 @@ For MVP, executors use a local process runner:
 LocalTerraformRunner
 ```
 
-Each Terraform-compatible activity uses the OpenTofu CLI (`tofu`) and:
+Each Terraform-compatible activity uses the configured CLI (`tofu` by
+default, or `terraform`; see `OPENPLAN_TERRAFORM_BINARY` above) and:
 
 - Creates a fresh temporary working directory.
 - Clones the template GitHub repository.
 - Checks out the selected ref.
 - Changes into the template root path.
 - Reads `template.yaml` as metadata when needed.
-- Runs `tofu init`.
+- Runs `init`.
 - Selects or creates the assigned Terraform workspace.
-- Runs `tofu plan`, `tofu apply`, or `tofu destroy`.
+- Runs `plan`, `apply`, or `destroy`.
 - Streams redacted logs.
 - Persists redacted logs.
 - Cleans up the temporary working directory.
@@ -454,9 +460,11 @@ Templates must bring their own backend configuration. The platform does not prov
 The platform still enforces workspace selection:
 
 ```text
-tofu init
-tofu workspace select <workspace> || tofu workspace new <workspace>
+<binary> init
+<binary> workspace select <workspace> || <binary> workspace new <workspace>
 ```
+
+where `<binary>` is `tofu` or `terraform` as `OPENPLAN_TERRAFORM_BINARY` says.
 
 The isolation contract is:
 

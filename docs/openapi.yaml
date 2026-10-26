@@ -2978,9 +2978,11 @@ components:
           type: string
           description: |
             `command` as people read it, such as `tofu init` or
-            `tofu plan -destroy`: the binary and subcommand that ran, without
-            the arguments. A destroy's second step reads `tofu apply`, since
-            it applies the saved destroy plan.
+            `terraform plan -destroy`: the binary and subcommand that ran,
+            without the arguments. The binary is `tofu` or `terraform`, as the
+            deployment ran it then (`OPENPLAN_TERRAFORM_BINARY`); a log keeps
+            its own even after the deployment switches. A destroy's second
+            step reads `tofu apply`, since it applies the saved destroy plan.
         state:
           type: string
           enum: [live, complete, lost]
