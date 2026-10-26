@@ -163,8 +163,8 @@ func TestTemplateResponseFields(t *testing.T) {
 	}, time.Date(2026, 10, 21, 11, 0, 0, 0, time.UTC))
 
 	assert.Equal(t, []string{
-		"created_at", "description", "id", "latest_sync", "latest_template_revision_id", "name", "repo_name",
-		"repo_owner", "root_path", "source_ref", "tags", "tenant_id",
+		"created_at", "description", "id", "installed", "latest_sync", "latest_template_revision_id", "name",
+		"repo_name", "repo_owner", "root_path", "source_ref", "tags", "tenant_id",
 	}, jsonKeys(t, response))
 }
 

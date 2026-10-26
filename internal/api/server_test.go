@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -843,6 +844,60 @@ func TestTemplateReadsCarryTheLatestSync(t *testing.T) {
 				t.Fatalf("list latest_sync = %s, want %s", got, test.want)
 			}
 		})
+	}
+}
+
+// A template read and the list say whether any stack has installed the
+// template, so a client can leave Delete out where the server would refuse it.
+func TestTemplateReadsSayWhetherInstalled(t *testing.T) {
+	t.Parallel()
+
+	deps := newAPITestDependencies(t)
+	deps.sourceTemplates.templates = []domain.SourceTemplate{
+		{ID: "source_template_vpc", TenantID: "tenant_123", Installed: true},
+		{ID: "source_template_unused", TenantID: "tenant_123"},
+	}
+	server := NewServer(deps.service(), configuredTenantID)
+
+	type installedField struct {
+		ID        string `json:"id"`
+		Installed bool   `json:"installed"`
+	}
+	for id, want := range map[string]bool{"source_template_vpc": true, "source_template_unused": false} {
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/templates/"+id, nil))
+		if response.Code != http.StatusOK {
+			t.Fatalf("read %s status = %d, want %d; body = %s", id, response.Code, http.StatusOK, response.Body.String())
+		}
+		if !strings.Contains(response.Body.String(), `"installed":`) {
+			t.Fatalf("read %s carries no installed field: %s", id, response.Body.String())
+		}
+		var one installedField
+		if err := json.Unmarshal(response.Body.Bytes(), &one); err != nil {
+			t.Fatalf("decode read: %v", err)
+		}
+		if one.Installed != want {
+			t.Fatalf("read %s installed = %t, want %t", id, one.Installed, want)
+		}
+	}
+
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/templates", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("list status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	var list struct {
+		Items []installedField `json:"items"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &list); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	got := map[string]bool{}
+	for _, item := range list.Items {
+		got[item.ID] = item.Installed
+	}
+	if want := map[string]bool{"source_template_vpc": true, "source_template_unused": false}; !maps.Equal(got, want) {
+		t.Fatalf("list installed = %v, want %v", got, want)
 	}
 }
 

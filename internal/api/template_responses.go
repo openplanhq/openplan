@@ -168,6 +168,7 @@ type templateResponse struct {
 	Description              string              `json:"description"`
 	Tags                     []string            `json:"tags"`
 	LatestTemplateRevisionID string              `json:"latest_template_revision_id"`
+	Installed                bool                `json:"installed"`
 	LatestSync               *latestSyncResponse `json:"latest_sync"`
 	CreatedAt                time.Time           `json:"created_at"`
 }
@@ -301,6 +302,7 @@ func newTemplateResponse(template domain.SourceTemplate, now time.Time) template
 		Description:              template.Description,
 		Tags:                     tags,
 		LatestTemplateRevisionID: string(template.LatestTemplateRevisionID),
+		Installed:                template.Installed,
 		LatestSync:               newLatestSyncResponse(template.LatestSync, now),
 		CreatedAt:                template.CreatedAt,
 	}

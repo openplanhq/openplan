@@ -2272,6 +2272,12 @@ components:
         latest_template_revision_id:
           type: string
           description: The newest revision a sync recorded. Empty until one has.
+        installed:
+          type: boolean
+          description: |
+            True once any stack has installed the template, whether or not
+            that install has since been destroyed. Such a template can't be
+            deleted (see `deleteTemplate`), so a client need not offer it.
         latest_sync:
           type: [object, "null"]
           description: |
@@ -2297,8 +2303,8 @@ components:
         created_at: { type: string, format: date-time }
       required:
         [id, tenant_id, repo_owner, repo_name, source_ref, root_path, name,
-         description, tags, latest_template_revision_id, latest_sync,
-         created_at]
+         description, tags, latest_template_revision_id, installed,
+         latest_sync, created_at]
 
     TemplateSyncStatus:
       type: string
