@@ -921,6 +921,10 @@ func (recordingStore) DiscardTemplateRun(context.Context, domain.TemplateRunDisc
 	return false, nil
 }
 
+func (recordingStore) EndTemplateRun(context.Context, domain.TemplateRunEnd) (bool, error) {
+	return false, nil
+}
+
 func (recordingStore) CreatePlanKey(context.Context, domain.TenantID, domain.TemplateRunID) ([]byte, error) {
 	return nil, nil
 }

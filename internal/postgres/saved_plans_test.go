@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/vishu42/openplan/internal/domain"
@@ -508,5 +509,161 @@ func TestBeginTemplateApplyClaimIsIdempotent(t *testing.T) {
 	}
 	if got := runStatus(t, ctx, pool, "run_123"); got != domain.TemplateRunRunning {
 		t.Fatalf("status = %q, want running", got)
+	}
+}
+
+// endBy is the end an operator makes of a run whose workflow is gone.
+func endBy(runID domain.TemplateRunID, workflowID string) domain.TemplateRunEnd {
+	return domain.TemplateRunEnd{
+		RunID: runID, TenantID: "tenant_123", EndedBy: "operator_789", Reason: "lost in the restore",
+		EndedAt: time.Now(), Summary: "Ended by an operator: the run's workflow was not found in Temporal.",
+		WorkflowID: workflowID,
+	}
+}
+
+// An applying run whose workflow is gone is ended the way its own failure
+// would end it: the apply execution and its step fail with the summary, the
+// run fails and keeps the step it was on, the saved plan is released, and
+// the template takes another run.
+func TestEndTemplateRunEndsARunningApply(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := savedPlanStore(t, pool)
+	seedStackWithTemplate(t, ctx, store)
+	seedPlanRun(t, ctx, pool, "run_123", domain.OperationApply, domain.TemplateRunQueued)
+	if _, err := store.CreatePlanKey(ctx, "tenant_123", "run_123"); err != nil {
+		t.Fatal(err)
+	}
+	planToApproval(t, ctx, store, "run_123")
+	approve(t, ctx, store, "run_123")
+	if claimed, err := store.BeginTemplateApply(ctx, "tenant_123", "run_123", false, "template-run/tenant_123/run_123/apply"); err != nil || !claimed {
+		t.Fatalf("BeginTemplateApply = %v, %v; want claimed", claimed, err)
+	}
+	recordSteps(t, ctx, store, "run_123", domain.TemplateRunStepApplying)
+
+	end := endBy("run_123", "")
+	ended, err := endTemplateRun(ctx, pool, end)
+	if err != nil || !ended {
+		t.Fatalf("endTemplateRun = %v, %v; want ended", ended, err)
+	}
+
+	run := runAt(t, ctx, store, "run_123")
+	if run.Status != domain.TemplateRunFailed || run.Step != domain.TemplateRunStepApplying || run.ErrorSummary != end.Summary || run.CompletedAt.IsZero() {
+		t.Fatalf("ended run = %#v, want failed while applying, with the summary and a completed_at", run)
+	}
+	executions, err := store.ListTemplateRunExecutions(ctx, "tenant_123", "run_123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	apply := executions[len(executions)-1]
+	if apply.Phase != domain.RunPhaseApply || apply.Status != domain.TemplateRunExecutionFailed || apply.ErrorSummary != end.Summary || apply.FinishedAt.IsZero() {
+		t.Fatalf("apply execution = %#v, want failed with the summary", apply)
+	}
+	if step := apply.Steps[len(apply.Steps)-1]; step.Status != domain.TemplateRunExecutionFailed || step.FinishedAt.IsZero() {
+		t.Fatalf("applying step = %#v, want failed", step)
+	}
+	if !planKeyIsNull(t, ctx, pool, "run_123") {
+		t.Fatal("the ended run should have no plan key")
+	}
+	var endedBy, reason string
+	if err := pool.QueryRow(ctx, `select cancellation_requested_by, cancellation_reason from template_runs where id = 'run_123'`).Scan(&endedBy, &reason); err != nil {
+		t.Fatal(err)
+	}
+	if endedBy != "operator_789" || reason != "lost in the restore" {
+		t.Fatalf("ended by %q for %q, want the operator and the reason", endedBy, reason)
+	}
+	// The in-flight index no longer counts the ended run.
+	seedPlanRun(t, ctx, pool, "run_124", domain.OperationPlan, domain.TemplateRunQueued)
+}
+
+// A queued run no workflow ever claimed has no execution to end, so it gets a
+// failed one of the phase that should have carried it, with the summary, and
+// the run reads the summary from it.
+func TestEndTemplateRunEndsAQueuedRun(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := savedPlanStore(t, pool)
+	seedStackWithTemplate(t, ctx, store)
+	seedPlanRun(t, ctx, pool, "run_123", domain.OperationPlan, domain.TemplateRunQueued)
+
+	end := endBy("run_123", "template-run/tenant_123/run_123")
+	ended, err := endTemplateRun(ctx, pool, end)
+	if err != nil || !ended {
+		t.Fatalf("endTemplateRun = %v, %v; want ended", ended, err)
+	}
+
+	run := runAt(t, ctx, store, "run_123")
+	if run.Status != domain.TemplateRunFailed || run.Step != "" || run.ErrorSummary != end.Summary {
+		t.Fatalf("ended run = %#v, want failed with no step and the summary", run)
+	}
+	executions, err := store.ListTemplateRunExecutions(ctx, "tenant_123", "run_123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(executions) != 1 || executions[0].Phase != domain.RunPhasePlan || executions[0].WorkflowID != end.WorkflowID || executions[0].Status != domain.TemplateRunExecutionFailed {
+		t.Fatalf("executions = %#v, want one failed plan execution under the carrier's id", executions)
+	}
+}
+
+// A destroy ended after it began destroying leaves its template failed, as a
+// destroy that failed on its own would: the template is unsafe to run again
+// until someone looks.
+func TestEndTemplateRunLeavesAnInterruptedDestroyFailed(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := savedPlanStore(t, pool)
+	seedStackWithTemplate(t, ctx, store)
+	seedPlanRun(t, ctx, pool, "run_123", domain.OperationDestroy, domain.TemplateRunQueued)
+	mustSucceed(t, store.RecordTemplateRunStatus(ctx, statusWrite("run_123", domain.OperationDestroy, domain.TemplateRunRunning, domain.RunPhasePlan)))
+	mustSucceed(t, store.RecordTemplateRunEvent(ctx, domain.TemplateRunEventActivityInput{
+		TenantID: "tenant_123", RunID: "run_123", StackTemplateID: "stack_template_123", Operation: domain.OperationDestroy, Event: domain.TemplateRunDestroying,
+	}))
+
+	if ended, err := endTemplateRun(ctx, pool, endBy("run_123", "")); err != nil || !ended {
+		t.Fatalf("endTemplateRun = %v, %v; want ended", ended, err)
+	}
+
+	var lifecycle domain.StackTemplateLifecycle
+	if err := pool.QueryRow(ctx, `select lifecycle from stack_templates where id = 'stack_template_123'`).Scan(&lifecycle); err != nil {
+		t.Fatal(err)
+	}
+	if lifecycle != domain.StackTemplateFailed {
+		t.Fatalf("lifecycle = %q, want failed", lifecycle)
+	}
+}
+
+// A plan waiting for approval is discarded, not ended: nothing is stuck, and
+// the write leaves it alone.
+func TestEndTemplateRunRefusesARunThatIsNotQueuedOrRunning(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := savedPlanStore(t, pool)
+	seedStackWithTemplate(t, ctx, store)
+	seedPlanRun(t, ctx, pool, "run_123", domain.OperationApply, domain.TemplateRunQueued)
+	if _, err := store.CreatePlanKey(ctx, "tenant_123", "run_123"); err != nil {
+		t.Fatal(err)
+	}
+	planToApproval(t, ctx, store, "run_123")
+
+	ended, err := endTemplateRun(ctx, pool, endBy("run_123", ""))
+	if err != nil || ended {
+		t.Fatalf("endTemplateRun = %v, %v; want not ended", ended, err)
+	}
+	if status := runStatus(t, ctx, pool, "run_123"); status != domain.TemplateRunWaitingApproval {
+		t.Fatalf("status = %q, want still waiting for approval", status)
+	}
+	if planKeyIsNull(t, ctx, pool, "run_123") {
+		t.Fatal("the waiting plan should keep its key")
+	}
+	if ended, err := endTemplateRun(ctx, pool, endBy("run_missing", "")); err != nil || ended {
+		t.Fatalf("endTemplateRun(missing) = %v, %v; want not ended", ended, err)
 	}
 }
