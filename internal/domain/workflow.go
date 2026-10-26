@@ -277,6 +277,9 @@ type RunTerraformActivityInput struct {
 	TerraformPath   string
 	WorkspaceName   string
 	Command         TerraformCommandType
+	// Binary is the CLI Command runs under, as the run's workflow input
+	// carries it from the deployment's configuration.
+	Binary TerraformBinary
 	// LogName is the log Command spools to, named by the workflow
 	// (RunLogName).
 	LogName    string

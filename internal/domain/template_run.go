@@ -45,8 +45,30 @@ const (
 	TerraformCommandApplyAutoApprove TerraformCommandType = "apply_auto_approve"
 )
 
-// TerraformExecutable is the binary every Terraform command runs.
-const TerraformExecutable = "tofu"
+// TerraformBinary is which Terraform-compatible CLI a run's commands execute.
+// Only these two names ever reach the executor: the value crosses into the
+// sandbox as data, and the allowlist is what keeps the control plane from
+// making a sandbox exec an arbitrary program.
+type TerraformBinary string
+
+const (
+	TerraformBinaryTofu      TerraformBinary = "tofu"
+	TerraformBinaryTerraform TerraformBinary = "terraform"
+	// DefaultTerraformBinary runs unless the deployment says otherwise
+	// (OPENPLAN_TERRAFORM_BINARY). OpenTofu is the one openplan ships;
+	// Terraform the operator brings into the executor image.
+	DefaultTerraformBinary = TerraformBinaryTofu
+)
+
+// Valid reports whether the binary is one an executor may run.
+func (binary TerraformBinary) Valid() bool {
+	switch binary {
+	case TerraformBinaryTofu, TerraformBinaryTerraform:
+		return true
+	default:
+		return false
+	}
+}
 
 // terraformCommandLines is each command as a run's logs show it: what
 // actually ran, minus the arguments people do not need to read (the workspace
@@ -73,14 +95,15 @@ func (command TerraformCommandType) Valid() bool {
 	return ok
 }
 
-// CommandLine is the command as people read it: "tofu plan -destroy". Empty
-// for a command that is not valid.
-func (command TerraformCommandType) CommandLine() string {
+// CommandLine is the command as people read it, under the binary that ran
+// it: "tofu plan -destroy", "terraform init". Empty for a command or binary
+// that is not valid.
+func (command TerraformCommandType) CommandLine(binary TerraformBinary) string {
 	line, ok := terraformCommandLines[command]
-	if !ok {
+	if !ok || !binary.Valid() {
 		return ""
 	}
-	return TerraformExecutable + " " + line
+	return string(binary) + " " + line
 }
 
 // PlanSummary counts the resource changes in a saved plan. A replacement
@@ -373,12 +396,16 @@ type TemplateRunLog struct {
 	RunPhase RunPhase             `json:"run_phase"`
 	Seq      int                  `json:"seq"`
 	Command  TerraformCommandType `json:"command"`
+	// Binary is the one Command ran under, recorded with the row so a
+	// deployment that switches binaries leaves earlier logs truthful. Not
+	// on the wire: CommandLine carries it.
+	Binary TerraformBinary `json:"-"`
 	// State is where the output lives. LostReason is set only when State is
 	// lost.
 	State      TemplateRunLogState      `json:"state"`
 	LostReason TemplateRunLogLostReason `json:"lost_reason,omitempty"`
-	// CommandLine is Command as people read it. Derived when the log is
-	// read, never stored, so it follows what the executor runs.
+	// CommandLine is Command under Binary as people read it. Derived when
+	// the log is read from those two stored facts, never stored itself.
 	CommandLine string `json:"command_line"`
 	// The object fields are zero unless State is complete: there is nothing
 	// in the object store to describe before then.

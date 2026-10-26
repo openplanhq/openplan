@@ -2418,6 +2418,7 @@ func TestListTemplateRunLogsChecksRunOwnershipBeforeListingMetadata(t *testing.T
 				RunPhase:    domain.RunPhasePlan,
 				Seq:         1,
 				Command:     domain.TerraformCommandInit,
+				Binary:      domain.TerraformBinaryTofu,
 				ObjectKey:   "tenants/tenant_123/runs/run_123/logs/plan-1.log",
 				ContentType: "text/plain; charset=utf-8",
 				SizeBytes:   12,
@@ -2445,6 +2446,19 @@ func TestListTemplateRunLogsChecksRunOwnershipBeforeListingMetadata(t *testing.T
 	}
 	if logs[0].CommandLine != "tofu init" {
 		t.Fatalf("command line = %q, want tofu init", logs[0].CommandLine)
+	}
+	// The label says what that row ran under, not what the deployment runs
+	// now: a row recorded under terraform keeps saying so.
+	metadata.logs[0].Binary = domain.TerraformBinaryTerraform
+	logs, err = service.ListTemplateRunLogs(authentication.ContextWithPrincipal(context.Background(), authentication.Principal{Subject: oidcSubject}), ListTemplateRunLogsCommand{
+		TenantID: domain.TenantID("tenant_123"),
+		RunID:    domain.TemplateRunID("run_123"),
+	})
+	if err != nil {
+		t.Fatalf("ListTemplateRunLogs returned error: %v", err)
+	}
+	if logs[0].CommandLine != "terraform init" {
+		t.Fatalf("command line = %q, want terraform init", logs[0].CommandLine)
 	}
 	if metadata.gotListRunID != domain.TemplateRunID("run_123") {
 		t.Fatalf("metadata run lookup = %q, want run_123", metadata.gotListRunID)
@@ -2480,6 +2494,7 @@ func liveRunLog() domain.TemplateRunLog {
 		RunPhase: domain.RunPhasePlan,
 		Seq:      1,
 		Command:  domain.TerraformCommandInit,
+		Binary:   domain.TerraformBinaryTofu,
 		State:    domain.TemplateRunLogLive,
 	}
 }

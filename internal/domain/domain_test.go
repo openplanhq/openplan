@@ -431,12 +431,28 @@ func TestTerraformCommandLine(t *testing.T) {
 		if !command.Valid() {
 			t.Fatalf("%q is not valid", command)
 		}
-		if got := command.CommandLine(); got != want {
+		if got := command.CommandLine(TerraformBinaryTofu); got != want {
 			t.Fatalf("%q command line = %q, want %q", command, got, want)
 		}
+		// The same commands under the binary the operator brought.
+		wantTerraform := "terraform" + strings.TrimPrefix(want, "tofu")
+		if got := command.CommandLine(TerraformBinaryTerraform); got != wantTerraform {
+			t.Fatalf("%q command line = %q, want %q", command, got, wantTerraform)
+		}
+		if got := command.CommandLine(""); got != "" {
+			t.Fatalf("%q command line under no binary = %q, want none", command, got)
+		}
 	}
-	if TerraformCommandType("refresh").Valid() || TerraformCommandType("refresh").CommandLine() != "" {
+	if TerraformCommandType("refresh").Valid() || TerraformCommandType("refresh").CommandLine(TerraformBinaryTofu) != "" {
 		t.Fatal("an unknown command is valid or has a command line")
+	}
+	for binary, want := range map[TerraformBinary]bool{TerraformBinaryTofu: true, TerraformBinaryTerraform: true, "": false, "tf": false, "/usr/bin/tofu": false} {
+		if binary.Valid() != want {
+			t.Fatalf("TerraformBinary(%q).Valid() = %v, want %v", binary, !want, want)
+		}
+	}
+	if DefaultTerraformBinary != TerraformBinaryTofu {
+		t.Fatalf("default binary = %q, want tofu, the one openplan ships", DefaultTerraformBinary)
 	}
 }
 

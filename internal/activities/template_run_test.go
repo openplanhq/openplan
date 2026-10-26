@@ -259,6 +259,7 @@ func planInput(workspace string) domain.RunTerraformActivityInput {
 		WorkspacePath: workspace,
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandPlan,
+		Binary:        domain.TerraformBinaryTofu,
 		LogName:       "plan",
 	}
 }

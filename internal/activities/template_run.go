@@ -237,7 +237,7 @@ func (activities *TemplateRunActivities) RunTerraform(ctx context.Context, input
 	data, runErr := activities.sandbox.Run(ctx, sandbox.Job{
 		Activity: bodyRunTerraform,
 		Request: runTerraformRequest{
-			TerraformPath: path, WorkspaceName: input.WorkspaceName, Command: input.Command,
+			TerraformPath: path, WorkspaceName: input.WorkspaceName, Command: input.Command, Binary: input.Binary,
 			ConfigJSON: input.ConfigJSON, Environment: credentials.Environment,
 		},
 		Mounts: []sandbox.Mount{{Path: workspace}},

@@ -2432,7 +2432,7 @@ func (service *Service) GetTemplateRunLogMetadata(ctx context.Context, command G
 	if err != nil {
 		return domain.TemplateRunLog{}, fmt.Errorf("get template run log metadata: %w", err)
 	}
-	log.CommandLine = log.Command.CommandLine()
+	log.CommandLine = log.Command.CommandLine(log.Binary)
 
 	return deriveTemplateRunLogState(log, run.Status), nil
 }
@@ -2492,7 +2492,7 @@ func (service *Service) ListTemplateRunLogs(ctx context.Context, command ListTem
 		return []domain.TemplateRunLog{}, nil
 	}
 	for i := range logs {
-		logs[i].CommandLine = logs[i].Command.CommandLine()
+		logs[i].CommandLine = logs[i].Command.CommandLine(logs[i].Binary)
 		logs[i] = deriveTemplateRunLogState(logs[i], run.Status)
 	}
 

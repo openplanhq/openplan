@@ -2447,6 +2447,7 @@ func TestRecordTemplateRunLogUpsertsTenantScopedMetadata(t *testing.T) {
 		RunPhase:    domain.RunPhasePlan,
 		Seq:         1,
 		Command:     domain.TerraformCommandPlan,
+		Binary:      domain.TerraformBinaryTofu,
 		State:       domain.TemplateRunLogComplete,
 		ObjectKey:   "tenants/tenant_123/runs/run_123/logs/plan-1.log",
 		ContentType: "text/plain; charset=utf-8",
@@ -2471,6 +2472,25 @@ func TestRecordTemplateRunLogUpsertsTenantScopedMetadata(t *testing.T) {
 
 	if got != log {
 		t.Fatalf("log = %#v, want %#v", got, log)
+	}
+
+	// The binary is the row's, so a row that ran under terraform reads back
+	// as such, and the upsert moves it with the rest.
+	log.Binary = domain.TerraformBinaryTerraform
+	if err := store.RecordTemplateRunLog(ctx, log); err != nil {
+		t.Fatalf("RecordTemplateRunLog(terraform) returned error: %v", err)
+	}
+	got, err = store.GetTemplateRunLog(ctx, domain.TenantID("tenant_123"), domain.TemplateRunID("run_123"), "plan-1")
+	if err != nil {
+		t.Fatalf("GetTemplateRunLog returned error: %v", err)
+	}
+	if got.Binary != domain.TerraformBinaryTerraform {
+		t.Fatalf("binary = %q, want terraform", got.Binary)
+	}
+	// A row never names anything but the two binaries the executor may run.
+	log.Binary = "sh"
+	if err := store.RecordTemplateRunLog(ctx, log); err == nil {
+		t.Fatal("RecordTemplateRunLog(sh) returned no error, want the binary check")
 	}
 }
 
@@ -2500,6 +2520,7 @@ func TestRecordTemplateRunLogWritesALiveRowThenCompletesIt(t *testing.T) {
 		RunPhase: domain.RunPhasePlan,
 		Seq:      1,
 		Command:  domain.TerraformCommandPlan,
+		Binary:   domain.TerraformBinaryTofu,
 		State:    domain.TemplateRunLogLive,
 	}
 	if err := store.RecordTemplateRunLog(ctx, live); err != nil {
@@ -2558,6 +2579,7 @@ func TestRecordTemplateRunLogWritesALostRowWithItsReason(t *testing.T) {
 		RunPhase:   domain.RunPhasePlan,
 		Seq:        1,
 		Command:    domain.TerraformCommandInit,
+		Binary:     domain.TerraformBinaryTofu,
 		State:      domain.TemplateRunLogLost,
 		LostReason: domain.LogLostUploadFailed,
 	}
@@ -2625,6 +2647,7 @@ func TestRecordTemplateRunLogAcceptsEveryCommandInEitherPhase(t *testing.T) {
 				RunPhase:    runPhase,
 				Seq:         seq,
 				Command:     command,
+				Binary:      domain.TerraformBinaryTofu,
 				State:       domain.TemplateRunLogComplete,
 				ObjectKey:   "tenants/tenant_123/runs/run_123/logs/" + fileName,
 				ContentType: "text/plain; charset=utf-8",
@@ -2673,7 +2696,7 @@ func TestListTemplateRunLogsReturnsTenantScopedMetadataInRunOrder(t *testing.T) 
 			t.Fatal(err)
 		}
 		return domain.TemplateRunLog{
-			TenantID: domain.TenantID(tenant), RunID: domain.TemplateRunID(run), Phase: name, RunPhase: phase, Seq: seq, Command: command,
+			TenantID: domain.TenantID(tenant), RunID: domain.TemplateRunID(run), Phase: name, RunPhase: phase, Seq: seq, Command: command, Binary: domain.TerraformBinaryTofu,
 			State: domain.TemplateRunLogComplete, ObjectKey: "tenants/" + tenant + "/runs/" + run + "/logs/" + name + ".log", ContentType: "text/plain; charset=utf-8", SizeBytes: 9, UploadedAt: at,
 		}
 	}
@@ -2724,7 +2747,7 @@ func TestRecordTemplateRunLogKeepsARepeatedCommandsLogs(t *testing.T) {
 	})
 	for _, seq := range []int{1, 4} {
 		if err := store.RecordTemplateRunLog(ctx, domain.TemplateRunLog{
-			TenantID: "tenant_123", RunID: "run_123", RunPhase: domain.RunPhasePlan, Seq: seq, Command: domain.TerraformCommandInit,
+			TenantID: "tenant_123", RunID: "run_123", RunPhase: domain.RunPhasePlan, Seq: seq, Command: domain.TerraformCommandInit, Binary: domain.TerraformBinaryTofu,
 			State: domain.TemplateRunLogComplete, ObjectKey: fmt.Sprintf("tenants/tenant_123/runs/run_123/logs/plan-%d.log", seq), ContentType: "text/plain; charset=utf-8",
 			UploadedAt: time.Now(),
 		}); err != nil {
@@ -2769,6 +2792,7 @@ func TestRecordTemplateRunLogReturnsNotFoundForOtherTenant(t *testing.T) {
 		RunPhase:    domain.RunPhasePlan,
 		Seq:         1,
 		Command:     domain.TerraformCommandPlan,
+		Binary:      domain.TerraformBinaryTofu,
 		State:       domain.TemplateRunLogComplete,
 		ObjectKey:   "tenants/tenant_456/runs/run_123/logs/plan-1.log",
 		ContentType: "text/plain; charset=utf-8",

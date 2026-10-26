@@ -41,6 +41,7 @@ type runTerraformRequest struct {
 	TerraformPath string
 	WorkspaceName string
 	Command       domain.TerraformCommandType
+	Binary        domain.TerraformBinary
 	// omitempty: a nil config would otherwise cross as null, which the runner
 	// refuses as not an object, where nil means no variables.
 	ConfigJSON  json.RawMessage `json:",omitempty"`
@@ -146,6 +147,7 @@ func (b *Bodies) runTerraform(ctx context.Context, request runTerraformRequest, 
 		WorkspacePath: request.TerraformPath,
 		WorkspaceName: request.WorkspaceName,
 		Command:       request.Command,
+		Binary:        request.Binary,
 		ConfigJSON:    request.ConfigJSON,
 		Environment:   request.Environment,
 		Stdout:        output,

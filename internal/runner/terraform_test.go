@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -22,6 +23,7 @@ func TestLocalTerraformRunnerRunsTerraformPlan(t *testing.T) {
 	runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
+		Binary:        domain.TerraformBinaryTofu,
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandPlan,
@@ -48,6 +50,7 @@ func TestLocalTerraformRunnerInjectsCredentialEnvironment(t *testing.T) {
 	runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
+		Binary:        domain.TerraformBinaryTofu,
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandPlan,
@@ -88,6 +91,7 @@ func TestLocalTerraformRunnerRunsTerraformApply(t *testing.T) {
 	runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
+		Binary:        domain.TerraformBinaryTofu,
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandApply,
@@ -118,6 +122,7 @@ func TestLocalTerraformRunnerRunsTerraformDestroy(t *testing.T) {
 	runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
+		Binary:        domain.TerraformBinaryTofu,
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandDestroy,
@@ -191,6 +196,7 @@ func TestLocalTerraformRunnerSetsTerraformVariablesOnlyWhenPlanning(t *testing.T
 			runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 			_, err := runner.Run(context.Background(), TerraformCommand{
+				Binary:        domain.TerraformBinaryTofu,
 				WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 				WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 				Command:       tt.command,
@@ -246,6 +252,7 @@ func TestLocalTerraformRunnerWritesTemplateLikeStringsVerbatim(t *testing.T) {
 	runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 	if _, err := runner.Run(context.Background(), TerraformCommand{
+		Binary:        domain.TerraformBinaryTofu,
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandPlan,
@@ -267,6 +274,7 @@ func TestLocalTerraformRunnerPassesNoVarFileForAnEmptyConfig(t *testing.T) {
 		runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 		if _, err := runner.Run(context.Background(), TerraformCommand{
+			Binary:        domain.TerraformBinaryTofu,
 			WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 			WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 			Command:       domain.TerraformCommandPlan,
@@ -290,6 +298,7 @@ func TestLocalTerraformRunnerRemovesTheVarFileWhenTheCommandFails(t *testing.T) 
 	runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
+		Binary:        domain.TerraformBinaryTofu,
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandPlan,
@@ -316,6 +325,7 @@ func TestLocalTerraformRunnerRefusesAConfigThatIsNotAnObject(t *testing.T) {
 		runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 		_, err := runner.Run(context.Background(), TerraformCommand{
+			Binary:        domain.TerraformBinaryTofu,
 			WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 			WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 			Command:       domain.TerraformCommandPlan,
@@ -341,6 +351,7 @@ func TestLocalTerraformRunnerCountsAnAutoApprovedApplyFromItsOutput(t *testing.T
 	var log bytes.Buffer
 
 	result, err := runner.Run(context.Background(), TerraformCommand{
+		Binary:        domain.TerraformBinaryTofu,
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandApplyAutoApprove,
@@ -405,6 +416,7 @@ func TestLocalTerraformRunnerCountsTheChangesOfAPlanThatHasThem(t *testing.T) {
 	runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 	result, err := runner.Run(context.Background(), TerraformCommand{
+		Binary:        domain.TerraformBinaryTofu,
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandPlan,
@@ -433,6 +445,7 @@ func TestLocalTerraformRunnerReportsAPlanWithoutChangesAsSuch(t *testing.T) {
 	runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 	result, err := runner.Run(context.Background(), TerraformCommand{
+		Binary:        domain.TerraformBinaryTofu,
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandPlan,
@@ -456,6 +469,7 @@ func TestLocalTerraformRunnerFailsAPlanThatExitsOne(t *testing.T) {
 	runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
+		Binary:        domain.TerraformBinaryTofu,
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandPlan,
@@ -466,6 +480,87 @@ func TestLocalTerraformRunnerFailsAPlanThatExitsOne(t *testing.T) {
 	}
 }
 
+// The binary is the command's: a deployment configured for Terraform runs the
+// same arguments under terraform.
+func TestLocalTerraformRunnerRunsTheCommandsBinary(t *testing.T) {
+	t.Parallel()
+
+	executor := &recordingCommandExecutor{}
+	runner := NewLocalTerraformRunnerWithExecutor(executor)
+
+	_, err := runner.Run(context.Background(), TerraformCommand{
+		Binary:        domain.TerraformBinaryTerraform,
+		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
+		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
+		Command:       domain.TerraformCommandInit,
+	})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	want := []recordedCommand{{
+		dir:  "/tmp/openplan/runs/tenant_123/run_123",
+		name: "terraform",
+		args: []string{"init", "-input=false", "-no-color"},
+	}}
+	if !reflect.DeepEqual(executor.commands, want) {
+		t.Fatalf("commands = %#v, want %#v", executor.commands, want)
+	}
+}
+
+// The binary's name crosses into the sandbox as data, so only the two known
+// names run; anything else, an empty value included, is refused before any
+// command.
+func TestLocalTerraformRunnerRefusesAnUnknownBinary(t *testing.T) {
+	t.Parallel()
+
+	for _, binary := range []domain.TerraformBinary{"", "tf", "/usr/local/bin/tofu", "sh"} {
+		executor := &recordingCommandExecutor{}
+		runner := NewLocalTerraformRunnerWithExecutor(executor)
+
+		_, err := runner.Run(context.Background(), TerraformCommand{
+			Binary:        binary,
+			WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
+			WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
+			Command:       domain.TerraformCommandInit,
+		})
+		if err == nil || !strings.Contains(err.Error(), "not tofu or terraform") {
+			t.Fatalf("binary %q: error = %v, want the binary refused", binary, err)
+		}
+		if len(executor.commands) != 0 {
+			t.Fatalf("binary %q: commands = %#v, want none", binary, executor.commands)
+		}
+	}
+}
+
+// A deployment that says terraform on an executor image that was never given
+// one fails its first command; the error says so and where the binary goes,
+// rather than the bare "executable file not found".
+func TestLocalTerraformRunnerNamesAMissingBinary(t *testing.T) {
+	t.Parallel()
+
+	executor := &recordingCommandExecutor{errs: []error{&exec.Error{Name: "terraform", Err: exec.ErrNotFound}}}
+	runner := NewLocalTerraformRunnerWithExecutor(executor)
+
+	_, err := runner.Run(context.Background(), TerraformCommand{
+		Binary:        domain.TerraformBinaryTerraform,
+		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
+		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
+		Command:       domain.TerraformCommandInit,
+	})
+	var cmdErr *CommandError
+	if !errors.As(err, &cmdErr) || cmdErr.Command != domain.TerraformCommandInit {
+		t.Fatalf("error = %v, want an init CommandError", err)
+	}
+	for _, want := range []string{"terraform is not in the executor image", "/opt/openplan/guest/usr/local/bin", "README"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error = %q, want it to say %q", err, want)
+		}
+	}
+	if !errors.Is(err, exec.ErrNotFound) {
+		t.Fatalf("error = %v, want it to keep exec.ErrNotFound", err)
+	}
+}
+
 func TestLocalTerraformRunnerSelectsExistingWorkspace(t *testing.T) {
 	t.Parallel()
 
@@ -473,6 +568,7 @@ func TestLocalTerraformRunnerSelectsExistingWorkspace(t *testing.T) {
 	runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
+		Binary:        domain.TerraformBinaryTofu,
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandSelectWorkspace,
@@ -502,6 +598,7 @@ func TestLocalTerraformRunnerCreatesMissingWorkspace(t *testing.T) {
 	runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
+		Binary:        domain.TerraformBinaryTofu,
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandSelectWorkspace,
@@ -537,6 +634,7 @@ func TestLocalTerraformRunnerWrapsWorkspaceCreationErrorWithTofuContext(t *testi
 	runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
+		Binary:        domain.TerraformBinaryTofu,
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandSelectWorkspace,
@@ -561,6 +659,7 @@ func TestLocalTerraformRunnerWrapsCommandErrors(t *testing.T) {
 	runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
+		Binary:        domain.TerraformBinaryTofu,
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandPlan,
@@ -589,6 +688,7 @@ func TestLocalTerraformRunnerPassesOutputWritersToExecutor(t *testing.T) {
 	var stderr bytes.Buffer
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
+		Binary:        domain.TerraformBinaryTofu,
 		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandPlan,
@@ -613,6 +713,7 @@ func TestLocalTerraformRunnerRequiresWorkspacePath(t *testing.T) {
 	runner := NewLocalTerraformRunnerWithExecutor(&recordingCommandExecutor{})
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
+		Binary:        domain.TerraformBinaryTofu,
 		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 		Command:       domain.TerraformCommandPlan,
 	})
@@ -741,6 +842,7 @@ func TestLocalTerraformRunnerCountsASavedPlanApplyFromItsOutput(t *testing.T) {
 			var log bytes.Buffer
 
 			result, err := runner.Run(context.Background(), TerraformCommand{
+				Binary:        domain.TerraformBinaryTofu,
 				WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
 				WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
 				Command:       testCase.command,

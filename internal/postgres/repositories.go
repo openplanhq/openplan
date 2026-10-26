@@ -1442,6 +1442,7 @@ func (store *Store) RecordTemplateRunLog(ctx context.Context, log domain.Templat
 			run_phase,
 			seq,
 			command,
+			terraform_binary,
 			state,
 			lost_reason,
 			object_key,
@@ -1449,7 +1450,7 @@ func (store *Store) RecordTemplateRunLog(ctx context.Context, log domain.Templat
 			size_bytes,
 			uploaded_at
 		)
-		select $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+		select $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
 		where exists (
 			select 1
 			from template_runs
@@ -1458,6 +1459,7 @@ func (store *Store) RecordTemplateRunLog(ctx context.Context, log domain.Templat
 		)
 		on conflict (tenant_id, run_id, run_phase, seq) do update set
 			command = excluded.command,
+			terraform_binary = excluded.terraform_binary,
 			state = excluded.state,
 			lost_reason = excluded.lost_reason,
 			object_key = excluded.object_key,
@@ -1470,6 +1472,7 @@ func (store *Store) RecordTemplateRunLog(ctx context.Context, log domain.Templat
 		log.RunPhase,
 		log.Seq,
 		log.Command,
+		log.Binary,
 		log.State,
 		lostReason,
 		objectKey,
@@ -1495,6 +1498,7 @@ func (store *Store) GetTemplateRunLog(ctx context.Context, tenantID domain.Tenan
 			run_phase,
 			seq,
 			command,
+			terraform_binary,
 			state,
 			lost_reason,
 			object_key,
@@ -1524,6 +1528,7 @@ func (store *Store) ListTemplateRunLogs(ctx context.Context, tenantID domain.Ten
 			run_phase,
 			seq,
 			command,
+			terraform_binary,
 			state,
 			lost_reason,
 			object_key,
@@ -1571,6 +1576,7 @@ func scanTemplateRunLog(row pgx.Row) (domain.TemplateRunLog, error) {
 		&log.RunPhase,
 		&log.Seq,
 		&log.Command,
+		&log.Binary,
 		&log.State,
 		&lostReason,
 		&objectKey,

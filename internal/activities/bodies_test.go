@@ -44,7 +44,7 @@ func TestRunTerraformBodyStreamsTofusOutput(t *testing.T) {
 	var output bytes.Buffer
 	_, err := runBody(t, bodies, bodyRunTerraform, runTerraformRequest{
 		TerraformPath: t.TempDir(), WorkspaceName: "default",
-		Command: domain.TerraformCommandInit, Environment: map[string]string{"AWS_ACCESS_KEY_ID": "AKIA"},
+		Command: domain.TerraformCommandInit, Binary: domain.TerraformBinaryTofu, Environment: map[string]string{"AWS_ACCESS_KEY_ID": "AKIA"},
 	}, &output)
 	if err != nil {
 		t.Fatalf("run-terraform returned error: %v", err)
@@ -54,6 +54,24 @@ func TestRunTerraformBodyStreamsTofusOutput(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(tofu.env[0], " "), "AWS_ACCESS_KEY_ID=AKIA") {
 		t.Fatalf("tofu env = %q, want the run's credentials", tofu.env[0])
+	}
+}
+
+// The request names the binary, and the body runs that one.
+func TestRunTerraformBodyRunsTheRequestsBinary(t *testing.T) {
+	t.Parallel()
+
+	terraform := &scriptedExecutor{}
+	bodies := &Bodies{terraform: runner.NewLocalTerraformRunnerWithExecutor(terraform)}
+	_, err := runBody(t, bodies, bodyRunTerraform, runTerraformRequest{
+		TerraformPath: t.TempDir(), WorkspaceName: "default",
+		Command: domain.TerraformCommandInit, Binary: domain.TerraformBinaryTerraform,
+	}, io.Discard)
+	if err != nil {
+		t.Fatalf("run-terraform returned error: %v", err)
+	}
+	if len(terraform.commands) != 1 || terraform.commands[0][0] != "terraform" {
+		t.Fatalf("commands = %v, want one terraform command", terraform.commands)
 	}
 }
 

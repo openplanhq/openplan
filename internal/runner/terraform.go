@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"regexp"
 	"sort"
 	"strconv"
@@ -21,20 +22,22 @@ type TerraformCommand struct {
 	WorkspacePath string
 	WorkspaceName string
 	Command       domain.TerraformCommandType
-	ConfigJSON    json.RawMessage
+	// Binary is the CLI to run Command with, as the deployment configured
+	// it. It must be one of domain.TerraformBinary's values: the runner
+	// refuses anything else rather than exec a name a request chose.
+	Binary     domain.TerraformBinary
+	ConfigJSON json.RawMessage
 	// Environment contains resolved provider credentials for this subprocess only.
 	Environment map[string]string
 	Stdout      io.Writer
 	Stderr      io.Writer
 }
 
-// LocalTerraformRunner runs OpenTofu as a subprocess via the shared
-// CommandExecutor boundary.
+// LocalTerraformRunner runs OpenTofu or Terraform, whichever the command
+// names, as a subprocess via the shared CommandExecutor boundary.
 type LocalTerraformRunner struct {
 	executor CommandExecutor
 }
-
-const terraformExecutable = domain.TerraformExecutable
 
 // NewLocalTerraformRunnerWithExecutor returns a runner backed by executor.
 //
@@ -43,7 +46,7 @@ const terraformExecutable = domain.TerraformExecutable
 // writers or to the process stdout/stderr when no writers are configured.
 //
 // Tests and alternate adapters can provide a custom executor to observe command
-// construction or to avoid spawning real OpenTofu subprocesses.
+// construction or to avoid spawning real subprocesses.
 func NewLocalTerraformRunnerWithExecutor(executor CommandExecutor) *LocalTerraformRunner {
 	return &LocalTerraformRunner{executor: executor}
 }
@@ -72,8 +75,8 @@ type Result struct {
 
 // Run validates input and executes the requested Terraform-compatible command.
 //
-// The runner owns the concrete OpenTofu CLI arguments for each supported
-// command type. Workspace selection is special-cased so a missing workspace is
+// The runner owns the concrete CLI arguments for each supported command type;
+// OpenTofu and Terraform take the same ones. Workspace selection is special-cased so a missing workspace is
 // created with `tofu workspace new` after `tofu workspace select`
 // fails.
 //
@@ -89,6 +92,9 @@ func (runner *LocalTerraformRunner) Run(ctx context.Context, input TerraformComm
 	}
 	if strings.TrimSpace(input.WorkspaceName) == "" {
 		return Result{}, fmt.Errorf("workspace name is required")
+	}
+	if !input.Binary.Valid() {
+		return Result{}, fmt.Errorf("terraform binary %q is not tofu or terraform", input.Binary)
 	}
 
 	switch input.Command {
@@ -193,7 +199,7 @@ func summarizeApplyOutput(output string) domain.PlanSummary {
 // openplan doesn't know, leaves it nil and the plan stands.
 func (runner *LocalTerraformRunner) summarize(ctx context.Context, input TerraformCommand) (domain.PlanSummary, *domain.PlanChanges, error) {
 	var stdout, stderr bytes.Buffer
-	if err := runner.executor.Run(ctx, input.WorkspacePath, sortedEnvironment(input.Environment), &stdout, &stderr, terraformExecutable, "show", "-json", "-no-color", PlanFileName); err != nil {
+	if err := runner.exec(ctx, input, sortedEnvironment(input.Environment), &stdout, &stderr, "show", "-json", "-no-color", PlanFileName); err != nil {
 		return domain.PlanSummary{}, nil, &CommandError{Command: input.Command, Err: fmt.Errorf("show saved plan: %w: %s", err, strings.TrimSpace(stderr.String()))}
 	}
 	summary, changes, err := planchanges.Read(stdout.Bytes())
@@ -205,57 +211,51 @@ func (runner *LocalTerraformRunner) summarize(ctx context.Context, input Terrafo
 
 // selectWorkspace selects the requested Terraform workspace or creates it.
 //
-// OpenTofu exits non-zero when the workspace does not exist, so this method
-// treats a select failure as the signal to run `tofu workspace new`. If the
+// Both CLIs exit non-zero when the workspace does not exist, so this method
+// treats a select failure as the signal to run `workspace new`. If the
 // creation also fails, the returned error includes context for both attempts.
 func (runner *LocalTerraformRunner) selectWorkspace(ctx context.Context, input TerraformCommand) error {
 	stdout, stderr := outputWriters(input)
-	err := runner.executor.Run(
-		ctx,
-		input.WorkspacePath,
-		sortedEnvironment(input.Environment),
-		stdout,
-		stderr,
-		terraformExecutable,
-		"workspace",
-		"select",
-		"-no-color",
-		input.WorkspaceName,
-	)
+	err := runner.exec(ctx, input, sortedEnvironment(input.Environment), stdout, stderr, "workspace", "select", "-no-color", input.WorkspaceName)
 	if err == nil {
 		return nil
 	}
 
-	if err := runner.executor.Run(
-		ctx,
-		input.WorkspacePath,
-		sortedEnvironment(input.Environment),
-		stdout,
-		stderr,
-		terraformExecutable,
-		"workspace",
-		"new",
-		"-no-color",
-		input.WorkspaceName,
-	); err != nil {
+	if err := runner.exec(ctx, input, sortedEnvironment(input.Environment), stdout, stderr, "workspace", "new", "-no-color", input.WorkspaceName); err != nil {
 		return &CommandError{Command: domain.TerraformCommandSelectWorkspace, Err: fmt.Errorf("select or new: %w", err)}
 	}
 	return nil
 }
 
-// run executes a non-workspace OpenTofu command with shared error wrapping.
+// run executes a non-workspace command with shared error wrapping.
 //
 // A failure is wrapped in CommandError (using input.Command) so callers can
 // identify which command failed via errors.As instead of parsing the error
-// text. args are the exact OpenTofu CLI arguments passed to the command
-// executor.
+// text. args are the exact CLI arguments passed to the command executor.
 func (runner *LocalTerraformRunner) run(ctx context.Context, input TerraformCommand, env []string, args ...string) error {
 	stdout, stderr := outputWriters(input)
-	err := runner.executor.Run(ctx, input.WorkspacePath, env, stdout, stderr, terraformExecutable, args...)
+	err := runner.exec(ctx, input, env, stdout, stderr, args...)
 	if err != nil {
 		return &CommandError{Command: input.Command, Err: err}
 	}
 	return nil
+}
+
+// guestBinDir is where the executor image keeps the binaries a sandbox can
+// run (Dockerfile.executor's guest stage), named so the error for a missing
+// one says where the operator's copy has to go.
+const guestBinDir = "/opt/openplan/guest/usr/local/bin"
+
+// exec runs the command's binary with args. A binary that isn't there at
+// all, which is what happens when the deployment says terraform and the
+// executor image was never given one, is reported as that rather than as the
+// bare "executable file not found" the run log would otherwise show.
+func (runner *LocalTerraformRunner) exec(ctx context.Context, input TerraformCommand, env []string, stdout, stderr io.Writer, args ...string) error {
+	err := runner.executor.Run(ctx, input.WorkspacePath, env, stdout, stderr, string(input.Binary), args...)
+	if errors.Is(err, exec.ErrNotFound) {
+		return fmt.Errorf("%s is not in the executor image (%s): openplan ships only tofu, see the README on running HashiCorp Terraform: %w", input.Binary, guestBinDir, err)
+	}
+	return err
 }
 
 // runWithTerraformVariables runs a command that plans, handing it the run's
@@ -331,7 +331,7 @@ func sortedEnvironment(values map[string]string) []string {
 
 // outputWriters returns the command-specific output writers with process defaults.
 //
-// Callers can pass writers to capture OpenTofu output in logs. When either
+// Callers can pass writers to capture the command's output in logs. When either
 // writer is nil, the runner preserves the CLI-like default of writing to the
 // current process stdout or stderr.
 func outputWriters(input TerraformCommand) (io.Writer, io.Writer) {
