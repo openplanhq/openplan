@@ -750,6 +750,65 @@ func TestRunReadsAnApplyThatFailedAfterItsClaim(t *testing.T) {
 	}
 }
 
+// Issue 522: a run that failed in a Terraform command keeps what the command
+// said apart from the workflow's wrapper, on its execution and on the run.
+func TestRecordTemplateRunStatusStoresTheCommandError(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := savedPlanStore(t, pool)
+	seedStackWithTemplate(t, ctx, store)
+	seedPlanRun(t, ctx, pool, "run_123", domain.OperationApply, domain.TemplateRunQueued)
+	planToApproval(t, ctx, store, "run_123")
+	approve(t, ctx, store, "run_123")
+	if claimed, err := store.BeginTemplateApply(ctx, "tenant_123", "run_123", false, "template-run/tenant_123/run_123/apply"); err != nil || !claimed {
+		t.Fatalf("BeginTemplateApply = %v, %v; want claimed", claimed, err)
+	}
+	write := statusWrite("run_123", domain.OperationApply, domain.TemplateRunFailed, domain.RunPhaseApply)
+	write.ErrorSummary = "template run activity failed: run terraform: apply: exit status 1"
+	write.CommandError = "Error: bad creds"
+	mustSucceed(t, store.RecordTemplateRunStatus(ctx, write))
+
+	assertCommandError(t, ctx, store, "Error: bad creds")
+}
+
+// Issue 522: the failed execution an apply gets when it fails before its claim
+// keeps the command error too.
+func TestRecordTemplateRunStatusStoresTheCommandErrorBeforeAClaim(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := savedPlanStore(t, pool)
+	seedStackWithTemplate(t, ctx, store)
+	seedPlanRun(t, ctx, pool, "run_123", domain.OperationApply, domain.TemplateRunQueued)
+	planToApproval(t, ctx, store, "run_123")
+	approve(t, ctx, store, "run_123")
+	write := statusWrite("run_123", domain.OperationApply, domain.TemplateRunFailed, domain.RunPhaseApply)
+	write.ErrorSummary = "template run activity failed: claim failed"
+	write.CommandError = "Error: bad creds"
+	mustSucceed(t, store.RecordTemplateRunStatus(ctx, write))
+
+	assertCommandError(t, ctx, store, "Error: bad creds")
+}
+
+// assertCommandError checks run_123's failed apply execution and the run both
+// read want, and its plan execution reads none.
+func assertCommandError(t *testing.T, ctx context.Context, store *Store, want string) {
+	t.Helper()
+	executions, err := store.ListTemplateRunExecutions(ctx, "tenant_123", "run_123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(executions) != 2 || executions[0].CommandError != "" || executions[1].CommandError != want {
+		t.Fatalf("executions = %#v, want the apply's command error %q only", executions, want)
+	}
+	if run := runAt(t, ctx, store, "run_123"); run.CommandError != want {
+		t.Fatalf("run command error = %q, want %q", run.CommandError, want)
+	}
+}
+
 // failAfterClaim takes an apply run from queued through its approved plan and
 // its apply's claim, then fails the apply while applying with errorSummary.
 func failAfterClaim(t *testing.T, ctx context.Context, store *Store, runID domain.TemplateRunID, errorSummary string) {

@@ -22,7 +22,7 @@ import (
 // It reports whether it inserted. The run already having an execution of the
 // phase is not an error here: a retried start finds the row it wrote the
 // first time.
-func insertWorkflowExecution(ctx context.Context, exec pgxExecutor, tenantID domain.TenantID, runID domain.TemplateRunID, phase domain.RunPhase, workflowID string, status domain.TemplateRunExecutionStatus, errorSummary string) (bool, error) {
+func insertWorkflowExecution(ctx context.Context, exec pgxExecutor, tenantID domain.TenantID, runID domain.TemplateRunID, phase domain.RunPhase, workflowID string, status domain.TemplateRunExecutionStatus, errorSummary, commandError string) (bool, error) {
 	if !phase.Valid() {
 		return false, fmt.Errorf("record workflow execution: unknown phase %q", phase)
 	}
@@ -31,20 +31,20 @@ func insertWorkflowExecution(ctx context.Context, exec pgxExecutor, tenantID dom
 	}
 	commandTag, err := exec.Exec(ctx, `
 		insert into template_run_workflow_executions (
-			tenant_id, run_id, phase, workflow_id, actor, status, started_at, finished_at, error_summary
+			tenant_id, run_id, phase, workflow_id, actor, status, started_at, finished_at, error_summary, command_error
 		)
 		select
 			r.tenant_id, r.id, $3::text, $4::text,
 			coalesce(a.approved_by, r.trigger_actor),
 			$5::text, now(),
 			case when $5::text = 'running' then null else now() end,
-			$6::text
+			$6::text, $7::text
 		from template_runs r
 		left join template_run_approvals a
 			on a.tenant_id = r.tenant_id and a.run_id = r.id and $3::text = 'apply'
 		where r.tenant_id = $1 and r.id = $2
 		on conflict (tenant_id, run_id, phase) do nothing
-	`, tenantID, runID, phase, workflowID, status, errorSummary)
+	`, tenantID, runID, phase, workflowID, status, errorSummary, commandError)
 	if err != nil {
 		return false, fmt.Errorf("record workflow execution: %w", err)
 	}
@@ -55,7 +55,7 @@ func insertWorkflowExecution(ctx context.Context, exec pgxExecutor, tenantID dom
 // as status, with errorSummary, and the step it was on the same way. It
 // reports whether the run had one: another phase's running execution is not
 // this write's to end.
-func finishRunningExecution(ctx context.Context, exec pgxExecutor, tenantID domain.TenantID, runID domain.TemplateRunID, phase domain.RunPhase, status domain.TemplateRunExecutionStatus, errorSummary string) (bool, error) {
+func finishRunningExecution(ctx context.Context, exec pgxExecutor, tenantID domain.TenantID, runID domain.TemplateRunID, phase domain.RunPhase, status domain.TemplateRunExecutionStatus, errorSummary, commandError string) (bool, error) {
 	if _, err := exec.Exec(ctx, `
 		update template_run_step_executions s
 		set status = $4, finished_at = now()
@@ -67,9 +67,9 @@ func finishRunningExecution(ctx context.Context, exec pgxExecutor, tenantID doma
 	}
 	commandTag, err := exec.Exec(ctx, `
 		update template_run_workflow_executions
-		set status = $4, finished_at = now(), error_summary = $5
+		set status = $4, finished_at = now(), error_summary = $5, command_error = $6
 		where tenant_id = $1 and run_id = $2 and phase = $3 and status = 'running'
-	`, tenantID, runID, phase, status, errorSummary)
+	`, tenantID, runID, phase, status, errorSummary, commandError)
 	if err != nil {
 		return false, fmt.Errorf("finish workflow execution: %w", err)
 	}
@@ -106,7 +106,7 @@ func endWorkflowExecution(ctx context.Context, exec pgxExecutor, input domain.Te
 	case err == nil && runningPhase != input.Phase:
 		return false, nil
 	case err == nil:
-		_, err := finishRunningExecution(ctx, exec, input.TenantID, input.RunID, input.Phase, status, input.ErrorSummary)
+		_, err := finishRunningExecution(ctx, exec, input.TenantID, input.RunID, input.Phase, status, input.ErrorSummary, input.CommandError)
 		return err == nil, err
 	case !errors.Is(err, pgx.ErrNoRows):
 		return false, fmt.Errorf("read running workflow execution: %w", err)
@@ -115,7 +115,7 @@ func endWorkflowExecution(ctx context.Context, exec pgxExecutor, input domain.Te
 	if input.Status != domain.TemplateRunFailed {
 		return false, fmt.Errorf("record template run status: run %s has no running %s workflow execution to complete", input.RunID, input.Phase)
 	}
-	inserted, err := insertWorkflowExecution(ctx, exec, input.TenantID, input.RunID, input.Phase, input.WorkflowID, domain.TemplateRunExecutionFailed, input.ErrorSummary)
+	inserted, err := insertWorkflowExecution(ctx, exec, input.TenantID, input.RunID, input.Phase, input.WorkflowID, domain.TemplateRunExecutionFailed, input.ErrorSummary, input.CommandError)
 	if err != nil {
 		return false, err
 	}
@@ -173,7 +173,7 @@ func (store *Store) ListTemplateRunExecutions(ctx context.Context, tenantID doma
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	rows, err := tx.Query(ctx, `
-		select id, phase, workflow_id, actor, status, started_at, finished_at, error_summary,
+		select id, phase, workflow_id, actor, status, started_at, finished_at, error_summary, command_error,
 			resource_add, resource_change, resource_destroy
 		from template_run_workflow_executions
 		where tenant_id = $1 and run_id = $2
@@ -190,7 +190,7 @@ func (store *Store) ListTemplateRunExecutions(ctx context.Context, tenantID doma
 		var finishedAt sql.NullTime
 		var add, change, destroy *int
 		if err := rows.Scan(&id, &execution.Phase, &execution.WorkflowID, &execution.Actor, &execution.Status,
-			&execution.StartedAt, &finishedAt, &execution.ErrorSummary, &add, &change, &destroy); err != nil {
+			&execution.StartedAt, &finishedAt, &execution.ErrorSummary, &execution.CommandError, &add, &change, &destroy); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scan workflow execution: %w", err)
 		}

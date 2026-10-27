@@ -1271,6 +1271,7 @@ const templateRunSelect = `
 		r.created_at,
 		r.completed_at,
 		coalesce(failed.error_summary, ''),
+		coalesce(failed.command_error, ''),
 		r.run_number,
 		r.auto_approve,
 		counts.resource_add,
@@ -1288,7 +1289,7 @@ const templateRunSelect = `
 		limit 1
 	) latest_step on true
 	left join lateral (
-		select e.error_summary
+		select e.error_summary, e.command_error
 		from template_run_workflow_executions e
 		where e.tenant_id = r.tenant_id and e.run_id = r.id and e.status = 'failed'
 		order by e.id desc
@@ -1329,6 +1330,7 @@ func scanTemplateRun(row pgx.Row) (domain.TemplateRun, error) {
 		&createdAt,
 		&completedAt,
 		&run.ErrorSummary,
+		&run.CommandError,
 		&run.RunNumber,
 		&run.AutoApprove,
 		&add,
@@ -1782,7 +1784,7 @@ func (store *Store) RecordTemplateRunStatus(ctx context.Context, input domain.Te
 		// Running is the only status recorded here, and only the plan
 		// workflow records it: an apply claims its run with
 		// BeginTemplateApply. The plan's execution starts with it.
-		if _, err := insertWorkflowExecution(ctx, tx, input.TenantID, input.RunID, input.Phase, input.WorkflowID, domain.TemplateRunExecutionRunning, ""); err != nil {
+		if _, err := insertWorkflowExecution(ctx, tx, input.TenantID, input.RunID, input.Phase, input.WorkflowID, domain.TemplateRunExecutionRunning, "", ""); err != nil {
 			return err
 		}
 		return commitTemplateRunStatus(ctx, tx)
