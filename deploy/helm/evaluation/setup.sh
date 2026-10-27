@@ -109,16 +109,20 @@ else
 	kube create secret generic evaluation-dependencies --from-env-file="$work/dependencies.env"
 fi
 
-# openplan's own keys, which no dependency holds. values.yaml reads every
-# other credential from evaluation-dependencies, where the dependencies read
-# them too.
-echo "==> openplan-keys"
-if secret_exists openplan-keys; then
-	echo "kept: openplan-keys"
+# What openplan reads that no dependency holds as it is: its two keys, and the
+# database and Valkey URLs, which carry the dependencies' passwords. The
+# passwords are hex, so they go into the URLs unescaped. values.yaml reads the
+# rest from evaluation-dependencies, where the dependencies read them too.
+echo "==> openplan-credentials"
+if secret_exists openplan-credentials; then
+	echo "kept: openplan-credentials"
 else
-	kube create secret generic openplan-keys \
+	kube create secret generic openplan-credentials \
 		--from-literal=session-encryption-key="$(fresh)" \
-		--from-literal=credential-encryption-key="$(fresh)"
+		--from-literal=credential-encryption-key="$(fresh)" \
+		--from-literal=database-url="postgres://openplan:$(secret_value evaluation-dependencies postgres-password)@postgres:5432/openplan?sslmode=disable" \
+		--from-literal=valkey-api-url="redis://api:$(secret_value evaluation-dependencies valkey-api-password)@valkey:6379/0" \
+		--from-literal=valkey-executor-url="redis://executor:$(secret_value evaluation-dependencies valkey-executor-password)@valkey:6379/0"
 fi
 
 # The api discovers Dex at https://dex.localhost/dex while it boots, the same
