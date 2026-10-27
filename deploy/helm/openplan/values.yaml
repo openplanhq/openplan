@@ -1,5 +1,12 @@
-# Every key here is contract: it is kept across releases. Settings that are not
-# here are fixed by the chart or come from the components' Secrets.
+
+# Every key here is contract: it is kept across releases. Everything the chart
+# passes to openplan is set here; nothing reaches a component any other way.
+#
+# A credential is never a value. Values are stored in the release, readable by
+# anyone who can read its Secret, and usually committed to git, so each one is
+# named here as a key of an existing Secret in the release namespace:
+#   name: the Secret
+#   key:  the key in it holding the credential
 
 image:
   # Where the openplan-api, openplan-executor and openplan-web images are
@@ -9,13 +16,92 @@ image:
   # was released with.
   tag: ""
 
+temporal:
+  # Required. The Temporal frontend, host:port.
+  address: ""
+  # The Temporal namespace openplan's workflows run in.
+  namespace: default
+
+postgres:
+  # Required. The api's database as a URL without the password, such as
+  # postgres://openplan@postgres:5432/openplan?sslmode=require. The api
+  # migrates it at startup.
+  url: ""
+  # Required. The database user's password.
+  passwordSecret:
+    name: ""
+    key: ""
+
+valkey:
+  api:
+    # Required. The Valkey the api reads live run output from, as the api
+    # user and without the password: redis://api@valkey:6379/0, or rediss://
+    # for TLS. The database must be 0.
+    url: ""
+    # Required. The api user's password.
+    passwordSecret:
+      name: ""
+      key: ""
+
+# Where run logs and plans are kept. S3 or any S3-compatible store; the
+# filesystem store can't work here, since the api and the executor run in
+# separate pods with no shared volume.
+s3:
+  # Required.
+  bucket: ""
+  # Required.
+  region: ""
+  # Empty means AWS. Set it for any other S3-compatible store.
+  endpoint: ""
+  # Address the bucket as <endpoint>/<bucket> instead of
+  # <bucket>.<endpoint>, which most stores other than AWS need.
+  forcePathStyle: false
+  # Required.
+  accessKeyIDSecret:
+    name: ""
+    key: ""
+  # Required.
+  secretAccessKeySecret:
+    name: ""
+    key: ""
+
+oidc:
+  # Required. The OIDC issuer (Dex) over HTTPS. It must resolve the same way
+  # from the browser and from the api pod.
+  issuerURL: ""
+  # Required. openplan's OAuth client ID, registered with redirect URL
+  # https://<ingress.host>/v1/auth/callback.
+  clientID: ""
+  # Required. That client's secret.
+  clientSecretSecret:
+    name: ""
+    key: ""
+
 api:
-  # Required. The name of an existing Secret in the release namespace. Every
-  # key becomes an environment variable of the api under the same name
-  # (DATABASE_URL, VALKEY_URL, OIDC_CLIENT_SECRET, ...). The chart sets
-  # HTTP_ADDRESS, OPENPLAN_ENVIRONMENT and OPENPLAN_PUBLIC_URL itself, and those
-  # win over the same keys in the Secret.
-  existingSecret: ""
+  # Required. The OIDC sub of the first administrator, who signs in to a fresh
+  # install and grants everyone else access.
+  rootSubject: ""
+  # Required. 32 random bytes (openssl rand -hex 32) that seal sign-in
+  # sessions.
+  sessionEncryptionKeySecret:
+    name: ""
+    key: ""
+  # Required. 32 random bytes, different from the session key, that encrypt
+  # the credentials stored in openplan.
+  credentialEncryptionKeySecret:
+    name: ""
+    key: ""
+  # The longest one Terraform command may run, as a duration such as 90m.
+  # Empty means openplan's default.
+  terraformTimeout: ""
+  # A GitHub App that clones private template repositories. Set the app ID and
+  # the private key together, or neither, which leaves only public
+  # repositories reachable.
+  githubApp:
+    id: ""
+    privateKeySecret:
+      name: ""
+      key: ""
   # Optional. The name of an existing Secret whose ca.crt the api trusts in
   # addition to the public roots, for an OIDC issuer behind an internal CA.
   trustedCASecret: ""
