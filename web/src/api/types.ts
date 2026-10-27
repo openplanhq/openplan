@@ -326,18 +326,21 @@ export interface TemplateRunExecution {
 }
 
 // Why an installed template needs a person: a plan waiting to be approved or
-// discarded, or a destroy that stopped before it finished.
-export type AttentionKind = "waiting_approval" | "destroy_failed";
+// discarded, a destroy that stopped before it finished, or a plan or apply
+// that failed and is still the template's latest run (its run's operation
+// says which; any newer run clears it).
+export type AttentionKind = "waiting_approval" | "destroy_failed" | "run_failed";
 
 export interface AttentionItem {
   kind: AttentionKind;
   // When it began to need a person: when the plan finished, or when the
-  // destroy stopped. Absent when unknown.
+  // destroy, plan or apply stopped. Absent when unknown.
   at?: string;
   stack: { id: string; name: string; slug: string };
   stack_template: { id: string; workspace_name: string; display_name: string };
-  // The plan waiting for approval, or the destroy that failed. Null for a
-  // failed template with no destroy run on record.
+  // The plan waiting for approval, the destroy that failed, or the plan or
+  // apply that failed. Null for a failed template with no destroy run on
+  // record.
   run: TemplateRun | null;
 }
 
