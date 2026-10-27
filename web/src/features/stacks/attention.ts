@@ -4,18 +4,30 @@ import type { AttentionItem } from "../../api/types";
 
 export interface StackAttention {
   waiting: number;
-  failed: number;
+  destroyFailed: number;
+  planFailed: number;
+  applyFailed: number;
 }
 
-/** Counts each stack's items, by kind. A stack with none has no entry. */
+/** Which operation a run_failed item's run was: a plan or an apply. */
+export function failedOperation(item: AttentionItem): "plan" | "apply" {
+  return item.run?.operation === "apply" ? "apply" : "plan";
+}
+
+/** Counts each stack's items, by kind, failed runs by operation. A stack
+    with none has no entry. */
 export function attentionByStack(items: AttentionItem[]): Map<string, StackAttention> {
   const byStack = new Map<string, StackAttention>();
   for (const item of items) {
-    const counts = byStack.get(item.stack.id) ?? { waiting: 0, failed: 0 };
+    const counts = byStack.get(item.stack.id) ?? { waiting: 0, destroyFailed: 0, planFailed: 0, applyFailed: 0 };
     if (item.kind === "waiting_approval") {
       counts.waiting += 1;
+    } else if (item.kind === "destroy_failed") {
+      counts.destroyFailed += 1;
+    } else if (failedOperation(item) === "apply") {
+      counts.applyFailed += 1;
     } else {
-      counts.failed += 1;
+      counts.planFailed += 1;
     }
     byStack.set(item.stack.id, counts);
   }
@@ -40,15 +52,18 @@ export function attentionSummary(items: AttentionItem[]): { lead: string; breakd
     return null;
   }
   const stacks = attentionByStack(items);
-  let waiting = 0;
-  let failed = 0;
+  const total: StackAttention = { waiting: 0, destroyFailed: 0, planFailed: 0, applyFailed: 0 };
   for (const counts of stacks.values()) {
-    waiting += counts.waiting;
-    failed += counts.failed;
+    total.waiting += counts.waiting;
+    total.destroyFailed += counts.destroyFailed;
+    total.planFailed += counts.planFailed;
+    total.applyFailed += counts.applyFailed;
   }
   const parts: string[] = [];
-  if (waiting > 0) parts.push(`${count(waiting, "plan", "plans")} waiting for approval`);
-  if (failed > 0) parts.push(`${count(failed, "destroy", "destroys")} failed`);
+  if (total.waiting > 0) parts.push(`${count(total.waiting, "plan", "plans")} waiting for approval`);
+  if (total.destroyFailed > 0) parts.push(`${count(total.destroyFailed, "destroy", "destroys")} failed`);
+  if (total.planFailed > 0) parts.push(`${count(total.planFailed, "plan", "plans")} failed`);
+  if (total.applyFailed > 0) parts.push(`${count(total.applyFailed, "apply", "applies")} failed`);
   return {
     lead: `${count(stacks.size, "stack needs", "stacks need")} attention`,
     breakdown: parts.join(", ")
@@ -63,6 +78,15 @@ export function waitingChipLabel(waiting: number): string {
 /** A list row's chip text for its failed destroys. */
 export function failedChipLabel(failed: number): string {
   return failed === 1 ? "destroy failed" : `${failed} destroys failed`;
+}
+
+/** A list row's chip text for its failed plans or applies, the word alone
+    for one, as a failed destroy's is. */
+export function runFailedChipLabel(operation: "plan" | "apply", failed: number): string {
+  if (failed === 1) {
+    return `${operation} failed`;
+  }
+  return `${failed} ${operation === "apply" ? "applies" : "plans"} failed`;
 }
 
 /** The word after a list row's template count; the row sets the number apart

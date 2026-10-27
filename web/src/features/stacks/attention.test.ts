@@ -5,6 +5,7 @@ import {
   attentionRunPath,
   attentionSummary,
   failedChipLabel,
+  runFailedChipLabel,
   templateCountWord,
   waitingChipLabel
 } from "./attention";
@@ -43,6 +44,22 @@ describe("attentionSummary", () => {
     expect(attentionSummary([item()])).toEqual({ lead: "1 stack needs attention", breakdown: "1 plan waiting for approval" });
   });
 
+  it("names failed plans and applies apart from failed destroys", () => {
+    const plan = { operation: "plan", run_number: 2 } as AttentionItem["run"];
+    const apply = { operation: "apply", run_number: 3 } as AttentionItem["run"];
+    const summary = attentionSummary([
+      item(),
+      item({ templateID: "b", kind: "destroy_failed" }),
+      item({ templateID: "c", kind: "run_failed", run: plan }),
+      item({ stackID: "edge", templateID: "d", kind: "run_failed", run: plan }),
+      item({ stackID: "edge", templateID: "e", kind: "run_failed", run: apply })
+    ]);
+    expect(summary).toEqual({
+      lead: "2 stacks need attention",
+      breakdown: "1 plan waiting for approval, 1 destroy failed, 2 plans failed, 1 apply failed"
+    });
+  });
+
   it("leaves out a kind with no items", () => {
     expect(attentionSummary([item({ kind: "destroy_failed" }), item({ templateID: "b", kind: "destroy_failed" })])?.breakdown).toBe(
       "2 destroys failed"
@@ -52,9 +69,17 @@ describe("attentionSummary", () => {
 
 describe("attentionByStack", () => {
   it("counts each stack's items by kind", () => {
-    const counts = attentionByStack([item(), item({ templateID: "b", kind: "destroy_failed" }), item({ stackID: "other" })]);
-    expect(counts.get("stack_1")).toEqual({ waiting: 1, failed: 1 });
-    expect(counts.get("other")).toEqual({ waiting: 1, failed: 0 });
+    const plan = { operation: "plan" } as AttentionItem["run"];
+    const apply = { operation: "apply" } as AttentionItem["run"];
+    const counts = attentionByStack([
+      item(),
+      item({ templateID: "b", kind: "destroy_failed" }),
+      item({ templateID: "c", kind: "run_failed", run: plan }),
+      item({ templateID: "d", kind: "run_failed", run: apply }),
+      item({ stackID: "other" })
+    ]);
+    expect(counts.get("stack_1")).toEqual({ waiting: 1, destroyFailed: 1, planFailed: 1, applyFailed: 1 });
+    expect(counts.get("other")).toEqual({ waiting: 1, destroyFailed: 0, planFailed: 0, applyFailed: 0 });
     expect(counts.has("quiet")).toBe(false);
   });
 });
@@ -69,6 +94,13 @@ describe("labels", () => {
     [1, "destroy failed"],
     [2, "2 destroys failed"]
   ])("failed chip for %i", (n, label) => expect(failedChipLabel(n)).toBe(label));
+
+  it.each([
+    ["plan", 1, "plan failed"],
+    ["plan", 2, "2 plans failed"],
+    ["apply", 1, "apply failed"],
+    ["apply", 3, "3 applies failed"]
+  ] as const)("failed %s chip for %i", (operation, n, label) => expect(runFailedChipLabel(operation, n)).toBe(label));
 
   it.each([
     [1, "template"],
