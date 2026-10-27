@@ -50,6 +50,7 @@ function run(overrides: Partial<TemplateRun> = {}): TemplateRun {
     trigger_actor_display_name: "user_123",
     created_at: "2026-07-20T00:00:00Z",
     error_summary: "",
+    command_error: "",
     run_number: 1,
     auto_approve: false,
     plan_summary: null,

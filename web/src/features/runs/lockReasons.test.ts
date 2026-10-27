@@ -25,6 +25,7 @@ function run(status: TemplateRun["status"]): TemplateRun {
     trigger_actor_display_name: "user_123",
     created_at: "2026-10-03T00:00:00Z",
     error_summary: "",
+    command_error: "",
     run_number: 7,
     auto_approve: false,
     plan_summary: null,

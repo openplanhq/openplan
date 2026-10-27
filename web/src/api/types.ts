@@ -295,6 +295,9 @@ export interface TemplateRun {
   created_at: string;
   completed_at?: string;
   error_summary: string;
+  // What the failed command printed, its first error block: "" when the run
+  // did not fail in a command. error_summary still wraps it.
+  command_error: string;
   // Counts runs within one stack template, from 1. Shown as "Run #N".
   run_number: number;
   // An apply run that applies straight away, with no saved plan and no

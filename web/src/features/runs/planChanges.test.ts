@@ -38,6 +38,7 @@ function run(overrides: Partial<TemplateRun> = {}): TemplateRun {
     trigger_actor_display_name: "Priya Raman",
     created_at: "2026-10-19T10:42:00Z",
     error_summary: "",
+    command_error: "",
     run_number: 22,
     auto_approve: false,
     plan_summary: { add: 4, change: 1, destroy: 2 },

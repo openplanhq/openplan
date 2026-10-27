@@ -18,22 +18,32 @@ import { cn } from "@/lib/utils";
 // with detailsCollapsed, and the headline and next step say it in words.
 //
 // It is announced (role="alert") when it appears, as anything that just
-// happened is.
+// happened is; live={false} leaves out the announcement for a record, such as
+// a run's failure, as ErrorLine does.
 export default function ErrorPanel({
   title,
   children,
+  output,
   details,
   detailsCollapsed = false,
+  live = true,
   testId
 }: {
   /** What failed, in a few words: "Sync failed". */
   title: ReactNode;
   /** The next step, in one or two sentences. */
   children?: ReactNode;
+  /**
+   * What the thing that failed printed, shown open above the details: a
+   * failed run's command error, with the workflow's wrapper as its details.
+   */
+  output?: string;
   /** The server's own words, as written. */
   details?: string;
   /** Hide the details behind "Show details" until asked for. */
   detailsCollapsed?: boolean;
+  /** Announce it when it appears; false for a record. */
+  live?: boolean;
   testId?: string;
 }) {
   const [open, setOpen] = useState(!detailsCollapsed);
@@ -41,11 +51,14 @@ export default function ErrorPanel({
   const hasDetails = details !== undefined && details.trim() !== "";
 
   return (
-    <div role="alert" className="flex min-w-0 items-start gap-3 rounded-lg border px-5 py-4" data-testid={testId}>
+    <div role={live ? "alert" : undefined} className="flex min-w-0 items-start gap-3 rounded-lg border px-5 py-4" data-testid={testId}>
       <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-destructive" />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <p className="text-label text-foreground">{title}</p>
         {children !== undefined && <p className="text-meta text-muted-foreground">{children}</p>}
+        {output !== undefined && output.trim() !== "" && (
+          <pre className="m-0 mt-1 font-mono text-log whitespace-pre-wrap text-code-foreground wrap-anywhere">{output}</pre>
+        )}
         {hasDetails && detailsCollapsed && (
           <button
             type="button"

@@ -21,6 +21,15 @@ describe("ErrorPanel", () => {
     expect(screen.queryByRole("button")).toBeNull();
   });
 
+  it("shows the output open above collapsed details, and as a record says nothing when it appears", () => {
+    render(<ErrorPanel title="tofu init failed" output={"Error: bad creds\n\n  on main.tf"} details="wrapper" detailsCollapsed live={false} />);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByText(/Error: bad creds/).textContent).toBe("Error: bad creds\n\n  on main.tf");
+    expect(screen.queryByText("wrapper")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Show details" }));
+    expect(screen.getByText("wrapper")).toBeTruthy();
+  });
+
   it("keeps collapsed details behind Show details until asked for", () => {
     render(<ErrorPanel title="Sync failed" details="raw detail" detailsCollapsed />);
     const toggle = screen.getByRole("button", { name: "Show details" });
