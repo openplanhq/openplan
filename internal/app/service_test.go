@@ -283,36 +283,6 @@ func TestGetStackPassesTenantAndIDAndNormalizesNilTemplates(t *testing.T) {
 	}
 }
 
-func TestTemplateDisplayName(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		repoName string
-		rootPath string
-		want     string
-	}{
-		{name: "root path dot", repoName: "infra-templates", rootPath: ".", want: "infra-templates"},
-		{name: "empty root path", repoName: "infra-templates", rootPath: "", want: "infra-templates"},
-		{name: "subdirectory", repoName: "infra-templates", rootPath: "modules/vpc", want: "vpc"},
-		{name: "nested subdirectory", repoName: "my-repo", rootPath: "modules/network/vpc", want: "vpc"},
-		{name: "trailing slash", repoName: "my-repo", rootPath: "modules/vpc/", want: "vpc"},
-		{name: "trims whitespace", repoName: "  my-repo  ", rootPath: ".", want: "my-repo"},
-		{name: "trims root path whitespace", repoName: "my-repo", rootPath: "  modules/vpc  ", want: "vpc"},
-		{name: "cleans path", repoName: "my-repo", rootPath: "modules/../modules/vpc", want: "vpc"},
-		{name: "dot slash is the root", repoName: "my-repo", rootPath: "./", want: "my-repo"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := templateDisplayName(tt.repoName, tt.rootPath)
-			if got != tt.want {
-				t.Errorf("templateDisplayName(%q, %q) = %q, want %q", tt.repoName, tt.rootPath, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestGetStackResolvesTemplateDisplayName(t *testing.T) {
 	t.Parallel()
 
@@ -342,8 +312,8 @@ func TestGetStackResolvesTemplateDisplayName(t *testing.T) {
 	}
 	revisions := &recordingTemplateRepository{
 		templates: []domain.TemplateRevision{
-			{ID: domain.TemplateRevisionID("rev_1"), RepoName: "infra-templates", RootPath: "modules/vpc", SourceRef: "v2.0.0"},
-			{ID: domain.TemplateRevisionID("rev_2"), RepoName: "my-repo", RootPath: ".", SourceRef: "main"},
+			{ID: domain.TemplateRevisionID("rev_1"), RepoName: "infra-templates", RootPath: "modules/vpc", Name: "network-vpc", SourceRef: "v2.0.0"},
+			{ID: domain.TemplateRevisionID("rev_2"), RepoName: "my-repo", RootPath: ".", Name: "my-repo", SourceRef: "main"},
 		},
 	}
 	service := NewService(Service{Stacks: stacks, TemplateRevisions: revisions, Authorization: testPlatformAuthorizer(t)})
@@ -360,8 +330,8 @@ func TestGetStackResolvesTemplateDisplayName(t *testing.T) {
 	if len(view.Templates) != 3 {
 		t.Fatalf("len(templates) = %d, want 3", len(view.Templates))
 	}
-	if got := view.Templates[0].DisplayName; got != "vpc" {
-		t.Errorf("template[0].DisplayName = %q, want vpc", got)
+	if got := view.Templates[0].DisplayName; got != "network-vpc" {
+		t.Errorf("template[0].DisplayName = %q, want network-vpc", got)
 	}
 	// The ref is resolved from the desired revision on every read rather than
 	// stored on the component, so it cannot drift from the revision in use.
@@ -721,7 +691,7 @@ func TestUpdateStackTemplateConfigValidatesDesiredRevisionVariables(t *testing.T
 		},
 	}
 	templates := &recordingTemplateRepository{
-		template: domain.TemplateRevision{ID: "template_rev_2", RepoName: "infra", RootPath: "modules/vpc", SourceRef: "v1.2.0"},
+		template: domain.TemplateRevision{ID: "template_rev_2", RepoName: "infra", RootPath: "modules/vpc", Name: "vpc", SourceRef: "v1.2.0"},
 		variables: []domain.TemplateVariable{
 			{Name: "region", Required: true},
 		},

@@ -1274,7 +1274,7 @@ func TestListAttentionReturnsWaitingPlans(t *testing.T) {
 		RunNumber:       7,
 		PlanSummary:     &domain.PlanSummary{Add: 2, Change: 1},
 	}}
-	deps.templates.templates = []domain.TemplateRevision{{ID: "template_123", RepoName: "infra-modules", RootPath: "modules/eks-cluster"}}
+	deps.templates.templates = []domain.TemplateRevision{{ID: "template_123", RepoName: "infra-modules", RootPath: "modules/eks-cluster", Name: "eks-cluster"}}
 	server := NewServer(deps.service(), configuredTenantID)
 	response := httptest.NewRecorder()
 
@@ -1344,7 +1344,7 @@ func TestListAttentionReturnsAFailedPlan(t *testing.T) {
 		RunNumber:       8,
 		CompletedAt:     failedAt,
 	}}
-	deps.templates.templates = []domain.TemplateRevision{{ID: "template_123", RepoName: "infra-modules", RootPath: "modules/eks-cluster"}}
+	deps.templates.templates = []domain.TemplateRevision{{ID: "template_123", RepoName: "infra-modules", RootPath: "modules/eks-cluster", Name: "eks-cluster"}}
 	server := NewServer(deps.service(), configuredTenantID)
 	response := httptest.NewRecorder()
 
@@ -1457,7 +1457,7 @@ func TestAddTemplateToStackCallsService(t *testing.T) {
 	deps.stacks.stack = domain.Stack{ID: domain.StackID("stack_123"), TenantID: domain.TenantID("tenant_123"), Slug: "acme-prod"}
 	deps.templates.template = domain.TemplateRevision{
 		ID: domain.TemplateRevisionID("template_123"), TenantID: domain.TenantID("tenant_123"), Status: domain.TemplateRevisionActive,
-		RepoName: "infra", RootPath: "modules/vpc", SourceRef: "v1.2.0",
+		RepoName: "infra", RootPath: "modules/vpc", SourceRef: "v1.2.0", Name: "vpc",
 	}
 	deps.templates.variables = []domain.TemplateVariable{{Name: "region", Required: true}}
 	deps.stackTemplateID = domain.StackTemplateID("stack_template_a1b2c3d4")
@@ -1517,7 +1517,7 @@ func TestUpdateStackTemplateConfigCallsService(t *testing.T) {
 	}
 	deps.templates.template = domain.TemplateRevision{
 		ID: domain.TemplateRevisionID("template_rev_1"), TenantID: domain.TenantID("tenant_123"),
-		RepoName: "infra", RootPath: "modules/vpc", SourceRef: "v1.2.0",
+		RepoName: "infra", RootPath: "modules/vpc", SourceRef: "v1.2.0", Name: "vpc",
 	}
 	deps.templates.variables = []domain.TemplateVariable{{Name: "region", Required: true}}
 	server := NewServer(deps.service(), configuredTenantID)
@@ -1598,6 +1598,7 @@ func TestUpgradeStackTemplateCallsService(t *testing.T) {
 		RepoName:         "infra",
 		RootPath:         "modules/vpc",
 		SourceRef:        "v2.0.0",
+		Name:             "vpc",
 	}
 	deps.templates.variables = []domain.TemplateVariable{{Name: "region", Required: true}}
 	server := NewServer(deps.service(), configuredTenantID)

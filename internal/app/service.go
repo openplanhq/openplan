@@ -476,7 +476,8 @@ type StackView struct {
 // record has no fields that are only ever populated on one path.
 type StackTemplateView struct {
 	domain.StackTemplate
-	// DisplayName is a human-readable label derived from template metadata.
+	// DisplayName is the desired revision's name, the name the template has
+	// in the catalogue too.
 	DisplayName string
 	// SourceRef is the desired revision's ref.
 	SourceRef string
@@ -1402,7 +1403,7 @@ func (service *Service) labelStackTemplates(ctx context.Context, tenantID domain
 func stackTemplateView(stackTemplate domain.StackTemplate, revision domain.TemplateRevision) StackTemplateView {
 	return StackTemplateView{
 		StackTemplate: stackTemplate,
-		DisplayName:   templateDisplayName(revision.RepoName, revision.RootPath),
+		DisplayName:   revision.Name,
 		SourceRef:     revision.SourceRef,
 	}
 }
@@ -2861,19 +2862,6 @@ func componentKey(value string, stackTemplateID domain.StackTemplateID) string {
 		return value
 	}
 	return string(stackTemplateID)
-}
-
-// templateDisplayName names an installed template by the last segment of its
-// root path: modules/network/vpc is "vpc". The repository is left out because
-// every template from one repository shares it, so it separated nothing. A
-// template at the repository root has no path to name it, so it takes the
-// repository's name.
-func templateDisplayName(repoName, rootPath string) string {
-	cleaned := filepath.Clean(strings.TrimSpace(rootPath))
-	if cleaned == "." {
-		return strings.TrimSpace(repoName)
-	}
-	return filepath.Base(cleaned)
 }
 
 func workspaceName(stackSlug string, stackTemplateID domain.StackTemplateID) string {
