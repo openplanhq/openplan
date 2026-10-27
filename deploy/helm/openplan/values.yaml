@@ -22,24 +22,22 @@ temporal:
   # The Temporal namespace openplan's workflows run in.
   namespace: default
 
+# A connection URL carries its password, so the whole URL is a credential and
+# comes from a Secret, like the others.
 postgres:
-  # Required. The api's database as a URL without the password, such as
-  # postgres://openplan@postgres:5432/openplan?sslmode=require. The api
-  # migrates it at startup.
-  url: ""
-  # Required. The database user's password.
-  passwordSecret:
+  # Required. The api's database URL, password included, such as
+  # postgres://openplan:<password>@postgres:5432/openplan?sslmode=require. The
+  # api migrates it at startup.
+  urlSecret:
     name: ""
     key: ""
 
 valkey:
   api:
     # Required. The Valkey the api reads live run output from, as the api
-    # user and without the password: redis://api@valkey:6379/0, or rediss://
-    # for TLS. The database must be 0.
-    url: ""
-    # Required. The api user's password.
-    passwordSecret:
+    # user: redis://api:<password>@valkey:6379/0, or rediss:// for TLS. The
+    # database must be 0.
+    urlSecret:
       name: ""
       key: ""
   executor:
