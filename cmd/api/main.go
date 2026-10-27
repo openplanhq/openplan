@@ -449,7 +449,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 			LogoutTokenVerifier: verifier,
 			Sealer:              sessionSealer,
 			PublicURL:           publicURL,
-			SecureCookies:       cfg.Security.Mode == config.RuntimeProduction,
+			SecureCookies:       cfg.Environment == config.EnvironmentProduction,
 			Sessions:            sessions,
 			SessionAbsoluteTTL:  cfg.Security.SessionAbsoluteTTL,
 			SessionIdleTTL:      cfg.Security.SessionIdleTTL,

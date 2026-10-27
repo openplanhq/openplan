@@ -23,15 +23,7 @@ const DefaultOpenFGAStoreName = "openplan"
 // multi-tenant openplan later needs no data migration.
 const defaultTenant domain.TenantID = "default"
 
-type RuntimeMode string
-
-const (
-	RuntimeDevelopment RuntimeMode = "development"
-	RuntimeProduction  RuntimeMode = "production"
-)
-
 type SecurityConfig struct {
-	Mode     RuntimeMode
 	TenantID domain.TenantID
 	// OIDC is the identity provider, and the only way in: openplan holds no
 	// credentials of its own.
@@ -102,8 +94,7 @@ func (cfg OpenFGAConfig) GoString() string {
 
 func (cfg SecurityConfig) String() string {
 	return fmt.Sprintf(
-		"SecurityConfig{Mode:%q TenantID:%q OIDC:{IssuerURL:%v ClientID:%q ClientSecret:%s} Root:{Subject:%q} PublicURL:%v SessionEncryptionKey:%s SessionAbsoluteTTL:%s SessionIdleTTL:%s OpenFGA:%s}",
-		cfg.Mode,
+		"SecurityConfig{TenantID:%q OIDC:{IssuerURL:%v ClientID:%q ClientSecret:%s} Root:{Subject:%q} PublicURL:%v SessionEncryptionKey:%s SessionAbsoluteTTL:%s SessionIdleTTL:%s OpenFGA:%s}",
 		cfg.TenantID,
 		cfg.OIDC.IssuerURL,
 		cfg.OIDC.ClientID,
@@ -121,12 +112,7 @@ func (cfg SecurityConfig) GoString() string {
 	return cfg.String()
 }
 
-func loadSecurityConfig(getenv func(string) string) (SecurityConfig, error) {
-	mode, err := parseRuntimeMode(getenv("OPENPLAN_ENVIRONMENT"))
-	if err != nil {
-		return SecurityConfig{}, err
-	}
-
+func loadSecurityConfig(getenv func(string) string, environment Environment) (SecurityConfig, error) {
 	oidc, err := loadOIDCConfig(getenv)
 	if err != nil {
 		return SecurityConfig{}, err
@@ -178,7 +164,7 @@ func loadSecurityConfig(getenv func(string) string) (SecurityConfig, error) {
 	if err != nil {
 		return SecurityConfig{}, err
 	}
-	if mode == RuntimeProduction {
+	if environment == EnvironmentProduction {
 		if oidc.IssuerURL.Scheme != "https" {
 			return SecurityConfig{}, authConfigError("OIDC_ISSUER_URL must use HTTPS in production")
 		}
@@ -196,7 +182,6 @@ func loadSecurityConfig(getenv func(string) string) (SecurityConfig, error) {
 	// API.
 
 	return SecurityConfig{
-		Mode:     mode,
 		TenantID: defaultTenant,
 		OIDC:     oidc,
 		Root:     root,
@@ -282,17 +267,6 @@ func loadOpenFGAConfig(getenv func(string) string) (OpenFGAConfig, error) {
 		return OpenFGAConfig{}, authConfigError("OPENFGA_STORE_NAME must not contain whitespace or control characters")
 	}
 	return OpenFGAConfig{StoreName: storeName}, nil
-}
-
-func parseRuntimeMode(raw string) (RuntimeMode, error) {
-	switch strings.TrimSpace(raw) {
-	case "", string(RuntimeDevelopment):
-		return RuntimeDevelopment, nil
-	case string(RuntimeProduction):
-		return RuntimeProduction, nil
-	default:
-		return "", authConfigError("OPENPLAN_ENVIRONMENT must be development or production")
-	}
 }
 
 func parseConfigURL(name, raw string) (*url.URL, error) {

@@ -372,13 +372,13 @@ func TestRunWiresDefaultTenantBoundary(t *testing.T) {
 	}
 }
 
-// TestRunGatesSecureCookiesOnRuntimeMode asserts the one cookie attribute
+// TestRunGatesSecureCookiesOnEnvironment asserts the one cookie attribute
 // whose regression is invisible in dev and serious in production: a session
 // cookie sent over plaintext. AuthConfig.SecureCookies is unexported outside
 // internal/api, so this observes it the way a browser would — through the
 // Secure flag on the Set-Cookie the login route actually issues — rather than
 // reaching into the server's internals.
-func TestRunGatesSecureCookiesOnRuntimeMode(t *testing.T) {
+func TestRunGatesSecureCookiesOnEnvironment(t *testing.T) {
 	t.Parallel()
 
 	for _, test := range []struct {
