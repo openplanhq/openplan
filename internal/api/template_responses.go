@@ -274,7 +274,7 @@ func newTemplateRunLogResponse(log domain.TemplateRunLog) templateRunLogResponse
 	return templateRunLogResponse{
 		TenantID:    string(log.TenantID),
 		RunID:       string(log.RunID),
-		Name:        log.Phase,
+		Name:        log.Name,
 		RunPhase:    string(log.RunPhase),
 		Seq:         log.Seq,
 		Command:     string(log.Command),

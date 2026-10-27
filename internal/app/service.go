@@ -204,7 +204,7 @@ type TemplateRunLogReader interface {
 
 // TemplateRunLogRepository reads persisted log metadata for tenant-owned TemplateRuns.
 type TemplateRunLogRepository interface {
-	GetTemplateRunLog(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, phase string) (domain.TemplateRunLog, error)
+	GetTemplateRunLog(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, name string) (domain.TemplateRunLog, error)
 	ListTemplateRunLogs(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) ([]domain.TemplateRunLog, error)
 }
 

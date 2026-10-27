@@ -125,7 +125,7 @@ func TestLogStoreReturnsMetadataForWrittenPhaseLog(t *testing.T) {
 	want := domain.TemplateRunLog{
 		TenantID:    domain.TenantID("tenant_123"),
 		RunID:       domain.TemplateRunID("run_123"),
-		Phase:       "plan",
+		Name:        "plan",
 		ObjectKey:   "tenants/tenant_123/runs/run_123/logs/plan.log",
 		ContentType: "text/plain; charset=utf-8",
 		SizeBytes:   12,

@@ -1519,12 +1519,12 @@ func (store *Store) RecordTemplateRunLog(ctx context.Context, log domain.Templat
 	return nil
 }
 
-func (store *Store) GetTemplateRunLog(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, phase string) (domain.TemplateRunLog, error) {
+func (store *Store) GetTemplateRunLog(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, name string) (domain.TemplateRunLog, error) {
 	log, err := scanTemplateRunLog(store.pool.QueryRow(ctx, `
 		select
 			tenant_id,
 			run_id,
-			phase,
+			name,
 			run_phase,
 			seq,
 			command,
@@ -1537,8 +1537,8 @@ func (store *Store) GetTemplateRunLog(ctx context.Context, tenantID domain.Tenan
 		from template_run_logs
 		where tenant_id = $1
 			and run_id = $2
-			and phase = $3
-	`, tenantID, runID, phase))
+			and name = $3
+	`, tenantID, runID, name))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.TemplateRunLog{}, app.ErrNotFound
 	}
@@ -1553,7 +1553,7 @@ func (store *Store) ListTemplateRunLogs(ctx context.Context, tenantID domain.Ten
 		select
 			tenant_id,
 			run_id,
-			phase,
+			name,
 			run_phase,
 			seq,
 			command,
@@ -1600,7 +1600,7 @@ func scanTemplateRunLog(row pgx.Row) (domain.TemplateRunLog, error) {
 	if err := row.Scan(
 		&log.TenantID,
 		&log.RunID,
-		&log.Phase,
+		&log.Name,
 		&log.RunPhase,
 		&log.Seq,
 		&log.Command,

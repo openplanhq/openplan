@@ -45,8 +45,8 @@ func TestRecordTemplateRunLogLiveWritesOnlyTheRow(t *testing.T) {
 	if err := NewControlActivities(&controlStoreStub{logs: recorder}, nil, client).RecordTemplateRunLog(context.Background(), log); err != nil {
 		t.Fatalf("RecordTemplateRunLog returned error: %v", err)
 	}
-	if recorder.log.State != domain.TemplateRunLogLive || recorder.log.Phase != "plan-3" {
-		t.Fatalf("recorded %q in state %q, want plan-3 live", recorder.log.Phase, recorder.log.State)
+	if recorder.log.State != domain.TemplateRunLogLive || recorder.log.Name != "plan-3" {
+		t.Fatalf("recorded %q in state %q, want plan-3 live", recorder.log.Name, recorder.log.State)
 	}
 	// The executor is still writing a live log's stream; ending it here would
 	// tell viewers the command is over.
@@ -81,7 +81,7 @@ func assertRecordEndsTheStream(t *testing.T, log domain.TemplateRunLog, state do
 		t.Fatalf("RecordTemplateRunLog returned error: %v", err)
 	}
 	want := log
-	want.Phase, want.ObjectKey = "plan-3", "tenants/tenant_123/runs/run_123/logs/plan-3.log"
+	want.Name, want.ObjectKey = "plan-3", "tenants/tenant_123/runs/run_123/logs/plan-3.log"
 	if recorder.log != want {
 		t.Fatalf("recorded log = %#v, want %#v", recorder.log, want)
 	}

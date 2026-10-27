@@ -2240,7 +2240,7 @@ func TestGetTemplateRunLogChecksRunOwnershipBeforeReadingLog(t *testing.T) {
 		log: domain.TemplateRunLog{
 			TenantID:  domain.TenantID("tenant_123"),
 			RunID:     domain.TemplateRunID("run_123"),
-			Phase:     "plan",
+			Name:      "plan",
 			ObjectKey: "tenants/tenant_123/runs/run_123/logs/plan.log",
 		},
 	}
@@ -2273,14 +2273,14 @@ func TestGetTemplateRunLogChecksRunOwnershipBeforeReadingLog(t *testing.T) {
 	if logs.gotRunID != domain.TemplateRunID("run_123") {
 		t.Fatalf("log run = %q, want run_123", logs.gotRunID)
 	}
-	if logs.gotPhase != "plan" {
-		t.Fatalf("log phase = %q, want plan", logs.gotPhase)
+	if logs.gotName != "plan" {
+		t.Fatalf("log phase = %q, want plan", logs.gotName)
 	}
 	if logs.gotObjectKey != "tenants/tenant_123/runs/run_123/logs/plan.log" {
 		t.Fatalf("log object key = %q, want metadata object key", logs.gotObjectKey)
 	}
-	if metadata.gotGetPhase != "plan" {
-		t.Fatalf("metadata phase = %q, want plan", metadata.gotGetPhase)
+	if metadata.gotGetName != "plan" {
+		t.Fatalf("metadata phase = %q, want plan", metadata.gotGetName)
 	}
 }
 
@@ -2358,7 +2358,7 @@ func TestGetTemplateRunLogMapsMissingLogToNotFound(t *testing.T) {
 		log: domain.TemplateRunLog{
 			TenantID:  domain.TenantID("tenant_123"),
 			RunID:     domain.TemplateRunID("run_123"),
-			Phase:     "plan",
+			Name:      "plan",
 			ObjectKey: "tenants/tenant_123/runs/run_123/logs/plan.log",
 		},
 	}
@@ -2414,7 +2414,7 @@ func TestListTemplateRunLogsChecksRunOwnershipBeforeListingMetadata(t *testing.T
 			{
 				TenantID:    domain.TenantID("tenant_123"),
 				RunID:       domain.TemplateRunID("run_123"),
-				Phase:       "plan-1",
+				Name:        "plan-1",
 				RunPhase:    domain.RunPhasePlan,
 				Seq:         1,
 				Command:     domain.TerraformCommandInit,
@@ -2476,7 +2476,7 @@ func liveRunLog() domain.TemplateRunLog {
 	return domain.TemplateRunLog{
 		TenantID: domain.TenantID("tenant_123"),
 		RunID:    domain.TemplateRunID("run_123"),
-		Phase:    "plan-1",
+		Name:     "plan-1",
 		RunPhase: domain.RunPhasePlan,
 		Seq:      1,
 		Command:  domain.TerraformCommandInit,
@@ -3046,14 +3046,14 @@ type recordingTemplateRunLogReader struct {
 	err          error
 	gotTenantID  domain.TenantID
 	gotRunID     domain.TemplateRunID
-	gotPhase     string
+	gotName      string
 	gotObjectKey string
 }
 
 func (reader *recordingTemplateRunLogReader) ReadTemplateRunLog(_ context.Context, log domain.TemplateRunLog) ([]byte, error) {
 	reader.gotTenantID = log.TenantID
 	reader.gotRunID = log.RunID
-	reader.gotPhase = log.Phase
+	reader.gotName = log.Name
 	reader.gotObjectKey = log.ObjectKey
 	if reader.err != nil {
 		return nil, reader.err
@@ -3066,17 +3066,17 @@ type recordingTemplateRunLogRepository struct {
 	logs            []domain.TemplateRunLog
 	gotGetTenantID  domain.TenantID
 	gotGetRunID     domain.TemplateRunID
-	gotGetPhase     string
+	gotGetName      string
 	gotListTenantID domain.TenantID
 	gotListRunID    domain.TemplateRunID
 	getErr          error
 	listErr         error
 }
 
-func (repository *recordingTemplateRunLogRepository) GetTemplateRunLog(_ context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, phase string) (domain.TemplateRunLog, error) {
+func (repository *recordingTemplateRunLogRepository) GetTemplateRunLog(_ context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, name string) (domain.TemplateRunLog, error) {
 	repository.gotGetTenantID = tenantID
 	repository.gotGetRunID = runID
-	repository.gotGetPhase = phase
+	repository.gotGetName = name
 	if repository.getErr != nil {
 		return domain.TemplateRunLog{}, repository.getErr
 	}

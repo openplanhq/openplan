@@ -51,7 +51,7 @@ type PlanChangesStore interface {
 type TemplateRunLogStore interface {
 	// PutTemplateRunLog stores the output for a run phase and returns the
 	// metadata row describing it.
-	PutTemplateRunLog(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, phase string, body io.Reader) (domain.TemplateRunLog, error)
+	PutTemplateRunLog(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, name string, body io.Reader) (domain.TemplateRunLog, error)
 }
 
 type CredentialReader interface {
@@ -337,7 +337,7 @@ func (activities *TemplateRunActivities) UploadLog(ctx context.Context, input do
 		Activity: bodyUploadLog,
 		Request: uploadLogRequest{
 			Store: activities.store, TenantID: input.TenantID, RunID: input.RunID,
-			Phase: input.LogName, LogsDir: logsDir, FileName: logsink.FileName(input.LogName),
+			Name: input.LogName, LogsDir: logsDir, FileName: logsink.FileName(input.LogName),
 			ChangesFileName: changesFileName(input.LogName),
 		},
 		Mounts: append([]sandbox.Mount{{Path: logsDir, ReadOnly: true}}, mounts...),

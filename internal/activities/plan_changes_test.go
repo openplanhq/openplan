@@ -179,7 +179,7 @@ func TestUploadLogKeepsTheLogWhenTheChangesCannotBeStored(t *testing.T) {
 	require.NoError(t, err)
 	log, err := activities.UploadLog(context.Background(), domain.UploadLogActivityInput{TenantID: "tenant_123", RunID: "run_123", LogName: "plan"})
 	require.NoError(t, err)
-	require.Equal(t, "plan", log.Phase)
+	require.Equal(t, "plan", log.Name)
 	require.Contains(t, logs.content, "Plan: 4 to add")
 }
 

@@ -2008,7 +2008,7 @@ func TestGetTemplateRunLogReturnsPlainText(t *testing.T) {
 	deps.logMetadata.log = domain.TemplateRunLog{
 		TenantID:  domain.TenantID("tenant_123"),
 		RunID:     domain.TemplateRunID("run_123"),
-		Phase:     "plan",
+		Name:      "plan",
 		ObjectKey: "tenants/tenant_123/runs/run_123/logs/plan.log",
 	}
 	server := NewServer(deps.service(), configuredTenantID)
@@ -2027,8 +2027,8 @@ func TestGetTemplateRunLogReturnsPlainText(t *testing.T) {
 		t.Fatalf("body = %q, want terraform plan output", response.Body.String())
 	}
 	// The path value is the log's name, looked up as such.
-	if deps.logMetadata.gotGetPhase != "plan" {
-		t.Fatalf("looked up log %q, want plan", deps.logMetadata.gotGetPhase)
+	if deps.logMetadata.gotGetName != "plan" {
+		t.Fatalf("looked up log %q, want plan", deps.logMetadata.gotGetName)
 	}
 }
 
@@ -2045,7 +2045,7 @@ func TestListTemplateRunLogsReturnsMetadata(t *testing.T) {
 		{
 			TenantID:    domain.TenantID("tenant_123"),
 			RunID:       domain.TemplateRunID("run_123"),
-			Phase:       "init",
+			Name:        "init",
 			State:       domain.TemplateRunLogComplete,
 			ObjectKey:   "tenants/tenant_123/runs/run_123/logs/init.log",
 			ContentType: "text/plain; charset=utf-8",
@@ -2097,7 +2097,7 @@ func TestListTemplateRunLogsReturnsState(t *testing.T) {
 		{
 			TenantID:    domain.TenantID("tenant_123"),
 			RunID:       domain.TemplateRunID("run_123"),
-			Phase:       "plan-1",
+			Name:        "plan-1",
 			State:       domain.TemplateRunLogComplete,
 			ObjectKey:   "tenants/tenant_123/runs/run_123/logs/plan-1.log",
 			ContentType: "text/plain; charset=utf-8",
@@ -2107,7 +2107,7 @@ func TestListTemplateRunLogsReturnsState(t *testing.T) {
 		{
 			TenantID:   domain.TenantID("tenant_123"),
 			RunID:      domain.TemplateRunID("run_123"),
-			Phase:      "plan-2",
+			Name:       "plan-2",
 			State:      domain.TemplateRunLogLost,
 			LostReason: domain.LogLostUploadFailed,
 		},
@@ -2160,7 +2160,7 @@ func TestGetTemplateRunLogAnswers409ForALiveLog(t *testing.T) {
 	deps.logMetadata.log = domain.TemplateRunLog{
 		TenantID: domain.TenantID("tenant_123"),
 		RunID:    domain.TemplateRunID("run_123"),
-		Phase:    "plan-1",
+		Name:     "plan-1",
 		State:    domain.TemplateRunLogLive,
 	}
 	server := NewServer(deps.service(), configuredTenantID)
@@ -2191,7 +2191,7 @@ func TestGetTemplateRunLogAnswers404ForALostLog(t *testing.T) {
 	deps.logMetadata.log = domain.TemplateRunLog{
 		TenantID: domain.TenantID("tenant_123"),
 		RunID:    domain.TemplateRunID("run_123"),
-		Phase:    "plan-1",
+		Name:     "plan-1",
 		State:    domain.TemplateRunLogLive,
 	}
 	server := NewServer(deps.service(), configuredTenantID)
@@ -2280,7 +2280,7 @@ func TestGetTemplateRunLogMapsMissingLogToNotFound(t *testing.T) {
 	deps.logMetadata.log = domain.TemplateRunLog{
 		TenantID:  domain.TenantID("tenant_123"),
 		RunID:     domain.TemplateRunID("run_123"),
-		Phase:     "plan",
+		Name:      "plan",
 		ObjectKey: "tenants/tenant_123/runs/run_123/logs/plan.log",
 	}
 	server := NewServer(deps.service(), configuredTenantID)
@@ -3102,8 +3102,8 @@ func newPermissionMatrixDependencies(t *testing.T) *apiTestDependencies {
 	// The history the routes list is finished, so nothing blocks the config
 	// and revision routes: those refuse while a run is in flight.
 	deps.templateRuns.list = []domain.TemplateRun{{ID: "run_122", TenantID: "tenant_123", StackTemplateID: "stack_template_123", Status: domain.TemplateRunCompleted}}
-	deps.logMetadata.logs = []domain.TemplateRunLog{{TenantID: "tenant_123", RunID: "run_123", Phase: "plan"}}
-	deps.logMetadata.log = domain.TemplateRunLog{TenantID: "tenant_123", RunID: "run_123", Phase: "plan", ObjectKey: "runs/run_123/plan.log"}
+	deps.logMetadata.logs = []domain.TemplateRunLog{{TenantID: "tenant_123", RunID: "run_123", Name: "plan"}}
+	deps.logMetadata.log = domain.TemplateRunLog{TenantID: "tenant_123", RunID: "run_123", Name: "plan", ObjectKey: "runs/run_123/plan.log"}
 	deps.logs.content = []byte("plan output")
 	return deps
 }
@@ -4002,13 +4002,13 @@ type recordingTemplateRunLogReader struct {
 	err         error
 	gotTenantID domain.TenantID
 	gotRunID    domain.TemplateRunID
-	gotPhase    string
+	gotName     string
 }
 
 func (reader *recordingTemplateRunLogReader) ReadTemplateRunLog(_ context.Context, log domain.TemplateRunLog) ([]byte, error) {
 	reader.gotTenantID = log.TenantID
 	reader.gotRunID = log.RunID
-	reader.gotPhase = log.Phase
+	reader.gotName = log.Name
 	if reader.err != nil {
 		return nil, reader.err
 	}
@@ -4025,17 +4025,17 @@ type recordingTemplateRunLogRepository struct {
 	logs            []domain.TemplateRunLog
 	gotGetTenantID  domain.TenantID
 	gotGetRunID     domain.TemplateRunID
-	gotGetPhase     string
+	gotGetName      string
 	gotListTenantID domain.TenantID
 	gotListRunID    domain.TemplateRunID
 	getErr          error
 	listErr         error
 }
 
-func (repository *recordingTemplateRunLogRepository) GetTemplateRunLog(_ context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, phase string) (domain.TemplateRunLog, error) {
+func (repository *recordingTemplateRunLogRepository) GetTemplateRunLog(_ context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, name string) (domain.TemplateRunLog, error) {
 	repository.gotGetTenantID = tenantID
 	repository.gotGetRunID = runID
-	repository.gotGetPhase = phase
+	repository.gotGetName = name
 	repository.getCalls++
 	if repository.getErr != nil {
 		return domain.TemplateRunLog{}, repository.getErr

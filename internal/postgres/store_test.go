@@ -2443,7 +2443,7 @@ func TestRecordTemplateRunLogUpsertsTenantScopedMetadata(t *testing.T) {
 	log := domain.TemplateRunLog{
 		TenantID:    domain.TenantID("tenant_123"),
 		RunID:       domain.TemplateRunID("run_123"),
-		Phase:       "plan-1",
+		Name:        "plan-1",
 		RunPhase:    domain.RunPhasePlan,
 		Seq:         1,
 		Command:     domain.TerraformCommandPlan,
@@ -2496,7 +2496,7 @@ func TestRecordTemplateRunLogWritesALiveRowThenCompletesIt(t *testing.T) {
 	live := domain.TemplateRunLog{
 		TenantID: "tenant_123",
 		RunID:    "run_123",
-		Phase:    "plan-1",
+		Name:     "plan-1",
 		RunPhase: domain.RunPhasePlan,
 		Seq:      1,
 		Command:  domain.TerraformCommandPlan,
@@ -2554,7 +2554,7 @@ func TestRecordTemplateRunLogWritesALostRowWithItsReason(t *testing.T) {
 	lost := domain.TemplateRunLog{
 		TenantID:   "tenant_123",
 		RunID:      "run_123",
-		Phase:      "plan-1",
+		Name:       "plan-1",
 		RunPhase:   domain.RunPhasePlan,
 		Seq:        1,
 		Command:    domain.TerraformCommandInit,
@@ -2574,7 +2574,7 @@ func TestRecordTemplateRunLogWritesALostRowWithItsReason(t *testing.T) {
 
 	unexplained := lost
 	unexplained.Seq = 2
-	unexplained.Phase = "plan-2"
+	unexplained.Name = "plan-2"
 	unexplained.LostReason = ""
 	err = store.RecordTemplateRunLog(ctx, unexplained)
 	if !violates(err, "23514", "template_run_logs_state_lost_reason_check") {
@@ -2621,7 +2621,7 @@ func TestRecordTemplateRunLogAcceptsEveryCommandInEitherPhase(t *testing.T) {
 			if err := store.RecordTemplateRunLog(ctx, domain.TemplateRunLog{
 				TenantID:    domain.TenantID("tenant_123"),
 				RunID:       domain.TemplateRunID("run_123"),
-				Phase:       phase,
+				Name:        phase,
 				RunPhase:    runPhase,
 				Seq:         seq,
 				Command:     command,
@@ -2673,7 +2673,7 @@ func TestListTemplateRunLogsReturnsTenantScopedMetadataInRunOrder(t *testing.T) 
 			t.Fatal(err)
 		}
 		return domain.TemplateRunLog{
-			TenantID: domain.TenantID(tenant), RunID: domain.TemplateRunID(run), Phase: name, RunPhase: phase, Seq: seq, Command: command,
+			TenantID: domain.TenantID(tenant), RunID: domain.TemplateRunID(run), Name: name, RunPhase: phase, Seq: seq, Command: command,
 			State: domain.TemplateRunLogComplete, ObjectKey: "tenants/" + tenant + "/runs/" + run + "/logs/" + name + ".log", ContentType: "text/plain; charset=utf-8", SizeBytes: 9, UploadedAt: at,
 		}
 	}
@@ -2696,7 +2696,7 @@ func TestListTemplateRunLogsReturnsTenantScopedMetadataInRunOrder(t *testing.T) 
 
 	phases := make([]string, 0, len(logs))
 	for _, log := range logs {
-		phases = append(phases, log.Phase)
+		phases = append(phases, log.Name)
 	}
 	if want := []string{"plan-1", "plan-2", "plan-10", "apply-1"}; !reflect.DeepEqual(phases, want) {
 		t.Fatalf("phases = %q, want %q", phases, want)
@@ -2736,7 +2736,7 @@ func TestRecordTemplateRunLogKeepsARepeatedCommandsLogs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(logs) != 2 || logs[0].Phase != "plan-1" || logs[1].Phase != "plan-4" {
+	if len(logs) != 2 || logs[0].Name != "plan-1" || logs[1].Name != "plan-4" {
 		t.Fatalf("logs = %+v, want plan-1 and plan-4, both init", logs)
 	}
 	got, err := store.GetTemplateRunLog(ctx, "tenant_123", "run_123", "plan-4")
@@ -2765,7 +2765,7 @@ func TestRecordTemplateRunLogReturnsNotFoundForOtherTenant(t *testing.T) {
 	err := store.RecordTemplateRunLog(ctx, domain.TemplateRunLog{
 		TenantID:    domain.TenantID("tenant_456"),
 		RunID:       domain.TemplateRunID("run_123"),
-		Phase:       "plan-1",
+		Name:        "plan-1",
 		RunPhase:    domain.RunPhasePlan,
 		Seq:         1,
 		Command:     domain.TerraformCommandPlan,
@@ -4058,11 +4058,11 @@ func TestMigrationRenamesPlanPhaseSetupLogs(t *testing.T) {
 	ctx := context.Background()
 	pool := openTestPool(t, ctx)
 	// Stop the first migration short of 0024 by marking it applied, and hold
-	// back 0032, 0033 and 0035 too: their columns are not in the rows 0024
-	// converts.
+	// back 0032, 0033, 0035 and 0041 too: their columns are not in the rows
+	// 0024 converts.
 	if _, err := pool.Exec(ctx, `
 		create table schema_migrations (version text primary key, applied_at timestamptz not null default now());
-		insert into schema_migrations (version) values ('0024_run_phase_log_names'), ('0032_template_run_log_commands'), ('0033_template_run_log_names_derived'), ('0035_template_run_log_state');
+		insert into schema_migrations (version) values ('0024_run_phase_log_names'), ('0032_template_run_log_commands'), ('0033_template_run_log_names_derived'), ('0035_template_run_log_state'), ('0041_template_run_logs_name');
 	`); err != nil {
 		t.Fatal(err)
 	}
