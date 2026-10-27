@@ -16,12 +16,12 @@ import (
 // work; setStatus and failOnError because they write it for the run's two
 // lifecycles.
 var statusWriters = map[string][]string{
-	"RecordTemplateRunStatusActivityName":          {"(*run).setStatus"},
-	"setStatus":                                    {"(*planWorkflow).lifecycle", "(*applyWorkflow).lifecycle", "(*run).failOnError"},
-	"failOnError":                                  {"(*planWorkflow).lifecycle", "(*applyWorkflow).lifecycle"},
-	"BeginApplyActivityName":                       {"(*applyWorkflow).lifecycle"},
-	"FinishPlanActivityName":                       {"(*planWorkflow).lifecycle"},
-	"RecordTemplateRegistrationStatusActivityName": {"(*registration).lifecycle"},
+	"RecordTemplateRunStatusActivityName":  {"(*run).setStatus"},
+	"setStatus":                            {"(*planWorkflow).lifecycle", "(*applyWorkflow).lifecycle", "(*run).failOnError"},
+	"failOnError":                          {"(*planWorkflow).lifecycle", "(*applyWorkflow).lifecycle"},
+	"BeginApplyActivityName":               {"(*applyWorkflow).lifecycle"},
+	"FinishPlanActivityName":               {"(*planWorkflow).lifecycle"},
+	"RecordTemplateSyncStatusActivityName": {"(*templateSync).lifecycle"},
 }
 
 // TestOnlyLifecycleWritesStatus pins that a workflow's status is written in

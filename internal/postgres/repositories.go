@@ -17,9 +17,9 @@ import (
 	"github.com/vishu42/openplan/internal/domain"
 )
 
-func createTemplateRegistration(ctx context.Context, exec pgxExecutor, registration domain.TemplateRegistration) error {
+func createTemplateSync(ctx context.Context, exec pgxExecutor, templateSync domain.TemplateSync) error {
 	_, err := exec.Exec(ctx, `
-		insert into template_registrations (
+		insert into template_syncs (
 			id,
 			tenant_id,
 			repo_owner,
@@ -39,28 +39,28 @@ func createTemplateRegistration(ctx context.Context, exec pgxExecutor, registrat
 			$8, $9, $10, $11, $12, $13, nullif($14, '')
 		)
 	`,
-		registration.ID,
-		registration.TenantID,
-		registration.RepoOwner,
-		registration.RepoName,
-		registration.SourceRef,
-		registration.RootPath,
-		registration.Status,
-		registration.TemplateRevisionID,
-		registration.ResolvedCommitSHA,
-		registration.RequestedBy,
-		registration.RequestedAt,
-		nullTime(registration.CompletedAt),
-		registration.ErrorSummary,
-		registration.SourceTemplateID,
+		templateSync.ID,
+		templateSync.TenantID,
+		templateSync.RepoOwner,
+		templateSync.RepoName,
+		templateSync.SourceRef,
+		templateSync.RootPath,
+		templateSync.Status,
+		templateSync.TemplateRevisionID,
+		templateSync.ResolvedCommitSHA,
+		templateSync.RequestedBy,
+		templateSync.RequestedAt,
+		nullTime(templateSync.CompletedAt),
+		templateSync.ErrorSummary,
+		templateSync.SourceTemplateID,
 	)
 	// The template was deleted between the caller reading it and this
 	// insert: a Sync of a template that no longer exists.
-	if foreignKeyViolation(err, "template_registrations_source_template_id_fkey") {
+	if foreignKeyViolation(err, "template_syncs_source_template_id_fkey") {
 		return app.ErrNotFound
 	}
 	if err != nil {
-		return fmt.Errorf("create template registration: %w", err)
+		return fmt.Errorf("create template sync: %w", err)
 	}
 	return nil
 }
@@ -160,29 +160,28 @@ func scanCredentials(rows credentialRows) ([]domain.Credential, error) {
 	return credentials, nil
 }
 
-// RecordTemplateRegistrationStep records the step a running sync has started.
-// Only a running registration has a step to start, so any other registration
-// is not found.
-func (store *Store) RecordTemplateRegistrationStep(ctx context.Context, input domain.TemplateRegistrationStepActivityInput) error {
+// RecordTemplateSyncStep records the step a running sync has started.
+// Only a running sync has a step to start, so any other sync is not found.
+func (store *Store) RecordTemplateSyncStep(ctx context.Context, input domain.TemplateSyncStepActivityInput) error {
 	if !input.Step.Valid() {
-		return fmt.Errorf("record template registration step: unknown step %q", input.Step)
+		return fmt.Errorf("record template sync step: unknown step %q", input.Step)
 	}
 	commandTag, err := store.pool.Exec(ctx, `
-		update template_registrations
+		update template_syncs
 		set step = $1
 		where tenant_id = $2
 			and id = $3
 			and status = $4
-	`, input.Step, input.TenantID, input.RegistrationID, domain.TemplateRegistrationRunning)
+	`, input.Step, input.TenantID, input.SyncID, domain.TemplateSyncStateRunning)
 	if err != nil {
-		return fmt.Errorf("record template registration step: %w", err)
+		return fmt.Errorf("record template sync step: %w", err)
 	}
 	if commandTag.RowsAffected() == 1 {
 		return nil
 	}
-	gone, err := templateRegistrationGone(ctx, store.pool, input.TenantID, input.RegistrationID)
+	gone, err := templateSyncGone(ctx, store.pool, input.TenantID, input.SyncID)
 	if err != nil {
-		return fmt.Errorf("record template registration step: %w", err)
+		return fmt.Errorf("record template sync step: %w", err)
 	}
 	if gone {
 		return nil
@@ -190,16 +189,16 @@ func (store *Store) RecordTemplateRegistrationStep(ctx context.Context, input do
 	return ErrNotFound
 }
 
-// templateRegistrationGone reports whether the registration no longer exists.
-// Deleting a template cascades to its registrations while their syncs may
+// templateSyncGone reports whether the sync no longer exists. Deleting a
+// template cascades to its syncs while they may
 // still be running; those syncs record into nothing and end, rather than
 // failing and being retried for their whole retry policy.
-func templateRegistrationGone(ctx context.Context, exec pgxExecutor, tenantID domain.TenantID, id domain.TemplateRegistrationID) (bool, error) {
+func templateSyncGone(ctx context.Context, exec pgxExecutor, tenantID domain.TenantID, id domain.TemplateSyncID) (bool, error) {
 	var exists bool
 	if err := exec.QueryRow(ctx, `
 		select exists (
 			select 1
-			from template_registrations
+			from template_syncs
 			where tenant_id = $1
 				and id = $2
 		)
@@ -209,14 +208,14 @@ func templateRegistrationGone(ctx context.Context, exec pgxExecutor, tenantID do
 	return !exists, nil
 }
 
-// RecordTemplateRegistrationStatus records a status transition. A
-// registration that is gone, deleted with its template, has nothing left to
-// record and succeeds; see templateRegistrationGone.
-func (store *Store) RecordTemplateRegistrationStatus(ctx context.Context, input domain.TemplateRegistrationStatusActivityInput) error {
+// RecordTemplateSyncStatus records a status transition. A
+// sync that is gone, deleted with its template, has nothing left to
+// record and succeeds; see templateSyncGone.
+func (store *Store) RecordTemplateSyncStatus(ctx context.Context, input domain.TemplateSyncStatusActivityInput) error {
 	var err error
-	if terminalTemplateRegistrationStatus(input.Status) {
+	if terminalTemplateSyncState(input.Status) {
 		_, err = store.pool.Exec(ctx, `
-			update template_registrations
+			update template_syncs
 			set
 				status = $1,
 				template_revision_id = $2,
@@ -231,11 +230,11 @@ func (store *Store) RecordTemplateRegistrationStatus(ctx context.Context, input 
 			input.ResolvedCommitSHA,
 			input.ErrorSummary,
 			input.TenantID,
-			input.RegistrationID,
+			input.SyncID,
 		)
 	} else {
 		_, err = store.pool.Exec(ctx, `
-			update template_registrations
+			update template_syncs
 			set
 				status = $1,
 				template_revision_id = $2,
@@ -249,11 +248,11 @@ func (store *Store) RecordTemplateRegistrationStatus(ctx context.Context, input 
 			input.ResolvedCommitSHA,
 			input.ErrorSummary,
 			input.TenantID,
-			input.RegistrationID,
+			input.SyncID,
 		)
 	}
 	if err != nil {
-		return fmt.Errorf("record template registration status: %w", err)
+		return fmt.Errorf("record template sync status: %w", err)
 	}
 	return nil
 }
@@ -544,7 +543,7 @@ func (store *Store) ListSourceTemplatesPage(ctx context.Context, tenantID domain
 // selectSourceTemplatesSQL reads templates with their latest revision's name,
 // description and tags, and their newest sync. The left joins keep a template
 // no sync has produced a revision for, or been requested for, yet. The
-// newest sync is one probe of the registrations index per template.
+// newest sync is one probe of the template_syncs index per template.
 const selectSourceTemplatesSQL = `
 	select
 		st.id,
@@ -577,7 +576,7 @@ const selectSourceTemplatesSQL = `
 			r.requested_at,
 			r.completed_at,
 			coalesce(rr.created_at < r.requested_at, false) as revision_predates_request
-		from template_registrations r
+		from template_syncs r
 		left join template_revisions rr
 			on rr.tenant_id = r.tenant_id
 			and rr.id = r.template_revision_id
@@ -644,7 +643,7 @@ func (columns latestTemplateSyncColumns) latestSync() *domain.LatestTemplateSync
 		return nil
 	}
 	return &domain.LatestTemplateSync{
-		Status:                  domain.TemplateRegistrationStatus(columns.status.String),
+		Status:                  domain.TemplateSyncState(columns.status.String),
 		ErrorSummary:            columns.errorSummary.String,
 		ResolvedCommitSHA:       columns.resolvedCommitSHA.String,
 		RequestedAt:             columns.requestedAt.Time,
@@ -2370,11 +2369,11 @@ func selectTemplateRevisionByIdentity(ctx context.Context, tx pgx.Tx, templateRe
 	return selected, nil
 }
 
-func terminalTemplateRegistrationStatus(status domain.TemplateRegistrationStatus) bool {
+func terminalTemplateSyncState(status domain.TemplateSyncState) bool {
 	switch status {
-	case domain.TemplateRegistrationCompleted, domain.TemplateRegistrationInvalid, domain.TemplateRegistrationFailed:
+	case domain.TemplateSyncStateCompleted, domain.TemplateSyncStateInvalid, domain.TemplateSyncStateFailed:
 		return true
-	case domain.TemplateRegistrationPending, domain.TemplateRegistrationRunning:
+	case domain.TemplateSyncStatePending, domain.TemplateSyncStateRunning:
 		return false
 	default:
 		return false

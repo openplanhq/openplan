@@ -112,19 +112,19 @@ func TestStartTemplateSyncExecutesWorkflow(t *testing.T) {
 	workflowClient := &recordingWorkflowClient{}
 	dispatcher := newDispatcher(workflowClient)
 	input := domain.TemplateSyncWorkflowInput{
-		RegistrationID: domain.TemplateRegistrationID("template_registration_123"),
-		TenantID:       domain.TenantID("tenant_123"),
-		RepoOwner:      "acme",
-		RepoName:       "infra-templates",
-		SourceRef:      "v0.0.1",
-		RootPath:       "modules/vpc",
+		SyncID:    domain.TemplateSyncID("template_sync_123"),
+		TenantID:  domain.TenantID("tenant_123"),
+		RepoOwner: "acme",
+		RepoName:  "infra-templates",
+		SourceRef: "v0.0.1",
+		RootPath:  "modules/vpc",
 	}
 
 	if err := dispatcher.StartTemplateSync(context.Background(), input); err != nil {
 		t.Fatalf("StartTemplateSync returned error: %v", err)
 	}
 
-	if workflowClient.executeOptions.ID != "template-sync/tenant_123/template_registration_123" {
+	if workflowClient.executeOptions.ID != "template-sync/tenant_123/template_sync_123" {
 		t.Fatalf("workflow ID = %q", workflowClient.executeOptions.ID)
 	}
 	if workflowClient.executeOptions.TaskQueue != domain.ControlTaskQueue {
@@ -201,8 +201,8 @@ func TestStartTemplateSyncWrapsClientError(t *testing.T) {
 	dispatcher := newDispatcher(&recordingWorkflowClient{executeErr: clientErr})
 
 	err := dispatcher.StartTemplateSync(context.Background(), domain.TemplateSyncWorkflowInput{
-		RegistrationID: domain.TemplateRegistrationID("template_registration_123"),
-		TenantID:       domain.TenantID("tenant_123"),
+		SyncID:   domain.TemplateSyncID("template_sync_123"),
+		TenantID: domain.TenantID("tenant_123"),
 	})
 	if !errors.Is(err, clientErr) {
 		t.Fatalf("error = %v, want wrapped client error", err)
@@ -224,8 +224,8 @@ func TestTemplatePlanWorkflowID(t *testing.T) {
 func TestTemplateSyncWorkflowID(t *testing.T) {
 	t.Parallel()
 
-	got := templateSyncWorkflowID(domain.TenantID("tenant_123"), domain.TemplateRegistrationID("template_registration_123"))
-	if got != "template-sync/tenant_123/template_registration_123" {
+	got := templateSyncWorkflowID(domain.TenantID("tenant_123"), domain.TemplateSyncID("template_sync_123"))
+	if got != "template-sync/tenant_123/template_sync_123" {
 		t.Fatalf("workflow ID = %q", got)
 	}
 }

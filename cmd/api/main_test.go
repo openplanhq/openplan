@@ -292,18 +292,18 @@ func TestRegisterControlRegistersWorkflowsAndControlActivities(t *testing.T) {
 		t.Fatalf("workflows = %v, want %v", worker.workflows, wantWorkflows)
 	}
 	wantActivities := map[string]bool{
-		domain.RecordTemplateRunStatusActivityName:          true,
-		domain.RecordTemplateRunLogActivityName:             true,
-		domain.SealRunCredentialsActivityName:               true,
-		domain.SealSourceTokenActivityName:                  true,
-		domain.SealPlanKeyActivityName:                      true,
-		domain.FinishPlanActivityName:                       true,
-		domain.BeginApplyActivityName:                       true,
-		domain.RecordTemplateRunStepActivityName:            true,
-		domain.RecordTemplateRunEventActivityName:           true,
-		domain.RecordTemplateRegistrationStatusActivityName: true,
-		domain.RecordTemplateRegistrationStepActivityName:   true,
-		domain.SyncTemplateActivityName:                     true,
+		domain.RecordTemplateRunStatusActivityName:  true,
+		domain.RecordTemplateRunLogActivityName:     true,
+		domain.SealRunCredentialsActivityName:       true,
+		domain.SealSourceTokenActivityName:          true,
+		domain.SealPlanKeyActivityName:              true,
+		domain.FinishPlanActivityName:               true,
+		domain.BeginApplyActivityName:               true,
+		domain.RecordTemplateRunStepActivityName:    true,
+		domain.RecordTemplateRunEventActivityName:   true,
+		domain.RecordTemplateSyncStatusActivityName: true,
+		domain.RecordTemplateSyncStepActivityName:   true,
+		domain.SyncTemplateActivityName:             true,
 	}
 	if !reflect.DeepEqual(worker.activities, wantActivities) {
 		t.Fatalf("activities = %v, want %v", worker.activities, wantActivities)
@@ -905,7 +905,7 @@ func (recordingStore) CreateTemplateRun(context.Context, domain.TemplateRun) (in
 	return 0, nil
 }
 
-func (recordingStore) CreateTemplateRegistration(context.Context, domain.TemplateRegistration) error {
+func (recordingStore) CreateTemplateSync(context.Context, domain.TemplateSync) error {
 	return nil
 }
 
@@ -981,11 +981,11 @@ func (recordingStore) ListTemplateRunLogs(context.Context, domain.TenantID, doma
 	return nil, nil
 }
 
-func (recordingStore) RecordTemplateRegistrationStatus(context.Context, domain.TemplateRegistrationStatusActivityInput) error {
+func (recordingStore) RecordTemplateSyncStatus(context.Context, domain.TemplateSyncStatusActivityInput) error {
 	return nil
 }
 
-func (recordingStore) RecordTemplateRegistrationStep(context.Context, domain.TemplateRegistrationStepActivityInput) error {
+func (recordingStore) RecordTemplateSyncStep(context.Context, domain.TemplateSyncStepActivityInput) error {
 	return nil
 }
 

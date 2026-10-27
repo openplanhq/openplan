@@ -104,7 +104,7 @@ type TxRepo interface {
 	CreateSourceTemplate(ctx context.Context, template domain.SourceTemplate) (domain.SourceTemplate, error)
 	AppendAuditEvent(ctx context.Context, event domain.SecurityAuditEvent) error
 	CreateTemplateRun(ctx context.Context, run domain.TemplateRun) (int, error)
-	CreateTemplateRegistration(ctx context.Context, registration domain.TemplateRegistration) error
+	CreateTemplateSync(ctx context.Context, templateSync domain.TemplateSync) error
 	ApproveTemplateRun(ctx context.Context, approval domain.TemplateRunApproval) error
 	// DiscardTemplateRun discards a run waiting for approval, or approved but
 	// not yet claimed by its apply, and reports whether it did.
@@ -228,9 +228,9 @@ type TemplateRunIDGenerator interface {
 	NewTemplateRunID() domain.TemplateRunID
 }
 
-// TemplateRegistrationIDGenerator creates TemplateRegistration identifiers.
-type TemplateRegistrationIDGenerator interface {
-	NewTemplateRegistrationID() domain.TemplateRegistrationID
+// TemplateSyncIDGenerator creates TemplateSync identifiers.
+type TemplateSyncIDGenerator interface {
+	NewTemplateSyncID() domain.TemplateSyncID
 }
 
 // StackIDGenerator creates Stack identifiers.
@@ -338,7 +338,7 @@ type Service struct {
 	StackTemplateIDs         StackTemplateIDGenerator
 	CredentialIDs            CredentialIDGenerator
 	RunIDs                   TemplateRunIDGenerator
-	RegistrationIDs          TemplateRegistrationIDGenerator
+	SyncIDs                  TemplateSyncIDGenerator
 	Clock                    Clock
 	Audit                    AuditRepository
 	Users                    UserRepository
@@ -362,8 +362,8 @@ func NewService(service Service) *Service {
 	if service.RunIDs == nil {
 		service.RunIDs = randomTemplateRunIDGenerator{}
 	}
-	if service.RegistrationIDs == nil {
-		service.RegistrationIDs = randomTemplateRegistrationIDGenerator{}
+	if service.SyncIDs == nil {
+		service.SyncIDs = randomTemplateSyncIDGenerator{}
 	}
 	if service.StackIDs == nil {
 		service.StackIDs = randomStackIDGenerator{}
@@ -421,11 +421,10 @@ type StartTemplateSyncCommand struct {
 }
 
 // StartedTemplateSync is a template and the sync that registering it, or
-// syncing it again, just queued. The sync is the registration row the
-// sync workflow records its progress into.
+// syncing it again, just queued. The sync is the row the sync workflow records its progress into.
 type StartedTemplateSync struct {
 	Template domain.SourceTemplate
-	Sync     domain.TemplateRegistration
+	Sync     domain.TemplateSync
 }
 
 // ListTemplatesCommand asks the app for one page of the tenant's templates.
@@ -729,20 +728,20 @@ func (service *Service) StartTemplateSync(ctx context.Context, command StartTemp
 // latest, which a read after the commit would also find, so the answer never
 // shows the sync it replaced.
 func (service *Service) queueTemplateSync(ctx context.Context, repository TxRepo, enqueuer queue.Enqueuer, template domain.SourceTemplate, actor domain.UserID) (StartedTemplateSync, error) {
-	templateSync := domain.TemplateRegistration{
-		ID:               service.RegistrationIDs.NewTemplateRegistrationID(),
+	templateSync := domain.TemplateSync{
+		ID:               service.SyncIDs.NewTemplateSyncID(),
 		TenantID:         template.TenantID,
 		SourceTemplateID: template.ID,
 		RepoOwner:        template.RepoOwner,
 		RepoName:         template.RepoName,
 		SourceRef:        template.SourceRef,
 		RootPath:         template.RootPath,
-		Status:           domain.TemplateRegistrationPending,
+		Status:           domain.TemplateSyncStatePending,
 		RequestedBy:      actor,
 		RequestedAt:      service.Clock.Now(),
 	}
 	payload, err := json.Marshal(StartTemplateSyncPayload(domain.TemplateSyncWorkflowInput{
-		RegistrationID:   templateSync.ID,
+		SyncID:           templateSync.ID,
 		TenantID:         templateSync.TenantID,
 		SourceTemplateID: templateSync.SourceTemplateID,
 		RepoOwner:        templateSync.RepoOwner,
@@ -753,7 +752,7 @@ func (service *Service) queueTemplateSync(ctx context.Context, repository TxRepo
 	if err != nil {
 		return StartedTemplateSync{}, fmt.Errorf("encode start template sync payload: %w", err)
 	}
-	if err := repository.CreateTemplateRegistration(ctx, templateSync); err != nil {
+	if err := repository.CreateTemplateSync(ctx, templateSync); err != nil {
 		return StartedTemplateSync{}, err
 	}
 	if err := enqueuer.Enqueue(ctx, queue.Request{
@@ -3089,10 +3088,10 @@ func (randomTemplateRunIDGenerator) NewTemplateRunID() domain.TemplateRunID {
 	return randomID[domain.TemplateRunID]("run")
 }
 
-type randomTemplateRegistrationIDGenerator struct{}
+type randomTemplateSyncIDGenerator struct{}
 
-func (randomTemplateRegistrationIDGenerator) NewTemplateRegistrationID() domain.TemplateRegistrationID {
-	return randomID[domain.TemplateRegistrationID]("template_registration")
+func (randomTemplateSyncIDGenerator) NewTemplateSyncID() domain.TemplateSyncID {
+	return randomID[domain.TemplateSyncID]("template_sync")
 }
 
 type randomStackIDGenerator struct{}

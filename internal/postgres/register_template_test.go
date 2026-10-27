@@ -48,7 +48,7 @@ func TestRegisteredTemplateTakesItsSyncsRevision(t *testing.T) {
 
 	input := queuedSync(t, ctx, pool, registered.Sync.ID)
 	assert.Equal(t, registered.Template.ID, input.SourceTemplateID)
-	stored, err := store.GetTemplateRegistration(ctx, "tenant_123", registered.Sync.ID)
+	stored, err := store.GetTemplateSync(ctx, "tenant_123", registered.Sync.ID)
 	require.NoError(t, err)
 	assert.Equal(t, registered.Template.ID, stored.SourceTemplateID)
 
@@ -77,14 +77,14 @@ func TestRegisteredTemplateTakesItsSyncsRevision(t *testing.T) {
 	assert.Equal(t, 1, templates)
 }
 
-// queuedSync reads the sync input queued for one registration.
-func queuedSync(t *testing.T, ctx context.Context, pool *pgxpool.Pool, registrationID domain.TemplateRegistrationID) app.StartTemplateSyncPayload {
+// queuedSync reads the sync input queued for one sync.
+func queuedSync(t *testing.T, ctx context.Context, pool *pgxpool.Pool, syncID domain.TemplateSyncID) app.StartTemplateSyncPayload {
 	t.Helper()
 	var payload []byte
 	require.NoError(t, pool.QueryRow(ctx, `
 		select payload from work_queue
-		where kind = 'start_template_sync' and payload->>'RegistrationID' = $1
-	`, string(registrationID)).Scan(&payload))
+		where kind = 'start_template_sync' and payload->>'SyncID' = $1
+	`, string(syncID)).Scan(&payload))
 	var input app.StartTemplateSyncPayload
 	require.NoError(t, json.Unmarshal(payload, &input))
 	return input

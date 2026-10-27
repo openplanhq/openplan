@@ -74,7 +74,7 @@ func (dispatcher *Dispatcher) StartTemplateSync(ctx context.Context, input domai
 	_, err := dispatcher.client.ExecuteWorkflow(
 		ctx,
 		client.StartWorkflowOptions{
-			ID:        templateSyncWorkflowID(input.TenantID, input.RegistrationID),
+			ID:        templateSyncWorkflowID(input.TenantID, input.SyncID),
 			TaskQueue: domain.ControlTaskQueue,
 		},
 		domain.TemplateSyncWorkflowName,
@@ -118,6 +118,6 @@ func templateApplyWorkflowID(tenantID domain.TenantID, runID domain.TemplateRunI
 	return templateRunWorkflowID(tenantID, runID) + "/apply"
 }
 
-func templateSyncWorkflowID(tenantID domain.TenantID, registrationID domain.TemplateRegistrationID) string {
-	return fmt.Sprintf("template-sync/%s/%s", tenantID, registrationID)
+func templateSyncWorkflowID(tenantID domain.TenantID, syncID domain.TemplateSyncID) string {
+	return fmt.Sprintf("template-sync/%s/%s", tenantID, syncID)
 }

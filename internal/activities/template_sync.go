@@ -32,8 +32,8 @@ type GitHubTokenSource interface {
 }
 
 type TemplateSyncStore interface {
-	RecordTemplateRegistrationStatus(context.Context, domain.TemplateRegistrationStatusActivityInput) error
-	RecordTemplateRegistrationStep(context.Context, domain.TemplateRegistrationStepActivityInput) error
+	RecordTemplateSyncStatus(context.Context, domain.TemplateSyncStatusActivityInput) error
+	RecordTemplateSyncStep(context.Context, domain.TemplateSyncStepActivityInput) error
 	// UpsertTemplateRevisionWithVariables writes the revision into its
 	// existing source template, and fails wrapping os.ErrNotExist when that
 	// template no longer exists.
@@ -76,16 +76,16 @@ func NewTemplateSyncActivities(store TemplateSyncStore, options ...TemplateSyncO
 	return activities
 }
 
-func (activities *TemplateSyncActivities) RecordTemplateRegistrationStatus(ctx context.Context, input domain.TemplateRegistrationStatusActivityInput) error {
-	if err := activities.store.RecordTemplateRegistrationStatus(ctx, input); err != nil {
-		return fmt.Errorf("record template registration status: %w", err)
+func (activities *TemplateSyncActivities) RecordTemplateSyncStatus(ctx context.Context, input domain.TemplateSyncStatusActivityInput) error {
+	if err := activities.store.RecordTemplateSyncStatus(ctx, input); err != nil {
+		return fmt.Errorf("record template sync status: %w", err)
 	}
 	return nil
 }
 
-func (activities *TemplateSyncActivities) RecordTemplateRegistrationStep(ctx context.Context, input domain.TemplateRegistrationStepActivityInput) error {
-	if err := activities.store.RecordTemplateRegistrationStep(ctx, input); err != nil {
-		return fmt.Errorf("record template registration step: %w", err)
+func (activities *TemplateSyncActivities) RecordTemplateSyncStep(ctx context.Context, input domain.TemplateSyncStepActivityInput) error {
+	if err := activities.store.RecordTemplateSyncStep(ctx, input); err != nil {
+		return fmt.Errorf("record template sync step: %w", err)
 	}
 	return nil
 }
@@ -109,7 +109,7 @@ func (activities *TemplateSyncActivities) SyncTemplate(ctx context.Context, inpu
 
 	repoPath := filepath.Join(workspace, "repo")
 	// Both the invalid summary and a returned error are stored on the
-	// registration and shown to the user, so neither may carry this
+	// sync and shown to the user, so neither may carry this
 	// server-side temp path: git and the HCL parser both put it in messages.
 	defer func() { output, err = withoutRepoPath(repoPath, output, err) }()
 	repoURL, err := gitHubRepoURL(input.RepoOwner, input.RepoName)
@@ -128,7 +128,7 @@ func (activities *TemplateSyncActivities) SyncTemplate(ctx context.Context, inpu
 	if err := activities.git.Clone(ctx, repoURL, input.SourceRef, repoPath, credential); err != nil {
 		hint := unauthenticatedFetchHint(credentialErr, input.RepoOwner, input.RepoName)
 		// A clone that failed while the token lookup was also failing is
-		// infrastructure, not a bad registration, and returning it as an error
+		// infrastructure, not a bad sync, and returning it as an error
 		// is what hands the retry back to Temporal. An outcome returned with a
 		// nil error tells Temporal the activity succeeded, spending none of the
 		// four attempts syncRetryPolicy grants.
@@ -193,7 +193,7 @@ func (activities *TemplateSyncActivities) SyncTemplate(ctx context.Context, inpu
 	}
 
 	return domain.TemplateSyncActivityOutput{
-		Status:             domain.TemplateRegistrationCompleted,
+		Status:             domain.TemplateSyncStateCompleted,
 		TemplateRevisionID: persisted.ID,
 		ResolvedCommitSHA:  persisted.ResolvedCommitSHA,
 	}, nil
@@ -287,7 +287,7 @@ func unauthenticatedFetchHint(cause error, owner string, repo string) string {
 
 func invalidTemplateSyncOutput(format string, args ...any) domain.TemplateSyncActivityOutput {
 	return domain.TemplateSyncActivityOutput{
-		Status:       domain.TemplateRegistrationInvalid,
+		Status:       domain.TemplateSyncStateInvalid,
 		ErrorSummary: fmt.Sprintf(format, args...),
 	}
 }

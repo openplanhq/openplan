@@ -785,7 +785,7 @@ func fetchWithSealedToken(t *testing.T, tokens GitHubTokenSource, git *fakeGit, 
 	return err
 }
 
-// A run's checkout needs the credential just as a registration's clone does;
+// A run's checkout needs the credential just as a sync's clone does;
 // this is the path that feeds Terraform.
 func TestFetchSourcePassesInstallationTokenToCheckout(t *testing.T) {
 	t.Parallel()

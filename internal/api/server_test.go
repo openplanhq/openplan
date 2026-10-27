@@ -696,11 +696,11 @@ func TestCreateTemplateAnswersTheTemplate(t *testing.T) {
 	if len(deps.work.requests) != 1 || deps.work.requests[0].Kind != app.KindStartTemplateSync {
 		t.Fatalf("queued requests = %#v, want one start_template_sync request", deps.work.requests)
 	}
-	if deps.registrations.created.SourceTemplateID != domain.SourceTemplateID(wantID) {
-		t.Fatalf("sync template id = %q, want %q", deps.registrations.created.SourceTemplateID, wantID)
+	if deps.syncs.created.SourceTemplateID != domain.SourceTemplateID(wantID) {
+		t.Fatalf("sync template id = %q, want %q", deps.syncs.created.SourceTemplateID, wantID)
 	}
-	if deps.registrations.created.RequestedBy != domain.UserID(apiOIDCSubject) {
-		t.Fatalf("requested by = %q, want %q", deps.registrations.created.RequestedBy, apiOIDCSubject)
+	if deps.syncs.created.RequestedBy != domain.UserID(apiOIDCSubject) {
+		t.Fatalf("requested by = %q, want %q", deps.syncs.created.RequestedBy, apiOIDCSubject)
 	}
 	var syncInput app.StartTemplateSyncPayload
 	if err := json.Unmarshal(deps.work.requests[0].Payload, &syncInput); err != nil {
@@ -775,18 +775,18 @@ func TestTemplateReadsCarryTheLatestSync(t *testing.T) {
 		{name: "never synced", want: `null`},
 		{
 			name: "syncing",
-			sync: &domain.LatestTemplateSync{Status: domain.TemplateRegistrationRunning, RequestedAt: now.Add(-time.Minute)},
+			sync: &domain.LatestTemplateSync{Status: domain.TemplateSyncStateRunning, RequestedAt: now.Add(-time.Minute)},
 			want: `{"status":"syncing","error_summary":"","resolved_commit_sha":"","requested_at":"2026-10-21T11:59:00Z"}`,
 		},
 		{
 			name: "stalled",
-			sync: &domain.LatestTemplateSync{Status: domain.TemplateRegistrationPending, RequestedAt: now.Add(-domain.TemplateSyncStallsAfter)},
+			sync: &domain.LatestTemplateSync{Status: domain.TemplateSyncStatePending, RequestedAt: now.Add(-domain.TemplateSyncStallsAfter)},
 			want: `{"status":"stalled","error_summary":"","resolved_commit_sha":"","requested_at":"2026-10-21T11:30:00Z"}`,
 		},
 		{
 			name: "up to date",
 			sync: &domain.LatestTemplateSync{
-				Status: domain.TemplateRegistrationCompleted, ResolvedCommitSHA: "abc123", RevisionPredatesRequest: true,
+				Status: domain.TemplateSyncStateCompleted, ResolvedCommitSHA: "abc123", RevisionPredatesRequest: true,
 				RequestedAt: now.Add(-2 * time.Hour), CompletedAt: now.Add(-2*time.Hour + time.Minute),
 			},
 			want: `{"status":"up_to_date","error_summary":"","resolved_commit_sha":"abc123","requested_at":"2026-10-21T10:00:00Z","completed_at":"2026-10-21T10:01:00Z"}`,
@@ -794,7 +794,7 @@ func TestTemplateReadsCarryTheLatestSync(t *testing.T) {
 		{
 			name: "invalid",
 			sync: &domain.LatestTemplateSync{
-				Status: domain.TemplateRegistrationInvalid, ErrorSummary: "root path modules/vpc does not exist",
+				Status: domain.TemplateSyncStateInvalid, ErrorSummary: "root path modules/vpc does not exist",
 				RequestedAt: now.Add(-2 * time.Hour), CompletedAt: now.Add(-2*time.Hour + time.Minute),
 			},
 			want: `{"status":"invalid","error_summary":"root path modules/vpc does not exist","resolved_commit_sha":"","requested_at":"2026-10-21T10:00:00Z","completed_at":"2026-10-21T10:01:00Z"}`,
@@ -884,7 +884,7 @@ func TestStartTemplateSync(t *testing.T) {
 			if len(deps.work.requests) != 1 || deps.work.requests[0].Kind != app.KindStartTemplateSync {
 				t.Fatalf("queued requests = %#v, want one start_template_sync request", deps.work.requests)
 			}
-			synced := deps.registrations.created
+			synced := deps.syncs.created
 			if synced.SourceTemplateID != "source_template_vpc" || synced.RepoOwner != "acme" || synced.RootPath != "modules/vpc" {
 				t.Fatalf("sync = %#v, want the template's source", synced)
 			}
@@ -2565,13 +2565,13 @@ func TestMutationRequestsRejectIdentityOverrides(t *testing.T) {
 			t.Errorf("created stack ID = %q, want no mutation", deps.stacks.created.ID)
 		}
 	}
-	assertNoRegistration := func(t *testing.T, deps *apiTestDependencies) {
+	assertNoSync := func(t *testing.T, deps *apiTestDependencies) {
 		t.Helper()
-		if deps.registrations.created.ID != "" {
-			t.Errorf("created registration ID = %q, want no mutation", deps.registrations.created.ID)
+		if deps.syncs.created.ID != "" {
+			t.Errorf("created sync ID = %q, want no mutation", deps.syncs.created.ID)
 		}
-		if deps.workflows.syncInput.RegistrationID != "" {
-			t.Errorf("workflow registration ID = %q, want no workflow start", deps.workflows.syncInput.RegistrationID)
+		if deps.workflows.syncInput.SyncID != "" {
+			t.Errorf("workflow sync ID = %q, want no workflow start", deps.workflows.syncInput.SyncID)
 		}
 	}
 	assertNoRun := func(t *testing.T, deps *apiTestDependencies) {
@@ -2600,7 +2600,7 @@ func TestMutationRequestsRejectIdentityOverrides(t *testing.T) {
 		assertNoEffects func(*testing.T, *apiTestDependencies)
 	}{
 		{name: "actor", path: "/v1/tenants/tenant_123/stacks", body: `{"name":"Acme","actor":"spoofed"}`, assertNoEffects: assertNoStackCreation},
-		{name: "requested by", path: "/v1/tenants/tenant_123/templates", body: `{"repo_owner":"acme","repo_name":"infra","source_ref":"main","root_path":".","requested_by":"spoofed"}`, assertNoEffects: assertNoRegistration},
+		{name: "requested by", path: "/v1/tenants/tenant_123/templates", body: `{"repo_owner":"acme","repo_name":"infra","source_ref":"main","root_path":".","requested_by":"spoofed"}`, assertNoEffects: assertNoSync},
 		{name: "trigger actor", path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/runs", body: `{"operation":"plan","trigger_actor":"spoofed"}`, assertNoEffects: assertNoRun},
 		{name: "approved by", path: "/v1/tenants/tenant_123/template-runs/run_123/approve", body: `{"approved_by":"spoofed"}`, assertNoEffects: assertNoApproval},
 		{name: "created by", path: "/v1/tenants/tenant_123/stacks", body: `{"name":"Acme","created_by":"spoofed"}`, assertNoEffects: assertNoStackCreation},
@@ -2791,8 +2791,8 @@ func TestTemplateCatalogRoutesRejectOrdinaryUser(t *testing.T) {
 			if response.Code != http.StatusForbidden {
 				t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusForbidden, response.Body.String())
 			}
-			if deps.registrations.created.ID != "" {
-				t.Fatalf("registration = %#v, want no mutation", deps.registrations.created)
+			if deps.syncs.created.ID != "" {
+				t.Fatalf("sync = %#v, want no mutation", deps.syncs.created)
 			}
 		})
 	}
@@ -3479,7 +3479,7 @@ type apiTestDependencies struct {
 	stackTemplates         recordingStackTemplateRepository
 	stackTemplateInstaller recordingStackTemplateInstaller
 	templateRuns           recordingTemplateRunRepository
-	registrations          recordingTemplateRegistrationRepository
+	syncs                  recordingTemplateSyncRepository
 	templates              recordingTemplateRepository
 	sourceTemplates        apiSourceTemplateRepository
 	logs                   recordingTemplateRunLogReader
@@ -3494,7 +3494,7 @@ type apiTestDependencies struct {
 	createdStackID  domain.StackID
 	stackTemplateID domain.StackTemplateID
 	runID           domain.TemplateRunID
-	registrationID  domain.TemplateRegistrationID
+	syncID          domain.TemplateSyncID
 	now             time.Time
 	work            *apiUnitOfWork
 }
@@ -3535,7 +3535,7 @@ func newBareAPITestDependencies(t *testing.T) *apiTestDependencies {
 		createdStackID:  domain.StackID("stack_new"),
 		stackTemplateID: domain.StackTemplateID("stack_template_123"),
 		runID:           domain.TemplateRunID("run_123"),
-		registrationID:  domain.TemplateRegistrationID("template_registration_123"),
+		syncID:          domain.TemplateSyncID("template_sync_123"),
 		now:             time.Date(2026, 7, 3, 12, 0, 0, 0, time.UTC),
 	}
 	// The fixture run is a plan waiting for approval, and the fixture stack
@@ -3639,9 +3639,9 @@ func seedAPIParentEdge(t *testing.T, auth *authorization.Authorization, stackID 
 
 func (deps *apiTestDependencies) service() *app.Service {
 	work := &apiUnitOfWork{
-		stacks:                &deps.stacks,
-		templateRuns:          &deps.templateRuns,
-		templateRegistrations: &deps.registrations,
+		stacks:        &deps.stacks,
+		templateRuns:  &deps.templateRuns,
+		templateSyncs: &deps.syncs,
 	}
 	deps.work = work
 	return app.NewService(app.Service{
@@ -3663,7 +3663,7 @@ func (deps *apiTestDependencies) service() *app.Service {
 		StackIDs:                 fixedStackIDGenerator{id: deps.createdStackID},
 		StackTemplateIDs:         fixedStackTemplateIDGenerator{id: deps.stackTemplateID},
 		RunIDs:                   fixedTemplateRunIDGenerator{runID: deps.runID},
-		RegistrationIDs:          fixedTemplateRegistrationIDGenerator{id: deps.registrationID},
+		SyncIDs:                  fixedTemplateSyncIDGenerator{id: deps.syncID},
 		Clock:                    fixedClock{now: deps.now},
 	})
 }
@@ -3712,12 +3712,12 @@ func (repository *apiStackOverviewRepository) ListLatestTemplateRuns(context.Con
 // apiUnitOfWork applies writes immediately; transactional behaviour is proven
 // against a real database in internal/postgres/unitofwork_test.go.
 type apiUnitOfWork struct {
-	stacks                app.StackRepository
-	templateRuns          app.TemplateRunRepository
-	templateRegistrations *recordingTemplateRegistrationRepository
-	requests              []queue.Request
-	audits                []domain.SecurityAuditEvent
-	err                   error
+	stacks        app.StackRepository
+	templateRuns  app.TemplateRunRepository
+	templateSyncs *recordingTemplateSyncRepository
+	requests      []queue.Request
+	audits        []domain.SecurityAuditEvent
+	err           error
 }
 
 func (unit *apiUnitOfWork) InTx(ctx context.Context, fn func(context.Context, app.TxRepo, queue.Enqueuer) error) error {
@@ -3753,11 +3753,11 @@ func (unit *apiUnitOfWork) CreateTemplateRun(ctx context.Context, run domain.Tem
 	return 0, nil
 }
 
-func (unit *apiUnitOfWork) CreateTemplateRegistration(ctx context.Context, registration domain.TemplateRegistration) error {
-	if unit.templateRegistrations == nil {
+func (unit *apiUnitOfWork) CreateTemplateSync(ctx context.Context, templateSync domain.TemplateSync) error {
+	if unit.templateSyncs == nil {
 		return nil
 	}
-	return unit.templateRegistrations.CreateTemplateRegistration(ctx, registration)
+	return unit.templateSyncs.CreateTemplateSync(ctx, templateSync)
 }
 
 func (unit *apiUnitOfWork) ApproveTemplateRun(ctx context.Context, approval domain.TemplateRunApproval) error {
@@ -4059,16 +4059,16 @@ func (repository *recordingTemplateRunLogRepository) ListTemplateRunLogs(_ conte
 	return repository.logs, nil
 }
 
-type recordingTemplateRegistrationRepository struct {
-	created   domain.TemplateRegistration
+type recordingTemplateSyncRepository struct {
+	created   domain.TemplateSync
 	createErr error
 }
 
-func (repository *recordingTemplateRegistrationRepository) CreateTemplateRegistration(_ context.Context, registration domain.TemplateRegistration) error {
+func (repository *recordingTemplateSyncRepository) CreateTemplateSync(_ context.Context, templateSync domain.TemplateSync) error {
 	if repository.createErr != nil {
 		return repository.createErr
 	}
-	repository.created = registration
+	repository.created = templateSync
 	return nil
 }
 
@@ -4235,11 +4235,11 @@ func (generator fixedTemplateRunIDGenerator) NewTemplateRunID() domain.TemplateR
 	return generator.runID
 }
 
-type fixedTemplateRegistrationIDGenerator struct {
-	id domain.TemplateRegistrationID
+type fixedTemplateSyncIDGenerator struct {
+	id domain.TemplateSyncID
 }
 
-func (generator fixedTemplateRegistrationIDGenerator) NewTemplateRegistrationID() domain.TemplateRegistrationID {
+func (generator fixedTemplateSyncIDGenerator) NewTemplateSyncID() domain.TemplateSyncID {
 	return generator.id
 }
 

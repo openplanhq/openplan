@@ -53,7 +53,7 @@ func TestStartTemplateApplyHandlerDeliversCompleteInput(t *testing.T) {
 func TestStartTemplateSyncHandlerDeliversCompleteInput(t *testing.T) {
 	dispatcher := &recordingWorkflowIntentDispatcher{}
 	handler := NewStartTemplateSyncHandler(dispatcher)
-	payload := StartTemplateSyncPayload{RegistrationID: "registration_1", TenantID: "tenant_1", SourceTemplateID: "source_template_1", RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc"}
+	payload := StartTemplateSyncPayload{SyncID: "registration_1", TenantID: "tenant_1", SourceTemplateID: "source_template_1", RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc"}
 
 	if _, err := handler.Deliver(context.Background(), queue.Item{Payload: marshalWorkflowIntentPayload(t, payload)}); err != nil {
 		t.Fatalf("Deliver() error = %v", err)
@@ -108,7 +108,7 @@ func TestStartTemplateSpecsUseFrozenKeysAndRejectMalformedPayloads(t *testing.T)
 		want    string
 	}{
 		{StartTemplatePlanSpec, StartTemplatePlanPayload{TenantID: "tenant_1", RunID: "run_1"}, "run:tenant_1/run_1"},
-		{StartTemplateSyncSpec, StartTemplateSyncPayload{TenantID: "tenant_1", RegistrationID: "registration_1"}, "registration:tenant_1/registration_1"},
+		{StartTemplateSyncSpec, StartTemplateSyncPayload{TenantID: "tenant_1", SyncID: "registration_1"}, "sync:tenant_1/registration_1"},
 		{StartTemplateApplySpec, StartTemplateApplyPayload{TenantID: "tenant_1", RunID: "run_1"}, "run:tenant_1/run_1"},
 	}
 	for _, tt := range tests {

@@ -11,14 +11,14 @@ func (id ID) Valid() bool {
 }
 
 type (
-	TenantID               ID
-	UserID                 ID
-	SourceTemplateID       ID
-	TemplateRevisionID     ID
-	TemplateRegistrationID ID
-	StackID                ID
-	StackTemplateID        ID
-	TemplateRunID          ID
-	StackRunID             ID
-	CredentialID           ID
+	TenantID           ID
+	UserID             ID
+	SourceTemplateID   ID
+	TemplateRevisionID ID
+	TemplateSyncID     ID
+	StackID            ID
+	StackTemplateID    ID
+	TemplateRunID      ID
+	StackRunID         ID
+	CredentialID       ID
 )
