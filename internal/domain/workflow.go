@@ -131,6 +131,9 @@ type TemplateRunStatusActivityInput struct {
 	Operation       OperationType
 	Status          TemplateRunStatus
 	ErrorSummary    string
+	// CommandError is what the failed Terraform command said, when the run
+	// failed in one that printed an error; ErrorSummary still wraps it.
+	CommandError string
 	// Phase is the workflow execution the write belongs to: the one a running
 	// write starts, and the one a failed write records when its workflow
 	// failed before it could claim the run.

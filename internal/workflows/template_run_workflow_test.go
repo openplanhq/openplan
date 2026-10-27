@@ -267,6 +267,50 @@ func TestTemplatePlanWorkflowRecordsLogOfFailedCommand(t *testing.T) {
 	if !strings.Contains(failedStatus.ErrorSummary, "plan: exit status 1") {
 		t.Fatalf("failure summary = %q, want the command error", failedStatus.ErrorSummary)
 	}
+	// Review focus 4: an error that carries no Terraform message records none.
+	if failedStatus.CommandError != "" {
+		t.Fatalf("command error = %q, want none", failedStatus.CommandError)
+	}
+}
+
+// Issue 522: the run keeps what Terraform said apart from the workflow's
+// wrapper around it.
+func TestTemplatePlanWorkflowRecordsTheCommandError(t *testing.T) {
+	t.Parallel()
+
+	env := newTemplateRunWorkflowTestEnvironment(t)
+	var failedStatus domain.TemplateRunStatusActivityInput
+	mockPrepareWorkspace(t, env)
+	env.OnActivity(domain.FetchSourceActivityName, mock.Anything, mock.Anything).
+		Return(domain.FetchSourceActivityOutput{TerraformPath: "run/workspace/source"}, nil)
+	env.OnActivity(domain.RunTerraformActivityName, mock.Anything, mock.Anything).
+		Return(func(_ context.Context, input domain.RunTerraformActivityInput) (domain.RunTerraformActivityOutput, error) {
+			if input.Command != domain.TerraformCommandPlan {
+				return domain.RunTerraformActivityOutput{}, nil
+			}
+			return domain.RunTerraformActivityOutput{}, temporal.NewApplicationError("run terraform: plan: exit status 1",
+				domain.TerraformCommandFailedErrorType, domain.TerraformCommandFailure{Message: "Error: bad creds"})
+		})
+	env.OnActivity(domain.RecordTemplateRunLogActivityName, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity(domain.RecordTemplateRunStatusActivityName, mock.Anything, mock.Anything).
+		Return(func(_ context.Context, input domain.TemplateRunStatusActivityInput) error {
+			if input.Status == domain.TemplateRunFailed {
+				failedStatus = input
+			}
+			return nil
+		})
+
+	env.ExecuteWorkflow(TemplatePlanWorkflow, templateRunWorkflowInput(domain.OperationPlan))
+
+	if !env.IsWorkflowCompleted() || env.GetWorkflowError() == nil {
+		t.Fatalf("workflow completed=%v error=%v, want a failed run", env.IsWorkflowCompleted(), env.GetWorkflowError())
+	}
+	if failedStatus.CommandError != "Error: bad creds" {
+		t.Fatalf("command error = %q, want Terraform's", failedStatus.CommandError)
+	}
+	if !strings.Contains(failedStatus.ErrorSummary, "plan: exit status 1") {
+		t.Fatalf("failure summary = %q, want the wrapper kept", failedStatus.ErrorSummary)
+	}
 }
 
 // A log that cannot be uploaded is lost, not a reason to fail the run: the
