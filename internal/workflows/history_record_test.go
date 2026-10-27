@@ -71,7 +71,7 @@ func historyRunScenarios() []runScenario {
 			StackTemplateID:   "stack-template-history",
 			Operation:         operation,
 			AutoApprove:       autoApprove,
-			SelectedRef:       "main",
+			SourceRef:         "main",
 			ResolvedCommitSHA: "0123456789abcdef0123456789abcdef01234567",
 			WorkspaceName:     "history",
 			RepoOwner:         "openplanhq",
@@ -99,7 +99,7 @@ func historyRunScenarios() []runScenario {
 func historySyncScenarios() []syncScenario {
 	return []syncScenario{
 		{name: "sync-completed", output: domain.TemplateSyncActivityOutput{TemplateRevisionID: "revision-history", ResolvedCommitSHA: "0123456789abcdef0123456789abcdef01234567"}},
-		{name: "sync-invalid", output: domain.TemplateSyncActivityOutput{Status: domain.TemplateRegistrationInvalid, ErrorSummary: "no Terraform files"}},
+		{name: "sync-invalid", output: domain.TemplateSyncActivityOutput{Status: domain.TemplateSyncStateInvalid, ErrorSummary: "no Terraform files"}},
 		// RepositoryNotFound is one of syncRetryPolicy's non-retryable types,
 		// so the recording does not wait out four attempts.
 		{name: "sync-failed", err: temporal.NewApplicationError("repository not found", "RepositoryNotFound"), wantErr: true},
@@ -144,12 +144,12 @@ func TestRecordHistories(t *testing.T) {
 			t.Fatalf("no scenario records %s: add one to TestRecordHistories", registration.Name)
 		}
 	}
-	stubs := &historyStubs{runs: map[domain.TemplateRunID]runScenario{}, syncs: map[domain.TemplateRegistrationID]syncScenario{}}
+	stubs := &historyStubs{runs: map[domain.TemplateRunID]runScenario{}, syncs: map[domain.TemplateSyncID]syncScenario{}}
 	for _, scenario := range runs {
 		stubs.runs[scenario.input.RunID] = scenario
 	}
 	for _, scenario := range syncs {
-		stubs.syncs[syncRegistrationID(scenario.name)] = scenario
+		stubs.syncs[syncIDFor(scenario.name)] = scenario
 	}
 	startHistoryWorkers(t, temporalClient, stubs)
 
@@ -161,18 +161,18 @@ func TestRecordHistories(t *testing.T) {
 	}
 	for _, scenario := range syncs {
 		recordHistory(ctx, t, temporalClient, dir, scenario.name, domain.TemplateSyncWorkflowName, domain.TemplateSyncWorkflowInput{
-			RegistrationID: syncRegistrationID(scenario.name),
-			TenantID:       "tenant-history",
-			RepoOwner:      "openplanhq",
-			RepoName:       "demo-templates",
-			SourceRef:      "main",
-			RootPath:       "random-pet",
+			SyncID:    syncIDFor(scenario.name),
+			TenantID:  "tenant-history",
+			RepoOwner: "openplanhq",
+			RepoName:  "demo-templates",
+			SourceRef: "main",
+			RootPath:  "random-pet",
 		}, scenario.wantErr)
 	}
 }
 
-func syncRegistrationID(name string) domain.TemplateRegistrationID {
-	return domain.TemplateRegistrationID("registration-" + name)
+func syncIDFor(name string) domain.TemplateSyncID {
+	return domain.TemplateSyncID("sync-" + name)
 }
 
 // dialHistoryNamespace registers the recording's namespace if it is missing,
@@ -224,18 +224,18 @@ func startHistoryWorkers(t *testing.T, temporalClient client.Client, stubs *hist
 	}
 	executor := worker.New(temporalClient, domain.ExecutionTaskQueue, worker.Options{EnableSessionWorker: true})
 	for name, fn := range map[string]any{
-		domain.RecordTemplateRunStatusActivityName:          stubs.noop,
-		domain.RecordTemplateRunStepActivityName:            stubs.noop,
-		domain.RecordTemplateRunEventActivityName:           stubs.noop,
-		domain.RecordTemplateRunLogActivityName:             stubs.noop,
-		domain.RecordTemplateRegistrationStatusActivityName: stubs.noop,
-		domain.RecordTemplateRegistrationStepActivityName:   stubs.noop,
-		domain.SealSourceTokenActivityName:                  stubs.sealSourceToken,
-		domain.SealRunCredentialsActivityName:               stubs.sealRunCredentials,
-		domain.SealPlanKeyActivityName:                      stubs.sealPlanKey,
-		domain.FinishPlanActivityName:                       stubs.finishPlan,
-		domain.BeginApplyActivityName:                       stubs.beginApply,
-		domain.SyncTemplateActivityName:                     stubs.syncTemplate,
+		domain.RecordTemplateRunStatusActivityName:  stubs.noop,
+		domain.RecordTemplateRunStepActivityName:    stubs.noop,
+		domain.RecordTemplateRunEventActivityName:   stubs.noop,
+		domain.RecordTemplateRunLogActivityName:     stubs.noop,
+		domain.RecordTemplateSyncStatusActivityName: stubs.noop,
+		domain.RecordTemplateSyncStepActivityName:   stubs.noop,
+		domain.SealSourceTokenActivityName:          stubs.sealSourceToken,
+		domain.SealRunCredentialsActivityName:       stubs.sealRunCredentials,
+		domain.SealPlanKeyActivityName:              stubs.sealPlanKey,
+		domain.FinishPlanActivityName:               stubs.finishPlan,
+		domain.BeginApplyActivityName:               stubs.beginApply,
+		domain.SyncTemplateActivityName:             stubs.syncTemplate,
 	} {
 		control.RegisterActivityWithOptions(fn, activity.RegisterOptions{Name: name})
 	}
@@ -300,12 +300,12 @@ func recordHistory(ctx context.Context, t *testing.T, temporalClient client.Clie
 }
 
 // historyStubs answers every activity the workflows schedule, as the scenario
-// of the run or registration it is called for says. Nothing here touches a
+// of the run or sync it is called for says. Nothing here touches a
 // database, an executor or a repository: a history records only what the
 // activities returned.
 type historyStubs struct {
 	runs  map[domain.TemplateRunID]runScenario
-	syncs map[domain.TemplateRegistrationID]syncScenario
+	syncs map[domain.TemplateSyncID]syncScenario
 }
 
 // noop stands in for every activity whose result the workflows ignore.
@@ -332,7 +332,7 @@ func (stubs *historyStubs) beginApply(_ context.Context, input domain.BeginApply
 }
 
 func (stubs *historyStubs) syncTemplate(_ context.Context, input domain.TemplateSyncActivityInput) (domain.TemplateSyncActivityOutput, error) {
-	scenario := stubs.syncs[input.RegistrationID]
+	scenario := stubs.syncs[input.SyncID]
 	return scenario.output, scenario.err
 }
 

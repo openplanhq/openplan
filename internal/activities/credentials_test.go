@@ -10,7 +10,7 @@ import (
 )
 
 type testCredentialReader struct {
-	credentials []domain.CredentialSet
+	credentials []domain.Credential
 }
 
 // TestRedactingWriterRemovesCredentialValues verifies that command output never exposes exact secret values.
@@ -31,7 +31,7 @@ type nopWriteCloser struct{ *bytes.Buffer }
 func (writer nopWriteCloser) Close() error { return nil }
 
 // ListCredentialsForStackTemplate returns fixture credentials to the resolver under test.
-func (reader testCredentialReader) ListCredentialsForStackTemplate(context.Context, domain.TenantID, domain.StackTemplateID) ([]domain.CredentialSet, error) {
+func (reader testCredentialReader) ListCredentialsForStackTemplate(context.Context, domain.TenantID, domain.StackTemplateID) ([]domain.Credential, error) {
 	return reader.credentials, nil
 }
 
@@ -45,11 +45,11 @@ func (testCredentialDecryptor) Decrypt(value string) (string, error) {
 // TestResolveCredentialEnvironmentTemplateOverridesStack verifies inheritance and template precedence
 // regardless of the order the store returns credentials in.
 func TestResolveCredentialEnvironmentTemplateOverridesStack(t *testing.T) {
-	stackRegion := domain.CredentialSet{StackID: "stack_123", Name: "CLOUD_REGION", Ciphertext: "stack-region"}
-	stackToken := domain.CredentialSet{StackID: "stack_123", Name: "CLOUD_TOKEN", Ciphertext: "stack-token"}
-	templateToken := domain.CredentialSet{StackTemplateID: "template_123", Name: "CLOUD_TOKEN", Ciphertext: "template-token"}
+	stackRegion := domain.Credential{StackID: "stack_123", Name: "CLOUD_REGION", Ciphertext: "stack-region"}
+	stackToken := domain.Credential{StackID: "stack_123", Name: "CLOUD_TOKEN", Ciphertext: "stack-token"}
+	templateToken := domain.Credential{StackTemplateID: "template_123", Name: "CLOUD_TOKEN", Ciphertext: "template-token"}
 
-	for name, credentials := range map[string][]domain.CredentialSet{
+	for name, credentials := range map[string][]domain.Credential{
 		"template last":  {stackRegion, stackToken, templateToken},
 		"template first": {templateToken, stackRegion, stackToken},
 	} {
@@ -72,7 +72,7 @@ func TestResolveCredentialEnvironmentTemplateOverridesStack(t *testing.T) {
 // override replaces the stack entry's sensitivity along with its value, in
 // either direction.
 func TestResolveCredentialEnvironmentWinningEntryDecidesPlain(t *testing.T) {
-	credentials := []domain.CredentialSet{
+	credentials := []domain.Credential{
 		{StackID: "stack_123", Name: "CLOUD_REGION", Ciphertext: "stack-region", Sensitive: false},
 		{StackID: "stack_123", Name: "CLOUD_TOKEN", Ciphertext: "stack-token", Sensitive: false},
 		{StackID: "stack_123", Name: "CLOUD_ZONE", Ciphertext: "stack-zone", Sensitive: true},

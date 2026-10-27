@@ -265,9 +265,9 @@ type TemplateRun struct {
 	TenantID           TenantID           `json:"tenant_id"`
 	StackTemplateID    StackTemplateID    `json:"stack_template_id"`
 	TemplateRevisionID TemplateRevisionID `json:"template_revision_id"`
-	SourceTemplateID   SourceTemplateID   `json:"source_template_id"`
+	TemplateID         TemplateID         `json:"template_id"`
 	Operation          OperationType      `json:"operation"`
-	SelectedRef        string             `json:"selected_ref"`
+	SourceRef          string             `json:"source_ref"`
 	ResolvedCommitSHA  string             `json:"resolved_commit_sha"`
 	WorkspaceName      string             `json:"workspace_name"`
 	ConfigJSON         json.RawMessage    `json:"config_json"`
@@ -370,9 +370,9 @@ const (
 type TemplateRunLog struct {
 	TenantID TenantID      `json:"tenant_id"`
 	RunID    TemplateRunID `json:"run_id"`
-	// Phase is the log's name, unique within the run: the key it is stored
-	// and read under (RunLogName), not something to show.
-	Phase string `json:"phase"`
+	// Name is unique within the run: the key the log is stored and read
+	// under (RunLogName), not something to show.
+	Name string `json:"name"`
 	// RunPhase and Command are what wrote the log: the run's plan or apply,
 	// and the Terraform command it ran. Seq is its place among the phase's
 	// logs, from 1, which is the order they ran in.

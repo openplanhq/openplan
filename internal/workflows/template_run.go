@@ -515,7 +515,7 @@ func (s *session) fetchSource() error {
 		WorkspacePath:     s.ws.path,
 		RepoOwner:         s.run.input.RepoOwner,
 		RepoName:          s.run.input.RepoName,
-		SourceRef:         s.run.input.SelectedRef,
+		SourceRef:         s.run.input.SourceRef,
 		ResolvedCommitSHA: s.run.input.ResolvedCommitSHA,
 		RootPath:          s.run.input.RootPath,
 		SealedToken:       token.SealedToken,
@@ -828,7 +828,7 @@ func (r *run) event(event domain.TemplateRunEvent, summary *domain.PlanSummary) 
 func (r *run) log(name string, log domain.TemplateRunLog) error {
 	log.TenantID = r.input.TenantID
 	log.RunID = r.input.RunID
-	log.Phase = name
+	log.Name = name
 	ctx := workflow.WithStartToCloseTimeout(r.ctx, 30*time.Second)
 	ctx = workflow.WithRetryPolicy(ctx, *recordLogRetryPolicy)
 	return workflow.ExecuteActivity(

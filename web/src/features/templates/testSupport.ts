@@ -13,7 +13,7 @@ export function revision(overrides: Partial<TemplateRevision> = {}): TemplateRev
   return {
     id: "rev_1",
     tenant_id: TENANT,
-    source_template_id: "tpl_1",
+    template_id: "tpl_1",
     repo_owner: "acme",
     repo_name: "infra-modules",
     source_ref: "main",
@@ -77,13 +77,13 @@ export function latestSync(overrides: Partial<TemplateLatestSync> = {}): Templat
 export function templatesOf(revisions: TemplateRevision[]): Template[] {
   const templates = new Map<string, Template>();
   for (const candidate of revisions) {
-    if (templates.has(candidate.source_template_id)) {
+    if (templates.has(candidate.template_id)) {
       continue;
     }
     templates.set(
-      candidate.source_template_id,
+      candidate.template_id,
       template({
-        id: candidate.source_template_id,
+        id: candidate.template_id,
         repo_owner: candidate.repo_owner,
         repo_name: candidate.repo_name,
         source_ref: candidate.source_ref,
@@ -106,7 +106,7 @@ export function seedTemplates(queryClient: QueryClient, revisions: TemplateRevis
   for (const seeded of templates) {
     queryClient.setQueryData(
       queryKeys.templateRevisions(TENANT, seeded.id),
-      revisions.filter((candidate) => candidate.source_template_id === seeded.id)
+      revisions.filter((candidate) => candidate.template_id === seeded.id)
     );
   }
 }
@@ -120,7 +120,7 @@ export function templateReadResponse(input: unknown, revisions: TemplateRevision
   }
   const revisionsOf = path.match(/\/templates\/([^/]+)\/revisions$/);
   if (revisionsOf) {
-    return jsonResponse(revisions.filter((candidate) => candidate.source_template_id === decodeURIComponent(revisionsOf[1])));
+    return jsonResponse(revisions.filter((candidate) => candidate.template_id === decodeURIComponent(revisionsOf[1])));
   }
   return null;
 }
@@ -131,13 +131,13 @@ export function testQueryClient(): QueryClient {
   return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
 }
 
-export function authValue(canPublishTemplate = true): AuthContextValue {
+export function authValue(canManageTemplates = true): AuthContextValue {
   return {
     me: {
       sub: "user_1",
       tenant_id: TENANT,
       display_name: "Test User",
-      global_capabilities: { can_create_stack: false, can_publish_template: canPublishTemplate, can_manage_platform_access: false }
+      global_capabilities: { can_create_stack: false, can_manage_templates: canManageTemplates, can_manage_platform_access: false }
     },
     status: "authenticated",
     login: () => {},

@@ -36,7 +36,7 @@ spec:
             - name: OPENPLAN_PUBLIC_URL
               value: {{ printf "https://%s" (required "ingress.host is required: the host openplan is served on" .Values.ingress.host) | quote }}
             {{- include "openplan.temporalEnv" . | nindent 12 }}
-            {{- include "openplan.secretEnv" (dict "name" "DATABASE_URL" "ref" .Values.postgres.urlSecret "path" "postgres.urlSecret") | nindent 12 }}
+            {{- include "openplan.secretEnv" (dict "name" "POSTGRES_URL" "ref" .Values.postgres.urlSecret "path" "postgres.urlSecret") | nindent 12 }}
             {{- include "openplan.secretEnv" (dict "name" "VALKEY_URL" "ref" .Values.valkey.api.urlSecret "path" "valkey.api.urlSecret") | nindent 12 }}
             {{- include "openplan.s3Env" . | nindent 12 }}
             - name: OIDC_ISSUER_URL

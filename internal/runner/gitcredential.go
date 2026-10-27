@@ -56,7 +56,7 @@ func (credential GitCredential) secrets() []string {
 // The trace variables are neutralised rather than trusted. The executor's
 // allowlist keeps its own GIT_TRACE_* out today, but GIT_TRACE_CURL=1 with
 // GIT_TRACE_REDACT=0 prints the Authorization header in full -- into output
-// that is persisted as a template registration's error summary and rendered in
+// that is persisted as a template sync's error summary and rendered in
 // the UI -- so that must not rest on what the allowlist omits. GIT_TERMINAL_PROMPT and
 // GIT_ASKPASS are pinned for a different reason: a rejected credential must fail
 // immediately instead of blocking on a username prompt until the activity's

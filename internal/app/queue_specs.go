@@ -13,7 +13,7 @@ import (
 // grant is part of the same transaction as the stack row.
 func QueueSpecs() []queue.Spec {
 	return []queue.Spec{
-		StartTemplateRunSpec,
+		StartTemplatePlanSpec,
 		StartTemplateSyncSpec,
 		StartTemplateApplySpec,
 	}

@@ -157,8 +157,8 @@ func TestListTemplatesPaging(t *testing.T) {
 
 	deps := newAPITestDependencies(t)
 	for i := range 3 {
-		deps.sourceTemplates.templates = append(deps.sourceTemplates.templates, domain.SourceTemplate{
-			ID: domain.SourceTemplateID(fmt.Sprintf("source_template_%d", i)), TenantID: "tenant_123", CreatedAt: time.Unix(int64(100-i), 0),
+		deps.templates.templates = append(deps.templates.templates, domain.Template{
+			ID: domain.TemplateID(fmt.Sprintf("source_template_%d", i)), TenantID: "tenant_123", CreatedAt: time.Unix(int64(100-i), 0),
 		})
 	}
 	server := NewServer(deps.service(), configuredTenantID)
@@ -175,11 +175,11 @@ func TestListTemplateRevisionsForTemplatePaging(t *testing.T) {
 	t.Parallel()
 
 	deps := newAPITestDependencies(t)
-	deps.sourceTemplates.templates = []domain.SourceTemplate{{ID: "source_template_123", TenantID: "tenant_123"}}
+	deps.templates.templates = []domain.Template{{ID: "source_template_123", TenantID: "tenant_123"}}
 	for i := range 3 {
-		deps.sourceTemplates.revisions = append(deps.sourceTemplates.revisions, domain.TemplateRevision{
+		deps.templates.revisions = append(deps.templates.revisions, domain.TemplateRevision{
 			ID: domain.TemplateRevisionID(fmt.Sprintf("rev_%d", i)), TenantID: "tenant_123",
-			SourceTemplateID: "source_template_123", CreatedAt: time.Unix(int64(100-i), 0),
+			TemplateID: "source_template_123", CreatedAt: time.Unix(int64(100-i), 0),
 		})
 	}
 	server := NewServer(deps.service(), configuredTenantID)
@@ -274,25 +274,25 @@ func TestListQueuePagesPastFifty(t *testing.T) {
 // value that is not sensitive needs the cipher to open it.
 type apiCredentialRepository struct{}
 
-func (apiCredentialRepository) CreateCredential(context.Context, domain.CredentialSet) error {
+func (apiCredentialRepository) CreateCredential(context.Context, domain.Credential) error {
 	return nil
 }
 
-func (apiCredentialRepository) ListCredentials(_ context.Context, _ domain.TenantID, scope domain.CredentialScope, ownerID string) ([]domain.CredentialSet, error) {
-	credential := domain.CredentialSet{ID: "cred_1", Name: "AWS_REGION", Sensitive: true}
+func (apiCredentialRepository) ListCredentials(_ context.Context, _ domain.TenantID, scope domain.CredentialScope, ownerID string) ([]domain.Credential, error) {
+	credential := domain.Credential{ID: "cred_1", Name: "AWS_REGION", Sensitive: true}
 	if scope == domain.CredentialScopeStack {
 		credential.StackID = domain.StackID(ownerID)
 	} else {
 		credential.StackTemplateID = domain.StackTemplateID(ownerID)
 	}
-	return []domain.CredentialSet{credential}, nil
+	return []domain.Credential{credential}, nil
 }
 
-func (apiCredentialRepository) DeleteCredential(context.Context, domain.TenantID, domain.CredentialSetID) error {
+func (apiCredentialRepository) DeleteCredential(context.Context, domain.TenantID, domain.CredentialID) error {
 	return nil
 }
 
-func (apiCredentialRepository) ListCredentialsForStackTemplate(context.Context, domain.TenantID, domain.StackTemplateID) ([]domain.CredentialSet, error) {
+func (apiCredentialRepository) ListCredentialsForStackTemplate(context.Context, domain.TenantID, domain.StackTemplateID) ([]domain.Credential, error) {
 	return nil, nil
 }
 
@@ -334,7 +334,7 @@ func TestEveryListRouteAnswersEnvelope(t *testing.T) {
 
 			deps := newAPITestDependencies(t)
 			deps.stackTemplates.stackTemplate.StackID = "stack_123"
-			deps.sourceTemplates.templates = []domain.SourceTemplate{{ID: "source_template_123", TenantID: "tenant_123"}}
+			deps.templates.templates = []domain.Template{{ID: "source_template_123", TenantID: "tenant_123"}}
 			service := deps.service()
 			service.Credentials = apiCredentialRepository{}
 			server := NewServer(service, configuredTenantID, WithQueueReader(&stubQueueReader{}))

@@ -109,8 +109,8 @@ func TestPlatformViewerReadsTheCatalogButCannotPublishToIt(t *testing.T) {
 	t.Parallel()
 
 	service := NewService(Service{
-		TemplateRevisions: &recordingTemplateRepository{},
-		SourceTemplates:   &recordingSourceTemplateRepository{template: domain.SourceTemplate{ID: "source_template_1", TenantID: "tenant_1"}},
+		TemplateRevisions: &recordingTemplateRevisionRepository{},
+		Templates:         &recordingTemplateRepository{template: domain.Template{ID: "source_template_1", TenantID: "tenant_1"}},
 		Work:              &recordingUnitOfWork{},
 		Authorization:     newPlatformAuthorizer(t, platformViewer("viewer-subject")),
 	})

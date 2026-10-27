@@ -142,7 +142,7 @@ export default function TemplateSync({
                 disabling it would drop a keyboard user's focus. */}
             <div className="-my-px -mr-2.5 flex shrink-0 items-start gap-1">
               {actions}
-              <RequireCapability capability="can_publish_template">
+              <RequireCapability capability="can_manage_templates">
                 <button
                   type="button"
                   className={cn(buttonClass("subtle", "sm"), "pointer-coarse:h-11")}
@@ -224,7 +224,7 @@ export default function TemplateSync({
             // it. Only people who can press Sync are told to.
             <>
               {unsynced ? "No revision yet, so stacks can't add this template." : "It didn't finish."}
-              {stalled && <RequireCapability capability="can_publish_template"> Sync again.</RequireCapability>}
+              {stalled && <RequireCapability capability="can_manage_templates"> Sync again.</RequireCapability>}
             </>
           ) : undefined}
         </ErrorPanel>

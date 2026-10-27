@@ -30,7 +30,7 @@ function run(overrides: Partial<TemplateRun> = {}): TemplateRun {
     stack_template_id: "stpl_1",
     template_revision_id: "rev_1",
     operation: "apply",
-    selected_ref: "main",
+    source_ref: "main",
     resolved_commit_sha: "abcdef1",
     status: "waiting_approval",
     step: "",

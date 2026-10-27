@@ -30,7 +30,7 @@ export function templateTabOf(pathname: string): TemplateTab {
     case "environment":
       return "environment";
     case "settings":
-    case "upgrade":
+    case "change-revision":
       return "settings";
     default:
       return "runs";
@@ -38,6 +38,6 @@ export function templateTabOf(pathname: string): TemplateTab {
 }
 
 /** Where a template's tab lives, or Change revision, which sits under Settings. */
-export function stackTemplatePath(stackId: string, stackTemplateId: string, section: TemplateTab | "upgrade" = "runs"): string {
+export function stackTemplatePath(stackId: string, stackTemplateId: string, section: TemplateTab | "change-revision" = "runs"): string {
   return `/stacks/${stackId}/templates/${stackTemplateId}/${section}`;
 }

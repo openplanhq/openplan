@@ -118,28 +118,28 @@ func TestValidateTemplateConfigStoresTheValueAsSent(t *testing.T) {
 	}
 }
 
-// Upgrade re-checks carried values against the target revision, so a value
+// Changing revision re-checks carried values against the target revision, so a value
 // that fit the old type but not the new one is refused under its field
 // instead of failing the next plan.
-func TestUpgradeStackTemplateRefusesACarriedValueTheNewTypeRejects(t *testing.T) {
+func TestChangeStackTemplateRevisionRefusesACarriedValueTheNewTypeRejects(t *testing.T) {
 	t.Parallel()
 
 	stackTemplates := &recordingStackTemplateRepository{
 		stackTemplate: domain.StackTemplate{
 			ID:                        domain.StackTemplateID("stack_template_123"),
 			TenantID:                  domain.TenantID("tenant_123"),
-			SourceTemplateID:          domain.SourceTemplateID("source_template_vpc"),
+			TemplateID:                domain.TemplateID("source_template_vpc"),
 			DesiredTemplateRevisionID: domain.TemplateRevisionID("template_rev_1"),
 			DesiredConfigJSON:         json.RawMessage(`{"azs":"us-east-1a"}`),
 			Lifecycle:                 domain.StackTemplateActive,
 		},
 	}
-	templates := &recordingTemplateRepository{
+	templates := &recordingTemplateRevisionRepository{
 		template: domain.TemplateRevision{
-			ID:               domain.TemplateRevisionID("template_rev_2"),
-			TenantID:         domain.TenantID("tenant_123"),
-			SourceTemplateID: domain.SourceTemplateID("source_template_vpc"),
-			Status:           domain.TemplateRevisionActive,
+			ID:         domain.TemplateRevisionID("template_rev_2"),
+			TenantID:   domain.TenantID("tenant_123"),
+			TemplateID: domain.TemplateID("source_template_vpc"),
+			Status:     domain.TemplateRevisionActive,
 		},
 		variables: []domain.TemplateVariable{{Name: "azs", Required: true, TypeExpression: "list(string)"}},
 	}
@@ -151,7 +151,7 @@ func TestUpgradeStackTemplateRefusesACarriedValueTheNewTypeRejects(t *testing.T)
 		TemplateRevisions:        templates,
 	})
 
-	_, err := service.UpgradeStackTemplate(authenticatedContext(), UpgradeStackTemplateCommand{
+	_, err := service.ChangeStackTemplateRevision(authenticatedContext(), ChangeStackTemplateRevisionCommand{
 		TenantID:                 domain.TenantID("tenant_123"),
 		StackTemplateID:          domain.StackTemplateID("stack_template_123"),
 		TargetTemplateRevisionID: domain.TemplateRevisionID("template_rev_2"),

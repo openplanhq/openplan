@@ -29,7 +29,7 @@ func tokenServer(t *testing.T, mints *int64, expiry time.Time) *httptest.Server 
 	}))
 }
 
-// A run and a registration against the same repo minutes apart should not each
+// A run and a sync against the same repo minutes apart should not each
 // pay two API calls against the App's hourly budget.
 func TestTokenSourceCachesUntilNearExpiry(t *testing.T) {
 	t.Parallel()

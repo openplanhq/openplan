@@ -76,7 +76,7 @@ func TestCreateStackReportsEveryInvalidField(t *testing.T) {
 		Name:                 " ",
 		Slug:                 "Bad Slug",
 		Tags:                 map[string]string{"bad key": "x"},
-		DefaultCredentialIDs: []domain.CredentialSetID{""},
+		DefaultCredentialIDs: []domain.CredentialID{""},
 	})
 	if !errors.Is(err, ErrInvalidCommand) {
 		t.Fatalf("error = %v, want ErrInvalidCommand", err)
@@ -144,7 +144,7 @@ func TestRequiredBodyIDsAreFieldErrors(t *testing.T) {
 
 	assertFieldIssues(t, validateAddTemplateToStackCommand(AddTemplateToStackCommand{TenantID: "t", StackID: "s"}),
 		"template_revision_id required")
-	assertFieldIssues(t, validateUpgradeStackTemplateCommand(UpgradeStackTemplateCommand{TenantID: "t", StackTemplateID: "s"}),
+	assertFieldIssues(t, validateChangeStackTemplateRevisionCommand(ChangeStackTemplateRevisionCommand{TenantID: "t", StackTemplateID: "s"}),
 		"target_template_revision_id required")
 	assertFieldIssues(t, validateUpdateStackTemplateConfigCommand(UpdateStackTemplateConfigCommand{TenantID: "t", StackTemplateID: "s"}),
 		"config required")

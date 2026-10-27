@@ -13,7 +13,7 @@ import (
 // in the API's transaction.
 func NewQueueRegistry(dispatcher WorkflowDispatcher) (*queue.Registry, error) {
 	return queue.NewRegistry(
-		NewStartTemplateRunHandler(dispatcher),
+		NewStartTemplatePlanHandler(dispatcher),
 		NewStartTemplateSyncHandler(dispatcher),
 		NewStartTemplateApplyHandler(dispatcher),
 	)

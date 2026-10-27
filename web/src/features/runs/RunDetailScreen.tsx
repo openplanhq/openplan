@@ -235,7 +235,7 @@ export default function RunDetailScreen() {
             )}
             <Fact term="Started by">{run.trigger_actor_display_name}</Fact>
             <Fact term="Source" mono>
-              {run.selected_ref} @ {run.resolved_commit_sha.slice(0, 7)}
+              {run.source_ref} @ {run.resolved_commit_sha.slice(0, 7)}
             </Fact>
           </dl>
           {run.command_error.trim() ? (

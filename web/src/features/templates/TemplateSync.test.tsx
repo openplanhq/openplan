@@ -13,7 +13,7 @@ import TemplatePanel from "./TemplatePanel";
 import { authValue, jsonResponse, latestSync, revision, seedTemplates, template, templateReadResponse, TENANT, testQueryClient } from "./testSupport";
 
 const current = revision();
-const other = revision({ id: "rev_net", source_template_id: "tpl_net", name: "network", root_path: "aws/network" });
+const other = revision({ id: "rev_net", template_id: "tpl_net", name: "network", root_path: "aws/network" });
 
 function seed(): QueryClient {
   const queryClient = testQueryClient();
@@ -50,14 +50,14 @@ function serve({
   });
 }
 
-function renderPanel(queryClient: QueryClient, canPublishTemplate = true) {
+function renderPanel(queryClient: QueryClient, canManageTemplates = true) {
   const router = createMemoryRouter(
-    [{ path: "/templates/:sourceTemplateId", element: <TemplatePanel />, children: [{ path: "revisions", element: <RevisionsTab /> }] }],
+    [{ path: "/templates/:templateId", element: <TemplatePanel />, children: [{ path: "revisions", element: <RevisionsTab /> }] }],
     { initialEntries: ["/templates/tpl_1/revisions"] }
   );
   render(
     <QueryClientProvider client={queryClient}>
-      <AuthContext.Provider value={authValue(canPublishTemplate)}>
+      <AuthContext.Provider value={authValue(canManageTemplates)}>
         <RouterProvider router={router} />
       </AuthContext.Provider>
     </QueryClientProvider>

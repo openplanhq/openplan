@@ -24,80 +24,80 @@ var syncRetryPolicy = &temporal.RetryPolicy{
 	},
 }
 
-// TemplateSyncWorkflow syncs a template registration: it syncs the template as
+// TemplateSyncWorkflow syncs a template: it clones and parses the template as
 // the sync's one step, and its status is lifecycle's.
 func TemplateSyncWorkflow(ctx workflow.Context, input domain.TemplateSyncWorkflowInput) error {
-	r := newRegistration(ctx, input)
+	r := newTemplateSync(ctx, input)
 	return r.lifecycle(r.sync)
 }
 
-// registration is a template registration, as its sync carries it out. It
+// templateSync is one template sync, as the workflow carries it out. It
 // holds the control-queue context and the sync's input, and it is the sync's
 // Recorder. Its status is written only by lifecycle.
 //
 // A sync has no executor session: it clones and parses a repository but runs
 // none of its code, so all of its work, the step included, schedules on the
 // control plane, on r.ctx.
-type registration struct {
+type templateSync struct {
 	ctx   workflow.Context
 	input domain.TemplateSyncWorkflowInput
 }
 
-// newRegistration sets the options for every activity the sync schedules.
-func newRegistration(ctx workflow.Context, input domain.TemplateSyncWorkflowInput) *registration {
+// newTemplateSync sets the options for every activity the sync schedules.
+func newTemplateSync(ctx workflow.Context, input domain.TemplateSyncWorkflowInput) *templateSync {
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		TaskQueue:           domain.ControlTaskQueue,
 		StartToCloseTimeout: 5 * time.Minute,
 		RetryPolicy:         syncRetryPolicy,
 	})
-	return &registration{ctx: ctx, input: input}
+	return &templateSync{ctx: ctx, input: input}
 }
 
-// sync clones the registration's repository at its ref and parses the
+// sync clones the sync's repository at its ref and parses the
 // template it holds, as the sync's one step.
-func (r *registration) sync() (domain.TemplateSyncActivityOutput, error) {
+func (r *templateSync) sync() (domain.TemplateSyncActivityOutput, error) {
 	var synced domain.TemplateSyncActivityOutput
-	err := ExecuteStep(r.ctx, r, domain.TemplateRegistrationStepSyncing, domain.SyncTemplateActivityName, domain.TemplateSyncActivityInput{
-		RegistrationID:   r.input.RegistrationID,
-		TenantID:         r.input.TenantID,
-		SourceTemplateID: r.input.SourceTemplateID,
-		RepoOwner:        r.input.RepoOwner,
-		RepoName:         r.input.RepoName,
-		SourceRef:        r.input.SourceRef,
-		RootPath:         r.input.RootPath,
+	err := ExecuteStep(r.ctx, r, domain.TemplateSyncStepSyncing, domain.SyncTemplateActivityName, domain.TemplateSyncActivityInput{
+		SyncID:     r.input.SyncID,
+		TenantID:   r.input.TenantID,
+		TemplateID: r.input.TemplateID,
+		RepoOwner:  r.input.RepoOwner,
+		RepoName:   r.input.RepoName,
+		SourceRef:  r.input.SourceRef,
+		RootPath:   r.input.RootPath,
 	}).Get(r.ctx, &synced)
 	return synced, err
 }
 
 // Record records the step the sync is starting.
-func (r *registration) Record(step domain.TemplateRegistrationStep) error {
+func (r *templateSync) Record(step domain.TemplateSyncStep) error {
 	return workflow.ExecuteActivity(
 		r.ctx,
-		domain.RecordTemplateRegistrationStepActivityName,
-		domain.TemplateRegistrationStepActivityInput{
-			RegistrationID: r.input.RegistrationID,
-			TenantID:       r.input.TenantID,
-			Step:           step,
+		domain.RecordTemplateSyncStepActivityName,
+		domain.TemplateSyncStepActivityInput{
+			SyncID:   r.input.SyncID,
+			TenantID: r.input.TenantID,
+			Step:     step,
 		},
 	).Get(r.ctx, nil)
 }
 
-// lifecycle carries a registration through its status, and is the only code
-// that writes it. It marks the registration running, runs work, and records
+// lifecycle carries a sync through its status, and is the only code
+// that writes it. It marks the sync running, runs work, and records
 // what work found: the revision it produced, or why the template is invalid. A
 // sync that reports no status of its own completed.
 //
-// Any error, including one writing that outcome, marks the registration failed
+// Any error, including one writing that outcome, marks the sync failed
 // before lifecycle returns it. If recording the failure also fails, both
 // errors are surfaced: the original wrapped with %w to stay matchable by
 // callers, the persistence error appended as context.
-func (r *registration) lifecycle(work func() (domain.TemplateSyncActivityOutput, error)) (err error) {
-	setStatus := func(status domain.TemplateRegistrationStatusActivityInput) error {
-		status.RegistrationID = r.input.RegistrationID
+func (r *templateSync) lifecycle(work func() (domain.TemplateSyncActivityOutput, error)) (err error) {
+	setStatus := func(status domain.TemplateSyncStatusActivityInput) error {
+		status.SyncID = r.input.SyncID
 		status.TenantID = r.input.TenantID
 		return workflow.ExecuteActivity(
 			r.ctx,
-			domain.RecordTemplateRegistrationStatusActivityName,
+			domain.RecordTemplateSyncStatusActivityName,
 			status,
 		).Get(r.ctx, nil)
 	}
@@ -105,16 +105,16 @@ func (r *registration) lifecycle(work func() (domain.TemplateSyncActivityOutput,
 		if err == nil {
 			return
 		}
-		if recordErr := setStatus(domain.TemplateRegistrationStatusActivityInput{
-			Status:       domain.TemplateRegistrationFailed,
+		if recordErr := setStatus(domain.TemplateSyncStatusActivityInput{
+			Status:       domain.TemplateSyncStateFailed,
 			ErrorSummary: err.Error(),
 		}); recordErr != nil {
 			err = fmt.Errorf("%w (also failed to persist failure status: %w)", err, recordErr)
 		}
 	}()
 
-	if err := setStatus(domain.TemplateRegistrationStatusActivityInput{
-		Status: domain.TemplateRegistrationRunning,
+	if err := setStatus(domain.TemplateSyncStatusActivityInput{
+		Status: domain.TemplateSyncStateRunning,
 	}); err != nil {
 		return err
 	}
@@ -124,9 +124,9 @@ func (r *registration) lifecycle(work func() (domain.TemplateSyncActivityOutput,
 	}
 	status := synced.Status
 	if status == "" {
-		status = domain.TemplateRegistrationCompleted
+		status = domain.TemplateSyncStateCompleted
 	}
-	return setStatus(domain.TemplateRegistrationStatusActivityInput{
+	return setStatus(domain.TemplateSyncStatusActivityInput{
 		Status:             status,
 		TemplateRevisionID: synced.TemplateRevisionID,
 		ResolvedCommitSHA:  synced.ResolvedCommitSHA,

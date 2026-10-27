@@ -43,14 +43,14 @@ spec:
           env:
             - name: EXECUTOR_RUN_ROOT
               value: /var/lib/openplan/runs
-            - name: EXECUTOR_SANDBOX_STATE
+            - name: EXECUTOR_SANDBOX_ROOT
               value: /var/lib/openplan/sandboxes
             {{- include "openplan.temporalEnv" . | nindent 12 }}
             {{- include "openplan.secretEnv" (dict "name" "VALKEY_URL" "ref" .Values.valkey.executor.urlSecret "path" "valkey.executor.urlSecret") | nindent 12 }}
             {{- include "openplan.s3Env" . | nindent 12 }}
             {{- range $name, $value := dict
                   "EXECUTOR_MAX_SESSIONS" .Values.executor.maxSessions
-                  "EXECUTOR_SANDBOX_MEMORY" .Values.executor.sandbox.memoryMiB
+                  "EXECUTOR_SANDBOX_MEMORY_MIB" .Values.executor.sandbox.memoryMiB
                   "EXECUTOR_SANDBOX_CPUS" .Values.executor.sandbox.cpus
                   "EXECUTOR_SANDBOX_PIDS" .Values.executor.sandbox.pids
                   "EXECUTOR_SANDBOX_SUBNET" .Values.executor.sandbox.subnet }}

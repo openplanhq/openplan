@@ -12,7 +12,7 @@ export interface Me {
     can_create_stack: boolean;
     /** Registering a template — which is also what the detail screen's Sync
         button posts, so it gates that button too. */
-    can_publish_template: boolean;
+    can_manage_templates: boolean;
     /** Granting and revoking platform roles on /access. Platform admins
         and root hold it. */
     can_manage_platform_access: boolean;

@@ -127,9 +127,9 @@ func TestRecordTemplateRunEventAppliedRecordsLastApplied(t *testing.T) {
 		TenantID:           "tenant_123",
 		StackTemplateID:    "stack_template_123",
 		TemplateRevisionID: "template_rev_2",
-		SourceTemplateID:   "source_template_vpc",
+		TemplateID:         "source_template_vpc",
 		Operation:          domain.OperationApply,
-		SelectedRef:        "main",
+		SourceRef:          "main",
 		WorkspaceName:      "mtp_acme_prod_vpc_a13f9c",
 		ConfigJSON:         json.RawMessage(`{"region":"us-east-1"}`),
 		Status:             domain.TemplateRunRunning,
@@ -169,7 +169,7 @@ func TestRecordTemplateRunEventRecordsTheCountsItCarries(t *testing.T) {
 	seedStackWithTemplate(t, ctx, store)
 	seedTemplateRun(t, ctx, pool, domain.TemplateRun{
 		ID: "run_123", TenantID: "tenant_123", StackTemplateID: "stack_template_123",
-		Operation: domain.OperationApply, SelectedRef: "main", WorkspaceName: "ws",
+		Operation: domain.OperationApply, SourceRef: "main", WorkspaceName: "ws",
 		Status: domain.TemplateRunRunning, TriggerActor: "user_123", AutoApprove: true,
 	})
 	event := domain.TemplateRunEventActivityInput{
@@ -219,16 +219,16 @@ func TestRecordTemplateRunEventMovesADestroyedTemplateThroughItsLifecycle(t *tes
 	}); err != nil {
 		t.Fatal(err)
 	}
-	seedSourceTemplate(t, ctx, store, "tenant_destroy_1", "source_template_vpc")
+	seedTemplate(t, ctx, store, "tenant_destroy_1", "source_template_vpc")
 	if err := store.CreateStackTemplate(ctx, domain.StackTemplate{
-		ID: "st_destroy_1", TenantID: "tenant_destroy_1", StackID: "stack_destroy_1", SourceTemplateID: "source_template_vpc",
+		ID: "st_destroy_1", TenantID: "tenant_destroy_1", StackID: "stack_destroy_1", TemplateID: "source_template_vpc",
 		Lifecycle: domain.StackTemplateActive,
 	}); err != nil {
 		t.Fatal(err)
 	}
 	seedTemplateRun(t, ctx, pool, domain.TemplateRun{
 		ID: "run_destroy_1", TenantID: "tenant_destroy_1", StackTemplateID: "st_destroy_1",
-		Operation: domain.OperationDestroy, SelectedRef: "main", WorkspaceName: "ws_destroy",
+		Operation: domain.OperationDestroy, SourceRef: "main", WorkspaceName: "ws_destroy",
 		Status: domain.TemplateRunRunning, TriggerActor: "user_123",
 	})
 

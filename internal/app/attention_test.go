@@ -100,10 +100,10 @@ func newAttentionFixture(t *testing.T) attentionFixture {
 			},
 		},
 	}
-	revisions := &recordingTemplateRepository{templates: []domain.TemplateRevision{
-		{ID: "rev_eks", RepoName: "infra-modules", RootPath: "modules/eks-cluster"},
-		{ID: "rev_cdn", RepoName: "infra-modules", RootPath: "modules/cloudfront"},
-		{ID: "rev_root", RepoName: "network", RootPath: "."},
+	revisions := &recordingTemplateRevisionRepository{templates: []domain.TemplateRevision{
+		{ID: "rev_eks", RepoName: "infra-modules", RootPath: "modules/eks-cluster", Name: "eks-cluster"},
+		{ID: "rev_cdn", RepoName: "infra-modules", RootPath: "modules/cloudfront", Name: "cloudfront"},
+		{ID: "rev_root", RepoName: "network", RootPath: ".", Name: "network"},
 	}}
 	users := &fakeUserRepository{users: []UserProfile{
 		{Sub: "user_priya", DisplayName: "Priya Shah"},

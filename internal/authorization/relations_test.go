@@ -111,10 +111,11 @@ func TestNamedRelationValuesMatchTheirBucket(t *testing.T) {
 // though every other test in the package still passes.
 func TestNamedRelationWireStringsAreExact(t *testing.T) {
 	permissions := map[string]Relation{
-		"can_view":          RelationCanView,
-		"can_operate":       RelationCanOperate,
-		"can_approve":       RelationCanApprove,
-		"can_manage_access": RelationCanManageAccess,
+		"can_view":               RelationCanView,
+		"can_operate":            RelationCanOperate,
+		"can_approve":            RelationCanApprove,
+		"can_manage_access":      RelationCanManageAccess,
+		"can_manage_credentials": RelationCanManageCredentials,
 	}
 	for want, relation := range permissions {
 		if got := relation.String(); got != want {

@@ -86,7 +86,7 @@ func newLiveLogDependencies(t *testing.T) *apiTestDependencies {
 		Status: domain.TemplateRunRunning,
 	}
 	deps.logMetadata.log = domain.TemplateRunLog{
-		TenantID: "tenant_123", RunID: "run_123", Phase: "plan-1", State: domain.TemplateRunLogLive,
+		TenantID: "tenant_123", RunID: "run_123", Name: "plan-1", State: domain.TemplateRunLogLive,
 	}
 	return deps
 }

@@ -20,12 +20,12 @@ func TestLoadSecurityConfigDevelopmentModes(t *testing.T) {
 
 			values := validSecurityValues()
 			values["OPENPLAN_ENVIRONMENT"] = mode
-			cfg, err := loadSecurityConfig(mapConfigEnv(values))
+			cfg, err := loadSecurityConfigFromEnv(mapConfigEnv(values))
 			if err != nil {
 				t.Fatalf("loadSecurityConfig returned error: %v", err)
 			}
-			if cfg.Mode != RuntimeDevelopment {
-				t.Fatalf("Mode = %q, want %q", cfg.Mode, RuntimeDevelopment)
+			if environment, _ := parseEnvironment(mode); environment != EnvironmentDevelopment {
+				t.Fatalf("Environment = %q, want %q", environment, EnvironmentDevelopment)
 			}
 			if cfg.TenantID != "default" {
 				t.Fatalf("TenantID = %q, want default", cfg.TenantID)
@@ -54,12 +54,9 @@ func TestLoadSecurityConfigProductionAndSecretFormatting(t *testing.T) {
 	values["OPENPLAN_PUBLIC_URL"] = "https://app.example.com"
 	values["OIDC_ISSUER_URL"] = "https://id.example.com/realms/openplan"
 
-	cfg, err := loadSecurityConfig(mapConfigEnv(values))
+	cfg, err := loadSecurityConfigFromEnv(mapConfigEnv(values))
 	if err != nil {
 		t.Fatalf("loadSecurityConfig returned error: %v", err)
-	}
-	if cfg.Mode != RuntimeProduction {
-		t.Fatalf("Mode = %q, want %q", cfg.Mode, RuntimeProduction)
 	}
 	// OpenFGA no longer carries a secret: there is no service to authenticate
 	// to. The redaction this pins is the remaining one, on the client secret.
@@ -116,7 +113,7 @@ func TestLoadSecurityConfigRejectsMissingAndMalformedValues(t *testing.T) {
 			t.Parallel()
 			values := validSecurityValues()
 			values[test.key] = test.value
-			_, err := loadSecurityConfig(mapConfigEnv(values))
+			_, err := loadSecurityConfigFromEnv(mapConfigEnv(values))
 			if !errors.Is(err, ErrInvalidConfig) {
 				t.Fatalf("error = %v, want ErrInvalidConfig", err)
 			}
@@ -152,7 +149,7 @@ func TestLoadSecurityConfigRejectsInsecureProductionValues(t *testing.T) {
 			values["OPENPLAN_PUBLIC_URL"] = "https://app.example.com"
 			values["OIDC_ISSUER_URL"] = "https://id.example.com/realms/openplan"
 			test.mutate(values)
-			_, err := loadSecurityConfig(mapConfigEnv(values))
+			_, err := loadSecurityConfigFromEnv(mapConfigEnv(values))
 			if !errors.Is(err, ErrInvalidConfig) || err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("error = %v, want ErrInvalidConfig containing %q", err, test.want)
 			}
@@ -168,7 +165,7 @@ func TestLoadSecurityConfigRequiresOIDCClientCredentials(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			env := validSecurityValues()
 			delete(env, name)
-			if _, err := loadSecurityConfig(mapConfigEnv(env)); err == nil {
+			if _, err := loadSecurityConfigFromEnv(mapConfigEnv(env)); err == nil {
 				t.Fatalf("loadSecurityConfig accepted a missing %s", name)
 			}
 		})
@@ -181,7 +178,7 @@ func TestLoadSecurityConfigRejectsRetiredOIDCAudience(t *testing.T) {
 	env := validSecurityValues()
 	delete(env, "OIDC_CLIENT_ID")
 	env["OIDC_AUDIENCE"] = "openplan-api"
-	if _, err := loadSecurityConfig(mapConfigEnv(env)); err == nil {
+	if _, err := loadSecurityConfigFromEnv(mapConfigEnv(env)); err == nil {
 		t.Fatal("loadSecurityConfig accepted the retired OIDC_AUDIENCE")
 	}
 }
@@ -221,7 +218,7 @@ func TestLoadSecurityConfigRejectsRetiredLocalRootSettings(t *testing.T) {
 
 func TestLoadSecurityConfigReadsPublicURLAndSessionKey(t *testing.T) {
 	env := validSecurityValues()
-	cfg, err := loadSecurityConfig(mapConfigEnv(env))
+	cfg, err := loadSecurityConfigFromEnv(mapConfigEnv(env))
 	if err != nil {
 		t.Fatalf("loadSecurityConfig returned error: %v", err)
 	}
@@ -240,7 +237,7 @@ func TestLoadSecurityConfigReadsPublicURLAndSessionKey(t *testing.T) {
 }
 
 func TestSecurityConfigStringRedactsSecrets(t *testing.T) {
-	cfg, err := loadSecurityConfig(mapConfigEnv(validSecurityValues()))
+	cfg, err := loadSecurityConfigFromEnv(mapConfigEnv(validSecurityValues()))
 	if err != nil {
 		t.Fatalf("loadSecurityConfig returned error: %v", err)
 	}
@@ -312,7 +309,17 @@ func loadSecurityConfigWith(t *testing.T, overrides map[string]string) (Security
 	t.Helper()
 	values := validSecurityValues()
 	maps.Copy(values, overrides)
-	return loadSecurityConfig(mapConfigEnv(values))
+	return loadSecurityConfigFromEnv(mapConfigEnv(values))
+}
+
+// loadSecurityConfigFromEnv reads OPENPLAN_ENVIRONMENT first, the way
+// LoadAPIConfig does, so these tests set the environment as an operator would.
+func loadSecurityConfigFromEnv(getenv func(string) string) (SecurityConfig, error) {
+	environment, err := parseEnvironment(getenv("OPENPLAN_ENVIRONMENT"))
+	if err != nil {
+		return SecurityConfig{}, err
+	}
+	return loadSecurityConfig(getenv, environment)
 }
 
 func validSecurityValues() map[string]string {

@@ -99,11 +99,11 @@ func defaultExecutorDependencies() executorDependencies {
 			if err != nil {
 				return nil, err
 			}
-			network, err := sandbox.SetupNetwork(cfg.State, cfg.Subnet)
+			network, err := sandbox.SetupNetwork(cfg.Root, cfg.Subnet)
 			if err != nil {
 				return nil, err
 			}
-			return sandbox.NewRuntime(cfg.Runsc, cfg.State, guestRoot, cgroupFS, cgroups, sandbox.Limits{
+			return sandbox.NewRuntime(cfg.Runsc, cfg.Root, guestRoot, cgroupFS, cgroups, sandbox.Limits{
 				MemoryMiB: cfg.MemoryMiB, CPUs: cfg.CPUs, Pids: cfg.Pids,
 			}, network)
 		},

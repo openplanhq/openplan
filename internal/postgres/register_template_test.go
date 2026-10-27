@@ -32,59 +32,59 @@ func TestRegisteredTemplateTakesItsSyncsRevision(t *testing.T) {
 	require.NoError(t, err)
 	store := NewStore(pool, WithQueueSpecs(specs))
 	service := app.NewService(app.Service{
-		Authorization:   platformAdminAuthorization(t, "user-1"),
-		Work:            store,
-		SourceTemplates: store,
+		Authorization: platformAdminAuthorization(t, "user-1"),
+		Work:          store,
+		Templates:     store,
 	})
 	actx := authentication.ContextWithPrincipal(ctx, authentication.Principal{Subject: "user-1"})
 	register := app.RegisterTemplateCommand{TenantID: "tenant_123", RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc"}
 
 	registered, err := service.RegisterTemplate(actx, register)
 	require.NoError(t, err)
-	template, err := store.GetSourceTemplate(ctx, "tenant_123", registered.Template.ID)
+	template, err := store.GetTemplate(ctx, "tenant_123", registered.Template.ID)
 	require.NoError(t, err, "the template is stored before any sync runs")
 	assert.Equal(t, "vpc", template.Name)
 	assert.Empty(t, template.LatestTemplateRevisionID)
 
 	input := queuedSync(t, ctx, pool, registered.Sync.ID)
-	assert.Equal(t, registered.Template.ID, input.SourceTemplateID)
-	stored, err := store.GetTemplateRegistration(ctx, "tenant_123", registered.Sync.ID)
+	assert.Equal(t, registered.Template.ID, input.TemplateID)
+	stored, err := store.GetTemplateSync(ctx, "tenant_123", registered.Sync.ID)
 	require.NoError(t, err)
-	assert.Equal(t, registered.Template.ID, stored.SourceTemplateID)
+	assert.Equal(t, registered.Template.ID, stored.TemplateID)
 
 	// What the sync activity stores on success, into the template it was handed.
 	_, err = store.UpsertTemplateRevisionWithVariables(ctx, domain.TemplateRevision{
-		ID: "revision_1", TenantID: input.TenantID, SourceTemplateID: input.SourceTemplateID,
+		ID: "revision_1", TenantID: input.TenantID, TemplateID: input.TemplateID,
 		RepoOwner: input.RepoOwner, RepoName: input.RepoName, SourceRef: input.SourceRef, RootPath: input.RootPath,
 		ResolvedCommitSHA: "abc123", Name: "vpc", Status: domain.TemplateRevisionActive, CreatedAt: time.Now().UTC(),
 	}, nil)
 	require.NoError(t, err)
-	template, err = store.GetSourceTemplate(ctx, "tenant_123", registered.Template.ID)
+	template, err = store.GetTemplate(ctx, "tenant_123", registered.Template.ID)
 	require.NoError(t, err)
 	assert.Equal(t, domain.TemplateRevisionID("revision_1"), template.LatestTemplateRevisionID)
 
 	again, err := service.RegisterTemplate(actx, register)
 	require.NoError(t, err)
 	assert.Equal(t, registered.Template.ID, again.Template.ID, "a repeat register lands on the same template")
-	assert.Equal(t, registered.Template.ID, queuedSync(t, ctx, pool, again.Sync.ID).SourceTemplateID)
+	assert.Equal(t, registered.Template.ID, queuedSync(t, ctx, pool, again.Sync.ID).TemplateID)
 
 	synced, err := service.StartTemplateSync(actx, app.StartTemplateSyncCommand{TenantID: "tenant_123", TemplateID: registered.Template.ID})
 	require.NoError(t, err)
-	assert.Equal(t, registered.Template.ID, queuedSync(t, ctx, pool, synced.Sync.ID).SourceTemplateID)
+	assert.Equal(t, registered.Template.ID, queuedSync(t, ctx, pool, synced.Sync.ID).TemplateID)
 
 	var templates int
-	require.NoError(t, pool.QueryRow(ctx, `select count(*) from source_templates`).Scan(&templates))
+	require.NoError(t, pool.QueryRow(ctx, `select count(*) from templates`).Scan(&templates))
 	assert.Equal(t, 1, templates)
 }
 
-// queuedSync reads the sync input queued for one registration.
-func queuedSync(t *testing.T, ctx context.Context, pool *pgxpool.Pool, registrationID domain.TemplateRegistrationID) app.StartTemplateSyncPayload {
+// queuedSync reads the sync input queued for one sync.
+func queuedSync(t *testing.T, ctx context.Context, pool *pgxpool.Pool, syncID domain.TemplateSyncID) app.StartTemplateSyncPayload {
 	t.Helper()
 	var payload []byte
 	require.NoError(t, pool.QueryRow(ctx, `
 		select payload from work_queue
-		where kind = 'start_template_sync' and payload->>'RegistrationID' = $1
-	`, string(registrationID)).Scan(&payload))
+		where kind = 'start_template_sync' and payload->>'SyncID' = $1
+	`, string(syncID)).Scan(&payload))
 	var input app.StartTemplateSyncPayload
 	require.NoError(t, json.Unmarshal(payload, &input))
 	return input

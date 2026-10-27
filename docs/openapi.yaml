@@ -97,8 +97,8 @@ info:
 
     Every list answers one shape: `{"items": [...], "next_cursor": ...}`.
 
-    The lists that grow (stacks, templates, template revisions, a
-    component's runs, user search and the queue) page by cursor. Ask for up to `limit` items (1 to
+    The lists that grow (stacks, templates, template revisions, an
+    installed template's runs, user search and the queue) page by cursor. Ask for up to `limit` items (1 to
     100, default 50); while `next_cursor` is a string, send it back as
     `cursor` for the next page, and on the last page it is `null`. A cursor
     is opaque, belongs to the list that gave it out, and is only a position:
@@ -658,7 +658,7 @@ paths:
       operationId: getStack
       responses:
         "200":
-          description: The stack and its components.
+          description: The stack and its installed templates.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/StackView" }
@@ -685,7 +685,7 @@ paths:
             schema: { $ref: "#/components/schemas/AddTemplateToStackRequest" }
             example:
               template_revision_id: 01J9K2M4P7QW8X0YZ1A2B3C4D5
-              component_key: vpc
+              key: vpc
               config:
                 cidr_block: 10.0.0.0/16
                 region: us-east-1
@@ -704,9 +704,9 @@ paths:
         "409":
           description: |
             The revision is still syncing or its sync failed
-            (`revision-not-installable`), or `component_key` is already used on
-            this stack (`duplicate-component-key`, with an `errors` entry on
-            `#/component_key`).
+            (`revision-not-installable`), or `key` is already used on
+            this stack (`duplicate-stack-template-key`, with an `errors` entry on
+            `#/key`).
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
@@ -1015,10 +1015,10 @@ paths:
         merge. The new config is validated against the desired revision's
         variables.
 
-        Refused with `409 run-in-flight` while the component has an unfinished
+        Refused with `409 run-in-flight` while the installed template has an unfinished
         run, a plan waiting for approval included: a run snapshots the config
         when it starts, and the plan being reviewed has to stay a plan of what
-        the component says. Apply or discard the run first.
+        the installed template says. Apply or discard the run first.
       operationId: updateStackTemplateConfig
       requestBody:
         required: true
@@ -1027,7 +1027,7 @@ paths:
             schema: { $ref: "#/components/schemas/UpdateStackTemplateConfigRequest" }
       responses:
         "200":
-          description: The updated component.
+          description: The updated installed template.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/StackTemplate" }
@@ -1037,8 +1037,8 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
           description: |
-            The component is being torn down, so its config can no longer be
-            edited (`template-not-editable`), or a run is unfinished
+            The installed template is being torn down, so its config can no longer be
+            edited (`stack-template-not-editable`), or a run is unfinished
             (`run-in-flight`).
           content:
             application/problem+json:
@@ -1056,31 +1056,31 @@ paths:
               schema: { $ref: "#/components/schemas/Problem" }
         "500": { $ref: "#/components/responses/InternalError" }
 
-  /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/upgrade:
+  /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/change-revision:
     parameters:
       - $ref: "#/components/parameters/TenantID"
       - $ref: "#/components/parameters/StackTemplateID"
     post:
       tags: [Stacks]
-      summary: Stage an installed template on a newer revision
+      summary: Stage an installed template on another revision
       description: |
-        Moves the component's *desired* revision. Nothing is applied here —
-        upgrading is a deliberate, reviewable step, so the new revision takes
+        Moves the installed template's *desired* revision. Nothing is applied here —
+        changing revision is a deliberate, reviewable step, so the new revision takes
         effect only when a subsequent apply succeeds. Until then
         `desired_template_revision_id` and `last_applied_template_revision_id`
         differ and `live_state` reads `differs`.
 
         Omit `config` to carry the current one forward; supply it when the new
         revision's variables changed.
-      operationId: upgradeStackTemplate
+      operationId: changeStackTemplateRevision
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/UpgradeStackTemplateRequest" }
+            schema: { $ref: "#/components/schemas/ChangeStackTemplateRevisionRequest" }
       responses:
         "200":
-          description: The component, now staged on the target revision.
+          description: The installed template, now staged on the target revision.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/StackTemplate" }
@@ -1090,7 +1090,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
           description: |
-            The component is being torn down (`template-not-upgradable`), the
+            The installed template is being torn down (`stack-template-revision-not-changeable`), the
             target revision is still syncing or failed
             (`revision-not-installable`), or a run is unfinished
             (`run-in-flight`).
@@ -1114,11 +1114,11 @@ paths:
       - $ref: "#/components/parameters/StackTemplateID"
     post:
       tags: [Credentials]
-      summary: Add a component-scoped credential
+      summary: Add a template-scoped credential
       description: |
         Same contract as a stack credential, sensitivity included, scoped to
-        one installed component. Use this to override a stack-wide credential
-        for a single component; the override's own `sensitive` decides whether
+        one installed template. Use this to override a stack-wide credential
+        for a single installed template; the override's own `sensitive` decides whether
         its value is shown.
       operationId: createStackTemplateCredential
       requestBody:
@@ -1149,14 +1149,14 @@ paths:
         "503": { $ref: "#/components/responses/CredentialEncryptionUnavailable" }
     get:
       tags: [Credentials]
-      summary: List component-scoped credentials
+      summary: List template-scoped credentials
       description: |
         Metadata for every credential, and the value of each one that is not
         sensitive. Sensitive values are never returned.
       operationId: listStackTemplateCredentials
       responses:
         "200":
-          description: The component's credentials.
+          description: The installed template's credentials.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CredentialList" }
@@ -1173,7 +1173,7 @@ paths:
       - $ref: "#/components/parameters/CredentialID"
     delete:
       tags: [Credentials]
-      summary: Delete a component-scoped credential
+      summary: Delete a template-scoped credential
       operationId: deleteStackTemplateCredential
       responses:
         "204":
@@ -1198,7 +1198,7 @@ paths:
         Operations work the way the Terraform CLI's do. `plan` only plans the
         desired config: the run records what would change and completes,
         keeping no plan. `apply` plans the desired config and saves the plan;
-        `destroy` plans the destruction of everything the component manages
+        `destroy` plans the destruction of everything the installed template manages
         and saves that. For either, a plan with no changes completes the run,
         and a plan with changes waits in `waiting_approval`, where approving it
         applies exactly that saved plan (see the approval endpoint).
@@ -1208,7 +1208,7 @@ paths:
         the counts the apply reports. It takes approve permission on the stack
         as well as operate permission.
 
-        One component runs one operation at a time, and a plan waiting for
+        One installed template runs one operation at a time, and a plan waiting for
         approval counts. Starting a second while one is in flight returns `409
         run-in-flight` — the competing run is visible through the list
         endpoint, so a client can wait for it, or approve or discard it.
@@ -1235,8 +1235,8 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
           description: |
-            `run-in-flight` — another run is already active for this component.
-            `template-not-runnable` — the component is being torn down, or has
+            `run-in-flight` — another run is already active for this installed template.
+            `stack-template-not-runnable` — the installed template is being torn down, or has
             no revision to run.
           content:
             application/problem+json:
@@ -1261,7 +1261,7 @@ paths:
         "500": { $ref: "#/components/responses/InternalError" }
     get:
       tags: [Runs]
-      summary: List a component's runs
+      summary: List an installed template's runs
       description: Most recent first, a page at a time.
       operationId: listTemplateRuns
       parameters:
@@ -1269,7 +1269,7 @@ paths:
         - $ref: "#/components/parameters/Cursor"
       responses:
         "200":
-          description: A page of the component's run history.
+          description: A page of the installed template's run history.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/TemplateRunList" }
@@ -1287,7 +1287,7 @@ paths:
       - name: run_number
         in: path
         required: true
-        description: The run's `run_number`, its number within the component, from 1.
+        description: The run's `run_number`, its number within the installed template, from 1.
         schema: { type: integer, minimum: 1 }
     get:
       tags: [Runs]
@@ -1535,7 +1535,7 @@ paths:
         plan was made, tofu refuses the plan and the run fails; plan again.
 
         Refused with `409 plan-stale` if the plan no longer describes the
-        component's desired config and revision. Those cannot change while
+        installed template's desired config and revision. Those cannot change while
         the plan waits, so this is a backstop.
 
         Takes no fields: send `{}` or no body at all. Returns `202` with the
@@ -1739,7 +1739,7 @@ components:
       name: stack_template_id
       in: path
       required: true
-      description: An installed component — a template revision inside a stack.
+      description: An installed template — a template revision inside a stack.
       schema: { type: string }
     CredentialID:
       name: credential_id
@@ -1995,7 +1995,7 @@ components:
       required: [items, next_cursor]
     TemplateRunList:
       type: object
-      description: One page of a component's runs, newest first.
+      description: One page of an installed template's runs, newest first.
       properties:
         items:
           type: array
@@ -2101,12 +2101,12 @@ components:
             - https://openplan.run/problems/plan-stale
             - https://openplan.run/problems/run-not-approvable
             - https://openplan.run/problems/run-not-discardable
-            - https://openplan.run/problems/template-not-runnable
-            - https://openplan.run/problems/template-not-editable
-            - https://openplan.run/problems/template-not-upgradable
+            - https://openplan.run/problems/stack-template-not-runnable
+            - https://openplan.run/problems/stack-template-not-editable
+            - https://openplan.run/problems/stack-template-revision-not-changeable
             - https://openplan.run/problems/revision-not-installable
             - https://openplan.run/problems/duplicate-slug
-            - https://openplan.run/problems/duplicate-component-key
+            - https://openplan.run/problems/duplicate-stack-template-key
             - https://openplan.run/problems/duplicate-credential-name
             - https://openplan.run/problems/last-owner
             - https://openplan.run/problems/log-live
@@ -2192,11 +2192,11 @@ components:
           type: object
           properties:
             can_create_stack: { type: boolean }
-            can_publish_template: { type: boolean }
+            can_manage_templates: { type: boolean }
             can_manage_platform_access:
               type: boolean
               description: May grant and revoke platform roles. Platform administrators and root.
-          required: [can_create_stack, can_publish_template, can_manage_platform_access]
+          required: [can_create_stack, can_manage_templates, can_manage_platform_access]
         tenant_id:
           type: string
           description: The tenant this deployment serves. Use it in every tenant-scoped path.
@@ -2323,12 +2323,12 @@ components:
       type: object
       description: |
         An immutable snapshot of a Terraform source at one commit. Stacks
-        install revisions, never branches, which is why upgrading is an
+        install revisions, never branches, which is why changing revision is an
         explicit step rather than something that drifts.
       properties:
         id: { type: string }
         tenant_id: { type: string }
-        source_template_id:
+        template_id:
           type: string
           description: |
             Groups the revisions of one source together. Two revisions of the
@@ -2348,7 +2348,7 @@ components:
         status: { $ref: "#/components/schemas/TemplateRevisionStatus" }
         created_at: { type: string, format: date-time }
       required:
-        [id, tenant_id, source_template_id, repo_owner, repo_name, source_ref,
+        [id, tenant_id, template_id, repo_owner, repo_name, source_ref,
          resolved_commit_sha, root_path, name, description, status, created_at]
 
     TemplateRevisionStatus:
@@ -2397,7 +2397,7 @@ components:
         default_credential_ids:
           type: array
           items: { type: string }
-          description: Credentials every component in the stack inherits.
+          description: Credentials every installed template in the stack inherits.
       required: [name, slug]
 
     Stack:
@@ -2526,17 +2526,17 @@ components:
       additionalProperties: false
       properties:
         template_revision_id: { type: string }
-        component_key:
+        key:
           type: string
           description: |
-            Names this component within the stack. It is what lets one stack
+            Names this installed template within the stack. It is what lets one stack
             install the same template twice.
         config:
           $ref: "#/components/schemas/StackTemplateConfig"
           description: |
             Terraform input variables, keyed by variable name. Validated
             against the revision's variables. Omit or send `{}` for none.
-      required: [template_revision_id, component_key]
+      required: [template_revision_id, key]
 
     StackTemplateConfig:
       type: object
@@ -2569,13 +2569,13 @@ components:
           description: The complete desired config. Replaces the current one wholesale.
       required: [config]
 
-    UpgradeStackTemplateRequest:
+    ChangeStackTemplateRevisionRequest:
       type: object
       additionalProperties: false
       properties:
         target_template_revision_id:
           type: string
-          description: The revision to stage. Must share the component's `source_template_id`.
+          description: The revision to stage. Must share the installed template's `template_id`.
         config:
           $ref: "#/components/schemas/StackTemplateConfig"
           description: |
@@ -2589,21 +2589,21 @@ components:
       properties:
         id: { type: string }
         stack_id: { type: string }
-        component_key: { type: string }
-        source_template_id: { type: string }
+        key: { type: string }
+        template_id: { type: string }
         desired_template_revision_id:
           type: string
-          description: The revision this component should be running.
+          description: The revision this installed template should be running.
         last_applied_template_revision_id:
           type: string
           description: |
             The revision actually applied. Differs from the desired one after
-            an upgrade is staged and before it is applied.
+            a revision change is staged and before it is applied.
         source_ref:
           type: string
           description: |
             The desired revision's ref, resolved per request. A label, not
-            component state — a component does not own a ref.
+            stack template state — an installed template does not own a ref.
         workspace_name: { type: string }
         display_name:
           type: string
@@ -2627,7 +2627,7 @@ components:
         created_by: { type: string }
         lifecycle: { $ref: "#/components/schemas/StackTemplateLifecycle" }
       required:
-        [id, stack_id, component_key, source_template_id,
+        [id, stack_id, key, template_id,
          desired_template_revision_id, last_applied_template_revision_id,
          source_ref, workspace_name, display_name, config,
          last_applied_run_id, pending_plan_run_id, plan_state, live_state,
@@ -2713,8 +2713,8 @@ components:
       type: string
       enum: [stack, stack_template]
       description: |
-        `stack` credentials are inherited by every component in the stack;
-        `stack_template` credentials apply to one component and override the
+        `stack` credentials are inherited by every installed template in the stack;
+        `stack_template` credentials apply to one installed template and override the
         stack's.
 
     StartTemplateRunRequest:
@@ -2748,7 +2748,7 @@ components:
 
     TemplateRun:
       type: object
-      description: One Terraform operation against one installed component.
+      description: One Terraform operation against one installed template.
       properties:
         id: { type: string }
         tenant_id: { type: string }
@@ -2756,10 +2756,10 @@ components:
         template_revision_id:
           type: string
           description: |
-            The revision this run executed. Pinned when the run started, so
-            history stays accurate after an upgrade.
+            The desired revision's source ref, copied when the run started, so
+            history stays accurate after a revision change.
         operation: { $ref: "#/components/schemas/OperationType" }
-        selected_ref: { type: string }
+        source_ref: { type: string }
         resolved_commit_sha: { type: string }
         status: { $ref: "#/components/schemas/TemplateRunStatus" }
         step:
@@ -2851,7 +2851,7 @@ components:
           items: { $ref: "#/components/schemas/TemplateRunWorkflowExecution" }
       required:
         [id, tenant_id, stack_template_id, template_revision_id, operation,
-         selected_ref, resolved_commit_sha, status, step, trigger_actor,
+         source_ref, resolved_commit_sha, status, step, trigger_actor,
          trigger_actor_display_name, created_at, error_summary, command_error, run_number,
          auto_approve, plan_summary, plan_changes]
 
@@ -3083,7 +3083,7 @@ components:
       enum: [viewer, editor, admin]
       description: |
         A platform role. `viewer` sees every stack and reads the template
-        catalog; `editor` also creates stacks and publishes templates;
+        catalog; `editor` also creates stacks and manages templates;
         `admin` also operates, approves and manages access on every stack,
         and manages platform access. Root is not a role this API grants.
 

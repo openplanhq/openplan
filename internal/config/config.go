@@ -19,7 +19,7 @@ const (
 	DefaultArtifactStoreFilesystemRoot = "/tmp/openplan/artifacts"
 	DefaultExecutorMaxSessions         = 20
 	DefaultExecutorSandboxRunsc        = "/usr/local/bin/runsc"
-	DefaultExecutorSandboxState        = "/var/lib/openplan/sandboxes"
+	DefaultExecutorSandboxRoot         = "/var/lib/openplan/sandboxes"
 	DefaultExecutorSandboxMemoryMiB    = 2048
 	DefaultExecutorSandboxCPUs         = 2
 	DefaultExecutorSandboxPids         = 1024
@@ -32,7 +32,11 @@ const (
 var ErrInvalidConfig = errors.New("invalid config")
 
 type APIConfig struct {
-	DatabaseURL             string
+	// Environment is OPENPLAN_ENVIRONMENT. Production turns on the checks a
+	// development install would fail: HTTPS URLs, secure cookies, and refusing
+	// the keys and passwords published in the examples.
+	Environment             Environment
+	PostgresURL             string
 	HTTPAddress             string
 	TemporalAddress         string
 	TemporalNamespace       string
@@ -80,9 +84,9 @@ type ExecutorConfig struct {
 type SandboxConfig struct {
 	// Runsc is the runsc binary, with its gvisor-bin/ sidecars beside it.
 	Runsc string
-	// State holds runsc's state and the sandboxes' bundles. It must be
+	// Root holds runsc's state and the sandboxes' bundles. It must be
 	// ephemeral, as the run root is.
-	State string
+	Root string
 	// MemoryMiB, CPUs and Pids are each sandbox's limits.
 	MemoryMiB int64
 	CPUs      int64
@@ -114,8 +118,31 @@ type S3Config struct {
 	ForcePathStyle  bool
 }
 
+// Environment is the kind of install the api runs as.
+type Environment string
+
+const (
+	EnvironmentDevelopment Environment = "development"
+	EnvironmentProduction  Environment = "production"
+)
+
+func parseEnvironment(raw string) (Environment, error) {
+	switch strings.TrimSpace(raw) {
+	case "", string(EnvironmentDevelopment):
+		return EnvironmentDevelopment, nil
+	case string(EnvironmentProduction):
+		return EnvironmentProduction, nil
+	default:
+		return "", fmt.Errorf("%w: OPENPLAN_ENVIRONMENT must be development or production", ErrInvalidConfig)
+	}
+}
+
 func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
-	security, err := loadSecurityConfig(getenv)
+	environment, err := parseEnvironment(getenv("OPENPLAN_ENVIRONMENT"))
+	if err != nil {
+		return APIConfig{}, err
+	}
+	security, err := loadSecurityConfig(getenv, environment)
 	if err != nil {
 		return APIConfig{}, err
 	}
@@ -125,12 +152,13 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	}
 
 	cfg := APIConfig{
-		DatabaseURL:       strings.TrimSpace(getenv("DATABASE_URL")),
+		PostgresURL:       strings.TrimSpace(getenv("POSTGRES_URL")),
 		HTTPAddress:       strings.TrimSpace(getenv("HTTP_ADDRESS")),
 		TemporalAddress:   strings.TrimSpace(getenv("TEMPORAL_ADDRESS")),
 		TemporalNamespace: strings.TrimSpace(getenv("TEMPORAL_NAMESPACE")),
 		ArtifactStore:     artifactStore,
 		ValkeyURL:         strings.TrimSpace(getenv("VALKEY_URL")),
+		Environment:       environment,
 		Security:          security,
 	}
 	if cfg.HTTPAddress == "" {
@@ -141,7 +169,7 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	if err != nil {
 		return APIConfig{}, err
 	}
-	if security.Mode == RuntimeProduction {
+	if environment == EnvironmentProduction {
 		if err := refusePublishedKey("CREDENTIAL_ENCRYPTION_KEY", credentialKey); err != nil {
 			return APIConfig{}, err
 		}
@@ -163,8 +191,8 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	}
 	cfg.TerraformTimeout = terraformTimeout
 
-	if cfg.DatabaseURL == "" {
-		return APIConfig{}, fmt.Errorf("%w: DATABASE_URL is required", ErrInvalidConfig)
+	if cfg.PostgresURL == "" {
+		return APIConfig{}, fmt.Errorf("%w: POSTGRES_URL is required", ErrInvalidConfig)
 	}
 	if cfg.TemporalAddress == "" {
 		return APIConfig{}, fmt.Errorf("%w: TEMPORAL_ADDRESS is required", ErrInvalidConfig)
@@ -201,7 +229,7 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 		cfg.MaxSessions = maxSessions
 	}
 	cfg.Sandbox = SandboxConfig{
-		Runsc: DefaultExecutorSandboxRunsc, State: DefaultExecutorSandboxState,
+		Runsc: DefaultExecutorSandboxRunsc, Root: DefaultExecutorSandboxRoot,
 		MemoryMiB: DefaultExecutorSandboxMemoryMiB, CPUs: DefaultExecutorSandboxCPUs, Pids: DefaultExecutorSandboxPids,
 		Subnet: netip.MustParsePrefix(DefaultExecutorSandboxSubnet),
 	}
@@ -213,17 +241,17 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 		}
 		cfg.Sandbox.Subnet = subnet.Masked()
 	}
-	if v := strings.TrimSpace(getenv("EXECUTOR_RUNSC")); v != "" {
+	if v := strings.TrimSpace(getenv("EXECUTOR_SANDBOX_RUNSC")); v != "" {
 		cfg.Sandbox.Runsc = v
 	}
-	if v := strings.TrimSpace(getenv("EXECUTOR_SANDBOX_STATE")); v != "" {
-		cfg.Sandbox.State = v
+	if v := strings.TrimSpace(getenv("EXECUTOR_SANDBOX_ROOT")); v != "" {
+		cfg.Sandbox.Root = v
 	}
 	for _, setting := range []struct {
 		name  string
 		value *int64
 	}{
-		{"EXECUTOR_SANDBOX_MEMORY", &cfg.Sandbox.MemoryMiB},
+		{"EXECUTOR_SANDBOX_MEMORY_MIB", &cfg.Sandbox.MemoryMiB},
 		{"EXECUTOR_SANDBOX_CPUS", &cfg.Sandbox.CPUs},
 		{"EXECUTOR_SANDBOX_PIDS", &cfg.Sandbox.Pids},
 	} {

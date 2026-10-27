@@ -76,8 +76,8 @@ var writePaths = []writePath{
 		})
 		return err
 	}},
-	{"UpgradeStackTemplate", viaStackTemplate, func(service *Service, ctx context.Context, _ domain.StackID) error {
-		_, err := service.UpgradeStackTemplate(ctx, UpgradeStackTemplateCommand{
+	{"ChangeStackTemplateRevision", viaStackTemplate, func(service *Service, ctx context.Context, _ domain.StackID) error {
+		_, err := service.ChangeStackTemplateRevision(ctx, ChangeStackTemplateRevisionCommand{
 			TenantID: "tenant_123", StackTemplateID: "stack_template_123", TargetTemplateRevisionID: "template_456",
 		})
 		return err
@@ -250,19 +250,19 @@ type refusingCredentialRepository struct{}
 
 var errCredentialCalled = errors.New("credential dependency called before authorization refused")
 
-func (refusingCredentialRepository) CreateCredential(context.Context, domain.CredentialSet) error {
+func (refusingCredentialRepository) CreateCredential(context.Context, domain.Credential) error {
 	return errCredentialCalled
 }
 
-func (refusingCredentialRepository) ListCredentials(context.Context, domain.TenantID, domain.CredentialScope, string) ([]domain.CredentialSet, error) {
+func (refusingCredentialRepository) ListCredentials(context.Context, domain.TenantID, domain.CredentialScope, string) ([]domain.Credential, error) {
 	return nil, errCredentialCalled
 }
 
-func (refusingCredentialRepository) DeleteCredential(context.Context, domain.TenantID, domain.CredentialSetID) error {
+func (refusingCredentialRepository) DeleteCredential(context.Context, domain.TenantID, domain.CredentialID) error {
 	return errCredentialCalled
 }
 
-func (refusingCredentialRepository) ListCredentialsForStackTemplate(context.Context, domain.TenantID, domain.StackTemplateID) ([]domain.CredentialSet, error) {
+func (refusingCredentialRepository) ListCredentialsForStackTemplate(context.Context, domain.TenantID, domain.StackTemplateID) ([]domain.Credential, error) {
 	return nil, errCredentialCalled
 }
 

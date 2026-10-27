@@ -7,7 +7,7 @@ description: |-
   plan was made, tofu refuses the plan and the run fails; plan again.
 
   Refused with `409 plan-stale` if the plan no longer describes the
-  component's desired config and revision. Those cannot change while
+  installed template's desired config and revision. Those cannot change while
   the plan waits, so this is a backstop.
 
   Takes no fields: send `{}` or no body at all. Returns `202` with the

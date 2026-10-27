@@ -51,7 +51,7 @@ type appRepositories interface {
 	app.TemplateRunRepository
 	app.TemplateRevisionMetadataRepository
 	app.TemplateRevisionRepository
-	app.SourceTemplateRepository
+	app.TemplateRepository
 	app.TemplateRunLogRepository
 	app.AuditRepository
 	app.UserRepository
@@ -61,7 +61,7 @@ type appRepositories interface {
 
 // controlStore is what the control plane needs from the store beyond serving
 // HTTP: the queue loop claims and settles intents, and the control activities
-// write run and registration state.
+// write run and sync state.
 type controlStore interface {
 	queue.Backend
 	queue.Enqueuer
@@ -292,11 +292,11 @@ func registerControl(worker temporalWorker, store controlStore, gitHubTokens act
 	})
 
 	sync := activities.NewTemplateSyncActivities(store, activities.WithTemplateSyncTokenSource(gitHubTokens))
-	worker.RegisterActivityWithOptions(sync.RecordTemplateRegistrationStatus, activity.RegisterOptions{
-		Name: domain.RecordTemplateRegistrationStatusActivityName,
+	worker.RegisterActivityWithOptions(sync.RecordTemplateSyncStatus, activity.RegisterOptions{
+		Name: domain.RecordTemplateSyncStatusActivityName,
 	})
-	worker.RegisterActivityWithOptions(sync.RecordTemplateRegistrationStep, activity.RegisterOptions{
-		Name: domain.RecordTemplateRegistrationStepActivityName,
+	worker.RegisterActivityWithOptions(sync.RecordTemplateSyncStep, activity.RegisterOptions{
+		Name: domain.RecordTemplateSyncStepActivityName,
 	})
 	worker.RegisterActivityWithOptions(sync.SyncTemplate, activity.RegisterOptions{
 		Name: domain.SyncTemplateActivityName,
@@ -341,7 +341,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 		return fmt.Errorf("create oidc flow: %w", err)
 	}
 
-	pool, err := deps.newPostgresPool(ctx, cfg.DatabaseURL)
+	pool, err := deps.newPostgresPool(ctx, cfg.PostgresURL)
 	if err != nil {
 		return fmt.Errorf("create postgres pool: %w", err)
 	}
@@ -357,7 +357,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 
 	// OpenFGA's schema is versioned by OpenFGA, so it is migrated separately
 	// from the application's and from its own DSN rather than the pool.
-	if err := deps.migrateAuthorization(ctx, cfg.DatabaseURL); err != nil {
+	if err := deps.migrateAuthorization(ctx, cfg.PostgresURL); err != nil {
 		return fmt.Errorf("migrate authorization: %w", err)
 	}
 
@@ -416,7 +416,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 		TemplateRuns:             store,
 		TemplateRevisionMetadata: store,
 		TemplateRevisions:        store,
-		SourceTemplates:          store,
+		Templates:                store,
 		TemplateRunLogs:          logReader,
 		TemplateRunLogMetadata:   store,
 		PlanChanges:              planChangeRepository(store),
@@ -449,7 +449,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 			LogoutTokenVerifier: verifier,
 			Sealer:              sessionSealer,
 			PublicURL:           publicURL,
-			SecureCookies:       cfg.Security.Mode == config.RuntimeProduction,
+			SecureCookies:       cfg.Environment == config.EnvironmentProduction,
 			Sessions:            sessions,
 			SessionAbsoluteTTL:  cfg.Security.SessionAbsoluteTTL,
 			SessionIdleTTL:      cfg.Security.SessionIdleTTL,

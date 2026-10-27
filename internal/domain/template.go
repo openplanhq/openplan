@@ -1,6 +1,6 @@
 package domain
 
-// The template catalogue: sources, revisions, registrations, variables.
+// The template catalogue: sources, revisions, syncs, variables.
 
 import (
 	"crypto/sha256"
@@ -31,66 +31,67 @@ func (status TemplateRevisionStatus) Valid() bool {
 	}
 }
 
-// TemplateRegistrationStatus identifies the lifecycle of one template registration request.
-type TemplateRegistrationStatus string
+// TemplateSyncState is a sync's stored lifecycle. It is not what the sync
+// shows: TemplateSyncStatus is derived from it (see LatestTemplateSync.StatusAt).
+type TemplateSyncState string
 
 const (
-	TemplateRegistrationPending   TemplateRegistrationStatus = "pending"
-	TemplateRegistrationRunning   TemplateRegistrationStatus = "running"
-	TemplateRegistrationCompleted TemplateRegistrationStatus = "completed"
-	TemplateRegistrationInvalid   TemplateRegistrationStatus = "invalid"
-	TemplateRegistrationFailed    TemplateRegistrationStatus = "failed"
+	TemplateSyncStatePending   TemplateSyncState = "pending"
+	TemplateSyncStateRunning   TemplateSyncState = "running"
+	TemplateSyncStateCompleted TemplateSyncState = "completed"
+	TemplateSyncStateInvalid   TemplateSyncState = "invalid"
+	TemplateSyncStateFailed    TemplateSyncState = "failed"
 )
 
-// Valid reports whether the status is one of the supported registration states.
-func (status TemplateRegistrationStatus) Valid() bool {
+// Valid reports whether the status is one of the supported sync states.
+func (status TemplateSyncState) Valid() bool {
 	switch status {
-	case TemplateRegistrationPending,
-		TemplateRegistrationRunning,
-		TemplateRegistrationCompleted,
-		TemplateRegistrationInvalid,
-		TemplateRegistrationFailed:
+	case TemplateSyncStatePending,
+		TemplateSyncStateRunning,
+		TemplateSyncStateCompleted,
+		TemplateSyncStateInvalid,
+		TemplateSyncStateFailed:
 		return true
 	default:
 		return false
 	}
 }
 
-// TemplateRegistrationStep is what a running sync is doing right now, for the
+// TemplateSyncStep is what a running sync is doing right now, for the
 // people watching it. It is not a status: nothing branches on it. It is
 // recorded when a step starts and kept when the sync ends, so a failed sync
 // still says where it failed. The zero value is a sync that has not started a
 // step.
-type TemplateRegistrationStep string
+type TemplateSyncStep string
 
 const (
-	// TemplateRegistrationStepSyncing is cloning the repository, parsing the
+	// TemplateSyncStepSyncing is cloning the repository, parsing the
 	// template it holds and saving the revision it describes.
-	TemplateRegistrationStepSyncing TemplateRegistrationStep = "syncing"
+	TemplateSyncStepSyncing TemplateSyncStep = "syncing"
 )
 
-// AllTemplateRegistrationSteps is every step a sync may record, in the order a
+// AllTemplateSyncSteps is every step a sync may record, in the order a
 // sync takes them. The step check constraint in the migrations lists the same
 // values.
-var AllTemplateRegistrationSteps = []TemplateRegistrationStep{
-	TemplateRegistrationStepSyncing,
+var AllTemplateSyncSteps = []TemplateSyncStep{
+	TemplateSyncStepSyncing,
 }
 
 // Valid reports whether the step is one a sync may record. The zero value is
-// not: it is what a registration has before its sync records one.
-func (step TemplateRegistrationStep) Valid() bool {
-	return slices.Contains(AllTemplateRegistrationSteps, step)
+// not: it is what a sync has before it records one.
+func (step TemplateSyncStep) Valid() bool {
+	return slices.Contains(AllTemplateSyncSteps, step)
 }
 
-// SourceTemplate is the stable logical identity tracked by template revisions.
+// Template is the stable logical identity tracked by template revisions.
 // It exists from registration on, before any sync has produced a revision.
-type SourceTemplate struct {
-	ID        SourceTemplateID `json:"id"`
-	TenantID  TenantID         `json:"tenant_id"`
-	RepoOwner string           `json:"repo_owner"`
-	RepoName  string           `json:"repo_name"`
-	SourceRef string           `json:"source_ref"`
-	RootPath  string           `json:"root_path"`
+type Template struct {
+	ID        TemplateID `json:"id"`
+	TenantID  TenantID   `json:"tenant_id"`
+	RepoOwner string     `json:"repo_owner"`
+	RepoName  string     `json:"repo_name"`
+	SourceRef string     `json:"source_ref"`
+	RootPath  string     `json:"root_path"`
 	// Name, Description and Tags are the latest revision's. Before the first
 	// revision, Name is FallbackTemplateName, Description is empty and Tags
 	// is empty.
@@ -108,7 +109,7 @@ type SourceTemplate struct {
 }
 
 // TemplateSyncStatus is how a template's latest sync reads to the people
-// looking at the template, derived from the stored registration.
+// looking at the template, derived from the stored TemplateSyncState.
 type TemplateSyncStatus string
 
 const (
@@ -127,9 +128,9 @@ const (
 // not coming back on its own.
 const TemplateSyncStallsAfter = 30 * time.Minute
 
-// LatestTemplateSync is the newest registration of a template, as stored.
+// LatestTemplateSync is the newest sync of a template, as stored.
 type LatestTemplateSync struct {
-	Status            TemplateRegistrationStatus
+	Status            TemplateSyncState
 	ErrorSummary      string
 	ResolvedCommitSHA string
 	RequestedAt       time.Time
@@ -147,19 +148,19 @@ type LatestTemplateSync struct {
 // never stored: the row stays pending or running.
 func (sync LatestTemplateSync) StatusAt(now time.Time) TemplateSyncStatus {
 	switch sync.Status {
-	case TemplateRegistrationPending, TemplateRegistrationRunning:
+	case TemplateSyncStatePending, TemplateSyncStateRunning:
 		if now.Sub(sync.RequestedAt) >= TemplateSyncStallsAfter {
 			return TemplateSyncStalled
 		}
 		return TemplateSyncSyncing
-	case TemplateRegistrationCompleted:
+	case TemplateSyncStateCompleted:
 		if sync.RevisionPredatesRequest {
 			return TemplateSyncUpToDate
 		}
 		return TemplateSyncSynced
-	case TemplateRegistrationInvalid:
+	case TemplateSyncStateInvalid:
 		return TemplateSyncInvalid
-	case TemplateRegistrationFailed:
+	case TemplateSyncStateFailed:
 		return TemplateSyncFailed
 	}
 	// The status check constraint admits no other status; were one stored,
@@ -167,11 +168,11 @@ func (sync LatestTemplateSync) StatusAt(now time.Time) TemplateSyncStatus {
 	return TemplateSyncFailed
 }
 
-// SourceTemplateIDFor derives the id of the template a source names, so
+// TemplateIDFor derives the id of the template a source names, so
 // registering the same source twice lands on the same template. rootPath is
 // the cleaned root path. The hash is over the values joined by NUL, which no
 // value may contain, so two different sources never join to the same input.
-func SourceTemplateIDFor(tenantID TenantID, repoOwner, repoName, rootPath, sourceRef string) SourceTemplateID {
+func TemplateIDFor(tenantID TenantID, repoOwner, repoName, rootPath, sourceRef string) TemplateID {
 	sum := sha256.Sum256([]byte(strings.Join([]string{
 		string(tenantID),
 		repoOwner,
@@ -179,7 +180,7 @@ func SourceTemplateIDFor(tenantID TenantID, repoOwner, repoName, rootPath, sourc
 		rootPath,
 		sourceRef,
 	}, "\x00")))
-	return SourceTemplateID("source_template_" + hex.EncodeToString(sum[:16]))
+	return TemplateID("template_" + hex.EncodeToString(sum[:16]))
 }
 
 // FallbackTemplateName names a template whose source does not name itself:
@@ -197,7 +198,7 @@ func FallbackTemplateName(repoName string, rootPath string) string {
 type TemplateRevision struct {
 	ID                TemplateRevisionID     `json:"id"`
 	TenantID          TenantID               `json:"tenant_id"`
-	SourceTemplateID  SourceTemplateID       `json:"source_template_id"`
+	TemplateID        TemplateID             `json:"template_id"`
 	RepoOwner         string                 `json:"repo_owner"`
 	RepoName          string                 `json:"repo_name"`
 	SourceRef         string                 `json:"source_ref"`
@@ -210,24 +211,25 @@ type TemplateRevision struct {
 	CreatedAt         time.Time              `json:"created_at"`
 }
 
-// TemplateRegistration records one async template registration request.
-type TemplateRegistration struct {
-	ID       TemplateRegistrationID `json:"id"`
-	TenantID TenantID               `json:"tenant_id"`
-	// SourceTemplateID is the template the registration syncs. It is empty on
-	// registrations made before templates were created at registration.
-	SourceTemplateID   SourceTemplateID           `json:"source_template_id"`
-	RepoOwner          string                     `json:"repo_owner"`
-	RepoName           string                     `json:"repo_name"`
-	SourceRef          string                     `json:"source_ref"`
-	RootPath           string                     `json:"root_path"`
-	Status             TemplateRegistrationStatus `json:"status"`
-	Step               TemplateRegistrationStep   `json:"step"`
-	TemplateRevisionID TemplateRevisionID         `json:"template_revision_id"`
-	ResolvedCommitSHA  string                     `json:"resolved_commit_sha"`
-	RequestedBy        UserID                     `json:"requested_by"`
-	RequestedAt        time.Time                  `json:"requested_at"`
-	// CompletedAt is omitted from JSON until the registration ends.
+// TemplateSync is one sync of a template: cloning its repository at its ref
+// and recording the revision it describes.
+type TemplateSync struct {
+	ID       TemplateSyncID `json:"id"`
+	TenantID TenantID       `json:"tenant_id"`
+	// TemplateID is the template synced. It is empty on
+	// syncs made before templates were created at registration.
+	TemplateID         TemplateID         `json:"template_id"`
+	RepoOwner          string             `json:"repo_owner"`
+	RepoName           string             `json:"repo_name"`
+	SourceRef          string             `json:"source_ref"`
+	RootPath           string             `json:"root_path"`
+	Status             TemplateSyncState  `json:"status"`
+	Step               TemplateSyncStep   `json:"step"`
+	TemplateRevisionID TemplateRevisionID `json:"template_revision_id"`
+	ResolvedCommitSHA  string             `json:"resolved_commit_sha"`
+	RequestedBy        UserID             `json:"requested_by"`
+	RequestedAt        time.Time          `json:"requested_at"`
+	// CompletedAt is omitted from JSON until the sync ends.
 	CompletedAt  time.Time `json:"completed_at,omitzero"`
 	ErrorSummary string    `json:"error_summary"`
 }

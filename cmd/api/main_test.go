@@ -41,10 +41,10 @@ func TestRunRequiresDatabaseURL(t *testing.T) {
 	t.Parallel()
 
 	values := apiTestValues()
-	delete(values, "DATABASE_URL")
+	delete(values, "POSTGRES_URL")
 	err := run(context.Background(), apiTestGetenv(values))
-	if !errors.Is(err, config.ErrInvalidConfig) || err == nil || !strings.Contains(err.Error(), "DATABASE_URL is required") {
-		t.Fatalf("error = %v, want DATABASE_URL ErrInvalidConfig", err)
+	if !errors.Is(err, config.ErrInvalidConfig) || err == nil || !strings.Contains(err.Error(), "POSTGRES_URL is required") {
+		t.Fatalf("error = %v, want POSTGRES_URL ErrInvalidConfig", err)
 	}
 }
 
@@ -292,18 +292,18 @@ func TestRegisterControlRegistersWorkflowsAndControlActivities(t *testing.T) {
 		t.Fatalf("workflows = %v, want %v", worker.workflows, wantWorkflows)
 	}
 	wantActivities := map[string]bool{
-		domain.RecordTemplateRunStatusActivityName:          true,
-		domain.RecordTemplateRunLogActivityName:             true,
-		domain.SealRunCredentialsActivityName:               true,
-		domain.SealSourceTokenActivityName:                  true,
-		domain.SealPlanKeyActivityName:                      true,
-		domain.FinishPlanActivityName:                       true,
-		domain.BeginApplyActivityName:                       true,
-		domain.RecordTemplateRunStepActivityName:            true,
-		domain.RecordTemplateRunEventActivityName:           true,
-		domain.RecordTemplateRegistrationStatusActivityName: true,
-		domain.RecordTemplateRegistrationStepActivityName:   true,
-		domain.SyncTemplateActivityName:                     true,
+		domain.RecordTemplateRunStatusActivityName:  true,
+		domain.RecordTemplateRunLogActivityName:     true,
+		domain.SealRunCredentialsActivityName:       true,
+		domain.SealSourceTokenActivityName:          true,
+		domain.SealPlanKeyActivityName:              true,
+		domain.FinishPlanActivityName:               true,
+		domain.BeginApplyActivityName:               true,
+		domain.RecordTemplateRunStepActivityName:    true,
+		domain.RecordTemplateRunEventActivityName:   true,
+		domain.RecordTemplateSyncStatusActivityName: true,
+		domain.RecordTemplateSyncStepActivityName:   true,
+		domain.SyncTemplateActivityName:             true,
 	}
 	if !reflect.DeepEqual(worker.activities, wantActivities) {
 		t.Fatalf("activities = %v, want %v", worker.activities, wantActivities)
@@ -316,7 +316,7 @@ func assertAPIQueueSpecs(t *testing.T, registry *queue.SpecRegistry) {
 		t.Fatal("queue spec registry was not passed to the API store")
 	}
 	for _, kind := range []queue.Kind{
-		app.KindStartTemplateRun,
+		app.KindStartTemplatePlan,
 		app.KindStartTemplateSync,
 		app.KindStartTemplateApply,
 	} {
@@ -372,13 +372,13 @@ func TestRunWiresDefaultTenantBoundary(t *testing.T) {
 	}
 }
 
-// TestRunGatesSecureCookiesOnRuntimeMode asserts the one cookie attribute
+// TestRunGatesSecureCookiesOnEnvironment asserts the one cookie attribute
 // whose regression is invisible in dev and serious in production: a session
 // cookie sent over plaintext. AuthConfig.SecureCookies is unexported outside
 // internal/api, so this observes it the way a browser would — through the
 // Secure flag on the Set-Cookie the login route actually issues — rather than
 // reaching into the server's internals.
-func TestRunGatesSecureCookiesOnRuntimeMode(t *testing.T) {
+func TestRunGatesSecureCookiesOnEnvironment(t *testing.T) {
 	t.Parallel()
 
 	for _, test := range []struct {
@@ -488,7 +488,7 @@ func TestRunMigratesRealPostgresWhenDSNIsSet(t *testing.T) {
 	defer cancel()
 
 	values := apiTestValues()
-	values["DATABASE_URL"] = dsn
+	values["POSTGRES_URL"] = dsn
 	values["HTTP_ADDRESS"] = "127.0.0.1:0"
 
 	// Real dependencies except the authorization adapter. Root seeding is
@@ -603,7 +603,7 @@ func (buffer *startupLogBuffer) String() string {
 
 func apiTestValues() map[string]string {
 	return map[string]string{
-		"DATABASE_URL":                   "postgres://user:pass@localhost:5432/db?sslmode=disable",
+		"POSTGRES_URL":                   "postgres://user:pass@localhost:5432/db?sslmode=disable",
 		"HTTP_ADDRESS":                   ":9090",
 		"TEMPORAL_ADDRESS":               "localhost:7233",
 		"VALKEY_URL":                     "redis://localhost:6379",
@@ -905,27 +905,27 @@ func (recordingStore) CreateTemplateRun(context.Context, domain.TemplateRun) (in
 	return 0, nil
 }
 
-func (recordingStore) CreateTemplateRegistration(context.Context, domain.TemplateRegistration) error {
+func (recordingStore) CreateTemplateSync(context.Context, domain.TemplateSync) error {
 	return nil
 }
 
-func (recordingStore) CreateSourceTemplate(_ context.Context, template domain.SourceTemplate) (domain.SourceTemplate, error) {
+func (recordingStore) CreateTemplate(_ context.Context, template domain.Template) (domain.Template, error) {
 	return template, nil
 }
 
-func (recordingStore) GetSourceTemplate(context.Context, domain.TenantID, domain.SourceTemplateID) (domain.SourceTemplate, error) {
-	return domain.SourceTemplate{}, nil
+func (recordingStore) GetTemplate(context.Context, domain.TenantID, domain.TemplateID) (domain.Template, error) {
+	return domain.Template{}, nil
 }
 
-func (recordingStore) DeleteSourceTemplate(context.Context, domain.TenantID, domain.SourceTemplateID) error {
+func (recordingStore) DeleteTemplate(context.Context, domain.TenantID, domain.TemplateID) error {
 	return nil
 }
 
-func (recordingStore) ListSourceTemplatesPage(context.Context, domain.TenantID, *app.SourceTemplateCursor, int) ([]domain.SourceTemplate, error) {
+func (recordingStore) ListTemplatesPage(context.Context, domain.TenantID, *app.TemplateCursor, int) ([]domain.Template, error) {
 	return nil, nil
 }
 
-func (recordingStore) ListTemplateRevisionsBySourcePage(context.Context, domain.TenantID, domain.SourceTemplateID, *app.TemplateRevisionCursor, int) ([]domain.TemplateRevision, error) {
+func (recordingStore) ListTemplateRevisionsBySourcePage(context.Context, domain.TenantID, domain.TemplateID, *app.TemplateRevisionCursor, int) ([]domain.TemplateRevision, error) {
 	return nil, nil
 }
 
@@ -981,11 +981,11 @@ func (recordingStore) ListTemplateRunLogs(context.Context, domain.TenantID, doma
 	return nil, nil
 }
 
-func (recordingStore) RecordTemplateRegistrationStatus(context.Context, domain.TemplateRegistrationStatusActivityInput) error {
+func (recordingStore) RecordTemplateSyncStatus(context.Context, domain.TemplateSyncStatusActivityInput) error {
 	return nil
 }
 
-func (recordingStore) RecordTemplateRegistrationStep(context.Context, domain.TemplateRegistrationStepActivityInput) error {
+func (recordingStore) RecordTemplateSyncStep(context.Context, domain.TemplateSyncStepActivityInput) error {
 	return nil
 }
 
@@ -1110,7 +1110,7 @@ func (recordingStore) RecordTemplateRunLog(context.Context, domain.TemplateRunLo
 	return nil
 }
 
-func (recordingStore) ListCredentialsForStackTemplate(context.Context, domain.TenantID, domain.StackTemplateID) ([]domain.CredentialSet, error) {
+func (recordingStore) ListCredentialsForStackTemplate(context.Context, domain.TenantID, domain.StackTemplateID) ([]domain.Credential, error) {
 	return nil, nil
 }
 
@@ -1166,7 +1166,7 @@ func (controller *recordingAPIQueueController) Run(ctx context.Context) {
 
 type recordingAPIDispatcher struct{}
 
-func (recordingAPIDispatcher) StartTemplateRun(context.Context, domain.TemplateRunWorkflowInput) error {
+func (recordingAPIDispatcher) StartTemplatePlan(context.Context, domain.TemplateRunWorkflowInput) error {
 	return nil
 }
 

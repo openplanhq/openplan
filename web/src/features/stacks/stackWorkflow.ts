@@ -6,24 +6,24 @@ export function findSelectedStackTemplate(stackTemplates: StackTemplate[], selec
   return findSelectedID(stackTemplates, selectedStackTemplateID);
 }
 
-// No ref suffix: source_ref is part of a source template's identity, so it read
+// No ref suffix: source_ref is part of a template's identity, so it read
 // the same on every install of that template and separated nothing. The ref
 // still shows in the revision panel, where it is about a specific commit.
 export function stackTemplateLabel(stackTemplate: Pick<StackTemplate, "display_name" | "workspace_name">): string {
   return stackTemplate.display_name || stackTemplate.workspace_name;
 }
 
-export function canUpgradeStackTemplate(stackTemplate: StackTemplate | null, templateRevision: TemplateRevision | null): boolean {
+export function canChangeStackTemplateRevision(stackTemplate: StackTemplate | null, templateRevision: TemplateRevision | null): boolean {
   if (!stackTemplate || !templateRevision || templateRevision.status !== "active") {
     return false;
   }
   if (stackTemplate.desired_template_revision_id === templateRevision.id) {
     return false;
   }
-  return stackTemplate.source_template_id === templateRevision.source_template_id;
+  return stackTemplate.template_id === templateRevision.template_id;
 }
 
-export interface UpgradeVariablePartition {
+export interface RevisionChangeVariablePartition {
   added: TemplateVariable[];
   carried: TemplateVariable[];
   removed: TemplateVariable[];
@@ -31,29 +31,29 @@ export interface UpgradeVariablePartition {
 
 /**
  * Revisions this stack template can change to: active revisions of the same
- * source template, minus the one already desired. The API's order is
+ * template, minus the one already desired. The API's order is
  * preserved, but it is not treated as commit ancestry or recency.
  */
-export function upgradeCandidateRevisions(
+export function revisionChangeCandidates(
   revisions: TemplateRevision[],
   stackTemplate: StackTemplate | null
 ): TemplateRevision[] {
   if (!stackTemplate) {
     return [];
   }
-  return revisions.filter((revision) => canUpgradeStackTemplate(stackTemplate, revision));
+  return revisions.filter((revision) => canChangeStackTemplateRevision(stackTemplate, revision));
 }
 
 /**
  * Compares the installed revision's variables against a target revision's, by
  * name. Carried variables carry the *target* revision's definition, because
- * that is what the upgrade will be validated against — a variable can stay
+ * that is what the revision change will be validated against — a variable can stay
  * named the same while becoming required or changing type.
  */
-export function partitionUpgradeVariables(
+export function partitionRevisionChangeVariables(
   currentVariables: TemplateVariable[],
   targetVariables: TemplateVariable[]
-): UpgradeVariablePartition {
+): RevisionChangeVariablePartition {
   const currentNames = new Set(currentVariables.map((variable) => variable.name));
   const targetNames = new Set(targetVariables.map((variable) => variable.name));
   return {

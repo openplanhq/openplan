@@ -29,26 +29,29 @@ const (
 	TemplateApplyWorkflowName = "TemplateApplyWorkflow"
 	TemplateSyncWorkflowName  = "TemplateSyncWorkflow"
 
-	RecordTemplateRunStatusActivityName          = "RecordTemplateRunStatus"
-	RecordTemplateRunLogActivityName             = "RecordTemplateRunLog"
-	RecordTemplateRunStepActivityName            = "RecordTemplateRunStep"
-	RecordTemplateRunEventActivityName           = "RecordTemplateRunEvent"
-	RecordTemplateRegistrationStatusActivityName = "RecordTemplateRegistrationStatus"
-	RecordTemplateRegistrationStepActivityName   = "RecordTemplateRegistrationStep"
-	PrepareWorkspaceActivityName                 = "PrepareWorkspace"
-	FetchSourceActivityName                      = "FetchSource"
-	RunTerraformActivityName                     = "RunTerraform"
-	UploadLogActivityName                        = "UploadLog"
-	SyncTemplateActivityName                     = "SyncTemplate"
-	SealSourceTokenActivityName                  = "SealSourceToken"
-	SealRunCredentialsActivityName               = "SealRunCredentials" //nolint:gosec // an activity name, not a credential
-	ReleaseRunKeyActivityName                    = "ReleaseRunKey"
-	CleanupWorkspaceActivityName                 = "CleanupWorkspace"
-	SealPlanKeyActivityName                      = "SealPlanKey"
-	UploadPlanActivityName                       = "UploadPlan"
-	DownloadPlanActivityName                     = "DownloadPlan"
-	FinishPlanActivityName                       = "FinishPlan"
-	BeginApplyActivityName                       = "BeginApply"
+	RecordTemplateRunStatusActivityName = "RecordTemplateRunStatus"
+	RecordTemplateRunLogActivityName    = "RecordTemplateRunLog"
+	RecordTemplateRunStepActivityName   = "RecordTemplateRunStep"
+	RecordTemplateRunEventActivityName  = "RecordTemplateRunEvent"
+	// The sync activities keep the names they had when a sync was called a
+	// registration: recorded workflow histories name them, and a renamed
+	// activity would fail those histories on replay.
+	RecordTemplateSyncStatusActivityName = "RecordTemplateRegistrationStatus"
+	RecordTemplateSyncStepActivityName   = "RecordTemplateRegistrationStep"
+	PrepareWorkspaceActivityName         = "PrepareWorkspace"
+	FetchSourceActivityName              = "FetchSource"
+	RunTerraformActivityName             = "RunTerraform"
+	UploadLogActivityName                = "UploadLog"
+	SyncTemplateActivityName             = "SyncTemplate"
+	SealSourceTokenActivityName          = "SealSourceToken"
+	SealRunCredentialsActivityName       = "SealRunCredentials" //nolint:gosec // an activity name, not a credential
+	ReleaseRunKeyActivityName            = "ReleaseRunKey"
+	CleanupWorkspaceActivityName         = "CleanupWorkspace"
+	SealPlanKeyActivityName              = "SealPlanKey"
+	UploadPlanActivityName               = "UploadPlan"
+	DownloadPlanActivityName             = "DownloadPlan"
+	FinishPlanActivityName               = "FinishPlan"
+	BeginApplyActivityName               = "BeginApply"
 )
 
 const (
@@ -88,10 +91,11 @@ type TemplateRunWorkflowInput struct {
 	TenantID        TenantID
 	StackTemplateID StackTemplateID
 	Operation       OperationType
-	// SelectedRef is the ref the component was installed from. It is carried
-	// for provenance and log context only — what the run executes is
-	// ResolvedCommitSHA, because a ref can move between planning and applying.
-	SelectedRef string
+	// SourceRef is the desired revision's source_ref, copied when the run
+	// starts. What the run executes is ResolvedCommitSHA, because a ref can
+	// move between planning and applying; FetchSource checks the ref out only
+	// when the commit is empty.
+	SourceRef string
 	// ResolvedCommitSHA is the commit the desired revision resolved to, and the
 	// exact source a run checks out.
 	ResolvedCommitSHA string
@@ -225,7 +229,7 @@ type FetchSourceActivityInput struct {
 	WorkspacePath string
 	RepoOwner     string
 	RepoName      string
-	// SourceRef is the ref the component was installed from. It is only used
+	// SourceRef is the run's source ref, the revision's. It is only used
 	// when ResolvedCommitSHA is absent, which is true solely for runs queued
 	// before the commit was threaded through.
 	SourceRef string
@@ -394,51 +398,51 @@ type BeginApplyActivityOutput struct {
 
 // TemplateSyncWorkflowInput starts template metadata sync for a public GitHub template.
 type TemplateSyncWorkflowInput struct {
-	RegistrationID TemplateRegistrationID
-	TenantID       TenantID
-	// SourceTemplateID is the template the sync writes its revision into. The
+	SyncID   TemplateSyncID
+	TenantID TenantID
+	// TemplateID is the template the sync writes its revision into. The
 	// API made it when the template was registered; the sync never creates
 	// one, so a template deleted mid-sync stays deleted.
-	SourceTemplateID SourceTemplateID
-	RepoOwner        string
-	RepoName         string
-	SourceRef        string
-	RootPath         string
+	TemplateID TemplateID
+	RepoOwner  string
+	RepoName   string
+	SourceRef  string
+	RootPath   string
 }
 
-// TemplateSyncActivityInput asks the control plane to sync one template registration source.
+// TemplateSyncActivityInput asks the control plane to sync one template source.
 type TemplateSyncActivityInput struct {
-	RegistrationID   TemplateRegistrationID
-	TenantID         TenantID
-	SourceTemplateID SourceTemplateID
-	RepoOwner        string
-	RepoName         string
-	SourceRef        string
-	RootPath         string
+	SyncID     TemplateSyncID
+	TenantID   TenantID
+	TemplateID TemplateID
+	RepoOwner  string
+	RepoName   string
+	SourceRef  string
+	RootPath   string
 }
 
-// TemplateSyncActivityOutput reports the sync result for one registration source.
+// TemplateSyncActivityOutput reports the sync result for one template source.
 type TemplateSyncActivityOutput struct {
-	Status             TemplateRegistrationStatus
+	Status             TemplateSyncState
 	TemplateRevisionID TemplateRevisionID
 	ResolvedCommitSHA  string
 	ErrorSummary       string
 }
 
-// TemplateRegistrationStatusActivityInput asks the control plane to persist one registration status transition.
-type TemplateRegistrationStatusActivityInput struct {
-	RegistrationID     TemplateRegistrationID
+// TemplateSyncStatusActivityInput asks the control plane to persist one sync status transition.
+type TemplateSyncStatusActivityInput struct {
+	SyncID             TemplateSyncID
 	TenantID           TenantID
-	Status             TemplateRegistrationStatus
+	Status             TemplateSyncState
 	TemplateRevisionID TemplateRevisionID
 	ResolvedCommitSHA  string
 	ErrorSummary       string
 }
 
-// TemplateRegistrationStepActivityInput records the step a running sync has
+// TemplateSyncStepActivityInput records the step a running sync has
 // started.
-type TemplateRegistrationStepActivityInput struct {
-	RegistrationID TemplateRegistrationID
-	TenantID       TenantID
-	Step           TemplateRegistrationStep
+type TemplateSyncStepActivityInput struct {
+	SyncID   TemplateSyncID
+	TenantID TenantID
+	Step     TemplateSyncStep
 }

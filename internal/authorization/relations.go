@@ -157,17 +157,18 @@ var (
 	RelationParent = mustRelation("parent")
 	RelationRoot   = mustRelation("root")
 
-	RelationCanView         = mustRelation("can_view")
-	RelationCanOperate      = mustRelation("can_operate")
-	RelationCanApprove      = mustRelation("can_approve")
-	RelationCanManageAccess = mustRelation("can_manage_access")
+	RelationCanView              = mustRelation("can_view")
+	RelationCanOperate           = mustRelation("can_operate")
+	RelationCanApprove           = mustRelation("can_approve")
+	RelationCanManageAccess      = mustRelation("can_manage_access")
+	RelationCanManageCredentials = mustRelation("can_manage_credentials")
 
 	// Platform capabilities. Each gates a route; the tiers they derive from
 	// live in the model, not here, so re-tiering one never touches Go.
 	RelationCanAdminister           = mustRelation("can_administer")
 	RelationCanCreateStack          = mustRelation("can_create_stack")
 	RelationCanReadTemplate         = mustRelation("can_read_template")
-	RelationCanPublishTemplate      = mustRelation("can_publish_template")
+	RelationCanManageTemplates      = mustRelation("can_manage_templates")
 	RelationCanManagePlatformAccess = mustRelation("can_manage_platform_access")
 )
 

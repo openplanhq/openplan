@@ -20,7 +20,7 @@ type recordingWorkflowIntentDispatcher struct {
 	startApplyErr  error
 }
 
-func (d *recordingWorkflowIntentDispatcher) StartTemplateRun(_ context.Context, input domain.TemplateRunWorkflowInput) error {
+func (d *recordingWorkflowIntentDispatcher) StartTemplatePlan(_ context.Context, input domain.TemplateRunWorkflowInput) error {
 	d.startRunInput = input
 	return d.startRunErr
 }
@@ -53,7 +53,7 @@ func TestStartTemplateApplyHandlerDeliversCompleteInput(t *testing.T) {
 func TestStartTemplateSyncHandlerDeliversCompleteInput(t *testing.T) {
 	dispatcher := &recordingWorkflowIntentDispatcher{}
 	handler := NewStartTemplateSyncHandler(dispatcher)
-	payload := StartTemplateSyncPayload{RegistrationID: "registration_1", TenantID: "tenant_1", SourceTemplateID: "source_template_1", RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc"}
+	payload := StartTemplateSyncPayload{SyncID: "registration_1", TenantID: "tenant_1", TemplateID: "source_template_1", RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc"}
 
 	if _, err := handler.Deliver(context.Background(), queue.Item{Payload: marshalWorkflowIntentPayload(t, payload)}); err != nil {
 		t.Fatalf("Deliver() error = %v", err)
@@ -65,8 +65,8 @@ func TestStartTemplateSyncHandlerDeliversCompleteInput(t *testing.T) {
 
 func TestStartTemplateRunHandlerDeliversCompleteInput(t *testing.T) {
 	dispatcher := &recordingWorkflowIntentDispatcher{}
-	handler := NewStartTemplateRunHandler(dispatcher)
-	payload := StartTemplateRunPayload{RunID: "run_1", TenantID: "tenant_1", StackTemplateID: "template_1", Operation: "apply", SelectedRef: "main", WorkspaceName: "workspace", RepoOwner: "owner", RepoName: "repo", RootPath: "module", ConfigJSON: json.RawMessage(`{"x":true}`)}
+	handler := NewStartTemplatePlanHandler(dispatcher)
+	payload := StartTemplatePlanPayload{RunID: "run_1", TenantID: "tenant_1", StackTemplateID: "template_1", Operation: "apply", SourceRef: "main", WorkspaceName: "workspace", RepoOwner: "owner", RepoName: "repo", RootPath: "module", ConfigJSON: json.RawMessage(`{"x":true}`)}
 
 	followUps, err := handler.Deliver(context.Background(), queue.Item{Payload: marshalWorkflowIntentPayload(t, payload)})
 	if err != nil {
@@ -87,7 +87,7 @@ func TestStartTemplateAndSignalRunHandlersPropagateDispatcherErrors(t *testing.T
 		handler queue.Handler
 		payload any
 	}{
-		{"start run", NewStartTemplateRunHandler(&recordingWorkflowIntentDispatcher{startRunErr: want}), StartTemplateRunPayload{}},
+		{"start run", NewStartTemplatePlanHandler(&recordingWorkflowIntentDispatcher{startRunErr: want}), StartTemplatePlanPayload{}},
 		{"start sync", NewStartTemplateSyncHandler(&recordingWorkflowIntentDispatcher{startSyncErr: want}), StartTemplateSyncPayload{}},
 		{"start apply", NewStartTemplateApplyHandler(&recordingWorkflowIntentDispatcher{startApplyErr: want}), StartTemplateApplyPayload{}},
 	}
@@ -107,8 +107,8 @@ func TestStartTemplateSpecsUseFrozenKeysAndRejectMalformedPayloads(t *testing.T)
 		payload any
 		want    string
 	}{
-		{StartTemplateRunSpec, StartTemplateRunPayload{TenantID: "tenant_1", RunID: "run_1"}, "run:tenant_1/run_1"},
-		{StartTemplateSyncSpec, StartTemplateSyncPayload{TenantID: "tenant_1", RegistrationID: "registration_1"}, "registration:tenant_1/registration_1"},
+		{StartTemplatePlanSpec, StartTemplatePlanPayload{TenantID: "tenant_1", RunID: "run_1"}, "run:tenant_1/run_1"},
+		{StartTemplateSyncSpec, StartTemplateSyncPayload{TenantID: "tenant_1", SyncID: "registration_1"}, "sync:tenant_1/registration_1"},
 		{StartTemplateApplySpec, StartTemplateApplyPayload{TenantID: "tenant_1", RunID: "run_1"}, "run:tenant_1/run_1"},
 	}
 	for _, tt := range tests {

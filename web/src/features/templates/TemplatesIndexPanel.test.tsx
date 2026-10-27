@@ -18,14 +18,14 @@ function seed(revisions: TemplateRevision[]): QueryClient {
   return queryClient;
 }
 
-function renderIndex(queryClient: QueryClient, canPublishTemplate = true) {
+function renderIndex(queryClient: QueryClient, canManageTemplates = true) {
   const router = createMemoryRouter(
     [{ path: "/templates", element: <TemplatesPage />, children: [{ index: true, element: <TemplatesIndexPanel /> }] }],
     { initialEntries: ["/templates"] }
   );
   render(
     <QueryClientProvider client={queryClient}>
-      <AuthContext.Provider value={authValue(canPublishTemplate)}>
+      <AuthContext.Provider value={authValue(canManageTemplates)}>
         <RouterProvider router={router} />
       </AuthContext.Provider>
     </QueryClientProvider>
@@ -43,7 +43,7 @@ afterEach(() => {
 
 describe("TemplatesIndexPanel", () => {
   it("shows the first template on its Variables tab", () => {
-    renderIndex(seed([revision(), revision({ id: "rev_net", source_template_id: "tpl_net", name: "network" })]));
+    renderIndex(seed([revision(), revision({ id: "rev_net", template_id: "tpl_net", name: "network" })]));
 
     expect(screen.getByRole("heading", { level: 2, name: "eks" })).toBeTruthy();
     expect(screen.getByTestId("template-variable-cluster_name")).toBeTruthy();
@@ -70,7 +70,7 @@ describe("TemplatesIndexPanel", () => {
   // Through the API client, not the cache: the list, then the first
   // template's revisions and its latest revision's variables.
   it("reads the templates, then the first one's revisions, and filters them", async () => {
-    const revisions = [revision(), revision({ id: "rev_net", source_template_id: "tpl_net", name: "network", root_path: "aws/network" })];
+    const revisions = [revision(), revision({ id: "rev_net", template_id: "tpl_net", name: "network", root_path: "aws/network" })];
     vi.mocked(globalThis.fetch).mockImplementation(async (input) => {
       if (String(input).endsWith("/variables")) return jsonResponse([]);
       return templateReadResponse(input, revisions) ?? jsonResponse({ type: "about:blank", title: "Not Found" }, 404);

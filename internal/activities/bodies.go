@@ -61,7 +61,7 @@ type uploadLogRequest struct {
 	Store    config.ArtifactStoreConfig
 	TenantID domain.TenantID
 	RunID    domain.TemplateRunID
-	Phase    string
+	Name     string
 	LogsDir  string
 	FileName string
 	// ChangesFileName is the plan's resource changes RunTerraform wrote
@@ -177,7 +177,7 @@ func (b *Bodies) uploadLog(ctx context.Context, request uploadLogRequest, _ io.W
 	if changes, ok := files[request.ChangesFileName]; ok && request.ChangesFileName != "" && stores.changes != nil {
 		_ = stores.changes.PutPlanChanges(ctx, request.TenantID, request.RunID, changes)
 	}
-	return stores.logs.PutTemplateRunLog(ctx, request.TenantID, request.RunID, request.Phase, bytes.NewReader(content))
+	return stores.logs.PutTemplateRunLog(ctx, request.TenantID, request.RunID, request.Name, bytes.NewReader(content))
 }
 
 func (b *Bodies) uploadPlan(ctx context.Context, request planRequest, _ io.Writer) (struct{}, error) {

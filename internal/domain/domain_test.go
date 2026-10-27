@@ -84,15 +84,15 @@ func TestTemplateRevisionStatusValid(t *testing.T) {
 	}
 }
 
-func TestTemplateRegistrationStatusValid(t *testing.T) {
+func TestTemplateSyncStatusValid(t *testing.T) {
 	t.Parallel()
 
-	validStatuses := []TemplateRegistrationStatus{
-		TemplateRegistrationPending,
-		TemplateRegistrationRunning,
-		TemplateRegistrationCompleted,
-		TemplateRegistrationInvalid,
-		TemplateRegistrationFailed,
+	validStatuses := []TemplateSyncState{
+		TemplateSyncStatePending,
+		TemplateSyncStateRunning,
+		TemplateSyncStateCompleted,
+		TemplateSyncStateInvalid,
+		TemplateSyncStateFailed,
 	}
 
 	for _, status := range validStatuses {
@@ -105,8 +105,8 @@ func TestTemplateRegistrationStatusValid(t *testing.T) {
 		})
 	}
 
-	if TemplateRegistrationStatus("queued").Valid() {
-		t.Fatal("expected unknown template registration status to be invalid")
+	if TemplateSyncState("queued").Valid() {
+		t.Fatal("expected unknown template sync status to be invalid")
 	}
 }
 
@@ -258,8 +258,8 @@ func TestTemplateSyncActivityNames(t *testing.T) {
 		t.Fatalf("SyncTemplateActivityName = %q", SyncTemplateActivityName)
 	}
 
-	if RecordTemplateRegistrationStatusActivityName != "RecordTemplateRegistrationStatus" {
-		t.Fatalf("RecordTemplateRegistrationStatusActivityName = %q", RecordTemplateRegistrationStatusActivityName)
+	if RecordTemplateSyncStatusActivityName != "RecordTemplateRegistrationStatus" {
+		t.Fatalf("RecordTemplateSyncStatusActivityName = %q", RecordTemplateSyncStatusActivityName)
 	}
 }
 
@@ -279,7 +279,7 @@ func TestTemplateRunWorkflowInputUsesTraitTypes(t *testing.T) {
 		TenantID:        TenantID("tenant_123"),
 		StackTemplateID: StackTemplateID("stack_template_123"),
 		Operation:       OperationDestroy,
-		SelectedRef:     "main",
+		SourceRef:       "main",
 		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
 		RepoOwner:       "acme",
 		RepoName:        "infra",
@@ -299,28 +299,28 @@ func TestTemplateRunWorkflowInputUsesTraitTypes(t *testing.T) {
 	}
 }
 
-func TestTemplateSyncWorkflowInputUsesRegistrationSource(t *testing.T) {
+func TestTemplateSyncWorkflowInputUsesSyncSource(t *testing.T) {
 	t.Parallel()
 
 	input := TemplateSyncWorkflowInput{
-		RegistrationID: templateRegistrationID("template_registration_123"),
-		TenantID:       TenantID("tenant_123"),
-		RepoOwner:      "acme",
-		RepoName:       "infra",
-		SourceRef:      "v0.0.1",
-		RootPath:       "modules/vpc",
+		SyncID:    templateSyncID("template_sync_123"),
+		TenantID:  TenantID("tenant_123"),
+		RepoOwner: "acme",
+		RepoName:  "infra",
+		SourceRef: "v0.0.1",
+		RootPath:  "modules/vpc",
 	}
 
-	if input.RegistrationID == "" {
-		t.Fatal("expected registration id to be carried into workflow input")
+	if input.SyncID == "" {
+		t.Fatal("expected sync id to be carried into workflow input")
 	}
 	if input.SourceRef != "v0.0.1" {
 		t.Fatalf("SourceRef = %q, want v0.0.1", input.SourceRef)
 	}
 }
 
-func templateRegistrationID(id string) TemplateRegistrationID {
-	return TemplateRegistrationID(id)
+func templateSyncID(id string) TemplateSyncID {
+	return TemplateSyncID(id)
 }
 
 func TestTemplateRunStepValid(t *testing.T) {
@@ -338,15 +338,15 @@ func TestTemplateRunStepValid(t *testing.T) {
 	}
 }
 
-func TestTemplateRegistrationStepValid(t *testing.T) {
+func TestTemplateSyncStepValid(t *testing.T) {
 	t.Parallel()
 
-	for _, step := range AllTemplateRegistrationSteps {
+	for _, step := range AllTemplateSyncSteps {
 		if !step.Valid() {
 			t.Errorf("%q is listed but not valid", step)
 		}
 	}
-	for _, step := range []TemplateRegistrationStep{"", "cloning", "running"} {
+	for _, step := range []TemplateSyncStep{"", "cloning", "running"} {
 		if step.Valid() {
 			t.Errorf("%q is valid, want invalid", step)
 		}
@@ -440,23 +440,23 @@ func TestTerraformCommandLine(t *testing.T) {
 	}
 }
 
-func TestSourceTemplateIDFor(t *testing.T) {
+func TestTemplateIDFor(t *testing.T) {
 	t.Parallel()
 
 	// The id the sync activity has always minted for this source. Templates
 	// already stored carry it, so the derivation must not change.
-	const want = SourceTemplateID("source_template_274b58d326ef98db04ed1a6ec6258d92")
-	if got := SourceTemplateIDFor("tenant_123", "acme", "infra", "modules/vpc", "main"); got != want {
-		t.Fatalf("SourceTemplateIDFor() = %q, want %q", got, want)
+	const want = TemplateID("template_274b58d326ef98db04ed1a6ec6258d92")
+	if got := TemplateIDFor("tenant_123", "acme", "infra", "modules/vpc", "main"); got != want {
+		t.Fatalf("TemplateIDFor() = %q, want %q", got, want)
 	}
 
 	// Each part of the source names a different template, including a
 	// boundary moved between two parts.
-	others := []SourceTemplateID{
-		SourceTemplateIDFor("tenant_456", "acme", "infra", "modules/vpc", "main"),
-		SourceTemplateIDFor("tenant_123", "acme", "infra", "modules/vpc", "dev"),
-		SourceTemplateIDFor("tenant_123", "acme", "infra", "modules/db", "main"),
-		SourceTemplateIDFor("tenant_123", "acmei", "nfra", "modules/vpc", "main"),
+	others := []TemplateID{
+		TemplateIDFor("tenant_456", "acme", "infra", "modules/vpc", "main"),
+		TemplateIDFor("tenant_123", "acme", "infra", "modules/vpc", "dev"),
+		TemplateIDFor("tenant_123", "acme", "infra", "modules/db", "main"),
+		TemplateIDFor("tenant_123", "acmei", "nfra", "modules/vpc", "main"),
 	}
 	for _, other := range others {
 		if other == want {
@@ -490,19 +490,19 @@ func TestLatestTemplateSyncStatusAt(t *testing.T) {
 
 	for _, test := range []struct {
 		name                    string
-		status                  TemplateRegistrationStatus
+		status                  TemplateSyncState
 		revisionPredatesRequest bool
 		now                     time.Time
 		want                    TemplateSyncStatus
 	}{
-		{name: "pending, fresh", status: TemplateRegistrationPending, now: justUnderStall, want: TemplateSyncSyncing},
-		{name: "running, fresh", status: TemplateRegistrationRunning, now: justUnderStall, want: TemplateSyncSyncing},
-		{name: "pending, at the threshold", status: TemplateRegistrationPending, now: atStall, want: TemplateSyncStalled},
-		{name: "running, past the threshold", status: TemplateRegistrationRunning, now: atStall.Add(time.Hour), want: TemplateSyncStalled},
-		{name: "completed on a new revision", status: TemplateRegistrationCompleted, now: atStall, want: TemplateSyncSynced},
-		{name: "completed on a revision it already had", status: TemplateRegistrationCompleted, revisionPredatesRequest: true, now: justUnderStall, want: TemplateSyncUpToDate},
-		{name: "invalid", status: TemplateRegistrationInvalid, now: atStall, want: TemplateSyncInvalid},
-		{name: "failed", status: TemplateRegistrationFailed, now: justUnderStall, want: TemplateSyncFailed},
+		{name: "pending, fresh", status: TemplateSyncStatePending, now: justUnderStall, want: TemplateSyncSyncing},
+		{name: "running, fresh", status: TemplateSyncStateRunning, now: justUnderStall, want: TemplateSyncSyncing},
+		{name: "pending, at the threshold", status: TemplateSyncStatePending, now: atStall, want: TemplateSyncStalled},
+		{name: "running, past the threshold", status: TemplateSyncStateRunning, now: atStall.Add(time.Hour), want: TemplateSyncStalled},
+		{name: "completed on a new revision", status: TemplateSyncStateCompleted, now: atStall, want: TemplateSyncSynced},
+		{name: "completed on a revision it already had", status: TemplateSyncStateCompleted, revisionPredatesRequest: true, now: justUnderStall, want: TemplateSyncUpToDate},
+		{name: "invalid", status: TemplateSyncStateInvalid, now: atStall, want: TemplateSyncInvalid},
+		{name: "failed", status: TemplateSyncStateFailed, now: justUnderStall, want: TemplateSyncFailed},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()

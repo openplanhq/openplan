@@ -10,7 +10,7 @@ import RegisterTemplatePanel from "./RegisterTemplatePanel";
 import TemplatesPage from "./TemplatesPage";
 import { authValue, jsonResponse, latestSync, revision, seedTemplates, template, templateReadResponse, TENANT, testQueryClient } from "./testSupport";
 
-const added = revision({ id: "rev_9", source_template_id: "tpl_9", repo_name: "edge", root_path: "." });
+const added = revision({ id: "rev_9", template_id: "tpl_9", repo_name: "edge", root_path: "." });
 
 // A fake API. Registering answers with templateID syncing; each read of it
 // answers the next of polled, the last one from then on; the list and the
@@ -44,8 +44,8 @@ function serve({
 }
 
 function Opened() {
-  const { sourceTemplateId = "" } = useParams<{ sourceTemplateId: string }>();
-  return <p data-testid="opened">{sourceTemplateId}</p>;
+  const { templateId = "" } = useParams<{ templateId: string }>();
+  return <p data-testid="opened">{templateId}</p>;
 }
 
 function seed(): QueryClient {
@@ -59,7 +59,7 @@ function renderPanel(queryClient: QueryClient) {
     [
       { path: "/templates", element: <p data-testid="templates-stub">templates</p> },
       { path: "/templates/new", element: <RegisterTemplatePanel /> },
-      { path: "/templates/:sourceTemplateId/variables", element: <Opened /> }
+      { path: "/templates/:templateId/variables", element: <Opened /> }
     ],
     { initialEntries: ["/templates/new"] }
   );
@@ -83,7 +83,7 @@ function renderInPage(queryClient: QueryClient) {
         element: <TemplatesPage />,
         children: [
           { path: "new", element: <RegisterTemplatePanel /> },
-          { path: ":sourceTemplateId/variables", element: <Opened /> }
+          { path: ":templateId/variables", element: <Opened /> }
         ]
       }
     ],

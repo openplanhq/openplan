@@ -15,37 +15,37 @@ import (
 	gitrunner "github.com/vishu42/openplan/internal/runner"
 )
 
-func TestRecordTemplateRegistrationStatusDelegatesToRecorder(t *testing.T) {
+func TestRecordTemplateSyncStatusDelegatesToRecorder(t *testing.T) {
 	t.Parallel()
 
 	store := &recordingTemplateSyncStore{}
 	activities := NewTemplateSyncActivities(store)
-	input := domain.TemplateRegistrationStatusActivityInput{
-		RegistrationID: domain.TemplateRegistrationID("template_registration_123"),
-		TenantID:       domain.TenantID("tenant_123"),
-		Status:         domain.TemplateRegistrationRunning,
+	input := domain.TemplateSyncStatusActivityInput{
+		SyncID:   domain.TemplateSyncID("template_sync_123"),
+		TenantID: domain.TenantID("tenant_123"),
+		Status:   domain.TemplateSyncStateRunning,
 	}
 
-	if err := activities.RecordTemplateRegistrationStatus(context.Background(), input); err != nil {
-		t.Fatalf("RecordTemplateRegistrationStatus returned error: %v", err)
+	if err := activities.RecordTemplateSyncStatus(context.Background(), input); err != nil {
+		t.Fatalf("RecordTemplateSyncStatus returned error: %v", err)
 	}
 	if store.statusInput != input {
 		t.Fatalf("status input = %#v, want %#v", store.statusInput, input)
 	}
 }
 
-func TestRecordTemplateRegistrationStepDelegatesToTheStore(t *testing.T) {
+func TestRecordTemplateSyncStepDelegatesToTheStore(t *testing.T) {
 	t.Parallel()
 
 	store := &recordingTemplateSyncStore{}
-	input := domain.TemplateRegistrationStepActivityInput{
-		RegistrationID: domain.TemplateRegistrationID("template_registration_123"),
-		TenantID:       domain.TenantID("tenant_123"),
-		Step:           domain.TemplateRegistrationStepSyncing,
+	input := domain.TemplateSyncStepActivityInput{
+		SyncID:   domain.TemplateSyncID("template_sync_123"),
+		TenantID: domain.TenantID("tenant_123"),
+		Step:     domain.TemplateSyncStepSyncing,
 	}
 
-	if err := NewTemplateSyncActivities(store).RecordTemplateRegistrationStep(context.Background(), input); err != nil {
-		t.Fatalf("RecordTemplateRegistrationStep returned error: %v", err)
+	if err := NewTemplateSyncActivities(store).RecordTemplateSyncStep(context.Background(), input); err != nil {
+		t.Fatalf("RecordTemplateSyncStep returned error: %v", err)
 	}
 	if store.stepInput != input {
 		t.Fatalf("step input = %#v, want %#v", store.stepInput, input)
@@ -85,19 +85,19 @@ variable "cidr" {
 	activities := newTestTemplateSyncActivities(t, store, git)
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		RegistrationID:   domain.TemplateRegistrationID("template_registration_123"),
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "acme",
-		RepoName:         "infra-templates",
-		SourceRef:        "v0.0.1",
-		RootPath:         "modules/vpc",
+		SyncID:     domain.TemplateSyncID("template_sync_123"),
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "infra-templates",
+		SourceRef:  "v0.0.1",
+		RootPath:   "modules/vpc",
 	})
 	if err != nil {
 		t.Fatalf("SyncTemplate returned error: %v", err)
 	}
 
-	if output.Status != domain.TemplateRegistrationCompleted {
+	if output.Status != domain.TemplateSyncStateCompleted {
 		t.Fatalf("status = %q, want completed", output.Status)
 	}
 	if output.ResolvedCommitSHA != "abc123" {
@@ -134,17 +134,17 @@ func TestSyncTemplateRejectsUnsafeRootPath(t *testing.T) {
 	activities := newTestTemplateSyncActivities(t, store, git)
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "acme",
-		RepoName:         "infra-templates",
-		SourceRef:        "v0.0.1",
-		RootPath:         "../secret",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "infra-templates",
+		SourceRef:  "v0.0.1",
+		RootPath:   "../secret",
 	})
 	if err != nil {
 		t.Fatalf("SyncTemplate returned error: %v", err)
 	}
-	if output.Status != domain.TemplateRegistrationInvalid {
+	if output.Status != domain.TemplateSyncStateInvalid {
 		t.Fatalf("status = %q, want invalid", output.Status)
 	}
 	if !strings.Contains(output.ErrorSummary, "root path") {
@@ -169,17 +169,17 @@ func TestSyncTemplateSupportsRepositoryRootPath(t *testing.T) {
 	activities := newTestTemplateSyncActivities(t, store, git)
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "acme",
-		RepoName:         "infra-templates",
-		SourceRef:        "v0.0.1",
-		RootPath:         ".",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "infra-templates",
+		SourceRef:  "v0.0.1",
+		RootPath:   ".",
 	})
 	if err != nil {
 		t.Fatalf("SyncTemplate returned error: %v", err)
 	}
-	if output.Status != domain.TemplateRegistrationCompleted {
+	if output.Status != domain.TemplateSyncStateCompleted {
 		t.Fatalf("status = %q, want completed", output.Status)
 	}
 	if store.template.RootPath != "." {
@@ -213,17 +213,17 @@ variable "password" {
 	activities := newTestTemplateSyncActivities(t, store, git)
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "acme",
-		RepoName:         "infra-templates",
-		SourceRef:        "v0.0.1",
-		RootPath:         "modules/db",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "infra-templates",
+		SourceRef:  "v0.0.1",
+		RootPath:   "modules/db",
 	})
 	if err != nil {
 		t.Fatalf("SyncTemplate returned error: %v", err)
 	}
-	if output.Status != domain.TemplateRegistrationInvalid {
+	if output.Status != domain.TemplateSyncStateInvalid {
 		t.Fatalf("status = %q, want invalid", output.Status)
 	}
 	if !strings.Contains(output.ErrorSummary, "sensitive variables") {
@@ -258,12 +258,12 @@ func TestSyncTemplateReturnsExistingImmutableTemplate(t *testing.T) {
 	activities := newTestTemplateSyncActivities(t, store, git)
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "acme",
-		RepoName:         "infra-templates",
-		SourceRef:        "v0.0.1",
-		RootPath:         "modules/vpc",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "infra-templates",
+		SourceRef:  "v0.0.1",
+		RootPath:   "modules/vpc",
 	})
 	if err != nil {
 		t.Fatalf("SyncTemplate returned error: %v", err)
@@ -282,21 +282,21 @@ func TestSyncTemplateWritesIntoTheTemplateItWasGiven(t *testing.T) {
 	activities := newTestTemplateSyncActivities(t, store, vpcTemplateGit(t))
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_given"),
-		RepoOwner:        "acme",
-		RepoName:         "infra-templates",
-		SourceRef:        "v0.0.1",
-		RootPath:         "modules/vpc",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_given"),
+		RepoOwner:  "acme",
+		RepoName:   "infra-templates",
+		SourceRef:  "v0.0.1",
+		RootPath:   "modules/vpc",
 	})
 	if err != nil {
 		t.Fatalf("SyncTemplate returned error: %v", err)
 	}
-	if output.Status != domain.TemplateRegistrationCompleted {
+	if output.Status != domain.TemplateSyncStateCompleted {
 		t.Fatalf("status = %q, want completed (%s)", output.Status, output.ErrorSummary)
 	}
-	if store.template.SourceTemplateID != "source_template_given" {
-		t.Fatalf("revision source template ID = %q, want source_template_given", store.template.SourceTemplateID)
+	if store.template.TemplateID != "source_template_given" {
+		t.Fatalf("revision template ID = %q, want source_template_given", store.template.TemplateID)
 	}
 }
 
@@ -319,7 +319,7 @@ func TestSyncTemplateWithoutATemplateIsInvalid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SyncTemplate returned error: %v", err)
 	}
-	if output.Status != domain.TemplateRegistrationInvalid {
+	if output.Status != domain.TemplateSyncStateInvalid {
 		t.Fatalf("status = %q, want invalid", output.Status)
 	}
 	if git.calls != 0 {
@@ -336,22 +336,22 @@ func TestSyncTemplateIntoADeletedTemplateIsInvalid(t *testing.T) {
 	t.Parallel()
 
 	store := &recordingTemplateSyncStore{
-		upsertErr: fmt.Errorf("source template source_template_123: %w", os.ErrNotExist),
+		upsertErr: fmt.Errorf("template source_template_123: %w", os.ErrNotExist),
 	}
 	activities := newTestTemplateSyncActivities(t, store, vpcTemplateGit(t))
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "acme",
-		RepoName:         "infra-templates",
-		SourceRef:        "v0.0.1",
-		RootPath:         "modules/vpc",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "infra-templates",
+		SourceRef:  "v0.0.1",
+		RootPath:   "modules/vpc",
 	})
 	if err != nil {
 		t.Fatalf("SyncTemplate returned error: %v", err)
 	}
-	if output.Status != domain.TemplateRegistrationInvalid {
+	if output.Status != domain.TemplateSyncStateInvalid {
 		t.Fatalf("status = %q, want invalid", output.Status)
 	}
 	if output.ErrorSummary != "template was deleted" {
@@ -369,12 +369,12 @@ func TestSyncTemplateReturnsOtherStoreFailures(t *testing.T) {
 	activities := newTestTemplateSyncActivities(t, store, vpcTemplateGit(t))
 
 	_, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "acme",
-		RepoName:         "infra-templates",
-		SourceRef:        "v0.0.1",
-		RootPath:         "modules/vpc",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "infra-templates",
+		SourceRef:  "v0.0.1",
+		RootPath:   "modules/vpc",
 	})
 	if !errors.Is(err, storeErr) {
 		t.Fatalf("error = %v, want %v", err, storeErr)
@@ -398,16 +398,16 @@ func vpcTemplateGit(t *testing.T) *fakeGit {
 }
 
 type recordingTemplateSyncStore struct {
-	statusInput    domain.TemplateRegistrationStatusActivityInput
+	statusInput    domain.TemplateSyncStatusActivityInput
 	statusErr      error
-	stepInput      domain.TemplateRegistrationStepActivityInput
+	stepInput      domain.TemplateSyncStepActivityInput
 	template       domain.TemplateRevision
 	variables      []domain.TemplateVariable
 	upsertTemplate domain.TemplateRevision
 	upsertErr      error
 }
 
-func (store *recordingTemplateSyncStore) RecordTemplateRegistrationStatus(_ context.Context, input domain.TemplateRegistrationStatusActivityInput) error {
+func (store *recordingTemplateSyncStore) RecordTemplateSyncStatus(_ context.Context, input domain.TemplateSyncStatusActivityInput) error {
 	if store.statusErr != nil {
 		return store.statusErr
 	}
@@ -415,7 +415,7 @@ func (store *recordingTemplateSyncStore) RecordTemplateRegistrationStatus(_ cont
 	return nil
 }
 
-func (store *recordingTemplateSyncStore) RecordTemplateRegistrationStep(_ context.Context, input domain.TemplateRegistrationStepActivityInput) error {
+func (store *recordingTemplateSyncStore) RecordTemplateSyncStep(_ context.Context, input domain.TemplateSyncStepActivityInput) error {
 	store.stepInput = input
 	return nil
 }
@@ -459,12 +459,12 @@ func TestSyncTemplatePassesInstallationTokenToClone(t *testing.T) {
 	activities := newTestTemplateSyncActivities(t, store, git, WithTemplateSyncTokenSource(stubTokenSource{token: "ghs_minted"}))
 
 	if _, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "acme",
-		RepoName:         "private-infra",
-		SourceRef:        "main",
-		RootPath:         "modules/vpc",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "private-infra",
+		SourceRef:  "main",
+		RootPath:   "modules/vpc",
 	}); err != nil {
 		t.Fatalf("SyncTemplate returned error: %v", err)
 	}
@@ -488,18 +488,18 @@ func TestSyncTemplateReportsUninstalledApp(t *testing.T) {
 	activities := newTestTemplateSyncActivities(t, store, &fakeGit{head: "abc123", err: cloneErr}, WithTemplateSyncTokenSource(stubTokenSource{err: githubapp.ErrAppNotInstalled}))
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "acme",
-		RepoName:         "private-infra",
-		SourceRef:        "main",
-		RootPath:         "modules/vpc",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "private-infra",
+		SourceRef:  "main",
+		RootPath:   "modules/vpc",
 	})
 	if err != nil {
 		t.Fatalf("SyncTemplate returned error: %v", err)
 	}
-	if output.Status != domain.TemplateRegistrationInvalid {
-		t.Fatalf("status = %q, want %q", output.Status, domain.TemplateRegistrationInvalid)
+	if output.Status != domain.TemplateSyncStateInvalid {
+		t.Fatalf("status = %q, want %q", output.Status, domain.TemplateSyncStateInvalid)
 	}
 	if !strings.Contains(output.ErrorSummary, cloneErr.Error()) {
 		t.Fatalf("summary = %q, want the underlying clone failure", output.ErrorSummary)
@@ -525,17 +525,17 @@ func TestSyncTemplateSucceedsWithZeroCredentialWhenAppNotInstalled(t *testing.T)
 	activities := newTestTemplateSyncActivities(t, store, git, WithTemplateSyncTokenSource(stubTokenSource{err: githubapp.ErrAppNotInstalled}))
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "hashicorp",
-		RepoName:         "terraform-aws-modules",
-		SourceRef:        "main",
-		RootPath:         "modules/vpc",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "hashicorp",
+		RepoName:   "terraform-aws-modules",
+		SourceRef:  "main",
+		RootPath:   "modules/vpc",
 	})
 	if err != nil {
 		t.Fatalf("SyncTemplate returned error: %v", err)
 	}
-	if output.Status != domain.TemplateRegistrationCompleted {
+	if output.Status != domain.TemplateSyncStateCompleted {
 		t.Fatalf("status = %q, want completed; summary = %q", output.Status, output.ErrorSummary)
 	}
 	if git.token != "" {
@@ -554,17 +554,17 @@ func TestSyncTemplateSucceedsWithZeroCredentialWhenTokenLookupFails(t *testing.T
 	activities := newTestTemplateSyncActivities(t, &recordingTemplateSyncStore{}, git, WithTemplateSyncTokenSource(stubTokenSource{err: errors.New("resolve installation: unexpected status 503 Service Unavailable")}))
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "hashicorp",
-		RepoName:         "terraform-aws-modules",
-		SourceRef:        "main",
-		RootPath:         "modules/vpc",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "hashicorp",
+		RepoName:   "terraform-aws-modules",
+		SourceRef:  "main",
+		RootPath:   "modules/vpc",
 	})
 	if err != nil {
 		t.Fatalf("SyncTemplate returned error: %v", err)
 	}
-	if output.Status != domain.TemplateRegistrationCompleted {
+	if output.Status != domain.TemplateSyncStateCompleted {
 		t.Fatalf("status = %q, want completed; summary = %q", output.Status, output.ErrorSummary)
 	}
 	if git.token != "" {
@@ -573,7 +573,7 @@ func TestSyncTemplateSucceedsWithZeroCredentialWhenTokenLookupFails(t *testing.T
 }
 
 // A clone that failed while the token lookup was also failing is an
-// infrastructure failure, not a bad registration, so it must come back as an
+// infrastructure failure, not a bad sync, so it must come back as an
 // error rather than a terminal Invalid outcome. Reporting it as an outcome
 // tells Temporal the activity succeeded and silently strips the four attempts
 // syncRetryPolicy grants -- which is exactly the retry Temporal exists to own.
@@ -588,12 +588,12 @@ func TestSyncTemplateRetriesWhenTokenLookupFailedAndCloneFailed(t *testing.T) {
 	activities := newTestTemplateSyncActivities(t, &recordingTemplateSyncStore{}, &fakeGit{head: "abc123", err: cloneErr}, WithTemplateSyncTokenSource(stubTokenSource{err: lookupErr}))
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "acme",
-		RepoName:         "private-infra",
-		SourceRef:        "main",
-		RootPath:         "modules/vpc",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "private-infra",
+		SourceRef:  "main",
+		RootPath:   "modules/vpc",
 	})
 	if err == nil {
 		t.Fatalf("SyncTemplate returned nil error; want a retryable failure (status = %q, summary = %q)", output.Status, output.ErrorSummary)
@@ -620,18 +620,18 @@ func TestSyncTemplateReportsPlainCloneFailureAsInvalid(t *testing.T) {
 	activities := newTestTemplateSyncActivities(t, &recordingTemplateSyncStore{}, &fakeGit{head: "abc123", err: cloneErr})
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "acme",
-		RepoName:         "no-such-repo",
-		SourceRef:        "main",
-		RootPath:         "modules/vpc",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "no-such-repo",
+		SourceRef:  "main",
+		RootPath:   "modules/vpc",
 	})
 	if err != nil {
 		t.Fatalf("SyncTemplate returned error %v; want a terminal invalid outcome", err)
 	}
-	if output.Status != domain.TemplateRegistrationInvalid {
-		t.Fatalf("status = %q, want %q", output.Status, domain.TemplateRegistrationInvalid)
+	if output.Status != domain.TemplateSyncStateInvalid {
+		t.Fatalf("status = %q, want %q", output.Status, domain.TemplateSyncStateInvalid)
 	}
 	if !strings.Contains(output.ErrorSummary, cloneErr.Error()) {
 		t.Fatalf("summary = %q, want the underlying clone failure", output.ErrorSummary)
@@ -651,17 +651,17 @@ func TestSyncTemplateRejectsUnsafeRepoIdentifiers(t *testing.T) {
 
 	for _, owner := range []string{"acme/evil", "acme?x=1", "acme#frag", "acme corp", "acme\nx"} {
 		output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-			TenantID:         domain.TenantID("tenant_123"),
-			SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-			RepoOwner:        owner,
-			RepoName:         "infra",
-			SourceRef:        "main",
-			RootPath:         ".",
+			TenantID:   domain.TenantID("tenant_123"),
+			TemplateID: domain.TemplateID("source_template_123"),
+			RepoOwner:  owner,
+			RepoName:   "infra",
+			SourceRef:  "main",
+			RootPath:   ".",
 		})
 		if err != nil {
 			t.Fatalf("SyncTemplate(%q) returned error: %v", owner, err)
 		}
-		if output.Status != domain.TemplateRegistrationInvalid {
+		if output.Status != domain.TemplateSyncStateInvalid {
 			t.Fatalf("SyncTemplate(%q) status = %q, want invalid", owner, output.Status)
 		}
 	}
@@ -780,17 +780,17 @@ func TestSyncTemplateStripsWorkspacePathFromInvalidOutcomes(t *testing.T) {
 			activities.git = gitrunner.NewLocalGitRunnerWithExecutor(test.git)
 
 			output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-				TenantID:         domain.TenantID("tenant_123"),
-				SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-				RepoOwner:        "acme",
-				RepoName:         "infra-templates",
-				SourceRef:        "nope",
-				RootPath:         test.rootPath,
+				TenantID:   domain.TenantID("tenant_123"),
+				TemplateID: domain.TemplateID("source_template_123"),
+				RepoOwner:  "acme",
+				RepoName:   "infra-templates",
+				SourceRef:  "nope",
+				RootPath:   test.rootPath,
 			})
 			if err != nil {
 				t.Fatalf("SyncTemplate returned error: %v", err)
 			}
-			if output.Status != domain.TemplateRegistrationInvalid {
+			if output.Status != domain.TemplateSyncStateInvalid {
 				t.Fatalf("status = %q, want invalid", output.Status)
 			}
 			if strings.Contains(output.ErrorSummary, "openplan-template-sync-") {
@@ -803,7 +803,7 @@ func TestSyncTemplateStripsWorkspacePathFromInvalidOutcomes(t *testing.T) {
 	}
 }
 
-// A returned error is stored as the failed registration's summary, so it is
+// A returned error is stored as the failed sync's summary, so it is
 // stripped too -- and still wraps its cause.
 func TestSyncTemplateStripsWorkspacePathFromReturnedError(t *testing.T) {
 	t.Parallel()
@@ -813,12 +813,12 @@ func TestSyncTemplateStripsWorkspacePathFromReturnedError(t *testing.T) {
 	activities.git = gitrunner.NewLocalGitRunnerWithExecutor(echoingCloneGit{})
 
 	_, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "acme",
-		RepoName:         "private-infra",
-		SourceRef:        "nope",
-		RootPath:         "modules/vpc",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "private-infra",
+		SourceRef:  "nope",
+		RootPath:   "modules/vpc",
 	})
 	if err == nil {
 		t.Fatal("SyncTemplate returned nil error; want a retryable failure")

@@ -48,7 +48,7 @@ function serve({ grants = team(), users = [] }: { grants?: GrantView[]; users?: 
 function renderScreen(me = { sub: ME, display_name: "Sam Park", email: "sam@acme.example" }) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   const auth: AuthContextValue = {
-    me: { ...me, tenant_id: "tenant_123", global_capabilities: { can_create_stack: true, can_publish_template: true, can_manage_platform_access: true } },
+    me: { ...me, tenant_id: "tenant_123", global_capabilities: { can_create_stack: true, can_manage_templates: true, can_manage_platform_access: true } },
     status: "authenticated",
     login: () => {},
     logout: () => {}

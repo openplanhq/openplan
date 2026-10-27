@@ -113,22 +113,22 @@ var problemTypes = []problemType{
 		detail: "The run has no plan waiting to discard.",
 	},
 	{
-		sentinel: app.ErrStackTemplateNotRunnable, status: http.StatusConflict, slug: "template-not-runnable",
+		sentinel: app.ErrStackTemplateNotRunnable, status: http.StatusConflict, slug: "stack-template-not-runnable",
 		title:  "The template can't run",
 		detail: "The template is being torn down, or has no revision to run.",
 	},
 	{
-		sentinel: app.ErrStackTemplateNotEditable, status: http.StatusConflict, slug: "template-not-editable",
+		sentinel: app.ErrStackTemplateNotEditable, status: http.StatusConflict, slug: "stack-template-not-editable",
 		title:  "The template can't be edited",
 		detail: "The template is being torn down, so its configuration can't change.",
 	},
 	{
-		sentinel: app.ErrStackTemplateUpgradeInvalid, status: http.StatusConflict, slug: "template-not-upgradable",
+		sentinel: app.ErrStackTemplateRevisionNotChangeable, status: http.StatusConflict, slug: "stack-template-revision-not-changeable",
 		title:  "The template can't change revision",
 		detail: "The template is being torn down, so it can't move to another revision.",
 	},
 	{
-		sentinel: app.ErrTemplateNotInstallable, status: http.StatusConflict, slug: "revision-not-installable",
+		sentinel: app.ErrRevisionNotInstallable, status: http.StatusConflict, slug: "revision-not-installable",
 		title:  "The revision can't be installed",
 		detail: "The revision is still syncing, or its sync failed. Wait for it, or pick another revision.",
 	},
@@ -143,9 +143,9 @@ var problemTypes = []problemType{
 		detail: "Another stack already uses this slug.", field: "slug",
 	},
 	{
-		sentinel: app.ErrDuplicateStackTemplateComponentKey, status: http.StatusConflict, slug: "duplicate-component-key",
-		title:  "The component key is taken",
-		detail: "This stack already has a template with this component key.", field: "component_key",
+		sentinel: app.ErrDuplicateStackTemplateKey, status: http.StatusConflict, slug: "duplicate-stack-template-key",
+		title:  "The key is taken",
+		detail: "This stack already has a template with this key.", field: "key",
 	},
 	{
 		sentinel: app.ErrDuplicateCredentialName, status: http.StatusConflict, slug: "duplicate-credential-name",
@@ -204,7 +204,7 @@ const (
 
 // writeAppError renders an error from the app layer. Field errors come first,
 // whatever sentinel each wraps: one response then carries every problem with
-// the request, and a sentinel such as ErrStackTemplateUpgradeInvalid can be
+// the request, and a sentinel such as ErrStackTemplateRevisionNotChangeable can be
 // a field problem in one case and a state conflict in another. detail never
 // comes from err.Error(), which is a Go error chain naming call sites.
 func writeAppError(response http.ResponseWriter, err error) {

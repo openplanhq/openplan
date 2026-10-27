@@ -86,7 +86,7 @@ func TestGitEnvironmentWithoutCredentialSetsNoConfig(t *testing.T) {
 	}
 }
 
-// Output becomes a registration's error summary in Postgres and is rendered in
+// Output becomes a sync's error summary in Postgres and is rendered in
 // the UI. Both the raw token and the wire form must be gone by then.
 func TestNewGitCommandErrorScrubsCredential(t *testing.T) {
 	t.Parallel()

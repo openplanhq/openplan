@@ -22,7 +22,7 @@ function seed(variables?: TemplateVariable[]): QueryClient {
 
 function renderTab(queryClient: QueryClient) {
   const router = createMemoryRouter(
-    [{ path: "/templates/:sourceTemplateId", element: <TemplatePanel />, children: [{ path: "variables", element: <VariablesTab /> }] }],
+    [{ path: "/templates/:templateId", element: <TemplatePanel />, children: [{ path: "variables", element: <VariablesTab /> }] }],
     { initialEntries: ["/templates/tpl_1/variables"] }
   );
   render(

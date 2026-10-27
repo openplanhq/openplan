@@ -13,8 +13,8 @@ import { authValue, jsonResponse, latestSync, revision, seedTemplates, template,
 
 const latest = revision({ id: "rev_2", resolved_commit_sha: "9e7d3b2aaaabbbbccccddddeeeeffff000011112", created_at: "2026-10-05T09:30:00Z" });
 const older = revision({ id: "rev_1" });
-const rds = revision({ id: "rev_rds", source_template_id: "tpl_rds", name: "rds", root_path: "aws/rds", description: "", tags: [] });
-const cdn = revision({ id: "rev_cdn", source_template_id: "tpl_cdn", repo_name: "edge", name: "cloudfront-site", root_path: ".", source_ref: "v2.0.1" });
+const rds = revision({ id: "rev_rds", template_id: "tpl_rds", name: "rds", root_path: "aws/rds", description: "", tags: [] });
+const cdn = revision({ id: "rev_cdn", template_id: "tpl_cdn", repo_name: "edge", name: "cloudfront-site", root_path: ".", source_ref: "v2.0.1" });
 
 function seed(revisions: TemplateRevision[] = [latest, older, rds, cdn]): QueryClient {
   const queryClient = testQueryClient();
@@ -27,13 +27,13 @@ function seed(revisions: TemplateRevision[] = [latest, older, rds, cdn]): QueryC
   return queryClient;
 }
 
-function renderPanel(queryClient: QueryClient, path: string, canPublishTemplate = true) {
+function renderPanel(queryClient: QueryClient, path: string, canManageTemplates = true) {
   const router = createMemoryRouter(
     [
       // Where a delete lands, showing what it carried.
       { path: "/templates", element: <LandedOn /> },
       {
-        path: "/templates/:sourceTemplateId",
+        path: "/templates/:templateId",
         element: <TemplatePanel />,
         children: [
           { path: "variables", element: <p data-testid="variables-content">variables</p> },
@@ -45,7 +45,7 @@ function renderPanel(queryClient: QueryClient, path: string, canPublishTemplate 
   );
   render(
     <QueryClientProvider client={queryClient}>
-      <AuthContext.Provider value={authValue(canPublishTemplate)}>
+      <AuthContext.Provider value={authValue(canManageTemplates)}>
         <RouterProvider router={router} />
       </AuthContext.Provider>
     </QueryClientProvider>
@@ -201,7 +201,7 @@ describe("TemplatePanel before a first revision", () => {
   });
 
   it("follows a first sync still running until it lands a revision, then shows the template", async () => {
-    const fresh = revision({ id: "rev_new", source_template_id: "tpl_new", name: "eks-fresh", resolved_commit_sha: "abc1234ffff" });
+    const fresh = revision({ id: "rev_new", template_id: "tpl_new", name: "eks-fresh", resolved_commit_sha: "abc1234ffff" });
     let done = false;
     vi.mocked(globalThis.fetch).mockImplementation(async (input) => {
       const path = String(input).split("?")[0];

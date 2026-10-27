@@ -23,17 +23,17 @@ const MAX_CHOICES = 6;
  * list without picking (Escape, or focus or a press elsewhere).
  */
 export default function TemplateSearch({
-  sourceTemplates,
+  templates,
   repositoryCount,
   autoFocus = false,
   onPick,
   onDismiss
 }: {
-  sourceTemplates: Template[];
+  templates: Template[];
   repositoryCount: number;
   /** Focused and open on mount: the search reopened by Change. */
   autoFocus?: boolean;
-  onPick: (sourceTemplate: Template) => void;
+  onPick: (template: Template) => void;
   onDismiss?: (reason: "escape" | "elsewhere") => void;
 }) {
   const [query, setQuery] = useState("");
@@ -42,7 +42,7 @@ export default function TemplateSearch({
   // The whole field, glass and all, so the list lines up with its edges.
   const anchorRef = useComboboxAnchor();
 
-  const matches = searchTemplates(sourceTemplates, query);
+  const matches = searchTemplates(templates, query);
   const shown = matches.slice(0, MAX_CHOICES);
 
   return (
@@ -55,7 +55,7 @@ export default function TemplateSearch({
         filter={null}
         value={null}
         onValueChange={(match) => {
-          if (match) onPick(match.sourceTemplate);
+          if (match) onPick(match.template);
         }}
         inputValue={query}
         onInputValueChange={(value, { reason }) => {
@@ -71,7 +71,7 @@ export default function TemplateSearch({
         }}
         autoHighlight
         itemToStringLabel={(match) => match.name}
-        isItemEqualToValue={(a, b) => a.sourceTemplate.id === b.sourceTemplate.id}
+        isItemEqualToValue={(a, b) => a.template.id === b.template.id}
       >
         <InputGroup ref={anchorRef} className={cn(searchFieldClass, "pointer-coarse:h-11")}>
           <InputGroupAddon className="pl-2.5">
@@ -103,7 +103,7 @@ export default function TemplateSearch({
             </Link>
           </ComboboxEmpty>
           <ComboboxList className="max-h-96 min-h-0 divide-y divide-divider p-0">
-            {(match: TemplateSearchMatch) => <Choice key={match.sourceTemplate.id} match={match} />}
+            {(match: TemplateSearchMatch) => <Choice key={match.template.id} match={match} />}
           </ComboboxList>
           {shown.length > 0 && (
             <div className="flex items-center justify-between gap-4 border-t border-divider bg-canvas px-4 py-2 text-caption text-muted-foreground">
@@ -116,7 +116,7 @@ export default function TemplateSearch({
         </ComboboxContent>
       </Combobox.Root>
       <p id={hintId} className="text-caption text-muted-foreground">
-        {sourceTemplates.length === 1 ? "1 template" : `${sourceTemplates.length} templates`} in{" "}
+        {templates.length === 1 ? "1 template" : `${templates.length} templates`} in{" "}
         {repositoryCount === 1 ? "1 repository" : `${repositoryCount} repositories`}.
       </p>
     </div>
@@ -126,7 +126,7 @@ export default function TemplateSearch({
 // One match as a ChoiceRow. Its revisions are read only once it is picked,
 // so it has no revision count or state of its own here.
 function Choice({ match }: { match: TemplateSearchMatch }) {
-  const { sourceTemplate } = match;
+  const { template } = match;
   return (
     <Combobox.Item
       value={match}
@@ -136,7 +136,7 @@ function Choice({ match }: { match: TemplateSearchMatch }) {
         <span className="truncate text-label text-foreground">
           <Highlighted text={match.name} hits={match.nameHits} markClassName="font-semibold" />
         </span>
-        <TemplateSource sourceTemplate={sourceTemplate} repositoryHits={match.repositoryHits} pathHits={match.pathHits} className="truncate" />
+        <TemplateSource template={template} repositoryHits={match.repositoryHits} pathHits={match.pathHits} className="truncate" />
       </span>
     </Combobox.Item>
   );
@@ -145,19 +145,19 @@ function Choice({ match }: { match: TemplateSearchMatch }) {
 /** Where a template lives, under its name: its repository, root path and ref,
     with the letters a search matched marked. */
 export function TemplateSource({
-  sourceTemplate,
+  template,
   repositoryHits = [],
   pathHits = [],
   className
 }: {
-  sourceTemplate: Template;
+  template: Template;
   repositoryHits?: number[];
   pathHits?: number[];
   className?: string;
 }) {
-  const { repo_owner, repo_name, root_path, source_ref } = sourceTemplate;
+  const { repo_owner, repo_name, root_path, source_ref } = template;
   // The root path adds nothing at the repository root, or when it is the name.
-  const showPath = templateRootPathLabel(root_path, templateDisplayName(sourceTemplate)) !== "";
+  const showPath = templateRootPathLabel(root_path, templateDisplayName(template)) !== "";
   return (
     <span className={cn("font-mono text-caption text-muted-foreground", className)}>
       <Highlighted text={`${repo_owner}/${repo_name}`} hits={repositoryHits} markClassName="font-medium" />

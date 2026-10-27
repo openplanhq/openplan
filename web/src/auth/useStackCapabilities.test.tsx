@@ -13,7 +13,7 @@ function wrapper(queryClient: QueryClient) {
     return (
       <AuthContext.Provider
         value={{
-          me: { sub: "s1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_publish_template: false, can_manage_platform_access: false } },
+          me: { sub: "s1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_manage_templates: false, can_manage_platform_access: false } },
           status: "authenticated",
           login: () => {},
           logout: () => {}
