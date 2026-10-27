@@ -485,7 +485,7 @@ func TestLocalTerraformRunnerSelectsExistingWorkspace(t *testing.T) {
 		{
 			dir:  "/tmp/openplan/runs/tenant_123/run_123",
 			name: "tofu",
-			args: []string{"workspace", "select", "-no-color", "mtp_acme_prod_vpc_a13f9c"},
+			args: []string{"workspace", "select", "-or-create=true", "-no-color", "mtp_acme_prod_vpc_a13f9c"},
 		},
 	}
 	if !reflect.DeepEqual(executor.commands, want) {
@@ -493,47 +493,14 @@ func TestLocalTerraformRunnerSelectsExistingWorkspace(t *testing.T) {
 	}
 }
 
-func TestLocalTerraformRunnerCreatesMissingWorkspace(t *testing.T) {
-	t.Parallel()
-
-	executor := &recordingCommandExecutor{
-		errs: []error{errors.New("workspace does not exist")},
-	}
-	runner := NewLocalTerraformRunnerWithExecutor(executor)
-
-	_, err := runner.Run(context.Background(), TerraformCommand{
-		WorkspacePath: "/tmp/openplan/runs/tenant_123/run_123",
-		WorkspaceName: "mtp_acme_prod_vpc_a13f9c",
-		Command:       domain.TerraformCommandSelectWorkspace,
-	})
-	if err != nil {
-		t.Fatalf("Run returned error: %v", err)
-	}
-
-	want := []recordedCommand{
-		{
-			dir:  "/tmp/openplan/runs/tenant_123/run_123",
-			name: "tofu",
-			args: []string{"workspace", "select", "-no-color", "mtp_acme_prod_vpc_a13f9c"},
-		},
-		{
-			dir:  "/tmp/openplan/runs/tenant_123/run_123",
-			name: "tofu",
-			args: []string{"workspace", "new", "-no-color", "mtp_acme_prod_vpc_a13f9c"},
-		},
-	}
-	if !reflect.DeepEqual(executor.commands, want) {
-		t.Fatalf("commands = %#v, want %#v", executor.commands, want)
-	}
-}
-
-func TestLocalTerraformRunnerWrapsWorkspaceCreationErrorWithTofuContext(t *testing.T) {
+// Issue 522: selecting a workspace is one command, so a failed first run
+// shows the error that stopped it, not the expected "doesn't exist" a select
+// prints before a fallback creates the workspace.
+func TestLocalTerraformRunnerSelectsOrCreatesTheWorkspaceInOneCommand(t *testing.T) {
 	t.Parallel()
 
 	createErr := errors.New("create failed")
-	executor := &recordingCommandExecutor{
-		errs: []error{errors.New("workspace does not exist"), createErr},
-	}
+	executor := &recordingCommandExecutor{errs: []error{createErr}}
 	runner := NewLocalTerraformRunnerWithExecutor(executor)
 
 	_, err := runner.Run(context.Background(), TerraformCommand{
@@ -545,11 +512,11 @@ func TestLocalTerraformRunnerWrapsWorkspaceCreationErrorWithTofuContext(t *testi
 		t.Fatalf("error = %v, want createErr", err)
 	}
 	var cmdErr *CommandError
-	if !errors.As(err, &cmdErr) {
-		t.Fatalf("error = %v, want *CommandError", err)
+	if !errors.As(err, &cmdErr) || cmdErr.Command != domain.TerraformCommandSelectWorkspace {
+		t.Fatalf("error = %v, want a select_workspace *CommandError", err)
 	}
-	if cmdErr.Command != domain.TerraformCommandSelectWorkspace {
-		t.Fatalf("cmdErr.Command = %q, want %q", cmdErr.Command, domain.TerraformCommandSelectWorkspace)
+	if len(executor.commands) != 1 {
+		t.Fatalf("commands = %#v, want one", executor.commands)
 	}
 }
 

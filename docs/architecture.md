@@ -455,7 +455,7 @@ The platform still enforces workspace selection:
 
 ```text
 tofu init
-tofu workspace select <workspace> || tofu workspace new <workspace>
+tofu workspace select -or-create=true <workspace>
 ```
 
 The isolation contract is:

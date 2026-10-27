@@ -73,9 +73,8 @@ type Result struct {
 // Run validates input and executes the requested Terraform-compatible command.
 //
 // The runner owns the concrete OpenTofu CLI arguments for each supported
-// command type. Workspace selection is special-cased so a missing workspace is
-// created with `tofu workspace new` after `tofu workspace select`
-// fails.
+// command type. Workspace selection creates a missing workspace with
+// `tofu workspace select -or-create`.
 //
 // A plan saves itself to PlanFileName. Apply and destroy both apply that saved
 // plan and nothing else: what was approved is exactly what runs, the variables
@@ -203,47 +202,16 @@ func (runner *LocalTerraformRunner) summarize(ctx context.Context, input Terrafo
 	return summary, changes, nil
 }
 
-// selectWorkspace selects the requested Terraform workspace or creates it.
-//
-// OpenTofu exits non-zero when the workspace does not exist, so this method
-// treats a select failure as the signal to run `tofu workspace new`. If the
-// creation also fails, the returned error includes context for both attempts.
+// selectWorkspace selects the requested workspace, creating it on the stack's
+// first run. It is one command: a select that fails and falls back to new
+// leaves an expected "doesn't exist" error first in the log, which a failed
+// run would then lead with instead of the error that stopped it (issue 522).
 func (runner *LocalTerraformRunner) selectWorkspace(ctx context.Context, input TerraformCommand) error {
-	stdout, stderr := outputWriters(input)
-	err := runner.executor.Run(
-		ctx,
-		input.WorkspacePath,
-		sortedEnvironment(input.Environment),
-		stdout,
-		stderr,
-		terraformExecutable,
-		"workspace",
-		"select",
-		"-no-color",
-		input.WorkspaceName,
-	)
-	if err == nil {
-		return nil
-	}
-
-	if err := runner.executor.Run(
-		ctx,
-		input.WorkspacePath,
-		sortedEnvironment(input.Environment),
-		stdout,
-		stderr,
-		terraformExecutable,
-		"workspace",
-		"new",
-		"-no-color",
-		input.WorkspaceName,
-	); err != nil {
-		return &CommandError{Command: domain.TerraformCommandSelectWorkspace, Err: fmt.Errorf("select or new: %w", err)}
-	}
-	return nil
+	return runner.run(ctx, input, sortedEnvironment(input.Environment),
+		"workspace", "select", "-or-create=true", "-no-color", input.WorkspaceName)
 }
 
-// run executes a non-workspace OpenTofu command with shared error wrapping.
+// run executes an OpenTofu command with shared error wrapping.
 //
 // A failure is wrapped in CommandError (using input.Command) so callers can
 // identify which command failed via errors.As instead of parsing the error
