@@ -91,10 +91,11 @@ type TemplateRunWorkflowInput struct {
 	TenantID        TenantID
 	StackTemplateID StackTemplateID
 	Operation       OperationType
-	// SelectedRef is the ref the component was installed from. It is carried
-	// for provenance and log context only — what the run executes is
-	// ResolvedCommitSHA, because a ref can move between planning and applying.
-	SelectedRef string
+	// SourceRef is the desired revision's source_ref, copied when the run
+	// starts. What the run executes is ResolvedCommitSHA, because a ref can
+	// move between planning and applying; FetchSource checks the ref out only
+	// when the commit is empty.
+	SourceRef string
 	// ResolvedCommitSHA is the commit the desired revision resolved to, and the
 	// exact source a run checks out.
 	ResolvedCommitSHA string
@@ -228,7 +229,7 @@ type FetchSourceActivityInput struct {
 	WorkspacePath string
 	RepoOwner     string
 	RepoName      string
-	// SourceRef is the ref the component was installed from. It is only used
+	// SourceRef is the run's source ref, the revision's. It is only used
 	// when ResolvedCommitSHA is absent, which is true solely for runs queued
 	// before the commit was threaded through.
 	SourceRef string
@@ -399,25 +400,25 @@ type BeginApplyActivityOutput struct {
 type TemplateSyncWorkflowInput struct {
 	SyncID   TemplateSyncID
 	TenantID TenantID
-	// SourceTemplateID is the template the sync writes its revision into. The
+	// TemplateID is the template the sync writes its revision into. The
 	// API made it when the template was registered; the sync never creates
 	// one, so a template deleted mid-sync stays deleted.
-	SourceTemplateID SourceTemplateID
-	RepoOwner        string
-	RepoName         string
-	SourceRef        string
-	RootPath         string
+	TemplateID TemplateID
+	RepoOwner  string
+	RepoName   string
+	SourceRef  string
+	RootPath   string
 }
 
 // TemplateSyncActivityInput asks the control plane to sync one template source.
 type TemplateSyncActivityInput struct {
-	SyncID           TemplateSyncID
-	TenantID         TenantID
-	SourceTemplateID SourceTemplateID
-	RepoOwner        string
-	RepoName         string
-	SourceRef        string
-	RootPath         string
+	SyncID     TemplateSyncID
+	TenantID   TenantID
+	TemplateID TemplateID
+	RepoOwner  string
+	RepoName   string
+	SourceRef  string
+	RootPath   string
 }
 
 // TemplateSyncActivityOutput reports the sync result for one template source.

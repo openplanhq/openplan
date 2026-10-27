@@ -326,13 +326,13 @@ func TestResolvePlatformCapabilitiesMapsEachRelationPositionally(t *testing.T) {
 		want PlatformCapabilities
 	}{
 		// viewer reaches no capability; editor reaches can_create_stack and
-		// can_publish_template through can_edit, and admin reaches both
+		// can_manage_templates through can_edit, and admin reaches both
 		// because can_administer satisfies can_edit.
 		{authorization.RelationViewer, PlatformCapabilities{}},
-		{authorization.RelationEditor, PlatformCapabilities{CanCreateStack: true, CanPublishTemplate: true}},
+		{authorization.RelationEditor, PlatformCapabilities{CanCreateStack: true, CanManageTemplates: true}},
 		{
 			authorization.RelationAdmin,
-			PlatformCapabilities{CanCreateStack: true, CanPublishTemplate: true, CanManagePlatformAccess: true},
+			PlatformCapabilities{CanCreateStack: true, CanManageTemplates: true, CanManagePlatformAccess: true},
 		},
 	}
 

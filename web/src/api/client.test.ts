@@ -31,7 +31,7 @@ import {
   syncTemplate,
   templateRunLogEventsURL,
   updateStackTemplateConfig,
-  upgradeStackTemplate
+  changeStackTemplateRevision
 } from "./client";
 import { isRunInFlightError } from "../features/runs/runErrors";
 import { problemTypes } from "./types";
@@ -221,7 +221,7 @@ describe("api client", () => {
     );
   });
 
-  it("edits and upgrades installed stack templates", async () => {
+  it("edits installed stack templates and changes their revision", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(jsonResponse({ id: "stack_template_123" }))
@@ -230,7 +230,7 @@ describe("api client", () => {
     await updateStackTemplateConfig("tenant_123", "stack_template_123", {
       config: { region: "us-west-2" }
     });
-    await upgradeStackTemplate("tenant_123", "stack_template_123", {
+    await changeStackTemplateRevision("tenant_123", "stack_template_123", {
       target_template_revision_id: "template_rev_2"
     });
 
@@ -245,7 +245,7 @@ describe("api client", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      "/v1/tenants/tenant_123/stack-templates/stack_template_123/upgrade",
+      "/v1/tenants/tenant_123/stack-templates/stack_template_123/change-revision",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({ target_template_revision_id: "template_rev_2" })
@@ -454,7 +454,7 @@ describe("api client", () => {
     await createStack("tenant_123", { name: "s", slug: "", tags: {}, default_credential_ids: [] });
     await addTemplateToStack("tenant_123", "stack_1", { template_revision_id: "rev_1", config: {} });
     await updateStackTemplateConfig("tenant_123", "st_1", { config: {} });
-    await upgradeStackTemplate("tenant_123", "st_1", { target_template_revision_id: "rev_2" });
+    await changeStackTemplateRevision("tenant_123", "st_1", { target_template_revision_id: "rev_2" });
     await startTemplateRun("tenant_123", "st_1", { operation: "plan" });
     await approveRun("tenant_123", "run_1");
     await discardRun("tenant_123", "run_2", { reason: "stop" });

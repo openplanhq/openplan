@@ -63,7 +63,7 @@ export function matchesTemplateFilter(template: Template, query: string): boolea
 
 /** A template found by searchTemplates, and which characters of it matched. */
 export interface TemplateSearchMatch {
-  sourceTemplate: Template;
+  template: Template;
   /** What the template is called, as templateDisplayName says it. */
   name: string;
   /** "owner/name". */
@@ -81,15 +81,15 @@ export interface TemplateSearchMatch {
  * only as a run of letters, so a short word cannot light up every long path.
  * With nothing typed, every template, by name.
  */
-export function searchTemplates(sourceTemplates: Template[], query: string): TemplateSearchMatch[] {
+export function searchTemplates(templates: Template[], query: string): TemplateSearchMatch[] {
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const scored: Array<{ match: TemplateSearchMatch; score: number }> = [];
 
-  for (const sourceTemplate of sourceTemplates) {
+  for (const template of templates) {
     const match: TemplateSearchMatch = {
-      sourceTemplate,
-      name: templateDisplayName(sourceTemplate),
-      repository: `${sourceTemplate.repo_owner}/${sourceTemplate.repo_name}`,
+      template,
+      name: templateDisplayName(template),
+      repository: `${template.repo_owner}/${template.repo_name}`,
       nameHits: [],
       repositoryHits: [],
       pathHits: []
@@ -102,7 +102,7 @@ export function searchTemplates(sourceTemplates: Template[], query: string): Tem
       const candidates = [
         { hits: match.nameHits, found: scoreWord(word, match.name, true), penalty: 0 },
         { hits: match.repositoryHits, found: scoreWord(word, match.repository, false), penalty: 60 },
-        { hits: match.pathHits, found: scoreWord(word, sourceTemplate.root_path, false), penalty: 60 }
+        { hits: match.pathHits, found: scoreWord(word, template.root_path, false), penalty: 60 }
       ];
       let best: (typeof candidates)[number] | null = null;
       for (const candidate of candidates) {

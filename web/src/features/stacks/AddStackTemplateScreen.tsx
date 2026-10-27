@@ -56,9 +56,9 @@ export default function AddStackTemplateScreen() {
   const stackName = useStackQuery(tenantID, stackId).data?.stack.name ?? "";
   const templatesQuery = useTemplatesQuery(tenantID);
   const boundary = useQueryErrorBoundary(templatesQuery.error);
-  const sourceTemplates = templatesWithRevision(templatesQuery.data ?? []);
-  const repositoryCount = new Set(sourceTemplates.map((template) => `${template.repo_owner}/${template.repo_name}`)).size;
-  const chosenTemplate = sourceTemplates.find((template) => template.id === chosenTemplateID) ?? null;
+  const templates = templatesWithRevision(templatesQuery.data ?? []);
+  const repositoryCount = new Set(templates.map((template) => `${template.repo_owner}/${template.repo_name}`)).size;
+  const chosenTemplate = templates.find((template) => template.id === chosenTemplateID) ?? null;
 
   const chosenRevisionsQuery = useTemplateRevisionsQuery(tenantID, chosenTemplate?.id ?? "");
   const chosenRevisions = chosenRevisionsQuery.data ?? [];
@@ -101,16 +101,16 @@ export default function AddStackTemplateScreen() {
   const installButtonRef = useRef<HTMLButtonElement>(null);
   const changeButtonRef = useRef<HTMLButtonElement>(null);
 
-  function handlePick(sourceTemplate: Template) {
+  function handlePick(template: Template) {
     setChangingTemplate(false);
     // The template already chosen, picked again after Change, is a second
     // look, not a new choice: its revision and values stay.
-    if (sourceTemplate.id === chosenTemplate?.id) {
+    if (template.id === chosenTemplate?.id) {
       focusChangeRef.current = true;
       return;
     }
     focusAfterPickRef.current = true;
-    handleChoose(sourceTemplate.id, "");
+    handleChoose(template.id, "");
   }
 
   useEffect(() => {
@@ -194,7 +194,7 @@ export default function AddStackTemplateScreen() {
         </button>
       </div>
     );
-  } else if (sourceTemplates.length === 0) {
+  } else if (templates.length === 0) {
     content = (
       <Empty className="gap-3 rounded-lg border border-dashed border-dashed-border px-5 py-10" data-testid="add-stack-template-none">
         <EmptyHeader className="gap-2">
@@ -220,7 +220,7 @@ export default function AddStackTemplateScreen() {
               <div className="flex min-h-13 flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-primary-soft py-2 pr-2.5 pl-4">
                 <span className="flex min-w-0 flex-col gap-0.5">
                   <span className="text-label text-primary-strong wrap-anywhere">{templateDisplayName(chosenTemplate)}</span>
-                  <TemplateSource sourceTemplate={chosenTemplate} className="wrap-anywhere" />
+                  <TemplateSource template={chosenTemplate} className="wrap-anywhere" />
                 </span>
                 <span className="flex shrink-0 items-center gap-3">
                   <TemplateChoiceState revisions={chosenRevisions} />
@@ -237,7 +237,7 @@ export default function AddStackTemplateScreen() {
             </div>
           ) : (
             <TemplateSearch
-              sourceTemplates={sourceTemplates}
+              templates={templates}
               repositoryCount={repositoryCount}
               autoFocus={changingTemplate}
               onPick={handlePick}

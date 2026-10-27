@@ -26,11 +26,11 @@ var (
 	ErrUnauthenticated                    = errors.New("unauthenticated")
 	ErrInvalidCommand                     = errors.New("invalid command")
 	ErrDuplicateStackSlug                 = errors.New("duplicate stack slug")
-	ErrDuplicateStackTemplateComponentKey = errors.New("duplicate stack template component key")
+	ErrDuplicateStackTemplateKey          = errors.New("duplicate stack template key")
 	ErrNotFound                           = errors.New("not found")
-	ErrTemplateNotInstallable             = errors.New("template is not installable")
+	ErrRevisionNotInstallable             = errors.New("template is not installable")
 	ErrStackTemplateConfigInvalid         = errors.New("stack template config is invalid")
-	ErrStackTemplateUpgradeInvalid        = errors.New("stack template upgrade is invalid")
+	ErrStackTemplateRevisionNotChangeable = errors.New("stack template revision can't change")
 	ErrStackTemplateNotEditable           = errors.New("stack template config cannot be edited")
 	ErrStackTemplateNotRunnable           = errors.New("stack template is not runnable")
 	ErrStackTemplatePlanStale             = errors.New("stack template plan does not match desired state")
@@ -82,14 +82,14 @@ func (cursor TemplateRevisionCursor) Valid() bool {
 	return !cursor.CreatedAt.IsZero() && cursor.ID != ""
 }
 
-// SourceTemplateCursor is a position in the templates list, newest first:
+// TemplateCursor is a position in the templates list, newest first:
 // the created_at and id of the last template a page held.
-type SourceTemplateCursor struct {
-	CreatedAt time.Time               `json:"created_at"`
-	ID        domain.SourceTemplateID `json:"id"`
+type TemplateCursor struct {
+	CreatedAt time.Time         `json:"created_at"`
+	ID        domain.TemplateID `json:"id"`
 }
 
-func (cursor SourceTemplateCursor) Valid() bool {
+func (cursor TemplateCursor) Valid() bool {
 	return !cursor.CreatedAt.IsZero() && cursor.ID != ""
 }
 
@@ -98,10 +98,10 @@ func (cursor SourceTemplateCursor) Valid() bool {
 // appears; every other repository method keeps opening its own transaction.
 type TxRepo interface {
 	CreateStack(ctx context.Context, stack domain.Stack) error
-	// CreateSourceTemplate stores the template unless one with its source
+	// CreateTemplate stores the template unless one with its source
 	// already exists, and returns whichever is stored, so registering a
 	// source twice lands on one template.
-	CreateSourceTemplate(ctx context.Context, template domain.SourceTemplate) (domain.SourceTemplate, error)
+	CreateTemplate(ctx context.Context, template domain.Template) (domain.Template, error)
 	AppendAuditEvent(ctx context.Context, event domain.SecurityAuditEvent) error
 	CreateTemplateRun(ctx context.Context, run domain.TemplateRun) (int, error)
 	CreateTemplateSync(ctx context.Context, templateSync domain.TemplateSync) error
@@ -176,20 +176,20 @@ type TemplateRevisionRepository interface {
 	GetTemplateRevisionVariables(ctx context.Context, tenantID domain.TenantID, templateRevisionID domain.TemplateRevisionID) ([]domain.TemplateVariable, error)
 }
 
-// SourceTemplateRepository reads templates and the revisions their syncs
+// TemplateRepository reads templates and the revisions their syncs
 // recorded, and deletes templates.
-type SourceTemplateRepository interface {
-	GetSourceTemplate(ctx context.Context, tenantID domain.TenantID, id domain.SourceTemplateID) (domain.SourceTemplate, error)
-	// DeleteSourceTemplate deletes the template with its revisions and syncs.
+type TemplateRepository interface {
+	GetTemplate(ctx context.Context, tenantID domain.TenantID, id domain.TemplateID) (domain.Template, error)
+	// DeleteTemplate deletes the template with its revisions and syncs.
 	// It is ErrTemplateInUse while any stack template names the template,
 	// and ErrNotFound when the tenant has no such template.
-	DeleteSourceTemplate(ctx context.Context, tenantID domain.TenantID, id domain.SourceTemplateID) error
-	// ListSourceTemplatesPage returns up to limit templates after the cursor,
+	DeleteTemplate(ctx context.Context, tenantID domain.TenantID, id domain.TemplateID) error
+	// ListTemplatesPage returns up to limit templates after the cursor,
 	// newest first.
-	ListSourceTemplatesPage(ctx context.Context, tenantID domain.TenantID, after *SourceTemplateCursor, limit int) ([]domain.SourceTemplate, error)
+	ListTemplatesPage(ctx context.Context, tenantID domain.TenantID, after *TemplateCursor, limit int) ([]domain.Template, error)
 	// ListTemplateRevisionsBySourcePage returns up to limit of one template's
 	// revisions after the cursor, newest first; none for an unknown template.
-	ListTemplateRevisionsBySourcePage(ctx context.Context, tenantID domain.TenantID, sourceTemplateID domain.SourceTemplateID, after *TemplateRevisionCursor, limit int) ([]domain.TemplateRevision, error)
+	ListTemplateRevisionsBySourcePage(ctx context.Context, tenantID domain.TenantID, templateID domain.TemplateID, after *TemplateRevisionCursor, limit int) ([]domain.TemplateRevision, error)
 }
 
 // TemplateRevisionMetadataRepository reads immutable template metadata.
@@ -328,7 +328,7 @@ type Service struct {
 	TemplateRuns             TemplateRunRepository
 	TemplateRevisionMetadata TemplateRevisionMetadataRepository
 	TemplateRevisions        TemplateRevisionRepository
-	SourceTemplates          SourceTemplateRepository
+	Templates                TemplateRepository
 	StackTemplateInstaller   StackTemplateInstaller
 	TemplateRunLogs          TemplateRunLogReader
 	TemplateRunLogMetadata   TemplateRunLogRepository
@@ -417,13 +417,13 @@ type RegisterTemplateCommand struct {
 // StartTemplateSyncCommand asks the app to sync a registered template again.
 type StartTemplateSyncCommand struct {
 	TenantID   domain.TenantID
-	TemplateID domain.SourceTemplateID
+	TemplateID domain.TemplateID
 }
 
 // StartedTemplateSync is a template and the sync that registering it, or
 // syncing it again, just queued. The sync is the row the sync workflow records its progress into.
 type StartedTemplateSync struct {
-	Template domain.SourceTemplate
+	Template domain.Template
 	Sync     domain.TemplateSync
 }
 
@@ -436,20 +436,20 @@ type ListTemplatesCommand struct {
 // GetTemplateCommand asks the app to read one tenant-owned template.
 type GetTemplateCommand struct {
 	TenantID   domain.TenantID
-	TemplateID domain.SourceTemplateID
+	TemplateID domain.TemplateID
 }
 
 // DeleteTemplateCommand asks the app to delete one template.
 type DeleteTemplateCommand struct {
 	TenantID   domain.TenantID
-	TemplateID domain.SourceTemplateID
+	TemplateID domain.TemplateID
 }
 
 // ListTemplateRevisionsForTemplateCommand asks the app for one page of a
 // template's revisions.
 type ListTemplateRevisionsForTemplateCommand struct {
 	TenantID   domain.TenantID
-	TemplateID domain.SourceTemplateID
+	TemplateID domain.TemplateID
 	Page       PageRequest
 }
 
@@ -469,14 +469,15 @@ type StackView struct {
 	Capabilities StackCapabilities
 }
 
-// StackTemplateView is one installed component plus the labels a read resolves
-// for it. Those labels are not component state: they are properties of the
+// StackTemplateView is one installed template plus the labels a read resolves
+// for it. Those labels are not stack template state: they are properties of the
 // desired revision, looked up per read so they cannot drift from the revision
 // in use. They live here rather than on domain.StackTemplate so the persisted
 // record has no fields that are only ever populated on one path.
 type StackTemplateView struct {
 	domain.StackTemplate
-	// DisplayName is a human-readable label derived from template metadata.
+	// DisplayName is the desired revision's name, the name the template has
+	// in the catalogue too.
 	DisplayName string
 	// SourceRef is the desired revision's ref.
 	SourceRef string
@@ -487,7 +488,7 @@ type AddTemplateToStackCommand struct {
 	TenantID           domain.TenantID
 	StackID            domain.StackID
 	TemplateRevisionID domain.TemplateRevisionID
-	ComponentKey       string
+	Key                string
 	WorkspaceName      string
 	ConfigJSON         json.RawMessage
 }
@@ -535,12 +536,12 @@ type DeleteCredentialCommand struct {
 
 // CredentialMetadata is the safe API representation of a credential.
 type CredentialMetadata struct {
-	ID        domain.CredentialID    `json:"id"`
-	Name      string                 `json:"name"`
-	Scope     domain.CredentialScope `json:"scope"`
-	StackID   domain.StackID         `json:"stack_id,omitempty"`
-	Template  domain.StackTemplateID `json:"stack_template_id,omitempty"`
-	Sensitive bool                   `json:"sensitive"`
+	ID              domain.CredentialID    `json:"id"`
+	Name            string                 `json:"name"`
+	Scope           domain.CredentialScope `json:"scope"`
+	StackID         domain.StackID         `json:"stack_id,omitempty"`
+	StackTemplateID domain.StackTemplateID `json:"stack_template_id,omitempty"`
+	Sensitive       bool                   `json:"sensitive"`
 	// Value is set only when Sensitive is false. Create refuses an empty
 	// value, so omitempty drops the key for sensitive credentials alone.
 	Value     string    `json:"value,omitempty"`
@@ -554,8 +555,8 @@ type UpdateStackTemplateConfigCommand struct {
 	ConfigJSON      json.RawMessage
 }
 
-// UpgradeStackTemplateCommand asks the app to point one install at another revision.
-type UpgradeStackTemplateCommand struct {
+// ChangeStackTemplateRevisionCommand asks the app to point one install at another revision.
+type ChangeStackTemplateRevisionCommand struct {
 	TenantID                 domain.TenantID
 	StackTemplateID          domain.StackTemplateID
 	TargetTemplateRevisionID domain.TemplateRevisionID
@@ -658,7 +659,7 @@ type GetTemplateRevisionVariablesCommand struct {
 // 2026-10-21). The template, its sync and the sync's intent commit together:
 // a sync never runs for a template that was not stored.
 func (service *Service) RegisterTemplate(ctx context.Context, command RegisterTemplateCommand) (StartedTemplateSync, error) {
-	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanPublishTemplate); err != nil {
+	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanManageTemplates); err != nil {
 		return StartedTemplateSync{}, err
 	}
 	actor, err := authenticatedActor(ctx)
@@ -669,7 +670,7 @@ func (service *Service) RegisterTemplate(ctx context.Context, command RegisterTe
 		return StartedTemplateSync{}, err
 	}
 
-	source := domain.SourceTemplate{
+	source := domain.Template{
 		TenantID:  command.TenantID,
 		RepoOwner: strings.TrimSpace(command.RepoOwner),
 		RepoName:  strings.TrimSpace(command.RepoName),
@@ -677,11 +678,11 @@ func (service *Service) RegisterTemplate(ctx context.Context, command RegisterTe
 		RootPath:  filepath.Clean(strings.TrimSpace(command.RootPath)),
 		CreatedAt: service.Clock.Now(),
 	}
-	source.ID = domain.SourceTemplateIDFor(source.TenantID, source.RepoOwner, source.RepoName, source.RootPath, source.SourceRef)
+	source.ID = domain.TemplateIDFor(source.TenantID, source.RepoOwner, source.RepoName, source.RootPath, source.SourceRef)
 
 	var started StartedTemplateSync
 	if err := service.Work.InTx(ctx, func(ctx context.Context, repository TxRepo, enqueuer queue.Enqueuer) error {
-		template, err := repository.CreateSourceTemplate(ctx, source)
+		template, err := repository.CreateTemplate(ctx, source)
 		if err != nil {
 			return err
 		}
@@ -696,7 +697,7 @@ func (service *Service) RegisterTemplate(ctx context.Context, command RegisterTe
 // StartTemplateSync queues a sync of a registered template, to pick up a new
 // commit on its ref or retry a sync that failed.
 func (service *Service) StartTemplateSync(ctx context.Context, command StartTemplateSyncCommand) (StartedTemplateSync, error) {
-	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanPublishTemplate); err != nil {
+	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanManageTemplates); err != nil {
 		return StartedTemplateSync{}, err
 	}
 	actor, err := authenticatedActor(ctx)
@@ -707,7 +708,7 @@ func (service *Service) StartTemplateSync(ctx context.Context, command StartTemp
 		return StartedTemplateSync{}, err
 	}
 
-	template, err := service.SourceTemplates.GetSourceTemplate(ctx, command.TenantID, command.TemplateID)
+	template, err := service.Templates.GetTemplate(ctx, command.TenantID, command.TemplateID)
 	if err != nil {
 		return StartedTemplateSync{}, fmt.Errorf("get template: %w", err)
 	}
@@ -727,27 +728,27 @@ func (service *Service) StartTemplateSync(ctx context.Context, command StartTemp
 // what the template names. The template comes back with this sync as its
 // latest, which a read after the commit would also find, so the answer never
 // shows the sync it replaced.
-func (service *Service) queueTemplateSync(ctx context.Context, repository TxRepo, enqueuer queue.Enqueuer, template domain.SourceTemplate, actor domain.UserID) (StartedTemplateSync, error) {
+func (service *Service) queueTemplateSync(ctx context.Context, repository TxRepo, enqueuer queue.Enqueuer, template domain.Template, actor domain.UserID) (StartedTemplateSync, error) {
 	templateSync := domain.TemplateSync{
-		ID:               service.SyncIDs.NewTemplateSyncID(),
-		TenantID:         template.TenantID,
-		SourceTemplateID: template.ID,
-		RepoOwner:        template.RepoOwner,
-		RepoName:         template.RepoName,
-		SourceRef:        template.SourceRef,
-		RootPath:         template.RootPath,
-		Status:           domain.TemplateSyncStatePending,
-		RequestedBy:      actor,
-		RequestedAt:      service.Clock.Now(),
+		ID:          service.SyncIDs.NewTemplateSyncID(),
+		TenantID:    template.TenantID,
+		TemplateID:  template.ID,
+		RepoOwner:   template.RepoOwner,
+		RepoName:    template.RepoName,
+		SourceRef:   template.SourceRef,
+		RootPath:    template.RootPath,
+		Status:      domain.TemplateSyncStatePending,
+		RequestedBy: actor,
+		RequestedAt: service.Clock.Now(),
 	}
 	payload, err := json.Marshal(StartTemplateSyncPayload(domain.TemplateSyncWorkflowInput{
-		SyncID:           templateSync.ID,
-		TenantID:         templateSync.TenantID,
-		SourceTemplateID: templateSync.SourceTemplateID,
-		RepoOwner:        templateSync.RepoOwner,
-		RepoName:         templateSync.RepoName,
-		SourceRef:        templateSync.SourceRef,
-		RootPath:         templateSync.RootPath,
+		SyncID:     templateSync.ID,
+		TenantID:   templateSync.TenantID,
+		TemplateID: templateSync.TemplateID,
+		RepoOwner:  templateSync.RepoOwner,
+		RepoName:   templateSync.RepoName,
+		SourceRef:  templateSync.SourceRef,
+		RootPath:   templateSync.RootPath,
 	}))
 	if err != nil {
 		return StartedTemplateSync{}, fmt.Errorf("encode start template sync payload: %w", err)
@@ -897,7 +898,7 @@ func (service *Service) AddTemplateToStack(ctx context.Context, command AddTempl
 		return StackTemplateView{}, fmt.Errorf("get template revision: %w", err)
 	}
 	if templateRevision.Status != domain.TemplateRevisionActive {
-		return StackTemplateView{}, fmt.Errorf("%w: status is %q", ErrTemplateNotInstallable, templateRevision.Status)
+		return StackTemplateView{}, fmt.Errorf("%w: status is %q", ErrRevisionNotInstallable, templateRevision.Status)
 	}
 
 	variables, err := service.TemplateRevisions.GetTemplateRevisionVariables(ctx, command.TenantID, command.TemplateRevisionID)
@@ -914,8 +915,8 @@ func (service *Service) AddTemplateToStack(ctx context.Context, command AddTempl
 		ID:                        id,
 		TenantID:                  command.TenantID,
 		StackID:                   command.StackID,
-		ComponentKey:              componentKey(command.ComponentKey, id),
-		SourceTemplateID:          templateRevision.SourceTemplateID,
+		Key:                       stackTemplateKey(command.Key, id),
+		TemplateID:                templateRevision.TemplateID,
 		DesiredTemplateRevisionID: command.TemplateRevisionID,
 		WorkspaceName:             workspaceName(stack.Slug, id),
 		InstalledConfigJSON:       configJSON,
@@ -973,9 +974,9 @@ func (service *Service) StartTemplateRun(ctx context.Context, command StartTempl
 	if err != nil {
 		return domain.TemplateRun{}, fmt.Errorf("get template revision metadata: %w", err)
 	}
-	sourceTemplateID := stackTemplate.SourceTemplateID
-	if sourceTemplateID == "" {
-		sourceTemplateID = templateRevision.SourceTemplateID
+	templateID := stackTemplate.TemplateID
+	if templateID == "" {
+		templateID = templateRevision.TemplateID
 	}
 
 	run := domain.TemplateRun{
@@ -983,12 +984,12 @@ func (service *Service) StartTemplateRun(ctx context.Context, command StartTempl
 		TenantID:           command.TenantID,
 		StackTemplateID:    command.StackTemplateID,
 		TemplateRevisionID: desiredTemplateRevisionID,
-		SourceTemplateID:   sourceTemplateID,
+		TemplateID:         templateID,
 		Operation:          command.Operation,
-		// The ref comes from the revision being run, not from the component:
-		// the component's install-time ref does not change when the desired
+		// The ref comes from the revision being run, not from the installed template:
+		// the installed template's install-time ref does not change when the desired
 		// revision does, so it would misreport what this run is against.
-		SelectedRef:       templateRevision.SourceRef,
+		SourceRef:         templateRevision.SourceRef,
 		ResolvedCommitSHA: templateRevision.ResolvedCommitSHA,
 		WorkspaceName:     stackTemplate.WorkspaceName,
 		ConfigJSON:        desiredConfigJSON,
@@ -1068,7 +1069,7 @@ func (service *Service) CreateCredential(ctx context.Context, command CreateCred
 	switch command.Scope {
 	case domain.CredentialScopeStack:
 		stackID = command.StackID
-		if err := authorizeStack(ctx, service.Authorization, stackID, authorization.RelationCanManageAccess); err != nil {
+		if err := authorizeStack(ctx, service.Authorization, stackID, authorization.RelationCanManageCredentials); err != nil {
 			return CredentialMetadata{}, err
 		}
 	case domain.CredentialScopeStackTemplate:
@@ -1079,7 +1080,7 @@ func (service *Service) CreateCredential(ctx context.Context, command CreateCred
 		if err != nil {
 			return CredentialMetadata{}, err
 		}
-		if err := authorizeStack(ctx, service.Authorization, stackTemplate.StackID, authorization.RelationCanManageAccess); err != nil {
+		if err := authorizeStack(ctx, service.Authorization, stackTemplate.StackID, authorization.RelationCanManageCredentials); err != nil {
 			return CredentialMetadata{}, err
 		}
 	default:
@@ -1126,10 +1127,10 @@ func (service *Service) ListCredentials(ctx context.Context, command ListCredent
 		if err != nil {
 			return nil, err
 		}
-		if err := authorizeStack(ctx, service.Authorization, stackTemplate.StackID, authorization.RelationCanManageAccess); err != nil {
+		if err := authorizeStack(ctx, service.Authorization, stackTemplate.StackID, authorization.RelationCanManageCredentials); err != nil {
 			return nil, err
 		}
-	} else if err := authorizeStack(ctx, service.Authorization, command.StackID, authorization.RelationCanManageAccess); err != nil {
+	} else if err := authorizeStack(ctx, service.Authorization, command.StackID, authorization.RelationCanManageCredentials); err != nil {
 		return nil, err
 	}
 	credentials, err := service.Credentials.ListCredentials(ctx, command.TenantID, command.Scope, ownerID)
@@ -1171,7 +1172,7 @@ func (service *Service) DeleteCredential(ctx context.Context, command DeleteCred
 	default:
 		return fmt.Errorf("%w: credential scope is required", ErrInvalidCommand)
 	}
-	if err := authorizeStack(ctx, service.Authorization, stackID, authorization.RelationCanManageAccess); err != nil {
+	if err := authorizeStack(ctx, service.Authorization, stackID, authorization.RelationCanManageCredentials); err != nil {
 		return err
 	}
 	scope := domain.CredentialScopeStack
@@ -1218,7 +1219,7 @@ func (service *Service) openCredentialValue(credential domain.Credential) (strin
 // credentialMetadata strips the ciphertext and carries the plaintext value
 // only for a credential that is not sensitive.
 func credentialMetadata(credential domain.Credential, value string) CredentialMetadata {
-	metadata := CredentialMetadata{ID: credential.ID, Name: credential.Name, Scope: credentialScope(credential), StackID: credential.StackID, Template: credential.StackTemplateID, Sensitive: credential.Sensitive, CreatedAt: credential.CreatedAt}
+	metadata := CredentialMetadata{ID: credential.ID, Name: credential.Name, Scope: credentialScope(credential), StackID: credential.StackID, StackTemplateID: credential.StackTemplateID, Sensitive: credential.Sensitive, CreatedAt: credential.CreatedAt}
 	if !credential.Sensitive {
 		metadata.Value = value
 	}
@@ -1282,13 +1283,13 @@ func (service *Service) UpdateStackTemplateConfig(ctx context.Context, command U
 	return stackTemplateView(updated, desiredRevision), nil
 }
 
-// UpgradeStackTemplate changes desired revision for an existing installed template.
-func (service *Service) UpgradeStackTemplate(ctx context.Context, command UpgradeStackTemplateCommand) (StackTemplateView, error) {
+// ChangeStackTemplateRevision changes desired revision for an existing installed template.
+func (service *Service) ChangeStackTemplateRevision(ctx context.Context, command ChangeStackTemplateRevisionCommand) (StackTemplateView, error) {
 	actor, err := authenticatedActor(ctx)
 	if err != nil {
 		return StackTemplateView{}, err
 	}
-	if err := validateUpgradeStackTemplateCommand(command); err != nil {
+	if err := validateChangeStackTemplateRevisionCommand(command); err != nil {
 		return StackTemplateView{}, err
 	}
 
@@ -1297,7 +1298,7 @@ func (service *Service) UpgradeStackTemplate(ctx context.Context, command Upgrad
 		return StackTemplateView{}, err
 	}
 	if stackTemplate.Lifecycle != domain.StackTemplateActive {
-		return StackTemplateView{}, fmt.Errorf("%w: lifecycle is %q", ErrStackTemplateUpgradeInvalid, stackTemplate.Lifecycle)
+		return StackTemplateView{}, fmt.Errorf("%w: lifecycle is %q", ErrStackTemplateRevisionNotChangeable, stackTemplate.Lifecycle)
 	}
 	if err := service.requireNoRunInFlight(ctx, command.TenantID, command.StackTemplateID); err != nil {
 		return StackTemplateView{}, err
@@ -1308,10 +1309,10 @@ func (service *Service) UpgradeStackTemplate(ctx context.Context, command Upgrad
 		return StackTemplateView{}, fmt.Errorf("get target template revision: %w", err)
 	}
 	if targetRevision.Status != domain.TemplateRevisionActive {
-		return StackTemplateView{}, fmt.Errorf("%w: status is %q", ErrTemplateNotInstallable, targetRevision.Status)
+		return StackTemplateView{}, fmt.Errorf("%w: status is %q", ErrRevisionNotInstallable, targetRevision.Status)
 	}
-	if stackTemplate.SourceTemplateID != "" && targetRevision.SourceTemplateID != "" && stackTemplate.SourceTemplateID != targetRevision.SourceTemplateID {
-		return StackTemplateView{}, fieldError(ErrStackTemplateUpgradeInvalid, IssueDifferentTemplate,
+	if stackTemplate.TemplateID != "" && targetRevision.TemplateID != "" && stackTemplate.TemplateID != targetRevision.TemplateID {
+		return StackTemplateView{}, fieldError(ErrStackTemplateRevisionNotChangeable, IssueDifferentTemplate,
 			"target_template_revision_id is a revision of a different template", "target_template_revision_id")
 	}
 
@@ -1402,7 +1403,7 @@ func (service *Service) labelStackTemplates(ctx context.Context, tenantID domain
 func stackTemplateView(stackTemplate domain.StackTemplate, revision domain.TemplateRevision) StackTemplateView {
 	return StackTemplateView{
 		StackTemplate: stackTemplate,
-		DisplayName:   templateDisplayName(revision.RepoName, revision.RootPath),
+		DisplayName:   revision.Name,
 		SourceRef:     revision.SourceRef,
 	}
 }
@@ -1429,42 +1430,42 @@ const (
 )
 
 // ListTemplates returns one page of the tenant's templates, newest first.
-func (service *Service) ListTemplates(ctx context.Context, command ListTemplatesCommand) (Page[domain.SourceTemplate], error) {
+func (service *Service) ListTemplates(ctx context.Context, command ListTemplatesCommand) (Page[domain.Template], error) {
 	if command.TenantID == "" {
-		return Page[domain.SourceTemplate]{}, fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
+		return Page[domain.Template]{}, fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
 	}
 	if err := validatePageRequest(command.Page); err != nil {
-		return Page[domain.SourceTemplate]{}, err
+		return Page[domain.Template]{}, err
 	}
-	after, err := DecodeCursor[SourceTemplateCursor](templatesList, command.Page.Cursor)
+	after, err := DecodeCursor[TemplateCursor](templatesList, command.Page.Cursor)
 	if err != nil {
-		return Page[domain.SourceTemplate]{}, err
+		return Page[domain.Template]{}, err
 	}
 	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanReadTemplate); err != nil {
-		return Page[domain.SourceTemplate]{}, err
+		return Page[domain.Template]{}, err
 	}
 
-	templates, err := service.SourceTemplates.ListSourceTemplatesPage(ctx, command.TenantID, after, command.Page.Limit+1)
+	templates, err := service.Templates.ListTemplatesPage(ctx, command.TenantID, after, command.Page.Limit+1)
 	if err != nil {
-		return Page[domain.SourceTemplate]{}, fmt.Errorf("list templates: %w", err)
+		return Page[domain.Template]{}, fmt.Errorf("list templates: %w", err)
 	}
-	return pageFrom(templates, command.Page.Limit, templatesList, func(template domain.SourceTemplate) cursorKey {
-		return SourceTemplateCursor{CreatedAt: template.CreatedAt, ID: template.ID}
+	return pageFrom(templates, command.Page.Limit, templatesList, func(template domain.Template) cursorKey {
+		return TemplateCursor{CreatedAt: template.CreatedAt, ID: template.ID}
 	}), nil
 }
 
 // GetTemplate returns one tenant-owned template.
-func (service *Service) GetTemplate(ctx context.Context, command GetTemplateCommand) (domain.SourceTemplate, error) {
+func (service *Service) GetTemplate(ctx context.Context, command GetTemplateCommand) (domain.Template, error) {
 	if err := validateTemplateCommand(command.TenantID, command.TemplateID); err != nil {
-		return domain.SourceTemplate{}, err
+		return domain.Template{}, err
 	}
 	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanReadTemplate); err != nil {
-		return domain.SourceTemplate{}, err
+		return domain.Template{}, err
 	}
 
-	template, err := service.SourceTemplates.GetSourceTemplate(ctx, command.TenantID, command.TemplateID)
+	template, err := service.Templates.GetTemplate(ctx, command.TenantID, command.TemplateID)
 	if err != nil {
-		return domain.SourceTemplate{}, fmt.Errorf("get template: %w", err)
+		return domain.Template{}, fmt.Errorf("get template: %w", err)
 	}
 	return template, nil
 }
@@ -1477,11 +1478,11 @@ func (service *Service) DeleteTemplate(ctx context.Context, command DeleteTempla
 	if err := validateTemplateCommand(command.TenantID, command.TemplateID); err != nil {
 		return err
 	}
-	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanPublishTemplate); err != nil {
+	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanManageTemplates); err != nil {
 		return err
 	}
 
-	if err := service.SourceTemplates.DeleteSourceTemplate(ctx, command.TenantID, command.TemplateID); err != nil {
+	if err := service.Templates.DeleteTemplate(ctx, command.TenantID, command.TemplateID); err != nil {
 		return fmt.Errorf("delete template: %w", err)
 	}
 	return nil
@@ -1505,10 +1506,10 @@ func (service *Service) ListTemplateRevisionsForTemplate(ctx context.Context, co
 		return Page[domain.TemplateRevision]{}, err
 	}
 
-	if _, err := service.SourceTemplates.GetSourceTemplate(ctx, command.TenantID, command.TemplateID); err != nil {
+	if _, err := service.Templates.GetTemplate(ctx, command.TenantID, command.TemplateID); err != nil {
 		return Page[domain.TemplateRevision]{}, fmt.Errorf("get template: %w", err)
 	}
-	revisions, err := service.SourceTemplates.ListTemplateRevisionsBySourcePage(ctx, command.TenantID, command.TemplateID, after, command.Page.Limit+1)
+	revisions, err := service.Templates.ListTemplateRevisionsBySourcePage(ctx, command.TenantID, command.TemplateID, after, command.Page.Limit+1)
 	if err != nil {
 		return Page[domain.TemplateRevision]{}, fmt.Errorf("list template revisions: %w", err)
 	}
@@ -2210,7 +2211,7 @@ func templateRunWorkflowInput(run domain.TemplateRun, templateRevision domain.Te
 		TenantID:          run.TenantID,
 		StackTemplateID:   run.StackTemplateID,
 		Operation:         run.Operation,
-		SelectedRef:       run.SelectedRef,
+		SourceRef:         run.SourceRef,
 		ResolvedCommitSHA: run.ResolvedCommitSHA,
 		WorkspaceName:     run.WorkspaceName,
 		RepoOwner:         templateRevision.RepoOwner,
@@ -2639,7 +2640,7 @@ func validateUpdateStackTemplateConfigCommand(command UpdateStackTemplateConfigC
 	}
 }
 
-func validateUpgradeStackTemplateCommand(command UpgradeStackTemplateCommand) error {
+func validateChangeStackTemplateRevisionCommand(command ChangeStackTemplateRevisionCommand) error {
 	switch {
 	case command.TenantID == "":
 		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
@@ -2702,7 +2703,7 @@ func validateDiscardRunCommand(command DiscardRunCommand) error {
 }
 
 // validateTemplateCommand checks the ids every command on one template names.
-func validateTemplateCommand(tenantID domain.TenantID, templateID domain.SourceTemplateID) error {
+func validateTemplateCommand(tenantID domain.TenantID, templateID domain.TemplateID) error {
 	switch {
 	case tenantID == "":
 		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
@@ -2855,25 +2856,12 @@ func carryForwardConfig(desiredConfigJSON json.RawMessage, variables []domain.Te
 	return normalized, nil
 }
 
-func componentKey(value string, stackTemplateID domain.StackTemplateID) string {
+func stackTemplateKey(value string, stackTemplateID domain.StackTemplateID) string {
 	value = strings.TrimSpace(value)
 	if value != "" {
 		return value
 	}
 	return string(stackTemplateID)
-}
-
-// templateDisplayName names an installed template by the last segment of its
-// root path: modules/network/vpc is "vpc". The repository is left out because
-// every template from one repository shares it, so it separated nothing. A
-// template at the repository root has no path to name it, so it takes the
-// repository's name.
-func templateDisplayName(repoName, rootPath string) string {
-	cleaned := filepath.Clean(strings.TrimSpace(rootPath))
-	if cleaned == "." {
-		return strings.TrimSpace(repoName)
-	}
-	return filepath.Base(cleaned)
 }
 
 func workspaceName(stackSlug string, stackTemplateID domain.StackTemplateID) string {

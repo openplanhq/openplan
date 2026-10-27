@@ -16,7 +16,7 @@ import TemplateRunsTab from "../features/stacks/TemplateRunsTab";
 import TemplateVariablesTab from "../features/stacks/TemplateVariablesTab";
 import TemplateEnvironmentTab from "../features/stacks/TemplateEnvironmentTab";
 import TemplateSettingsTab from "../features/stacks/TemplateSettingsTab";
-import UpgradeStackTemplateScreen from "../features/stacks/UpgradeStackTemplateScreen";
+import ChangeRevisionScreen from "../features/stacks/ChangeRevisionScreen";
 import EnvironmentScreen from "../features/stacks/EnvironmentScreen";
 import RegisterTemplatePanel from "../features/templates/RegisterTemplatePanel";
 import RevisionsTab from "../features/templates/RevisionsTab";
@@ -119,9 +119,9 @@ export const routeConfig: RouteObject[] = [
                       },
                       { path: "settings", element: <TemplateSettingsTab /> },
                       {
-                        path: "upgrade",
+                        path: "change-revision",
                         element: <RequireCapability capability="can_operate" mode="route" />,
-                        children: [{ index: true, element: <UpgradeStackTemplateScreen /> }]
+                        children: [{ index: true, element: <ChangeRevisionScreen /> }]
                       }
                     ]
                   }
@@ -154,16 +154,16 @@ export const routeConfig: RouteObject[] = [
               { index: true, element: <TemplatesIndexPanel /> },
               {
                 path: "new",
-                element: <RequireCapability capability="can_publish_template" mode="route" />,
+                element: <RequireCapability capability="can_manage_templates" mode="route" />,
                 children: [{ index: true, element: <RegisterTemplatePanel /> }]
               },
               {
-                path: ":sourceTemplateId",
+                path: ":templateId",
                 element: <RegistryTemplatePanel />,
                 children: [
                   // A loader redirect, so the old /templates/:id links land
                   // on Variables before anything renders.
-                  { index: true, loader: ({ params }) => redirect(templatePath(params.sourceTemplateId ?? "")) },
+                  { index: true, loader: ({ params }) => redirect(templatePath(params.templateId ?? "")) },
                   { path: "variables", element: <RegistryVariablesTab /> },
                   { path: "revisions", element: <RevisionsTab /> }
                 ]

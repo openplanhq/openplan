@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import UpgradeStackTemplateScreen from "./UpgradeStackTemplateScreen";
+import ChangeRevisionScreen from "./ChangeRevisionScreen";
 import { StackTemplateContext } from "./stackTemplateContext";
 import { queryKeys } from "../../api/queryKeys";
 import type { StackTemplate, StackView, TemplateRevision, TemplateVariable } from "../../api/types";
@@ -16,8 +16,8 @@ function stackTemplate(overrides: Partial<StackTemplate> = {}): StackTemplate {
   return {
     id: "st_1",
     stack_id: "stack_1",
-    component_key: "vpc",
-    source_template_id: "tmpl_src_1",
+    key: "vpc",
+    template_id: "tmpl_src_1",
     desired_template_revision_id: "rev_current",
     last_applied_template_revision_id: "rev_current",
     source_ref: "main",
@@ -56,7 +56,7 @@ function templateRevision(overrides: Partial<TemplateRevision> = {}): TemplateRe
   return {
     id: "rev_current",
     tenant_id: "tenant_123",
-    source_template_id: "tmpl_src_1",
+    template_id: "tmpl_src_1",
     repo_owner: "hashicorp",
     repo_name: "vpc",
     source_ref: "main",
@@ -102,7 +102,7 @@ function testQueryClient(): QueryClient {
 }
 
 /** Installed rev_current has region + legacy_flag; rev_next drops legacy_flag and adds new_var. */
-function seedUpgradeable(queryClient: QueryClient) {
+function seedChangeable(queryClient: QueryClient) {
   queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([stackTemplate()]));
   seedTemplates(queryClient, [
     templateRevision({ id: "rev_next", source_ref: "main", resolved_commit_sha: "9f21abc0000000" }),
@@ -123,7 +123,7 @@ function LocationProbe() {
   return <span data-testid="location">{`${location.pathname}${location.search}`}</span>;
 }
 
-// UpgradeStackTemplateScreen renders via useQueryErrorBoundary, which calls
+// ChangeRevisionScreen renders via useQueryErrorBoundary, which calls
 // useAuth() unconditionally (see queryErrorBoundary.tsx and its use in every
 // sibling screen test — AddStackTemplateScreen.test.tsx, StackTemplateScreen.test.tsx,
 // etc.). Without an AuthContext.Provider the hook throws "useAuth must be used
@@ -131,7 +131,7 @@ function LocationProbe() {
 // wrapper is required infrastructure, not a test case change.
 function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
   return {
-    me: { sub: "user_1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_publish_template: false, can_manage_platform_access: false } },
+    me: { sub: "user_1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_manage_templates: false, can_manage_platform_access: false } },
     status: "authenticated",
     login: () => {},
     logout: () => {},
@@ -145,13 +145,13 @@ function renderScreen(queryClient: QueryClient, template: StackTemplate = stackT
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthContext.Provider value={authValue()}>
-        <MemoryRouter initialEntries={["/stacks/stack_1/templates/st_1/upgrade"]}>
+        <MemoryRouter initialEntries={["/stacks/stack_1/templates/st_1/change-revision"]}>
           <Routes>
             <Route
-              path="/stacks/:stackId/templates/:stackTemplateId/upgrade"
+              path="/stacks/:stackId/templates/:stackTemplateId/change-revision"
               element={
                 <StackTemplateContext.Provider value={{ stackId: "stack_1", stackTemplate: template }}>
-                  <UpgradeStackTemplateScreen />
+                  <ChangeRevisionScreen />
                 </StackTemplateContext.Provider>
               }
             />
@@ -163,7 +163,7 @@ function renderScreen(queryClient: QueryClient, template: StackTemplate = stackT
   );
 }
 
-describe("UpgradeStackTemplateScreen", () => {
+describe("ChangeRevisionScreen", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
@@ -172,7 +172,7 @@ describe("UpgradeStackTemplateScreen", () => {
 
   it("preselects the first same-source alternative revision", () => {
     const queryClient = testQueryClient();
-    seedUpgradeable(queryClient);
+    seedChangeable(queryClient);
 
     renderScreen(queryClient);
 
@@ -200,37 +200,37 @@ describe("UpgradeStackTemplateScreen", () => {
     expect(options[0]).toContain("0000000");
   });
 
-  it("excludes the installed revision and other source templates from the candidates", async () => {
+  it("excludes the installed revision and other templates from the candidates", async () => {
     const queryClient = testQueryClient();
-    seedUpgradeable(queryClient);
+    seedChangeable(queryClient);
     seedTemplates(queryClient, [
       templateRevision({ id: "rev_next" }),
       templateRevision({ id: "rev_current" }),
-      templateRevision({ id: "rev_elsewhere", source_template_id: "tmpl_src_2" }),
+      templateRevision({ id: "rev_elsewhere", template_id: "tmpl_src_2" }),
       templateRevision({ id: "rev_pending", status: "pending_validation" })
     ]);
 
     renderScreen(queryClient);
 
-    // Only rev_next: the installed revision, the other source template's and
+    // Only rev_next: the installed revision, the other template's and
     // the unvalidated one are all left out.
     expect(await targetOptions()).toHaveLength(1);
   });
 
   it("marks variables as added, carried, or removed against the target revision", () => {
     const queryClient = testQueryClient();
-    seedUpgradeable(queryClient);
+    seedChangeable(queryClient);
 
     renderScreen(queryClient);
 
-    expect(screen.getByTestId("upgrade-added-new_var")).toBeTruthy();
-    expect(screen.getByTestId("upgrade-removed-legacy_flag")).toBeTruthy();
+    expect(screen.getByTestId("change-revision-added-new_var")).toBeTruthy();
+    expect(screen.getByTestId("change-revision-removed-legacy_flag")).toBeTruthy();
     expect((screen.getByLabelText(/region/) as HTMLInputElement).value).toBe("us-east-1");
   });
 
-  it("upgrades with a config built only from the target revision's variables", async () => {
+  it("changes revision with a config built only from the target revision's variables", async () => {
     const queryClient = testQueryClient();
-    seedUpgradeable(queryClient);
+    seedChangeable(queryClient);
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ id: "st_1" }), {
         status: 200,
@@ -247,7 +247,7 @@ describe("UpgradeStackTemplateScreen", () => {
     expect(screen.getByTestId("location").textContent).toBe("/stacks/stack_1/templates/st_1/runs");
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("/v1/tenants/tenant_123/stack-templates/st_1/upgrade");
+    expect(url).toBe("/v1/tenants/tenant_123/stack-templates/st_1/change-revision");
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toEqual({
       target_template_revision_id: "rev_next",
@@ -273,7 +273,7 @@ describe("UpgradeStackTemplateScreen", () => {
 
     renderScreen(queryClient);
 
-    expect(screen.getByTestId("upgrade-loading")).toBeTruthy();
+    expect(screen.getByTestId("change-revision-loading")).toBeTruthy();
     expect(screen.queryByText(/is no longer used and will be dropped/)).toBeNull();
     expect(screen.queryByText(/is new in this revision/)).toBeNull();
     expect(screen.queryByRole("button", { name: /Change revision/ })).toBeNull();
@@ -300,7 +300,7 @@ describe("UpgradeStackTemplateScreen", () => {
     renderScreen(queryClient);
 
     // The preselected first candidate, rev_next, has already loaded.
-    expect(screen.getByTestId("upgrade-added-new_var")).toBeTruthy();
+    expect(screen.getByTestId("change-revision-added-new_var")).toBeTruthy();
     expect(screen.getByLabelText(/new_var/)).toBeTruthy();
 
     // Switch to the second candidate with fetch stalled: keepPreviousData
@@ -314,10 +314,10 @@ describe("UpgradeStackTemplateScreen", () => {
     await user.click(within(await screen.findByRole("listbox")).getByRole("option", { name: /aa00bb1/ }));
     await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
 
-    expect(screen.getByTestId("upgrade-target-variables-loading")).toBeTruthy();
+    expect(screen.getByTestId("change-revision-target-variables-loading")).toBeTruthy();
     expect(screen.queryByLabelText(/new_var/)).toBeNull();
-    expect(screen.queryByTestId("upgrade-added-new_var")).toBeNull();
-    expect(screen.queryByTestId("upgrade-removed-legacy_flag")).toBeNull();
+    expect(screen.queryByTestId("change-revision-added-new_var")).toBeNull();
+    expect(screen.queryByTestId("change-revision-removed-legacy_flag")).toBeNull();
     expect((screen.getByRole("button", { name: /Change revision/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -325,7 +325,7 @@ describe("UpgradeStackTemplateScreen", () => {
   // commits.
   it("changes the target from the keyboard", async () => {
     const queryClient = testQueryClient();
-    seedUpgradeable(queryClient);
+    seedChangeable(queryClient);
     seedTemplates(queryClient, [
       templateRevision({ id: "rev_next", resolved_commit_sha: "9f21abc0000000" }),
       templateRevision({ id: "rev_next_2", resolved_commit_sha: "aa00bb1111111" }),
@@ -351,11 +351,11 @@ describe("UpgradeStackTemplateScreen", () => {
 
   it("guards the direct-URL path when the installed template is mid-destroy", () => {
     const queryClient = testQueryClient();
-    seedUpgradeable(queryClient);
+    seedChangeable(queryClient);
 
     renderScreen(queryClient, stackTemplate({ lifecycle: "destroying" }));
 
-    expect(screen.getByTestId("upgrade-locked").textContent).toContain("Destroy in progress.");
+    expect(screen.getByTestId("change-revision-locked").textContent).toContain("Destroy in progress.");
     expect(screen.queryByRole("button", { name: /Change revision/ })).toBeNull();
   });
 
@@ -363,30 +363,30 @@ describe("UpgradeStackTemplateScreen", () => {
   // active, so the direct URL says why instead of offering a form.
   it("says why a template whose destroy failed cannot change revision", () => {
     const queryClient = testQueryClient();
-    seedUpgradeable(queryClient);
+    seedChangeable(queryClient);
 
     renderScreen(queryClient, stackTemplate({ lifecycle: "failed" }));
 
-    expect(screen.getByTestId("upgrade-locked").textContent).toContain("A template whose destroy failed cannot change revision.");
+    expect(screen.getByTestId("change-revision-locked").textContent).toContain("A template whose destroy failed cannot change revision.");
     expect(screen.queryByRole("button", { name: /Change revision/ })).toBeNull();
     expect(screen.getByRole("link", { name: "Settings" })).toBeTruthy();
   });
 
   it("reports when no other active revisions are available", () => {
     const queryClient = testQueryClient();
-    seedUpgradeable(queryClient);
+    seedChangeable(queryClient);
     seedTemplates(queryClient, [templateRevision({ id: "rev_current" })]);
 
     renderScreen(queryClient);
 
-    expect(screen.getByTestId("upgrade-no-alternatives")).toBeTruthy();
+    expect(screen.getByTestId("change-revision-no-alternatives")).toBeTruthy();
     expect(screen.getByText("No other active revisions available.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Change revision/ })).toBeNull();
   });
 
   it("shows an error instead of a false diff when the target variables fail to load", async () => {
     const queryClient = testQueryClient();
-    seedUpgradeable(queryClient);
+    seedChangeable(queryClient);
     // A permanently failed variables fetch leaves data undefined, which the
     // partition reads as "the target declares no variables" — indistinguishable
     // from a real empty revision, and so rendered as every current variable
@@ -406,14 +406,14 @@ describe("UpgradeStackTemplateScreen", () => {
 
     renderScreen(queryClient);
 
-    await waitFor(() => expect(screen.getByTestId("upgrade-load-error")).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId("change-revision-load-error")).toBeTruthy());
     expect(screen.queryByText(/is no longer used and will be dropped/)).toBeNull();
     expect(screen.queryByRole("button", { name: /Change revision/ })).toBeNull();
   });
 
   it("shows an error when the installed template's variables fail to load", async () => {
     const queryClient = testQueryClient();
-    seedUpgradeable(queryClient);
+    seedChangeable(queryClient);
     queryClient.removeQueries({ queryKey: queryKeys.templateRevisionVariables("tenant_123", "rev_current") });
     // The 401 also drives client.ts's fetchWithAuth to navigate via
     // globalThis.location.assign; stub it so jsdom does not attempt (and
@@ -428,14 +428,14 @@ describe("UpgradeStackTemplateScreen", () => {
 
     renderScreen(queryClient);
 
-    await waitFor(() => expect(screen.getByTestId("upgrade-load-error")).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId("change-revision-load-error")).toBeTruthy());
     expect(screen.queryByText(/is new in this revision/)).toBeNull();
     expect(screen.queryByRole("button", { name: /Change revision/ })).toBeNull();
   });
 
   it("refuses a structured value that isn't JSON before any request", async () => {
     const queryClient = testQueryClient();
-    seedUpgradeable(queryClient);
+    seedChangeable(queryClient);
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_next"), [
       variable({ name: "region", template_revision_id: "rev_next" }),
       variable({ name: "new_var", template_revision_id: "rev_next", type_expression: "map(string)" })
@@ -463,9 +463,9 @@ describe("UpgradeStackTemplateScreen", () => {
     expect(JSON.parse(init.body as string).config).toEqual({ region: "us-east-1", new_var: { team: "payments" } });
   });
 
-  it("surfaces a failed upgrade without leaving the screen", async () => {
+  it("surfaces a failed revision change without leaving the screen", async () => {
     const queryClient = testQueryClient();
-    seedUpgradeable(queryClient);
+    seedChangeable(queryClient);
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ type: "about:blank", title: "Conflict", detail: "run in progress" }), {
         status: 409,
@@ -477,7 +477,7 @@ describe("UpgradeStackTemplateScreen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Change revision/ }));
 
-    await waitFor(() => expect(screen.getByTestId("upgrade-stack-template-error")).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId("change-revision-stack-template-error")).toBeTruthy());
   });
 
   // The target revision's variables are the only inputs on screen, so an
@@ -485,7 +485,7 @@ describe("UpgradeStackTemplateScreen", () => {
   // variable only the current revision had, stays in the form line.
   it("puts errors on the target's variables and says the rest in the form line", async () => {
     const queryClient = testQueryClient();
-    seedUpgradeable(queryClient);
+    seedChangeable(queryClient);
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -506,7 +506,7 @@ describe("UpgradeStackTemplateScreen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Change revision/ }));
 
-    await waitFor(() => expect(screen.getByTestId("upgrade-stack-template-error").textContent).toBe("retired_var is not a variable of this template"));
+    await waitFor(() => expect(screen.getByTestId("change-revision-stack-template-error").textContent).toBe("retired_var is not a variable of this template"));
     expect(screen.getByLabelText(/new_var/).getAttribute("aria-invalid")).toBe("true");
     expect(screen.getByText("new_var is required")).toBeTruthy();
   });
@@ -516,7 +516,7 @@ describe("UpgradeStackTemplateScreen", () => {
   // mid-edit — taking every value typed here with it.
   it("marks itself unsaved once a variable is edited, so SessionProvider's proactive re-auth defers", () => {
     const queryClient = testQueryClient();
-    seedUpgradeable(queryClient);
+    seedChangeable(queryClient);
 
     renderScreen(queryClient);
 
@@ -527,7 +527,7 @@ describe("UpgradeStackTemplateScreen", () => {
 
   it("leads with a crumb back to Settings", () => {
     const queryClient = testQueryClient();
-    seedUpgradeable(queryClient);
+    seedChangeable(queryClient);
 
     renderScreen(queryClient);
 
@@ -540,7 +540,7 @@ describe("UpgradeStackTemplateScreen", () => {
 
   it("goes back to Settings on Cancel", async () => {
     const queryClient = testQueryClient();
-    seedUpgradeable(queryClient);
+    seedChangeable(queryClient);
 
     renderScreen(queryClient);
     await userEvent.setup().click(screen.getByRole("link", { name: "Cancel" }));
@@ -550,13 +550,13 @@ describe("UpgradeStackTemplateScreen", () => {
 
   it("states what the change does to the config before the fields", () => {
     const queryClient = testQueryClient();
-    seedUpgradeable(queryClient);
+    seedChangeable(queryClient);
 
     renderScreen(queryClient);
 
-    const added = screen.getByTestId("upgrade-added-new_var");
+    const added = screen.getByTestId("change-revision-added-new_var");
     expect(added.textContent).toBe("new_var is new in this revision.");
-    expect(screen.getByTestId("upgrade-removed-legacy_flag").textContent).toBe("legacy_flag is no longer used and will be dropped.");
+    expect(screen.getByTestId("change-revision-removed-legacy_flag").textContent).toBe("legacy_flag is no longer used and will be dropped.");
     expect(Boolean(added.compareDocumentPosition(screen.getByLabelText(/region/)) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
   });
 });

@@ -26,7 +26,7 @@ func TestStartTemplateRunExecutesWorkflow(t *testing.T) {
 		TenantID:        domain.TenantID("tenant_123"),
 		StackTemplateID: domain.StackTemplateID("stack_template_123"),
 		Operation:       domain.OperationPlan,
-		SelectedRef:     "main",
+		SourceRef:       "main",
 		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
 	}
 

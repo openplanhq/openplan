@@ -22,7 +22,7 @@ function seed(): QueryClient {
 
 function renderTab(queryClient: QueryClient) {
   const router = createMemoryRouter(
-    [{ path: "/templates/:sourceTemplateId", element: <TemplatePanel />, children: [{ path: "revisions", element: <RevisionsTab /> }] }],
+    [{ path: "/templates/:templateId", element: <TemplatePanel />, children: [{ path: "revisions", element: <RevisionsTab /> }] }],
     { initialEntries: ["/templates/tpl_1/revisions"] }
   );
   render(

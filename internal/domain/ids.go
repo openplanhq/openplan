@@ -13,7 +13,7 @@ func (id ID) Valid() bool {
 type (
 	TenantID           ID
 	UserID             ID
-	SourceTemplateID   ID
+	TemplateID         ID
 	TemplateRevisionID ID
 	TemplateSyncID     ID
 	StackID            ID

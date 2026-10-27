@@ -22,7 +22,7 @@ export default function TemplateSettingsTab() {
   // template shares its ref, so the commit is what tells them apart. The
   // sentence stands without it while the template's revisions load.
   const revision =
-    useTemplateRevisionsQuery(tenantID, stackTemplate.source_template_id).data?.find((candidate) => candidate.id === stackTemplate.desired_template_revision_id) ?? null;
+    useTemplateRevisionsQuery(tenantID, stackTemplate.template_id).data?.find((candidate) => candidate.id === stackTemplate.desired_template_revision_id) ?? null;
   const commit = revision ? shortCommitSHA(revision.resolved_commit_sha) : "";
   const actionClass = cn(buttonClass("outline"), "pointer-coarse:h-11");
 
@@ -48,7 +48,7 @@ export default function TemplateSettingsTab() {
           </>
         }
         reason={reason}
-        reasonTestId="upgrade-disabled-reason"
+        reasonTestId="change-revision-disabled-reason"
         action={
           reason ? (
             <button type="button" disabled className={actionClass} data-testid="change-stack-template-revision-link">
@@ -56,7 +56,7 @@ export default function TemplateSettingsTab() {
             </button>
           ) : (
             <Link
-              to={stackTemplatePath(stackId, stackTemplate.id, "upgrade")}
+              to={stackTemplatePath(stackId, stackTemplate.id, "change-revision")}
               className={actionClass}
               data-testid="change-stack-template-revision-link"
             >

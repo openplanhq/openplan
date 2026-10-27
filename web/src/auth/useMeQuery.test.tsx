@@ -27,7 +27,7 @@ describe("useMeQuery", () => {
           sub: "user_1",
           display_name: "Alice",
           email: "alice@example.com",
-          global_capabilities: { can_create_stack: false, can_publish_template: false },
+          global_capabilities: { can_create_stack: false, can_manage_templates: false },
           tenant_id: "tenant_123",
         }),
         { status: 200, headers: { "content-type": "application/json" } }
@@ -42,7 +42,7 @@ describe("useMeQuery", () => {
       sub: "user_1",
       display_name: "Alice",
       email: "alice@example.com",
-      global_capabilities: { can_create_stack: false, can_publish_template: false },
+      global_capabilities: { can_create_stack: false, can_manage_templates: false },
       tenant_id: "tenant_123",
     });
   });

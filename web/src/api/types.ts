@@ -58,13 +58,13 @@ export const problemTypes = {
   planStale: `${problemBase}plan-stale`,
   runNotApprovable: `${problemBase}run-not-approvable`,
   runNotDiscardable: `${problemBase}run-not-discardable`,
-  templateNotRunnable: `${problemBase}template-not-runnable`,
-  templateNotEditable: `${problemBase}template-not-editable`,
-  templateNotUpgradable: `${problemBase}template-not-upgradable`,
+  stackTemplateNotRunnable: `${problemBase}stack-template-not-runnable`,
+  stackTemplateNotEditable: `${problemBase}stack-template-not-editable`,
+  stackTemplateRevisionNotChangeable: `${problemBase}stack-template-revision-not-changeable`,
   revisionNotInstallable: `${problemBase}revision-not-installable`,
   templateInUse: `${problemBase}template-in-use`,
   duplicateSlug: `${problemBase}duplicate-slug`,
-  duplicateComponentKey: `${problemBase}duplicate-component-key`,
+  duplicateStackTemplateKey: `${problemBase}duplicate-stack-template-key`,
   duplicateCredentialName: `${problemBase}duplicate-credential-name`,
   lastOwner: `${problemBase}last-owner`,
   credentialEncryptionUnavailable: `${problemBase}credential-encryption-unavailable`,
@@ -136,7 +136,7 @@ export interface Template {
 export interface TemplateRevision {
   id: string;
   tenant_id: string;
-  source_template_id: string;
+  template_id: string;
   repo_owner: string;
   repo_name: string;
   source_ref: string;
@@ -185,12 +185,12 @@ export interface StackListItem extends Stack {
 export interface StackTemplate {
   id: string;
   stack_id: string;
-  component_key: string;
-  source_template_id: string;
+  key: string;
+  template_id: string;
   desired_template_revision_id: string;
   last_applied_template_revision_id: string;
   // The desired revision's ref, resolved by the server per request. A label,
-  // not component state — the component does not own a ref.
+  // not stack template state — an installed template does not own a ref.
   source_ref: string;
   workspace_name: string;
   display_name: string;
@@ -281,7 +281,7 @@ export interface TemplateRun {
   stack_template_id: string;
   template_revision_id: string;
   operation: Operation;
-  selected_ref: string;
+  source_ref: string;
   resolved_commit_sha: string;
   status: TemplateRunStatus;
   // The latest step of the workflow that started last. Empty until that

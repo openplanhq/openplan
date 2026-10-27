@@ -909,23 +909,23 @@ func (recordingStore) CreateTemplateSync(context.Context, domain.TemplateSync) e
 	return nil
 }
 
-func (recordingStore) CreateSourceTemplate(_ context.Context, template domain.SourceTemplate) (domain.SourceTemplate, error) {
+func (recordingStore) CreateTemplate(_ context.Context, template domain.Template) (domain.Template, error) {
 	return template, nil
 }
 
-func (recordingStore) GetSourceTemplate(context.Context, domain.TenantID, domain.SourceTemplateID) (domain.SourceTemplate, error) {
-	return domain.SourceTemplate{}, nil
+func (recordingStore) GetTemplate(context.Context, domain.TenantID, domain.TemplateID) (domain.Template, error) {
+	return domain.Template{}, nil
 }
 
-func (recordingStore) DeleteSourceTemplate(context.Context, domain.TenantID, domain.SourceTemplateID) error {
+func (recordingStore) DeleteTemplate(context.Context, domain.TenantID, domain.TemplateID) error {
 	return nil
 }
 
-func (recordingStore) ListSourceTemplatesPage(context.Context, domain.TenantID, *app.SourceTemplateCursor, int) ([]domain.SourceTemplate, error) {
+func (recordingStore) ListTemplatesPage(context.Context, domain.TenantID, *app.TemplateCursor, int) ([]domain.Template, error) {
 	return nil, nil
 }
 
-func (recordingStore) ListTemplateRevisionsBySourcePage(context.Context, domain.TenantID, domain.SourceTemplateID, *app.TemplateRevisionCursor, int) ([]domain.TemplateRevision, error) {
+func (recordingStore) ListTemplateRevisionsBySourcePage(context.Context, domain.TenantID, domain.TemplateID, *app.TemplateRevisionCursor, int) ([]domain.TemplateRevision, error) {
 	return nil, nil
 }
 

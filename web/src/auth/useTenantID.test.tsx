@@ -17,7 +17,7 @@ describe("useTenantID", () => {
     const wrapper = wrapperWith({
       ...session,
       status: "authenticated",
-      me: { sub: "s1", tenant_id: "default", display_name: "Test User", global_capabilities: { can_create_stack: false, can_publish_template: false, can_manage_platform_access: false } }
+      me: { sub: "s1", tenant_id: "default", display_name: "Test User", global_capabilities: { can_create_stack: false, can_manage_templates: false, can_manage_platform_access: false } }
     });
 
     const { result } = renderHook(() => useTenantID(), { wrapper });

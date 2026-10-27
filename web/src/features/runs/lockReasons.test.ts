@@ -17,7 +17,7 @@ function run(status: TemplateRun["status"]): TemplateRun {
     stack_template_id: "st_1",
     template_revision_id: "rev_1",
     operation: "apply",
-    selected_ref: "main",
+    source_ref: "main",
     resolved_commit_sha: "abcdef1234567890",
     status,
     step: "",

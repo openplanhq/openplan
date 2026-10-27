@@ -57,14 +57,14 @@ func TestListTemplateRunsPageAndGetByNumber(t *testing.T) {
 	for number := 1; number <= 5; number++ {
 		seedTemplateRun(t, ctx, pool, domain.TemplateRun{
 			ID: domain.TemplateRunID(fmt.Sprintf("run_%d", number)), TenantID: "tenant_123",
-			StackTemplateID: "stack_template_123", Operation: domain.OperationPlan, SelectedRef: "main",
+			StackTemplateID: "stack_template_123", Operation: domain.OperationPlan, SourceRef: "main",
 			WorkspaceName: "ws", Status: domain.TemplateRunCompleted, TriggerActor: "user_123",
 			CreatedAt: time.Date(2026, 10, 17, 9, number, 0, 0, time.UTC),
 		})
 	}
 	seedTemplateRun(t, ctx, pool, domain.TemplateRun{
 		ID: "run_elsewhere", TenantID: "tenant_123", StackTemplateID: "stack_template_456",
-		Operation: domain.OperationPlan, SelectedRef: "main", WorkspaceName: "ws",
+		Operation: domain.OperationPlan, SourceRef: "main", WorkspaceName: "ws",
 		Status: domain.TemplateRunCompleted, TriggerActor: "user_123", CreatedAt: time.Now(),
 	})
 
@@ -91,31 +91,31 @@ func TestListTemplateRunsPageAndGetByNumber(t *testing.T) {
 	require.ErrorIs(t, err, app.ErrNotFound, "another tenant's run is not found")
 }
 
-func TestListSourceTemplatesPageKeyset(t *testing.T) {
+func TestListTemplatesPageKeyset(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	store := NewStore(openMigratedTestPool(t, ctx))
 	at := time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC)
 	for i := range 5 {
-		_, err := store.CreateSourceTemplate(ctx, domain.SourceTemplate{
-			ID: domain.SourceTemplateID(fmt.Sprintf("source_%d", i)), TenantID: "tenant_123",
+		_, err := store.CreateTemplate(ctx, domain.Template{
+			ID: domain.TemplateID(fmt.Sprintf("source_%d", i)), TenantID: "tenant_123",
 			RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: fmt.Sprintf("modules/m%d", i),
 			// Two share a created_at, so the id has to break the tie.
 			CreatedAt: at.Add(-time.Duration(i/2*2) * time.Minute),
 		})
 		require.NoError(t, err)
 	}
-	_, err := store.CreateSourceTemplate(ctx, domain.SourceTemplate{
+	_, err := store.CreateTemplate(ctx, domain.Template{
 		ID: "source_elsewhere", TenantID: "tenant_456", RepoOwner: "acme", RepoName: "infra",
 		SourceRef: "main", RootPath: "modules/m0", CreatedAt: at,
 	})
 	require.NoError(t, err)
 
-	var seen []domain.SourceTemplateID
-	var after *app.SourceTemplateCursor
+	var seen []domain.TemplateID
+	var after *app.TemplateCursor
 	for range 5 {
-		page, err := store.ListSourceTemplatesPage(ctx, "tenant_123", after, 2)
+		page, err := store.ListTemplatesPage(ctx, "tenant_123", after, 2)
 		require.NoError(t, err)
 		if len(page) == 0 {
 			break
@@ -124,11 +124,11 @@ func TestListSourceTemplatesPageKeyset(t *testing.T) {
 			seen = append(seen, template.ID)
 		}
 		last := page[len(page)-1]
-		after = &app.SourceTemplateCursor{CreatedAt: last.CreatedAt, ID: last.ID}
+		after = &app.TemplateCursor{CreatedAt: last.CreatedAt, ID: last.ID}
 	}
-	assert.Equal(t, []domain.SourceTemplateID{"source_1", "source_0", "source_3", "source_2", "source_4"}, seen)
+	assert.Equal(t, []domain.TemplateID{"source_1", "source_0", "source_3", "source_2", "source_4"}, seen)
 
-	_, err = store.ListSourceTemplatesPage(ctx, "tenant_123", nil, 0)
+	_, err = store.ListTemplatesPage(ctx, "tenant_123", nil, 0)
 	require.Error(t, err)
 }
 
@@ -139,14 +139,14 @@ func TestListTemplateRevisionsBySourcePageKeyset(t *testing.T) {
 
 	ctx := context.Background()
 	store := NewStore(openMigratedTestPool(t, ctx))
-	seedSourceTemplate(t, ctx, store, "tenant_123", "source_1")
-	seedSourceTemplate(t, ctx, store, "tenant_123", "source_2")
+	seedTemplate(t, ctx, store, "tenant_123", "source_1")
+	seedTemplate(t, ctx, store, "tenant_123", "source_2")
 	at := time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC)
 	for i := range 5 {
 		_, err := store.UpsertTemplateRevisionWithVariables(ctx, domain.TemplateRevision{
 			ID: domain.TemplateRevisionID(fmt.Sprintf("rev_%d", i)), TenantID: "tenant_123", RepoOwner: "acme",
 			RepoName: "infra", SourceRef: "main", ResolvedCommitSHA: fmt.Sprintf("sha_%d", i), RootPath: ".",
-			SourceTemplateID: "source_1", Name: "n", Status: domain.TemplateRevisionActive,
+			TemplateID: "source_1", Name: "n", Status: domain.TemplateRevisionActive,
 			CreatedAt: at.Add(-time.Duration(i/2*2) * time.Minute),
 		}, nil)
 		require.NoError(t, err)
@@ -154,7 +154,7 @@ func TestListTemplateRevisionsBySourcePageKeyset(t *testing.T) {
 	_, err := store.UpsertTemplateRevisionWithVariables(ctx, domain.TemplateRevision{
 		ID: "rev_other_template", TenantID: "tenant_123", RepoOwner: "acme", RepoName: "infra",
 		SourceRef: "main", ResolvedCommitSHA: "sha_other", RootPath: "modules/db",
-		SourceTemplateID: "source_2", Name: "db", Status: domain.TemplateRevisionActive, CreatedAt: at,
+		TemplateID: "source_2", Name: "db", Status: domain.TemplateRevisionActive, CreatedAt: at,
 	}, nil)
 	require.NoError(t, err)
 

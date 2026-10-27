@@ -24,8 +24,8 @@ function template(id: string, overrides: Partial<StackTemplate> = {}): StackTemp
   return {
     id,
     stack_id: "stack_1",
-    component_key: id,
-    source_template_id: "source_1",
+    key: id,
+    template_id: "source_1",
     desired_template_revision_id: "rev_1",
     last_applied_template_revision_id: "rev_1",
     source_ref: "v1.0.0",
@@ -85,7 +85,7 @@ function seed(templates: StackTemplate[], capabilities: StackCapabilities = allA
 
 function authValue(): AuthContextValue {
   return {
-    me: { sub: "user_1", tenant_id: TENANT, display_name: "Test User", global_capabilities: { can_create_stack: false, can_publish_template: false, can_manage_platform_access: false } },
+    me: { sub: "user_1", tenant_id: TENANT, display_name: "Test User", global_capabilities: { can_create_stack: false, can_manage_templates: false, can_manage_platform_access: false } },
     status: "authenticated",
     login: () => {},
     logout: () => {}
@@ -110,7 +110,7 @@ function renderPage(queryClient: QueryClient, path: string) {
               { path: "runs/:runNumber", element: <p data-testid="run-content">run</p> },
               { path: "variables", element: <p data-testid="variables-content">variables</p> },
               { path: "settings", element: <p data-testid="settings-content">settings</p> },
-              { path: "upgrade", element: <p data-testid="upgrade-content">upgrade</p> }
+              { path: "change-revision", element: <p data-testid="change-revision-content">change revision</p> }
             ]
           }
         ]
@@ -201,7 +201,7 @@ describe("StackPage selection", () => {
   it.each([
     ["/stacks/stack_1/templates/network/variables", "/stacks/stack_1/templates/eks-cluster/variables"],
     ["/stacks/stack_1/templates/network/runs/3", "/stacks/stack_1/templates/eks-cluster/runs"],
-    ["/stacks/stack_1/templates/network/upgrade", "/stacks/stack_1/templates/eks-cluster/settings"],
+    ["/stacks/stack_1/templates/network/change-revision", "/stacks/stack_1/templates/eks-cluster/settings"],
     ["/stacks/stack_1/templates/new", "/stacks/stack_1/templates/eks-cluster/runs"]
   ])("from %s, another template's row opens %s", (from, to) => {
     renderPage(seed([network, eks]), from);

@@ -15,8 +15,8 @@ function stackTemplate(overrides: Partial<StackTemplate> = {}): StackTemplate {
   return {
     id: "stpl_1",
     stack_id: "stack_1",
-    component_key: "primary",
-    source_template_id: "tpl_1",
+    key: "primary",
+    template_id: "tpl_1",
     desired_template_revision_id: "rev_1",
     last_applied_template_revision_id: "",
     source_ref: "main",
@@ -40,7 +40,7 @@ function run(overrides: Partial<TemplateRun> = {}): TemplateRun {
     stack_template_id: "stpl_1",
     template_revision_id: "rev_1",
     operation: "plan",
-    selected_ref: "main",
+    source_ref: "main",
     resolved_commit_sha: "abcdef1234567890",
     status: "queued",
     step: "",
@@ -65,7 +65,7 @@ function testQueryClient(): QueryClient {
 
 function authValue(): AuthContextValue {
   return {
-    me: { sub: "user_1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_publish_template: false, can_manage_platform_access: false } },
+    me: { sub: "user_1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_manage_templates: false, can_manage_platform_access: false } },
     status: "authenticated",
     login: () => {},
     logout: () => {}

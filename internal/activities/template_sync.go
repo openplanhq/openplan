@@ -35,7 +35,7 @@ type TemplateSyncStore interface {
 	RecordTemplateSyncStatus(context.Context, domain.TemplateSyncStatusActivityInput) error
 	RecordTemplateSyncStep(context.Context, domain.TemplateSyncStepActivityInput) error
 	// UpsertTemplateRevisionWithVariables writes the revision into its
-	// existing source template, and fails wrapping os.ErrNotExist when that
+	// existing template, and fails wrapping os.ErrNotExist when that
 	// template no longer exists.
 	UpsertTemplateRevisionWithVariables(context.Context, domain.TemplateRevision, []domain.TemplateVariable) (domain.TemplateRevision, error)
 }
@@ -93,7 +93,7 @@ func (activities *TemplateSyncActivities) RecordTemplateSyncStep(ctx context.Con
 func (activities *TemplateSyncActivities) SyncTemplate(ctx context.Context, input domain.TemplateSyncActivityInput) (output domain.TemplateSyncActivityOutput, err error) {
 	// The sync never creates a template, so without one it has nothing to
 	// write into. Checked first, so such a sync clones nothing.
-	if input.SourceTemplateID == "" {
+	if input.TemplateID == "" {
 		return invalidTemplateSyncOutput("sync names no template to write into"), nil
 	}
 	rootPath, err := safeTemplateRootPath(input.RootPath)
@@ -170,7 +170,7 @@ func (activities *TemplateSyncActivities) SyncTemplate(ctx context.Context, inpu
 	templateRevision := domain.TemplateRevision{
 		ID:                templateRevisionID,
 		TenantID:          input.TenantID,
-		SourceTemplateID:  input.SourceTemplateID,
+		TemplateID:        input.TemplateID,
 		RepoOwner:         input.RepoOwner,
 		RepoName:          input.RepoName,
 		SourceRef:         input.SourceRef,

@@ -49,7 +49,7 @@ const me = {
   display_name: "Ada",
   email: "ada@example.test",
   tenant_id: "tenant_123",
-  global_capabilities: { can_create_stack: true, can_publish_template: true },
+  global_capabilities: { can_create_stack: true, can_manage_templates: true },
   session_expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString()
 };
 

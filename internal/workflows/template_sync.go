@@ -58,13 +58,13 @@ func newTemplateSync(ctx workflow.Context, input domain.TemplateSyncWorkflowInpu
 func (r *templateSync) sync() (domain.TemplateSyncActivityOutput, error) {
 	var synced domain.TemplateSyncActivityOutput
 	err := ExecuteStep(r.ctx, r, domain.TemplateSyncStepSyncing, domain.SyncTemplateActivityName, domain.TemplateSyncActivityInput{
-		SyncID:           r.input.SyncID,
-		TenantID:         r.input.TenantID,
-		SourceTemplateID: r.input.SourceTemplateID,
-		RepoOwner:        r.input.RepoOwner,
-		RepoName:         r.input.RepoName,
-		SourceRef:        r.input.SourceRef,
-		RootPath:         r.input.RootPath,
+		SyncID:     r.input.SyncID,
+		TenantID:   r.input.TenantID,
+		TemplateID: r.input.TemplateID,
+		RepoOwner:  r.input.RepoOwner,
+		RepoName:   r.input.RepoName,
+		SourceRef:  r.input.SourceRef,
+		RootPath:   r.input.RootPath,
 	}).Get(r.ctx, &synced)
 	return synced, err
 }

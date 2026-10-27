@@ -129,7 +129,7 @@ func TestPrepareWorkspaceRejectsUnsafePathComponents(t *testing.T) {
 
 // The revision is a commit, so the run checks out that commit. Following the
 // ref instead would let the source move between a plan and the apply approved
-// against it, and would ignore the revision entirely after an upgrade, since
+// against it, and would ignore the revision entirely after a revision change, since
 // the installed ref is never updated to match the new revision.
 func TestFetchSourceChecksOutTheResolvedCommitRatherThanTheRef(t *testing.T) {
 	t.Parallel()
@@ -149,7 +149,7 @@ func TestFetchSourceChecksOutTheResolvedCommitRatherThanTheRef(t *testing.T) {
 		WorkspacePath: workspacePath,
 		RepoOwner:     "acme",
 		RepoName:      "infra-templates",
-		// The ref the component was installed from is stale relative to the
+		// The ref the template was installed from is stale relative to the
 		// revision this run is for; it must not decide what gets checked out.
 		SourceRef:         "main",
 		ResolvedCommitSHA: "a1b2c3d",

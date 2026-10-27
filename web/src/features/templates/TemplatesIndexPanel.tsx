@@ -22,13 +22,13 @@ export default function TemplatesIndexPanel() {
           <EmptyHeader className="gap-3">
             <h2 className="text-label">No templates yet</h2>
             <RequireCapability
-              capability="can_publish_template"
+              capability="can_manage_templates"
               fallback={<EmptyDescription className="text-meta">Templates appear here once someone who can publish registers one.</EmptyDescription>}
             >
               <EmptyDescription className="text-meta">Register a Terraform module from a Git repository to make it available to your stacks.</EmptyDescription>
             </RequireCapability>
           </EmptyHeader>
-          <RequireCapability capability="can_publish_template">
+          <RequireCapability capability="can_manage_templates">
             <Link to="/templates/new" className={cn(buttonClass("primary"), "pointer-coarse:h-11")}>
               <Plus data-icon="inline-start" aria-hidden="true" />
               Register template
@@ -40,7 +40,7 @@ export default function TemplatesIndexPanel() {
   }
 
   return (
-    <TemplatePanel sourceTemplateId={selectedId}>
+    <TemplatePanel templateId={selectedId}>
       <VariablesTab />
     </TemplatePanel>
   );

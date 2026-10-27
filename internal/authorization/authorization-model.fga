@@ -19,7 +19,7 @@ type platform
     # Capabilities. What routes check. Each one gates a real route; retiring a
     # route retires its capability.
     define can_create_stack: can_edit
-    define can_publish_template: can_edit
+    define can_manage_templates: can_edit
     define can_read_template: can_view
     # Granting and revoking platform roles, and the platform-wide person
     # search that picking someone for a role needs.
@@ -36,6 +36,10 @@ type stack
     # A ladder: viewer < operator < approver < owner. Each rung includes the
     # one below it, so one grant per user is always enough to express a role.
     define can_manage_access: owner or can_administer from parent
+    # Environment entries (secrets and variables) are managed by whoever
+    # manages access today; a relation of their own lets the two part
+    # without touching Go.
+    define can_manage_credentials: can_manage_access
     define can_approve: can_manage_access or approver
     define can_operate: can_approve or operator
     define can_view: can_operate or viewer or can_view from parent

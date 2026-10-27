@@ -144,7 +144,7 @@ func TestRequiredBodyIDsAreFieldErrors(t *testing.T) {
 
 	assertFieldIssues(t, validateAddTemplateToStackCommand(AddTemplateToStackCommand{TenantID: "t", StackID: "s"}),
 		"template_revision_id required")
-	assertFieldIssues(t, validateUpgradeStackTemplateCommand(UpgradeStackTemplateCommand{TenantID: "t", StackTemplateID: "s"}),
+	assertFieldIssues(t, validateChangeStackTemplateRevisionCommand(ChangeStackTemplateRevisionCommand{TenantID: "t", StackTemplateID: "s"}),
 		"target_template_revision_id required")
 	assertFieldIssues(t, validateUpdateStackTemplateConfigCommand(UpdateStackTemplateConfigCommand{TenantID: "t", StackTemplateID: "s"}),
 		"config required")

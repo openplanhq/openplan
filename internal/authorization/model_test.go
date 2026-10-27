@@ -46,12 +46,12 @@ func TestEmbeddedDSLTransformsToExpectedModel(t *testing.T) {
 		"platform": {
 			"root", "admin", "editor", "viewer",
 			"can_administer", "can_edit", "can_view",
-			"can_create_stack", "can_publish_template", "can_read_template",
+			"can_create_stack", "can_manage_templates", "can_read_template",
 			"can_manage_platform_access",
 		},
 		"stack": {
 			"owner", "operator", "approver", "viewer", "parent",
-			"can_view", "can_operate", "can_approve", "can_manage_access",
+			"can_view", "can_operate", "can_approve", "can_manage_access", "can_manage_credentials",
 		},
 	}
 	for typeName, names := range expected {

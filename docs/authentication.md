@@ -534,6 +534,7 @@ The roles are a ladder, viewer < operator < approver < owner: each one holds
 every permission of the role below it. The derived relations are exactly:
 
 - `can_manage_access = owner`
+- `can_manage_credentials = can_manage_access` (Environment secrets and variables)
 - `can_approve = can_manage_access or approver`
 - `can_operate = can_approve or operator`
 - `can_view = can_operate or viewer`
@@ -582,11 +583,11 @@ visibility is never an authorization boundary.
 
 | Route | Required permission |
 |---|---|
-| `POST /v1/tenants/{tenant_id}/templates` | Platform `can_publish_template` |
+| `POST /v1/tenants/{tenant_id}/templates` | Platform `can_manage_templates` |
 | `GET /v1/tenants/{tenant_id}/templates` | Platform `can_read_template` |
 | `GET /v1/tenants/{tenant_id}/templates/{template_id}` | Platform `can_read_template` |
-| `DELETE /v1/tenants/{tenant_id}/templates/{template_id}` | Platform `can_publish_template` |
-| `POST /v1/tenants/{tenant_id}/templates/{template_id}/syncs` | Platform `can_publish_template` |
+| `DELETE /v1/tenants/{tenant_id}/templates/{template_id}` | Platform `can_manage_templates` |
+| `POST /v1/tenants/{tenant_id}/templates/{template_id}/syncs` | Platform `can_manage_templates` |
 | `GET /v1/tenants/{tenant_id}/templates/{template_id}/revisions` | Platform `can_read_template` |
 | `GET /v1/tenants/{tenant_id}/template-revisions/{template_revision_id}/variables` | Platform `can_read_template` |
 | `POST /v1/tenants/{tenant_id}/stacks` | Global `platform-admin` or `stack-creator` |
@@ -594,7 +595,7 @@ visibility is never an authorization boundary.
 | `GET /v1/tenants/{tenant_id}/stacks/{stack_id}` | `can_view` |
 | `POST /v1/tenants/{tenant_id}/stacks/{stack_id}/templates` | `can_operate` |
 | `PUT /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/config` | Owning stack `can_operate` |
-| `POST /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/upgrade` | Owning stack `can_operate` |
+| `POST /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/change-revision` | Owning stack `can_operate` |
 | `POST /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/runs` | Owning stack `can_operate` |
 | `GET /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/runs` | Owning stack `can_view` |
 | `GET /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/runs/{run_number}` | Owning stack `can_view` |

@@ -33,10 +33,9 @@ type meResponse struct {
 // gates on what the caller may do, never on who they are.
 type globalCapabilities struct {
 	CanCreateStack bool `json:"can_create_stack"`
-	// CanPublishTemplate gates registering a template, which is also what the
-	// template detail screen's Sync button posts — so the button is hidden
-	// rather than left to earn a 403.
-	CanPublishTemplate bool `json:"can_publish_template"`
+	// CanManageTemplates gates registering, syncing and deleting a template, so
+	// the screens hide those buttons rather than leave them to earn a 403.
+	CanManageTemplates bool `json:"can_manage_templates"`
 	// CanManagePlatformAccess gates the Access nav item and /access, where
 	// platform roles are granted.
 	CanManagePlatformAccess bool `json:"can_manage_platform_access"`

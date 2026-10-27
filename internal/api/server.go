@@ -198,7 +198,7 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	// Replaces the whole desired config for an installed stack template.
 	server.handleTenantRoute("PUT", "/stack-templates/{stack_template_id}/config", server.handleUpdateStackTemplateConfig)
 	// Stages an installed stack template to a newer template revision.
-	server.handleTenantRoute("POST", "/stack-templates/{stack_template_id}/upgrade", server.handleUpgradeStackTemplate)
+	server.handleTenantRoute("POST", "/stack-templates/{stack_template_id}/change-revision", server.handleChangeStackTemplateRevision)
 
 	// Template run routes.
 	// Starts a Terraform operation for an installed stack template.
@@ -328,7 +328,7 @@ func (server *Server) handleMe(response http.ResponseWriter, request *http.Reque
 	}
 	writeJSON(response, http.StatusOK, meFromPrincipal(principal, server.tenantID, globalCapabilities{
 		CanCreateStack:          capabilities.CanCreateStack,
-		CanPublishTemplate:      capabilities.CanPublishTemplate,
+		CanManageTemplates:      capabilities.CanManageTemplates,
 		CanManagePlatformAccess: capabilities.CanManagePlatformAccess,
 	}))
 }
@@ -510,14 +510,14 @@ func (server *Server) handleListTemplates(response http.ResponseWriter, request 
 	}
 
 	now := server.service.Clock.Now()
-	items := mapItems(templates.Items, func(template domain.SourceTemplate) templateResponse { return newTemplateResponse(template, now) })
+	items := mapItems(templates.Items, func(template domain.Template) templateResponse { return newTemplateResponse(template, now) })
 	writeJSON(response, http.StatusOK, newListResponse(items, templates.NextCursor))
 }
 
 func (server *Server) handleGetTemplate(response http.ResponseWriter, request *http.Request) {
 	template, err := server.service.GetTemplate(request.Context(), app.GetTemplateCommand{
 		TenantID:   domain.TenantID(request.PathValue("tenant_id")),
-		TemplateID: domain.SourceTemplateID(request.PathValue("template_id")),
+		TemplateID: domain.TemplateID(request.PathValue("template_id")),
 	})
 	if err != nil {
 		writeAppError(response, err)
@@ -530,7 +530,7 @@ func (server *Server) handleGetTemplate(response http.ResponseWriter, request *h
 func (server *Server) handleDeleteTemplate(response http.ResponseWriter, request *http.Request) {
 	err := server.service.DeleteTemplate(request.Context(), app.DeleteTemplateCommand{
 		TenantID:   domain.TenantID(request.PathValue("tenant_id")),
-		TemplateID: domain.SourceTemplateID(request.PathValue("template_id")),
+		TemplateID: domain.TemplateID(request.PathValue("template_id")),
 	})
 	if err != nil {
 		writeAppError(response, err)
@@ -551,7 +551,7 @@ func (server *Server) handleStartTemplateSync(response http.ResponseWriter, requ
 
 	started, err := server.service.StartTemplateSync(request.Context(), app.StartTemplateSyncCommand{
 		TenantID:   domain.TenantID(request.PathValue("tenant_id")),
-		TemplateID: domain.SourceTemplateID(request.PathValue("template_id")),
+		TemplateID: domain.TemplateID(request.PathValue("template_id")),
 	})
 	if err != nil {
 		writeAppError(response, err)
@@ -569,7 +569,7 @@ func (server *Server) handleListTemplateRevisionsForTemplate(response http.Respo
 	}
 	revisions, err := server.service.ListTemplateRevisionsForTemplate(request.Context(), app.ListTemplateRevisionsForTemplateCommand{
 		TenantID:   domain.TenantID(request.PathValue("tenant_id")),
-		TemplateID: domain.SourceTemplateID(request.PathValue("template_id")),
+		TemplateID: domain.TemplateID(request.PathValue("template_id")),
 		Page:       page,
 	})
 	if err != nil {
@@ -816,7 +816,7 @@ func (server *Server) handleAddTemplateToStack(response http.ResponseWriter, req
 		TenantID:           domain.TenantID(request.PathValue("tenant_id")),
 		StackID:            domain.StackID(request.PathValue("stack_id")),
 		TemplateRevisionID: domain.TemplateRevisionID(body.TemplateRevisionID),
-		ComponentKey:       body.ComponentKey,
+		Key:                body.Key,
 		ConfigJSON:         configJSON,
 	})
 	if err != nil {
@@ -857,8 +857,8 @@ func (server *Server) handleUpdateStackTemplateConfig(response http.ResponseWrit
 	writeJSON(response, http.StatusOK, newStackTemplateResponse(stackTemplate))
 }
 
-func (server *Server) handleUpgradeStackTemplate(response http.ResponseWriter, request *http.Request) {
-	var body upgradeStackTemplateRequest
+func (server *Server) handleChangeStackTemplateRevision(response http.ResponseWriter, request *http.Request) {
+	var body changeStackTemplateRevisionRequest
 	if !decodeRequestBody(response, request, &body) {
 		return
 	}
@@ -872,7 +872,7 @@ func (server *Server) handleUpgradeStackTemplate(response http.ResponseWriter, r
 		}
 	}
 
-	stackTemplate, err := server.service.UpgradeStackTemplate(request.Context(), app.UpgradeStackTemplateCommand{
+	stackTemplate, err := server.service.ChangeStackTemplateRevision(request.Context(), app.ChangeStackTemplateRevisionCommand{
 		TenantID:                 domain.TenantID(request.PathValue("tenant_id")),
 		StackTemplateID:          domain.StackTemplateID(request.PathValue("stack_template_id")),
 		TargetTemplateRevisionID: domain.TemplateRevisionID(body.TargetTemplateRevisionID),
@@ -1084,7 +1084,7 @@ type createStackRequest struct {
 
 type addTemplateToStackRequest struct {
 	TemplateRevisionID string         `json:"template_revision_id"`
-	ComponentKey       string         `json:"component_key"`
+	Key                string         `json:"key"`
 	Config             map[string]any `json:"config"`
 }
 
@@ -1092,7 +1092,7 @@ type updateStackTemplateConfigRequest struct {
 	Config map[string]any `json:"config"`
 }
 
-type upgradeStackTemplateRequest struct {
+type changeStackTemplateRevisionRequest struct {
 	TargetTemplateRevisionID string         `json:"target_template_revision_id"`
 	Config                   map[string]any `json:"config"`
 }
@@ -1212,12 +1212,12 @@ type stackCapabilitiesResponse struct {
 type stackTemplateResponse struct {
 	ID                            string `json:"id"`
 	StackID                       string `json:"stack_id"`
-	ComponentKey                  string `json:"component_key"`
-	SourceTemplateID              string `json:"source_template_id"`
+	Key                           string `json:"key"`
+	TemplateID                    string `json:"template_id"`
 	DesiredTemplateRevisionID     string `json:"desired_template_revision_id"`
 	LastAppliedTemplateRevisionID string `json:"last_applied_template_revision_id"`
 	// SourceRef is the desired revision's ref, resolved per request. It is a
-	// label, not component state — the component does not own a ref.
+	// label, not stack template state — an installed template does not own a ref.
 	SourceRef        string         `json:"source_ref"`
 	WorkspaceName    string         `json:"workspace_name"`
 	DisplayName      string         `json:"display_name"`
@@ -1286,7 +1286,7 @@ func newStackResponse(stack domain.Stack, capabilities app.StackCapabilities) st
 
 // newStackTemplateResponse takes the view rather than the record because two of
 // the fields it returns — display_name and source_ref — are resolved per read
-// from the desired revision and are not component state.
+// from the desired revision and are not stack template state.
 func newStackTemplateResponse(view app.StackTemplateView) stackTemplateResponse {
 	stackTemplate := view.StackTemplate
 	var config map[string]any
@@ -1301,8 +1301,8 @@ func newStackTemplateResponse(view app.StackTemplateView) stackTemplateResponse 
 	response := stackTemplateResponse{
 		ID:                            string(stackTemplate.ID),
 		StackID:                       string(stackTemplate.StackID),
-		ComponentKey:                  stackTemplate.ComponentKey,
-		SourceTemplateID:              string(stackTemplate.SourceTemplateID),
+		Key:                           stackTemplate.Key,
+		TemplateID:                    string(stackTemplate.TemplateID),
 		DesiredTemplateRevisionID:     string(stackTemplate.DesiredTemplateRevisionID),
 		LastAppliedTemplateRevisionID: string(stackTemplate.LastAppliedTemplateRevisionID),
 		SourceRef:                     view.SourceRef,

@@ -157,8 +157,8 @@ func TestListTemplatesPaging(t *testing.T) {
 
 	deps := newAPITestDependencies(t)
 	for i := range 3 {
-		deps.sourceTemplates.templates = append(deps.sourceTemplates.templates, domain.SourceTemplate{
-			ID: domain.SourceTemplateID(fmt.Sprintf("source_template_%d", i)), TenantID: "tenant_123", CreatedAt: time.Unix(int64(100-i), 0),
+		deps.templates.templates = append(deps.templates.templates, domain.Template{
+			ID: domain.TemplateID(fmt.Sprintf("source_template_%d", i)), TenantID: "tenant_123", CreatedAt: time.Unix(int64(100-i), 0),
 		})
 	}
 	server := NewServer(deps.service(), configuredTenantID)
@@ -175,11 +175,11 @@ func TestListTemplateRevisionsForTemplatePaging(t *testing.T) {
 	t.Parallel()
 
 	deps := newAPITestDependencies(t)
-	deps.sourceTemplates.templates = []domain.SourceTemplate{{ID: "source_template_123", TenantID: "tenant_123"}}
+	deps.templates.templates = []domain.Template{{ID: "source_template_123", TenantID: "tenant_123"}}
 	for i := range 3 {
-		deps.sourceTemplates.revisions = append(deps.sourceTemplates.revisions, domain.TemplateRevision{
+		deps.templates.revisions = append(deps.templates.revisions, domain.TemplateRevision{
 			ID: domain.TemplateRevisionID(fmt.Sprintf("rev_%d", i)), TenantID: "tenant_123",
-			SourceTemplateID: "source_template_123", CreatedAt: time.Unix(int64(100-i), 0),
+			TemplateID: "source_template_123", CreatedAt: time.Unix(int64(100-i), 0),
 		})
 	}
 	server := NewServer(deps.service(), configuredTenantID)
@@ -334,7 +334,7 @@ func TestEveryListRouteAnswersEnvelope(t *testing.T) {
 
 			deps := newAPITestDependencies(t)
 			deps.stackTemplates.stackTemplate.StackID = "stack_123"
-			deps.sourceTemplates.templates = []domain.SourceTemplate{{ID: "source_template_123", TenantID: "tenant_123"}}
+			deps.templates.templates = []domain.Template{{ID: "source_template_123", TenantID: "tenant_123"}}
 			service := deps.service()
 			service.Credentials = apiCredentialRepository{}
 			server := NewServer(service, configuredTenantID, WithQueueReader(&stubQueueReader{}))

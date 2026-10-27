@@ -14,7 +14,7 @@ import (
 
 // templateRunResponse leaves out what only the executor reads: the config
 // snapshot (it can hold sensitive values), the state backend and its hash,
-// the Terraform workspace, and the source template, which the stack template
+// the Terraform workspace, and the template, which the stack template
 // already names.
 type templateRunResponse struct {
 	ID                      string                         `json:"id"`
@@ -22,7 +22,7 @@ type templateRunResponse struct {
 	StackTemplateID         string                         `json:"stack_template_id"`
 	TemplateRevisionID      string                         `json:"template_revision_id"`
 	Operation               string                         `json:"operation"`
-	SelectedRef             string                         `json:"selected_ref"`
+	SourceRef               string                         `json:"source_ref"`
 	ResolvedCommitSHA       string                         `json:"resolved_commit_sha"`
 	Status                  string                         `json:"status"`
 	Step                    string                         `json:"step"`
@@ -188,8 +188,8 @@ type latestSyncResponse struct {
 type templateRevisionResponse struct {
 	ID       string `json:"id"`
 	TenantID string `json:"tenant_id"`
-	// SourceTemplateID names the template the revision belongs to.
-	SourceTemplateID  string    `json:"source_template_id"`
+	// TemplateID names the template the revision belongs to.
+	TemplateID        string    `json:"template_id"`
 	RepoOwner         string    `json:"repo_owner"`
 	RepoName          string    `json:"repo_name"`
 	SourceRef         string    `json:"source_ref"`
@@ -209,7 +209,7 @@ func newTemplateRunResponse(run domain.TemplateRun) templateRunResponse {
 		StackTemplateID:         string(run.StackTemplateID),
 		TemplateRevisionID:      string(run.TemplateRevisionID),
 		Operation:               string(run.Operation),
-		SelectedRef:             run.SelectedRef,
+		SourceRef:               run.SourceRef,
 		ResolvedCommitSHA:       run.ResolvedCommitSHA,
 		Status:                  string(run.Status),
 		Step:                    string(run.Step),
@@ -289,7 +289,7 @@ func newTemplateRunLogResponse(log domain.TemplateRunLog) templateRunLogResponse
 
 // newTemplateResponse needs now because the latest sync's status depends on
 // how long it has been running.
-func newTemplateResponse(template domain.SourceTemplate, now time.Time) templateResponse {
+func newTemplateResponse(template domain.Template, now time.Time) templateResponse {
 	tags := template.Tags
 	if tags == nil {
 		tags = []string{}
@@ -333,7 +333,7 @@ func newTemplateRevisionResponse(revision domain.TemplateRevision) templateRevis
 	return templateRevisionResponse{
 		ID:                string(revision.ID),
 		TenantID:          string(revision.TenantID),
-		SourceTemplateID:  string(revision.SourceTemplateID),
+		TemplateID:        string(revision.TemplateID),
 		RepoOwner:         revision.RepoOwner,
 		RepoName:          revision.RepoName,
 		SourceRef:         revision.SourceRef,

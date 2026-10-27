@@ -11,7 +11,7 @@ vi.mock("../auth/SessionProvider");
 
 function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
   return {
-    me: { sub: "user_1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_publish_template: false, can_manage_platform_access: false } },
+    me: { sub: "user_1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_manage_templates: false, can_manage_platform_access: false } },
     status: "authenticated",
     login: () => {},
     logout: () => {},
@@ -49,8 +49,8 @@ function stackQueryClient(
 const installedTemplate = {
   id: "st_1",
   stack_id: "stack_1",
-  component_key: "vpc",
-  source_template_id: "tmpl_src_1",
+  key: "vpc",
+  template_id: "tmpl_src_1",
   desired_template_revision_id: "rev_1",
   last_applied_template_revision_id: "",
   source_ref: "main",
@@ -90,7 +90,7 @@ describe("routeConfig", () => {
       const testRouter = createMemoryRouter(routeConfig, { initialEntries: ["/stacks/new"] });
       const markup = renderToStaticMarkup(
         <QueryClientProvider client={new QueryClient()}>
-          <AuthContext.Provider value={authValue({ me: { ...authValue().me!, global_capabilities: { can_create_stack: true, can_publish_template: true, can_manage_platform_access: false } } })}>
+          <AuthContext.Provider value={authValue({ me: { ...authValue().me!, global_capabilities: { can_create_stack: true, can_manage_templates: true, can_manage_platform_access: false } } })}>
             <RouterProvider router={testRouter} />
           </AuthContext.Provider>
         </QueryClientProvider>
@@ -214,7 +214,7 @@ describe("routeConfig", () => {
   const registeredRevision = {
     id: "rev_1",
     tenant_id: "tenant_123",
-    source_template_id: "tpl_1",
+    template_id: "tpl_1",
     repo_owner: "hashicorp",
     repo_name: "terraform-aws-vpc",
     source_ref: "main",
@@ -233,11 +233,11 @@ describe("routeConfig", () => {
   // test asks for. It provides the AuthContext the router imports: after
   // resetModules, a fresh module, not the one this file imported. The shared
   // mock is restored once the router holds its own.
-  async function renderTemplatesRoute(path: string, canPublishTemplate = false) {
+  async function renderTemplatesRoute(path: string, canManageTemplates = false) {
     vi.doMock("../auth/SessionProvider", async () => {
       const { AuthContext: RouterAuthContext } = await import("../auth/AuthContext");
       const signedIn = authValue({
-        me: { sub: "user_1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_publish_template: canPublishTemplate, can_manage_platform_access: false } }
+        me: { sub: "user_1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_manage_templates: canManageTemplates, can_manage_platform_access: false } }
       });
       return {
         default: () => (
@@ -469,14 +469,14 @@ describe("routeConfig", () => {
     expect(markup).toContain('data-testid="add-stack-template-none"');
   });
 
-  it("renders the upgrade screen at /stacks/:stackId/templates/:stackTemplateId/upgrade", async () => {
+  it("renders the change revision screen at /stacks/:stackId/templates/:stackTemplateId/change-revision", async () => {
     const { routeConfig } = await import("./router");
     const { queryKeys } = await import("../api/queryKeys");
     const queryClient = stackQueryClient(queryKeys, { templates: [installedTemplate] });
     seedTemplates(queryClient, []);
 
     const testRouter = createMemoryRouter(routeConfig, {
-      initialEntries: ["/stacks/stack_1/templates/st_1/upgrade"]
+      initialEntries: ["/stacks/stack_1/templates/st_1/change-revision"]
     });
     const markup = renderToStaticMarkup(
       <QueryClientProvider client={queryClient}>
@@ -488,7 +488,7 @@ describe("routeConfig", () => {
 
     // The panel draws the template's header, then the screen in its outlet.
     expect(markup).toContain('data-testid="template-panel"');
-    expect(markup).toMatch(/data-testid="upgrade-[a-z-]+"/);
+    expect(markup).toMatch(/data-testid="change-revision-[a-z-]+"/);
   });
 
   it("renders AccessDenied for /stacks/:stackId/templates/new when canOperate is denied but canView is allowed", async () => {
@@ -525,7 +525,7 @@ describe("routeConfig", () => {
     expect(markup).toContain('data-testid="route-access-denied"');
   });
 
-  it("renders AccessDenied for /stacks/:stackId/templates/:stackTemplateId/upgrade when canOperate is denied but canView is allowed", async () => {
+  it("renders AccessDenied for /stacks/:stackId/templates/:stackTemplateId/change-revision when canOperate is denied but canView is allowed", async () => {
     const { routeConfig } = await import("./router");
     const { queryKeys } = await import("../api/queryKeys");
     const queryClient = stackQueryClient(queryKeys, {
@@ -534,7 +534,7 @@ describe("routeConfig", () => {
     });
 
     const testRouter = createMemoryRouter(routeConfig, {
-      initialEntries: ["/stacks/stack_1/templates/st_1/upgrade"]
+      initialEntries: ["/stacks/stack_1/templates/st_1/change-revision"]
     });
     const markup = renderToStaticMarkup(
       <QueryClientProvider client={queryClient}>

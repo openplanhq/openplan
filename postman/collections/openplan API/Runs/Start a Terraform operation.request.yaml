@@ -6,7 +6,7 @@ description: |-
   Operations work the way the Terraform CLI's do. `plan` only plans the
   desired config: the run records what would change and completes,
   keeping no plan. `apply` plans the desired config and saves the plan;
-  `destroy` plans the destruction of everything the component manages
+  `destroy` plans the destruction of everything the installed template manages
   and saves that. For either, a plan with no changes completes the run,
   and a plan with changes waits in `waiting_approval`, where approving it
   applies exactly that saved plan (see the approval endpoint).
@@ -16,7 +16,7 @@ description: |-
   the counts the apply reports. It takes approve permission on the stack
   as well as operate permission.
 
-  One component runs one operation at a time, and a plan waiting for
+  One installed template runs one operation at a time, and a plan waiting for
   approval counts. Starting a second while one is in flight returns `409
   run-in-flight` — the competing run is visible through the list
   endpoint, so a client can wait for it, or approve or discard it.

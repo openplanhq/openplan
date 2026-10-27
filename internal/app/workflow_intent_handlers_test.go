@@ -53,7 +53,7 @@ func TestStartTemplateApplyHandlerDeliversCompleteInput(t *testing.T) {
 func TestStartTemplateSyncHandlerDeliversCompleteInput(t *testing.T) {
 	dispatcher := &recordingWorkflowIntentDispatcher{}
 	handler := NewStartTemplateSyncHandler(dispatcher)
-	payload := StartTemplateSyncPayload{SyncID: "registration_1", TenantID: "tenant_1", SourceTemplateID: "source_template_1", RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc"}
+	payload := StartTemplateSyncPayload{SyncID: "registration_1", TenantID: "tenant_1", TemplateID: "source_template_1", RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc"}
 
 	if _, err := handler.Deliver(context.Background(), queue.Item{Payload: marshalWorkflowIntentPayload(t, payload)}); err != nil {
 		t.Fatalf("Deliver() error = %v", err)
@@ -66,7 +66,7 @@ func TestStartTemplateSyncHandlerDeliversCompleteInput(t *testing.T) {
 func TestStartTemplateRunHandlerDeliversCompleteInput(t *testing.T) {
 	dispatcher := &recordingWorkflowIntentDispatcher{}
 	handler := NewStartTemplatePlanHandler(dispatcher)
-	payload := StartTemplatePlanPayload{RunID: "run_1", TenantID: "tenant_1", StackTemplateID: "template_1", Operation: "apply", SelectedRef: "main", WorkspaceName: "workspace", RepoOwner: "owner", RepoName: "repo", RootPath: "module", ConfigJSON: json.RawMessage(`{"x":true}`)}
+	payload := StartTemplatePlanPayload{RunID: "run_1", TenantID: "tenant_1", StackTemplateID: "template_1", Operation: "apply", SourceRef: "main", WorkspaceName: "workspace", RepoOwner: "owner", RepoName: "repo", RootPath: "module", ConfigJSON: json.RawMessage(`{"x":true}`)}
 
 	followUps, err := handler.Deliver(context.Background(), queue.Item{Payload: marshalWorkflowIntentPayload(t, payload)})
 	if err != nil {
