@@ -251,7 +251,7 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 		name  string
 		value *int64
 	}{
-		{"EXECUTOR_SANDBOX_MEMORY", &cfg.Sandbox.MemoryMiB},
+		{"EXECUTOR_SANDBOX_MEMORY_MIB", &cfg.Sandbox.MemoryMiB},
 		{"EXECUTOR_SANDBOX_CPUS", &cfg.Sandbox.CPUs},
 		{"EXECUTOR_SANDBOX_PIDS", &cfg.Sandbox.Pids},
 	} {

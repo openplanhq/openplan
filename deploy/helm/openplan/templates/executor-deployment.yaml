@@ -50,7 +50,7 @@ spec:
             {{- include "openplan.s3Env" . | nindent 12 }}
             {{- range $name, $value := dict
                   "EXECUTOR_MAX_SESSIONS" .Values.executor.maxSessions
-                  "EXECUTOR_SANDBOX_MEMORY" .Values.executor.sandbox.memoryMiB
+                  "EXECUTOR_SANDBOX_MEMORY_MIB" .Values.executor.sandbox.memoryMiB
                   "EXECUTOR_SANDBOX_CPUS" .Values.executor.sandbox.cpus
                   "EXECUTOR_SANDBOX_PIDS" .Values.executor.sandbox.pids
                   "EXECUTOR_SANDBOX_SUBNET" .Values.executor.sandbox.subnet }}

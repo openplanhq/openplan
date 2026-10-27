@@ -636,7 +636,7 @@ func TestLoadExecutorConfigSandboxDefaultsAndValidation(t *testing.T) {
 	if cfg.Sandbox != want {
 		t.Fatalf("sandbox = %+v, want %+v", cfg.Sandbox, want)
 	}
-	for _, name := range []string{"EXECUTOR_SANDBOX_MEMORY", "EXECUTOR_SANDBOX_CPUS", "EXECUTOR_SANDBOX_PIDS"} {
+	for _, name := range []string{"EXECUTOR_SANDBOX_MEMORY_MIB", "EXECUTOR_SANDBOX_CPUS", "EXECUTOR_SANDBOX_PIDS"} {
 		env := map[string]string{"TEMPORAL_ADDRESS": "temporal:7233", "VALKEY_URL": "redis://valkey:6379", name: "0"}
 		if _, err := LoadExecutorConfig(func(k string) string { return env[k] }); !errors.Is(err, ErrInvalidConfig) {
 			t.Fatalf("%s=0: error = %v, want ErrInvalidConfig", name, err)
