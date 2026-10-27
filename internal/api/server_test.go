@@ -454,7 +454,7 @@ func TestStartTemplateRunMapsAnInFlightRunToConflictWithItsOwnCode(t *testing.T)
 	}
 }
 
-func TestAddTemplateToStackMapsDuplicateComponentKeyToConflictWithItsOwnCode(t *testing.T) {
+func TestAddTemplateToStackMapsDuplicateStackTemplateKeyToConflictWithItsOwnCode(t *testing.T) {
 	t.Parallel()
 
 	deps := newAPITestDependencies(t)
@@ -463,8 +463,8 @@ func TestAddTemplateToStackMapsDuplicateComponentKeyToConflictWithItsOwnCode(t *
 	deps.templates.variables = []domain.TemplateVariable{{Name: "region", Required: true}}
 	deps.stackTemplateID = domain.StackTemplateID("stack_template_a1b2c3d4")
 	// What the store returns when the stack already has a template under this
-	// component_key.
-	deps.stackTemplateInstaller.createErr = app.ErrDuplicateStackTemplateComponentKey
+	// key.
+	deps.stackTemplateInstaller.createErr = app.ErrDuplicateStackTemplateKey
 	server := NewServer(deps.service(), configuredTenantID)
 	response := httptest.NewRecorder()
 	request := authenticatedRequest(
@@ -479,10 +479,10 @@ func TestAddTemplateToStackMapsDuplicateComponentKeyToConflictWithItsOwnCode(t *
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusConflict, response.Body.String())
 	}
 	body := decodeProblem(t, response)
-	// Its own type, and an errors entry on component_key, so the client can
+	// Its own type, and an errors entry on key, so the client can
 	// mark the field instead of showing a generic failure.
-	if body.Type != problemTypeURI("duplicate-component-key") {
-		t.Fatalf("type = %q, want %q", body.Type, problemTypeURI("duplicate-component-key"))
+	if body.Type != problemTypeURI("duplicate-stack-template-key") {
+		t.Fatalf("type = %q, want %q", body.Type, problemTypeURI("duplicate-stack-template-key"))
 	}
 }
 

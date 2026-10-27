@@ -26,7 +26,7 @@ var (
 	ErrUnauthenticated                    = errors.New("unauthenticated")
 	ErrInvalidCommand                     = errors.New("invalid command")
 	ErrDuplicateStackSlug                 = errors.New("duplicate stack slug")
-	ErrDuplicateStackTemplateComponentKey = errors.New("duplicate stack template component key")
+	ErrDuplicateStackTemplateKey          = errors.New("duplicate stack template key")
 	ErrNotFound                           = errors.New("not found")
 	ErrRevisionNotInstallable             = errors.New("template is not installable")
 	ErrStackTemplateConfigInvalid         = errors.New("stack template config is invalid")
@@ -469,8 +469,8 @@ type StackView struct {
 	Capabilities StackCapabilities
 }
 
-// StackTemplateView is one installed component plus the labels a read resolves
-// for it. Those labels are not component state: they are properties of the
+// StackTemplateView is one installed template plus the labels a read resolves
+// for it. Those labels are not stack template state: they are properties of the
 // desired revision, looked up per read so they cannot drift from the revision
 // in use. They live here rather than on domain.StackTemplate so the persisted
 // record has no fields that are only ever populated on one path.
@@ -488,7 +488,7 @@ type AddTemplateToStackCommand struct {
 	TenantID           domain.TenantID
 	StackID            domain.StackID
 	TemplateRevisionID domain.TemplateRevisionID
-	ComponentKey       string
+	Key                string
 	WorkspaceName      string
 	ConfigJSON         json.RawMessage
 }
@@ -915,7 +915,7 @@ func (service *Service) AddTemplateToStack(ctx context.Context, command AddTempl
 		ID:                        id,
 		TenantID:                  command.TenantID,
 		StackID:                   command.StackID,
-		ComponentKey:              componentKey(command.ComponentKey, id),
+		Key:                       stackTemplateKey(command.Key, id),
 		SourceTemplateID:          templateRevision.SourceTemplateID,
 		DesiredTemplateRevisionID: command.TemplateRevisionID,
 		WorkspaceName:             workspaceName(stack.Slug, id),
@@ -986,8 +986,8 @@ func (service *Service) StartTemplateRun(ctx context.Context, command StartTempl
 		TemplateRevisionID: desiredTemplateRevisionID,
 		SourceTemplateID:   sourceTemplateID,
 		Operation:          command.Operation,
-		// The ref comes from the revision being run, not from the component:
-		// the component's install-time ref does not change when the desired
+		// The ref comes from the revision being run, not from the installed template:
+		// the installed template's install-time ref does not change when the desired
 		// revision does, so it would misreport what this run is against.
 		SourceRef:         templateRevision.SourceRef,
 		ResolvedCommitSHA: templateRevision.ResolvedCommitSHA,
@@ -2856,7 +2856,7 @@ func carryForwardConfig(desiredConfigJSON json.RawMessage, variables []domain.Te
 	return normalized, nil
 }
 
-func componentKey(value string, stackTemplateID domain.StackTemplateID) string {
+func stackTemplateKey(value string, stackTemplateID domain.StackTemplateID) string {
 	value = strings.TrimSpace(value)
 	if value != "" {
 		return value

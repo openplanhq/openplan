@@ -338,7 +338,7 @@ function stackTemplate(overrides: Partial<StackTemplate>): StackTemplate {
   return {
     id: "stack_template_123",
     stack_id: "stack_123",
-    component_key: "primary",
+    key: "primary",
     source_template_id: "source_template_123",
     desired_template_revision_id: "template_123",
     last_applied_template_revision_id: "",

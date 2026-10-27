@@ -816,7 +816,7 @@ func (server *Server) handleAddTemplateToStack(response http.ResponseWriter, req
 		TenantID:           domain.TenantID(request.PathValue("tenant_id")),
 		StackID:            domain.StackID(request.PathValue("stack_id")),
 		TemplateRevisionID: domain.TemplateRevisionID(body.TemplateRevisionID),
-		ComponentKey:       body.ComponentKey,
+		Key:                body.Key,
 		ConfigJSON:         configJSON,
 	})
 	if err != nil {
@@ -1084,7 +1084,7 @@ type createStackRequest struct {
 
 type addTemplateToStackRequest struct {
 	TemplateRevisionID string         `json:"template_revision_id"`
-	ComponentKey       string         `json:"component_key"`
+	Key                string         `json:"key"`
 	Config             map[string]any `json:"config"`
 }
 
@@ -1212,12 +1212,12 @@ type stackCapabilitiesResponse struct {
 type stackTemplateResponse struct {
 	ID                            string `json:"id"`
 	StackID                       string `json:"stack_id"`
-	ComponentKey                  string `json:"component_key"`
+	Key                           string `json:"key"`
 	SourceTemplateID              string `json:"source_template_id"`
 	DesiredTemplateRevisionID     string `json:"desired_template_revision_id"`
 	LastAppliedTemplateRevisionID string `json:"last_applied_template_revision_id"`
 	// SourceRef is the desired revision's ref, resolved per request. It is a
-	// label, not component state — the component does not own a ref.
+	// label, not stack template state — an installed template does not own a ref.
 	SourceRef        string         `json:"source_ref"`
 	WorkspaceName    string         `json:"workspace_name"`
 	DisplayName      string         `json:"display_name"`
@@ -1286,7 +1286,7 @@ func newStackResponse(stack domain.Stack, capabilities app.StackCapabilities) st
 
 // newStackTemplateResponse takes the view rather than the record because two of
 // the fields it returns — display_name and source_ref — are resolved per read
-// from the desired revision and are not component state.
+// from the desired revision and are not stack template state.
 func newStackTemplateResponse(view app.StackTemplateView) stackTemplateResponse {
 	stackTemplate := view.StackTemplate
 	var config map[string]any
@@ -1301,7 +1301,7 @@ func newStackTemplateResponse(view app.StackTemplateView) stackTemplateResponse 
 	response := stackTemplateResponse{
 		ID:                            string(stackTemplate.ID),
 		StackID:                       string(stackTemplate.StackID),
-		ComponentKey:                  stackTemplate.ComponentKey,
+		Key:                           stackTemplate.Key,
 		SourceTemplateID:              string(stackTemplate.SourceTemplateID),
 		DesiredTemplateRevisionID:     string(stackTemplate.DesiredTemplateRevisionID),
 		LastAppliedTemplateRevisionID: string(stackTemplate.LastAppliedTemplateRevisionID),

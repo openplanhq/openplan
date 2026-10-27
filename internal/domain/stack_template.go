@@ -30,31 +30,31 @@ func (lifecycle StackTemplateLifecycle) Valid() bool {
 	}
 }
 
-// StackTemplate is one long-lived template install/component instance in a stack.
+// StackTemplate is one long-lived install of a template revision in a stack.
 type StackTemplate struct {
-	// ID uniquely identifies this installed component instance.
+	// ID uniquely identifies this install.
 	ID StackTemplateID
 	// TenantID scopes the install to one tenant.
 	TenantID TenantID
-	// StackID is the stack this component is installed into.
+	// StackID is the stack this template is installed into.
 	StackID StackID
-	// ComponentKey is the human/stable key unique among active installs in a stack.
-	ComponentKey string
+	// Key is the human/stable key unique among active installs in a stack.
+	Key string
 	// SourceTemplateID is the stable source identity shared by all revisions.
 	SourceTemplateID SourceTemplateID
 	// DesiredTemplateRevisionID is the template revision to use for the next run.
 	DesiredTemplateRevisionID TemplateRevisionID
 	// LastAppliedTemplateRevisionID is the template revision from the last successful apply.
 	LastAppliedTemplateRevisionID TemplateRevisionID
-	// WorkspaceName is the Terraform workspace used for this component.
+	// WorkspaceName is the Terraform workspace used for this installed template.
 	WorkspaceName string
-	// InstalledConfigJSON is the config captured when the component was
+	// InstalledConfigJSON is the config captured when the installed template was
 	// installed. It is history: desired state is DesiredConfigJSON, and nothing
 	// derives desired state from this.
 	InstalledConfigJSON json.RawMessage
 	// DesiredConfigJSON is the config to snapshot into the next run.
 	DesiredConfigJSON json.RawMessage
-	// LastAppliedRunID is the run that last applied this component successfully.
+	// LastAppliedRunID is the run that last applied this installed template successfully.
 	LastAppliedRunID TemplateRunID
 	// LastAppliedConfigJSON is the config the last successful apply ran with.
 	// Nil means no apply has been recorded with one; an empty object is a
@@ -62,7 +62,7 @@ type StackTemplate struct {
 	LastAppliedConfigJSON json.RawMessage
 	// LastAppliedAt is when the last successful apply completed.
 	LastAppliedAt time.Time
-	// PendingPlanRunID is the latest plan run that completed for this component.
+	// PendingPlanRunID is the latest plan run that completed for this installed template.
 	PendingPlanRunID TemplateRunID
 	// PendingPlanTemplateRevisionID is the revision that plan ran against.
 	PendingPlanTemplateRevisionID TemplateRevisionID
@@ -71,9 +71,9 @@ type StackTemplate struct {
 	PendingPlanConfigJSON json.RawMessage
 	// PendingPlanAt is when that plan completed.
 	PendingPlanAt time.Time
-	// CreatedBy is the user that installed this component.
+	// CreatedBy is the user that installed this template.
 	CreatedBy UserID
-	// Lifecycle determines whether this component can run or is being removed.
+	// Lifecycle determines whether this installed template can run or is being removed.
 	Lifecycle StackTemplateLifecycle
 }
 
@@ -83,7 +83,7 @@ type StackTemplate struct {
 type PlanState string
 
 const (
-	// PlanNone means no plan has completed for this component.
+	// PlanNone means no plan has completed for this installed template.
 	PlanNone PlanState = "none"
 	// PlanStale means a plan completed but desired has moved since.
 	PlanStale PlanState = "stale"

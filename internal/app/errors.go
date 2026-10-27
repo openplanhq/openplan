@@ -122,7 +122,7 @@ func Sentinels() []error {
 		ErrInvalidQuery,
 		ErrInvalidQuery,
 		ErrDuplicateStackSlug,
-		ErrDuplicateStackTemplateComponentKey,
+		ErrDuplicateStackTemplateKey,
 		ErrNotFound,
 		ErrRevisionNotInstallable,
 		ErrStackTemplateConfigInvalid,

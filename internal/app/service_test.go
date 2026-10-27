@@ -334,7 +334,7 @@ func TestGetStackResolvesTemplateDisplayName(t *testing.T) {
 		t.Errorf("template[0].DisplayName = %q, want network-vpc", got)
 	}
 	// The ref is resolved from the desired revision on every read rather than
-	// stored on the component, so it cannot drift from the revision in use.
+	// stored on the installed template, so it cannot drift from the revision in use.
 	if got := view.Templates[0].SourceRef; got != "v2.0.0" {
 		t.Errorf("template[0].SourceRef = %q, want v2.0.0", got)
 	}
@@ -419,7 +419,7 @@ func TestAddTemplateToStackValidatesVariablesAndPersistsStackTemplate(t *testing
 		TenantID:           domain.TenantID("tenant_123"),
 		StackID:            domain.StackID("stack_123"),
 		TemplateRevisionID: domain.TemplateRevisionID("template_123"),
-		ComponentKey:       "primary-vpc",
+		Key:                "primary-vpc",
 		ConfigJSON:         json.RawMessage(`{"region":"us-east-1"}`),
 	})
 	if err != nil {
@@ -441,8 +441,8 @@ func TestAddTemplateToStackValidatesVariablesAndPersistsStackTemplate(t *testing
 	if stackTemplate.CreatedBy != domain.UserID(oidcSubject) {
 		t.Fatalf("created by = %q, want %q", stackTemplate.CreatedBy, oidcSubject)
 	}
-	if stackTemplate.ComponentKey != "primary-vpc" {
-		t.Fatalf("component key = %q, want primary-vpc", stackTemplate.ComponentKey)
+	if stackTemplate.Key != "primary-vpc" {
+		t.Fatalf("key = %q, want primary-vpc", stackTemplate.Key)
 	}
 	if stackTemplate.SourceTemplateID != domain.SourceTemplateID("source_template_vpc") {
 		t.Fatalf("source template ID = %q, want source_template_vpc", stackTemplate.SourceTemplateID)
@@ -583,7 +583,7 @@ func TestStartTemplateRunCreatesQueuedRunWithoutDispatchingWorkflow(t *testing.T
 			SourceTemplateID: domain.SourceTemplateID("source_template_vpc"),
 			RepoOwner:        "acme",
 			RepoName:         "infra-templates",
-			// The run's ref comes from here now, not from the component.
+			// The run's ref comes from here now, not from the installed template.
 			SourceRef:         "main",
 			ResolvedCommitSHA: "sha-2",
 			RootPath:          "modules/vpc",
@@ -1333,9 +1333,9 @@ func TestStartTemplateRunStartsNothingWhenTheActorLookupFails(t *testing.T) {
 	}
 }
 
-// The component does not own a ref. It used to keep the one chosen at install
+// The installed template does not own a ref. It used to keep the one chosen at install
 // and stamp it onto every run, which stayed stale after a revision change: a
-// component installed from main and moved to a v2.0.0 revision kept reporting
+// template installed from main and moved to a v2.0.0 revision kept reporting
 // main. The run takes the ref from the revision it is actually running.
 func TestStartTemplateRunStampsTheRefOfTheRevisionBeingRun(t *testing.T) {
 	t.Parallel()
@@ -1377,7 +1377,7 @@ func TestStartTemplateRunStampsTheRefOfTheRevisionBeingRun(t *testing.T) {
 		t.Fatalf("run.SourceRef = %q, want v2.0.0", run.SourceRef)
 	}
 	// The ref and the commit describe the same revision, which is the property
-	// that was impossible to guarantee while the component carried its own ref.
+	// that was impossible to guarantee while the installed template carried its own ref.
 	if run.ResolvedCommitSHA != "sha_v2" {
 		t.Fatalf("run.ResolvedCommitSHA = %q, want sha_v2", run.ResolvedCommitSHA)
 	}

@@ -69,7 +69,7 @@ func TestCreateCredentialReturnsValueOnlyWhenNotSensitive(t *testing.T) {
 }
 
 // Migration 0010 lets a credential have exactly one owner, and the fakes here
-// don't enforce it, so the row the service builds for a component is pinned:
+// don't enforce it, so the row the service builds for an installed template is pinned:
 // the template id alone, never the stack id it authorized with (#480).
 func TestCreateCredentialForATemplateStoresOnlyTheTemplateOwner(t *testing.T) {
 	t.Parallel()

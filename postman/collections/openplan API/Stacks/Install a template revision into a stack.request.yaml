@@ -14,7 +14,7 @@ body:
   content: |-
     {
       "template_revision_id": "{{template_revision_id}}",
-      "component_key": "postman-{{$timestamp}}",
+      "key": "postman-{{$timestamp}}",
       "config": {}
     }
 scripts:

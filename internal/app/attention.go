@@ -147,7 +147,7 @@ func waitingItems(
 		if !ok {
 			continue
 		}
-		// The component records when the plan was parked, which is when the
+		// The installed template records when the plan was parked, which is when the
 		// person started waiting; the run's own creation is earlier.
 		at := run.CreatedAt
 		if stackTemplate.PendingPlanRunID == run.ID && !stackTemplate.PendingPlanAt.IsZero() {

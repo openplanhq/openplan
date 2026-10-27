@@ -81,7 +81,7 @@ function installedTemplate(id: string): StackTemplate {
   return {
     id,
     stack_id: "stack_1",
-    component_key: "vpc",
+    key: "vpc",
     source_template_id: "tmpl_src_1",
     desired_template_revision_id: "rev_1",
     last_applied_template_revision_id: "",

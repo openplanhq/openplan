@@ -567,7 +567,7 @@ func TestTemplateSourceMigrationBackfillsLegacyStackTemplateRevisionPointers(t *
 		t.Fatalf("desired config JSON = %s, want region config", desiredConfigJSON)
 	}
 	if componentKey != "stack_template_123" {
-		t.Fatalf("component key = %q, want stack_template_123", componentKey)
+		t.Fatalf("key = %q, want stack_template_123", componentKey)
 	}
 }
 
@@ -1628,7 +1628,7 @@ func TestCreateStackTemplateAndGetStackWithTemplates(t *testing.T) {
 	}
 }
 
-func TestCreateStackTemplateAllowsRepeatedSourceWithDistinctComponentKeys(t *testing.T) {
+func TestCreateStackTemplateAllowsRepeatedSourceWithDistinctKeys(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -1673,7 +1673,7 @@ func TestCreateStackTemplateAllowsRepeatedSourceWithDistinctComponentKeys(t *tes
 		StackID:                   stack.ID,
 		SourceTemplateID:          sourceTemplateID,
 		DesiredTemplateRevisionID: template.ID,
-		ComponentKey:              "primary-vpc",
+		Key:                       "primary-vpc",
 		WorkspaceName:             "meg_acme_primary",
 		InstalledConfigJSON:       json.RawMessage(`{"region":"us-east-1"}`),
 		DesiredConfigJSON:         json.RawMessage(`{"region":"us-east-1"}`),
@@ -1682,7 +1682,7 @@ func TestCreateStackTemplateAllowsRepeatedSourceWithDistinctComponentKeys(t *tes
 	}
 	second := first
 	second.ID = domain.StackTemplateID("stack_template_shared")
-	second.ComponentKey = "shared-vpc"
+	second.Key = "shared-vpc"
 	second.WorkspaceName = "meg_acme_shared"
 
 	if err := store.CreateStackTemplate(ctx, first); err != nil {
@@ -1704,7 +1704,7 @@ func TestCreateStackTemplateAllowsRepeatedSourceWithDistinctComponentKeys(t *tes
 	}
 }
 
-func TestCreateStackTemplateRejectsDuplicateActiveComponentKey(t *testing.T) {
+func TestCreateStackTemplateRejectsDuplicateActiveKey(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -1749,7 +1749,7 @@ func TestCreateStackTemplateRejectsDuplicateActiveComponentKey(t *testing.T) {
 		StackID:                   stack.ID,
 		SourceTemplateID:          sourceTemplateID,
 		DesiredTemplateRevisionID: template.ID,
-		ComponentKey:              "primary-vpc",
+		Key:                       "primary-vpc",
 		WorkspaceName:             "meg_acme_primary",
 		InstalledConfigJSON:       json.RawMessage(`{}`),
 		DesiredConfigJSON:         json.RawMessage(`{}`),
@@ -1762,8 +1762,8 @@ func TestCreateStackTemplateRejectsDuplicateActiveComponentKey(t *testing.T) {
 	}
 	stackTemplate.ID = domain.StackTemplateID("stack_template_duplicate")
 	err := store.CreateStackTemplate(ctx, stackTemplate)
-	if !errors.Is(err, app.ErrDuplicateStackTemplateComponentKey) {
-		t.Fatalf("error = %v, want ErrDuplicateStackTemplateComponentKey", err)
+	if !errors.Is(err, app.ErrDuplicateStackTemplateKey) {
+		t.Fatalf("error = %v, want ErrDuplicateStackTemplateKey", err)
 	}
 }
 
@@ -1791,7 +1791,7 @@ func TestUpdateStackTemplateConfigPersistsDesiredConfig(t *testing.T) {
 		StackID:                   stack.ID,
 		SourceTemplateID:          domain.SourceTemplateID("source_template_vpc"),
 		DesiredTemplateRevisionID: domain.TemplateRevisionID("template_rev_1"),
-		ComponentKey:              "primary-vpc",
+		Key:                       "primary-vpc",
 		WorkspaceName:             "meg_acme_primary",
 		InstalledConfigJSON:       json.RawMessage(`{"region":"us-east-1"}`),
 		DesiredConfigJSON:         json.RawMessage(`{"region":"us-east-1"}`),
@@ -1839,7 +1839,7 @@ func TestUpdateStackTemplateDesiredRevisionPersistsRevisionAndConfig(t *testing.
 		StackID:                   stack.ID,
 		SourceTemplateID:          domain.SourceTemplateID("source_template_vpc"),
 		DesiredTemplateRevisionID: domain.TemplateRevisionID("template_rev_1"),
-		ComponentKey:              "primary-vpc",
+		Key:                       "primary-vpc",
 		WorkspaceName:             "meg_acme_primary",
 		InstalledConfigJSON:       json.RawMessage(`{"region":"us-east-1"}`),
 		DesiredConfigJSON:         json.RawMessage(`{"region":"us-east-1"}`),
@@ -1880,7 +1880,7 @@ func TestGetStackTemplateReturnsTenantScopedRecord(t *testing.T) {
 			id,
 			tenant_id,
 			stack_id,
-			component_key,
+			key,
 			source_template_id,
 			desired_template_revision_id,
 			workspace_name,
@@ -3327,8 +3327,8 @@ func TestPlannedStateMigrationLeavesUnplannedTemplatesAbsent(t *testing.T) {
 	}
 }
 
-// The ref columns are gone from the component. A ref belongs to the revision,
-// which is immutable per commit, so it cannot go stale there; on the component
+// The ref columns are gone from the installed template. A ref belongs to the revision,
+// which is immutable per commit, so it cannot go stale there; on the installed template
 // it was a copy that nothing updated when the desired revision changed.
 func TestStackTemplatesNoLongerCarryRefColumns(t *testing.T) {
 	t.Parallel()
@@ -4676,7 +4676,7 @@ func TestDeleteSourceTemplateRacesAnInstall(t *testing.T) {
 	t.Run("install commits first, the delete is refused", func(t *testing.T) {
 		seedSourceTemplate(t, ctx, store, "tenant_123", "source_template_install_first")
 		install := holdTx(t, ctx, pool, `
-			insert into stack_templates (id, tenant_id, stack_id, component_key, source_template_id, workspace_name, created_by, lifecycle)
+			insert into stack_templates (id, tenant_id, stack_id, key, source_template_id, workspace_name, created_by, lifecycle)
 			values ('stack_template_install_first', 'tenant_123', 'stack_123', 'install_first', 'source_template_install_first', 'mtp_install_first', 'installer_123', 'active')
 		`)
 

@@ -990,9 +990,9 @@ func (store *Store) CreateStackTemplate(ctx context.Context, stackTemplate domai
 	if len(desiredConfigJSON) == 0 {
 		desiredConfigJSON = configJSON
 	}
-	componentKey := strings.TrimSpace(stackTemplate.ComponentKey)
-	if componentKey == "" {
-		componentKey = string(stackTemplate.ID)
+	key := strings.TrimSpace(stackTemplate.Key)
+	if key == "" {
+		key = string(stackTemplate.ID)
 	}
 	desiredTemplateRevisionID := stackTemplate.DesiredTemplateRevisionID
 
@@ -1001,7 +1001,7 @@ func (store *Store) CreateStackTemplate(ctx context.Context, stackTemplate domai
 			id,
 			tenant_id,
 			stack_id,
-			component_key,
+			key,
 			source_template_id,
 			desired_template_revision_id,
 			last_applied_template_revision_id,
@@ -1029,7 +1029,7 @@ func (store *Store) CreateStackTemplate(ctx context.Context, stackTemplate domai
 		stackTemplate.ID,
 		stackTemplate.TenantID,
 		stackTemplate.StackID,
-		componentKey,
+		key,
 		stackTemplate.SourceTemplateID,
 		desiredTemplateRevisionID,
 		stackTemplate.LastAppliedTemplateRevisionID,
@@ -1047,8 +1047,8 @@ func (store *Store) CreateStackTemplate(ctx context.Context, stackTemplate domai
 		stackTemplate.Lifecycle,
 	)
 	if err != nil {
-		if duplicateConstraint(err, "stack_templates_active_component_key_idx") {
-			return app.ErrDuplicateStackTemplateComponentKey
+		if duplicateConstraint(err, "stack_templates_active_key_idx") {
+			return app.ErrDuplicateStackTemplateKey
 		}
 		// The template was deleted between the caller reading it and this
 		// insert; the key refuses the install rather than orphan it.
@@ -1929,7 +1929,7 @@ const stackTemplateColumns = `
 	id,
 	tenant_id,
 	stack_id,
-	component_key,
+	key,
 	source_template_id,
 	desired_template_revision_id,
 	last_applied_template_revision_id,
@@ -1972,7 +1972,7 @@ func scanStackTemplate(scanner stackTemplateScanner) (domain.StackTemplate, erro
 		&stackTemplate.ID,
 		&stackTemplate.TenantID,
 		&stackTemplate.StackID,
-		&stackTemplate.ComponentKey,
+		&stackTemplate.Key,
 		&stackTemplate.SourceTemplateID,
 		&stackTemplate.DesiredTemplateRevisionID,
 		&stackTemplate.LastAppliedTemplateRevisionID,

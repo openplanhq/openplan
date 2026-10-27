@@ -143,9 +143,9 @@ var problemTypes = []problemType{
 		detail: "Another stack already uses this slug.", field: "slug",
 	},
 	{
-		sentinel: app.ErrDuplicateStackTemplateComponentKey, status: http.StatusConflict, slug: "duplicate-component-key",
-		title:  "The component key is taken",
-		detail: "This stack already has a template with this component key.", field: "component_key",
+		sentinel: app.ErrDuplicateStackTemplateKey, status: http.StatusConflict, slug: "duplicate-stack-template-key",
+		title:  "The key is taken",
+		detail: "This stack already has a template with this key.", field: "key",
 	},
 	{
 		sentinel: app.ErrDuplicateCredentialName, status: http.StatusConflict, slug: "duplicate-credential-name",

@@ -61,7 +61,7 @@ interface CreateStackRequest {
 
 interface AddTemplateToStackRequest {
   template_revision_id: string;
-  component_key?: string;
+  key?: string;
   config: Record<string, unknown>;
 }
 

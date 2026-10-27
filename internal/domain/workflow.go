@@ -229,7 +229,7 @@ type FetchSourceActivityInput struct {
 	WorkspacePath string
 	RepoOwner     string
 	RepoName      string
-	// SourceRef is the ref the component was installed from. It is only used
+	// SourceRef is the run's source ref, the revision's. It is only used
 	// when ResolvedCommitSHA is absent, which is true solely for runs queued
 	// before the commit was threaded through.
 	SourceRef string

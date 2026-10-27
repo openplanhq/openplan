@@ -1,6 +1,6 @@
 $kind: http-request
 description: |-
-  Moves the component's *desired* revision. Nothing is applied here —
+  Moves the installed template's *desired* revision. Nothing is applied here —
   changing revision is a deliberate, reviewable step, so the new revision takes
   effect only when a subsequent apply succeeds. Until then
   `desired_template_revision_id` and `last_applied_template_revision_id`

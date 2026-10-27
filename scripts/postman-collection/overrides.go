@@ -127,7 +127,7 @@ var overrides = map[string]override{
 	"addTemplateToStack": {
 		jsonBody: `{
   "template_revision_id": "{{template_revision_id}}",
-  "component_key": "postman-{{$timestamp}}",
+  "key": "postman-{{$timestamp}}",
   "config": {}
 }`,
 		test: save("stack_template_id", "pm.response.json().id"),

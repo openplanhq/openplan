@@ -24,7 +24,7 @@ function template(id: string, overrides: Partial<StackTemplate> = {}): StackTemp
   return {
     id,
     stack_id: "stack_1",
-    component_key: id,
+    key: id,
     source_template_id: "source_1",
     desired_template_revision_id: "rev_1",
     last_applied_template_revision_id: "rev_1",

@@ -544,7 +544,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"template_revision_id\": \"{{template_revision_id}}\",\n  \"component_key\": \"postman-{{$timestamp}}\",\n  \"config\": {}\n}",
+              "raw": "{\n  \"template_revision_id\": \"{{template_revision_id}}\",\n  \"key\": \"postman-{{$timestamp}}\",\n  \"config\": {}\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -612,7 +612,7 @@
                 "config"
               ]
             },
-            "description": "Replaces the desired config wholesale — this is not a field-level\nmerge. The new config is validated against the desired revision's\nvariables.\n\nRefused with `409 run-in-flight` while the component has an unfinished\nrun, a plan waiting for approval included: a run snapshots the config\nwhen it starts, and the plan being reviewed has to stay a plan of what\nthe component says. Apply or discard the run first."
+            "description": "Replaces the desired config wholesale — this is not a field-level\nmerge. The new config is validated against the desired revision's\nvariables.\n\nRefused with `409 run-in-flight` while the installed template has an unfinished\nrun, a plan waiting for approval included: a run snapshots the config\nwhen it starts, and the plan being reviewed has to stay a plan of what\nthe installed template says. Apply or discard the run first."
           }
         },
         {
@@ -659,7 +659,7 @@
                 "change-revision"
               ]
             },
-            "description": "Moves the component's *desired* revision. Nothing is applied here —\nchanging revision is a deliberate, reviewable step, so the new revision takes\neffect only when a subsequent apply succeeds. Until then\n`desired_template_revision_id` and `last_applied_template_revision_id`\ndiffer and `live_state` reads `differs`.\n\nOmit `config` to carry the current one forward; supply it when the new\nrevision's variables changed."
+            "description": "Moves the installed template's *desired* revision. Nothing is applied here —\nchanging revision is a deliberate, reviewable step, so the new revision takes\neffect only when a subsequent apply succeeds. Until then\n`desired_template_revision_id` and `last_applied_template_revision_id`\ndiffer and `live_state` reads `differs`.\n\nOmit `config` to carry the current one forward; supply it when the new\nrevision's variables changed."
           }
         }
       ]
@@ -783,7 +783,7 @@
           }
         },
         {
-          "name": "Add a component-scoped credential",
+          "name": "Add a template-scoped credential",
           "event": [
             {
               "listen": "test",
@@ -827,11 +827,11 @@
                 "credentials"
               ]
             },
-            "description": "Same contract as a stack credential, sensitivity included, scoped to\none installed component. Use this to override a stack-wide credential\nfor a single component; the override's own `sensitive` decides whether\nits value is shown."
+            "description": "Same contract as a stack credential, sensitivity included, scoped to\none installed template. Use this to override a stack-wide credential\nfor a single installed template; the override's own `sensitive` decides whether\nits value is shown."
           }
         },
         {
-          "name": "List component-scoped credentials",
+          "name": "List template-scoped credentials",
           "event": [
             {
               "listen": "test",
@@ -864,7 +864,7 @@
           }
         },
         {
-          "name": "Delete a component-scoped credential",
+          "name": "Delete a template-scoped credential",
           "event": [
             {
               "listen": "test",
@@ -948,7 +948,7 @@
                 "runs"
               ]
             },
-            "description": "Runs are durably orchestrated: a plan or apply survives a process\nrestart rather than being lost halfway.\n\nOperations work the way the Terraform CLI's do. `plan` only plans the\ndesired config: the run records what would change and completes,\nkeeping no plan. `apply` plans the desired config and saves the plan;\n`destroy` plans the destruction of everything the component manages\nand saves that. For either, a plan with no changes completes the run,\nand a plan with changes waits in `waiting_approval`, where approving it\napplies exactly that saved plan (see the approval endpoint).\n\n`auto_approve` is allowed on `apply` only. The run then applies\nstraight away, with no saved plan and nothing to approve, and records\nthe counts the apply reports. It takes approve permission on the stack\nas well as operate permission.\n\nOne component runs one operation at a time, and a plan waiting for\napproval counts. Starting a second while one is in flight returns `409\nrun-in-flight` — the competing run is visible through the list\nendpoint, so a client can wait for it, or approve or discard it.\n\nAn apply, so that its plan waits for approval and the approval request has something to approve."
+            "description": "Runs are durably orchestrated: a plan or apply survives a process\nrestart rather than being lost halfway.\n\nOperations work the way the Terraform CLI's do. `plan` only plans the\ndesired config: the run records what would change and completes,\nkeeping no plan. `apply` plans the desired config and saves the plan;\n`destroy` plans the destruction of everything the installed template manages\nand saves that. For either, a plan with no changes completes the run,\nand a plan with changes waits in `waiting_approval`, where approving it\napplies exactly that saved plan (see the approval endpoint).\n\n`auto_approve` is allowed on `apply` only. The run then applies\nstraight away, with no saved plan and nothing to approve, and records\nthe counts the apply reports. It takes approve permission on the stack\nas well as operate permission.\n\nOne installed template runs one operation at a time, and a plan waiting for\napproval counts. Starting a second while one is in flight returns `409\nrun-in-flight` — the competing run is visible through the list\nendpoint, so a client can wait for it, or approve or discard it.\n\nAn apply, so that its plan waits for approval and the approval request has something to approve."
           },
           "response": [
             {
@@ -985,7 +985,7 @@
           ]
         },
         {
-          "name": "List a component's runs",
+          "name": "List an installed template's runs",
           "event": [
             {
               "listen": "test",
@@ -1310,7 +1310,7 @@
                 "approve"
               ]
             },
-            "description": "Valid only while the run's `status` is `waiting_approval`. Approving\nstarts the apply of the plan the run saved: the same file, applied\nwith `tofu apply` on whichever executor picks it up, so what was\nreviewed is exactly what runs. If the state has moved on since the\nplan was made, tofu refuses the plan and the run fails; plan again.\n\nRefused with `409 plan-stale` if the plan no longer describes the\ncomponent's desired config and revision. Those cannot change while\nthe plan waits, so this is a backstop.\n\nTakes no fields: send `{}` or no body at all. Returns `202` with the\nrun, now `approved`, while its apply waits for an executor; poll the\nrun until its `status` is terminal.\n\n`409` when the plan had no changes, so there is nothing to approve."
+            "description": "Valid only while the run's `status` is `waiting_approval`. Approving\nstarts the apply of the plan the run saved: the same file, applied\nwith `tofu apply` on whichever executor picks it up, so what was\nreviewed is exactly what runs. If the state has moved on since the\nplan was made, tofu refuses the plan and the run fails; plan again.\n\nRefused with `409 plan-stale` if the plan no longer describes the\ninstalled template's desired config and revision. Those cannot change while\nthe plan waits, so this is a backstop.\n\nTakes no fields: send `{}` or no body at all. Returns `202` with the\nrun, now `approved`, while its apply waits for an executor; poll the\nrun until its `status` is terminal.\n\n`409` when the plan had no changes, so there is nothing to approve."
           }
         },
         {

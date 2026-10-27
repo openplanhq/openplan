@@ -117,7 +117,7 @@ var sentinelNames = map[error]string{
 	ErrInvalidCommand:                     "ErrInvalidCommand",
 	ErrInvalidQuery:                       "ErrInvalidQuery",
 	ErrDuplicateStackSlug:                 "ErrDuplicateStackSlug",
-	ErrDuplicateStackTemplateComponentKey: "ErrDuplicateStackTemplateComponentKey",
+	ErrDuplicateStackTemplateKey:          "ErrDuplicateStackTemplateKey",
 	ErrNotFound:                           "ErrNotFound",
 	ErrRevisionNotInstallable:             "ErrRevisionNotInstallable",
 	ErrStackTemplateConfigInvalid:         "ErrStackTemplateConfigInvalid",

@@ -64,7 +64,7 @@ export const problemTypes = {
   revisionNotInstallable: `${problemBase}revision-not-installable`,
   templateInUse: `${problemBase}template-in-use`,
   duplicateSlug: `${problemBase}duplicate-slug`,
-  duplicateComponentKey: `${problemBase}duplicate-component-key`,
+  duplicateStackTemplateKey: `${problemBase}duplicate-stack-template-key`,
   duplicateCredentialName: `${problemBase}duplicate-credential-name`,
   lastOwner: `${problemBase}last-owner`,
   credentialEncryptionUnavailable: `${problemBase}credential-encryption-unavailable`,
@@ -185,12 +185,12 @@ export interface StackListItem extends Stack {
 export interface StackTemplate {
   id: string;
   stack_id: string;
-  component_key: string;
+  key: string;
   source_template_id: string;
   desired_template_revision_id: string;
   last_applied_template_revision_id: string;
   // The desired revision's ref, resolved by the server per request. A label,
-  // not component state — the component does not own a ref.
+  // not stack template state — an installed template does not own a ref.
   source_ref: string;
   workspace_name: string;
   display_name: string;
