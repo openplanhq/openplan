@@ -42,10 +42,8 @@ valkey:
       key: ""
   executor:
     # Required. The same Valkey as the executor user, which may only append to
-    # run logs: redis://executor@valkey:6379/0.
-    url: ""
-    # Required. The executor user's password.
-    passwordSecret:
+    # run logs: redis://executor:<password>@valkey:6379/0.
+    urlSecret:
       name: ""
       key: ""
 
