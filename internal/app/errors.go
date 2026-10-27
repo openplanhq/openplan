@@ -124,7 +124,7 @@ func Sentinels() []error {
 		ErrDuplicateStackSlug,
 		ErrDuplicateStackTemplateComponentKey,
 		ErrNotFound,
-		ErrTemplateNotInstallable,
+		ErrRevisionNotInstallable,
 		ErrStackTemplateConfigInvalid,
 		ErrStackTemplateUpgradeInvalid,
 		ErrStackTemplateNotEditable,

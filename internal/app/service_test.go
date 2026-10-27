@@ -550,8 +550,8 @@ func TestAddTemplateToStackRejectsInactiveTemplate(t *testing.T) {
 		TemplateRevisionID: domain.TemplateRevisionID("template_123"),
 		ConfigJSON:         json.RawMessage(`{}`),
 	})
-	if !errors.Is(err, ErrTemplateNotInstallable) {
-		t.Fatalf("error = %v, want ErrTemplateNotInstallable", err)
+	if !errors.Is(err, ErrRevisionNotInstallable) {
+		t.Fatalf("error = %v, want ErrRevisionNotInstallable", err)
 	}
 }
 

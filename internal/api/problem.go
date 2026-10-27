@@ -113,22 +113,22 @@ var problemTypes = []problemType{
 		detail: "The run has no plan waiting to discard.",
 	},
 	{
-		sentinel: app.ErrStackTemplateNotRunnable, status: http.StatusConflict, slug: "template-not-runnable",
+		sentinel: app.ErrStackTemplateNotRunnable, status: http.StatusConflict, slug: "stack-template-not-runnable",
 		title:  "The template can't run",
 		detail: "The template is being torn down, or has no revision to run.",
 	},
 	{
-		sentinel: app.ErrStackTemplateNotEditable, status: http.StatusConflict, slug: "template-not-editable",
+		sentinel: app.ErrStackTemplateNotEditable, status: http.StatusConflict, slug: "stack-template-not-editable",
 		title:  "The template can't be edited",
 		detail: "The template is being torn down, so its configuration can't change.",
 	},
 	{
-		sentinel: app.ErrStackTemplateUpgradeInvalid, status: http.StatusConflict, slug: "template-not-upgradable",
+		sentinel: app.ErrStackTemplateUpgradeInvalid, status: http.StatusConflict, slug: "stack-template-revision-not-changeable",
 		title:  "The template can't change revision",
 		detail: "The template is being torn down, so it can't move to another revision.",
 	},
 	{
-		sentinel: app.ErrTemplateNotInstallable, status: http.StatusConflict, slug: "revision-not-installable",
+		sentinel: app.ErrRevisionNotInstallable, status: http.StatusConflict, slug: "revision-not-installable",
 		title:  "The revision can't be installed",
 		detail: "The revision is still syncing, or its sync failed. Wait for it, or pick another revision.",
 	},

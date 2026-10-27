@@ -1038,7 +1038,7 @@ paths:
         "409":
           description: |
             The component is being torn down, so its config can no longer be
-            edited (`template-not-editable`), or a run is unfinished
+            edited (`stack-template-not-editable`), or a run is unfinished
             (`run-in-flight`).
           content:
             application/problem+json:
@@ -1090,7 +1090,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
           description: |
-            The component is being torn down (`template-not-upgradable`), the
+            The component is being torn down (`stack-template-revision-not-changeable`), the
             target revision is still syncing or failed
             (`revision-not-installable`), or a run is unfinished
             (`run-in-flight`).
@@ -1236,7 +1236,7 @@ paths:
         "409":
           description: |
             `run-in-flight` — another run is already active for this component.
-            `template-not-runnable` — the component is being torn down, or has
+            `stack-template-not-runnable` — the component is being torn down, or has
             no revision to run.
           content:
             application/problem+json:
@@ -2101,9 +2101,9 @@ components:
             - https://openplan.run/problems/plan-stale
             - https://openplan.run/problems/run-not-approvable
             - https://openplan.run/problems/run-not-discardable
-            - https://openplan.run/problems/template-not-runnable
-            - https://openplan.run/problems/template-not-editable
-            - https://openplan.run/problems/template-not-upgradable
+            - https://openplan.run/problems/stack-template-not-runnable
+            - https://openplan.run/problems/stack-template-not-editable
+            - https://openplan.run/problems/stack-template-revision-not-changeable
             - https://openplan.run/problems/revision-not-installable
             - https://openplan.run/problems/duplicate-slug
             - https://openplan.run/problems/duplicate-component-key

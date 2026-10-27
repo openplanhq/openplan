@@ -173,8 +173,8 @@ func TestFieldErrorWinsOverItsSentinelsRow(t *testing.T) {
 	t.Parallel()
 
 	_, conflict := renderAppError(t, fmt.Errorf("%w: lifecycle is %q", app.ErrStackTemplateUpgradeInvalid, "destroying"))
-	if conflict.Status != http.StatusConflict || conflict.Type != problemTypeURI("template-not-upgradable") {
-		t.Fatalf("lifecycle case = %+v, want 409 template-not-upgradable", conflict)
+	if conflict.Status != http.StatusConflict || conflict.Type != problemTypeURI("stack-template-revision-not-changeable") {
+		t.Fatalf("lifecycle case = %+v, want 409 stack-template-revision-not-changeable", conflict)
 	}
 	_, invalid := renderAppError(t, &app.FieldError{
 		Path: []string{"target_template_revision_id"}, Issue: app.IssueDifferentTemplate,

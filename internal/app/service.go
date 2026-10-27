@@ -28,7 +28,7 @@ var (
 	ErrDuplicateStackSlug                 = errors.New("duplicate stack slug")
 	ErrDuplicateStackTemplateComponentKey = errors.New("duplicate stack template component key")
 	ErrNotFound                           = errors.New("not found")
-	ErrTemplateNotInstallable             = errors.New("template is not installable")
+	ErrRevisionNotInstallable             = errors.New("template is not installable")
 	ErrStackTemplateConfigInvalid         = errors.New("stack template config is invalid")
 	ErrStackTemplateUpgradeInvalid        = errors.New("stack template upgrade is invalid")
 	ErrStackTemplateNotEditable           = errors.New("stack template config cannot be edited")
@@ -898,7 +898,7 @@ func (service *Service) AddTemplateToStack(ctx context.Context, command AddTempl
 		return StackTemplateView{}, fmt.Errorf("get template revision: %w", err)
 	}
 	if templateRevision.Status != domain.TemplateRevisionActive {
-		return StackTemplateView{}, fmt.Errorf("%w: status is %q", ErrTemplateNotInstallable, templateRevision.Status)
+		return StackTemplateView{}, fmt.Errorf("%w: status is %q", ErrRevisionNotInstallable, templateRevision.Status)
 	}
 
 	variables, err := service.TemplateRevisions.GetTemplateRevisionVariables(ctx, command.TenantID, command.TemplateRevisionID)
@@ -1309,7 +1309,7 @@ func (service *Service) UpgradeStackTemplate(ctx context.Context, command Upgrad
 		return StackTemplateView{}, fmt.Errorf("get target template revision: %w", err)
 	}
 	if targetRevision.Status != domain.TemplateRevisionActive {
-		return StackTemplateView{}, fmt.Errorf("%w: status is %q", ErrTemplateNotInstallable, targetRevision.Status)
+		return StackTemplateView{}, fmt.Errorf("%w: status is %q", ErrRevisionNotInstallable, targetRevision.Status)
 	}
 	if stackTemplate.SourceTemplateID != "" && targetRevision.SourceTemplateID != "" && stackTemplate.SourceTemplateID != targetRevision.SourceTemplateID {
 		return StackTemplateView{}, fieldError(ErrStackTemplateUpgradeInvalid, IssueDifferentTemplate,
