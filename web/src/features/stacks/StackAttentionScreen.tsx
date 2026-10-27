@@ -9,7 +9,7 @@ import { formatDateTime } from "../../shared/formatTimestamp";
 import PageHeader from "../../shared/PageHeader";
 import PlanDiff from "../../shared/PlanDiff";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
-import { attentionRunPath } from "./attention";
+import { attentionRunPath, failedOperation } from "./attention";
 import { stackTemplateLabel } from "./stackWorkflow";
 import { buttonClass } from "../../shared/buttonClass";
 import RequestIdNote from "../../shared/RequestIdNote";
@@ -59,6 +59,7 @@ export default function StackAttentionScreen() {
 
   const waiting = items.filter((item) => item.kind === "waiting_approval");
   const failed = items.filter((item) => item.kind === "destroy_failed");
+  const runFailed = items.filter((item) => item.kind === "run_failed");
 
   return (
     <section className="mx-auto max-w-260">
@@ -70,7 +71,7 @@ export default function StackAttentionScreen() {
               <Check aria-hidden="true" className="size-5 text-muted-foreground" />
             </EmptyMedia>
             <h2 className="text-label">Nothing needs attention</h2>
-            <EmptyDescription className="text-meta">No plans are waiting for approval and no destroys have failed.</EmptyDescription>
+            <EmptyDescription className="text-meta">Nothing is waiting for approval and nothing has failed.</EmptyDescription>
           </EmptyHeader>
           <Link to="/stacks" className={cn(buttonClass("outline"), "pointer-coarse:h-11")}>
             Back to stacks
@@ -88,6 +89,13 @@ export default function StackAttentionScreen() {
           {failed.length > 0 && (
             <AttentionGroup id="failed" icon={TriangleAlert} iconClass="text-destructive" title="Destroy failed">
               {failed.map((item) => (
+                <AttentionRow key={item.stack_template.id} item={item} />
+              ))}
+            </AttentionGroup>
+          )}
+          {runFailed.length > 0 && (
+            <AttentionGroup id="run-failed" icon={TriangleAlert} iconClass="text-destructive" title="Plan or apply failed">
+              {runFailed.map((item) => (
                 <AttentionRow key={item.stack_template.id} item={item} />
               ))}
             </AttentionGroup>
@@ -122,6 +130,22 @@ function AttentionGroup({
   );
 }
 
+// The row's second line: who planned a waiting plan, or what a failure means
+// for what the template manages. A failed plan changed nothing; a failed apply
+// may have changed part of what it set out to.
+function attentionMeaning(item: AttentionItem): string | null {
+  switch (item.kind) {
+    case "waiting_approval":
+      return item.run && `Planned by ${item.run.trigger_actor_display_name || item.run.trigger_actor}`;
+    case "destroy_failed":
+      return "The destroy run stopped before it finished. Some resources may still exist.";
+    case "run_failed":
+      return failedOperation(item) === "apply"
+        ? "The apply failed. Some changes may have been made."
+        : "The plan failed. Nothing was changed.";
+  }
+}
+
 // One item: what it is, why it needs a person, when, and the action that
 // resolves it. The columns stack on a phone.
 function AttentionRow({ item }: { item: AttentionItem }) {
@@ -147,11 +171,7 @@ function AttentionRow({ item }: { item: AttentionItem }) {
             {templateName}
           </span>
         </Link>
-        <span className="text-meta text-muted-foreground">
-          {waiting
-            ? item.run && `Planned by ${item.run.trigger_actor_display_name || item.run.trigger_actor}`
-            : "The destroy run stopped before it finished. Some resources may still exist."}
-        </span>
+        <span className="text-meta text-muted-foreground">{attentionMeaning(item)}</span>
       </div>
       {waiting && <div className="md:w-37.5 md:shrink-0">{item.run?.plan_summary && <PlanDiff summary={item.run.plan_summary} />}</div>}
       <div className="text-meta text-muted-foreground md:w-37.5 md:shrink-0">

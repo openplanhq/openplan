@@ -7,6 +7,7 @@ import Chip from "../../shared/Chip";
 import { listItemClass } from "../../shared/listItemClass";
 import SearchField from "../../shared/SearchField";
 import { cn } from "@/lib/utils";
+import { failedOperation, runFailedChipLabel } from "./attention";
 import { stackTemplateActivity } from "./StackTemplateStatusLabel";
 import { stackTemplatePath, templateTabOf } from "./templateSelection";
 import { stackTemplateLabel } from "./stackWorkflow";
@@ -99,6 +100,7 @@ function StackTemplateRow({
   const activity = stackTemplateActivity(stackTemplate, attention);
   const waiting = stackTemplate.pending_plan_run_id !== "";
   const failed = stackTemplate.lifecycle === "failed";
+  const runFailed = attention?.kind === "run_failed" ? failedOperation(attention) : null;
 
   return (
     <Link to={to} aria-current={selected ? "true" : undefined} className={listItemClass(selected)} data-testid={`stack-template-link-${stackTemplate.id}`}>
@@ -123,7 +125,7 @@ function StackTemplateRow({
           )}
         </span>
       </span>
-      {(waiting || failed) && (
+      {(waiting || failed || runFailed) && (
         <span className="flex shrink-0 flex-col items-end gap-1">
           {waiting && (
             <Chip tone="warning" icon={Hourglass}>
@@ -133,6 +135,11 @@ function StackTemplateRow({
           {failed && (
             <Chip tone="destructive" icon={TriangleAlert}>
               destroy failed
+            </Chip>
+          )}
+          {runFailed && (
+            <Chip tone="destructive" icon={TriangleAlert}>
+              {runFailedChipLabel(runFailed, 1)}
             </Chip>
           )}
         </span>

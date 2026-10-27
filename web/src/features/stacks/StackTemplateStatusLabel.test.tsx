@@ -26,6 +26,10 @@ function template(overrides: Partial<StackTemplate> = {}): StackTemplate {
 }
 
 const waiting = { kind: "waiting_approval", at: "2026-10-03T09:30:00Z" } as AttentionItem;
+const failedPlan = { kind: "run_failed", at: "2026-10-03T11:00:00Z", run: { operation: "plan" } } as AttentionItem;
+const failedApply = { kind: "run_failed", at: "2026-10-03T11:00:00Z", run: { operation: "apply", plan_summary: { add: 1, change: 0, destroy: 0 } } } as AttentionItem;
+// An apply run whose own plan failed: nothing was applied.
+const applyFailedPlanning = { kind: "run_failed", at: "2026-10-03T11:00:00Z", run: { operation: "apply", plan_summary: null } } as AttentionItem;
 
 describe("stackTemplateIndicator", () => {
   // Every state is an icon and a word; only those that need a person are
@@ -37,7 +41,12 @@ describe("stackTemplateIndicator", () => {
     ["destroy failed", template({ lifecycle: "failed" }), undefined, TriangleAlert, "failed", true],
     ["destroying", template({ lifecycle: "destroying" }), undefined, LoaderCircle, "settled", false],
     ["waiting for approval", template({ live_state: "differs" }), waiting, Hourglass, "attention", true],
-    ["waiting for approval", template({ live_state: "differs", pending_plan_run_id: "run_14" }), undefined, Hourglass, "attention", true]
+    ["waiting for approval", template({ live_state: "differs", pending_plan_run_id: "run_14" }), undefined, Hourglass, "attention", true],
+    // The latest run failed: that, not the live state before it, is what
+    // needs a person, whether or not the template was ever applied.
+    ["plan failed", template(), failedPlan, TriangleAlert, "failed", true],
+    ["apply failed", template({ live_state: "matches", last_applied_at: "2026-09-22T10:00:00Z" }), failedApply, TriangleAlert, "failed", true],
+    ["plan failed", template({ live_state: "matches" }), applyFailedPlanning, TriangleAlert, "failed", true]
   ] as const)("shows %s", (label, stackTemplate, attention, icon, tone, strong) => {
     expect(stackTemplateIndicator(stackTemplate, attention)).toEqual({ label, icon, tone, strong });
   });
@@ -56,6 +65,10 @@ describe("stackTemplateActivity", () => {
     expect(stackTemplateActivity(template({ pending_plan_run_id: "run_14", pending_plan_at: "2026-10-03T09:30:00Z" }), undefined)).toMatch(
       /^Planned 3 Oct, \d\d:\d\d$/
     );
+  });
+
+  it("dates a failed plan or apply from when it stopped", () => {
+    expect(stackTemplateActivity(template({ last_applied_at: "2026-09-22T10:00:00Z" }), failedApply)).toMatch(/^Failed 3 Oct, \d\d:\d\d$/);
   });
 
   it("dates a waiting plan from when it finished", () => {

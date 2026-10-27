@@ -448,6 +448,21 @@ describe("StacksListScreen", () => {
     expect(row.classList).toContain("h-13");
   });
 
+  // A failed plan is not a failed destroy: the chip names what failed.
+  it("marks a stack whose template's plan or apply failed, apart from failed destroys", () => {
+    const queryClient = testQueryClient();
+    const failedRun = (operation: "plan" | "apply", id: string) =>
+      waitingItem({ kind: "run_failed", stack_template: { id, workspace_name: id, display_name: id }, run: { ...waitingItem().run!, operation, status: "failed" } });
+    seed(queryClient, { stacks: [stack()], attention: [failedRun("plan", "tpl_a"), failedRun("plan", "tpl_b"), failedRun("apply", "tpl_c")] });
+
+    renderScreen(queryClient);
+
+    const row = within(screen.getByTestId("stack-row-stack_1"));
+    expect(row.getByText("2 plans failed").classList).toContain("bg-destructive-soft");
+    expect(row.getByText("apply failed")).toBeTruthy();
+    expect(row.queryByText(/destroy/)).toBeNull();
+  });
+
   it("fills the chips with the soft signal colours", () => {
     const queryClient = testQueryClient();
     seed(queryClient, {

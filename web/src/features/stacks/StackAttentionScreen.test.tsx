@@ -41,6 +41,17 @@ function failed(overrides: Partial<AttentionItem> = {}): AttentionItem {
   };
 }
 
+function runFailed(operation: "plan" | "apply", overrides: Partial<AttentionItem> = {}): AttentionItem {
+  return {
+    kind: "run_failed",
+    at: "2026-10-03T11:00:00Z",
+    stack: { id: "stack_dev", name: "dev", slug: "dev" },
+    stack_template: { id: `tpl_${operation}`, workspace_name: `ws_${operation}`, display_name: operation === "plan" ? "supabase" : "vpc" },
+    run: { id: "run_2", run_number: 2, operation, status: "failed", plan_summary: operation === "apply" ? { add: 1, change: 0, destroy: 0 } : null } as TemplateRun,
+    ...overrides
+  };
+}
+
 function testQueryClient(items?: AttentionItem[]): QueryClient {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   if (items) {
@@ -114,6 +125,38 @@ describe("StackAttentionScreen", () => {
     const row = within(screen.getByTestId("attention-row-tpl_cdn"));
     expect(row.getByText("The destroy run stopped before it finished. Some resources may still exist.")).toBeTruthy();
     expect(row.getByRole("link", { name: "View run" }).getAttribute("href")).toBe("/stacks/stack_edge/templates/tpl_cdn/runs/3");
+  });
+
+  // A failed plan changed nothing; a failed apply may have changed some of
+  // what it set out to, so the two lines say so apart.
+  it("lists failed plans and applies after failed destroys, each saying what it means", () => {
+    renderScreen(testQueryClient([waiting(), failed(), runFailed("plan"), runFailed("apply")]));
+
+    const groups = screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent);
+    expect(groups).toEqual(["Waiting for approval", "Destroy failed", "Plan or apply failed"]);
+    const plan = within(screen.getByTestId("attention-row-tpl_plan"));
+    expect(plan.getByRole("link", { name: "dev / supabase" })).toBeTruthy();
+    expect(plan.getByText("The plan failed. Nothing was changed.")).toBeTruthy();
+    expect(plan.getByText(formatDateTime("2026-10-03T11:00:00Z"))).toBeTruthy();
+    expect(plan.getByRole("link", { name: "View run" }).getAttribute("href")).toBe("/stacks/stack_dev/templates/tpl_plan/runs/2");
+    const apply = within(screen.getByTestId("attention-row-tpl_apply"));
+    expect(apply.getByText("The apply failed. Some changes may have been made.")).toBeTruthy();
+  });
+
+  // An apply whose own plan failed changed nothing, so it says so.
+  it("says nothing changed when an apply failed before it had a plan", () => {
+    const item = runFailed("apply");
+    renderScreen(testQueryClient([{ ...item, run: { ...item.run!, plan_summary: null } }]));
+
+    expect(within(screen.getByTestId("attention-row-tpl_apply")).getByText("The plan failed. Nothing was changed.")).toBeTruthy();
+  });
+
+  // The only item a failed plan: the page lists it rather than standing empty.
+  it("shows a failed plan when it is the only thing needing attention", () => {
+    renderScreen(testQueryClient([runFailed("plan")]));
+
+    expect(screen.getByTestId("attention-group-run-failed")).toBeTruthy();
+    expect(screen.queryByTestId("attention-empty")).toBeNull();
   });
 
   it("leaves out a kind with nothing in it", () => {

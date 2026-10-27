@@ -14,6 +14,7 @@ import {
   attentionByStackTemplate,
   attentionSummary,
   failedChipLabel,
+  runFailedChipLabel,
   templateCountWord,
   waitingChipLabel
 } from "./attention";
@@ -272,9 +273,19 @@ function StackRow({ stack, selected, attention }: { stack: StackListItem; select
               {waitingChipLabel(attention.waiting)}
             </Chip>
           )}
-          {attention.failed > 0 && (
+          {attention.destroyFailed > 0 && (
             <Chip tone="destructive" icon={TriangleAlert}>
-              {failedChipLabel(attention.failed)}
+              {failedChipLabel(attention.destroyFailed)}
+            </Chip>
+          )}
+          {attention.planFailed > 0 && (
+            <Chip tone="destructive" icon={TriangleAlert}>
+              {runFailedChipLabel("plan", attention.planFailed)}
+            </Chip>
+          )}
+          {attention.applyFailed > 0 && (
+            <Chip tone="destructive" icon={TriangleAlert}>
+              {runFailedChipLabel("apply", attention.applyFailed)}
             </Chip>
           )}
         </span>
