@@ -262,3 +262,95 @@ func TestListStackSummariesReportsTemplateReadFailure(t *testing.T) {
 		t.Fatal("ListStackSummaries() error = nil, want the template read failure")
 	}
 }
+
+// latestFailures gives the fixture's templates the latest runs the attention
+// list reads for run_failed: tpl_a2's last plan failed, a new tpl_b3's last
+// apply failed with no completion time, tpl_b1's last run is the destroy that
+// failed (already destroy_failed), and hidden tpl_c1's last plan failed.
+func latestFailures(fixture attentionFixture) {
+	fixture.overview.templates = append(fixture.overview.templates,
+		domain.StackTemplate{ID: "tpl_b3", StackID: "stack_b", DesiredTemplateRevisionID: "rev_root", Lifecycle: domain.StackTemplateActive})
+	fixture.overview.latestRuns = []domain.TemplateRun{
+		{ID: "run_a2", StackTemplateID: "tpl_a2", Operation: domain.OperationPlan, Status: domain.TemplateRunFailed, RunNumber: 2, TriggerActor: "user_priya",
+			CreatedAt: time.Date(2026, 10, 2, 11, 0, 0, 0, time.UTC), CompletedAt: time.Date(2026, 10, 2, 11, 5, 0, 0, time.UTC)},
+		{ID: "run_b3", StackTemplateID: "tpl_b3", Operation: domain.OperationApply, Status: domain.TemplateRunFailed, RunNumber: 1, TriggerActor: "user_dana",
+			CreatedAt: time.Date(2026, 10, 1, 8, 0, 0, 0, time.UTC)},
+		{ID: "run_b1_destroy", StackTemplateID: "tpl_b1", Operation: domain.OperationDestroy, Status: domain.TemplateRunFailed, RunNumber: 3},
+		{ID: "run_c1_plan", StackTemplateID: "tpl_c1", Operation: domain.OperationPlan, Status: domain.TemplateRunFailed, RunNumber: 9},
+	}
+}
+
+func TestListAttentionListsAFailedPlanOrApply(t *testing.T) {
+	t.Parallel()
+
+	fixture := newAttentionFixture(t)
+	latestFailures(fixture)
+
+	items, err := fixture.service.ListAttention(fixture.ctx, ListAttentionCommand{TenantID: "tenant_123"})
+	if err != nil {
+		t.Fatalf("ListAttention() error = %v", err)
+	}
+
+	type row struct {
+		kind     AttentionKind
+		template domain.StackTemplateID
+		run      domain.TemplateRunID
+		at       time.Time
+	}
+	var got []row
+	for _, item := range items {
+		var runID domain.TemplateRunID
+		if item.Run != nil {
+			runID = item.Run.ID
+		}
+		got = append(got, row{item.Kind, item.StackTemplate.ID, runID, item.At})
+	}
+	// Waiting plans first; then every failure newest first, the failed
+	// destroy once as destroy_failed, and nothing from the hidden stack c. A
+	// failure with no completion time dates from when it was requested.
+	want := []row{
+		{AttentionWaitingApproval, "tpl_b2", "run_b2", time.Date(2026, 10, 3, 10, 0, 0, 0, time.UTC)},
+		{AttentionWaitingApproval, "tpl_a1", "run_a1", time.Date(2026, 10, 3, 9, 0, 0, 0, time.UTC)},
+		{AttentionRunFailed, "tpl_a2", "run_a2", time.Date(2026, 10, 2, 11, 5, 0, 0, time.UTC)},
+		{AttentionRunFailed, "tpl_b3", "run_b3", time.Date(2026, 10, 1, 8, 0, 0, 0, time.UTC)},
+		{AttentionDestroyFailed, "tpl_b1", "run_b1_destroy", time.Date(2026, 9, 29, 8, 0, 0, 0, time.UTC)},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("items = %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("items[%d] = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+	if name := items[2].Run.TriggerActorDisplayName; name != "Priya Shah" {
+		t.Errorf("failed run trigger actor = %q, want Priya Shah", name)
+	}
+	if name := items[3].StackTemplate.DisplayName; name != "network" {
+		t.Errorf("failed apply template name = %q, want network", name)
+	}
+}
+
+func TestListAttentionClearsAFailedRunOnceANewerRunStarts(t *testing.T) {
+	t.Parallel()
+
+	fixture := newAttentionFixture(t)
+	latestFailures(fixture)
+	// Each template's latest run is now a newer one: a canceled plan after
+	// tpl_a2's failure, and a queued apply after tpl_b3's.
+	fixture.overview.latestRuns[0] = domain.TemplateRun{ID: "run_a2_next", StackTemplateID: "tpl_a2", Operation: domain.OperationPlan, Status: domain.TemplateRunCanceled}
+	fixture.overview.latestRuns[1] = domain.TemplateRun{ID: "run_b3_next", StackTemplateID: "tpl_b3", Operation: domain.OperationApply, Status: domain.TemplateRunQueued}
+
+	items, err := fixture.service.ListAttention(fixture.ctx, ListAttentionCommand{TenantID: "tenant_123"})
+	if err != nil {
+		t.Fatalf("ListAttention() error = %v", err)
+	}
+	for _, item := range items {
+		if item.Kind == AttentionRunFailed {
+			t.Errorf("run_failed item for %s, want none once a newer run started", item.StackTemplate.ID)
+		}
+	}
+	if len(items) != 3 {
+		t.Errorf("len(items) = %d, want 3 (two waiting, one failed destroy)", len(items))
+	}
+}
