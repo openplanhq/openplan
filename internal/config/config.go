@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	neturl "net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -136,6 +137,12 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	if cfg.HTTPAddress == "" {
 		cfg.HTTPAddress = DefaultHTTPAddress
 	}
+	if cfg.DatabaseURL, err = withPassword(getenv, "DATABASE_URL", cfg.DatabaseURL, "DATABASE_PASSWORD"); err != nil {
+		return APIConfig{}, err
+	}
+	if cfg.LiveLogURL, err = withPassword(getenv, "VALKEY_URL", cfg.LiveLogURL, "VALKEY_PASSWORD"); err != nil {
+		return APIConfig{}, err
+	}
 	cfg.Debug = parseBool(getenv("OPENPLAN_DEBUG"))
 	credentialKey, err := loadCredentialEncryptionKey(getenv)
 	if err != nil {
@@ -191,6 +198,9 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 	}
 	if cfg.RunRoot == "" {
 		cfg.RunRoot = DefaultExecutorRunRoot
+	}
+	if cfg.LiveLogURL, err = withPassword(getenv, "VALKEY_URL", cfg.LiveLogURL, "VALKEY_PASSWORD"); err != nil {
+		return ExecutorConfig{}, err
 	}
 	cfg.MaxSessions = DefaultExecutorMaxSessions
 	if raw := strings.TrimSpace(getenv("EXECUTOR_MAX_SESSIONS")); raw != "" {
@@ -251,6 +261,28 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 	}
 
 	return cfg, nil
+}
+
+// withPassword returns rawURL, read from urlName, with the password read from
+// passwordName as its own. Kept apart, the password can live in a Secret by
+// itself while the URL sits in plain configuration, as the Helm chart has it,
+// and any character works in it: written into a URL by hand, @ / : % # would
+// each break the URL. Neither error quotes the URL, which may hold a password.
+func withPassword(getenv func(string) string, urlName, rawURL, passwordName string) (string, error) {
+	password := strings.TrimSpace(getenv(passwordName))
+	// An empty URL is left to the caller's own required check.
+	if password == "" || rawURL == "" {
+		return rawURL, nil
+	}
+	parsed, err := neturl.Parse(rawURL)
+	if err != nil || parsed.Host == "" {
+		return "", fmt.Errorf("%w: %s must be a URL with a host when %s is set", ErrInvalidConfig, urlName, passwordName)
+	}
+	if _, set := parsed.User.Password(); set {
+		return "", fmt.Errorf("%w: %s is set and %s holds a password too; keep the password in one of them", ErrInvalidConfig, passwordName, urlName)
+	}
+	parsed.User = neturl.UserPassword(parsed.User.Username(), password)
+	return parsed.String(), nil
 }
 
 // sandboxAddresses is how many sandboxes subnet can address at once: all of

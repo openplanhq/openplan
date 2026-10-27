@@ -7,6 +7,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"net/netip"
+	neturl "net/url"
 	"reflect"
 	"strings"
 	"testing"
@@ -652,5 +653,91 @@ func TestLoadExecutorConfigSandboxDefaultsAndValidation(t *testing.T) {
 	env := map[string]string{"TEMPORAL_ADDRESS": "temporal:7233", "VALKEY_URL": "redis://valkey:6379", "EXECUTOR_SANDBOX_SUBNET": "192.168.77.0/26"}
 	if cfg, err := LoadExecutorConfig(func(k string) string { return env[k] }); err != nil || cfg.Sandbox.Subnet != netip.MustParsePrefix("192.168.77.0/26") {
 		t.Fatalf("subnet = %v, %v; want 192.168.77.0/26", cfg.Sandbox.Subnet, err)
+	}
+}
+
+func TestLoadAPIConfigPutsSeparatePasswordsInTheirURLs(t *testing.T) {
+	t.Parallel()
+
+	// Every character a URL reserves, which a password written into the URL
+	// by hand would have to escape.
+	const password = "p@ss/w:rd%#?"
+	cfg, err := LoadAPIConfig(withValidAPIEnv(map[string]string{
+		"DATABASE_URL":      "postgres://openplan@postgres:5432/openplan?sslmode=require",
+		"DATABASE_PASSWORD": " " + password + "\n",
+		"VALKEY_URL":        "redis://api@valkey:6379/0",
+		"VALKEY_PASSWORD":   password,
+	}))
+	if err != nil {
+		t.Fatalf("LoadAPIConfig returned error: %v", err)
+	}
+	assertURLCredentials(t, "DatabaseURL", cfg.DatabaseURL, "openplan", password)
+	assertURLCredentials(t, "LiveLogURL", cfg.LiveLogURL, "api", password)
+	if !strings.HasSuffix(cfg.DatabaseURL, "@postgres:5432/openplan?sslmode=require") {
+		t.Fatalf("DatabaseURL = %q lost its host, path or query", cfg.DatabaseURL)
+	}
+}
+
+func TestLoadExecutorConfigPutsTheValkeyPasswordInItsURL(t *testing.T) {
+	t.Parallel()
+
+	values := map[string]string{
+		"TEMPORAL_ADDRESS": "localhost:7233",
+		"VALKEY_URL":       "redis://executor@valkey:6379/0",
+		"VALKEY_PASSWORD":  "fresh/password",
+	}
+	cfg, err := LoadExecutorConfig(func(key string) string { return values[key] })
+	if err != nil {
+		t.Fatalf("LoadExecutorConfig returned error: %v", err)
+	}
+	assertURLCredentials(t, "LiveLogURL", cfg.LiveLogURL, "executor", "fresh/password")
+}
+
+func TestLoadAPIConfigRefusesAPasswordSetTwice(t *testing.T) {
+	t.Parallel()
+
+	for _, setting := range []struct{ url, password string }{
+		{"DATABASE_URL", "DATABASE_PASSWORD"},
+		{"VALKEY_URL", "VALKEY_PASSWORD"},
+	} {
+		t.Run(setting.password, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := LoadAPIConfig(withValidAPIEnv(map[string]string{
+				setting.url:      "redis://user:in-url@host:6379/0",
+				setting.password: "separate",
+			}))
+			if !errors.Is(err, ErrInvalidConfig) || !strings.Contains(err.Error(), setting.password) {
+				t.Fatalf("error = %v, want ErrInvalidConfig naming %s", err, setting.password)
+			}
+			if strings.Contains(err.Error(), "in-url") || strings.Contains(err.Error(), "separate") {
+				t.Fatalf("error = %q quotes a password", err)
+			}
+		})
+	}
+}
+
+func TestLoadAPIConfigRequiresAURLForASeparatePassword(t *testing.T) {
+	t.Parallel()
+
+	_, err := LoadAPIConfig(withValidAPIEnv(map[string]string{
+		"DATABASE_URL":      "host=postgres user=openplan dbname=openplan",
+		"DATABASE_PASSWORD": "separate",
+	}))
+	if !errors.Is(err, ErrInvalidConfig) || !strings.Contains(err.Error(), "DATABASE_URL") {
+		t.Fatalf("error = %v, want ErrInvalidConfig naming DATABASE_URL", err)
+	}
+}
+
+func assertURLCredentials(t *testing.T, name, raw, username, password string) {
+	t.Helper()
+
+	parsed, err := neturl.Parse(raw)
+	if err != nil {
+		t.Fatalf("%s does not parse: %v", name, err)
+	}
+	got, _ := parsed.User.Password()
+	if parsed.User.Username() != username || got != password {
+		t.Fatalf("%s user = %q password = %q, want %q and %q", name, parsed.User.Username(), got, username, password)
 	}
 }

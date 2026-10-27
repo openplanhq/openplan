@@ -192,3 +192,15 @@ func TestPublishedValkeyPasswordsCoverTheRepository(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadAPIConfigRefusesAPublishedSeparateValkeyPasswordInProduction(t *testing.T) {
+	t.Parallel()
+
+	values := productionAPIValues()
+	values["VALKEY_URL"] = "redis://api@valkey:6379/0"
+	values["VALKEY_PASSWORD"] = "api-local-only"
+	_, err := LoadAPIConfig(mapConfigEnv(values))
+	if !errors.Is(err, ErrInvalidConfig) || strings.Contains(err.Error(), "api-local-only") {
+		t.Fatalf("error = %v, want ErrInvalidConfig without the password", err)
+	}
+}
