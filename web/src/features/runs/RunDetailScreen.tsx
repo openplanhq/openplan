@@ -238,7 +238,7 @@ export default function RunDetailScreen() {
               {run.selected_ref} @ {run.resolved_commit_sha.slice(0, 7)}
             </Fact>
           </dl>
-          {run.command_error ? (
+          {run.command_error.trim() ? (
             <CommandErrorPanel run={run} logs={logsQuery.data} />
           ) : (
             run.error_summary && <ErrorLine live={false}>{run.error_summary}</ErrorLine>

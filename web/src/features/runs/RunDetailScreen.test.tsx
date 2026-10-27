@@ -857,6 +857,59 @@ describe("RunDetailScreen", () => {
     expect(screen.getByText("template run activity failed: run terraform: init: exit status 1")).toBeTruthy();
   });
 
+  // The failed command is the last that ran, so its log is the last one.
+  it("names the last command that ran, across phases", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(
+      queryKeys.templateRun("tenant_123", "run_1"),
+      run({ operation: "apply", status: "failed", step: "applying", command_error: "Error: apply broke", error_summary: "wrapper" })
+    );
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/logs")) {
+        return jsonResponse(["plan-1", "plan-2", "plan-3", "apply-1", "apply-2", "apply-3"].map((name) => runLog({ name })));
+      }
+      return new Response("log body", { status: 200, headers: { "content-type": "text/plain" } });
+    });
+
+    renderScreen(queryClient);
+
+    const panel = screen.getByTestId("run-detail-command-error");
+    await waitFor(() => expect(within(panel).getByText("tofu apply failed")).toBeTruthy());
+  });
+
+  it("names no command while the logs cannot be read", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(
+      queryKeys.templateRun("tenant_123", "run_1"),
+      run({ status: "failed", step: "planning", command_error: "Error: plan broke", error_summary: "wrapper" })
+    );
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ title: "boom" }, 500));
+
+    renderScreen(queryClient);
+
+    await waitFor(() => expect(screen.getByText("Could not load this run's logs.")).toBeTruthy());
+    expect(within(screen.getByTestId("run-detail-command-error")).getByText("The command failed")).toBeTruthy();
+  });
+
+  // A blank command error has nothing to lead with.
+  it("falls back to the summary when the command error is blank", () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(
+      queryKeys.templateRun("tenant_123", "run_1"),
+      run({ status: "failed", command_error: "  \n", error_summary: "template run activity failed: plan broke" })
+    );
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([]));
+
+    renderScreen(queryClient);
+
+    expect(screen.queryByTestId("run-detail-command-error")).toBeNull();
+    expect(screen.getByText("template run activity failed: plan broke")).toBeTruthy();
+  });
+
   it("falls back to the summary when the run did not fail in a command", () => {
     const queryClient = testQueryClient();
     seedCapabilities(queryClient, allAllowed);
