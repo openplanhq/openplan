@@ -18,7 +18,7 @@ const commandErrorLimit = 4096
 // as when the command was killed (issue 522).
 func commandError(log []byte) string {
 	var block []string
-	for _, line := range strings.Split(string(log), "\n") {
+	for line := range strings.SplitSeq(string(log), "\n") {
 		if block == nil {
 			if strings.HasPrefix(line, "Error: ") {
 				block = []string{line}
