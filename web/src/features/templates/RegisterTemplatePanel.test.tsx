@@ -234,7 +234,7 @@ describe("RegisterTemplatePanel", () => {
     listFails = false;
     fake.mockImplementation(async (input, init) => templateReadResponse(input, [added, revision()]) ?? answer(input, init));
     fireEvent.click(screen.getByTestId("templates-retry"));
-    await waitFor(() => expect(screen.getByTestId("page-count").textContent).toBe("2"));
+    await waitFor(() => expect(screen.getByTestId("template-link-tpl_9")).toBeTruthy());
     expect((screen.getByTestId("register-template-submit") as HTMLButtonElement).disabled).toBe(false);
   });
 

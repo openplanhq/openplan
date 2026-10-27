@@ -55,11 +55,6 @@ export default function StacksListScreen() {
   const query = useDebounce(filter.trim(), FILTER_DEBOUNCE_MS);
   const stacksQuery = useStacksQuery(tenantID, query);
   const { data: stacks, status, error, refetch } = stacksQuery;
-  // The header counts every stack, which only the unfiltered list knows, and
-  // only once all its pages are in: there is no total to ask for, since a
-  // count of the stacks someone can see means checking every one.
-  const allStacks = useStacksQuery(tenantID);
-  const count = allStacks.data !== undefined && !allStacks.hasNextPage ? allStacks.data.length : undefined;
   // The attention list only decorates this page, so while it loads or if it
   // fails the stacks still show, without the summary line and chips.
   const attention = useAttentionQuery(tenantID).data ?? [];
@@ -69,10 +64,9 @@ export default function StacksListScreen() {
 
   // The header stands while the stacks load and when they fail, so the page
   // keeps its title and its one action, and only the panel below waits.
-  const header = (count?: number) => (
+  const header = () => (
     <PageHeader
       title="Stacks"
-      count={count}
       action={
         <RequireCapability capability="can_create_stack">
           {/* A link that looks like the page's primary action. Full width
@@ -143,7 +137,7 @@ export default function StacksListScreen() {
 
   return (
     <section>
-      {header(count)}
+      {header()}
       {noStacks ? (
         // openplan UI's page-level EmptyState: a card, its one icon plain
         // rather than on a tile. It is the first screen of a new install, so

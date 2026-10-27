@@ -24,13 +24,12 @@ describe("PageHeader", () => {
     }
   });
 
-  it("shows the count in the neutral count pill", () => {
-    renderHeader({ title: "Stacks", count: 6 });
+  // A title is the word alone: no count pill beside it (owner's rule, #518).
+  it("draws no count beside the title", () => {
+    renderHeader({ title: "Stacks" });
 
-    const pill = screen.getByTestId("page-count");
-    expect(pill.textContent).toBe("6");
-    expect(pill.classList).toContain("bg-muted-strong");
-    expect(pill.classList).not.toContain("bg-muted");
+    expect(screen.queryByTestId("page-count")).toBeNull();
+    expect(screen.getByRole("heading", { level: 1 }).parentElement?.textContent).not.toMatch(/\d/);
   });
 
   it("ends its trail with the page itself, as plain current text", () => {

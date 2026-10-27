@@ -70,7 +70,6 @@ export default function TemplatesPage() {
   // Every registered template, a first sync still running or failed
   // included: it exists from the moment it is registered.
   const templates = templatesByName(templatesQuery.data);
-  const count = templates.length;
   const first = templates[0] ?? null;
   const onPanel = templateMatch !== null;
   const registering = templateMatch?.params.sourceTemplateId === "new";
@@ -81,7 +80,6 @@ export default function TemplatesPage() {
     <section data-testid="templates-page">
       <PageHeader
         title="Templates"
-        count={count}
         action={
           <RequireCapability capability="can_publish_template">
             <Link to="/templates/new" className={registerLinkClass} data-testid="register-template-link">

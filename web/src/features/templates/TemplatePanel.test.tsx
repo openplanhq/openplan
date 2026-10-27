@@ -19,7 +19,6 @@ const cdn = revision({ id: "rev_cdn", source_template_id: "tpl_cdn", repo_name: 
 function seed(revisions: TemplateRevision[] = [latest, older, rds, cdn]): QueryClient {
   const queryClient = testQueryClient();
   seedTemplates(queryClient, revisions);
-  // Three variables against two revisions, so swapped counts would show.
   queryClient.setQueryData(queryKeys.templateRevisionVariables(TENANT, "rev_2"), [
     variable({ template_revision_id: "rev_2" }),
     variable({ template_revision_id: "rev_2", name: "node_desired_size", type_expression: "number", required: false, has_default: true }),
@@ -142,15 +141,15 @@ describe("TemplatePanel header", () => {
 });
 
 describe("TemplatePanel tabs", () => {
-  it("marks the current tab and counts the variables and revisions", () => {
+  it("marks the current tab, each named by its word alone", () => {
     renderPanel(seed(), "/templates/tpl_1/revisions");
     const nav = within(screen.getByRole("navigation", { name: "Template sections" }));
 
-    const variables = nav.getByRole("link", { name: "Variables 3" });
+    const variables = nav.getByRole("link", { name: "Variables" });
     expect(variables.getAttribute("href")).toBe("/templates/tpl_1/variables");
     expect(variables.getAttribute("aria-current")).toBeNull();
 
-    const revisions = nav.getByRole("link", { name: "Revisions 2" });
+    const revisions = nav.getByRole("link", { name: "Revisions" });
     expect(revisions.getAttribute("href")).toBe("/templates/tpl_1/revisions");
     expect(revisions.getAttribute("aria-current")).toBe("page");
     expect(screen.getByTestId("revisions-content")).toBeTruthy();

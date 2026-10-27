@@ -41,7 +41,6 @@ export default function StackAccessScreen() {
     <section className="mx-auto max-w-260" data-testid="stack-access-screen">
       <PageHeader
         title="Access"
-        count={grants.data?.length}
         trail={[
           { label: "Stacks", to: "/stacks" },
           { label: stackName, to: `/stacks/${stackId}` }

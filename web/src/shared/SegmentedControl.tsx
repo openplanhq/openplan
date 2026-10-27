@@ -3,8 +3,6 @@ import { cn } from "@/lib/utils";
 export interface SegmentedOption<Value extends string> {
   value: Value;
   label: string;
-  // A plain count after the label, as a tab carries one. Left out until known.
-  count?: number;
 }
 
 /**
@@ -43,13 +41,12 @@ export default function SegmentedControl<Value extends string>({
             aria-pressed={pressed}
             onClick={() => onChange(option.value)}
             className={cn(
-              "inline-flex h-7 items-center gap-2 rounded-md border px-2.5 text-meta font-medium transition-colors duration-150",
+              "inline-flex h-7 items-center rounded-md border px-2.5 text-meta font-medium transition-colors duration-150",
               "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring pointer-coarse:h-11",
               pressed ? "border-border bg-card text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
             )}
           >
             {option.label}
-            {option.count !== undefined && <span className="text-caption font-medium text-subtle-foreground">{option.count}</span>}
           </button>
         );
       })}
