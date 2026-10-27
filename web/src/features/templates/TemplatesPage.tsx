@@ -30,7 +30,7 @@ export default function TemplatesPage() {
   const tenantID = useTenantID();
   const templatesQuery = useTemplatesQuery(tenantID);
   const boundary = useQueryErrorBoundary(templatesQuery.error);
-  const templateMatch = useMatch("/templates/:sourceTemplateId/*");
+  const templateMatch = useMatch("/templates/:templateId/*");
   const deleted = (useLocation().state as TemplatesLocationState | null)?.deletedTemplate ?? null;
 
   if (templatesQuery.status === "pending") {
@@ -72,8 +72,8 @@ export default function TemplatesPage() {
   const templates = templatesByName(templatesQuery.data);
   const first = templates[0] ?? null;
   const onPanel = templateMatch !== null;
-  const registering = templateMatch?.params.sourceTemplateId === "new";
-  const selectedId = onPanel ? (registering ? null : templateMatch.params.sourceTemplateId ?? null) : first?.id ?? null;
+  const registering = templateMatch?.params.templateId === "new";
+  const selectedId = onPanel ? (registering ? null : templateMatch.params.templateId ?? null) : first?.id ?? null;
   const outletContext: TemplatesPageOutletContext = { indexTemplateId: first?.id ?? null };
 
   return (

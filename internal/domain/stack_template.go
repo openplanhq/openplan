@@ -40,8 +40,8 @@ type StackTemplate struct {
 	StackID StackID
 	// Key is the human/stable key unique among active installs in a stack.
 	Key string
-	// SourceTemplateID is the stable source identity shared by all revisions.
-	SourceTemplateID SourceTemplateID
+	// TemplateID is the stable source identity shared by all revisions.
+	TemplateID TemplateID
 	// DesiredTemplateRevisionID is the template revision to use for the next run.
 	DesiredTemplateRevisionID TemplateRevisionID
 	// LastAppliedTemplateRevisionID is the template revision from the last successful apply.

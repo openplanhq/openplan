@@ -85,13 +85,13 @@ variable "cidr" {
 	activities := newTestTemplateSyncActivities(t, store, git)
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		SyncID:           domain.TemplateSyncID("template_sync_123"),
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "acme",
-		RepoName:         "infra-templates",
-		SourceRef:        "v0.0.1",
-		RootPath:         "modules/vpc",
+		SyncID:     domain.TemplateSyncID("template_sync_123"),
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "infra-templates",
+		SourceRef:  "v0.0.1",
+		RootPath:   "modules/vpc",
 	})
 	if err != nil {
 		t.Fatalf("SyncTemplate returned error: %v", err)
@@ -134,12 +134,12 @@ func TestSyncTemplateRejectsUnsafeRootPath(t *testing.T) {
 	activities := newTestTemplateSyncActivities(t, store, git)
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "acme",
-		RepoName:         "infra-templates",
-		SourceRef:        "v0.0.1",
-		RootPath:         "../secret",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "infra-templates",
+		SourceRef:  "v0.0.1",
+		RootPath:   "../secret",
 	})
 	if err != nil {
 		t.Fatalf("SyncTemplate returned error: %v", err)
@@ -169,12 +169,12 @@ func TestSyncTemplateSupportsRepositoryRootPath(t *testing.T) {
 	activities := newTestTemplateSyncActivities(t, store, git)
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "acme",
-		RepoName:         "infra-templates",
-		SourceRef:        "v0.0.1",
-		RootPath:         ".",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "infra-templates",
+		SourceRef:  "v0.0.1",
+		RootPath:   ".",
 	})
 	if err != nil {
 		t.Fatalf("SyncTemplate returned error: %v", err)
@@ -213,12 +213,12 @@ variable "password" {
 	activities := newTestTemplateSyncActivities(t, store, git)
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "acme",
-		RepoName:         "infra-templates",
-		SourceRef:        "v0.0.1",
-		RootPath:         "modules/db",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "infra-templates",
+		SourceRef:  "v0.0.1",
+		RootPath:   "modules/db",
 	})
 	if err != nil {
 		t.Fatalf("SyncTemplate returned error: %v", err)
@@ -258,12 +258,12 @@ func TestSyncTemplateReturnsExistingImmutableTemplate(t *testing.T) {
 	activities := newTestTemplateSyncActivities(t, store, git)
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "acme",
-		RepoName:         "infra-templates",
-		SourceRef:        "v0.0.1",
-		RootPath:         "modules/vpc",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "infra-templates",
+		SourceRef:  "v0.0.1",
+		RootPath:   "modules/vpc",
 	})
 	if err != nil {
 		t.Fatalf("SyncTemplate returned error: %v", err)
@@ -282,12 +282,12 @@ func TestSyncTemplateWritesIntoTheTemplateItWasGiven(t *testing.T) {
 	activities := newTestTemplateSyncActivities(t, store, vpcTemplateGit(t))
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_given"),
-		RepoOwner:        "acme",
-		RepoName:         "infra-templates",
-		SourceRef:        "v0.0.1",
-		RootPath:         "modules/vpc",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_given"),
+		RepoOwner:  "acme",
+		RepoName:   "infra-templates",
+		SourceRef:  "v0.0.1",
+		RootPath:   "modules/vpc",
 	})
 	if err != nil {
 		t.Fatalf("SyncTemplate returned error: %v", err)
@@ -295,8 +295,8 @@ func TestSyncTemplateWritesIntoTheTemplateItWasGiven(t *testing.T) {
 	if output.Status != domain.TemplateSyncStateCompleted {
 		t.Fatalf("status = %q, want completed (%s)", output.Status, output.ErrorSummary)
 	}
-	if store.template.SourceTemplateID != "source_template_given" {
-		t.Fatalf("revision source template ID = %q, want source_template_given", store.template.SourceTemplateID)
+	if store.template.TemplateID != "source_template_given" {
+		t.Fatalf("revision template ID = %q, want source_template_given", store.template.TemplateID)
 	}
 }
 
@@ -336,17 +336,17 @@ func TestSyncTemplateIntoADeletedTemplateIsInvalid(t *testing.T) {
 	t.Parallel()
 
 	store := &recordingTemplateSyncStore{
-		upsertErr: fmt.Errorf("source template source_template_123: %w", os.ErrNotExist),
+		upsertErr: fmt.Errorf("template source_template_123: %w", os.ErrNotExist),
 	}
 	activities := newTestTemplateSyncActivities(t, store, vpcTemplateGit(t))
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "acme",
-		RepoName:         "infra-templates",
-		SourceRef:        "v0.0.1",
-		RootPath:         "modules/vpc",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "infra-templates",
+		SourceRef:  "v0.0.1",
+		RootPath:   "modules/vpc",
 	})
 	if err != nil {
 		t.Fatalf("SyncTemplate returned error: %v", err)
@@ -369,12 +369,12 @@ func TestSyncTemplateReturnsOtherStoreFailures(t *testing.T) {
 	activities := newTestTemplateSyncActivities(t, store, vpcTemplateGit(t))
 
 	_, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "acme",
-		RepoName:         "infra-templates",
-		SourceRef:        "v0.0.1",
-		RootPath:         "modules/vpc",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "infra-templates",
+		SourceRef:  "v0.0.1",
+		RootPath:   "modules/vpc",
 	})
 	if !errors.Is(err, storeErr) {
 		t.Fatalf("error = %v, want %v", err, storeErr)
@@ -459,12 +459,12 @@ func TestSyncTemplatePassesInstallationTokenToClone(t *testing.T) {
 	activities := newTestTemplateSyncActivities(t, store, git, WithTemplateSyncTokenSource(stubTokenSource{token: "ghs_minted"}))
 
 	if _, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "acme",
-		RepoName:         "private-infra",
-		SourceRef:        "main",
-		RootPath:         "modules/vpc",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "private-infra",
+		SourceRef:  "main",
+		RootPath:   "modules/vpc",
 	}); err != nil {
 		t.Fatalf("SyncTemplate returned error: %v", err)
 	}
@@ -488,12 +488,12 @@ func TestSyncTemplateReportsUninstalledApp(t *testing.T) {
 	activities := newTestTemplateSyncActivities(t, store, &fakeGit{head: "abc123", err: cloneErr}, WithTemplateSyncTokenSource(stubTokenSource{err: githubapp.ErrAppNotInstalled}))
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "acme",
-		RepoName:         "private-infra",
-		SourceRef:        "main",
-		RootPath:         "modules/vpc",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "private-infra",
+		SourceRef:  "main",
+		RootPath:   "modules/vpc",
 	})
 	if err != nil {
 		t.Fatalf("SyncTemplate returned error: %v", err)
@@ -525,12 +525,12 @@ func TestSyncTemplateSucceedsWithZeroCredentialWhenAppNotInstalled(t *testing.T)
 	activities := newTestTemplateSyncActivities(t, store, git, WithTemplateSyncTokenSource(stubTokenSource{err: githubapp.ErrAppNotInstalled}))
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "hashicorp",
-		RepoName:         "terraform-aws-modules",
-		SourceRef:        "main",
-		RootPath:         "modules/vpc",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "hashicorp",
+		RepoName:   "terraform-aws-modules",
+		SourceRef:  "main",
+		RootPath:   "modules/vpc",
 	})
 	if err != nil {
 		t.Fatalf("SyncTemplate returned error: %v", err)
@@ -554,12 +554,12 @@ func TestSyncTemplateSucceedsWithZeroCredentialWhenTokenLookupFails(t *testing.T
 	activities := newTestTemplateSyncActivities(t, &recordingTemplateSyncStore{}, git, WithTemplateSyncTokenSource(stubTokenSource{err: errors.New("resolve installation: unexpected status 503 Service Unavailable")}))
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "hashicorp",
-		RepoName:         "terraform-aws-modules",
-		SourceRef:        "main",
-		RootPath:         "modules/vpc",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "hashicorp",
+		RepoName:   "terraform-aws-modules",
+		SourceRef:  "main",
+		RootPath:   "modules/vpc",
 	})
 	if err != nil {
 		t.Fatalf("SyncTemplate returned error: %v", err)
@@ -588,12 +588,12 @@ func TestSyncTemplateRetriesWhenTokenLookupFailedAndCloneFailed(t *testing.T) {
 	activities := newTestTemplateSyncActivities(t, &recordingTemplateSyncStore{}, &fakeGit{head: "abc123", err: cloneErr}, WithTemplateSyncTokenSource(stubTokenSource{err: lookupErr}))
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "acme",
-		RepoName:         "private-infra",
-		SourceRef:        "main",
-		RootPath:         "modules/vpc",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "private-infra",
+		SourceRef:  "main",
+		RootPath:   "modules/vpc",
 	})
 	if err == nil {
 		t.Fatalf("SyncTemplate returned nil error; want a retryable failure (status = %q, summary = %q)", output.Status, output.ErrorSummary)
@@ -620,12 +620,12 @@ func TestSyncTemplateReportsPlainCloneFailureAsInvalid(t *testing.T) {
 	activities := newTestTemplateSyncActivities(t, &recordingTemplateSyncStore{}, &fakeGit{head: "abc123", err: cloneErr})
 
 	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "acme",
-		RepoName:         "no-such-repo",
-		SourceRef:        "main",
-		RootPath:         "modules/vpc",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "no-such-repo",
+		SourceRef:  "main",
+		RootPath:   "modules/vpc",
 	})
 	if err != nil {
 		t.Fatalf("SyncTemplate returned error %v; want a terminal invalid outcome", err)
@@ -651,12 +651,12 @@ func TestSyncTemplateRejectsUnsafeRepoIdentifiers(t *testing.T) {
 
 	for _, owner := range []string{"acme/evil", "acme?x=1", "acme#frag", "acme corp", "acme\nx"} {
 		output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-			TenantID:         domain.TenantID("tenant_123"),
-			SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-			RepoOwner:        owner,
-			RepoName:         "infra",
-			SourceRef:        "main",
-			RootPath:         ".",
+			TenantID:   domain.TenantID("tenant_123"),
+			TemplateID: domain.TemplateID("source_template_123"),
+			RepoOwner:  owner,
+			RepoName:   "infra",
+			SourceRef:  "main",
+			RootPath:   ".",
 		})
 		if err != nil {
 			t.Fatalf("SyncTemplate(%q) returned error: %v", owner, err)
@@ -780,12 +780,12 @@ func TestSyncTemplateStripsWorkspacePathFromInvalidOutcomes(t *testing.T) {
 			activities.git = gitrunner.NewLocalGitRunnerWithExecutor(test.git)
 
 			output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-				TenantID:         domain.TenantID("tenant_123"),
-				SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-				RepoOwner:        "acme",
-				RepoName:         "infra-templates",
-				SourceRef:        "nope",
-				RootPath:         test.rootPath,
+				TenantID:   domain.TenantID("tenant_123"),
+				TemplateID: domain.TemplateID("source_template_123"),
+				RepoOwner:  "acme",
+				RepoName:   "infra-templates",
+				SourceRef:  "nope",
+				RootPath:   test.rootPath,
 			})
 			if err != nil {
 				t.Fatalf("SyncTemplate returned error: %v", err)
@@ -813,12 +813,12 @@ func TestSyncTemplateStripsWorkspacePathFromReturnedError(t *testing.T) {
 	activities.git = gitrunner.NewLocalGitRunnerWithExecutor(echoingCloneGit{})
 
 	_, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "acme",
-		RepoName:         "private-infra",
-		SourceRef:        "nope",
-		RootPath:         "modules/vpc",
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "private-infra",
+		SourceRef:  "nope",
+		RootPath:   "modules/vpc",
 	})
 	if err == nil {
 		t.Fatal("SyncTemplate returned nil error; want a retryable failure")

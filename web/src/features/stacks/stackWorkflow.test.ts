@@ -26,7 +26,7 @@ describe("stack workflow helpers", () => {
 
   // Two suffixes have now been dropped from this label. The lifecycle read
   // "(active)" on every row a user ever sees, and the status pill carries it.
-  // The ref is part of a source template's identity, so it read the same on
+  // The ref is part of a template's identity, so it read the same on
   // every install of that template and separated nothing.
   it("formats stack template rows from display_name alone", () => {
     const withDisplayName = stackTemplate({
@@ -107,30 +107,30 @@ describe("stack workflow helpers", () => {
     });
   });
 
-  it("allows a revision change only to a different active revision from the same source template", () => {
+  it("allows a revision change only to a different active revision from the same template", () => {
     const installedTemplate = stackTemplate({
-      source_template_id: "source_template_vpc",
+      template_id: "source_template_vpc",
       desired_template_revision_id: "template_rev_1"
     });
 
     expect(canChangeStackTemplateRevision(installedTemplate, templateRevision({
       id: "template_rev_2",
-      source_template_id: "source_template_vpc",
+      template_id: "source_template_vpc",
       status: "active"
     }))).toBe(true);
     expect(canChangeStackTemplateRevision(installedTemplate, templateRevision({
       id: "template_rev_1",
-      source_template_id: "source_template_vpc",
+      template_id: "source_template_vpc",
       status: "active"
     }))).toBe(false);
     expect(canChangeStackTemplateRevision(installedTemplate, templateRevision({
       id: "template_rev_3",
-      source_template_id: "source_template_db",
+      template_id: "source_template_db",
       status: "active"
     }))).toBe(false);
     expect(canChangeStackTemplateRevision(installedTemplate, templateRevision({
       id: "template_rev_4",
-      source_template_id: "source_template_vpc",
+      template_id: "source_template_vpc",
       status: "invalid"
     }))).toBe(false);
   });
@@ -210,24 +210,24 @@ describe("stack workflow helpers", () => {
     expect(upsertStackTemplate([secondTemplate], updatedFirst)).toEqual([updatedFirst, secondTemplate]);
   });
 
-  it("offers only active revisions of the same source template as revision change candidates", () => {
-    const installed = stackTemplate({ source_template_id: "src_1", desired_template_revision_id: "rev_current" });
+  it("offers only active revisions of the same template as revision change candidates", () => {
+    const installed = stackTemplate({ template_id: "src_1", desired_template_revision_id: "rev_current" });
     const revisions = [
-      templateRevision({ id: "rev_new", source_template_id: "src_1", status: "active" }),
-      templateRevision({ id: "rev_current", source_template_id: "src_1", status: "active" }),
-      templateRevision({ id: "rev_other_source", source_template_id: "src_2", status: "active" }),
-      templateRevision({ id: "rev_pending", source_template_id: "src_1", status: "pending_validation" })
+      templateRevision({ id: "rev_new", template_id: "src_1", status: "active" }),
+      templateRevision({ id: "rev_current", template_id: "src_1", status: "active" }),
+      templateRevision({ id: "rev_other_source", template_id: "src_2", status: "active" }),
+      templateRevision({ id: "rev_pending", template_id: "src_1", status: "pending_validation" })
     ];
 
     expect(revisionChangeCandidates(revisions, installed).map((item) => item.id)).toEqual(["rev_new"]);
   });
 
   it("preserves the newest-first order the API returns for revision change candidates", () => {
-    const installed = stackTemplate({ source_template_id: "src_1", desired_template_revision_id: "rev_current" });
+    const installed = stackTemplate({ template_id: "src_1", desired_template_revision_id: "rev_current" });
     const revisions = [
-      templateRevision({ id: "rev_newest", source_template_id: "src_1", status: "active" }),
-      templateRevision({ id: "rev_older", source_template_id: "src_1", status: "active" }),
-      templateRevision({ id: "rev_current", source_template_id: "src_1", status: "active" })
+      templateRevision({ id: "rev_newest", template_id: "src_1", status: "active" }),
+      templateRevision({ id: "rev_older", template_id: "src_1", status: "active" }),
+      templateRevision({ id: "rev_current", template_id: "src_1", status: "active" })
     ];
 
     expect(revisionChangeCandidates(revisions, installed).map((item) => item.id)).toEqual(["rev_newest", "rev_older"]);
@@ -319,7 +319,7 @@ function templateRevision(overrides: Partial<TemplateRevision>): TemplateRevisio
   return {
     id: "template_123",
     tenant_id: "tenant_123",
-    source_template_id: "source_template_123",
+    template_id: "source_template_123",
     repo_owner: "hashicorp",
     repo_name: "terraform-template",
     source_ref: "main",
@@ -339,7 +339,7 @@ function stackTemplate(overrides: Partial<StackTemplate>): StackTemplate {
     id: "stack_template_123",
     stack_id: "stack_123",
     key: "primary",
-    source_template_id: "source_template_123",
+    template_id: "source_template_123",
     desired_template_revision_id: "template_123",
     last_applied_template_revision_id: "",
     source_ref: "main",

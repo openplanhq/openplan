@@ -50,7 +50,7 @@ const installedTemplate = {
   id: "st_1",
   stack_id: "stack_1",
   key: "vpc",
-  source_template_id: "tmpl_src_1",
+  template_id: "tmpl_src_1",
   desired_template_revision_id: "rev_1",
   last_applied_template_revision_id: "",
   source_ref: "main",
@@ -214,7 +214,7 @@ describe("routeConfig", () => {
   const registeredRevision = {
     id: "rev_1",
     tenant_id: "tenant_123",
-    source_template_id: "tpl_1",
+    template_id: "tpl_1",
     repo_owner: "hashicorp",
     repo_name: "terraform-aws-vpc",
     source_ref: "main",

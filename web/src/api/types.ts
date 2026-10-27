@@ -136,7 +136,7 @@ export interface Template {
 export interface TemplateRevision {
   id: string;
   tenant_id: string;
-  source_template_id: string;
+  template_id: string;
   repo_owner: string;
   repo_name: string;
   source_ref: string;
@@ -186,7 +186,7 @@ export interface StackTemplate {
   id: string;
   stack_id: string;
   key: string;
-  source_template_id: string;
+  template_id: string;
   desired_template_revision_id: string;
   last_applied_template_revision_id: string;
   // The desired revision's ref, resolved by the server per request. A label,

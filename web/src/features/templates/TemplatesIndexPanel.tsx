@@ -40,7 +40,7 @@ export default function TemplatesIndexPanel() {
   }
 
   return (
-    <TemplatePanel sourceTemplateId={selectedId}>
+    <TemplatePanel templateId={selectedId}>
       <VariablesTab />
     </TemplatePanel>
   );

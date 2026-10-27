@@ -53,7 +53,7 @@ func TestStartTemplateApplyHandlerDeliversCompleteInput(t *testing.T) {
 func TestStartTemplateSyncHandlerDeliversCompleteInput(t *testing.T) {
 	dispatcher := &recordingWorkflowIntentDispatcher{}
 	handler := NewStartTemplateSyncHandler(dispatcher)
-	payload := StartTemplateSyncPayload{SyncID: "registration_1", TenantID: "tenant_1", SourceTemplateID: "source_template_1", RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc"}
+	payload := StartTemplateSyncPayload{SyncID: "registration_1", TenantID: "tenant_1", TemplateID: "source_template_1", RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc"}
 
 	if _, err := handler.Deliver(context.Background(), queue.Item{Payload: marshalWorkflowIntentPayload(t, payload)}); err != nil {
 		t.Fatalf("Deliver() error = %v", err)

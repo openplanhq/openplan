@@ -47,7 +47,7 @@ function stackTemplate(overrides: Partial<StackTemplate> = {}): StackTemplate {
     id: "st_1",
     stack_id: "stack_1",
     key: "vpc",
-    source_template_id: "tmpl_src_1",
+    template_id: "tmpl_src_1",
     desired_template_revision_id: "rev_1",
     last_applied_template_revision_id: "rev_0",
     source_ref: "main",
@@ -68,7 +68,7 @@ function templateRevision(overrides: Partial<TemplateRevision> = {}): TemplateRe
   return {
     id: "rev_1",
     tenant_id: "tenant_123",
-    source_template_id: "tmpl_src_1",
+    template_id: "tmpl_src_1",
     repo_owner: "hashicorp",
     repo_name: "vpc",
     source_ref: "main",

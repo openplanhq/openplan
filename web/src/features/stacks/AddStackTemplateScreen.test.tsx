@@ -18,7 +18,7 @@ function templateRevision(overrides: Partial<TemplateRevision> = {}): TemplateRe
   return {
     id: "rev_1",
     tenant_id: "tenant_123",
-    source_template_id: "tmpl_src_1",
+    template_id: "tmpl_src_1",
     repo_owner: "hashicorp",
     repo_name: "vpc",
     source_ref: "main",
@@ -82,7 +82,7 @@ function installedTemplate(id: string): StackTemplate {
     id,
     stack_id: "stack_1",
     key: "vpc",
-    source_template_id: "tmpl_src_1",
+    template_id: "tmpl_src_1",
     desired_template_revision_id: "rev_1",
     last_applied_template_revision_id: "",
     source_ref: "main",
@@ -157,7 +157,7 @@ describe("AddStackTemplateScreen", () => {
   it("searches the registry instead of listing it", async () => {
     const queryClient = testQueryClient();
     seedTemplates(queryClient, ["acm", "alb", "eks", "iam", "kms", "rds", "sqs", "waf"].map((name, index) =>
-        templateRevision({ id: `rev_${index}`, source_template_id: `tmpl_${index}`, name, root_path: `aws/${name}` })
+        templateRevision({ id: `rev_${index}`, template_id: `tmpl_${index}`, name, root_path: `aws/${name}` })
       )
     );
 
@@ -178,9 +178,9 @@ describe("AddStackTemplateScreen", () => {
   it("narrows to what is typed, best match first, and counts the matches", async () => {
     const queryClient = testQueryClient();
     seedTemplates(queryClient, [
-      templateRevision({ id: "rev_1", source_template_id: "tmpl_1", name: "redis-operator" }),
-      templateRevision({ id: "rev_2", source_template_id: "tmpl_2", name: "network" }),
-      templateRevision({ id: "rev_3", source_template_id: "tmpl_3", name: "redis" })
+      templateRevision({ id: "rev_1", template_id: "tmpl_1", name: "redis-operator" }),
+      templateRevision({ id: "rev_2", template_id: "tmpl_2", name: "network" }),
+      templateRevision({ id: "rev_3", template_id: "tmpl_3", name: "redis" })
     ]);
 
     renderScreen(queryClient);
@@ -283,7 +283,7 @@ describe("AddStackTemplateScreen", () => {
     const queryClient = testQueryClient();
     seedTemplates(queryClient, [
       templateRevision(),
-      templateRevision({ id: "rev_2", source_template_id: "tmpl_src_2", name: "rds", repo_owner: "my-org", repo_name: "rds" })
+      templateRevision({ id: "rev_2", template_id: "tmpl_src_2", name: "rds", repo_owner: "my-org", repo_name: "rds" })
     ]);
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [variable()]);
 
@@ -617,7 +617,7 @@ describe("AddStackTemplateScreen", () => {
     const queryClient = testQueryClient();
     seedTemplates(queryClient, [
       templateRevision(),
-      templateRevision({ id: "rev_2", source_template_id: "tmpl_src_2", name: "rds", repo_owner: "my-org", repo_name: "rds" })
+      templateRevision({ id: "rev_2", template_id: "tmpl_src_2", name: "rds", repo_owner: "my-org", repo_name: "rds" })
     ]);
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [variable()]);
     // rev_2's variables are deliberately left unseeded, and fetch never

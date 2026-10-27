@@ -33,7 +33,7 @@ func createTemplateSync(ctx context.Context, exec pgxExecutor, templateSync doma
 			requested_at,
 			completed_at,
 			error_summary,
-			source_template_id
+			template_id
 		) values (
 			$1, $2, $3, $4, $5, $6, $7,
 			$8, $9, $10, $11, $12, $13, nullif($14, '')
@@ -52,11 +52,11 @@ func createTemplateSync(ctx context.Context, exec pgxExecutor, templateSync doma
 		templateSync.RequestedAt,
 		nullTime(templateSync.CompletedAt),
 		templateSync.ErrorSummary,
-		templateSync.SourceTemplateID,
+		templateSync.TemplateID,
 	)
 	// The template was deleted between the caller reading it and this
 	// insert: a Sync of a template that no longer exists.
-	if foreignKeyViolation(err, "template_syncs_source_template_id_fkey") {
+	if foreignKeyViolation(err, "template_syncs_template_id_fkey") {
 		return app.ErrNotFound
 	}
 	if err != nil {
@@ -274,8 +274,8 @@ func (store *Store) UpsertTemplateRevisionWithVariables(ctx context.Context, tem
 		return domain.TemplateRevision{}, fmt.Errorf("marshal template revision tags: %w", err)
 	}
 
-	if templateRevision.SourceTemplateID == "" {
-		return domain.TemplateRevision{}, errors.New("upsert template revision: source template ID is required")
+	if templateRevision.TemplateID == "" {
+		return domain.TemplateRevision{}, errors.New("upsert template revision: template ID is required")
 	}
 
 	inserted, insertedNew, err := insertTemplateRevision(ctx, tx, templateRevision, tagsJSON)
@@ -391,7 +391,7 @@ func (store *Store) ListTemplateRevisions(ctx context.Context, tenantID domain.T
 		select
 			id,
 			tenant_id,
-			source_template_id,
+			template_id,
 			repo_owner,
 			repo_name,
 			source_ref,
@@ -425,23 +425,23 @@ func (store *Store) ListTemplateRevisions(ctx context.Context, tenantID domain.T
 	return templateRevisions, nil
 }
 
-// CreateSourceTemplate stores the template unless its source already has
+// CreateTemplate stores the template unless its source already has
 // one, and returns the stored template.
-func (store *Store) CreateSourceTemplate(ctx context.Context, template domain.SourceTemplate) (domain.SourceTemplate, error) {
-	return createSourceTemplate(ctx, store.pool, template)
+func (store *Store) CreateTemplate(ctx context.Context, template domain.Template) (domain.Template, error) {
+	return createTemplate(ctx, store.pool, template)
 }
 
-// createSourceTemplate inserts, or finds, the template by its source rather
+// createTemplate inserts, or finds, the template by its source rather
 // than its id: a row from before ids were sha256 has another id for the same
 // source, and the source is what makes two registrations one template. A
 // concurrent register of the same source waits on this insert's unique index
 // entry, then finds the row once it commits.
-func createSourceTemplate(ctx context.Context, exec pgxExecutor, template domain.SourceTemplate) (domain.SourceTemplate, error) {
+func createTemplate(ctx context.Context, exec pgxExecutor, template domain.Template) (domain.Template, error) {
 	if template.ID == "" {
-		return domain.SourceTemplate{}, errors.New("create source template: id is required")
+		return domain.Template{}, errors.New("create template: id is required")
 	}
 	if _, err := exec.Exec(ctx, `
-		insert into source_templates (id, tenant_id, repo_owner, repo_name, source_ref, root_path, created_at, updated_at)
+		insert into templates (id, tenant_id, repo_owner, repo_name, source_ref, root_path, created_at, updated_at)
 		values ($1, $2, $3, $4, $5, $6, coalesce($7::timestamptz, now()), coalesce($7::timestamptz, now()))
 		on conflict do nothing
 	`,
@@ -453,10 +453,10 @@ func createSourceTemplate(ctx context.Context, exec pgxExecutor, template domain
 		template.RootPath,
 		nullTime(template.CreatedAt),
 	); err != nil {
-		return domain.SourceTemplate{}, fmt.Errorf("create source template: %w", err)
+		return domain.Template{}, fmt.Errorf("create template: %w", err)
 	}
 
-	stored, err := scanSourceTemplate(exec.QueryRow(ctx, selectSourceTemplatesSQL+`
+	stored, err := scanTemplate(exec.QueryRow(ctx, selectTemplatesSQL+`
 		where st.tenant_id = $1
 			and st.repo_owner = $2
 			and st.repo_name = $3
@@ -464,38 +464,38 @@ func createSourceTemplate(ctx context.Context, exec pgxExecutor, template domain
 			and st.source_ref = $5
 	`, template.TenantID, template.RepoOwner, template.RepoName, template.RootPath, template.SourceRef))
 	if err != nil {
-		return domain.SourceTemplate{}, fmt.Errorf("read created source template: %w", err)
+		return domain.Template{}, fmt.Errorf("read created template: %w", err)
 	}
 	return stored, nil
 }
 
-func (store *Store) GetSourceTemplate(ctx context.Context, tenantID domain.TenantID, id domain.SourceTemplateID) (domain.SourceTemplate, error) {
-	template, err := scanSourceTemplate(store.pool.QueryRow(ctx, selectSourceTemplatesSQL+`
+func (store *Store) GetTemplate(ctx context.Context, tenantID domain.TenantID, id domain.TemplateID) (domain.Template, error) {
+	template, err := scanTemplate(store.pool.QueryRow(ctx, selectTemplatesSQL+`
 		where st.tenant_id = $1
 			and st.id = $2
 	`, tenantID, id))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.SourceTemplate{}, app.ErrNotFound
+		return domain.Template{}, app.ErrNotFound
 	}
 	if err != nil {
-		return domain.SourceTemplate{}, fmt.Errorf("get source template: %w", err)
+		return domain.Template{}, fmt.Errorf("get template: %w", err)
 	}
 	return template, nil
 }
 
-// DeleteSourceTemplate deletes the tenant's template; its revisions, their
+// DeleteTemplate deletes the tenant's template; its revisions, their
 // variables and its syncs cascade with it. The stack templates' key refuses
 // the delete while any stack template names the template, whatever its
 // lifecycle, and because the key's check locks and sees concurrent commits,
 // an install racing this delete either lands first and refuses it, or finds
 // the template gone.
-func (store *Store) DeleteSourceTemplate(ctx context.Context, tenantID domain.TenantID, id domain.SourceTemplateID) error {
-	result, err := store.pool.Exec(ctx, `delete from source_templates where tenant_id = $1 and id = $2`, tenantID, id)
-	if foreignKeyViolation(err, "stack_templates_source_template_id_fkey") {
+func (store *Store) DeleteTemplate(ctx context.Context, tenantID domain.TenantID, id domain.TemplateID) error {
+	result, err := store.pool.Exec(ctx, `delete from templates where tenant_id = $1 and id = $2`, tenantID, id)
+	if foreignKeyViolation(err, "stack_templates_template_id_fkey") {
 		return app.ErrTemplateInUse
 	}
 	if err != nil {
-		return fmt.Errorf("delete source template: %w", err)
+		return fmt.Errorf("delete template: %w", err)
 	}
 	if result.RowsAffected() == 0 {
 		return app.ErrNotFound
@@ -503,48 +503,48 @@ func (store *Store) DeleteSourceTemplate(ctx context.Context, tenantID domain.Te
 	return nil
 }
 
-// ListSourceTemplatesPage returns up to limit templates after the cursor,
+// ListTemplatesPage returns up to limit templates after the cursor,
 // newest first.
-func (store *Store) ListSourceTemplatesPage(ctx context.Context, tenantID domain.TenantID, after *app.SourceTemplateCursor, limit int) ([]domain.SourceTemplate, error) {
+func (store *Store) ListTemplatesPage(ctx context.Context, tenantID domain.TenantID, after *app.TemplateCursor, limit int) ([]domain.Template, error) {
 	if limit <= 0 {
-		return nil, fmt.Errorf("source template page limit must be positive")
+		return nil, fmt.Errorf("template page limit must be positive")
 	}
 	var afterCreatedAt any
-	var afterID domain.SourceTemplateID
+	var afterID domain.TemplateID
 	if after != nil {
 		afterCreatedAt = after.CreatedAt
 		afterID = after.ID
 	}
-	rows, err := store.pool.Query(ctx, selectSourceTemplatesSQL+`
+	rows, err := store.pool.Query(ctx, selectTemplatesSQL+`
 		where st.tenant_id = $1
 			and ($2::timestamptz is null or (st.created_at, st.id) < ($2, $3))
 		order by st.created_at desc, st.id desc
 		limit $4
 	`, tenantID, afterCreatedAt, afterID, limit)
 	if err != nil {
-		return nil, fmt.Errorf("list source templates: %w", err)
+		return nil, fmt.Errorf("list templates: %w", err)
 	}
 	defer rows.Close()
 
-	var templates []domain.SourceTemplate
+	var templates []domain.Template
 	for rows.Next() {
-		template, err := scanSourceTemplate(rows)
+		template, err := scanTemplate(rows)
 		if err != nil {
-			return nil, fmt.Errorf("scan source template: %w", err)
+			return nil, fmt.Errorf("scan template: %w", err)
 		}
 		templates = append(templates, template)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate source templates: %w", err)
+		return nil, fmt.Errorf("iterate templates: %w", err)
 	}
 	return templates, nil
 }
 
-// selectSourceTemplatesSQL reads templates with their latest revision's name,
+// selectTemplatesSQL reads templates with their latest revision's name,
 // description and tags, and their newest sync. The left joins keep a template
 // no sync has produced a revision for, or been requested for, yet. The
 // newest sync is one probe of the template_syncs index per template.
-const selectSourceTemplatesSQL = `
+const selectTemplatesSQL = `
 	select
 		st.id,
 		st.tenant_id,
@@ -564,7 +564,7 @@ const selectSourceTemplatesSQL = `
 		ls.requested_at,
 		ls.completed_at,
 		ls.revision_predates_request
-	from source_templates st
+	from templates st
 	left join template_revisions tr
 		on tr.tenant_id = st.tenant_id
 		and tr.id = st.latest_template_revision_id
@@ -580,15 +580,15 @@ const selectSourceTemplatesSQL = `
 		left join template_revisions rr
 			on rr.tenant_id = r.tenant_id
 			and rr.id = r.template_revision_id
-		where r.source_template_id = st.id
+		where r.template_id = st.id
 			and r.tenant_id = st.tenant_id
 		order by r.requested_at desc, r.id desc
 		limit 1
 	) ls on true
 `
 
-func scanSourceTemplate(scanner templateScanner) (domain.SourceTemplate, error) {
-	var template domain.SourceTemplate
+func scanTemplate(scanner templateScanner) (domain.Template, error) {
+	var template domain.Template
 	var name sql.NullString
 	var tagsJSON []byte
 	var sync latestTemplateSyncColumns
@@ -612,7 +612,7 @@ func scanSourceTemplate(scanner templateScanner) (domain.SourceTemplate, error) 
 		&sync.completedAt,
 		&sync.revisionPredatesRequest,
 	); err != nil {
-		return domain.SourceTemplate{}, err
+		return domain.Template{}, err
 	}
 	template.LatestSync = sync.latestSync()
 	template.Name = name.String
@@ -621,7 +621,7 @@ func scanSourceTemplate(scanner templateScanner) (domain.SourceTemplate, error) 
 	}
 	tags, err := decodeTemplateRevisionTags(tagsJSON)
 	if err != nil {
-		return domain.SourceTemplate{}, fmt.Errorf("unmarshal source template tags: %w", err)
+		return domain.Template{}, fmt.Errorf("unmarshal template tags: %w", err)
 	}
 	template.Tags = tags
 	return template, nil
@@ -654,7 +654,7 @@ func (columns latestTemplateSyncColumns) latestSync() *domain.LatestTemplateSync
 
 // ListTemplateRevisionsBySourcePage returns up to limit of one template's
 // revisions after the cursor, newest first.
-func (store *Store) ListTemplateRevisionsBySourcePage(ctx context.Context, tenantID domain.TenantID, sourceTemplateID domain.SourceTemplateID, after *app.TemplateRevisionCursor, limit int) ([]domain.TemplateRevision, error) {
+func (store *Store) ListTemplateRevisionsBySourcePage(ctx context.Context, tenantID domain.TenantID, templateID domain.TemplateID, after *app.TemplateRevisionCursor, limit int) ([]domain.TemplateRevision, error) {
 	if limit <= 0 {
 		return nil, fmt.Errorf("template revision page limit must be positive")
 	}
@@ -668,7 +668,7 @@ func (store *Store) ListTemplateRevisionsBySourcePage(ctx context.Context, tenan
 		select
 			id,
 			tenant_id,
-			source_template_id,
+			template_id,
 			repo_owner,
 			repo_name,
 			source_ref,
@@ -681,11 +681,11 @@ func (store *Store) ListTemplateRevisionsBySourcePage(ctx context.Context, tenan
 			created_at
 		from template_revisions
 		where tenant_id = $1
-			and source_template_id = $2
+			and template_id = $2
 			and ($3::timestamptz is null or (created_at, id) < ($3, $4))
 		order by created_at desc, id desc
 		limit $5
-	`, tenantID, sourceTemplateID, afterCreatedAt, afterID, limit)
+	`, tenantID, templateID, afterCreatedAt, afterID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list template revisions by source: %w", err)
 	}
@@ -1002,7 +1002,7 @@ func (store *Store) CreateStackTemplate(ctx context.Context, stackTemplate domai
 			tenant_id,
 			stack_id,
 			key,
-			source_template_id,
+			template_id,
 			desired_template_revision_id,
 			last_applied_template_revision_id,
 			workspace_name,
@@ -1030,7 +1030,7 @@ func (store *Store) CreateStackTemplate(ctx context.Context, stackTemplate domai
 		stackTemplate.TenantID,
 		stackTemplate.StackID,
 		key,
-		stackTemplate.SourceTemplateID,
+		stackTemplate.TemplateID,
 		desiredTemplateRevisionID,
 		stackTemplate.LastAppliedTemplateRevisionID,
 		stackTemplate.WorkspaceName,
@@ -1052,7 +1052,7 @@ func (store *Store) CreateStackTemplate(ctx context.Context, stackTemplate domai
 		}
 		// The template was deleted between the caller reading it and this
 		// insert; the key refuses the install rather than orphan it.
-		if foreignKeyViolation(err, "stack_templates_source_template_id_fkey") {
+		if foreignKeyViolation(err, "stack_templates_template_id_fkey") {
 			return app.ErrNotFound
 		}
 		return fmt.Errorf("create stack template: %w", err)
@@ -1068,7 +1068,7 @@ func (store *Store) GetTemplateRevision(ctx context.Context, tenantID domain.Ten
 		select
 			id,
 			tenant_id,
-			source_template_id,
+			template_id,
 			repo_owner,
 			repo_name,
 			source_ref,
@@ -1176,7 +1176,7 @@ func createTemplateRun(ctx context.Context, exec pgxExecutor, run domain.Templat
 			tenant_id,
 			stack_template_id,
 			template_revision_id,
-			source_template_id,
+			template_id,
 			operation,
 			source_ref,
 			resolved_commit_sha,
@@ -1206,7 +1206,7 @@ func createTemplateRun(ctx context.Context, exec pgxExecutor, run domain.Templat
 		run.TenantID,
 		run.StackTemplateID,
 		run.TemplateRevisionID,
-		run.SourceTemplateID,
+		run.TemplateID,
 		run.Operation,
 		run.SourceRef,
 		run.ResolvedCommitSHA,
@@ -1256,7 +1256,7 @@ const templateRunSelect = `
 		r.tenant_id,
 		r.stack_template_id,
 		r.template_revision_id,
-		r.source_template_id,
+		r.template_id,
 		r.operation,
 		r.source_ref,
 		r.resolved_commit_sha,
@@ -1315,7 +1315,7 @@ func scanTemplateRun(row pgx.Row) (domain.TemplateRun, error) {
 		&run.TenantID,
 		&run.StackTemplateID,
 		&run.TemplateRevisionID,
-		&run.SourceTemplateID,
+		&run.TemplateID,
 		&run.Operation,
 		&run.SourceRef,
 		&run.ResolvedCommitSHA,
@@ -1930,7 +1930,7 @@ const stackTemplateColumns = `
 	tenant_id,
 	stack_id,
 	key,
-	source_template_id,
+	template_id,
 	desired_template_revision_id,
 	last_applied_template_revision_id,
 	workspace_name,
@@ -1973,7 +1973,7 @@ func scanStackTemplate(scanner stackTemplateScanner) (domain.StackTemplate, erro
 		&stackTemplate.TenantID,
 		&stackTemplate.StackID,
 		&stackTemplate.Key,
-		&stackTemplate.SourceTemplateID,
+		&stackTemplate.TemplateID,
 		&stackTemplate.DesiredTemplateRevisionID,
 		&stackTemplate.LastAppliedTemplateRevisionID,
 		&stackTemplate.WorkspaceName,
@@ -2017,7 +2017,7 @@ func scanTemplateRevision(scanner templateScanner) (domain.TemplateRevision, err
 	if err := scanner.Scan(
 		&templateRevision.ID,
 		&templateRevision.TenantID,
-		&templateRevision.SourceTemplateID,
+		&templateRevision.TemplateID,
 		&templateRevision.RepoOwner,
 		&templateRevision.RepoName,
 		&templateRevision.SourceRef,
@@ -2177,7 +2177,7 @@ func foreignKeyViolation(err error, constraint string) bool {
 
 func recordLatestTemplateRevision(ctx context.Context, tx pgx.Tx, templateRevision domain.TemplateRevision) error {
 	commandTag, err := tx.Exec(ctx, `
-		update source_templates
+		update templates
 		set
 			latest_template_revision_id = $1,
 			updated_at = now()
@@ -2186,7 +2186,7 @@ func recordLatestTemplateRevision(ctx context.Context, tx pgx.Tx, templateRevisi
 	`,
 		templateRevision.ID,
 		templateRevision.TenantID,
-		templateRevision.SourceTemplateID,
+		templateRevision.TemplateID,
 	)
 	if err != nil {
 		return fmt.Errorf("record latest template revision: %w", err)
@@ -2194,18 +2194,18 @@ func recordLatestTemplateRevision(ctx context.Context, tx pgx.Tx, templateRevisi
 	// A reused revision takes no lock on its template, so a delete can commit
 	// between the insert and this update.
 	if commandTag.RowsAffected() == 0 {
-		return sourceTemplateGone(templateRevision.SourceTemplateID)
+		return templateGone(templateRevision.TemplateID)
 	}
 
 	return nil
 }
 
-// sourceTemplateGone is the error for a revision whose template no longer
+// templateGone is the error for a revision whose template no longer
 // exists. It wraps app.ErrNotFound, the store's not found, and os.ErrNotExist,
 // which the sync activity checks for: the activities package can't import app,
 // because the executor shares it and must not carry app's dependencies.
-func sourceTemplateGone(id domain.SourceTemplateID) error {
-	return fmt.Errorf("source template %s: %w (%w)", id, app.ErrNotFound, os.ErrNotExist)
+func templateGone(id domain.TemplateID) error {
+	return fmt.Errorf("template %s: %w (%w)", id, app.ErrNotFound, os.ErrNotExist)
 }
 
 func defaultJSON(input json.RawMessage) json.RawMessage {
@@ -2233,7 +2233,7 @@ func insertTemplateRevision(ctx context.Context, tx pgx.Tx, templateRevision dom
 		insert into template_revisions (
 			id,
 			tenant_id,
-			source_template_id,
+			template_id,
 			repo_owner,
 			repo_name,
 			source_ref,
@@ -2248,11 +2248,11 @@ func insertTemplateRevision(ctx context.Context, tx pgx.Tx, templateRevision dom
 			$1, $2, $3, $4, $5, $6, $7, $8,
 			$9, $10, $11::jsonb, $12, coalesce($13::timestamptz, now())
 		)
-		on conflict (tenant_id, source_template_id, resolved_commit_sha) do nothing
+		on conflict (tenant_id, template_id, resolved_commit_sha) do nothing
 		returning
 			id,
 			tenant_id,
-			source_template_id,
+			template_id,
 			repo_owner,
 			repo_name,
 			source_ref,
@@ -2266,7 +2266,7 @@ func insertTemplateRevision(ctx context.Context, tx pgx.Tx, templateRevision dom
 	`,
 		templateRevision.ID,
 		templateRevision.TenantID,
-		templateRevision.SourceTemplateID,
+		templateRevision.TemplateID,
 		templateRevision.RepoOwner,
 		templateRevision.RepoName,
 		templateRevision.SourceRef,
@@ -2280,7 +2280,7 @@ func insertTemplateRevision(ctx context.Context, tx pgx.Tx, templateRevision dom
 	).Scan(
 		&inserted.ID,
 		&inserted.TenantID,
-		&inserted.SourceTemplateID,
+		&inserted.TemplateID,
 		&inserted.RepoOwner,
 		&inserted.RepoName,
 		&inserted.SourceRef,
@@ -2300,8 +2300,8 @@ func insertTemplateRevision(ctx context.Context, tx pgx.Tx, templateRevision dom
 		inserted.Tags = tags
 		return inserted, true, nil
 	}
-	if foreignKeyViolation(err, "template_revisions_source_template_id_fkey") {
-		return domain.TemplateRevision{}, false, sourceTemplateGone(templateRevision.SourceTemplateID)
+	if foreignKeyViolation(err, "template_revisions_template_id_fkey") {
+		return domain.TemplateRevision{}, false, templateGone(templateRevision.TemplateID)
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return domain.TemplateRevision{}, false, fmt.Errorf("insert template revision: %w", err)
@@ -2321,7 +2321,7 @@ func selectTemplateRevisionByIdentity(ctx context.Context, tx pgx.Tx, templateRe
 		select
 			id,
 			tenant_id,
-			source_template_id,
+			template_id,
 			repo_owner,
 			repo_name,
 			source_ref,
@@ -2334,16 +2334,16 @@ func selectTemplateRevisionByIdentity(ctx context.Context, tx pgx.Tx, templateRe
 			created_at
 		from template_revisions
 		where tenant_id = $1
-			and source_template_id = $2
+			and template_id = $2
 			and resolved_commit_sha = $3
 	`,
 		templateRevision.TenantID,
-		templateRevision.SourceTemplateID,
+		templateRevision.TemplateID,
 		templateRevision.ResolvedCommitSHA,
 	).Scan(
 		&selected.ID,
 		&selected.TenantID,
-		&selected.SourceTemplateID,
+		&selected.TemplateID,
 		&selected.RepoOwner,
 		&selected.RepoName,
 		&selected.SourceRef,

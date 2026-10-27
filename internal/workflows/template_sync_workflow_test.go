@@ -33,8 +33,8 @@ func TestTemplateSyncWorkflowRecordsCompletedSync(t *testing.T) {
 			if activityInput.SourceRef != "v0.0.1" {
 				t.Fatalf("source ref = %q, want v0.0.1", activityInput.SourceRef)
 			}
-			if activityInput.SourceTemplateID != input.SourceTemplateID {
-				t.Fatalf("source template ID = %q, want %q", activityInput.SourceTemplateID, input.SourceTemplateID)
+			if activityInput.TemplateID != input.TemplateID {
+				t.Fatalf("template ID = %q, want %q", activityInput.TemplateID, input.TemplateID)
 			}
 			return domain.TemplateSyncActivityOutput{
 				Status:             domain.TemplateSyncStateCompleted,
@@ -242,13 +242,13 @@ func newTemplateSyncWorkflowTestEnvironment(t *testing.T) *testsuite.TestWorkflo
 
 func templateSyncWorkflowInput() domain.TemplateSyncWorkflowInput {
 	return domain.TemplateSyncWorkflowInput{
-		SyncID:           domain.TemplateSyncID("template_sync_123"),
-		TenantID:         domain.TenantID("tenant_123"),
-		SourceTemplateID: domain.SourceTemplateID("source_template_123"),
-		RepoOwner:        "acme",
-		RepoName:         "infra-templates",
-		SourceRef:        "v0.0.1",
-		RootPath:         "modules/vpc",
+		SyncID:     domain.TemplateSyncID("template_sync_123"),
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "infra-templates",
+		SourceRef:  "v0.0.1",
+		RootPath:   "modules/vpc",
 	}
 }
 

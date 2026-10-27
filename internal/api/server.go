@@ -510,14 +510,14 @@ func (server *Server) handleListTemplates(response http.ResponseWriter, request 
 	}
 
 	now := server.service.Clock.Now()
-	items := mapItems(templates.Items, func(template domain.SourceTemplate) templateResponse { return newTemplateResponse(template, now) })
+	items := mapItems(templates.Items, func(template domain.Template) templateResponse { return newTemplateResponse(template, now) })
 	writeJSON(response, http.StatusOK, newListResponse(items, templates.NextCursor))
 }
 
 func (server *Server) handleGetTemplate(response http.ResponseWriter, request *http.Request) {
 	template, err := server.service.GetTemplate(request.Context(), app.GetTemplateCommand{
 		TenantID:   domain.TenantID(request.PathValue("tenant_id")),
-		TemplateID: domain.SourceTemplateID(request.PathValue("template_id")),
+		TemplateID: domain.TemplateID(request.PathValue("template_id")),
 	})
 	if err != nil {
 		writeAppError(response, err)
@@ -530,7 +530,7 @@ func (server *Server) handleGetTemplate(response http.ResponseWriter, request *h
 func (server *Server) handleDeleteTemplate(response http.ResponseWriter, request *http.Request) {
 	err := server.service.DeleteTemplate(request.Context(), app.DeleteTemplateCommand{
 		TenantID:   domain.TenantID(request.PathValue("tenant_id")),
-		TemplateID: domain.SourceTemplateID(request.PathValue("template_id")),
+		TemplateID: domain.TemplateID(request.PathValue("template_id")),
 	})
 	if err != nil {
 		writeAppError(response, err)
@@ -551,7 +551,7 @@ func (server *Server) handleStartTemplateSync(response http.ResponseWriter, requ
 
 	started, err := server.service.StartTemplateSync(request.Context(), app.StartTemplateSyncCommand{
 		TenantID:   domain.TenantID(request.PathValue("tenant_id")),
-		TemplateID: domain.SourceTemplateID(request.PathValue("template_id")),
+		TemplateID: domain.TemplateID(request.PathValue("template_id")),
 	})
 	if err != nil {
 		writeAppError(response, err)
@@ -569,7 +569,7 @@ func (server *Server) handleListTemplateRevisionsForTemplate(response http.Respo
 	}
 	revisions, err := server.service.ListTemplateRevisionsForTemplate(request.Context(), app.ListTemplateRevisionsForTemplateCommand{
 		TenantID:   domain.TenantID(request.PathValue("tenant_id")),
-		TemplateID: domain.SourceTemplateID(request.PathValue("template_id")),
+		TemplateID: domain.TemplateID(request.PathValue("template_id")),
 		Page:       page,
 	})
 	if err != nil {
@@ -1213,7 +1213,7 @@ type stackTemplateResponse struct {
 	ID                            string `json:"id"`
 	StackID                       string `json:"stack_id"`
 	Key                           string `json:"key"`
-	SourceTemplateID              string `json:"source_template_id"`
+	TemplateID                    string `json:"template_id"`
 	DesiredTemplateRevisionID     string `json:"desired_template_revision_id"`
 	LastAppliedTemplateRevisionID string `json:"last_applied_template_revision_id"`
 	// SourceRef is the desired revision's ref, resolved per request. It is a
@@ -1302,7 +1302,7 @@ func newStackTemplateResponse(view app.StackTemplateView) stackTemplateResponse 
 		ID:                            string(stackTemplate.ID),
 		StackID:                       string(stackTemplate.StackID),
 		Key:                           stackTemplate.Key,
-		SourceTemplateID:              string(stackTemplate.SourceTemplateID),
+		TemplateID:                    string(stackTemplate.TemplateID),
 		DesiredTemplateRevisionID:     string(stackTemplate.DesiredTemplateRevisionID),
 		LastAppliedTemplateRevisionID: string(stackTemplate.LastAppliedTemplateRevisionID),
 		SourceRef:                     view.SourceRef,

@@ -18,7 +18,7 @@ function stackTemplate(overrides: Partial<StackTemplate> = {}): StackTemplate {
     id: "stpl_1",
     stack_id: "stack_1",
     key: "primary",
-    source_template_id: "tpl_1",
+    template_id: "tpl_1",
     desired_template_revision_id: "rev_1",
     last_applied_template_revision_id: "",
     source_ref: "main",

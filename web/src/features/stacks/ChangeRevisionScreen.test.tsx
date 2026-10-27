@@ -17,7 +17,7 @@ function stackTemplate(overrides: Partial<StackTemplate> = {}): StackTemplate {
     id: "st_1",
     stack_id: "stack_1",
     key: "vpc",
-    source_template_id: "tmpl_src_1",
+    template_id: "tmpl_src_1",
     desired_template_revision_id: "rev_current",
     last_applied_template_revision_id: "rev_current",
     source_ref: "main",
@@ -56,7 +56,7 @@ function templateRevision(overrides: Partial<TemplateRevision> = {}): TemplateRe
   return {
     id: "rev_current",
     tenant_id: "tenant_123",
-    source_template_id: "tmpl_src_1",
+    template_id: "tmpl_src_1",
     repo_owner: "hashicorp",
     repo_name: "vpc",
     source_ref: "main",
@@ -200,19 +200,19 @@ describe("ChangeRevisionScreen", () => {
     expect(options[0]).toContain("0000000");
   });
 
-  it("excludes the installed revision and other source templates from the candidates", async () => {
+  it("excludes the installed revision and other templates from the candidates", async () => {
     const queryClient = testQueryClient();
     seedChangeable(queryClient);
     seedTemplates(queryClient, [
       templateRevision({ id: "rev_next" }),
       templateRevision({ id: "rev_current" }),
-      templateRevision({ id: "rev_elsewhere", source_template_id: "tmpl_src_2" }),
+      templateRevision({ id: "rev_elsewhere", template_id: "tmpl_src_2" }),
       templateRevision({ id: "rev_pending", status: "pending_validation" })
     ]);
 
     renderScreen(queryClient);
 
-    // Only rev_next: the installed revision, the other source template's and
+    // Only rev_next: the installed revision, the other template's and
     // the unvalidated one are all left out.
     expect(await targetOptions()).toHaveLength(1);
   });

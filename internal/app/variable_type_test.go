@@ -128,18 +128,18 @@ func TestChangeStackTemplateRevisionRefusesACarriedValueTheNewTypeRejects(t *tes
 		stackTemplate: domain.StackTemplate{
 			ID:                        domain.StackTemplateID("stack_template_123"),
 			TenantID:                  domain.TenantID("tenant_123"),
-			SourceTemplateID:          domain.SourceTemplateID("source_template_vpc"),
+			TemplateID:                domain.TemplateID("source_template_vpc"),
 			DesiredTemplateRevisionID: domain.TemplateRevisionID("template_rev_1"),
 			DesiredConfigJSON:         json.RawMessage(`{"azs":"us-east-1a"}`),
 			Lifecycle:                 domain.StackTemplateActive,
 		},
 	}
-	templates := &recordingTemplateRepository{
+	templates := &recordingTemplateRevisionRepository{
 		template: domain.TemplateRevision{
-			ID:               domain.TemplateRevisionID("template_rev_2"),
-			TenantID:         domain.TenantID("tenant_123"),
-			SourceTemplateID: domain.SourceTemplateID("source_template_vpc"),
-			Status:           domain.TemplateRevisionActive,
+			ID:         domain.TemplateRevisionID("template_rev_2"),
+			TenantID:   domain.TenantID("tenant_123"),
+			TemplateID: domain.TemplateID("source_template_vpc"),
+			Status:     domain.TemplateRevisionActive,
 		},
 		variables: []domain.TemplateVariable{{Name: "azs", Required: true, TypeExpression: "list(string)"}},
 	}

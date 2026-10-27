@@ -6,7 +6,7 @@ export function findSelectedStackTemplate(stackTemplates: StackTemplate[], selec
   return findSelectedID(stackTemplates, selectedStackTemplateID);
 }
 
-// No ref suffix: source_ref is part of a source template's identity, so it read
+// No ref suffix: source_ref is part of a template's identity, so it read
 // the same on every install of that template and separated nothing. The ref
 // still shows in the revision panel, where it is about a specific commit.
 export function stackTemplateLabel(stackTemplate: Pick<StackTemplate, "display_name" | "workspace_name">): string {
@@ -20,7 +20,7 @@ export function canChangeStackTemplateRevision(stackTemplate: StackTemplate | nu
   if (stackTemplate.desired_template_revision_id === templateRevision.id) {
     return false;
   }
-  return stackTemplate.source_template_id === templateRevision.source_template_id;
+  return stackTemplate.template_id === templateRevision.template_id;
 }
 
 export interface RevisionChangeVariablePartition {
@@ -31,7 +31,7 @@ export interface RevisionChangeVariablePartition {
 
 /**
  * Revisions this stack template can change to: active revisions of the same
- * source template, minus the one already desired. The API's order is
+ * template, minus the one already desired. The API's order is
  * preserved, but it is not treated as commit ancestry or recency.
  */
 export function revisionChangeCandidates(

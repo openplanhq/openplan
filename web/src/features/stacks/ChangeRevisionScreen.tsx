@@ -27,7 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 
 // /stacks/:stackId/templates/:stackTemplateId/change-revision — moving the template
-// to another revision of the same source template, under Settings. The
+// to another revision of the same template, under Settings. The
 // candidates are filtered to the valid ones and what the change does to the
 // config is stated outright. The panel around it names the template and
 // handles one the stack does not have.
@@ -40,7 +40,7 @@ export default function ChangeRevisionScreen() {
   const [errorMessage, setErrorMessage] = useState("");
   const variableErrors = useFieldErrors("#/config/");
 
-  const templateRevisionsQuery = useTemplateRevisionsQuery(tenantID, stackTemplate.source_template_id);
+  const templateRevisionsQuery = useTemplateRevisionsQuery(tenantID, stackTemplate.template_id);
   const candidates = revisionChangeCandidates(templateRevisionsQuery.data ?? [], stackTemplate);
   const targetRevision = candidates.find((revision) => revision.id === chosenTargetID) ?? candidates[0] ?? null;
 

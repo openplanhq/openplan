@@ -127,7 +127,7 @@ func TestRecordTemplateRunEventAppliedRecordsLastApplied(t *testing.T) {
 		TenantID:           "tenant_123",
 		StackTemplateID:    "stack_template_123",
 		TemplateRevisionID: "template_rev_2",
-		SourceTemplateID:   "source_template_vpc",
+		TemplateID:         "source_template_vpc",
 		Operation:          domain.OperationApply,
 		SourceRef:          "main",
 		WorkspaceName:      "mtp_acme_prod_vpc_a13f9c",
@@ -219,9 +219,9 @@ func TestRecordTemplateRunEventMovesADestroyedTemplateThroughItsLifecycle(t *tes
 	}); err != nil {
 		t.Fatal(err)
 	}
-	seedSourceTemplate(t, ctx, store, "tenant_destroy_1", "source_template_vpc")
+	seedTemplate(t, ctx, store, "tenant_destroy_1", "source_template_vpc")
 	if err := store.CreateStackTemplate(ctx, domain.StackTemplate{
-		ID: "st_destroy_1", TenantID: "tenant_destroy_1", StackID: "stack_destroy_1", SourceTemplateID: "source_template_vpc",
+		ID: "st_destroy_1", TenantID: "tenant_destroy_1", StackID: "stack_destroy_1", TemplateID: "source_template_vpc",
 		Lifecycle: domain.StackTemplateActive,
 	}); err != nil {
 		t.Fatal(err)

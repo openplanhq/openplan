@@ -43,10 +43,10 @@ import { cn } from "@/lib/utils";
 // its revisions are read again. A Sync or a registration only
 // refreshes them while it is on screen, so one the person walked away from can
 // finish unseen; coming back must show its commit.
-export default function TemplatePanel({ sourceTemplateId, children }: { sourceTemplateId?: string; children?: ReactNode }) {
+export default function TemplatePanel({ templateId, children }: { templateId?: string; children?: ReactNode }) {
   const tenantID = useTenantID();
-  const params = useParams<{ sourceTemplateId: string }>();
-  const id = sourceTemplateId ?? params.sourceTemplateId ?? "";
+  const params = useParams<{ templateId: string }>();
+  const id = templateId ?? params.templateId ?? "";
   const queryClient = useQueryClient();
   // The template the panel last showed; the first one needs no refetch, as
   // the page has just loaded the list.

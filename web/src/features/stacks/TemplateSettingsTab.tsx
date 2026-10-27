@@ -22,7 +22,7 @@ export default function TemplateSettingsTab() {
   // template shares its ref, so the commit is what tells them apart. The
   // sentence stands without it while the template's revisions load.
   const revision =
-    useTemplateRevisionsQuery(tenantID, stackTemplate.source_template_id).data?.find((candidate) => candidate.id === stackTemplate.desired_template_revision_id) ?? null;
+    useTemplateRevisionsQuery(tenantID, stackTemplate.template_id).data?.find((candidate) => candidate.id === stackTemplate.desired_template_revision_id) ?? null;
   const commit = revision ? shortCommitSHA(revision.resolved_commit_sha) : "";
   const actionClass = cn(buttonClass("outline"), "pointer-coarse:h-11");
 

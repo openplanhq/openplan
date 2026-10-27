@@ -2328,7 +2328,7 @@ components:
       properties:
         id: { type: string }
         tenant_id: { type: string }
-        source_template_id:
+        template_id:
           type: string
           description: |
             Groups the revisions of one source together. Two revisions of the
@@ -2348,7 +2348,7 @@ components:
         status: { $ref: "#/components/schemas/TemplateRevisionStatus" }
         created_at: { type: string, format: date-time }
       required:
-        [id, tenant_id, source_template_id, repo_owner, repo_name, source_ref,
+        [id, tenant_id, template_id, repo_owner, repo_name, source_ref,
          resolved_commit_sha, root_path, name, description, status, created_at]
 
     TemplateRevisionStatus:
@@ -2575,7 +2575,7 @@ components:
       properties:
         target_template_revision_id:
           type: string
-          description: The revision to stage. Must share the installed template's `source_template_id`.
+          description: The revision to stage. Must share the installed template's `template_id`.
         config:
           $ref: "#/components/schemas/StackTemplateConfig"
           description: |
@@ -2590,7 +2590,7 @@ components:
         id: { type: string }
         stack_id: { type: string }
         key: { type: string }
-        source_template_id: { type: string }
+        template_id: { type: string }
         desired_template_revision_id:
           type: string
           description: The revision this installed template should be running.
@@ -2627,7 +2627,7 @@ components:
         created_by: { type: string }
         lifecycle: { $ref: "#/components/schemas/StackTemplateLifecycle" }
       required:
-        [id, stack_id, key, source_template_id,
+        [id, stack_id, key, template_id,
          desired_template_revision_id, last_applied_template_revision_id,
          source_ref, workspace_name, display_name, config,
          last_applied_run_id, pending_plan_run_id, plan_state, live_state,

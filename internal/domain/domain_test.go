@@ -440,23 +440,23 @@ func TestTerraformCommandLine(t *testing.T) {
 	}
 }
 
-func TestSourceTemplateIDFor(t *testing.T) {
+func TestTemplateIDFor(t *testing.T) {
 	t.Parallel()
 
 	// The id the sync activity has always minted for this source. Templates
 	// already stored carry it, so the derivation must not change.
-	const want = SourceTemplateID("source_template_274b58d326ef98db04ed1a6ec6258d92")
-	if got := SourceTemplateIDFor("tenant_123", "acme", "infra", "modules/vpc", "main"); got != want {
-		t.Fatalf("SourceTemplateIDFor() = %q, want %q", got, want)
+	const want = TemplateID("template_274b58d326ef98db04ed1a6ec6258d92")
+	if got := TemplateIDFor("tenant_123", "acme", "infra", "modules/vpc", "main"); got != want {
+		t.Fatalf("TemplateIDFor() = %q, want %q", got, want)
 	}
 
 	// Each part of the source names a different template, including a
 	// boundary moved between two parts.
-	others := []SourceTemplateID{
-		SourceTemplateIDFor("tenant_456", "acme", "infra", "modules/vpc", "main"),
-		SourceTemplateIDFor("tenant_123", "acme", "infra", "modules/vpc", "dev"),
-		SourceTemplateIDFor("tenant_123", "acme", "infra", "modules/db", "main"),
-		SourceTemplateIDFor("tenant_123", "acmei", "nfra", "modules/vpc", "main"),
+	others := []TemplateID{
+		TemplateIDFor("tenant_456", "acme", "infra", "modules/vpc", "main"),
+		TemplateIDFor("tenant_123", "acme", "infra", "modules/vpc", "dev"),
+		TemplateIDFor("tenant_123", "acme", "infra", "modules/db", "main"),
+		TemplateIDFor("tenant_123", "acmei", "nfra", "modules/vpc", "main"),
 	}
 	for _, other := range others {
 		if other == want {

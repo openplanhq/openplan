@@ -83,15 +83,15 @@ func (step TemplateSyncStep) Valid() bool {
 	return slices.Contains(AllTemplateSyncSteps, step)
 }
 
-// SourceTemplate is the stable logical identity tracked by template revisions.
+// Template is the stable logical identity tracked by template revisions.
 // It exists from registration on, before any sync has produced a revision.
-type SourceTemplate struct {
-	ID        SourceTemplateID `json:"id"`
-	TenantID  TenantID         `json:"tenant_id"`
-	RepoOwner string           `json:"repo_owner"`
-	RepoName  string           `json:"repo_name"`
-	SourceRef string           `json:"source_ref"`
-	RootPath  string           `json:"root_path"`
+type Template struct {
+	ID        TemplateID `json:"id"`
+	TenantID  TenantID   `json:"tenant_id"`
+	RepoOwner string     `json:"repo_owner"`
+	RepoName  string     `json:"repo_name"`
+	SourceRef string     `json:"source_ref"`
+	RootPath  string     `json:"root_path"`
 	// Name, Description and Tags are the latest revision's. Before the first
 	// revision, Name is FallbackTemplateName, Description is empty and Tags
 	// is empty.
@@ -168,11 +168,11 @@ func (sync LatestTemplateSync) StatusAt(now time.Time) TemplateSyncStatus {
 	return TemplateSyncFailed
 }
 
-// SourceTemplateIDFor derives the id of the template a source names, so
+// TemplateIDFor derives the id of the template a source names, so
 // registering the same source twice lands on the same template. rootPath is
 // the cleaned root path. The hash is over the values joined by NUL, which no
 // value may contain, so two different sources never join to the same input.
-func SourceTemplateIDFor(tenantID TenantID, repoOwner, repoName, rootPath, sourceRef string) SourceTemplateID {
+func TemplateIDFor(tenantID TenantID, repoOwner, repoName, rootPath, sourceRef string) TemplateID {
 	sum := sha256.Sum256([]byte(strings.Join([]string{
 		string(tenantID),
 		repoOwner,
@@ -180,7 +180,7 @@ func SourceTemplateIDFor(tenantID TenantID, repoOwner, repoName, rootPath, sourc
 		rootPath,
 		sourceRef,
 	}, "\x00")))
-	return SourceTemplateID("source_template_" + hex.EncodeToString(sum[:16]))
+	return TemplateID("template_" + hex.EncodeToString(sum[:16]))
 }
 
 // FallbackTemplateName names a template whose source does not name itself:
@@ -198,7 +198,7 @@ func FallbackTemplateName(repoName string, rootPath string) string {
 type TemplateRevision struct {
 	ID                TemplateRevisionID     `json:"id"`
 	TenantID          TenantID               `json:"tenant_id"`
-	SourceTemplateID  SourceTemplateID       `json:"source_template_id"`
+	TemplateID        TemplateID             `json:"template_id"`
 	RepoOwner         string                 `json:"repo_owner"`
 	RepoName          string                 `json:"repo_name"`
 	SourceRef         string                 `json:"source_ref"`
@@ -216,9 +216,9 @@ type TemplateRevision struct {
 type TemplateSync struct {
 	ID       TemplateSyncID `json:"id"`
 	TenantID TenantID       `json:"tenant_id"`
-	// SourceTemplateID is the template synced. It is empty on
+	// TemplateID is the template synced. It is empty on
 	// syncs made before templates were created at registration.
-	SourceTemplateID   SourceTemplateID   `json:"source_template_id"`
+	TemplateID         TemplateID         `json:"template_id"`
 	RepoOwner          string             `json:"repo_owner"`
 	RepoName           string             `json:"repo_name"`
 	SourceRef          string             `json:"source_ref"`

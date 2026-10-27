@@ -12,17 +12,17 @@ import { authValue, jsonResponse, latestSync, revision, seedTemplates, template,
 // The page through the same route shape as router.tsx, with the panel's
 // routes stubbed: these tests are about the frame, the header and the list.
 
-const eks = revision({ id: "rev_eks", source_template_id: "tpl_eks", name: "eks", root_path: "aws/eks" });
+const eks = revision({ id: "rev_eks", template_id: "tpl_eks", name: "eks", root_path: "aws/eks" });
 const network = revision({
   id: "rev_net",
-  source_template_id: "tpl_net",
+  template_id: "tpl_net",
   name: "network",
   root_path: "aws/network",
   source_ref: "v2.3.0",
   description: "A VPC with public and private subnets.",
   tags: ["networking"]
 });
-const cdn = revision({ id: "rev_cdn", source_template_id: "tpl_cdn", repo_name: "edge", name: "cloudfront-site", root_path: ".", source_ref: "v2.0.1", tags: [] });
+const cdn = revision({ id: "rev_cdn", template_id: "tpl_cdn", repo_name: "edge", name: "cloudfront-site", root_path: ".", source_ref: "v2.0.1", tags: [] });
 
 function seed(revisions: TemplateRevision[] = [eks, network, cdn]): QueryClient {
   const queryClient = testQueryClient();
@@ -39,8 +39,8 @@ function renderPage(queryClient: QueryClient, path: string, canManageTemplates =
         children: [
           { index: true, element: <p data-testid="index-content">index</p> },
           { path: "new", element: <p data-testid="register-content">register</p> },
-          { path: ":sourceTemplateId/variables", element: <p data-testid="variables-content">variables</p> },
-          { path: ":sourceTemplateId/revisions", element: <p data-testid="revisions-content">revisions</p> }
+          { path: ":templateId/variables", element: <p data-testid="variables-content">variables</p> },
+          { path: ":templateId/revisions", element: <p data-testid="revisions-content">revisions</p> }
         ]
       }
     ],
@@ -68,7 +68,7 @@ afterEach(() => {
 
 describe("TemplatesPage header", () => {
   it("titles the page with no count", () => {
-    renderPage(seed([revision({ id: "rev_eks_2", source_template_id: "tpl_eks" }), eks, network, cdn]), "/templates");
+    renderPage(seed([revision({ id: "rev_eks_2", template_id: "tpl_eks" }), eks, network, cdn]), "/templates");
 
     expect(screen.getByRole("heading", { level: 1, name: "Templates" })).toBeTruthy();
     expect(screen.queryByTestId("page-count")).toBeNull();

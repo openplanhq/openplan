@@ -30,7 +30,7 @@ func fullTemplateRun() domain.TemplateRun {
 	summary := &domain.PlanSummary{Add: 1, Change: 2, Destroy: 3}
 	return domain.TemplateRun{
 		ID: "run-1", TenantID: "tenant-1", StackTemplateID: "st-1", TemplateRevisionID: "rev-1",
-		SourceTemplateID: "src-1", Operation: domain.OperationApply, SourceRef: "main",
+		TemplateID: "src-1", Operation: domain.OperationApply, SourceRef: "main",
 		ResolvedCommitSHA: "abc", WorkspaceName: "ws", ConfigJSON: json.RawMessage(`{"secret":"x"}`),
 		BackendType: "s3", BackendConfigHash: "hash", Status: domain.TemplateRunCompleted,
 		Step: domain.TemplateRunStepApplying, TriggerActor: "alice", TriggerActorDisplayName: "Alice",
@@ -61,7 +61,7 @@ func TestTemplateRunResponseFields(t *testing.T) {
 	}, jsonKeys(t, response))
 	// The run's config snapshot can hold sensitive values, and the backend
 	// and workspace are the executor's business.
-	for _, internal := range []string{"config_json", "backend_type", "backend_config_hash", "workspace_name", "source_template_id"} {
+	for _, internal := range []string{"config_json", "backend_type", "backend_config_hash", "workspace_name", "template_id"} {
 		assert.NotContains(t, jsonKeys(t, response), internal)
 	}
 
@@ -150,14 +150,14 @@ func TestTemplateRevisionResponseFields(t *testing.T) {
 	t.Parallel()
 
 	response := newTemplateRevisionResponse(domain.TemplateRevision{
-		ID: "rev-1", TenantID: "tenant-1", SourceTemplateID: "src-1", RepoOwner: "o", RepoName: "r",
+		ID: "rev-1", TenantID: "tenant-1", TemplateID: "src-1", RepoOwner: "o", RepoName: "r",
 		SourceRef: "main", ResolvedCommitSHA: "abc", RootPath: ".", Name: "n", Description: "d",
 		Tags: []string{"t"}, Status: domain.TemplateRevisionActive, CreatedAt: time.Date(2026, 10, 17, 9, 0, 0, 0, time.UTC),
 	})
 
 	assert.Equal(t, []string{
 		"created_at", "description", "id", "name", "repo_name", "repo_owner", "resolved_commit_sha",
-		"root_path", "source_ref", "source_template_id", "status", "tags", "tenant_id",
+		"root_path", "source_ref", "status", "tags", "template_id", "tenant_id",
 	}, jsonKeys(t, response))
 }
 
@@ -174,7 +174,7 @@ func TestTemplateRevisionResponseTagsNeverNull(t *testing.T) {
 func TestTemplateResponseFields(t *testing.T) {
 	t.Parallel()
 
-	response := newTemplateResponse(domain.SourceTemplate{
+	response := newTemplateResponse(domain.Template{
 		ID: "source_template_1", TenantID: "tenant-1", RepoOwner: "o", RepoName: "r", SourceRef: "main",
 		RootPath: ".", Name: "n", Description: "d", Tags: []string{"t"}, LatestTemplateRevisionID: "rev-1",
 		CreatedAt: time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 10, 21, 10, 0, 0, 0, time.UTC),
@@ -191,7 +191,7 @@ func TestTemplateResponseFields(t *testing.T) {
 func TestTemplateResponseBeforeTheFirstRevision(t *testing.T) {
 	t.Parallel()
 
-	encoded, err := json.Marshal(newTemplateResponse(domain.SourceTemplate{ID: "source_template_1"}, time.Now()))
+	encoded, err := json.Marshal(newTemplateResponse(domain.Template{ID: "source_template_1"}, time.Now()))
 	require.NoError(t, err)
 	assert.Contains(t, string(encoded), `"tags":[]`)
 	assert.Contains(t, string(encoded), `"latest_template_revision_id":""`)

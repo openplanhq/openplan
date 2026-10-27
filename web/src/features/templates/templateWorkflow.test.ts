@@ -128,7 +128,7 @@ function templateRevision(overrides: Partial<TemplateRevision>): TemplateRevisio
   return {
     id: "template_123",
     tenant_id: "tenant_123",
-    source_template_id: "source_template_123",
+    template_id: "source_template_123",
     repo_owner: "hashicorp",
     repo_name: "terraform-template",
     source_ref: "main",
@@ -173,7 +173,7 @@ describe("matchesTemplateFilter", () => {
 });
 
 describe("searchTemplates", () => {
-  // One template per spec, each its own source template.
+  // One template per spec, each its own template.
   const templates = (...specs: Array<Partial<Template>>) => specs.map((spec, index) => template({ id: `tpl_${index}`, ...spec }));
   const names = (query: string, ...specs: Array<Partial<Template>>) => searchTemplates(templates(...specs), query).map((match) => match.name);
 

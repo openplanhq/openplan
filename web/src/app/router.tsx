@@ -158,12 +158,12 @@ export const routeConfig: RouteObject[] = [
                 children: [{ index: true, element: <RegisterTemplatePanel /> }]
               },
               {
-                path: ":sourceTemplateId",
+                path: ":templateId",
                 element: <RegistryTemplatePanel />,
                 children: [
                   // A loader redirect, so the old /templates/:id links land
                   // on Variables before anything renders.
-                  { index: true, loader: ({ params }) => redirect(templatePath(params.sourceTemplateId ?? "")) },
+                  { index: true, loader: ({ params }) => redirect(templatePath(params.templateId ?? "")) },
                   { path: "variables", element: <RegistryVariablesTab /> },
                   { path: "revisions", element: <RevisionsTab /> }
                 ]
