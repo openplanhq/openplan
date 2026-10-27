@@ -154,7 +154,7 @@ export const routeConfig: RouteObject[] = [
               { index: true, element: <TemplatesIndexPanel /> },
               {
                 path: "new",
-                element: <RequireCapability capability="can_publish_template" mode="route" />,
+                element: <RequireCapability capability="can_manage_templates" mode="route" />,
                 children: [{ index: true, element: <RegisterTemplatePanel /> }]
               },
               {

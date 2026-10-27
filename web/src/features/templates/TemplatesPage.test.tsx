@@ -30,7 +30,7 @@ function seed(revisions: TemplateRevision[] = [eks, network, cdn]): QueryClient 
   return queryClient;
 }
 
-function renderPage(queryClient: QueryClient, path: string, canPublishTemplate = true) {
+function renderPage(queryClient: QueryClient, path: string, canManageTemplates = true) {
   const router = createMemoryRouter(
     [
       {
@@ -48,7 +48,7 @@ function renderPage(queryClient: QueryClient, path: string, canPublishTemplate =
   );
   render(
     <QueryClientProvider client={queryClient}>
-      <AuthContext.Provider value={authValue(canPublishTemplate)}>
+      <AuthContext.Provider value={authValue(canManageTemplates)}>
         <RouterProvider router={router} />
       </AuthContext.Provider>
     </QueryClientProvider>

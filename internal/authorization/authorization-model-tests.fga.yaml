@@ -81,7 +81,7 @@ tests:
           can_edit: true
           can_view: true
           can_create_stack: true
-          can_publish_template: true
+          can_manage_templates: true
           can_read_template: true
           can_manage_platform_access: true
       - user: user:admin
@@ -91,7 +91,7 @@ tests:
           can_edit: true
           can_view: true
           can_create_stack: true
-          can_publish_template: true
+          can_manage_templates: true
           can_read_template: true
           can_manage_platform_access: true
       - user: user:editor
@@ -101,7 +101,7 @@ tests:
           can_edit: true
           can_view: true
           can_create_stack: true
-          can_publish_template: true
+          can_manage_templates: true
           can_read_template: true
           can_manage_platform_access: false
       - user: user:platform-viewer
@@ -112,7 +112,7 @@ tests:
           can_view: true
           can_create_stack: false
           # A platform viewer may read the catalog but never publish to it.
-          can_publish_template: false
+          can_manage_templates: false
           can_read_template: true
           can_manage_platform_access: false
       - user: user:unrelated
@@ -122,7 +122,7 @@ tests:
           can_edit: false
           can_view: false
           can_create_stack: false
-          can_publish_template: false
+          can_manage_templates: false
           can_read_template: false
           can_manage_platform_access: false
 

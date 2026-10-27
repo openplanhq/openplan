@@ -19,7 +19,7 @@ type platform
     # Capabilities. What routes check. Each one gates a real route; retiring a
     # route retires its capability.
     define can_create_stack: can_edit
-    define can_publish_template: can_edit
+    define can_manage_templates: can_edit
     define can_read_template: can_view
     # Granting and revoking platform roles, and the platform-wide person
     # search that picking someone for a role needs.

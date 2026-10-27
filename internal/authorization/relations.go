@@ -167,7 +167,7 @@ var (
 	RelationCanAdminister           = mustRelation("can_administer")
 	RelationCanCreateStack          = mustRelation("can_create_stack")
 	RelationCanReadTemplate         = mustRelation("can_read_template")
-	RelationCanPublishTemplate      = mustRelation("can_publish_template")
+	RelationCanManageTemplates      = mustRelation("can_manage_templates")
 	RelationCanManagePlatformAccess = mustRelation("can_manage_platform_access")
 )
 

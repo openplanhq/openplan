@@ -18,14 +18,14 @@ function seed(revisions: TemplateRevision[]): QueryClient {
   return queryClient;
 }
 
-function renderIndex(queryClient: QueryClient, canPublishTemplate = true) {
+function renderIndex(queryClient: QueryClient, canManageTemplates = true) {
   const router = createMemoryRouter(
     [{ path: "/templates", element: <TemplatesPage />, children: [{ index: true, element: <TemplatesIndexPanel /> }] }],
     { initialEntries: ["/templates"] }
   );
   render(
     <QueryClientProvider client={queryClient}>
-      <AuthContext.Provider value={authValue(canPublishTemplate)}>
+      <AuthContext.Provider value={authValue(canManageTemplates)}>
         <RouterProvider router={router} />
       </AuthContext.Provider>
     </QueryClientProvider>

@@ -50,14 +50,14 @@ function serve({
   });
 }
 
-function renderPanel(queryClient: QueryClient, canPublishTemplate = true) {
+function renderPanel(queryClient: QueryClient, canManageTemplates = true) {
   const router = createMemoryRouter(
     [{ path: "/templates/:sourceTemplateId", element: <TemplatePanel />, children: [{ path: "revisions", element: <RevisionsTab /> }] }],
     { initialEntries: ["/templates/tpl_1/revisions"] }
   );
   render(
     <QueryClientProvider client={queryClient}>
-      <AuthContext.Provider value={authValue(canPublishTemplate)}>
+      <AuthContext.Provider value={authValue(canManageTemplates)}>
         <RouterProvider router={router} />
       </AuthContext.Provider>
     </QueryClientProvider>

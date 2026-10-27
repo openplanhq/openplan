@@ -4307,7 +4307,7 @@ func TestMeReturnsIdentityWithGlobalCapabilities(t *testing.T) {
 		wantPublish bool
 		wantManage  bool
 	}{
-		// An administrator holds can_create_stack and can_publish_template
+		// An administrator holds can_create_stack and can_manage_templates
 		// too: the model derives both from can_edit, which can_administer
 		// satisfies. Only an administrator manages platform access.
 		{name: "platform admin", tier: "admin", wantCreate: true, wantPublish: true, wantManage: true},
@@ -4344,7 +4344,7 @@ func TestMeReturnsIdentityWithGlobalCapabilities(t *testing.T) {
 				Email              string `json:"email"`
 				GlobalCapabilities struct {
 					CanCreateStack          bool `json:"can_create_stack"`
-					CanPublishTemplate      bool `json:"can_publish_template"`
+					CanManageTemplates      bool `json:"can_manage_templates"`
 					CanManagePlatformAccess bool `json:"can_manage_platform_access"`
 				} `json:"global_capabilities"`
 				TenantID string `json:"tenant_id"`
@@ -4367,8 +4367,8 @@ func TestMeReturnsIdentityWithGlobalCapabilities(t *testing.T) {
 			}
 			// The Sync button on the template detail screen is gated on this,
 			// and RegisterTemplate is the route it would call.
-			if body.GlobalCapabilities.CanPublishTemplate != test.wantPublish {
-				t.Errorf("can_publish_template = %t, want %t", body.GlobalCapabilities.CanPublishTemplate, test.wantPublish)
+			if body.GlobalCapabilities.CanManageTemplates != test.wantPublish {
+				t.Errorf("can_manage_templates = %t, want %t", body.GlobalCapabilities.CanManageTemplates, test.wantPublish)
 			}
 			// The Access nav item and /access are gated on this.
 			if body.GlobalCapabilities.CanManagePlatformAccess != test.wantManage {

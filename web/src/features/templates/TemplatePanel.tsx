@@ -109,7 +109,7 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
   // like it, as one pair. Both are for people who can publish, so they come
   // and go together.
   const actions = (
-    <RequireCapability capability="can_publish_template">
+    <RequireCapability capability="can_manage_templates">
       <button
         ref={remove.triggerRef}
         type="button"
@@ -176,7 +176,7 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
           {description}
         </p>
       ) : (
-        <RequireCapability capability="can_publish_template">
+        <RequireCapability capability="can_manage_templates">
           <p className="max-w-170 text-caption text-muted-foreground" data-testid="template-no-description">
             No description. Add a <span className="font-mono text-code-foreground">template.yaml</span> beside the module with a name, a description
             and tags.

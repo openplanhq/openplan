@@ -17,7 +17,7 @@ function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue 
       sub: "user_1",
       tenant_id: "tenant_123",
       display_name: "Otto Operator",
-      global_capabilities: { can_create_stack: true, can_publish_template: true, can_manage_platform_access: false },
+      global_capabilities: { can_create_stack: true, can_manage_templates: true, can_manage_platform_access: false },
     },
     status: "authenticated",
     login: () => {},

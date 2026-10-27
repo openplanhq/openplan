@@ -44,7 +44,7 @@ function setup(latest: TemplateRun) {
     <QueryClientProvider client={queryClient}>
       <AuthContext.Provider
         value={{
-          me: { sub: "user_123", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_publish_template: false, can_manage_platform_access: false } },
+          me: { sub: "user_123", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_manage_templates: false, can_manage_platform_access: false } },
           status: "authenticated",
           login: () => {},
           logout: () => {}

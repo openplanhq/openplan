@@ -131,13 +131,13 @@ export function testQueryClient(): QueryClient {
   return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
 }
 
-export function authValue(canPublishTemplate = true): AuthContextValue {
+export function authValue(canManageTemplates = true): AuthContextValue {
   return {
     me: {
       sub: "user_1",
       tenant_id: TENANT,
       display_name: "Test User",
-      global_capabilities: { can_create_stack: false, can_publish_template: canPublishTemplate, can_manage_platform_access: false }
+      global_capabilities: { can_create_stack: false, can_manage_templates: canManageTemplates, can_manage_platform_access: false }
     },
     status: "authenticated",
     login: () => {},

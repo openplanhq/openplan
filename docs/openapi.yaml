@@ -2192,11 +2192,11 @@ components:
           type: object
           properties:
             can_create_stack: { type: boolean }
-            can_publish_template: { type: boolean }
+            can_manage_templates: { type: boolean }
             can_manage_platform_access:
               type: boolean
               description: May grant and revoke platform roles. Platform administrators and root.
-          required: [can_create_stack, can_publish_template, can_manage_platform_access]
+          required: [can_create_stack, can_manage_templates, can_manage_platform_access]
         tenant_id:
           type: string
           description: The tenant this deployment serves. Use it in every tenant-scoped path.
@@ -3083,7 +3083,7 @@ components:
       enum: [viewer, editor, admin]
       description: |
         A platform role. `viewer` sees every stack and reads the template
-        catalog; `editor` also creates stacks and publishes templates;
+        catalog; `editor` also creates stacks and manages templates;
         `admin` also operates, approves and manages access on every stack,
         and manages platform access. Root is not a role this API grants.
 

@@ -659,7 +659,7 @@ type GetTemplateRevisionVariablesCommand struct {
 // 2026-10-21). The template, its sync and the sync's intent commit together:
 // a sync never runs for a template that was not stored.
 func (service *Service) RegisterTemplate(ctx context.Context, command RegisterTemplateCommand) (StartedTemplateSync, error) {
-	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanPublishTemplate); err != nil {
+	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanManageTemplates); err != nil {
 		return StartedTemplateSync{}, err
 	}
 	actor, err := authenticatedActor(ctx)
@@ -697,7 +697,7 @@ func (service *Service) RegisterTemplate(ctx context.Context, command RegisterTe
 // StartTemplateSync queues a sync of a registered template, to pick up a new
 // commit on its ref or retry a sync that failed.
 func (service *Service) StartTemplateSync(ctx context.Context, command StartTemplateSyncCommand) (StartedTemplateSync, error) {
-	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanPublishTemplate); err != nil {
+	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanManageTemplates); err != nil {
 		return StartedTemplateSync{}, err
 	}
 	actor, err := authenticatedActor(ctx)
@@ -1478,7 +1478,7 @@ func (service *Service) DeleteTemplate(ctx context.Context, command DeleteTempla
 	if err := validateTemplateCommand(command.TenantID, command.TemplateID); err != nil {
 		return err
 	}
-	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanPublishTemplate); err != nil {
+	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanManageTemplates); err != nil {
 		return err
 	}
 

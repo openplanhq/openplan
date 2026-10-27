@@ -27,7 +27,7 @@ function seed(revisions: TemplateRevision[] = [latest, older, rds, cdn]): QueryC
   return queryClient;
 }
 
-function renderPanel(queryClient: QueryClient, path: string, canPublishTemplate = true) {
+function renderPanel(queryClient: QueryClient, path: string, canManageTemplates = true) {
   const router = createMemoryRouter(
     [
       // Where a delete lands, showing what it carried.
@@ -45,7 +45,7 @@ function renderPanel(queryClient: QueryClient, path: string, canPublishTemplate 
   );
   render(
     <QueryClientProvider client={queryClient}>
-      <AuthContext.Provider value={authValue(canPublishTemplate)}>
+      <AuthContext.Provider value={authValue(canManageTemplates)}>
         <RouterProvider router={router} />
       </AuthContext.Provider>
     </QueryClientProvider>

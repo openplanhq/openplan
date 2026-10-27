@@ -317,7 +317,7 @@ func (service *Service) operableStackTemplate(
 // changed is where the answers come from.
 type PlatformCapabilities struct {
 	CanCreateStack          bool
-	CanPublishTemplate      bool
+	CanManageTemplates      bool
 	CanManagePlatformAccess bool
 }
 
@@ -327,14 +327,14 @@ type PlatformCapabilities struct {
 // separately at the point of use.
 var platformCapabilityRelations = []authorization.Relation{
 	authorization.RelationCanCreateStack,
-	authorization.RelationCanPublishTemplate,
+	authorization.RelationCanManageTemplates,
 	authorization.RelationCanManagePlatformAccess,
 }
 
 func platformCapabilitiesFrom(results []bool) PlatformCapabilities {
 	return PlatformCapabilities{
 		CanCreateStack:          results[0],
-		CanPublishTemplate:      results[1],
+		CanManageTemplates:      results[1],
 		CanManagePlatformAccess: results[2],
 	}
 }

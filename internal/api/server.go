@@ -328,7 +328,7 @@ func (server *Server) handleMe(response http.ResponseWriter, request *http.Reque
 	}
 	writeJSON(response, http.StatusOK, meFromPrincipal(principal, server.tenantID, globalCapabilities{
 		CanCreateStack:          capabilities.CanCreateStack,
-		CanPublishTemplate:      capabilities.CanPublishTemplate,
+		CanManageTemplates:      capabilities.CanManageTemplates,
 		CanManagePlatformAccess: capabilities.CanManagePlatformAccess,
 	}))
 }
