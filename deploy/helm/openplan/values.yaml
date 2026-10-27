@@ -1,5 +1,12 @@
-# Every key here is contract: it is kept across releases. Settings that are not
-# here are fixed by the chart or come from the components' Secrets.
+
+# Every key here is contract: it is kept across releases. Everything the chart
+# passes to openplan is set here; nothing reaches a component any other way.
+#
+# A credential is never a value. Values are stored in the release, readable by
+# anyone who can read its Secret, and usually committed to git, so each one is
+# named here as a key of an existing Secret in the release namespace:
+#   name: the Secret
+#   key:  the key in it holding the credential
 
 image:
   # Where the openplan-api, openplan-executor and openplan-web images are
@@ -9,13 +16,100 @@ image:
   # was released with.
   tag: ""
 
+temporal:
+  # Required. The Temporal frontend, host:port.
+  address: ""
+  # The Temporal namespace openplan's workflows run in.
+  namespace: default
+
+postgres:
+  # Required. The api's database as a URL without the password, such as
+  # postgres://openplan@postgres:5432/openplan?sslmode=require. The api
+  # migrates it at startup.
+  url: ""
+  # Required. The database user's password.
+  passwordSecret:
+    name: ""
+    key: ""
+
+valkey:
+  api:
+    # Required. The Valkey the api reads live run output from, as the api
+    # user and without the password: redis://api@valkey:6379/0, or rediss://
+    # for TLS. The database must be 0.
+    url: ""
+    # Required. The api user's password.
+    passwordSecret:
+      name: ""
+      key: ""
+  executor:
+    # Required. The same Valkey as the executor user, which may only append to
+    # run logs: redis://executor@valkey:6379/0.
+    url: ""
+    # Required. The executor user's password.
+    passwordSecret:
+      name: ""
+      key: ""
+
+# Where run logs and plans are kept. S3 or any S3-compatible store; the
+# filesystem store can't work here, since the api and the executor run in
+# separate pods with no shared volume.
+s3:
+  # Required.
+  bucket: ""
+  # Required.
+  region: ""
+  # Empty means AWS. Set it for any other S3-compatible store.
+  endpoint: ""
+  # Address the bucket as <endpoint>/<bucket> instead of
+  # <bucket>.<endpoint>, which most stores other than AWS need.
+  forcePathStyle: false
+  # Required.
+  accessKeyIDSecret:
+    name: ""
+    key: ""
+  # Required.
+  secretAccessKeySecret:
+    name: ""
+    key: ""
+
+oidc:
+  # Required. The OIDC issuer (Dex) over HTTPS. It must resolve the same way
+  # from the browser and from the api pod.
+  issuerURL: ""
+  # Required. openplan's OAuth client ID, registered with redirect URL
+  # https://<ingress.host>/v1/auth/callback.
+  clientID: ""
+  # Required. That client's secret.
+  clientSecretSecret:
+    name: ""
+    key: ""
+
 api:
-  # Required. The name of an existing Secret in the release namespace. Every
-  # key becomes an environment variable of the api under the same name
-  # (DATABASE_URL, VALKEY_URL, OIDC_CLIENT_SECRET, ...). The chart sets
-  # HTTP_ADDRESS, OPENPLAN_ENVIRONMENT and OPENPLAN_PUBLIC_URL itself, and those
-  # win over the same keys in the Secret.
-  existingSecret: ""
+  # Required. The OIDC sub of the first administrator, who signs in to a fresh
+  # install and grants everyone else access.
+  rootSubject: ""
+  # Required. 32 random bytes (openssl rand -hex 32) that seal sign-in
+  # sessions.
+  sessionEncryptionKeySecret:
+    name: ""
+    key: ""
+  # Required. 32 random bytes, different from the session key, that encrypt
+  # the credentials stored in openplan.
+  credentialEncryptionKeySecret:
+    name: ""
+    key: ""
+  # The longest one Terraform command may run, as a duration such as 90m.
+  # Empty means openplan's default.
+  terraformTimeout: ""
+  # A GitHub App that clones private template repositories. Set the app ID and
+  # the private key together, or neither, which leaves only public
+  # repositories reachable.
+  githubApp:
+    id: ""
+    privateKeySecret:
+      name: ""
+      key: ""
   # Optional. The name of an existing Secret whose ca.crt the api trusts in
   # addition to the public roots, for an OIDC issuer behind an internal CA.
   trustedCASecret: ""
@@ -31,17 +125,13 @@ api:
       cpu: "2"
       memory: 2Gi
 
+# The executor gets Temporal, the executor's Valkey user and S3 from above, and
+# nothing else: no database, no keys, no OIDC secret.
 executor:
-  # Required. The name of an existing Secret in the release namespace. Every
-  # key becomes an environment variable of the executor under the same name
-  # (TEMPORAL_ADDRESS, VALKEY_URL as the append-only executor user, S3_*, ...).
-  # Keep it apart from the api's: the executor gets no database or keys. The
-  # chart sets EXECUTOR_RUN_ROOT and EXECUTOR_SANDBOX_STATE itself.
-  existingSecret: ""
   replicas: 1
   # Every sandbox's memory is counted in this pod, so memory must be at least
-  # EXECUTOR_MAX_SESSIONS times EXECUTOR_SANDBOX_MEMORY plus 512Mi for the
-  # executor itself; the default fits the chart's one 1536 MiB session.
+  # maxSessions times sandbox.memoryMiB plus 512Mi for the executor itself;
+  # the default fits the chart's one 1536 MiB session.
   # requests equal limits, so the pod is Guaranteed and never uses more than
   # the node reserved for it. Override requests and limits together: Helm
   # merges maps, so setting only limits.memory keeps the 2Gi request and the
@@ -53,6 +143,20 @@ executor:
     limits:
       cpu: "2"
       memory: 2Gi
+  # The runs, each in its own sandbox, one executor holds at once. One fits
+  # the default 2Gi pod; the executor's own default (20 sessions of 2048 MiB)
+  # would need 40 GiB. More runs at once come from replicas.
+  maxSessions: 1
+  # Each sandbox's limits. Empty means the executor's default.
+  sandbox:
+    # MiB of memory.
+    memoryMiB: 1536
+    cpus: ""
+    pids: ""
+    # The IPv4 subnet, /29 or larger, the sandboxes' addresses come from. Move
+    # it when it collides with a network the executor reaches, such as the
+    # cluster's pod or service CIDR. Empty means 10.237.0.0/24.
+    subnet: ""
   runRoot:
     # Disk for the workspaces of the runs in flight on one executor. The
     # kubelet evicts the pod, and every run on it, when they outgrow it.

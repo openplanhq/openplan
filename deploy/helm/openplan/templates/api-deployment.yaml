@@ -25,10 +25,9 @@ spec:
           ports:
             - name: http
               containerPort: 8081
-          envFrom:
-            - secretRef:
-                name: {{ required "api.existingSecret is required: the name of the Secret holding the api's environment" .Values.api.existingSecret }}
-          # env wins over envFrom, so a stray key in the Secret can't move these.
+          # Every setting comes from values, credentials by reference to a
+          # Secret key, so the values file is the whole of the api's
+          # configuration.
           env:
             - name: HTTP_ADDRESS
               value: ":8081"
@@ -36,6 +35,36 @@ spec:
               value: production
             - name: OPENPLAN_PUBLIC_URL
               value: {{ printf "https://%s" (required "ingress.host is required: the host openplan is served on" .Values.ingress.host) | quote }}
+            {{- include "openplan.temporalEnv" . | nindent 12 }}
+            - name: DATABASE_URL
+              value: {{ required "postgres.url is required: the api's database, without the password" .Values.postgres.url | quote }}
+            {{- include "openplan.secretEnv" (dict "name" "DATABASE_PASSWORD" "ref" .Values.postgres.passwordSecret "path" "postgres.passwordSecret") | nindent 12 }}
+            - name: VALKEY_URL
+              value: {{ required "valkey.api.url is required: the api's Valkey URL, without the password" .Values.valkey.api.url | quote }}
+            {{- include "openplan.secretEnv" (dict "name" "VALKEY_PASSWORD" "ref" .Values.valkey.api.passwordSecret "path" "valkey.api.passwordSecret") | nindent 12 }}
+            {{- include "openplan.s3Env" . | nindent 12 }}
+            - name: OIDC_ISSUER_URL
+              value: {{ required "oidc.issuerURL is required: the OIDC issuer, over HTTPS" .Values.oidc.issuerURL | quote }}
+            - name: OIDC_CLIENT_ID
+              value: {{ required "oidc.clientID is required: openplan's OAuth client ID" .Values.oidc.clientID | quote }}
+            {{- include "openplan.secretEnv" (dict "name" "OIDC_CLIENT_SECRET" "ref" .Values.oidc.clientSecretSecret "path" "oidc.clientSecretSecret") | nindent 12 }}
+            - name: OPENPLAN_ROOT_SUBJECT
+              value: {{ required "api.rootSubject is required: the OIDC sub of the first administrator" .Values.api.rootSubject | quote }}
+            {{- include "openplan.secretEnv" (dict "name" "SESSION_ENCRYPTION_KEY" "ref" .Values.api.sessionEncryptionKeySecret "path" "api.sessionEncryptionKeySecret") | nindent 12 }}
+            {{- include "openplan.secretEnv" (dict "name" "CREDENTIAL_ENCRYPTION_KEY" "ref" .Values.api.credentialEncryptionKeySecret "path" "api.credentialEncryptionKeySecret") | nindent 12 }}
+            {{- with .Values.api.terraformTimeout }}
+            - name: OPENPLAN_TERRAFORM_TIMEOUT
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.api.githubApp }}
+            {{- if .id }}
+            - name: GITHUB_APP_ID
+              value: {{ .id | quote }}
+            {{- include "openplan.secretEnv" (dict "name" "GITHUB_APP_PRIVATE_KEY" "ref" .privateKeySecret "path" "api.githubApp.privateKeySecret") | nindent 12 }}
+            {{- else if or .privateKeySecret.name .privateKeySecret.key }}
+            {{- fail "api.githubApp.id is required when api.githubApp.privateKeySecret is set" }}
+            {{- end }}
+            {{- end }}
             {{- if .Values.api.trustedCASecret }}
             # Go reads the system bundle and then every file in SSL_CERT_DIR,
             # so the internal CA is added to the public roots, not swapped in.

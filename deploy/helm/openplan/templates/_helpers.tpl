@@ -40,3 +40,49 @@ Call with (dict "context" $ "component" "api").
 {{- $image := .context.Values.image -}}
 {{- printf "%s/openplan-%s:%s" $image.registry .component ($image.tag | default .context.Chart.AppVersion) -}}
 {{- end -}}
+
+{{/*
+An environment variable read from a key of an existing Secret, so the
+credential never passes through values. Call with
+(dict "name" "DATABASE_PASSWORD" "ref" .Values.postgres.passwordSecret "path" "postgres.passwordSecret");
+path is the ref's place in values, for the error naming it.
+*/}}
+{{- define "openplan.secretEnv" -}}
+- name: {{ .name }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ required (printf "%s.name is required: the Secret holding %s" .path .name) .ref.name }}
+      key: {{ required (printf "%s.key is required: the key in that Secret holding %s" .path .name) .ref.key }}
+{{- end -}}
+
+{{/*
+Temporal, which the api and the executor reach alike. Call with $.
+*/}}
+{{- define "openplan.temporalEnv" -}}
+- name: TEMPORAL_ADDRESS
+  value: {{ required "temporal.address is required: the Temporal frontend, host:port" .Values.temporal.address | quote }}
+- name: TEMPORAL_NAMESPACE
+  value: {{ .Values.temporal.namespace | quote }}
+{{- end -}}
+
+{{/*
+The artifact store, which the api and the executor share: the executor writes
+run logs and plans, the api reads them. Always S3, since the two pods share
+no volume. Call with $.
+*/}}
+{{- define "openplan.s3Env" -}}
+- name: ARTIFACT_STORE_KIND
+  value: s3
+- name: S3_BUCKET
+  value: {{ required "s3.bucket is required: the bucket for run logs and plans" .Values.s3.bucket | quote }}
+- name: S3_REGION
+  value: {{ required "s3.region is required: the bucket's region" .Values.s3.region | quote }}
+{{- with .Values.s3.endpoint }}
+- name: S3_ENDPOINT
+  value: {{ . | quote }}
+{{- end }}
+- name: S3_FORCE_PATH_STYLE
+  value: {{ .Values.s3.forcePathStyle | quote }}
+{{ include "openplan.secretEnv" (dict "name" "S3_ACCESS_KEY_ID" "ref" .Values.s3.accessKeyIDSecret "path" "s3.accessKeyIDSecret") }}
+{{ include "openplan.secretEnv" (dict "name" "S3_SECRET_ACCESS_KEY" "ref" .Values.s3.secretAccessKeySecret "path" "s3.secretAccessKeySecret") }}
+{{- end -}}

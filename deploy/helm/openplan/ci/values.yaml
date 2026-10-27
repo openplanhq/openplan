@@ -1,9 +1,30 @@
 # The required values with placeholder names, so CI can lint and render the
 # chart. Nothing here is a real Secret or host; an install needs its own.
+temporal:
+  address: temporal:7233
+postgres:
+  url: postgres://openplan@postgres:5432/openplan
+  passwordSecret: {name: openplan-postgres, key: password}
+valkey:
+  api:
+    url: redis://api@valkey:6379/0
+    passwordSecret: {name: openplan-valkey, key: api}
+  executor:
+    url: redis://executor@valkey:6379/0
+    passwordSecret: {name: openplan-valkey, key: executor}
+s3:
+  bucket: openplan-artifacts
+  region: us-east-1
+  accessKeyIDSecret: {name: openplan-s3, key: access-key-id}
+  secretAccessKeySecret: {name: openplan-s3, key: secret-access-key}
+oidc:
+  issuerURL: https://dex.example.com/dex
+  clientID: openplan
+  clientSecretSecret: {name: openplan-oidc, key: client-secret}
 api:
-  existingSecret: openplan-api
-executor:
-  existingSecret: openplan-executor
+  rootSubject: placeholder-subject
+  sessionEncryptionKeySecret: {name: openplan-keys, key: session}
+  credentialEncryptionKeySecret: {name: openplan-keys, key: credential}
 ingress:
   host: openplan.example.com
   tlsSecretName: openplan-tls
