@@ -1,7 +1,7 @@
 # CI for openplan. One job per thing a contributor is asked to run: the Go
 # build from the repository root, the executor's isolation test, the frontend
-# checks from web/, the website build from site/, and the lint and
-# vulnerability scan the Makefile pins.
+# checks from web/, the website build from site/, the Helm chart under
+# deploy/helm/openplan, and the lint and vulnerability scan the Makefile pins.
 #
 # The backend job runs against a real Postgres, so every test gated on
 # OPENPLAN_POSTGRES_TEST_DSN runs here, the authorization differential test
@@ -149,6 +149,48 @@ jobs:
 
       - name: build
         run: npm run build
+
+  helm:
+    name: helm (lint, template)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The exact Helm release, so a new Helm cannot change whether the chart
+      # lints without a commit here saying so.
+      - uses: azure/setup-helm@v4
+        with:
+          version: v4.1.1
+
+      # ci/values.yaml fills the required values with placeholders; without
+      # them the templates that need them cannot render.
+      - name: lint
+        run: helm lint --strict deploy/helm/openplan -f deploy/helm/openplan/ci/values.yaml
+
+      - name: template
+        run: helm template openplan deploy/helm/openplan -f deploy/helm/openplan/ci/values.yaml
+
+      # An install missing a required value must stop at template time and name
+      # the key, not render a Deployment that crash-loops. Helm's lint only
+      # warns about a missing required value, so this checks it through
+      # template, one key at a time.
+      - name: template fails without each required value
+        run: |
+          # Each Secret reference is required twice over: its name and its key.
+          refs="postgres.urlSecret valkey.api.urlSecret valkey.executor.urlSecret s3.accessKeyIDSecret s3.secretAccessKeySecret oidc.clientSecretSecret api.sessionEncryptionKeySecret api.credentialEncryptionKeySecret"
+          keys="temporal.address s3.bucket s3.region oidc.issuerURL oidc.clientID api.rootSubject ingress.host ingress.tlsSecretName"
+          for ref in $refs; do keys="$keys $ref.name $ref.key"; done
+          for key in $keys; do
+            if out=$(helm template openplan deploy/helm/openplan -f deploy/helm/openplan/ci/values.yaml --set "$key=" 2>&1); then
+              echo "::error::helm template succeeded with $key empty"
+              exit 1
+            fi
+            if ! grep -qF "$key is required" <<<"$out"; then
+              echo "::error::helm template failed with $key empty but did not name it:"
+              echo "$out"
+              exit 1
+            fi
+          done
 
   lint:
     name: lint (golangci-lint)
