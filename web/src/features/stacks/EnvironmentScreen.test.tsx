@@ -33,8 +33,25 @@ function jsonResponse(body: unknown, status = 200): Response {
 // panel it belongs to.
 const secrets = () => within(screen.getByTestId("environment-secrets"));
 const variables = () => within(screen.getByTestId("environment-variables"));
+// The page's breadcrumb is a list too, so the entries are looked up in the card.
+const card = () => within(screen.getByTestId("environment-card"));
 
 function renderScreen(queryClient: QueryClient) {
+  // The trail names the stack, so the page reads it; seeded, it sends nothing.
+  queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), {
+    stack: {
+      id: "stack_1",
+      tenant_id: "tenant_123",
+      name: "prod",
+      slug: "prod",
+      tags: {},
+      default_credential_ids: [],
+      created_by: "user_1",
+      created_at: "2026-07-19T00:00:00Z",
+      effective_capabilities: { can_view: true, can_operate: true, can_approve: true, can_manage_access: true }
+    },
+    templates: []
+  });
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthContext.Provider value={authValue()}>
@@ -111,7 +128,7 @@ describe("EnvironmentScreen", () => {
 
     renderScreen(queryClient);
 
-    const rows = within(screen.getByRole("list")).getAllByRole("listitem");
+    const rows = within(card().getByRole("list")).getAllByRole("listitem");
     expect(rows.map((row) => row.textContent)).toEqual(["TF_VAR_TESTAdded 19 Jul 2026", "AWS_ACCESS_KEY_IDAdded 12 Aug 2026"]);
     expect(within(rows[1]).getByRole("button", { name: "Delete AWS_ACCESS_KEY_ID" })).toBeTruthy();
   });
@@ -137,7 +154,7 @@ describe("EnvironmentScreen", () => {
     expect(secrets().getByText("No secrets in this environment")).toBeTruthy();
     expect(secrets().getByText("Secrets added here are available to every template in this stack.")).toBeTruthy();
     expect(variables().getByText("No variables in this environment")).toBeTruthy();
-    expect(screen.queryByRole("list")).toBeNull();
+    expect(card().queryByRole("list")).toBeNull();
   });
 
   // The value is a secret: masked while typed, and gone from the page once
@@ -403,7 +420,7 @@ describe("EnvironmentScreen", () => {
     const variablesOption = within(switcher).getByRole("button", { name: "Variables" });
     // It opens on Secrets.
     expect(secretsOption.getAttribute("aria-pressed")).toBe("true");
-    expect(within(screen.getByRole("list")).getAllByRole("listitem").map((row) => row.textContent)).toEqual(["TF_VAR_TESTAdded 19 Jul 2026"]);
+    expect(within(card().getByRole("list")).getAllByRole("listitem").map((row) => row.textContent)).toEqual(["TF_VAR_TESTAdded 19 Jul 2026"]);
     expect(screen.getByRole("button", { name: "Add secret" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Add variable" })).toBeNull();
 
@@ -411,7 +428,7 @@ describe("EnvironmentScreen", () => {
 
     expect(variablesOption.getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByTestId("environment-secrets").hidden).toBe(true);
-    const rows = within(screen.getByRole("list")).getAllByRole("listitem");
+    const rows = within(card().getByRole("list")).getAllByRole("listitem");
     expect(rows.map((row) => row.textContent)).toEqual(["AWS_REGIONeu-west-1Added 19 Jul 2026"]);
     expect(within(rows[0]).getByText("eu-west-1").getAttribute("title")).toBe("eu-west-1");
     expect(screen.getByRole("button", { name: "Add variable" })).toBeTruthy();

@@ -309,11 +309,12 @@ describe("CreateStackScreen", () => {
     expect(screen.getByRole("button", { name: /create stack/i }).classList).toContain("pointer-coarse:h-11");
   });
 
-  it("sits in a shadcn Card", () => {
+  it("titles the page and draws the form as one card", () => {
     renderScreen();
 
+    expect(screen.getByRole("heading", { level: 1, name: "Create stack" })).toBeTruthy();
     const form = screen.getByLabelText("Name").closest("form") as HTMLElement;
-    expect(form.closest('[data-slot="card"]')).not.toBeNull();
+    for (const name of ["rounded-panel", "border", "bg-card"]) expect(form.classList).toContain(name);
   });
 
   it("shows an inline error message for a handled API error status", async () => {
