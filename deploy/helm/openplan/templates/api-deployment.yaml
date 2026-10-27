@@ -1,0 +1,92 @@
+{{- $component := dict "context" $ "component" "api" -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openplan.fullname" . }}-api
+  labels:
+    {{- include "openplan.labels" $component | nindent 4 }}
+spec:
+  # One api until #318 makes several safe; Recreate keeps an upgrade from
+  # running the old and the new one side by side.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "openplan.selectorLabels" $component | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "openplan.labels" $component | nindent 8 }}
+    spec:
+      containers:
+        - name: api
+          image: {{ include "openplan.image" $component }}
+          ports:
+            - name: http
+              containerPort: 8081
+          # Every setting comes from values, credentials by reference to a
+          # Secret key, so the values file is the whole of the api's
+          # configuration.
+          env:
+            - name: HTTP_ADDRESS
+              value: ":8081"
+            - name: OPENPLAN_ENVIRONMENT
+              value: production
+            - name: OPENPLAN_PUBLIC_URL
+              value: {{ printf "https://%s" (required "ingress.host is required: the host openplan is served on" .Values.ingress.host) | quote }}
+            {{- include "openplan.temporalEnv" . | nindent 12 }}
+            {{- include "openplan.secretEnv" (dict "name" "DATABASE_URL" "ref" .Values.postgres.urlSecret "path" "postgres.urlSecret") | nindent 12 }}
+            {{- include "openplan.secretEnv" (dict "name" "VALKEY_URL" "ref" .Values.valkey.api.urlSecret "path" "valkey.api.urlSecret") | nindent 12 }}
+            {{- include "openplan.s3Env" . | nindent 12 }}
+            - name: OIDC_ISSUER_URL
+              value: {{ required "oidc.issuerURL is required: the OIDC issuer, over HTTPS" .Values.oidc.issuerURL | quote }}
+            - name: OIDC_CLIENT_ID
+              value: {{ required "oidc.clientID is required: openplan's OAuth client ID" .Values.oidc.clientID | quote }}
+            {{- include "openplan.secretEnv" (dict "name" "OIDC_CLIENT_SECRET" "ref" .Values.oidc.clientSecretSecret "path" "oidc.clientSecretSecret") | nindent 12 }}
+            - name: OPENPLAN_ROOT_SUBJECT
+              value: {{ required "api.rootSubject is required: the OIDC sub of the first administrator" .Values.api.rootSubject | quote }}
+            {{- include "openplan.secretEnv" (dict "name" "SESSION_ENCRYPTION_KEY" "ref" .Values.api.sessionEncryptionKeySecret "path" "api.sessionEncryptionKeySecret") | nindent 12 }}
+            {{- include "openplan.secretEnv" (dict "name" "CREDENTIAL_ENCRYPTION_KEY" "ref" .Values.api.credentialEncryptionKeySecret "path" "api.credentialEncryptionKeySecret") | nindent 12 }}
+            {{- with .Values.api.terraformTimeout }}
+            - name: OPENPLAN_TERRAFORM_TIMEOUT
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.api.githubApp }}
+            {{- if .id }}
+            - name: GITHUB_APP_ID
+              value: {{ .id | quote }}
+            {{- include "openplan.secretEnv" (dict "name" "GITHUB_APP_PRIVATE_KEY" "ref" .privateKeySecret "path" "api.githubApp.privateKeySecret") | nindent 12 }}
+            {{- else if or .privateKeySecret.name .privateKeySecret.key }}
+            {{- fail "api.githubApp.id is required when api.githubApp.privateKeySecret is set" }}
+            {{- end }}
+            {{- end }}
+            {{- if .Values.api.trustedCASecret }}
+            # Go reads the system bundle and then every file in SSL_CERT_DIR,
+            # so the internal CA is added to the public roots, not swapped in.
+            - name: SSL_CERT_DIR
+              value: /etc/openplan/trusted-ca
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          {{- if .Values.api.trustedCASecret }}
+          volumeMounts:
+            - name: trusted-ca
+              mountPath: /etc/openplan/trusted-ca
+              readOnly: true
+          {{- end }}
+      {{- if .Values.api.trustedCASecret }}
+      volumes:
+        - name: trusted-ca
+          secret:
+            secretName: {{ .Values.api.trustedCASecret }}
+            items:
+              - key: ca.crt
+                path: ca.crt
+      {{- end }}

@@ -1,0 +1,15 @@
+{{- $component := dict "context" $ "component" "api" -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "openplan.fullname" . }}-api
+  labels:
+    {{- include "openplan.labels" $component | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "openplan.selectorLabels" $component | nindent 4 }}
+  ports:
+    - name: http
+      port: 8081
+      targetPort: http

@@ -1,0 +1,9 @@
+openplan is starting in namespace {{ .Release.Namespace }}.
+
+Open https://{{ .Values.ingress.host }} once the api is ready:
+
+  kubectl --namespace {{ .Release.Namespace }} rollout status deployment/{{ include "openplan.fullname" . }}-api
+
+If the api restarts instead, its log names what it refused:
+
+  kubectl --namespace {{ .Release.Namespace }} logs deployment/{{ include "openplan.fullname" . }}-api
