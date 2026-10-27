@@ -241,7 +241,7 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 		}
 		cfg.Sandbox.Subnet = subnet.Masked()
 	}
-	if v := strings.TrimSpace(getenv("EXECUTOR_RUNSC")); v != "" {
+	if v := strings.TrimSpace(getenv("EXECUTOR_SANDBOX_RUNSC")); v != "" {
 		cfg.Sandbox.Runsc = v
 	}
 	if v := strings.TrimSpace(getenv("EXECUTOR_SANDBOX_ROOT")); v != "" {
