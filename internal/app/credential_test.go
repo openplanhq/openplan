@@ -68,6 +68,28 @@ func TestCreateCredentialReturnsValueOnlyWhenNotSensitive(t *testing.T) {
 	}
 }
 
+// Migration 0010 lets a credential have exactly one owner, and the fakes here
+// don't enforce it, so the row the service builds for a component is pinned:
+// the template id alone, never the stack id it authorized with (#480).
+func TestCreateCredentialForATemplateStoresOnlyTheTemplateOwner(t *testing.T) {
+	t.Parallel()
+
+	fixture := newCredentialFixture(t)
+	_, err := fixture.service.CreateCredential(authenticatedContext(), CreateCredentialCommand{
+		TenantID: "tenant_123", Scope: domain.CredentialScopeStackTemplate, StackTemplateID: "stack_template_123",
+		Name: "AWS_REGION", Value: "eu-west-1",
+	})
+	if err != nil {
+		t.Fatalf("CreateCredential returned error: %v", err)
+	}
+	if len(fixture.credentials.created) != 1 {
+		t.Fatalf("stored credentials = %+v, want one", fixture.credentials.created)
+	}
+	if stored := fixture.credentials.created[0]; stored.StackTemplateID != "stack_template_123" || stored.StackID != "" {
+		t.Fatalf("stored owners = stack %q, template %q; want the template alone", stored.StackID, stored.StackTemplateID)
+	}
+}
+
 func TestListCredentialsOpensOnlyValuesThatAreNotSensitive(t *testing.T) {
 	t.Parallel()
 
