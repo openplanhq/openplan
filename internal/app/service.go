@@ -1069,7 +1069,7 @@ func (service *Service) CreateCredential(ctx context.Context, command CreateCred
 	switch command.Scope {
 	case domain.CredentialScopeStack:
 		stackID = command.StackID
-		if err := authorizeStack(ctx, service.Authorization, stackID, authorization.RelationCanManageAccess); err != nil {
+		if err := authorizeStack(ctx, service.Authorization, stackID, authorization.RelationCanManageCredentials); err != nil {
 			return CredentialMetadata{}, err
 		}
 	case domain.CredentialScopeStackTemplate:
@@ -1080,7 +1080,7 @@ func (service *Service) CreateCredential(ctx context.Context, command CreateCred
 		if err != nil {
 			return CredentialMetadata{}, err
 		}
-		if err := authorizeStack(ctx, service.Authorization, stackTemplate.StackID, authorization.RelationCanManageAccess); err != nil {
+		if err := authorizeStack(ctx, service.Authorization, stackTemplate.StackID, authorization.RelationCanManageCredentials); err != nil {
 			return CredentialMetadata{}, err
 		}
 	default:
@@ -1127,10 +1127,10 @@ func (service *Service) ListCredentials(ctx context.Context, command ListCredent
 		if err != nil {
 			return nil, err
 		}
-		if err := authorizeStack(ctx, service.Authorization, stackTemplate.StackID, authorization.RelationCanManageAccess); err != nil {
+		if err := authorizeStack(ctx, service.Authorization, stackTemplate.StackID, authorization.RelationCanManageCredentials); err != nil {
 			return nil, err
 		}
-	} else if err := authorizeStack(ctx, service.Authorization, command.StackID, authorization.RelationCanManageAccess); err != nil {
+	} else if err := authorizeStack(ctx, service.Authorization, command.StackID, authorization.RelationCanManageCredentials); err != nil {
 		return nil, err
 	}
 	credentials, err := service.Credentials.ListCredentials(ctx, command.TenantID, command.Scope, ownerID)
@@ -1172,7 +1172,7 @@ func (service *Service) DeleteCredential(ctx context.Context, command DeleteCred
 	default:
 		return fmt.Errorf("%w: credential scope is required", ErrInvalidCommand)
 	}
-	if err := authorizeStack(ctx, service.Authorization, stackID, authorization.RelationCanManageAccess); err != nil {
+	if err := authorizeStack(ctx, service.Authorization, stackID, authorization.RelationCanManageCredentials); err != nil {
 		return err
 	}
 	scope := domain.CredentialScopeStack

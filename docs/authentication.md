@@ -534,6 +534,7 @@ The roles are a ladder, viewer < operator < approver < owner: each one holds
 every permission of the role below it. The derived relations are exactly:
 
 - `can_manage_access = owner`
+- `can_manage_credentials = can_manage_access` (Environment secrets and variables)
 - `can_approve = can_manage_access or approver`
 - `can_operate = can_approve or operator`
 - `can_view = can_operate or viewer`

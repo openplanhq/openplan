@@ -51,7 +51,7 @@ func TestEmbeddedDSLTransformsToExpectedModel(t *testing.T) {
 		},
 		"stack": {
 			"owner", "operator", "approver", "viewer", "parent",
-			"can_view", "can_operate", "can_approve", "can_manage_access",
+			"can_view", "can_operate", "can_approve", "can_manage_access", "can_manage_credentials",
 		},
 	}
 	for typeName, names := range expected {

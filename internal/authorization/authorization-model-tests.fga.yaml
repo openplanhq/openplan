@@ -42,6 +42,7 @@ tests:
           can_operate: true
           can_approve: true
           can_manage_access: true
+          can_manage_credentials: true
       - user: user:operator
         object: stack:example
         assertions:
@@ -49,6 +50,7 @@ tests:
           can_operate: true
           can_approve: false
           can_manage_access: false
+          can_manage_credentials: false
       # An approver is a rung above operator, so it can also operate.
       - user: user:approver
         object: stack:example
@@ -57,6 +59,7 @@ tests:
           can_operate: true
           can_approve: true
           can_manage_access: false
+          can_manage_credentials: false
       - user: user:viewer
         object: stack:example
         assertions:
@@ -64,6 +67,7 @@ tests:
           can_operate: false
           can_approve: false
           can_manage_access: false
+          can_manage_credentials: false
       - user: user:unrelated
         object: stack:example
         assertions:
@@ -71,6 +75,7 @@ tests:
           can_operate: false
           can_approve: false
           can_manage_access: false
+          can_manage_credentials: false
 
   - name: every platform role capability
     check:
@@ -137,6 +142,7 @@ tests:
           can_operate: true
           can_approve: true
           can_manage_access: true
+          can_manage_credentials: true
       - user: user:admin
         object: stack:example
         assertions:
@@ -144,6 +150,7 @@ tests:
           can_operate: true
           can_approve: true
           can_manage_access: true
+          can_manage_credentials: true
       - user: user:editor
         object: stack:example
         assertions:
@@ -151,6 +158,7 @@ tests:
           can_operate: false
           can_approve: false
           can_manage_access: false
+          can_manage_credentials: false
       - user: user:platform-viewer
         object: stack:example
         assertions:
@@ -158,6 +166,7 @@ tests:
           can_operate: false
           can_approve: false
           can_manage_access: false
+          can_manage_credentials: false
 
   # A stack whose parent tuple was never written is unreachable by every
   # platform role. Stack creation must write parent alongside owner.
@@ -168,6 +177,7 @@ tests:
         assertions:
           can_view: false
           can_manage_access: false
+          can_manage_credentials: false
       - user: user:platform-viewer
         object: stack:orphan
         assertions:
@@ -177,3 +187,4 @@ tests:
         assertions:
           can_view: true
           can_manage_access: true
+          can_manage_credentials: true
