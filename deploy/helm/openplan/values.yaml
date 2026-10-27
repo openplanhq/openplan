@@ -109,21 +109,44 @@ api:
   # Optional. The name of an existing Secret whose ca.crt the api trusts in
   # addition to the public roots, for an OIDC issuer behind an internal CA.
   trustedCASecret: ""
+  # requests equal limits, so the pod is Guaranteed and never uses more than
+  # the node reserved for it. Override requests and limits together: Helm
+  # merges maps, so setting only limits.memory keeps the 2Gi request and the
+  # pod drops to Burstable.
+  resources:
+    requests:
+      cpu: "2"
+      memory: 2Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
 
 # The executor gets Temporal, the executor's Valkey user and S3 from above, and
 # nothing else: no database, no keys, no OIDC secret.
 executor:
   replicas: 1
-  # Set a memory limit of at least sandbox.memoryMiB times maxSessions, plus
-  # the executor's own headroom: every sandbox's memory is counted in this pod.
-  resources: {}
-  # The runs, each in its own sandbox, one executor holds at once. Empty means
-  # the executor's default.
-  maxSessions: ""
+  # Every sandbox's memory is counted in this pod, so memory must be at least
+  # maxSessions times sandbox.memoryMiB plus 512Mi for the executor itself;
+  # the default fits the chart's one 1536 MiB session.
+  # requests equal limits, so the pod is Guaranteed and never uses more than
+  # the node reserved for it. Override requests and limits together: Helm
+  # merges maps, so setting only limits.memory keeps the 2Gi request and the
+  # pod drops to Burstable.
+  resources:
+    requests:
+      cpu: "2"
+      memory: 2Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+  # The runs, each in its own sandbox, one executor holds at once. One fits
+  # the default 2Gi pod; the executor's own default (20 sessions of 2048 MiB)
+  # would need 40 GiB. More runs at once come from replicas.
+  maxSessions: 1
   # Each sandbox's limits. Empty means the executor's default.
   sandbox:
     # MiB of memory.
-    memoryMiB: ""
+    memoryMiB: 1536
     cpus: ""
     pids: ""
     # The IPv4 subnet, /29 or larger, the sandboxes' addresses come from. Move

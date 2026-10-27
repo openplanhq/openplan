@@ -24,7 +24,10 @@ real TLS, real keys and an OIDC provider reachable over HTTPS.
   executor's security settings, so the chart doesn't work there. Use standard
   node pools.
 - **An ingress controller** with an IngressClass, and a TLS certificate for
-  the host you serve openplan on.
+  the host you serve openplan on. The chart creates a standard Ingress with
+  no controller-specific annotations, so any controller that serves one
+  works. Don't start on ingress-nginx: Kubernetes retired it in March 2026,
+  and it gets no more releases or security fixes.
 
 ### The services you bring
 
@@ -117,11 +120,8 @@ api:
   credentialEncryptionKeySecret: {name: openplan-credentials, key: credential-encryption-key}
   trustedCASecret: openplan-trusted-ca   # only for an internal CA
 executor:
-  resources:
-    limits:
-      memory: 41Gi   # see "Sizing the executor"
 ingress:
-  className: nginx
+  className: <your-ingress-class>   # kubectl get ingressclass; omit for the cluster default
   host: openplan.example.com
   tlsSecretName: openplan-tls
 ```
@@ -137,8 +137,8 @@ kubectl -n openplan rollout status deployment/openplan-executor
 ```
 
 `helm install` succeeds before any pod is up. Wait for the executor too: if
-it can't be scheduled or refuses to start, the UI still works, but every
-plan fails after a minute and every apply after ten, for want of an executor.
+it can't be scheduled or refuses to start, the UI still works, but every plan
+and apply waits ten minutes for an executor and then fails.
 
 **6. Sign in** at `https://<host>` as the user whose `sub` you set in
 `api.rootSubject`.
@@ -171,10 +171,11 @@ the key in it.
 | `api.terraformTimeout` | openplan's default | The longest one Terraform command may run, as a duration such as `90m`. |
 | `api.githubApp.id`, `api.githubApp.privateKeySecret` | none | A GitHub App that clones private template repositories. Set both or neither. |
 | `api.trustedCASecret` | none | A Secret whose `ca.crt` the api trusts, for Dex behind an internal CA. |
-| `executor.replicas` | `1` | Executors. Each runs up to `executor.maxSessions` runs at once. |
-| `executor.resources` | none | Requests and limits for the executor container. |
-| `executor.maxSessions` | `20` | Runs at once on one executor, each in its own sandbox. |
-| `executor.sandbox.memoryMiB` | `2048` | Memory per sandbox, in MiB. |
+| `api.resources` | 2 CPU, 2Gi, requests equal to limits | Requests and limits for the api container. Override requests and limits together. |
+| `executor.replicas` | `1` | Executors. Each runs `executor.maxSessions` runs at once, one by default, so this is how many runs go at once. |
+| `executor.resources` | 2 CPU, 2Gi, requests equal to limits | Requests and limits for the executor container. Override requests and limits together; see "Sizing the executor". |
+| `executor.maxSessions` | `1` | Runs at once on one executor, each in its own sandbox. |
+| `executor.sandbox.memoryMiB` | `1536` | Memory per sandbox, in MiB. See "Sizing the executor" before you raise it. |
 | `executor.sandbox.cpus`, `executor.sandbox.pids` | `2`, `1024` | CPUs and processes per sandbox. |
 | `executor.sandbox.subnet` | `10.237.0.0/24` | The IPv4 subnet the sandboxes' addresses come from, `/29` or larger. Move it if it collides with your pod or service CIDR. |
 | `executor.runRoot.sizeLimit` | `8Gi` | Disk for the workspaces of the runs in flight on one executor. |
@@ -187,19 +188,39 @@ the key.
 
 ## Sizing the executor
 
-Every sandbox's memory counts against the executor pod. Set the executor's
-memory limit to at least `executor.sandbox.memoryMiB` × `executor.maxSessions`,
-plus about 1 GiB for the executor itself. The defaults, 2048 MiB × 20
-sessions, need 40 GiB of runs, so a limit around 41 GiB. To fit a smaller
-node, lower `executor.maxSessions`, then the limit.
+By default each executor pod gets 2 CPU and 2 GiB, reserved on its node
+(requests equal limits, so Kubernetes runs it as `Guaranteed`), and runs one
+plan or apply at a time in a 1536 MiB sandbox. The other 512 MiB is for the
+executor itself.
 
-A limit set without a request is also the request, so the scheduler needs a
-node with that much allocatable memory. With the defaults' 41 GiB limit on a
-smaller node, the executor stays `Pending` ("Insufficient memory"). With no
-`executor.resources` at all, the pod schedules anywhere, but its runs can
-together claim more memory than the node has, and as a `BestEffort` pod the
-executor is the first the kubelet evicts under memory pressure, failing every
-run on it.
+**More runs at once: add replicas.** Set `executor.replicas` to the number of
+runs you want going at the same time. Each replica needs another 2 CPU and
+2 GiB on some node.
+
+**When runs outnumber executors**, a new run shows "waiting for executor" and
+waits for a free one, up to 10 minutes, whether it's a plan or an apply. If
+none frees up in that time, the run fails and you start it again.
+
+**A heavy module: give each run more memory.** If a run's sandbox runs out of
+memory, the run fails, and an apply can stop halfway and leave the state
+locked. Raise `executor.sandbox.memoryMiB`, and raise the executor's memory
+with it, so that memory is at least `executor.maxSessions` ×
+`executor.sandbox.memoryMiB` + 512Mi. Set requests and limits together: Helm
+merges the map, so setting only `limits.memory` keeps the 2Gi request and the
+pod is no longer `Guaranteed`. For 3072 MiB per run:
+
+```yaml
+executor:
+  sandbox:
+    memoryMiB: 3072
+  resources:
+    requests:
+      cpu: "2"
+      memory: 3584Mi
+    limits:
+      cpu: "2"
+      memory: 3584Mi
+```
 
 The run root holds the checked-out template and providers of every run in
 flight. When it passes `executor.runRoot.sizeLimit`, the kubelet evicts the
@@ -260,9 +281,9 @@ how it went.
 
 `deploy/helm/evaluation/` in the repository sets up everything above on
 Docker Desktop's Kubernetes, so you can try the chart without your own
-services: single-pod Postgres, Temporal, Dex, Valkey and MinIO, ingress-nginx,
-a local CA, fresh keys and the credentials Secret. It is for evaluation only: one
-replica of everything, no backups, no persistence you should trust.
+services: single-pod Postgres, Temporal, Dex, Valkey and MinIO, Traefik,
+a local CA, fresh keys and the credentials Secret. It is for evaluation
+only: one replica of everything, no backups, no persistence you should trust.
 
 From a checkout, with Docker Desktop's Kubernetes on and selected:
 
@@ -278,8 +299,9 @@ release you checked out without its `v`, such as `1.0.0`.
 
 Then open `https://openplan.localhost` and sign in as
 `admin@openplan.local` / `admin-local-only`. `setup.sh` prints how to trust
-the local CA on macOS, so the browser stops warning. Docker Desktop's VM has
-about 8 GiB, so the harness runs two sessions at once. To remove everything:
+the local CA on macOS, so the browser stops warning. The harness runs the
+chart's defaults, which fit in Docker Desktop's VM of about 8 GiB: one run at
+a time, and a second run waits for the first. To remove everything:
 
 ```sh
 ./deploy/helm/evaluation/teardown.sh
