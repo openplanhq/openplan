@@ -951,6 +951,37 @@ func (store *Store) ListTemplateRunsByStatus(ctx context.Context, tenantID domai
 	return runs, nil
 }
 
+// ListLatestTemplateRuns returns each stack template's newest run in the
+// tenant, one per template that has run at all, whatever the template's
+// lifecycle. The attention list reads it to tell a failed plan or apply that
+// is still the template's last word from one a later run has superseded.
+func (store *Store) ListLatestTemplateRuns(ctx context.Context, tenantID domain.TenantID) ([]domain.TemplateRun, error) {
+	// distinct on keeps the first row per template in the order below, which
+	// puts each template's newest run first.
+	query := strings.Replace(templateRunSelect, "select", "select distinct on (r.stack_template_id)", 1) + `
+		where r.tenant_id = $1
+		order by r.stack_template_id, r.created_at desc nulls last, r.id desc
+	`
+	rows, err := store.pool.Query(ctx, query, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("list latest template runs: %w", err)
+	}
+	defer rows.Close()
+
+	runs := []domain.TemplateRun{}
+	for rows.Next() {
+		run, err := scanTemplateRun(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan template run: %w", err)
+		}
+		runs = append(runs, run)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list latest template runs: %w", err)
+	}
+	return runs, nil
+}
+
 func (store *Store) CreateStackTemplate(ctx context.Context, stackTemplate domain.StackTemplate) error {
 	configJSON := stackTemplate.InstalledConfigJSON
 	if len(configJSON) == 0 {
