@@ -20,7 +20,7 @@ func TestLoadAPIConfigReadsAPISettings(t *testing.T) {
 
 	cfg, err := LoadAPIConfig(withValidSecurity(func(key string) string {
 		switch key {
-		case "DATABASE_URL":
+		case "POSTGRES_URL":
 			return " postgres://user:pass@localhost:5432/db?sslmode=disable "
 		case "HTTP_ADDRESS":
 			return " :9090 "
@@ -54,8 +54,8 @@ func TestLoadAPIConfigReadsAPISettings(t *testing.T) {
 		t.Fatalf("LoadAPIConfig returned error: %v", err)
 	}
 
-	if cfg.DatabaseURL != "postgres://user:pass@localhost:5432/db?sslmode=disable" {
-		t.Fatalf("DatabaseURL = %q", cfg.DatabaseURL)
+	if cfg.PostgresURL != "postgres://user:pass@localhost:5432/db?sslmode=disable" {
+		t.Fatalf("PostgresURL = %q", cfg.PostgresURL)
 	}
 	if cfg.HTTPAddress != ":9090" {
 		t.Fatalf("HTTPAddress = %q", cfg.HTTPAddress)
@@ -80,7 +80,7 @@ func TestLoadAPIConfigAppliesDefaults(t *testing.T) {
 
 	cfg, err := LoadAPIConfig(withValidSecurity(func(key string) string {
 		switch key {
-		case "DATABASE_URL":
+		case "POSTGRES_URL":
 			return "postgres://user:pass@localhost:5432/db?sslmode=disable"
 		case "TEMPORAL_ADDRESS":
 			return "localhost:7233"
@@ -135,7 +135,7 @@ func TestLoadAPIConfigReadsTerraformTimeout(t *testing.T) {
 
 			cfg, err := LoadAPIConfig(withValidSecurity(func(key string) string {
 				switch key {
-				case "DATABASE_URL":
+				case "POSTGRES_URL":
 					return "postgres://user:pass@localhost:5432/db?sslmode=disable"
 				case "TEMPORAL_ADDRESS":
 					return "localhost:7233"
@@ -170,7 +170,7 @@ func TestLoadAPIConfigRejectsUnusableTerraformTimeout(t *testing.T) {
 
 			_, err := LoadAPIConfig(withValidSecurity(func(key string) string {
 				switch key {
-				case "DATABASE_URL":
+				case "POSTGRES_URL":
 					return "postgres://user:pass@localhost:5432/db?sslmode=disable"
 				case "TEMPORAL_ADDRESS":
 					return "localhost:7233"
@@ -210,7 +210,7 @@ func TestLoadAPIConfigRequiresTemporalAddress(t *testing.T) {
 	t.Parallel()
 
 	_, err := LoadAPIConfig(withValidSecurity(func(key string) string {
-		if key == "DATABASE_URL" {
+		if key == "POSTGRES_URL" {
 			return "postgres://user:pass@localhost:5432/db?sslmode=disable"
 		}
 		return ""
@@ -234,7 +234,7 @@ func TestLoadAPIConfigAllowsEmptyCredentialEncryptionKey(t *testing.T) {
 
 	cfg, err := LoadAPIConfig(withValidSecurity(func(key string) string {
 		switch key {
-		case "DATABASE_URL":
+		case "POSTGRES_URL":
 			return "postgres://user:pass@localhost:5432/db?sslmode=disable"
 		case "TEMPORAL_ADDRESS":
 			return "localhost:7233"
@@ -257,7 +257,7 @@ func TestLoadAPIConfigAcceptsValidCredentialEncryptionKey(t *testing.T) {
 
 	cfg, err := LoadAPIConfig(withValidSecurity(func(key string) string {
 		switch key {
-		case "DATABASE_URL":
+		case "POSTGRES_URL":
 			return "postgres://user:pass@localhost:5432/db?sslmode=disable"
 		case "TEMPORAL_ADDRESS":
 			return "localhost:7233"
@@ -282,7 +282,7 @@ func TestLoadAPIConfigRejectsMalformedCredentialEncryptionKey(t *testing.T) {
 
 	_, err := LoadAPIConfig(withValidSecurity(func(key string) string {
 		switch key {
-		case "DATABASE_URL":
+		case "POSTGRES_URL":
 			return "postgres://user:pass@localhost:5432/db?sslmode=disable"
 		case "TEMPORAL_ADDRESS":
 			return "localhost:7233"
@@ -304,7 +304,7 @@ func TestLoadAPIConfigRejectsInvalidArtifactStoreKind(t *testing.T) {
 
 	_, err := LoadAPIConfig(withValidSecurity(func(key string) string {
 		switch key {
-		case "DATABASE_URL":
+		case "POSTGRES_URL":
 			return "postgres://user:pass@localhost:5432/db?sslmode=disable"
 		case "TEMPORAL_ADDRESS":
 			return "localhost:7233"
@@ -365,7 +365,7 @@ func TestLoadAPIConfigReadsGitHubApp(t *testing.T) {
 
 	encoded, _ := testRSAPrivateKeyPEM(t)
 	values := map[string]string{
-		"DATABASE_URL":           "postgres://user:pass@localhost:5432/db?sslmode=disable",
+		"POSTGRES_URL":           "postgres://user:pass@localhost:5432/db?sslmode=disable",
 		"TEMPORAL_ADDRESS":       "localhost:7233",
 		"VALKEY_URL":             "redis://localhost:6379",
 		"GITHUB_APP_ID":          "12345",
@@ -456,7 +456,7 @@ func testRSAPrivateKeyPEM(t *testing.T) (string, *rsa.PrivateKey) {
 
 func withValidAPIEnv(overrides map[string]string) func(string) string {
 	base := map[string]string{
-		"DATABASE_URL":     "postgres://user:pass@localhost:5432/db?sslmode=disable",
+		"POSTGRES_URL":     "postgres://user:pass@localhost:5432/db?sslmode=disable",
 		"TEMPORAL_ADDRESS": "localhost:7233",
 		"VALKEY_URL":       "redis://localhost:6379",
 	}
@@ -630,13 +630,13 @@ func TestLoadExecutorConfigSandboxDefaultsAndValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := SandboxConfig{
-		Runsc: DefaultExecutorSandboxRunsc, State: DefaultExecutorSandboxState, MemoryMiB: 2048, CPUs: 2, Pids: 1024,
+		Runsc: DefaultExecutorSandboxRunsc, Root: DefaultExecutorSandboxRoot, MemoryMiB: 2048, CPUs: 2, Pids: 1024,
 		Subnet: netip.MustParsePrefix(DefaultExecutorSandboxSubnet),
 	}
 	if cfg.Sandbox != want {
 		t.Fatalf("sandbox = %+v, want %+v", cfg.Sandbox, want)
 	}
-	for _, name := range []string{"EXECUTOR_SANDBOX_MEMORY", "EXECUTOR_SANDBOX_CPUS", "EXECUTOR_SANDBOX_PIDS"} {
+	for _, name := range []string{"EXECUTOR_SANDBOX_MEMORY_MIB", "EXECUTOR_SANDBOX_CPUS", "EXECUTOR_SANDBOX_PIDS"} {
 		env := map[string]string{"TEMPORAL_ADDRESS": "temporal:7233", "VALKEY_URL": "redis://valkey:6379", name: "0"}
 		if _, err := LoadExecutorConfig(func(k string) string { return env[k] }); !errors.Is(err, ErrInvalidConfig) {
 			t.Fatalf("%s=0: error = %v, want ErrInvalidConfig", name, err)

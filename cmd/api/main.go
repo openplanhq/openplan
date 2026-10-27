@@ -341,7 +341,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 		return fmt.Errorf("create oidc flow: %w", err)
 	}
 
-	pool, err := deps.newPostgresPool(ctx, cfg.DatabaseURL)
+	pool, err := deps.newPostgresPool(ctx, cfg.PostgresURL)
 	if err != nil {
 		return fmt.Errorf("create postgres pool: %w", err)
 	}
@@ -357,7 +357,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 
 	// OpenFGA's schema is versioned by OpenFGA, so it is migrated separately
 	// from the application's and from its own DSN rather than the pool.
-	if err := deps.migrateAuthorization(ctx, cfg.DatabaseURL); err != nil {
+	if err := deps.migrateAuthorization(ctx, cfg.PostgresURL); err != nil {
 		return fmt.Errorf("migrate authorization: %w", err)
 	}
 

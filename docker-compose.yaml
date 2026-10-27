@@ -30,9 +30,9 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: ${APP_DB_USER:-openplan}
-      POSTGRES_PASSWORD: ${APP_DB_PASSWORD:-openplan}
-      POSTGRES_DB: ${APP_DB_NAME:-openplan_test}
+      POSTGRES_USER: ${OPENPLAN_DB_USER:-openplan}
+      POSTGRES_PASSWORD: ${OPENPLAN_DB_PASSWORD:-openplan}
+      POSTGRES_DB: ${OPENPLAN_DB_NAME:-openplan}
       DEX_DB_USER: ${DEX_DB_USER:-dex}
       DEX_DB_PASSWORD: ${DEX_DB_PASSWORD:-dex-local-only}
       TEMPORAL_DB_USER: ${TEMPORAL_DB_USER:-temporal}
@@ -43,7 +43,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./deploy/postgres/init.sh:/docker-entrypoint-initdb.d/10-databases.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${APP_DB_USER:-openplan} -d ${APP_DB_NAME:-openplan_test}"]
+      test: ["CMD-SHELL", "pg_isready -U ${OPENPLAN_DB_USER:-openplan} -d ${OPENPLAN_DB_NAME:-openplan}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -232,7 +232,7 @@ services:
         condition: service_healthy
     environment:
       HTTP_ADDRESS: ":8081"
-      DATABASE_URL: postgres://${APP_DB_USER:-openplan}:${APP_DB_PASSWORD:-openplan}@postgres:5432/${APP_DB_NAME:-openplan_test}?sslmode=disable
+      POSTGRES_URL: postgres://${OPENPLAN_DB_USER:-openplan}:${OPENPLAN_DB_PASSWORD:-openplan}@postgres:5432/${OPENPLAN_DB_NAME:-openplan}?sslmode=disable
       VALKEY_URL: redis://api:${VALKEY_API_PASSWORD:-api-local-only}@valkey:6379/0
       TEMPORAL_ADDRESS: temporal:7233
       OPENPLAN_ENVIRONMENT: development
@@ -292,7 +292,7 @@ services:
       ARTIFACT_STORE_KIND: filesystem
       ARTIFACT_STORE_FILESYSTEM_ROOT: /var/lib/openplan/artifacts
       EXECUTOR_RUN_ROOT: /var/lib/openplan/runs
-      EXECUTOR_SANDBOX_STATE: /var/lib/openplan/sandboxes
+      EXECUTOR_SANDBOX_ROOT: /var/lib/openplan/sandboxes
     restart: on-failure
     # Each activity runs in a gVisor sandbox of its own (#245), started from
     # here with runsc: root with these seven capabilities, and Docker's

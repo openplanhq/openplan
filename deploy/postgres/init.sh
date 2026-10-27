@@ -5,6 +5,10 @@
 # OpenFGA has no entry here: it is embedded in the API and its tables live in
 # the application database, created by the API at startup. That is what lets a
 # tuple write join the same transaction as the domain write that caused it.
+#
+# openplan_test is the integration tests' (OPENPLAN_POSTGRES_TEST_DSN, `make
+# differential-test`), apart from the dev database: some of those tests migrate
+# the public schema and leave rows behind.
 set -eu
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
@@ -14,4 +18,6 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
 	CREATE ROLE "${TEMPORAL_DB_USER}" LOGIN PASSWORD '${TEMPORAL_DB_PASSWORD}';
 	CREATE DATABASE "temporal" OWNER "${TEMPORAL_DB_USER}";
 	CREATE DATABASE "temporal_visibility" OWNER "${TEMPORAL_DB_USER}";
+
+	CREATE DATABASE "openplan_test" OWNER "${POSTGRES_USER}";
 EOSQL

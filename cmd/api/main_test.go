@@ -41,10 +41,10 @@ func TestRunRequiresDatabaseURL(t *testing.T) {
 	t.Parallel()
 
 	values := apiTestValues()
-	delete(values, "DATABASE_URL")
+	delete(values, "POSTGRES_URL")
 	err := run(context.Background(), apiTestGetenv(values))
-	if !errors.Is(err, config.ErrInvalidConfig) || err == nil || !strings.Contains(err.Error(), "DATABASE_URL is required") {
-		t.Fatalf("error = %v, want DATABASE_URL ErrInvalidConfig", err)
+	if !errors.Is(err, config.ErrInvalidConfig) || err == nil || !strings.Contains(err.Error(), "POSTGRES_URL is required") {
+		t.Fatalf("error = %v, want POSTGRES_URL ErrInvalidConfig", err)
 	}
 }
 
@@ -488,7 +488,7 @@ func TestRunMigratesRealPostgresWhenDSNIsSet(t *testing.T) {
 	defer cancel()
 
 	values := apiTestValues()
-	values["DATABASE_URL"] = dsn
+	values["POSTGRES_URL"] = dsn
 	values["HTTP_ADDRESS"] = "127.0.0.1:0"
 
 	// Real dependencies except the authorization adapter. Root seeding is
@@ -603,7 +603,7 @@ func (buffer *startupLogBuffer) String() string {
 
 func apiTestValues() map[string]string {
 	return map[string]string{
-		"DATABASE_URL":                   "postgres://user:pass@localhost:5432/db?sslmode=disable",
+		"POSTGRES_URL":                   "postgres://user:pass@localhost:5432/db?sslmode=disable",
 		"HTTP_ADDRESS":                   ":9090",
 		"TEMPORAL_ADDRESS":               "localhost:7233",
 		"VALKEY_URL":                     "redis://localhost:6379",
