@@ -340,11 +340,11 @@ export function useUpdateStackTemplateConfigMutation(tenantID: string, stackID: 
   });
 }
 
-export function useUpgradeStackTemplateMutation(tenantID: string, stackID: string) {
+export function useChangeStackTemplateRevisionMutation(tenantID: string, stackID: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (variables: { stackTemplateID: string; body: Parameters<typeof client.upgradeStackTemplate>[2] }) =>
-      client.upgradeStackTemplate(tenantID, variables.stackTemplateID, variables.body),
+    mutationFn: (variables: { stackTemplateID: string; body: Parameters<typeof client.changeStackTemplateRevision>[2] }) =>
+      client.changeStackTemplateRevision(tenantID, variables.stackTemplateID, variables.body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.stack(tenantID, stackID) });
     }

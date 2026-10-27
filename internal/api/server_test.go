@@ -121,7 +121,7 @@ func TestTenantScopedRoutesRejectOtherTenantBeforeHandler(t *testing.T) {
 		{name: "get stack", method: http.MethodGet, path: "/v1/tenants/tenant_other/stacks/stack_123"},
 		{name: "install template", method: http.MethodPost, path: "/v1/tenants/tenant_other/stacks/stack_123/templates"},
 		{name: "update template config", method: http.MethodPut, path: "/v1/tenants/tenant_other/stack-templates/stack_template_123/config"},
-		{name: "upgrade template", method: http.MethodPost, path: "/v1/tenants/tenant_other/stack-templates/stack_template_123/upgrade"},
+		{name: "change template revision", method: http.MethodPost, path: "/v1/tenants/tenant_other/stack-templates/stack_template_123/change-revision"},
 		{name: "start run", method: http.MethodPost, path: "/v1/tenants/tenant_other/stack-templates/stack_template_123/runs"},
 		{name: "get run", method: http.MethodGet, path: "/v1/tenants/tenant_other/template-runs/run_123"},
 		{name: "list run logs", method: http.MethodGet, path: "/v1/tenants/tenant_other/template-runs/run_123/logs"},
@@ -1578,7 +1578,7 @@ func TestUpdateStackTemplateConfigRequiresConfig(t *testing.T) {
 	}
 }
 
-func TestUpgradeStackTemplateCallsService(t *testing.T) {
+func TestChangeStackTemplateRevisionCallsService(t *testing.T) {
 	t.Parallel()
 
 	deps := newAPITestDependencies(t)
@@ -1605,7 +1605,7 @@ func TestUpgradeStackTemplateCallsService(t *testing.T) {
 	response := httptest.NewRecorder()
 	request := authenticatedRequest(
 		http.MethodPost,
-		"/v1/tenants/tenant_123/stack-templates/stack_template_123/upgrade",
+		"/v1/tenants/tenant_123/stack-templates/stack_template_123/change-revision",
 		strings.NewReader(`{"target_template_revision_id":"template_rev_2"}`),
 	)
 
@@ -1634,7 +1634,7 @@ func TestUpgradeStackTemplateCallsService(t *testing.T) {
 	}
 }
 
-func TestUpgradeStackTemplateMapsMissingRequiredVariableToValidationFailed(t *testing.T) {
+func TestChangeStackTemplateRevisionMapsMissingRequiredVariableToValidationFailed(t *testing.T) {
 	t.Parallel()
 
 	deps := newAPITestDependencies(t)
@@ -1660,7 +1660,7 @@ func TestUpgradeStackTemplateMapsMissingRequiredVariableToValidationFailed(t *te
 	response := httptest.NewRecorder()
 	request := authenticatedRequest(
 		http.MethodPost,
-		"/v1/tenants/tenant_123/stack-templates/stack_template_123/upgrade",
+		"/v1/tenants/tenant_123/stack-templates/stack_template_123/change-revision",
 		strings.NewReader(`{"target_template_revision_id":"template_rev_2"}`),
 	)
 
@@ -1671,7 +1671,7 @@ func TestUpgradeStackTemplateMapsMissingRequiredVariableToValidationFailed(t *te
 	assertValidationFailed(t, response, "#/config/cidr_block required")
 }
 
-func TestUpgradeStackTemplateMapsSourceMismatchToValidationFailed(t *testing.T) {
+func TestChangeStackTemplateRevisionMapsSourceMismatchToValidationFailed(t *testing.T) {
 	t.Parallel()
 
 	deps := newAPITestDependencies(t)
@@ -1691,7 +1691,7 @@ func TestUpgradeStackTemplateMapsSourceMismatchToValidationFailed(t *testing.T) 
 	response := httptest.NewRecorder()
 	request := authenticatedRequest(
 		http.MethodPost,
-		"/v1/tenants/tenant_123/stack-templates/stack_template_123/upgrade",
+		"/v1/tenants/tenant_123/stack-templates/stack_template_123/change-revision",
 		strings.NewReader(`{"target_template_revision_id":"template_rev_2"}`),
 	)
 
@@ -1718,9 +1718,9 @@ func TestStackTemplateEditRoutesHideMissingStackTemplateAsNotFound(t *testing.T)
 			body:   `{"config":{}}`,
 		},
 		{
-			name:   "upgrade",
+			name:   "change revision",
 			method: http.MethodPost,
-			path:   "/v1/tenants/tenant_123/stack-templates/missing_stack_template/upgrade",
+			path:   "/v1/tenants/tenant_123/stack-templates/missing_stack_template/change-revision",
 			body:   `{"target_template_revision_id":"template_rev_2"}`,
 		},
 	}
@@ -2869,7 +2869,7 @@ func TestStackRoleRoutesUseInheritedPermissions(t *testing.T) {
 		{name: "viewer reads stack", role: authorization.RelationViewer, method: http.MethodGet, path: "/v1/tenants/tenant_123/stacks/stack_123", status: http.StatusOK, permission: authorization.RelationCanView},
 		{name: "operator installs template", role: authorization.RelationOperator, method: http.MethodPost, path: "/v1/tenants/tenant_123/stacks/stack_123/templates", body: `{"template_revision_id":"revision_123","config":{}}`, status: http.StatusCreated, permission: authorization.RelationCanOperate},
 		{name: "owner operates config", role: authorization.RelationOwner, method: http.MethodPut, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/config", body: `{"config":{}}`, status: http.StatusOK, permission: authorization.RelationCanOperate},
-		{name: "operator upgrades template", role: authorization.RelationOperator, method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/upgrade", body: `{"target_template_revision_id":"revision_123"}`, status: http.StatusOK, permission: authorization.RelationCanOperate},
+		{name: "operator changes template revision", role: authorization.RelationOperator, method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/change-revision", body: `{"target_template_revision_id":"revision_123"}`, status: http.StatusOK, permission: authorization.RelationCanOperate},
 		{name: "operator starts run", role: authorization.RelationOperator, method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/runs", body: `{"operation":"plan"}`, status: http.StatusAccepted, permission: authorization.RelationCanOperate},
 		{name: "approver approves run", role: authorization.RelationApprover, method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/approve", body: `{}`, status: http.StatusAccepted, permission: authorization.RelationCanApprove},
 		{name: "approver updates config", role: authorization.RelationApprover, method: http.MethodPut, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/config", body: `{"config":{}}`, status: http.StatusOK, permission: authorization.RelationCanOperate},
@@ -2925,7 +2925,7 @@ func TestStackRoleRoutesDenyInsufficientRoles(t *testing.T) {
 		{name: "unassigned cannot approve run", method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/approve", body: `{}`, status: http.StatusNotFound, permission: authorization.RelationCanApprove},
 		{name: "unassigned cannot assign role", method: http.MethodPut, path: "/v1/tenants/tenant_123/stacks/stack_123/grants/user-2", body: `{"role":"viewer"}`, status: http.StatusNotFound, permission: authorization.RelationCanManageAccess},
 		{name: "viewer cannot install template", role: authorization.RelationViewer, method: http.MethodPost, path: "/v1/tenants/tenant_123/stacks/stack_123/templates", body: `{"template_revision_id":"revision_123","config":{}}`, status: http.StatusForbidden, permission: authorization.RelationCanOperate},
-		{name: "viewer cannot upgrade template", role: authorization.RelationViewer, method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/upgrade", body: `{"target_template_revision_id":"revision_123"}`, status: http.StatusForbidden, permission: authorization.RelationCanOperate},
+		{name: "viewer cannot change template revision", role: authorization.RelationViewer, method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/change-revision", body: `{"target_template_revision_id":"revision_123"}`, status: http.StatusForbidden, permission: authorization.RelationCanOperate},
 		{name: "operator cannot approve run", role: authorization.RelationOperator, method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/approve", body: `{}`, status: http.StatusForbidden, permission: authorization.RelationCanApprove},
 		{name: "unassigned cannot read run", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123", status: http.StatusNotFound, permission: authorization.RelationCanView},
 		{name: "unassigned cannot list logs", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123/logs", status: http.StatusNotFound, permission: authorization.RelationCanView},
@@ -3035,7 +3035,7 @@ func TestInheritedRouteMissingAndDeniedStatusesMatch(t *testing.T) {
 		resource string
 	}{
 		{name: "config", method: http.MethodPut, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/config", body: `{"config":{}}`, resource: "stack-template"},
-		{name: "upgrade", method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/upgrade", body: `{"target_template_revision_id":"revision_123"}`, resource: "stack-template"},
+		{name: "change revision", method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/change-revision", body: `{"target_template_revision_id":"revision_123"}`, resource: "stack-template"},
 		{name: "start run", method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/runs", body: `{"operation":"plan"}`, resource: "stack-template"},
 		{name: "run detail", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123"},
 		{name: "approval", method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/approve", body: `{}`},
@@ -3199,7 +3199,7 @@ func TestPlatformAdminCannotBypassMissingAuthorizer(t *testing.T) {
 		{name: "stack detail", method: http.MethodGet, path: "/v1/tenants/tenant_123/stacks/stack_123"},
 		{name: "stack mutation", method: http.MethodPost, path: "/v1/tenants/tenant_123/stacks/stack_123/templates", body: `{"template_revision_id":"revision_123","config":{}}`},
 		{name: "config mutation", method: http.MethodPut, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/config", body: `{"config":{}}`},
-		{name: "upgrade mutation", method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/upgrade", body: `{"target_template_revision_id":"revision_123"}`},
+		{name: "change revision mutation", method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/change-revision", body: `{"target_template_revision_id":"revision_123"}`},
 		{name: "start run", method: http.MethodPost, path: "/v1/tenants/tenant_123/stack-templates/stack_template_123/runs", body: `{"operation":"plan"}`},
 		{name: "inherited read", method: http.MethodGet, path: "/v1/tenants/tenant_123/template-runs/run_123"},
 		{name: "approval", method: http.MethodPost, path: "/v1/tenants/tenant_123/template-runs/run_123/approve", body: `{}`},

@@ -238,7 +238,7 @@ confirmed revocation affects the next request.
 |---|---|
 | Create stack | `stack-creator` or `platform-admin` |
 | List/read stack and inherited resources | `can_view` or `platform-admin` |
-| Edit stack, install/upgrade template, start/cancel run | `can_operate` or `platform-admin` |
+| Edit stack, install template, change its revision, start/cancel run | `can_operate` or `platform-admin` |
 | Approve eligible run | `can_approve` or `platform-admin`, plus self-approval check |
 | List/search/manage stack access | `can_manage_access` or `platform-admin` |
 | User/global-role administration | Keycloak Admin Console only |

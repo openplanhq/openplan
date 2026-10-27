@@ -30,7 +30,7 @@ var (
 	ErrNotFound                           = errors.New("not found")
 	ErrRevisionNotInstallable             = errors.New("template is not installable")
 	ErrStackTemplateConfigInvalid         = errors.New("stack template config is invalid")
-	ErrStackTemplateUpgradeInvalid        = errors.New("stack template upgrade is invalid")
+	ErrStackTemplateRevisionNotChangeable = errors.New("stack template revision can't change")
 	ErrStackTemplateNotEditable           = errors.New("stack template config cannot be edited")
 	ErrStackTemplateNotRunnable           = errors.New("stack template is not runnable")
 	ErrStackTemplatePlanStale             = errors.New("stack template plan does not match desired state")
@@ -555,8 +555,8 @@ type UpdateStackTemplateConfigCommand struct {
 	ConfigJSON      json.RawMessage
 }
 
-// UpgradeStackTemplateCommand asks the app to point one install at another revision.
-type UpgradeStackTemplateCommand struct {
+// ChangeStackTemplateRevisionCommand asks the app to point one install at another revision.
+type ChangeStackTemplateRevisionCommand struct {
 	TenantID                 domain.TenantID
 	StackTemplateID          domain.StackTemplateID
 	TargetTemplateRevisionID domain.TemplateRevisionID
@@ -1283,13 +1283,13 @@ func (service *Service) UpdateStackTemplateConfig(ctx context.Context, command U
 	return stackTemplateView(updated, desiredRevision), nil
 }
 
-// UpgradeStackTemplate changes desired revision for an existing installed template.
-func (service *Service) UpgradeStackTemplate(ctx context.Context, command UpgradeStackTemplateCommand) (StackTemplateView, error) {
+// ChangeStackTemplateRevision changes desired revision for an existing installed template.
+func (service *Service) ChangeStackTemplateRevision(ctx context.Context, command ChangeStackTemplateRevisionCommand) (StackTemplateView, error) {
 	actor, err := authenticatedActor(ctx)
 	if err != nil {
 		return StackTemplateView{}, err
 	}
-	if err := validateUpgradeStackTemplateCommand(command); err != nil {
+	if err := validateChangeStackTemplateRevisionCommand(command); err != nil {
 		return StackTemplateView{}, err
 	}
 
@@ -1298,7 +1298,7 @@ func (service *Service) UpgradeStackTemplate(ctx context.Context, command Upgrad
 		return StackTemplateView{}, err
 	}
 	if stackTemplate.Lifecycle != domain.StackTemplateActive {
-		return StackTemplateView{}, fmt.Errorf("%w: lifecycle is %q", ErrStackTemplateUpgradeInvalid, stackTemplate.Lifecycle)
+		return StackTemplateView{}, fmt.Errorf("%w: lifecycle is %q", ErrStackTemplateRevisionNotChangeable, stackTemplate.Lifecycle)
 	}
 	if err := service.requireNoRunInFlight(ctx, command.TenantID, command.StackTemplateID); err != nil {
 		return StackTemplateView{}, err
@@ -1312,7 +1312,7 @@ func (service *Service) UpgradeStackTemplate(ctx context.Context, command Upgrad
 		return StackTemplateView{}, fmt.Errorf("%w: status is %q", ErrRevisionNotInstallable, targetRevision.Status)
 	}
 	if stackTemplate.SourceTemplateID != "" && targetRevision.SourceTemplateID != "" && stackTemplate.SourceTemplateID != targetRevision.SourceTemplateID {
-		return StackTemplateView{}, fieldError(ErrStackTemplateUpgradeInvalid, IssueDifferentTemplate,
+		return StackTemplateView{}, fieldError(ErrStackTemplateRevisionNotChangeable, IssueDifferentTemplate,
 			"target_template_revision_id is a revision of a different template", "target_template_revision_id")
 	}
 
@@ -2640,7 +2640,7 @@ func validateUpdateStackTemplateConfigCommand(command UpdateStackTemplateConfigC
 	}
 }
 
-func validateUpgradeStackTemplateCommand(command UpgradeStackTemplateCommand) error {
+func validateChangeStackTemplateRevisionCommand(command ChangeStackTemplateRevisionCommand) error {
 	switch {
 	case command.TenantID == "":
 		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)

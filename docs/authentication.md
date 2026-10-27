@@ -595,7 +595,7 @@ visibility is never an authorization boundary.
 | `GET /v1/tenants/{tenant_id}/stacks/{stack_id}` | `can_view` |
 | `POST /v1/tenants/{tenant_id}/stacks/{stack_id}/templates` | `can_operate` |
 | `PUT /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/config` | Owning stack `can_operate` |
-| `POST /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/upgrade` | Owning stack `can_operate` |
+| `POST /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/change-revision` | Owning stack `can_operate` |
 | `POST /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/runs` | Owning stack `can_operate` |
 | `GET /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/runs` | Owning stack `can_view` |
 | `GET /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/runs/{run_number}` | Owning stack `can_view` |

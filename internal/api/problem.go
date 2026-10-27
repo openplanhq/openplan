@@ -123,7 +123,7 @@ var problemTypes = []problemType{
 		detail: "The template is being torn down, so its configuration can't change.",
 	},
 	{
-		sentinel: app.ErrStackTemplateUpgradeInvalid, status: http.StatusConflict, slug: "stack-template-revision-not-changeable",
+		sentinel: app.ErrStackTemplateRevisionNotChangeable, status: http.StatusConflict, slug: "stack-template-revision-not-changeable",
 		title:  "The template can't change revision",
 		detail: "The template is being torn down, so it can't move to another revision.",
 	},
@@ -204,7 +204,7 @@ const (
 
 // writeAppError renders an error from the app layer. Field errors come first,
 // whatever sentinel each wraps: one response then carries every problem with
-// the request, and a sentinel such as ErrStackTemplateUpgradeInvalid can be
+// the request, and a sentinel such as ErrStackTemplateRevisionNotChangeable can be
 // a field problem in one case and a state conflict in another. detail never
 // comes from err.Error(), which is a Go error chain naming call sites.
 func writeAppError(response http.ResponseWriter, err error) {

@@ -616,7 +616,7 @@
           }
         },
         {
-          "name": "Stage an installed template on a newer revision",
+          "name": "Stage an installed template on another revision",
           "event": [
             {
               "listen": "test",
@@ -646,7 +646,7 @@
               }
             },
             "url": {
-              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/stack-templates/{{stack_template_id}}/upgrade",
+              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/stack-templates/{{stack_template_id}}/change-revision",
               "host": [
                 "{{base_url}}"
               ],
@@ -656,10 +656,10 @@
                 "{{tenant_id}}",
                 "stack-templates",
                 "{{stack_template_id}}",
-                "upgrade"
+                "change-revision"
               ]
             },
-            "description": "Moves the component's *desired* revision. Nothing is applied here —\nupgrading is a deliberate, reviewable step, so the new revision takes\neffect only when a subsequent apply succeeds. Until then\n`desired_template_revision_id` and `last_applied_template_revision_id`\ndiffer and `live_state` reads `differs`.\n\nOmit `config` to carry the current one forward; supply it when the new\nrevision's variables changed."
+            "description": "Moves the component's *desired* revision. Nothing is applied here —\nchanging revision is a deliberate, reviewable step, so the new revision takes\neffect only when a subsequent apply succeeds. Until then\n`desired_template_revision_id` and `last_applied_template_revision_id`\ndiffer and `live_state` reads `differs`.\n\nOmit `config` to carry the current one forward; supply it when the new\nrevision's variables changed."
           }
         }
       ]

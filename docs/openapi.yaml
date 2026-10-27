@@ -1056,28 +1056,28 @@ paths:
               schema: { $ref: "#/components/schemas/Problem" }
         "500": { $ref: "#/components/responses/InternalError" }
 
-  /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/upgrade:
+  /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/change-revision:
     parameters:
       - $ref: "#/components/parameters/TenantID"
       - $ref: "#/components/parameters/StackTemplateID"
     post:
       tags: [Stacks]
-      summary: Stage an installed template on a newer revision
+      summary: Stage an installed template on another revision
       description: |
         Moves the component's *desired* revision. Nothing is applied here —
-        upgrading is a deliberate, reviewable step, so the new revision takes
+        changing revision is a deliberate, reviewable step, so the new revision takes
         effect only when a subsequent apply succeeds. Until then
         `desired_template_revision_id` and `last_applied_template_revision_id`
         differ and `live_state` reads `differs`.
 
         Omit `config` to carry the current one forward; supply it when the new
         revision's variables changed.
-      operationId: upgradeStackTemplate
+      operationId: changeStackTemplateRevision
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/UpgradeStackTemplateRequest" }
+            schema: { $ref: "#/components/schemas/ChangeStackTemplateRevisionRequest" }
       responses:
         "200":
           description: The component, now staged on the target revision.
@@ -2323,7 +2323,7 @@ components:
       type: object
       description: |
         An immutable snapshot of a Terraform source at one commit. Stacks
-        install revisions, never branches, which is why upgrading is an
+        install revisions, never branches, which is why changing revision is an
         explicit step rather than something that drifts.
       properties:
         id: { type: string }
@@ -2569,7 +2569,7 @@ components:
           description: The complete desired config. Replaces the current one wholesale.
       required: [config]
 
-    UpgradeStackTemplateRequest:
+    ChangeStackTemplateRevisionRequest:
       type: object
       additionalProperties: false
       properties:
@@ -2598,7 +2598,7 @@ components:
           type: string
           description: |
             The revision actually applied. Differs from the desired one after
-            an upgrade is staged and before it is applied.
+            a revision change is staged and before it is applied.
         source_ref:
           type: string
           description: |
@@ -2756,8 +2756,8 @@ components:
         template_revision_id:
           type: string
           description: |
-            The revision this run executed. Pinned when the run started, so
-            history stays accurate after an upgrade.
+            The desired revision's source ref, copied when the run started, so
+            history stays accurate after a revision change.
         operation: { $ref: "#/components/schemas/OperationType" }
         source_ref: { type: string }
         resolved_commit_sha: { type: string }

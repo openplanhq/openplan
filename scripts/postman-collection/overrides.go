@@ -137,7 +137,7 @@ var overrides = map[string]override{
 	"updateStackTemplateConfig": {
 		jsonBody: `{ "config": {} }`,
 	},
-	"upgradeStackTemplate": {
+	"changeStackTemplateRevision": {
 		jsonBody: `{ "target_template_revision_id": "{{template_revision_id}}" }`,
 	},
 	"createStackCredential": {

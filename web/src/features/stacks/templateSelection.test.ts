@@ -54,7 +54,7 @@ describe("templateTabOf", () => {
     ["/stacks/s1/templates/t1/variables", "variables"],
     ["/stacks/s1/templates/t1/environment", "environment"],
     ["/stacks/s1/templates/t1/settings", "settings"],
-    ["/stacks/s1/templates/t1/upgrade", "settings"]
+    ["/stacks/s1/templates/t1/change-revision", "settings"]
   ] as const)("%s belongs to %s", (pathname, tab) => {
     expect(templateTabOf(pathname)).toBe(tab);
   });

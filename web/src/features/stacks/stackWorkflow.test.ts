@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 import type { Stack, StackTemplate, TemplateRevision, TemplateVariable } from "../../api/types";
 import {
   canSaveInstalledTemplateConfig,
-  canUpgradeStackTemplate,
+  canChangeStackTemplateRevision,
   configFromVariableValues,
   findSelectedStackTemplate,
   isStructuredVariable,
-  partitionUpgradeVariables,
+  partitionRevisionChangeVariables,
   stackTemplateLabel,
   stackTemplateStatus,
-  upgradeCandidateRevisions,
+  revisionChangeCandidates,
   upsertStackTemplate,
   variableValuesFromConfig
 } from "./stackWorkflow";
@@ -107,28 +107,28 @@ describe("stack workflow helpers", () => {
     });
   });
 
-  it("allows upgrades only to a different active revision from the same source template", () => {
+  it("allows a revision change only to a different active revision from the same source template", () => {
     const installedTemplate = stackTemplate({
       source_template_id: "source_template_vpc",
       desired_template_revision_id: "template_rev_1"
     });
 
-    expect(canUpgradeStackTemplate(installedTemplate, templateRevision({
+    expect(canChangeStackTemplateRevision(installedTemplate, templateRevision({
       id: "template_rev_2",
       source_template_id: "source_template_vpc",
       status: "active"
     }))).toBe(true);
-    expect(canUpgradeStackTemplate(installedTemplate, templateRevision({
+    expect(canChangeStackTemplateRevision(installedTemplate, templateRevision({
       id: "template_rev_1",
       source_template_id: "source_template_vpc",
       status: "active"
     }))).toBe(false);
-    expect(canUpgradeStackTemplate(installedTemplate, templateRevision({
+    expect(canChangeStackTemplateRevision(installedTemplate, templateRevision({
       id: "template_rev_3",
       source_template_id: "source_template_db",
       status: "active"
     }))).toBe(false);
-    expect(canUpgradeStackTemplate(installedTemplate, templateRevision({
+    expect(canChangeStackTemplateRevision(installedTemplate, templateRevision({
       id: "template_rev_4",
       source_template_id: "source_template_vpc",
       status: "invalid"
@@ -210,7 +210,7 @@ describe("stack workflow helpers", () => {
     expect(upsertStackTemplate([secondTemplate], updatedFirst)).toEqual([updatedFirst, secondTemplate]);
   });
 
-  it("offers only active revisions of the same source template as upgrade candidates", () => {
+  it("offers only active revisions of the same source template as revision change candidates", () => {
     const installed = stackTemplate({ source_template_id: "src_1", desired_template_revision_id: "rev_current" });
     const revisions = [
       templateRevision({ id: "rev_new", source_template_id: "src_1", status: "active" }),
@@ -219,10 +219,10 @@ describe("stack workflow helpers", () => {
       templateRevision({ id: "rev_pending", source_template_id: "src_1", status: "pending_validation" })
     ];
 
-    expect(upgradeCandidateRevisions(revisions, installed).map((item) => item.id)).toEqual(["rev_new"]);
+    expect(revisionChangeCandidates(revisions, installed).map((item) => item.id)).toEqual(["rev_new"]);
   });
 
-  it("preserves the newest-first order the API returns for upgrade candidates", () => {
+  it("preserves the newest-first order the API returns for revision change candidates", () => {
     const installed = stackTemplate({ source_template_id: "src_1", desired_template_revision_id: "rev_current" });
     const revisions = [
       templateRevision({ id: "rev_newest", source_template_id: "src_1", status: "active" }),
@@ -230,18 +230,18 @@ describe("stack workflow helpers", () => {
       templateRevision({ id: "rev_current", source_template_id: "src_1", status: "active" })
     ];
 
-    expect(upgradeCandidateRevisions(revisions, installed).map((item) => item.id)).toEqual(["rev_newest", "rev_older"]);
+    expect(revisionChangeCandidates(revisions, installed).map((item) => item.id)).toEqual(["rev_newest", "rev_older"]);
   });
 
-  it("has no upgrade candidates without an installed template", () => {
-    expect(upgradeCandidateRevisions([templateRevision({ id: "rev_new" })], null)).toEqual([]);
+  it("has no revision change candidates without an installed template", () => {
+    expect(revisionChangeCandidates([templateRevision({ id: "rev_new" })], null)).toEqual([]);
   });
 
-  it("splits upgrade variables into added, carried, and removed by name", () => {
+  it("splits revision change variables into added, carried, and removed by name", () => {
     const current = [variable({ name: "region" }), variable({ name: "legacy_flag" })];
     const target = [variable({ name: "region" }), variable({ name: "new_var" })];
 
-    const partition = partitionUpgradeVariables(current, target);
+    const partition = partitionRevisionChangeVariables(current, target);
 
     expect(partition.added.map((item) => item.name)).toEqual(["new_var"]);
     expect(partition.carried.map((item) => item.name)).toEqual(["region"]);
@@ -251,7 +251,7 @@ describe("stack workflow helpers", () => {
   it("carries every variable when the revision's variable set is unchanged", () => {
     const variables = [variable({ name: "region" }), variable({ name: "cidr_block" })];
 
-    const partition = partitionUpgradeVariables(variables, variables);
+    const partition = partitionRevisionChangeVariables(variables, variables);
 
     expect(partition.carried.map((item) => item.name)).toEqual(["region", "cidr_block"]);
     expect(partition.added).toEqual([]);
@@ -259,7 +259,7 @@ describe("stack workflow helpers", () => {
   });
 
   it("treats a fully disjoint variable set as all added and all removed", () => {
-    const partition = partitionUpgradeVariables([variable({ name: "old" })], [variable({ name: "new" })]);
+    const partition = partitionRevisionChangeVariables([variable({ name: "old" })], [variable({ name: "new" })]);
 
     expect(partition.added.map((item) => item.name)).toEqual(["new"]);
     expect(partition.carried).toEqual([]);
@@ -270,7 +270,7 @@ describe("stack workflow helpers", () => {
     const current = [variable({ name: "region", template_revision_id: "rev_current", required: false })];
     const target = [variable({ name: "region", template_revision_id: "rev_target", required: true })];
 
-    const partition = partitionUpgradeVariables(current, target);
+    const partition = partitionRevisionChangeVariables(current, target);
 
     expect(partition.carried[0].template_revision_id).toBe("rev_target");
     expect(partition.carried[0].required).toBe(true);

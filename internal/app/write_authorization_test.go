@@ -76,8 +76,8 @@ var writePaths = []writePath{
 		})
 		return err
 	}},
-	{"UpgradeStackTemplate", viaStackTemplate, func(service *Service, ctx context.Context, _ domain.StackID) error {
-		_, err := service.UpgradeStackTemplate(ctx, UpgradeStackTemplateCommand{
+	{"ChangeStackTemplateRevision", viaStackTemplate, func(service *Service, ctx context.Context, _ domain.StackID) error {
+		_, err := service.ChangeStackTemplateRevision(ctx, ChangeStackTemplateRevisionCommand{
 			TenantID: "tenant_123", StackTemplateID: "stack_template_123", TargetTemplateRevisionID: "template_456",
 		})
 		return err

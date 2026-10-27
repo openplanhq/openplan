@@ -118,10 +118,10 @@ func TestValidateTemplateConfigStoresTheValueAsSent(t *testing.T) {
 	}
 }
 
-// Upgrade re-checks carried values against the target revision, so a value
+// Changing revision re-checks carried values against the target revision, so a value
 // that fit the old type but not the new one is refused under its field
 // instead of failing the next plan.
-func TestUpgradeStackTemplateRefusesACarriedValueTheNewTypeRejects(t *testing.T) {
+func TestChangeStackTemplateRevisionRefusesACarriedValueTheNewTypeRejects(t *testing.T) {
 	t.Parallel()
 
 	stackTemplates := &recordingStackTemplateRepository{
@@ -151,7 +151,7 @@ func TestUpgradeStackTemplateRefusesACarriedValueTheNewTypeRejects(t *testing.T)
 		TemplateRevisions:        templates,
 	})
 
-	_, err := service.UpgradeStackTemplate(authenticatedContext(), UpgradeStackTemplateCommand{
+	_, err := service.ChangeStackTemplateRevision(authenticatedContext(), ChangeStackTemplateRevisionCommand{
 		TenantID:                 domain.TenantID("tenant_123"),
 		StackTemplateID:          domain.StackTemplateID("stack_template_123"),
 		TargetTemplateRevisionID: domain.TemplateRevisionID("template_rev_2"),

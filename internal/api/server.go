@@ -198,7 +198,7 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	// Replaces the whole desired config for an installed stack template.
 	server.handleTenantRoute("PUT", "/stack-templates/{stack_template_id}/config", server.handleUpdateStackTemplateConfig)
 	// Stages an installed stack template to a newer template revision.
-	server.handleTenantRoute("POST", "/stack-templates/{stack_template_id}/upgrade", server.handleUpgradeStackTemplate)
+	server.handleTenantRoute("POST", "/stack-templates/{stack_template_id}/change-revision", server.handleChangeStackTemplateRevision)
 
 	// Template run routes.
 	// Starts a Terraform operation for an installed stack template.
@@ -857,8 +857,8 @@ func (server *Server) handleUpdateStackTemplateConfig(response http.ResponseWrit
 	writeJSON(response, http.StatusOK, newStackTemplateResponse(stackTemplate))
 }
 
-func (server *Server) handleUpgradeStackTemplate(response http.ResponseWriter, request *http.Request) {
-	var body upgradeStackTemplateRequest
+func (server *Server) handleChangeStackTemplateRevision(response http.ResponseWriter, request *http.Request) {
+	var body changeStackTemplateRevisionRequest
 	if !decodeRequestBody(response, request, &body) {
 		return
 	}
@@ -872,7 +872,7 @@ func (server *Server) handleUpgradeStackTemplate(response http.ResponseWriter, r
 		}
 	}
 
-	stackTemplate, err := server.service.UpgradeStackTemplate(request.Context(), app.UpgradeStackTemplateCommand{
+	stackTemplate, err := server.service.ChangeStackTemplateRevision(request.Context(), app.ChangeStackTemplateRevisionCommand{
 		TenantID:                 domain.TenantID(request.PathValue("tenant_id")),
 		StackTemplateID:          domain.StackTemplateID(request.PathValue("stack_template_id")),
 		TargetTemplateRevisionID: domain.TemplateRevisionID(body.TargetTemplateRevisionID),
@@ -1092,7 +1092,7 @@ type updateStackTemplateConfigRequest struct {
 	Config map[string]any `json:"config"`
 }
 
-type upgradeStackTemplateRequest struct {
+type changeStackTemplateRevisionRequest struct {
 	TargetTemplateRevisionID string         `json:"target_template_revision_id"`
 	Config                   map[string]any `json:"config"`
 }

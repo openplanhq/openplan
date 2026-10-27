@@ -69,7 +69,7 @@ interface UpdateStackTemplateConfigRequest {
   config: Record<string, unknown>;
 }
 
-interface UpgradeStackTemplateRequest {
+interface ChangeStackTemplateRevisionRequest {
   target_template_revision_id: string;
   config?: Record<string, unknown>;
 }
@@ -249,8 +249,8 @@ export function updateStackTemplateConfig(tenantID: string, stackTemplateID: str
   });
 }
 
-export function upgradeStackTemplate(tenantID: string, stackTemplateID: string, body: UpgradeStackTemplateRequest): Promise<StackTemplate> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/stack-templates/${encodeURIComponent(stackTemplateID)}/upgrade`, {
+export function changeStackTemplateRevision(tenantID: string, stackTemplateID: string, body: ChangeStackTemplateRevisionRequest): Promise<StackTemplate> {
+  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/stack-templates/${encodeURIComponent(stackTemplateID)}/change-revision`, {
     method: "POST",
     body: JSON.stringify(body)
   });

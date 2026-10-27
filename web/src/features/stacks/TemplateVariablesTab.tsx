@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 
 // /stacks/:stackId/templates/:stackTemplateId/variables — the installed
 // template's configuration. Choosing another revision is a separate view
-// (upgrade), reached from Settings, so this form has exactly one action.
+// (change revision), reached from Settings, so this form has exactly one action.
 export default function TemplateVariablesTab() {
   const tenantID = useTenantID();
   const { stackId, stackTemplate } = useStackTemplate();

@@ -469,14 +469,14 @@ describe("routeConfig", () => {
     expect(markup).toContain('data-testid="add-stack-template-none"');
   });
 
-  it("renders the upgrade screen at /stacks/:stackId/templates/:stackTemplateId/upgrade", async () => {
+  it("renders the change revision screen at /stacks/:stackId/templates/:stackTemplateId/change-revision", async () => {
     const { routeConfig } = await import("./router");
     const { queryKeys } = await import("../api/queryKeys");
     const queryClient = stackQueryClient(queryKeys, { templates: [installedTemplate] });
     seedTemplates(queryClient, []);
 
     const testRouter = createMemoryRouter(routeConfig, {
-      initialEntries: ["/stacks/stack_1/templates/st_1/upgrade"]
+      initialEntries: ["/stacks/stack_1/templates/st_1/change-revision"]
     });
     const markup = renderToStaticMarkup(
       <QueryClientProvider client={queryClient}>
@@ -488,7 +488,7 @@ describe("routeConfig", () => {
 
     // The panel draws the template's header, then the screen in its outlet.
     expect(markup).toContain('data-testid="template-panel"');
-    expect(markup).toMatch(/data-testid="upgrade-[a-z-]+"/);
+    expect(markup).toMatch(/data-testid="change-revision-[a-z-]+"/);
   });
 
   it("renders AccessDenied for /stacks/:stackId/templates/new when canOperate is denied but canView is allowed", async () => {
@@ -525,7 +525,7 @@ describe("routeConfig", () => {
     expect(markup).toContain('data-testid="route-access-denied"');
   });
 
-  it("renders AccessDenied for /stacks/:stackId/templates/:stackTemplateId/upgrade when canOperate is denied but canView is allowed", async () => {
+  it("renders AccessDenied for /stacks/:stackId/templates/:stackTemplateId/change-revision when canOperate is denied but canView is allowed", async () => {
     const { routeConfig } = await import("./router");
     const { queryKeys } = await import("../api/queryKeys");
     const queryClient = stackQueryClient(queryKeys, {
@@ -534,7 +534,7 @@ describe("routeConfig", () => {
     });
 
     const testRouter = createMemoryRouter(routeConfig, {
-      initialEntries: ["/stacks/stack_1/templates/st_1/upgrade"]
+      initialEntries: ["/stacks/stack_1/templates/st_1/change-revision"]
     });
     const markup = renderToStaticMarkup(
       <QueryClientProvider client={queryClient}>

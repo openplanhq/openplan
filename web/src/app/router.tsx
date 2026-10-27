@@ -16,7 +16,7 @@ import TemplateRunsTab from "../features/stacks/TemplateRunsTab";
 import TemplateVariablesTab from "../features/stacks/TemplateVariablesTab";
 import TemplateEnvironmentTab from "../features/stacks/TemplateEnvironmentTab";
 import TemplateSettingsTab from "../features/stacks/TemplateSettingsTab";
-import UpgradeStackTemplateScreen from "../features/stacks/UpgradeStackTemplateScreen";
+import ChangeRevisionScreen from "../features/stacks/ChangeRevisionScreen";
 import EnvironmentScreen from "../features/stacks/EnvironmentScreen";
 import RegisterTemplatePanel from "../features/templates/RegisterTemplatePanel";
 import RevisionsTab from "../features/templates/RevisionsTab";
@@ -119,9 +119,9 @@ export const routeConfig: RouteObject[] = [
                       },
                       { path: "settings", element: <TemplateSettingsTab /> },
                       {
-                        path: "upgrade",
+                        path: "change-revision",
                         element: <RequireCapability capability="can_operate" mode="route" />,
-                        children: [{ index: true, element: <UpgradeStackTemplateScreen /> }]
+                        children: [{ index: true, element: <ChangeRevisionScreen /> }]
                       }
                     ]
                   }

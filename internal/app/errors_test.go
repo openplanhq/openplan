@@ -121,7 +121,7 @@ var sentinelNames = map[error]string{
 	ErrNotFound:                           "ErrNotFound",
 	ErrRevisionNotInstallable:             "ErrRevisionNotInstallable",
 	ErrStackTemplateConfigInvalid:         "ErrStackTemplateConfigInvalid",
-	ErrStackTemplateUpgradeInvalid:        "ErrStackTemplateUpgradeInvalid",
+	ErrStackTemplateRevisionNotChangeable: "ErrStackTemplateRevisionNotChangeable",
 	ErrStackTemplateNotEditable:           "ErrStackTemplateNotEditable",
 	ErrStackTemplateNotRunnable:           "ErrStackTemplateNotRunnable",
 	ErrStackTemplatePlanStale:             "ErrStackTemplatePlanStale",

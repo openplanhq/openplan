@@ -48,7 +48,7 @@ export default function TemplateSettingsTab() {
           </>
         }
         reason={reason}
-        reasonTestId="upgrade-disabled-reason"
+        reasonTestId="change-revision-disabled-reason"
         action={
           reason ? (
             <button type="button" disabled className={actionClass} data-testid="change-stack-template-revision-link">
@@ -56,7 +56,7 @@ export default function TemplateSettingsTab() {
             </button>
           ) : (
             <Link
-              to={stackTemplatePath(stackId, stackTemplate.id, "upgrade")}
+              to={stackTemplatePath(stackId, stackTemplate.id, "change-revision")}
               className={actionClass}
               data-testid="change-stack-template-revision-link"
             >

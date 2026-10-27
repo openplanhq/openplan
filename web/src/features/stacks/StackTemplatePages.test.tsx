@@ -263,10 +263,10 @@ describe("TemplatePanel", () => {
     render(
       <QueryClientProvider client={queryClient}>
         <AuthContext.Provider value={authValue()}>
-          <MemoryRouter initialEntries={["/stacks/stack_1/templates/st_1/upgrade"]}>
+          <MemoryRouter initialEntries={["/stacks/stack_1/templates/st_1/change-revision"]}>
             <Routes>
               <Route path="/stacks/:stackId/templates/:stackTemplateId" element={<TemplatePanel />}>
-                <Route path="upgrade" element={<p>change revision</p>} />
+                <Route path="change-revision" element={<p>change revision</p>} />
               </Route>
             </Routes>
           </MemoryRouter>
@@ -547,7 +547,7 @@ describe("editing while a run is in flight", () => {
     variables.unmount();
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/settings");
-    expect(screen.getByTestId("upgrade-disabled-reason").textContent).toBe("Apply or discard run #7 before changing the revision.");
+    expect(screen.getByTestId("change-revision-disabled-reason").textContent).toBe("Apply or discard run #7 before changing the revision.");
     expect((screen.getByTestId("change-stack-template-revision-link") as HTMLButtonElement).disabled).toBe(true);
   });
 });
@@ -636,7 +636,7 @@ describe("TemplateSettingsTab", () => {
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/settings");
 
     const revisionAction = screen.getByRole("region", { name: "Revision" });
-    expect(screen.getByTestId("change-stack-template-revision-link").getAttribute("href")).toBe("/stacks/stack_1/templates/st_1/upgrade");
+    expect(screen.getByTestId("change-stack-template-revision-link").getAttribute("href")).toBe("/stacks/stack_1/templates/st_1/change-revision");
     expect(precedes(revisionAction, screen.getByRole("region", { name: "Destroy" }))).toBe(true);
   });
 
@@ -668,7 +668,7 @@ describe("TemplateSettingsTab", () => {
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/settings");
 
-    expect(screen.getByTestId("change-stack-template-revision-link").getAttribute("href")).toBe("/stacks/stack_1/templates/st_1/upgrade");
+    expect(screen.getByTestId("change-stack-template-revision-link").getAttribute("href")).toBe("/stacks/stack_1/templates/st_1/change-revision");
     expect(screen.getByText(/^This template runs revision/).textContent).toBe("This template runs revision main.");
   });
 
@@ -681,7 +681,7 @@ describe("TemplateSettingsTab", () => {
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/settings");
 
     await waitFor(() =>
-      expect(screen.getByTestId("upgrade-disabled-reason").textContent).toBe("Changing the revision requires operator access.")
+      expect(screen.getByTestId("change-revision-disabled-reason").textContent).toBe("Changing the revision requires operator access.")
     );
     const changeRevision = screen.getByTestId("change-stack-template-revision-link") as HTMLButtonElement;
     expect(changeRevision.tagName).toBe("BUTTON");
@@ -700,6 +700,6 @@ describe("TemplateSettingsTab", () => {
     const changeRevisionControl = screen.getByTestId("change-stack-template-revision-link") as HTMLButtonElement;
     expect(changeRevisionControl.tagName).toBe("BUTTON");
     expect(changeRevisionControl.disabled).toBe(true);
-    expect(screen.getByTestId("upgrade-disabled-reason").textContent).toBe("Destroy in progress.");
+    expect(screen.getByTestId("change-revision-disabled-reason").textContent).toBe("Destroy in progress.");
   });
 });

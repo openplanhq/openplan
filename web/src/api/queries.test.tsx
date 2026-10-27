@@ -29,7 +29,7 @@ import {
   templateRefetchInterval,
   templatesRefetchInterval,
   useUpdateStackTemplateConfigMutation,
-  useUpgradeStackTemplateMutation
+  useChangeStackTemplateRevisionMutation
 } from "./queries";
 import { queryKeys } from "./queryKeys";
 import { asListBody } from "./listTestSupport";
@@ -439,11 +439,11 @@ describe("mutation hooks", () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.stack("tenant_123", "stack_1") });
   });
 
-  it("upgrades a stack template and invalidates that stack's detail", async () => {
+  it("changes a stack template's revision and invalidates that stack's detail", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: "stack_template_1" }));
     const queryClient = testQueryClient();
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
-    const { result } = renderHook(() => useUpgradeStackTemplateMutation("tenant_123", "stack_1"), {
+    const { result } = renderHook(() => useChangeStackTemplateRevisionMutation("tenant_123", "stack_1"), {
       wrapper: wrapper(queryClient)
     });
 

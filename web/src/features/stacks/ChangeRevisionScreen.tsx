@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { useTemplateRevisionVariablesQuery, useTemplateRevisionsQuery, useUpgradeStackTemplateMutation } from "../../api/queries";
+import { useTemplateRevisionVariablesQuery, useTemplateRevisionsQuery, useChangeStackTemplateRevisionMutation } from "../../api/queries";
 import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
@@ -13,8 +13,8 @@ import PanelTrail from "./PanelTrail";
 import { useStackTemplate } from "./stackTemplateContext";
 import {
   configFromVariableValues,
-  partitionUpgradeVariables,
-  upgradeCandidateRevisions,
+  partitionRevisionChangeVariables,
+  revisionChangeCandidates,
   variableValuesFromConfig
 } from "./stackWorkflow";
 import { stackTemplatePath } from "./templateSelection";
@@ -26,12 +26,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
-// /stacks/:stackId/templates/:stackTemplateId/upgrade — moving the template
+// /stacks/:stackId/templates/:stackTemplateId/change-revision — moving the template
 // to another revision of the same source template, under Settings. The
 // candidates are filtered to the valid ones and what the change does to the
 // config is stated outright. The panel around it names the template and
 // handles one the stack does not have.
-export default function UpgradeStackTemplateScreen() {
+export default function ChangeRevisionScreen() {
   const tenantID = useTenantID();
   const { stackId, stackTemplate } = useStackTemplate();
   const navigate = useNavigate();
@@ -41,12 +41,12 @@ export default function UpgradeStackTemplateScreen() {
   const variableErrors = useFieldErrors("#/config/");
 
   const templateRevisionsQuery = useTemplateRevisionsQuery(tenantID, stackTemplate.source_template_id);
-  const candidates = upgradeCandidateRevisions(templateRevisionsQuery.data ?? [], stackTemplate);
+  const candidates = revisionChangeCandidates(templateRevisionsQuery.data ?? [], stackTemplate);
   const targetRevision = candidates.find((revision) => revision.id === chosenTargetID) ?? candidates[0] ?? null;
 
   const currentVariablesQuery = useTemplateRevisionVariablesQuery(tenantID, stackTemplate.desired_template_revision_id);
   const targetVariablesQuery = useTemplateRevisionVariablesQuery(tenantID, targetRevision?.id ?? "");
-  const partition = partitionUpgradeVariables(currentVariablesQuery.data ?? [], targetVariablesQuery.data ?? []);
+  const partition = partitionRevisionChangeVariables(currentVariablesQuery.data ?? [], targetVariablesQuery.data ?? []);
 
   // Every query feeding the diff belongs here. A failed variables fetch leaves
   // data undefined, which the partition above reads as "that revision declares
@@ -70,7 +70,7 @@ export default function UpgradeStackTemplateScreen() {
     variableValues[variable.name] = editedValues[variable.name] ?? baseValues[variable.name] ?? "";
   }
 
-  const upgradeStackTemplateMutation = useUpgradeStackTemplateMutation(tenantID, stackId);
+  const changeStackTemplateRevisionMutation = useChangeStackTemplateRevisionMutation(tenantID, stackId);
   // Read by SessionProvider's proactive re-auth timer: it defers navigating
   // away while a `[data-unsaved='true']` element is mounted, so values typed
   // here are never wiped out by a background sign-in redirect.
@@ -78,7 +78,7 @@ export default function UpgradeStackTemplateScreen() {
   const settingsPath = stackTemplatePath(stackId, stackTemplate.id, "settings");
   const trail = <PanelTrail name="Change revision" parent={{ label: "Settings", to: settingsPath }} current="Change revision" />;
 
-  async function handleUpgrade() {
+  async function handleChangeRevision() {
     if (!targetRevision || targetVariablesRefreshing) {
       return;
     }
@@ -91,7 +91,7 @@ export default function UpgradeStackTemplateScreen() {
       return;
     }
     try {
-      await upgradeStackTemplateMutation.mutateAsync({
+      await changeStackTemplateRevisionMutation.mutateAsync({
         stackTemplateID: stackTemplate.id,
         body: {
           target_template_revision_id: targetRevision.id,
@@ -115,7 +115,7 @@ export default function UpgradeStackTemplateScreen() {
 
   if (templateRevisionsQuery.status === "pending" || waitingOnCurrentVariables || waitingOnTargetVariables) {
     return (
-      <section className="flex min-w-0 flex-col gap-5" data-testid="upgrade-loading">
+      <section className="flex min-w-0 flex-col gap-5" data-testid="change-revision-loading">
         {trail}
         <p className="flex items-center gap-2 text-meta text-muted-foreground">
           <Loader2 aria-hidden="true" className="size-3.5 animate-spin" /> Loading revisions…
@@ -129,14 +129,14 @@ export default function UpgradeStackTemplateScreen() {
       return <>{boundary}</>;
     }
     return (
-      <section className="flex min-w-0 flex-col items-start gap-5" data-testid="upgrade-load-error">
+      <section className="flex min-w-0 flex-col items-start gap-5" data-testid="change-revision-load-error">
         {trail}
         <ErrorLine live={false}>Something went wrong while loading revisions.</ErrorLine>
         <RequestIdNote error={templateRevisionsQuery.error ?? currentVariablesQuery.error ?? targetVariablesQuery.error} />
         <button
           type="button"
           className={cn(buttonClass("outline"), "pointer-coarse:h-11")}
-          data-testid="upgrade-retry"
+          data-testid="change-revision-retry"
           onClick={() => {
             void templateRevisionsQuery.refetch();
             void currentVariablesQuery.refetch();
@@ -156,7 +156,7 @@ export default function UpgradeStackTemplateScreen() {
   const lifecycleReason = lifecycleLockReason(stackTemplate.lifecycle, "revision");
   if (lifecycleReason) {
     return (
-      <section className="flex min-w-0 flex-col gap-5" data-testid="upgrade-locked">
+      <section className="flex min-w-0 flex-col gap-5" data-testid="change-revision-locked">
         {trail}
         <p className="text-meta text-muted-foreground">{lifecycleReason}</p>
       </section>
@@ -167,17 +167,17 @@ export default function UpgradeStackTemplateScreen() {
   const targetItems = candidates.map((candidate) => ({ value: candidate.id, label: templateRevisionLabel(candidate) }));
 
   return (
-    <section className="flex min-w-0 flex-col gap-5" data-testid="upgrade-stack-template-screen" data-unsaved={hasUnsavedValues ? "true" : undefined}>
+    <section className="flex min-w-0 flex-col gap-5" data-testid="change-revision-stack-template-screen" data-unsaved={hasUnsavedValues ? "true" : undefined}>
       {trail}
       {candidates.length === 0 ? (
-        <p className="text-meta text-muted-foreground" data-testid="upgrade-no-alternatives">
+        <p className="text-meta text-muted-foreground" data-testid="change-revision-no-alternatives">
           No other active revisions available.
         </p>
       ) : (
         <>
           <div className="flex max-w-140 flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="upgrade-target" className={fieldLabelClass}>
+              <Label htmlFor="change-revision-target" className={fieldLabelClass}>
                 Revision
               </Label>
               <Select
@@ -190,7 +190,7 @@ export default function UpgradeStackTemplateScreen() {
                   setEditedValues({});
                 }}
               >
-                <SelectTrigger id="upgrade-target" data-testid="upgrade-target-select" className={selectTriggerClass}>
+                <SelectTrigger id="change-revision-target" data-testid="change-revision-target-select" className={selectTriggerClass}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -206,7 +206,7 @@ export default function UpgradeStackTemplateScreen() {
               // Inline, not the loading view: a new target is a small change to
               // a drawn view. It replaces only what would be wrong while the
               // previous target's data is still served: the notes and fields.
-              <p className="flex items-center gap-2 text-meta text-muted-foreground" data-testid="upgrade-target-variables-loading">
+              <p className="flex items-center gap-2 text-meta text-muted-foreground" data-testid="change-revision-target-variables-loading">
                 <Loader2 aria-hidden="true" className="size-3.5 animate-spin" /> Loading variables for the selected revision…
               </p>
             ) : (
@@ -217,12 +217,12 @@ export default function UpgradeStackTemplateScreen() {
                 {(partition.added.length > 0 || partition.removed.length > 0) && (
                   <ul className="flex flex-col gap-1 text-meta">
                     {partition.added.map((variable) => (
-                      <li key={`added-${variable.name}`} className="text-muted-foreground wrap-anywhere" data-testid={`upgrade-added-${variable.name}`}>
+                      <li key={`added-${variable.name}`} className="text-muted-foreground wrap-anywhere" data-testid={`change-revision-added-${variable.name}`}>
                         <span className="font-mono text-code-foreground">{variable.name}</span> is new in this revision.
                       </li>
                     ))}
                     {partition.removed.map((variable) => (
-                      <li key={`removed-${variable.name}`} className="text-warning wrap-anywhere" data-testid={`upgrade-removed-${variable.name}`}>
+                      <li key={`removed-${variable.name}`} className="text-warning wrap-anywhere" data-testid={`change-revision-removed-${variable.name}`}>
                         <span className="font-mono">{variable.name}</span> is no longer used and will be dropped.
                       </li>
                     ))}
@@ -241,15 +241,15 @@ export default function UpgradeStackTemplateScreen() {
               </>
             )}
           </div>
-          {errorMessage && <ErrorLine testId="upgrade-stack-template-error">{errorMessage}</ErrorLine>}
+          {errorMessage && <ErrorLine testId="change-revision-stack-template-error">{errorMessage}</ErrorLine>}
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               className={cn(buttonClass("primary"), "pointer-coarse:h-11")}
-              disabled={targetVariablesRefreshing || upgradeStackTemplateMutation.isPending}
-              onClick={() => void handleUpgrade()}
+              disabled={targetVariablesRefreshing || changeStackTemplateRevisionMutation.isPending}
+              onClick={() => void handleChangeRevision()}
             >
-              {upgradeStackTemplateMutation.isPending ? (
+              {changeStackTemplateRevisionMutation.isPending ? (
                 <Loader2 data-icon="inline-start" aria-hidden="true" className="animate-spin" />
               ) : (
                 <RefreshCw data-icon="inline-start" aria-hidden="true" />

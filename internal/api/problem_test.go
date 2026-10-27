@@ -172,13 +172,13 @@ func TestDuplicateCarriesItsField(t *testing.T) {
 func TestFieldErrorWinsOverItsSentinelsRow(t *testing.T) {
 	t.Parallel()
 
-	_, conflict := renderAppError(t, fmt.Errorf("%w: lifecycle is %q", app.ErrStackTemplateUpgradeInvalid, "destroying"))
+	_, conflict := renderAppError(t, fmt.Errorf("%w: lifecycle is %q", app.ErrStackTemplateRevisionNotChangeable, "destroying"))
 	if conflict.Status != http.StatusConflict || conflict.Type != problemTypeURI("stack-template-revision-not-changeable") {
 		t.Fatalf("lifecycle case = %+v, want 409 stack-template-revision-not-changeable", conflict)
 	}
 	_, invalid := renderAppError(t, &app.FieldError{
 		Path: []string{"target_template_revision_id"}, Issue: app.IssueDifferentTemplate,
-		Message: "target_template_revision_id is a revision of a different template", Err: app.ErrStackTemplateUpgradeInvalid,
+		Message: "target_template_revision_id is a revision of a different template", Err: app.ErrStackTemplateRevisionNotChangeable,
 	})
 	if invalid.Status != http.StatusUnprocessableEntity || invalid.Errors[0].Issue != app.IssueDifferentTemplate {
 		t.Fatalf("mismatch case = %+v, want 422 different_template", invalid)

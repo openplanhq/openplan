@@ -56,8 +56,8 @@ func TestActorMutationsRejectMissingPrincipal(t *testing.T) {
 			_, err := service.UpdateStackTemplateConfig(context.Background(), UpdateStackTemplateConfigCommand{})
 			return err
 		}},
-		{name: "upgrade template", call: func() error {
-			_, err := service.UpgradeStackTemplate(context.Background(), UpgradeStackTemplateCommand{})
+		{name: "change template revision", call: func() error {
+			_, err := service.ChangeStackTemplateRevision(context.Background(), ChangeStackTemplateRevisionCommand{})
 			return err
 		}},
 		{name: "start run", call: func() error {
@@ -760,7 +760,7 @@ func TestUpdateStackTemplateConfigRejectsMissingDesiredRevision(t *testing.T) {
 }
 
 // A template being torn down cannot take a config edit, and says so in its
-// own terms rather than as a failed upgrade.
+// own terms rather than as a failed revision change.
 func TestUpdateStackTemplateConfigRejectsAnInactiveTemplate(t *testing.T) {
 	t.Parallel()
 
@@ -787,15 +787,15 @@ func TestUpdateStackTemplateConfigRejectsAnInactiveTemplate(t *testing.T) {
 	if !errors.Is(err, ErrStackTemplateNotEditable) {
 		t.Fatalf("error = %v, want ErrStackTemplateNotEditable", err)
 	}
-	if errors.Is(err, ErrStackTemplateUpgradeInvalid) {
-		t.Fatalf("error = %v, want it not to read as an upgrade failure", err)
+	if errors.Is(err, ErrStackTemplateRevisionNotChangeable) {
+		t.Fatalf("error = %v, want it not to read as a revision change failure", err)
 	}
 	if stackTemplates.gotConfigJSON != nil {
 		t.Fatalf("updated config = %s, want no update", stackTemplates.gotConfigJSON)
 	}
 }
 
-func TestUpgradeStackTemplateCarriesForwardCompatibleConfig(t *testing.T) {
+func TestChangeStackTemplateRevisionCarriesForwardCompatibleConfig(t *testing.T) {
 	t.Parallel()
 
 	stackTemplates := &recordingStackTemplateRepository{
@@ -828,13 +828,13 @@ func TestUpgradeStackTemplateCarriesForwardCompatibleConfig(t *testing.T) {
 		TemplateRevisions:        templates,
 	})
 
-	updated, err := service.UpgradeStackTemplate(authenticatedContext(), UpgradeStackTemplateCommand{
+	updated, err := service.ChangeStackTemplateRevision(authenticatedContext(), ChangeStackTemplateRevisionCommand{
 		TenantID:                 domain.TenantID("tenant_123"),
 		StackTemplateID:          domain.StackTemplateID("stack_template_123"),
 		TargetTemplateRevisionID: domain.TemplateRevisionID("template_rev_2"),
 	})
 	if err != nil {
-		t.Fatalf("UpgradeStackTemplate returned error: %v", err)
+		t.Fatalf("ChangeStackTemplateRevision returned error: %v", err)
 	}
 
 	if stackTemplates.gotDesiredTemplateRevisionID != domain.TemplateRevisionID("template_rev_2") {
@@ -848,7 +848,7 @@ func TestUpgradeStackTemplateCarriesForwardCompatibleConfig(t *testing.T) {
 	}
 }
 
-func TestUpgradeStackTemplateRejectsDifferentSourceTemplate(t *testing.T) {
+func TestChangeStackTemplateRevisionRejectsDifferentSourceTemplate(t *testing.T) {
 	t.Parallel()
 
 	stackTemplates := &recordingStackTemplateRepository{
@@ -875,13 +875,13 @@ func TestUpgradeStackTemplateRejectsDifferentSourceTemplate(t *testing.T) {
 		TemplateRevisions:        templates,
 	})
 
-	_, err := service.UpgradeStackTemplate(authenticatedContext(), UpgradeStackTemplateCommand{
+	_, err := service.ChangeStackTemplateRevision(authenticatedContext(), ChangeStackTemplateRevisionCommand{
 		TenantID:                 domain.TenantID("tenant_123"),
 		StackTemplateID:          domain.StackTemplateID("stack_template_123"),
 		TargetTemplateRevisionID: domain.TemplateRevisionID("template_rev_2"),
 	})
-	if !errors.Is(err, ErrStackTemplateUpgradeInvalid) {
-		t.Fatalf("error = %v, want ErrStackTemplateUpgradeInvalid", err)
+	if !errors.Is(err, ErrStackTemplateRevisionNotChangeable) {
+		t.Fatalf("error = %v, want ErrStackTemplateRevisionNotChangeable", err)
 	}
 	// The fix is in the request, so it lands on the field the caller picked.
 	assertFieldIssues(t, err, "target_template_revision_id different_template")
@@ -1136,9 +1136,9 @@ func TestConfigAndRevisionChangesWaitForTheRunInFlight(t *testing.T) {
 	if inFlight, ok := errors.AsType[*RunInFlightError](err); !ok || inFlight.RunNumber != 4 || inFlight.Status != domain.TemplateRunWaitingApproval {
 		t.Fatalf("config error = %v, want run #4 waiting for approval as a RunInFlightError", err)
 	}
-	_, err = service.UpgradeStackTemplate(authenticatedContext(), UpgradeStackTemplateCommand{TenantID: "tenant_123", StackTemplateID: "stack_template_123", TargetTemplateRevisionID: "template_124"})
+	_, err = service.ChangeStackTemplateRevision(authenticatedContext(), ChangeStackTemplateRevisionCommand{TenantID: "tenant_123", StackTemplateID: "stack_template_123", TargetTemplateRevisionID: "template_124"})
 	if !errors.Is(err, ErrTemplateRunInFlight) {
-		t.Fatalf("upgrade error = %v, want ErrTemplateRunInFlight", err)
+		t.Fatalf("change revision error = %v, want ErrTemplateRunInFlight", err)
 	}
 }
 
@@ -3921,8 +3921,8 @@ func TestOperableStackTemplateCommandsAuditRefusals(t *testing.T) {
 			})
 			return err
 		}},
-		{"UpgradeStackTemplate", func(service *Service, ctx context.Context) error {
-			_, err := service.UpgradeStackTemplate(ctx, UpgradeStackTemplateCommand{
+		{"ChangeStackTemplateRevision", func(service *Service, ctx context.Context) error {
+			_, err := service.ChangeStackTemplateRevision(ctx, ChangeStackTemplateRevisionCommand{
 				TenantID:                 domain.TenantID("tenant_123"),
 				StackTemplateID:          domain.StackTemplateID("stack_template_123"),
 				TargetTemplateRevisionID: domain.TemplateRevisionID("template_456"),
