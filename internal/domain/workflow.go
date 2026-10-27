@@ -110,6 +110,18 @@ type TemplateRunWorkflowInput struct {
 	TerraformTimeout time.Duration
 }
 
+// TerraformCommandFailedErrorType is the Temporal application error type a
+// RunTerraform failure carries when the command printed an error of its own.
+// Its detail is a TerraformCommandFailure.
+const TerraformCommandFailedErrorType = "TerraformCommandFailed"
+
+// TerraformCommandFailure is what a failed Terraform command said, kept apart
+// from the workflow's wrapper around it so a run can lead with it (issue 522).
+type TerraformCommandFailure struct {
+	// Message is the command's first error block, redacted and capped.
+	Message string
+}
+
 // TemplateRunStatusActivityInput asks the control plane to move a run along
 // its lifecycle.
 type TemplateRunStatusActivityInput struct {
@@ -119,6 +131,9 @@ type TemplateRunStatusActivityInput struct {
 	Operation       OperationType
 	Status          TemplateRunStatus
 	ErrorSummary    string
+	// CommandError is what the failed Terraform command said, when the run
+	// failed in one that printed an error; ErrorSummary still wraps it.
+	CommandError string
 	// Phase is the workflow execution the write belongs to: the one a running
 	// write starts, and the one a failed write records when its workflow
 	// failed before it could claim the run.

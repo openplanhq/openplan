@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"go.temporal.io/sdk/temporal"
 
 	"github.com/vishu42/openplan/internal/config"
 	"github.com/vishu42/openplan/internal/domain"
@@ -142,6 +145,69 @@ func TestRunTerraformRefusesAPathOutsideTheWorkspace(t *testing.T) {
 	}
 	if len(recorder.jobs) != before {
 		t.Fatal("a sandbox started for a path outside the workspace")
+	}
+}
+
+// commandFailure is the Terraform error a RunTerraform error carries, and
+// whether it carries one.
+func commandFailure(t *testing.T, err error) (domain.TerraformCommandFailure, bool) {
+	t.Helper()
+	var appErr *temporal.ApplicationError
+	if !errors.As(err, &appErr) || appErr.Type() != domain.TerraformCommandFailedErrorType {
+		return domain.TerraformCommandFailure{}, false
+	}
+	var failure domain.TerraformCommandFailure
+	if err := appErr.Details(&failure); err != nil {
+		t.Fatalf("decode command failure: %v", err)
+	}
+	return failure, true
+}
+
+// Issue 522: a failed command's error leads with what Terraform said.
+func TestRunTerraformReturnsTheCommandError(t *testing.T) {
+	t.Parallel()
+
+	activities, _, workspace := newSandboxedActivities(t, &scriptedExecutor{stdout: "Error: bad creds\n", err: errors.New("exit status 1")})
+	_, err := activities.RunTerraform(context.Background(), planInput(workspace))
+	failure, ok := commandFailure(t, err)
+	if !ok || failure.Message != "Error: bad creds" {
+		t.Fatalf("RunTerraform error = %v, failure = %#v, want the command's error", err, failure)
+	}
+	if !strings.Contains(err.Error(), "run terraform: ") {
+		t.Fatalf("error = %q, want today's wrapper text", err)
+	}
+}
+
+// Review focus 2: the message is read from the redacted spool.
+func TestRunTerraformCommandErrorIsRedacted(t *testing.T) {
+	t.Parallel()
+
+	activities, _, workspace := newSandboxedActivities(t, &scriptedExecutor{stdout: "Error: key s3cr3t-value rejected\n", err: errors.New("exit status 1")})
+	input := planInput(workspace)
+	input.SealedEnvironment = sealedEnvironment(t, activities, domain.RunCredentials{
+		Environment: map[string]string{"AWS_SECRET_ACCESS_KEY": "s3cr3t-value"},
+	})
+	_, err := activities.RunTerraform(context.Background(), input)
+	failure, ok := commandFailure(t, err)
+	if !ok || strings.Contains(failure.Message, "s3cr3t-value") {
+		t.Fatalf("failure = %#v (carried %v), want the redacted error", failure, ok)
+	}
+}
+
+// Review focus 1: a command that printed no error fails as it does today.
+func TestRunTerraformReturnsNoCommandErrorWithoutAnErrorLine(t *testing.T) {
+	t.Parallel()
+
+	activities, _, workspace := newSandboxedActivities(t, &scriptedExecutor{stdout: "Killed\n", err: errors.New("exit status 1")})
+	_, err := activities.RunTerraform(context.Background(), planInput(workspace))
+	if err == nil {
+		t.Fatal("RunTerraform returned no error")
+	}
+	if _, ok := commandFailure(t, err); ok {
+		t.Fatalf("error = %v, want no command failure", err)
+	}
+	if !strings.HasPrefix(err.Error(), "run terraform: ") {
+		t.Fatalf("error = %q, want today's text", err)
 	}
 }
 

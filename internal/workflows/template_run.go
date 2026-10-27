@@ -144,7 +144,7 @@ func (w *planWorkflow) lifecycle() (err error) {
 	if err := w.carries(); err != nil {
 		return err
 	}
-	if err := w.setStatus(domain.TemplateRunRunning, ""); err != nil {
+	if err := w.setStatus(domain.TemplateRunRunning, "", ""); err != nil {
 		return err
 	}
 	var planned domain.RunTerraformActivityOutput
@@ -173,9 +173,9 @@ func (w *planWorkflow) lifecycle() (err error) {
 				return err
 			}
 		}
-		return w.setStatus(domain.TemplateRunCompleted, "")
+		return w.setStatus(domain.TemplateRunCompleted, "", "")
 	case domain.PlanOutcomePlanned:
-		return w.setStatus(domain.TemplateRunCompleted, "")
+		return w.setStatus(domain.TemplateRunCompleted, "", "")
 	case domain.PlanOutcomeWaiting:
 		return nil
 	default:
@@ -214,7 +214,7 @@ func (w *applyWorkflow) lifecycle() (err error) {
 	if err := w.inSession(applySessionCreationTimeout, domain.RunPhaseApply, w.apply); err != nil {
 		return err
 	}
-	return w.setStatus(domain.TemplateRunCompleted, "")
+	return w.setStatus(domain.TemplateRunCompleted, "", "")
 }
 
 // run is what both of a template run's workflows share. It holds the
@@ -250,7 +250,7 @@ func newRun(ctx workflow.Context, input domain.TemplateRunWorkflowInput, phase d
 
 // setStatus records the run's status. Only the two lifecycles call it, and
 // failOnError for them.
-func (r *run) setStatus(status domain.TemplateRunStatus, errorSummary string) error {
+func (r *run) setStatus(status domain.TemplateRunStatus, errorSummary, commandError string) error {
 	return workflow.ExecuteActivity(
 		r.ctx,
 		domain.RecordTemplateRunStatusActivityName,
@@ -261,6 +261,7 @@ func (r *run) setStatus(status domain.TemplateRunStatus, errorSummary string) er
 			Operation:       r.input.Operation,
 			Status:          status,
 			ErrorSummary:    errorSummary,
+			CommandError:    commandError,
 			Phase:           r.phase,
 			WorkflowID:      r.workflowID,
 		},
@@ -276,10 +277,24 @@ func (r *run) failOnError(err error) error {
 	if err == nil {
 		return nil
 	}
-	if failureErr := r.setStatus(domain.TemplateRunFailed, fmt.Sprintf("template run activity failed: %v", err)); failureErr != nil {
+	if failureErr := r.setStatus(domain.TemplateRunFailed, fmt.Sprintf("template run activity failed: %v", err), commandError(err)); failureErr != nil {
 		return fmt.Errorf("%w (also failed to persist failure status: %w)", err, failureErr)
 	}
 	return err
+}
+
+// commandError is what the Terraform command behind err said, when err is a
+// RunTerraform failure that carries it, and "" for any other failure.
+func commandError(err error) string {
+	var appErr *temporal.ApplicationError
+	if !errors.As(err, &appErr) || appErr.Type() != domain.TerraformCommandFailedErrorType || !appErr.HasDetails() {
+		return ""
+	}
+	var failure domain.TerraformCommandFailure
+	if appErr.Details(&failure) != nil {
+		return ""
+	}
+	return failure.Message
 }
 
 // carries rejects a run the plan workflow does not plan, before any session

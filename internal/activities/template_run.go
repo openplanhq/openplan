@@ -20,6 +20,7 @@ import (
 	"github.com/vishu42/openplan/internal/runseal"
 	"github.com/vishu42/openplan/internal/sandbox"
 	"go.temporal.io/sdk/activity"
+	"go.temporal.io/sdk/temporal"
 )
 
 type StatusRecorder interface {
@@ -253,7 +254,7 @@ func (activities *TemplateRunActivities) RunTerraform(ctx context.Context, input
 		return domain.RunTerraformActivityOutput{}, fmt.Errorf("close terraform log: %w", closeErr)
 	}
 	if runErr != nil {
-		return domain.RunTerraformActivityOutput{}, fmt.Errorf("run terraform: %w", runErr)
+		return domain.RunTerraformActivityOutput{}, terraformFailure(logsDir, input.LogName, runErr)
 	}
 	var result runTerraformResult
 	if err := json.Unmarshal(data, &result); err != nil {
@@ -273,6 +274,46 @@ func (activities *TemplateRunActivities) RunTerraform(ctx context.Context, input
 		}
 	}
 	return domain.RunTerraformActivityOutput{HasChanges: result.HasChanges, Summary: result.Summary}, nil
+}
+
+// commandErrorTail is how much of a failed command's spool is searched for its
+// error. Terraform prints the error last, so its tail is enough, and a 64 MiB
+// log is never read whole.
+const commandErrorTail = 1 << 20
+
+// terraformFailure is the error a failed command returns. When the command
+// printed an error of its own, the error carries it as its detail, read back
+// from the spool: the spool is already redacted, so redaction stays the one
+// place a credential is taken out. Anything that stops the read leaves the
+// error as it would be without it, because a missing message must never hide
+// the failure.
+func terraformFailure(logsDir, logName string, runErr error) error {
+	wrapped := fmt.Errorf("run terraform: %w", runErr)
+	tail, err := readTail(filepath.Join(logsDir, logsink.FileName(logName)), commandErrorTail)
+	if err != nil {
+		return wrapped
+	}
+	message := commandError(tail)
+	if message == "" {
+		return wrapped
+	}
+	return temporal.NewApplicationErrorWithCause(wrapped.Error(), domain.TerraformCommandFailedErrorType, runErr,
+		domain.TerraformCommandFailure{Message: message})
+}
+
+// readTail reads at most limit bytes from the end of the file at path.
+func readTail(path string, limit int64) ([]byte, error) {
+	file, err := os.Open(path) //nolint:gosec // the spool this process just wrote, under the run's logs dir
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	offset := max(info.Size()-limit, 0)
+	return io.ReadAll(io.NewSectionReader(file, offset, info.Size()-offset))
 }
 
 // changesFileName is the file a plan command's resource changes wait in, in
