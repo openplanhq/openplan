@@ -200,8 +200,8 @@ func TestRunWiresControlPlane(t *testing.T) {
 	if deps.gitHubTokens != nil {
 		t.Fatalf("GitHub token source = %#v, want nil when no App is configured", deps.gitHubTokens)
 	}
-	if deps.liveLogURL != "redis://localhost:6379" {
-		t.Fatalf("dialLiveLogs got %q, want VALKEY_URL", deps.liveLogURL)
+	if deps.valkeyURL != "redis://localhost:6379" {
+		t.Fatalf("dialLiveLogs got %q, want VALKEY_URL", deps.valkeyURL)
 	}
 	if deps.registeredLive != logsink.Stream(deps.liveLogs) {
 		t.Fatal("control activities did not get the client dialLiveLogs returned")
@@ -211,8 +211,8 @@ func TestRunWiresControlPlane(t *testing.T) {
 	}
 	// The registry's tailers pin connections; on the control plane's client
 	// they could starve the activity that ends each log's stream.
-	if deps.liveLogReaderURL != "redis://localhost:6379" {
-		t.Fatalf("dialLiveLogReaders got %q, want VALKEY_URL", deps.liveLogReaderURL)
+	if deps.valkeyReaderURL != "redis://localhost:6379" {
+		t.Fatalf("dialLiveLogReaders got %q, want VALKEY_URL", deps.valkeyReaderURL)
 	}
 	if deps.subscriberReader != logsink.Reader(deps.liveLogReaders) {
 		t.Fatal("the live log registry did not get the client dialLiveLogReaders returned")
@@ -261,7 +261,7 @@ func TestRunWrapsTemporalDialFailure(t *testing.T) {
 func TestRunFailsWhenValkeyIsUnreachable(t *testing.T) {
 	t.Parallel()
 
-	dialErr := errors.New("ping live log server localhost:6379: connection refused")
+	dialErr := errors.New("ping valkey localhost:6379: connection refused")
 	deps := newRecordingAPIDependencies(t)
 	deps.liveLogsErr = dialErr
 
@@ -662,15 +662,15 @@ type recordingAPIDependencies struct {
 	temporalDialed            bool
 	registeredLive            logsink.Stream
 	// liveLogs and liveLogsErr are what dialLiveLogs returns, and
-	// liveLogURL what it was given.
+	// valkeyURL what it was given.
 	liveLogs    *redis.Client
 	liveLogsErr error
-	liveLogURL  string
+	valkeyURL   string
 	// liveLogReaders is what dialLiveLogReaders returns, and
-	// liveLogReaderURL what it was given; subscriberReader is what the
+	// valkeyReaderURL what it was given; subscriberReader is what the
 	// registry was built on.
 	liveLogReaders   *redis.Client
-	liveLogReaderURL string
+	valkeyReaderURL  string
 	subscriberReader logsink.Reader
 }
 
@@ -738,14 +738,14 @@ func newRecordingAPIDependencies(t *testing.T) *recordingAPIDependencies {
 			return deps.serverErr
 		},
 		dialLiveLogs: func(_ context.Context, url string) (*redis.Client, error) {
-			deps.liveLogURL = url
+			deps.valkeyURL = url
 			if deps.liveLogsErr != nil {
 				return nil, deps.liveLogsErr
 			}
 			return deps.liveLogs, nil
 		},
 		dialLiveLogReaders: func(_ context.Context, url string) (*redis.Client, error) {
-			deps.liveLogReaderURL = url
+			deps.valkeyReaderURL = url
 			return deps.liveLogReaders, nil
 		},
 		newLiveLogSubscriber: func(reader logsink.Reader) api.LiveLogSubscriber {

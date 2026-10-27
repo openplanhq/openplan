@@ -60,8 +60,8 @@ func TestRunWiresTemporalWorker(t *testing.T) {
 	if !reflect.DeepEqual(deps.calls, []string{"newSandbox", "dialLiveLogs", "dialTemporal"}) {
 		t.Fatalf("startup order = %v, want the sandbox readied and Valkey dialed before Temporal", deps.calls)
 	}
-	if deps.liveLogURL != "redis://localhost:6379" {
-		t.Fatalf("dialLiveLogs got %q, want VALKEY_URL", deps.liveLogURL)
+	if deps.valkeyURL != "redis://localhost:6379" {
+		t.Fatalf("dialLiveLogs got %q, want VALKEY_URL", deps.valkeyURL)
 	}
 	if deps.execution.live != deps.liveLogs {
 		t.Fatal("activities did not get the client dialLiveLogs returned")
@@ -152,7 +152,7 @@ func TestRunStopsWhenItCannotSandbox(t *testing.T) {
 func TestRunFailsWhenValkeyIsUnreachable(t *testing.T) {
 	t.Parallel()
 
-	dialErr := errors.New("ping live log server localhost:6379: connection refused")
+	dialErr := errors.New("ping valkey localhost:6379: connection refused")
 	deps := newRecordingExecutorDependencies(t)
 	deps.liveLogsErr = dialErr
 
@@ -234,10 +234,10 @@ type recordingExecutorDependencies struct {
 	sandboxConfig  config.SandboxConfig
 	sandboxRunRoot string
 	// liveLogs and liveLogsErr are what dialLiveLogs returns, and
-	// liveLogURL what it was given.
+	// valkeyURL what it was given.
 	liveLogs    *redis.Client
 	liveLogsErr error
-	liveLogURL  string
+	valkeyURL   string
 	// calls records the startup steps in the order they ran.
 	calls []string
 }
@@ -289,7 +289,7 @@ func newRecordingExecutorDependencies(t *testing.T) *recordingExecutorDependenci
 		},
 		dialLiveLogs: func(_ context.Context, url string) (*redis.Client, error) {
 			deps.calls = append(deps.calls, "dialLiveLogs")
-			deps.liveLogURL = url
+			deps.valkeyURL = url
 			if deps.liveLogsErr != nil {
 				return nil, deps.liveLogsErr
 			}

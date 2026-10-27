@@ -151,7 +151,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps e
 	}
 	// Before Temporal too: an executor whose output nobody can watch should
 	// fail at start, not take work and leave its runs' logs dark.
-	liveLogs, err := deps.dialLiveLogs(ctx, cfg.LiveLogURL)
+	liveLogs, err := deps.dialLiveLogs(ctx, cfg.ValkeyURL)
 	if err != nil {
 		return fmt.Errorf("live logs: %w", err)
 	}
