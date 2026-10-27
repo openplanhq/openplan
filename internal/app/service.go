@@ -535,12 +535,12 @@ type DeleteCredentialCommand struct {
 
 // CredentialMetadata is the safe API representation of a credential.
 type CredentialMetadata struct {
-	ID        domain.CredentialID    `json:"id"`
-	Name      string                 `json:"name"`
-	Scope     domain.CredentialScope `json:"scope"`
-	StackID   domain.StackID         `json:"stack_id,omitempty"`
-	Template  domain.StackTemplateID `json:"stack_template_id,omitempty"`
-	Sensitive bool                   `json:"sensitive"`
+	ID              domain.CredentialID    `json:"id"`
+	Name            string                 `json:"name"`
+	Scope           domain.CredentialScope `json:"scope"`
+	StackID         domain.StackID         `json:"stack_id,omitempty"`
+	StackTemplateID domain.StackTemplateID `json:"stack_template_id,omitempty"`
+	Sensitive       bool                   `json:"sensitive"`
 	// Value is set only when Sensitive is false. Create refuses an empty
 	// value, so omitempty drops the key for sensitive credentials alone.
 	Value     string    `json:"value,omitempty"`
@@ -1218,7 +1218,7 @@ func (service *Service) openCredentialValue(credential domain.Credential) (strin
 // credentialMetadata strips the ciphertext and carries the plaintext value
 // only for a credential that is not sensitive.
 func credentialMetadata(credential domain.Credential, value string) CredentialMetadata {
-	metadata := CredentialMetadata{ID: credential.ID, Name: credential.Name, Scope: credentialScope(credential), StackID: credential.StackID, Template: credential.StackTemplateID, Sensitive: credential.Sensitive, CreatedAt: credential.CreatedAt}
+	metadata := CredentialMetadata{ID: credential.ID, Name: credential.Name, Scope: credentialScope(credential), StackID: credential.StackID, StackTemplateID: credential.StackTemplateID, Sensitive: credential.Sensitive, CreatedAt: credential.CreatedAt}
 	if !credential.Sensitive {
 		metadata.Value = value
 	}
