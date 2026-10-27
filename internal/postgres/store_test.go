@@ -991,7 +991,7 @@ func TestCreateAndGetStack(t *testing.T) {
 		Name:                 "Acme Prod",
 		Slug:                 "acme-prod",
 		Tags:                 map[string]string{"env": "prod"},
-		DefaultCredentialIDs: []domain.CredentialSetID{domain.CredentialSetID("credential_123")},
+		DefaultCredentialIDs: []domain.CredentialID{domain.CredentialID("credential_123")},
 		CreatedBy:            domain.UserID("user_123"),
 		CreatedAt:            createdAt,
 	}
@@ -1011,7 +1011,7 @@ func TestCreateAndGetStack(t *testing.T) {
 	if got.Tags["env"] != "prod" {
 		t.Fatalf("tags = %#v", got.Tags)
 	}
-	if len(got.DefaultCredentialIDs) != 1 || got.DefaultCredentialIDs[0] != domain.CredentialSetID("credential_123") {
+	if len(got.DefaultCredentialIDs) != 1 || got.DefaultCredentialIDs[0] != domain.CredentialID("credential_123") {
 		t.Fatalf("default credential IDs = %#v", got.DefaultCredentialIDs)
 	}
 	if !got.CreatedAt.Equal(createdAt) {
@@ -1112,7 +1112,7 @@ func TestCredentialSensitivityRoundTrips(t *testing.T) {
 	tenantID := domain.TenantID("tenant_123")
 	stackTemplate := seedCredentialOwners(t, ctx, store, tenantID)
 
-	written := []domain.CredentialSet{
+	written := []domain.Credential{
 		{ID: "cred_token", TenantID: tenantID, StackID: stackTemplate.StackID, Name: "CLOUD_TOKEN", Ciphertext: "sealed-token", Sensitive: true, CreatedAt: time.Now().UTC()},
 		{ID: "cred_region", TenantID: tenantID, StackID: stackTemplate.StackID, Name: "CLOUD_REGION", Ciphertext: "sealed-region", Sensitive: false, CreatedAt: time.Now().UTC()},
 		{ID: "cred_zone", TenantID: tenantID, StackTemplateID: stackTemplate.ID, Name: "CLOUD_ZONE", Ciphertext: "sealed-zone", Sensitive: false, CreatedAt: time.Now().UTC()},
@@ -1136,9 +1136,9 @@ func TestCredentialSensitivityRoundTrips(t *testing.T) {
 		t.Fatalf("ListCredentialsForStackTemplate returned error: %v", err)
 	}
 
-	assertSensitivity(t, "stack list", stackCredentials, map[domain.CredentialSetID]bool{"cred_token": true, "cred_region": false})
-	assertSensitivity(t, "stack template list", templateCredentials, map[domain.CredentialSetID]bool{"cred_zone": false})
-	assertSensitivity(t, "runtime list", runtimeCredentials, map[domain.CredentialSetID]bool{"cred_token": true, "cred_region": false, "cred_zone": false})
+	assertSensitivity(t, "stack list", stackCredentials, map[domain.CredentialID]bool{"cred_token": true, "cred_region": false})
+	assertSensitivity(t, "stack template list", templateCredentials, map[domain.CredentialID]bool{"cred_zone": false})
+	assertSensitivity(t, "runtime list", runtimeCredentials, map[domain.CredentialID]bool{"cred_token": true, "cred_region": false, "cred_zone": false})
 }
 
 // A row written without the column, as every row before 0039 was, is
@@ -1163,7 +1163,7 @@ func TestCredentialWithoutSensitivityIsSensitive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListCredentials returned error: %v", err)
 	}
-	assertSensitivity(t, "stack list", credentials, map[domain.CredentialSetID]bool{"cred_legacy": true})
+	assertSensitivity(t, "stack list", credentials, map[domain.CredentialID]bool{"cred_legacy": true})
 }
 
 // seedCredentialOwners stores a stack and one stack template in it, the two
@@ -1200,10 +1200,10 @@ func seedCredentialOwners(t *testing.T, ctx context.Context, store *Store, tenan
 	return stackTemplate
 }
 
-func assertSensitivity(t *testing.T, read string, credentials []domain.CredentialSet, want map[domain.CredentialSetID]bool) {
+func assertSensitivity(t *testing.T, read string, credentials []domain.Credential, want map[domain.CredentialID]bool) {
 	t.Helper()
 
-	got := make(map[domain.CredentialSetID]bool, len(credentials))
+	got := make(map[domain.CredentialID]bool, len(credentials))
 	for _, credential := range credentials {
 		got[credential.ID] = credential.Sensitive
 	}

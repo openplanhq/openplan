@@ -138,10 +138,10 @@ type StackTemplateRepository interface {
 
 // CredentialRepository persists encrypted, scope-owned Terraform credentials.
 type CredentialRepository interface {
-	CreateCredential(ctx context.Context, credential domain.CredentialSet) error
-	ListCredentials(ctx context.Context, tenantID domain.TenantID, scope domain.CredentialScope, ownerID string) ([]domain.CredentialSet, error)
-	DeleteCredential(ctx context.Context, tenantID domain.TenantID, id domain.CredentialSetID) error
-	ListCredentialsForStackTemplate(ctx context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID) ([]domain.CredentialSet, error)
+	CreateCredential(ctx context.Context, credential domain.Credential) error
+	ListCredentials(ctx context.Context, tenantID domain.TenantID, scope domain.CredentialScope, ownerID string) ([]domain.Credential, error)
+	DeleteCredential(ctx context.Context, tenantID domain.TenantID, id domain.CredentialID) error
+	ListCredentialsForStackTemplate(ctx context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID) ([]domain.Credential, error)
 }
 
 // CredentialCipher protects credential values before persistence, and opens
@@ -336,7 +336,7 @@ type Service struct {
 	Workflows                WorkflowDispatcher
 	StackIDs                 StackIDGenerator
 	StackTemplateIDs         StackTemplateIDGenerator
-	CredentialIDs            CredentialSetIDGenerator
+	CredentialIDs            CredentialIDGenerator
 	RunIDs                   TemplateRunIDGenerator
 	RegistrationIDs          TemplateRegistrationIDGenerator
 	Clock                    Clock
@@ -344,10 +344,10 @@ type Service struct {
 	Users                    UserRepository
 }
 
-// CredentialSetIDGenerator creates credential identifiers.
-type CredentialSetIDGenerator interface {
-	// NewCredentialSetID returns a fresh identifier for a credential record.
-	NewCredentialSetID() domain.CredentialSetID
+// CredentialIDGenerator creates credential identifiers.
+type CredentialIDGenerator interface {
+	// NewCredentialID returns a fresh identifier for a credential record.
+	NewCredentialID() domain.CredentialID
 }
 
 // NewService creates a Service from app-owned dependencies.
@@ -372,7 +372,7 @@ func NewService(service Service) *Service {
 		service.StackTemplateIDs = randomStackTemplateIDGenerator{}
 	}
 	if service.CredentialIDs == nil {
-		service.CredentialIDs = randomCredentialSetIDGenerator{}
+		service.CredentialIDs = randomCredentialIDGenerator{}
 	}
 
 	return &service
@@ -460,7 +460,7 @@ type CreateStackCommand struct {
 	Name                 string
 	Slug                 string
 	Tags                 map[string]string
-	DefaultCredentialIDs []domain.CredentialSetID
+	DefaultCredentialIDs []domain.CredentialID
 }
 
 // StackView returns one stack with its installed templates.
@@ -529,14 +529,14 @@ type ListCredentialsCommand struct {
 // DeleteCredentialCommand asks the app to remove one scoped credential.
 type DeleteCredentialCommand struct {
 	TenantID        domain.TenantID
-	CredentialID    domain.CredentialSetID
+	CredentialID    domain.CredentialID
 	StackID         domain.StackID
 	StackTemplateID domain.StackTemplateID
 }
 
 // CredentialMetadata is the safe API representation of a credential.
 type CredentialMetadata struct {
-	ID        domain.CredentialSetID `json:"id"`
+	ID        domain.CredentialID    `json:"id"`
 	Name      string                 `json:"name"`
 	Scope     domain.CredentialScope `json:"scope"`
 	StackID   domain.StackID         `json:"stack_id,omitempty"`
@@ -807,7 +807,7 @@ func (service *Service) CreateStack(ctx context.Context, command CreateStackComm
 		// stack that exists is always one its creator can reach.
 		Status:               domain.StackStatusReady,
 		Tags:                 cloneStringMap(command.Tags),
-		DefaultCredentialIDs: append([]domain.CredentialSetID(nil), command.DefaultCredentialIDs...),
+		DefaultCredentialIDs: append([]domain.CredentialID(nil), command.DefaultCredentialIDs...),
 		CreatedBy:            actor,
 		CreatedAt:            service.Clock.Now(),
 	}
@@ -1090,8 +1090,8 @@ func (service *Service) CreateCredential(ctx context.Context, command CreateCred
 	if err != nil {
 		return CredentialMetadata{}, fmt.Errorf("encrypt credential: %w", err)
 	}
-	credential := domain.CredentialSet{
-		ID:              service.CredentialIDs.NewCredentialSetID(),
+	credential := domain.Credential{
+		ID:              service.CredentialIDs.NewCredentialID(),
 		TenantID:        command.TenantID,
 		StackID:         stackID,
 		StackTemplateID: templateID,
@@ -1202,7 +1202,7 @@ func (service *Service) DeleteCredential(ctx context.Context, command DeleteCred
 // sensitive, and returns "" for one that is: a sensitive value is never opened
 // for a read. A value that won't open means a wrong or missing key, an
 // operator fault, so the caller fails the whole read rather than hide the row.
-func (service *Service) openCredentialValue(credential domain.CredentialSet) (string, error) {
+func (service *Service) openCredentialValue(credential domain.Credential) (string, error) {
 	if credential.Sensitive {
 		return "", nil
 	}
@@ -1218,7 +1218,7 @@ func (service *Service) openCredentialValue(credential domain.CredentialSet) (st
 
 // credentialMetadata strips the ciphertext and carries the plaintext value
 // only for a credential that is not sensitive.
-func credentialMetadata(credential domain.CredentialSet, value string) CredentialMetadata {
+func credentialMetadata(credential domain.Credential, value string) CredentialMetadata {
 	metadata := CredentialMetadata{ID: credential.ID, Name: credential.Name, Scope: credentialScope(credential), StackID: credential.StackID, Template: credential.StackTemplateID, Sensitive: credential.Sensitive, CreatedAt: credential.CreatedAt}
 	if !credential.Sensitive {
 		metadata.Value = value
@@ -1227,7 +1227,7 @@ func credentialMetadata(credential domain.CredentialSet, value string) Credentia
 }
 
 // credentialScope derives the public scope from the populated owner column.
-func credentialScope(credential domain.CredentialSet) domain.CredentialScope {
+func credentialScope(credential domain.Credential) domain.CredentialScope {
 	if credential.StackTemplateID != "" {
 		return domain.CredentialScopeStackTemplate
 	}
@@ -2524,7 +2524,7 @@ func validateCreateStackCommand(command CreateStackCommand) error {
 	if !validStackTags(command.Tags) {
 		problems = append(problems, fieldError(ErrInvalidCommand, IssueInvalidFormat, "tags are invalid", "tags"))
 	}
-	if !validCredentialSetIDs(command.DefaultCredentialIDs) {
+	if !validCredentialIDs(command.DefaultCredentialIDs) {
 		problems = append(problems, fieldError(ErrInvalidCommand, IssueInvalid,
 			"default_credential_ids must not contain an empty id", "default_credential_ids"))
 	}
@@ -3008,7 +3008,7 @@ func validTagValue(value string) bool {
 	return true
 }
 
-func validCredentialSetIDs(ids []domain.CredentialSetID) bool {
+func validCredentialIDs(ids []domain.CredentialID) bool {
 	for _, id := range ids {
 		if strings.TrimSpace(string(id)) == "" {
 			return false
@@ -3107,9 +3107,9 @@ func (randomStackTemplateIDGenerator) NewStackTemplateID() domain.StackTemplateI
 	return randomID[domain.StackTemplateID]("stack_template")
 }
 
-type randomCredentialSetIDGenerator struct{}
+type randomCredentialIDGenerator struct{}
 
-// NewCredentialSetID creates a random identifier for a persisted credential record.
-func (randomCredentialSetIDGenerator) NewCredentialSetID() domain.CredentialSetID {
-	return randomID[domain.CredentialSetID]("credential")
+// NewCredentialID creates a random identifier for a persisted credential record.
+func (randomCredentialIDGenerator) NewCredentialID() domain.CredentialID {
+	return randomID[domain.CredentialID]("credential")
 }

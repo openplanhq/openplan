@@ -897,7 +897,7 @@ func TestRunCredentialsRoundTripThroughTheRunKey(t *testing.T) {
 		t.Fatalf("PrepareWorkspace returned error: %v", err)
 	}
 	publicKey := workspace.PublicKey
-	store := &controlStoreStub{credentials: []domain.CredentialSet{
+	store := &controlStoreStub{credentials: []domain.Credential{
 		{StackID: "stack_123", Name: "AWS_SECRET_ACCESS_KEY", Ciphertext: "canary-7f3a", Sensitive: true},
 	}}
 	sealed, err := NewControlActivities(store, nil, nil).SealRunCredentials(context.Background(), domain.SealRunCredentialsActivityInput{
@@ -956,7 +956,7 @@ func TestPrepareWorkspaceReturnsRunPublicKey(t *testing.T) {
 // controlStoreStub satisfies ControlStore, delegating the writes to recorders a
 // test cares about.
 type controlStoreStub struct {
-	credentials []domain.CredentialSet
+	credentials []domain.Credential
 	status      *recordingStatusRecorder
 	logs        *recordingLogMetadataRecorder
 	planKey     []byte
@@ -983,7 +983,7 @@ func (store *controlStoreStub) RecordTemplateRunLog(ctx context.Context, log dom
 	return store.logs.RecordTemplateRunLog(ctx, log)
 }
 
-func (store *controlStoreStub) ListCredentialsForStackTemplate(context.Context, domain.TenantID, domain.StackTemplateID) ([]domain.CredentialSet, error) {
+func (store *controlStoreStub) ListCredentialsForStackTemplate(context.Context, domain.TenantID, domain.StackTemplateID) ([]domain.Credential, error) {
 	return store.credentials, nil
 }
 

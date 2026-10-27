@@ -94,7 +94,7 @@ func TestListCredentialsOpensOnlyValuesThatAreNotSensitive(t *testing.T) {
 	t.Parallel()
 
 	fixture := newCredentialFixture(t)
-	fixture.credentials.listed = []domain.CredentialSet{
+	fixture.credentials.listed = []domain.Credential{
 		{ID: "cred_secret", StackID: "stack_123", Name: "AWS_SECRET_ACCESS_KEY", Ciphertext: "sealed:hunter2", Sensitive: true},
 		{ID: "cred_region", StackID: "stack_123", Name: "AWS_REGION", Ciphertext: "sealed:us-east-1", Sensitive: false},
 	}
@@ -114,7 +114,7 @@ func TestListCredentialsFailsWhenAValueWontOpen(t *testing.T) {
 	t.Parallel()
 
 	fixture := newCredentialFixture(t)
-	fixture.credentials.listed = []domain.CredentialSet{
+	fixture.credentials.listed = []domain.Credential{
 		{ID: "cred_region", StackID: "stack_123", Name: "AWS_REGION", Ciphertext: "under another key", Sensitive: false},
 	}
 
@@ -144,15 +144,15 @@ func newCredentialFixture(t *testing.T) credentialFixture {
 
 type recordingCredentialRepository struct {
 	refusingCredentialRepository
-	created []domain.CredentialSet
-	listed  []domain.CredentialSet
+	created []domain.Credential
+	listed  []domain.Credential
 }
 
-func (repository *recordingCredentialRepository) ListCredentials(context.Context, domain.TenantID, domain.CredentialScope, string) ([]domain.CredentialSet, error) {
+func (repository *recordingCredentialRepository) ListCredentials(context.Context, domain.TenantID, domain.CredentialScope, string) ([]domain.Credential, error) {
 	return repository.listed, nil
 }
 
-func (repository *recordingCredentialRepository) CreateCredential(_ context.Context, credential domain.CredentialSet) error {
+func (repository *recordingCredentialRepository) CreateCredential(_ context.Context, credential domain.Credential) error {
 	repository.created = append(repository.created, credential)
 	return nil
 }

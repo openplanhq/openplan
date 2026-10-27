@@ -66,7 +66,7 @@ func createTemplateRegistration(ctx context.Context, exec pgxExecutor, registrat
 }
 
 // CreateCredential stores one already-encrypted credential under exactly one scope owner.
-func (store *Store) CreateCredential(ctx context.Context, credential domain.CredentialSet) error {
+func (store *Store) CreateCredential(ctx context.Context, credential domain.Credential) error {
 	_, err := store.pool.Exec(ctx, `
 		insert into scoped_credentials (id, tenant_id, stack_id, stack_template_id, name, ciphertext, sensitive, created_at)
 		values ($1, $2, nullif($3, ''), nullif($4, ''), $5, $6, $7, $8)
@@ -81,7 +81,7 @@ func (store *Store) CreateCredential(ctx context.Context, credential domain.Cred
 }
 
 // ListCredentials returns encrypted credential records owned directly by one scope owner.
-func (store *Store) ListCredentials(ctx context.Context, tenantID domain.TenantID, scope domain.CredentialScope, ownerID string) ([]domain.CredentialSet, error) {
+func (store *Store) ListCredentials(ctx context.Context, tenantID domain.TenantID, scope domain.CredentialScope, ownerID string) ([]domain.Credential, error) {
 	column := "stack_id"
 	if scope == domain.CredentialScopeStackTemplate {
 		column = "stack_template_id"
@@ -103,7 +103,7 @@ func (store *Store) ListCredentials(ctx context.Context, tenantID domain.TenantI
 }
 
 // DeleteCredential removes one tenant-owned credential record by ID.
-func (store *Store) DeleteCredential(ctx context.Context, tenantID domain.TenantID, id domain.CredentialSetID) error {
+func (store *Store) DeleteCredential(ctx context.Context, tenantID domain.TenantID, id domain.CredentialID) error {
 	result, err := store.pool.Exec(ctx, `delete from scoped_credentials where tenant_id = $1 and id = $2`, tenantID, id)
 	if err != nil {
 		return fmt.Errorf("delete credential: %w", err)
@@ -115,7 +115,7 @@ func (store *Store) DeleteCredential(ctx context.Context, tenantID domain.Tenant
 }
 
 // ListCredentialsForStackTemplate returns stack credentials plus template credentials for runtime inheritance.
-func (store *Store) ListCredentialsForStackTemplate(ctx context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID) ([]domain.CredentialSet, error) {
+func (store *Store) ListCredentialsForStackTemplate(ctx context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID) ([]domain.Credential, error) {
 	rows, err := store.pool.Query(ctx, `
 		select c.id, c.tenant_id, c.stack_id, c.stack_template_id, c.name, c.ciphertext, c.sensitive, c.created_at
 		from scoped_credentials c
@@ -137,10 +137,10 @@ type credentialRows interface {
 }
 
 // scanCredentials converts nullable scope-owner columns into credential domain records.
-func scanCredentials(rows credentialRows) ([]domain.CredentialSet, error) {
-	credentials := make([]domain.CredentialSet, 0)
+func scanCredentials(rows credentialRows) ([]domain.Credential, error) {
+	credentials := make([]domain.Credential, 0)
 	for rows.Next() {
-		var credential domain.CredentialSet
+		var credential domain.Credential
 		var stackID sql.NullString
 		var stackTemplateID sql.NullString
 		if err := rows.Scan(&credential.ID, &credential.TenantID, &stackID, &stackTemplateID, &credential.Name, &credential.Ciphertext, &credential.Sensitive, &credential.CreatedAt); err != nil {
@@ -2086,22 +2086,22 @@ func decodeStackTags(tagsJSON []byte) (map[string]string, error) {
 
 // encodeStackCredentialIDs is a stack's default credentials as stored: [] for
 // none.
-func encodeStackCredentialIDs(ids []domain.CredentialSetID) ([]byte, error) {
+func encodeStackCredentialIDs(ids []domain.CredentialID) ([]byte, error) {
 	if ids == nil {
-		ids = []domain.CredentialSetID{}
+		ids = []domain.CredentialID{}
 	}
 	return json.Marshal(ids)
 }
 
 // decodeStackCredentialIDs reads stored default credentials, an empty slice
 // for none.
-func decodeStackCredentialIDs(idsJSON []byte) ([]domain.CredentialSetID, error) {
-	var ids []domain.CredentialSetID
+func decodeStackCredentialIDs(idsJSON []byte) ([]domain.CredentialID, error) {
+	var ids []domain.CredentialID
 	if err := json.Unmarshal(idsJSON, &ids); err != nil {
 		return nil, err
 	}
 	if ids == nil {
-		ids = []domain.CredentialSetID{}
+		ids = []domain.CredentialID{}
 	}
 	return ids, nil
 }

@@ -93,27 +93,27 @@ func newCredentialTestServer(t *testing.T) (*Server, *memoryCredentialRepository
 // list read open the same row the create stored.
 type memoryCredentialRepository struct {
 	mu      sync.Mutex
-	created []domain.CredentialSet
+	created []domain.Credential
 }
 
-func (repository *memoryCredentialRepository) CreateCredential(_ context.Context, credential domain.CredentialSet) error {
+func (repository *memoryCredentialRepository) CreateCredential(_ context.Context, credential domain.Credential) error {
 	repository.mu.Lock()
 	defer repository.mu.Unlock()
 	repository.created = append(repository.created, credential)
 	return nil
 }
 
-func (repository *memoryCredentialRepository) ListCredentials(context.Context, domain.TenantID, domain.CredentialScope, string) ([]domain.CredentialSet, error) {
+func (repository *memoryCredentialRepository) ListCredentials(context.Context, domain.TenantID, domain.CredentialScope, string) ([]domain.Credential, error) {
 	repository.mu.Lock()
 	defer repository.mu.Unlock()
-	return append([]domain.CredentialSet(nil), repository.created...), nil
+	return append([]domain.Credential(nil), repository.created...), nil
 }
 
-func (*memoryCredentialRepository) DeleteCredential(context.Context, domain.TenantID, domain.CredentialSetID) error {
+func (*memoryCredentialRepository) DeleteCredential(context.Context, domain.TenantID, domain.CredentialID) error {
 	return nil
 }
 
-func (*memoryCredentialRepository) ListCredentialsForStackTemplate(context.Context, domain.TenantID, domain.StackTemplateID) ([]domain.CredentialSet, error) {
+func (*memoryCredentialRepository) ListCredentialsForStackTemplate(context.Context, domain.TenantID, domain.StackTemplateID) ([]domain.Credential, error) {
 	return nil, nil
 }
 

@@ -124,12 +124,12 @@ func TestEncodeStackCredentialIDsStoresNoneAsAnEmptyArray(t *testing.T) {
 
 	for _, tc := range []struct {
 		name string
-		ids  []domain.CredentialSetID
+		ids  []domain.CredentialID
 		want string
 	}{
 		{name: "nil", ids: nil, want: "[]"},
-		{name: "empty", ids: []domain.CredentialSetID{}, want: "[]"},
-		{name: "ids", ids: []domain.CredentialSetID{"cred_1", "cred_2"}, want: `["cred_1","cred_2"]`},
+		{name: "empty", ids: []domain.CredentialID{}, want: "[]"},
+		{name: "ids", ids: []domain.CredentialID{"cred_1", "cred_2"}, want: `["cred_1","cred_2"]`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := encodeStackCredentialIDs(tc.ids)

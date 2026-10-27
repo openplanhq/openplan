@@ -111,7 +111,7 @@ func TestCreateStackDerivesSlugAndPersistsStack(t *testing.T) {
 		Tags: map[string]string{
 			"env": "prod",
 		},
-		DefaultCredentialIDs: []domain.CredentialSetID{domain.CredentialSetID("credential_123")},
+		DefaultCredentialIDs: []domain.CredentialID{domain.CredentialID("credential_123")},
 	})
 	if err != nil {
 		t.Fatalf("CreateStack returned error: %v", err)
@@ -135,7 +135,7 @@ func TestCreateStackDerivesSlugAndPersistsStack(t *testing.T) {
 	if stacks.created.Tags["env"] != "prod" {
 		t.Fatalf("persisted tags = %#v", stacks.created.Tags)
 	}
-	if len(stacks.created.DefaultCredentialIDs) != 1 || stacks.created.DefaultCredentialIDs[0] != domain.CredentialSetID("credential_123") {
+	if len(stacks.created.DefaultCredentialIDs) != 1 || stacks.created.DefaultCredentialIDs[0] != domain.CredentialID("credential_123") {
 		t.Fatalf("default credential IDs = %#v", stacks.created.DefaultCredentialIDs)
 	}
 }
@@ -235,8 +235,8 @@ func TestCreateStackRejectsEmptyDefaultCredentialID(t *testing.T) {
 	_, err := service.CreateStack(authenticatedContext(), CreateStackCommand{
 		TenantID: domain.TenantID("tenant_123"),
 		Name:     "Acme Prod",
-		DefaultCredentialIDs: []domain.CredentialSetID{
-			domain.CredentialSetID(""),
+		DefaultCredentialIDs: []domain.CredentialID{
+			domain.CredentialID(""),
 		},
 	})
 	if !errors.Is(err, ErrInvalidCommand) {
@@ -3900,7 +3900,7 @@ func TestDefaultIDGeneratorsMintPrefixedRandomIDs(t *testing.T) {
 		"template_registration": func() string { return string(randomTemplateRegistrationIDGenerator{}.NewTemplateRegistrationID()) },
 		"stack":                 func() string { return string(randomStackIDGenerator{}.NewStackID()) },
 		"stack_template":        func() string { return string(randomStackTemplateIDGenerator{}.NewStackTemplateID()) },
-		"credential":            func() string { return string(randomCredentialSetIDGenerator{}.NewCredentialSetID()) },
+		"credential":            func() string { return string(randomCredentialIDGenerator{}.NewCredentialID()) },
 	}
 
 	for prefix, generate := range generators {

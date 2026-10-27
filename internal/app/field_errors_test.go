@@ -76,7 +76,7 @@ func TestCreateStackReportsEveryInvalidField(t *testing.T) {
 		Name:                 " ",
 		Slug:                 "Bad Slug",
 		Tags:                 map[string]string{"bad key": "x"},
-		DefaultCredentialIDs: []domain.CredentialSetID{""},
+		DefaultCredentialIDs: []domain.CredentialID{""},
 	})
 	if !errors.Is(err, ErrInvalidCommand) {
 		t.Fatalf("error = %v, want ErrInvalidCommand", err)

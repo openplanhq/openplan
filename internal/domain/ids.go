@@ -20,5 +20,5 @@ type (
 	StackTemplateID        ID
 	TemplateRunID          ID
 	StackRunID             ID
-	CredentialSetID        ID
+	CredentialID           ID
 )

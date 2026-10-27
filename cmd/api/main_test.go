@@ -1110,7 +1110,7 @@ func (recordingStore) RecordTemplateRunLog(context.Context, domain.TemplateRunLo
 	return nil
 }
 
-func (recordingStore) ListCredentialsForStackTemplate(context.Context, domain.TenantID, domain.StackTemplateID) ([]domain.CredentialSet, error) {
+func (recordingStore) ListCredentialsForStackTemplate(context.Context, domain.TenantID, domain.StackTemplateID) ([]domain.Credential, error) {
 	return nil, nil
 }
 

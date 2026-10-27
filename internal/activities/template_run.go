@@ -56,7 +56,7 @@ type TemplateRunLogStore interface {
 
 type CredentialReader interface {
 	// ListCredentialsForStackTemplate returns encrypted credentials inherited by a template.
-	ListCredentialsForStackTemplate(context.Context, domain.TenantID, domain.StackTemplateID) ([]domain.CredentialSet, error)
+	ListCredentialsForStackTemplate(context.Context, domain.TenantID, domain.StackTemplateID) ([]domain.Credential, error)
 }
 
 type CredentialDecryptor interface {
