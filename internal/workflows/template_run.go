@@ -515,7 +515,7 @@ func (s *session) fetchSource() error {
 		WorkspacePath:     s.ws.path,
 		RepoOwner:         s.run.input.RepoOwner,
 		RepoName:          s.run.input.RepoName,
-		SourceRef:         s.run.input.SelectedRef,
+		SourceRef:         s.run.input.SourceRef,
 		ResolvedCommitSHA: s.run.input.ResolvedCommitSHA,
 		RootPath:          s.run.input.RootPath,
 		SealedToken:       token.SealedToken,

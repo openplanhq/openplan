@@ -30,7 +30,7 @@ func fullTemplateRun() domain.TemplateRun {
 	summary := &domain.PlanSummary{Add: 1, Change: 2, Destroy: 3}
 	return domain.TemplateRun{
 		ID: "run-1", TenantID: "tenant-1", StackTemplateID: "st-1", TemplateRevisionID: "rev-1",
-		SourceTemplateID: "src-1", Operation: domain.OperationApply, SelectedRef: "main",
+		SourceTemplateID: "src-1", Operation: domain.OperationApply, SourceRef: "main",
 		ResolvedCommitSHA: "abc", WorkspaceName: "ws", ConfigJSON: json.RawMessage(`{"secret":"x"}`),
 		BackendType: "s3", BackendConfigHash: "hash", Status: domain.TemplateRunCompleted,
 		Step: domain.TemplateRunStepApplying, TriggerActor: "alice", TriggerActorDisplayName: "Alice",
@@ -55,7 +55,7 @@ func TestTemplateRunResponseFields(t *testing.T) {
 
 	assert.Equal(t, []string{
 		"auto_approve", "command_error", "completed_at", "created_at", "error_summary", "executions", "id",
-		"operation", "plan_changes", "plan_summary", "resolved_commit_sha", "run_number", "selected_ref",
+		"operation", "plan_changes", "plan_summary", "resolved_commit_sha", "run_number", "source_ref",
 		"stack_template_id", "status", "step", "template_revision_id", "tenant_id",
 		"trigger_actor", "trigger_actor_display_name",
 	}, jsonKeys(t, response))

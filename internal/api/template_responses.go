@@ -22,7 +22,7 @@ type templateRunResponse struct {
 	StackTemplateID         string                         `json:"stack_template_id"`
 	TemplateRevisionID      string                         `json:"template_revision_id"`
 	Operation               string                         `json:"operation"`
-	SelectedRef             string                         `json:"selected_ref"`
+	SourceRef               string                         `json:"source_ref"`
 	ResolvedCommitSHA       string                         `json:"resolved_commit_sha"`
 	Status                  string                         `json:"status"`
 	Step                    string                         `json:"step"`
@@ -209,7 +209,7 @@ func newTemplateRunResponse(run domain.TemplateRun) templateRunResponse {
 		StackTemplateID:         string(run.StackTemplateID),
 		TemplateRevisionID:      string(run.TemplateRevisionID),
 		Operation:               string(run.Operation),
-		SelectedRef:             run.SelectedRef,
+		SourceRef:               run.SourceRef,
 		ResolvedCommitSHA:       run.ResolvedCommitSHA,
 		Status:                  string(run.Status),
 		Step:                    string(run.Step),

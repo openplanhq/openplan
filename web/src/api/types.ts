@@ -281,7 +281,7 @@ export interface TemplateRun {
   stack_template_id: string;
   template_revision_id: string;
   operation: Operation;
-  selected_ref: string;
+  source_ref: string;
   resolved_commit_sha: string;
   status: TemplateRunStatus;
   // The latest step of the workflow that started last. Empty until that

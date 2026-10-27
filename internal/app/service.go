@@ -988,7 +988,7 @@ func (service *Service) StartTemplateRun(ctx context.Context, command StartTempl
 		// The ref comes from the revision being run, not from the component:
 		// the component's install-time ref does not change when the desired
 		// revision does, so it would misreport what this run is against.
-		SelectedRef:       templateRevision.SourceRef,
+		SourceRef:         templateRevision.SourceRef,
 		ResolvedCommitSHA: templateRevision.ResolvedCommitSHA,
 		WorkspaceName:     stackTemplate.WorkspaceName,
 		ConfigJSON:        desiredConfigJSON,
@@ -2210,7 +2210,7 @@ func templateRunWorkflowInput(run domain.TemplateRun, templateRevision domain.Te
 		TenantID:          run.TenantID,
 		StackTemplateID:   run.StackTemplateID,
 		Operation:         run.Operation,
-		SelectedRef:       run.SelectedRef,
+		SourceRef:         run.SourceRef,
 		ResolvedCommitSHA: run.ResolvedCommitSHA,
 		WorkspaceName:     run.WorkspaceName,
 		RepoOwner:         templateRevision.RepoOwner,

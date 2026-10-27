@@ -279,7 +279,7 @@ func TestTemplateRunWorkflowInputUsesTraitTypes(t *testing.T) {
 		TenantID:        TenantID("tenant_123"),
 		StackTemplateID: StackTemplateID("stack_template_123"),
 		Operation:       OperationDestroy,
-		SelectedRef:     "main",
+		SourceRef:       "main",
 		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
 		RepoOwner:       "acme",
 		RepoName:        "infra",

@@ -862,8 +862,8 @@ func TestTemplatePlanWorkflowRecordsPlanSteps(t *testing.T) {
 			if activityInput.RepoName != input.RepoName {
 				t.Fatalf("fetch source RepoName = %q, want %q", activityInput.RepoName, input.RepoName)
 			}
-			if activityInput.SourceRef != input.SelectedRef {
-				t.Fatalf("fetch source SourceRef = %q, want %q", activityInput.SourceRef, input.SelectedRef)
+			if activityInput.SourceRef != input.SourceRef {
+				t.Fatalf("fetch source SourceRef = %q, want %q", activityInput.SourceRef, input.SourceRef)
 			}
 			if activityInput.RootPath != input.RootPath {
 				t.Fatalf("fetch source RootPath = %q, want %q", activityInput.RootPath, input.RootPath)
@@ -1530,7 +1530,7 @@ func templateRunWorkflowInput(operation domain.OperationType) domain.TemplateRun
 		TenantID:        domain.TenantID("tenant_123"),
 		StackTemplateID: domain.StackTemplateID("stack_template_123"),
 		Operation:       operation,
-		SelectedRef:     "main",
+		SourceRef:       "main",
 		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
 		RepoOwner:       "acme",
 		RepoName:        "infra-templates",

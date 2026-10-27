@@ -71,7 +71,7 @@ func historyRunScenarios() []runScenario {
 			StackTemplateID:   "stack-template-history",
 			Operation:         operation,
 			AutoApprove:       autoApprove,
-			SelectedRef:       "main",
+			SourceRef:         "main",
 			ResolvedCommitSHA: "0123456789abcdef0123456789abcdef01234567",
 			WorkspaceName:     "history",
 			RepoOwner:         "openplanhq",

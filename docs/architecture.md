@@ -412,7 +412,7 @@ A `StackTemplate` is one installed template inside one stack.
 StackTemplate
   stack_id
   template_id
-  selected_ref
+  source_ref
   workspace_name
   config_json
   last_applied_run_id

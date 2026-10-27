@@ -662,8 +662,8 @@ func TestStartTemplateRunCreatesQueuedRunWithoutDispatchingWorkflow(t *testing.T
 		t.Fatalf("run.WorkspaceName = %q", run.WorkspaceName)
 	}
 
-	if run.SelectedRef != "main" {
-		t.Fatalf("run.SelectedRef = %q, want main", run.SelectedRef)
+	if run.SourceRef != "main" {
+		t.Fatalf("run.SourceRef = %q, want main", run.SourceRef)
 	}
 
 	if run.TemplateRevisionID != domain.TemplateRevisionID("template_rev_2") {
@@ -1403,8 +1403,8 @@ func TestStartTemplateRunStampsTheRefOfTheRevisionBeingRun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StartTemplateRun returned error: %v", err)
 	}
-	if run.SelectedRef != "v2.0.0" {
-		t.Fatalf("run.SelectedRef = %q, want v2.0.0", run.SelectedRef)
+	if run.SourceRef != "v2.0.0" {
+		t.Fatalf("run.SourceRef = %q, want v2.0.0", run.SourceRef)
 	}
 	// The ref and the commit describe the same revision, which is the property
 	// that was impossible to guarantee while the component carried its own ref.
@@ -3663,7 +3663,7 @@ func TestStartTemplateRunPairsRunWithStartIntentInTransaction(t *testing.T) {
 	if err := json.Unmarshal(work.requests[0].Payload, &payload); err != nil {
 		t.Fatalf("decode start intent: %v", err)
 	}
-	if payload.RunID != run.ID || payload.TenantID != run.TenantID || payload.StackTemplateID != run.StackTemplateID || payload.Operation != run.Operation || payload.SelectedRef != run.SelectedRef || payload.WorkspaceName != run.WorkspaceName || payload.RepoOwner != "acme" || payload.RepoName != "infra" || payload.RootPath != "modules/vpc" || string(payload.ConfigJSON) != `{"region":"us-east-1"}` {
+	if payload.RunID != run.ID || payload.TenantID != run.TenantID || payload.StackTemplateID != run.StackTemplateID || payload.Operation != run.Operation || payload.SourceRef != run.SourceRef || payload.WorkspaceName != run.WorkspaceName || payload.RepoOwner != "acme" || payload.RepoName != "infra" || payload.RootPath != "modules/vpc" || string(payload.ConfigJSON) != `{"region":"us-east-1"}` {
 		t.Fatalf("start payload = %#v", payload)
 	}
 	// The executor checks out this commit. Without it in the payload the run would

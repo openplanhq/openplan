@@ -2759,7 +2759,7 @@ components:
             The revision this run executed. Pinned when the run started, so
             history stays accurate after an upgrade.
         operation: { $ref: "#/components/schemas/OperationType" }
-        selected_ref: { type: string }
+        source_ref: { type: string }
         resolved_commit_sha: { type: string }
         status: { $ref: "#/components/schemas/TemplateRunStatus" }
         step:
@@ -2851,7 +2851,7 @@ components:
           items: { $ref: "#/components/schemas/TemplateRunWorkflowExecution" }
       required:
         [id, tenant_id, stack_template_id, template_revision_id, operation,
-         selected_ref, resolved_commit_sha, status, step, trigger_actor,
+         source_ref, resolved_commit_sha, status, step, trigger_actor,
          trigger_actor_display_name, created_at, error_summary, command_error, run_number,
          auto_approve, plan_summary, plan_changes]
 

@@ -57,14 +57,14 @@ func TestListTemplateRunsPageAndGetByNumber(t *testing.T) {
 	for number := 1; number <= 5; number++ {
 		seedTemplateRun(t, ctx, pool, domain.TemplateRun{
 			ID: domain.TemplateRunID(fmt.Sprintf("run_%d", number)), TenantID: "tenant_123",
-			StackTemplateID: "stack_template_123", Operation: domain.OperationPlan, SelectedRef: "main",
+			StackTemplateID: "stack_template_123", Operation: domain.OperationPlan, SourceRef: "main",
 			WorkspaceName: "ws", Status: domain.TemplateRunCompleted, TriggerActor: "user_123",
 			CreatedAt: time.Date(2026, 10, 17, 9, number, 0, 0, time.UTC),
 		})
 	}
 	seedTemplateRun(t, ctx, pool, domain.TemplateRun{
 		ID: "run_elsewhere", TenantID: "tenant_123", StackTemplateID: "stack_template_456",
-		Operation: domain.OperationPlan, SelectedRef: "main", WorkspaceName: "ws",
+		Operation: domain.OperationPlan, SourceRef: "main", WorkspaceName: "ws",
 		Status: domain.TemplateRunCompleted, TriggerActor: "user_123", CreatedAt: time.Now(),
 	})
 

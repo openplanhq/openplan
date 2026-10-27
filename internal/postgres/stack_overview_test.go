@@ -146,7 +146,7 @@ func TestListLatestTemplateRunsReturnsEachTemplatesNewestRun(t *testing.T) {
 			TemplateRevisionID: "template_rev_2",
 			SourceTemplateID:   "source_template_vpc",
 			Operation:          operation,
-			SelectedRef:        "main",
+			SourceRef:          "main",
 			WorkspaceName:      "mtp_acme_prod_vpc_a13f9c",
 			ConfigJSON:         json.RawMessage(`{}`),
 			Status:             status,

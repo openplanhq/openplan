@@ -210,6 +210,11 @@ func TestRetireWorkflowOutboxBackfillsPendingStarts(t *testing.T) {
 	if err := applyMigration(ctx, pool, "0014_retire_workflow_outbox", "migrations/0014_retire_workflow_outbox.sql"); err != nil {
 		t.Fatalf("apply migration 0014_retire_workflow_outbox: %v", err)
 	}
+	// 0044 renames the ref key in queued payloads, so the backfilled row
+	// decodes into today's input only after it.
+	if err := applyMigration(ctx, pool, "0044_template_runs_source_ref", "migrations/0044_template_runs_source_ref.sql"); err != nil {
+		t.Fatalf("apply migration 0044_template_runs_source_ref: %v", err)
+	}
 
 	var (
 		resourceKey string
@@ -250,8 +255,8 @@ func TestRetireWorkflowOutboxBackfillsPendingStarts(t *testing.T) {
 	if input.Operation != domain.OperationPlan {
 		t.Fatalf("Operation = %q, want %q", input.Operation, domain.OperationPlan)
 	}
-	if input.SelectedRef != "main" {
-		t.Fatalf("SelectedRef = %q, want main", input.SelectedRef)
+	if input.SourceRef != "main" {
+		t.Fatalf("SourceRef = %q, want main", input.SourceRef)
 	}
 	if input.WorkspaceName != "demo-workspace" {
 		t.Fatalf("WorkspaceName = %q, want demo-workspace", input.WorkspaceName)
@@ -1997,7 +2002,7 @@ func TestCreateTemplateRunPersistsRunFields(t *testing.T) {
 		TemplateRevisionID: domain.TemplateRevisionID("template_rev_2"),
 		SourceTemplateID:   domain.SourceTemplateID("source_template_vpc"),
 		Operation:          domain.OperationPlan,
-		SelectedRef:        "main",
+		SourceRef:          "main",
 		ResolvedCommitSHA:  "abc123",
 		WorkspaceName:      "mtp_acme_prod_vpc_a13f9c",
 		ConfigJSON:         json.RawMessage(`{"region":"us-east-1"}`),
@@ -2022,7 +2027,7 @@ func TestCreateTemplateRunPersistsRunFields(t *testing.T) {
 			template_revision_id,
 			source_template_id,
 			operation,
-			selected_ref,
+			source_ref,
 			resolved_commit_sha,
 			workspace_name,
 			config_json,
@@ -2041,7 +2046,7 @@ func TestCreateTemplateRunPersistsRunFields(t *testing.T) {
 		&got.TemplateRevisionID,
 		&got.SourceTemplateID,
 		&got.Operation,
-		&got.SelectedRef,
+		&got.SourceRef,
 		&got.ResolvedCommitSHA,
 		&got.WorkspaceName,
 		&got.ConfigJSON,
@@ -2062,7 +2067,7 @@ func TestCreateTemplateRunPersistsRunFields(t *testing.T) {
 		got.TemplateRevisionID != run.TemplateRevisionID ||
 		got.SourceTemplateID != run.SourceTemplateID ||
 		got.Operation != run.Operation ||
-		got.SelectedRef != run.SelectedRef ||
+		got.SourceRef != run.SourceRef ||
 		got.ResolvedCommitSHA != run.ResolvedCommitSHA ||
 		got.WorkspaceName != run.WorkspaceName ||
 		!sameJSON(t, got.ConfigJSON, run.ConfigJSON) ||
@@ -2289,7 +2294,7 @@ func templateRunAt(stackTemplateID domain.StackTemplateID, runID domain.Template
 		TenantID:        domain.TenantID("tenant_123"),
 		StackTemplateID: stackTemplateID,
 		Operation:       domain.OperationPlan,
-		SelectedRef:     "main",
+		SourceRef:       "main",
 		WorkspaceName:   "workspace",
 		ConfigJSON:      json.RawMessage(`{}`),
 		Status:          status,
@@ -2313,15 +2318,15 @@ func TestUnitOfWorkTemplateWritesRollbackTogether(t *testing.T) {
 	// template_runs_in_flight_idx allows only one of those per stack template.
 	// What this test is about is that four unrelated writes roll back together,
 	// so which template each run belongs to does not matter to it.
-	seedTemplateRun(t, ctx, pool, domain.TemplateRun{ID: "run_approval", TenantID: "tenant_123", StackTemplateID: "stack_template_approval", Operation: domain.OperationPlan, SelectedRef: "main", WorkspaceName: "workspace", Status: domain.TemplateRunWaitingApproval, TriggerActor: "user_123"})
-	seedTemplateRun(t, ctx, pool, domain.TemplateRun{ID: "run_discard", TenantID: "tenant_123", StackTemplateID: "stack_template_discard", Operation: domain.OperationApply, SelectedRef: "main", WorkspaceName: "workspace", Status: domain.TemplateRunWaitingApproval, TriggerActor: "user_123"})
+	seedTemplateRun(t, ctx, pool, domain.TemplateRun{ID: "run_approval", TenantID: "tenant_123", StackTemplateID: "stack_template_approval", Operation: domain.OperationPlan, SourceRef: "main", WorkspaceName: "workspace", Status: domain.TemplateRunWaitingApproval, TriggerActor: "user_123"})
+	seedTemplateRun(t, ctx, pool, domain.TemplateRun{ID: "run_discard", TenantID: "tenant_123", StackTemplateID: "stack_template_discard", Operation: domain.OperationApply, SourceRef: "main", WorkspaceName: "workspace", Status: domain.TemplateRunWaitingApproval, TriggerActor: "user_123"})
 	sentinel := errors.New("rollback")
 
 	err = store.InTx(ctx, func(ctx context.Context, repo app.TxRepo, _ queue.Enqueuer) error {
 		if err := repo.CreateTemplateSync(ctx, domain.TemplateSync{ID: "registration_123", TenantID: "tenant_123", RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc", Status: domain.TemplateSyncStatePending, RequestedBy: "user_123", RequestedAt: time.Date(2026, 8, 11, 10, 0, 0, 0, time.UTC)}); err != nil {
 			return err
 		}
-		if _, err := repo.CreateTemplateRun(ctx, domain.TemplateRun{ID: "run_created", TenantID: "tenant_123", StackTemplateID: "stack_template_123", TemplateRevisionID: "revision_123", Operation: domain.OperationPlan, SelectedRef: "main", WorkspaceName: "workspace", ConfigJSON: json.RawMessage(`{}`), Status: domain.TemplateRunQueued, TriggerActor: "user_123"}); err != nil {
+		if _, err := repo.CreateTemplateRun(ctx, domain.TemplateRun{ID: "run_created", TenantID: "tenant_123", StackTemplateID: "stack_template_123", TemplateRevisionID: "revision_123", Operation: domain.OperationPlan, SourceRef: "main", WorkspaceName: "workspace", ConfigJSON: json.RawMessage(`{}`), Status: domain.TemplateRunQueued, TriggerActor: "user_123"}); err != nil {
 			return err
 		}
 		if err := repo.ApproveTemplateRun(ctx, domain.TemplateRunApproval{TenantID: "tenant_123", RunID: "run_approval", ApprovedBy: "user_123", ApprovedAt: time.Date(2026, 8, 11, 10, 0, 0, 0, time.UTC)}); err != nil {
@@ -2359,7 +2364,7 @@ func TestGetTemplateRunReturnsTenantScopedRecord(t *testing.T) {
 		TenantID:          domain.TenantID("tenant_123"),
 		StackTemplateID:   domain.StackTemplateID("stack_template_123"),
 		Operation:         domain.OperationPlan,
-		SelectedRef:       "main",
+		SourceRef:         "main",
 		ResolvedCommitSHA: "abc123",
 		WorkspaceName:     "mtp_acme_prod_vpc_a13f9c",
 		BackendType:       "s3",
@@ -2380,7 +2385,7 @@ func TestGetTemplateRunReturnsTenantScopedRecord(t *testing.T) {
 		TenantID:          domain.TenantID("tenant_123"),
 		StackTemplateID:   domain.StackTemplateID("stack_template_123"),
 		Operation:         domain.OperationPlan,
-		SelectedRef:       "main",
+		SourceRef:         "main",
 		ResolvedCommitSHA: "abc123",
 		WorkspaceName:     "mtp_acme_prod_vpc_a13f9c",
 		BackendType:       "s3",
@@ -2410,7 +2415,7 @@ func TestGetTemplateRunReturnsNotFoundForOtherTenant(t *testing.T) {
 		TenantID:        domain.TenantID("tenant_123"),
 		StackTemplateID: domain.StackTemplateID("stack_template_123"),
 		Operation:       domain.OperationPlan,
-		SelectedRef:     "main",
+		SourceRef:       "main",
 		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
 		Status:          domain.TemplateRunQueued,
 		TriggerActor:    domain.UserID("user_123"),
@@ -2434,7 +2439,7 @@ func TestRecordTemplateRunLogUpsertsTenantScopedMetadata(t *testing.T) {
 		TenantID:        domain.TenantID("tenant_123"),
 		StackTemplateID: domain.StackTemplateID("stack_template_123"),
 		Operation:       domain.OperationPlan,
-		SelectedRef:     "main",
+		SourceRef:       "main",
 		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
 		Status:          domain.TemplateRunQueued,
 		TriggerActor:    domain.UserID("user_123"),
@@ -2487,7 +2492,7 @@ func TestRecordTemplateRunLogWritesALiveRowThenCompletesIt(t *testing.T) {
 		TenantID:        domain.TenantID("tenant_123"),
 		StackTemplateID: domain.StackTemplateID("stack_template_123"),
 		Operation:       domain.OperationPlan,
-		SelectedRef:     "main",
+		SourceRef:       "main",
 		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
 		Status:          domain.TemplateRunRunning,
 		TriggerActor:    domain.UserID("user_123"),
@@ -2545,7 +2550,7 @@ func TestRecordTemplateRunLogWritesALostRowWithItsReason(t *testing.T) {
 		TenantID:        domain.TenantID("tenant_123"),
 		StackTemplateID: domain.StackTemplateID("stack_template_123"),
 		Operation:       domain.OperationPlan,
-		SelectedRef:     "main",
+		SourceRef:       "main",
 		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
 		Status:          domain.TemplateRunRunning,
 		TriggerActor:    domain.UserID("user_123"),
@@ -2595,7 +2600,7 @@ func TestRecordTemplateRunLogAcceptsEveryCommandInEitherPhase(t *testing.T) {
 		TenantID:        domain.TenantID("tenant_123"),
 		StackTemplateID: domain.StackTemplateID("stack_template_123"),
 		Operation:       domain.OperationApply,
-		SelectedRef:     "main",
+		SourceRef:       "main",
 		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
 		Status:          domain.TemplateRunQueued,
 		TriggerActor:    domain.UserID("user_123"),
@@ -2652,7 +2657,7 @@ func TestListTemplateRunLogsReturnsTenantScopedMetadataInRunOrder(t *testing.T) 
 		TenantID:        domain.TenantID("tenant_123"),
 		StackTemplateID: domain.StackTemplateID("stack_template_123"),
 		Operation:       domain.OperationPlan,
-		SelectedRef:     "main",
+		SourceRef:       "main",
 		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
 		Status:          domain.TemplateRunQueued,
 		TriggerActor:    domain.UserID("user_123"),
@@ -2662,7 +2667,7 @@ func TestListTemplateRunLogsReturnsTenantScopedMetadataInRunOrder(t *testing.T) 
 		TenantID:        domain.TenantID("tenant_456"),
 		StackTemplateID: domain.StackTemplateID("stack_template_456"),
 		Operation:       domain.OperationPlan,
-		SelectedRef:     "main",
+		SourceRef:       "main",
 		WorkspaceName:   "mtp_other_prod_vpc_f47ac",
 		Status:          domain.TemplateRunQueued,
 		TriggerActor:    domain.UserID("user_456"),
@@ -2717,7 +2722,7 @@ func TestRecordTemplateRunLogKeepsARepeatedCommandsLogs(t *testing.T) {
 		TenantID:        domain.TenantID("tenant_123"),
 		StackTemplateID: domain.StackTemplateID("stack_template_123"),
 		Operation:       domain.OperationPlan,
-		SelectedRef:     "main",
+		SourceRef:       "main",
 		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
 		Status:          domain.TemplateRunQueued,
 		TriggerActor:    domain.UserID("user_123"),
@@ -2756,7 +2761,7 @@ func TestRecordTemplateRunLogReturnsNotFoundForOtherTenant(t *testing.T) {
 		TenantID:        domain.TenantID("tenant_123"),
 		StackTemplateID: domain.StackTemplateID("stack_template_123"),
 		Operation:       domain.OperationPlan,
-		SelectedRef:     "main",
+		SourceRef:       "main",
 		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
 		Status:          domain.TemplateRunQueued,
 		TriggerActor:    domain.UserID("user_123"),
@@ -2792,7 +2797,7 @@ func TestListTemplateRunsReturnsMostRecentFirstScopedToStackTemplate(t *testing.
 		TenantID:        domain.TenantID("tenant_123"),
 		StackTemplateID: domain.StackTemplateID("stack_template_123"),
 		Operation:       domain.OperationPlan,
-		SelectedRef:     "main",
+		SourceRef:       "main",
 		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
 		Status:          domain.TemplateRunCompleted,
 		TriggerActor:    domain.UserID("user_123"),
@@ -2803,7 +2808,7 @@ func TestListTemplateRunsReturnsMostRecentFirstScopedToStackTemplate(t *testing.
 		TenantID:        domain.TenantID("tenant_123"),
 		StackTemplateID: domain.StackTemplateID("stack_template_123"),
 		Operation:       domain.OperationPlan,
-		SelectedRef:     "main",
+		SourceRef:       "main",
 		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
 		Status:          domain.TemplateRunWaitingApproval,
 		TriggerActor:    domain.UserID("user_456"),
@@ -2814,7 +2819,7 @@ func TestListTemplateRunsReturnsMostRecentFirstScopedToStackTemplate(t *testing.
 		TenantID:        domain.TenantID("tenant_123"),
 		StackTemplateID: domain.StackTemplateID("stack_template_456"),
 		Operation:       domain.OperationPlan,
-		SelectedRef:     "main",
+		SourceRef:       "main",
 		WorkspaceName:   "mtp_acme_prod_vpc_other",
 		Status:          domain.TemplateRunCompleted,
 		TriggerActor:    domain.UserID("user_123"),
@@ -2871,7 +2876,7 @@ func TestApproveTemplateRunApprovesWaitingRun(t *testing.T) {
 		TenantID:        domain.TenantID("tenant_123"),
 		StackTemplateID: domain.StackTemplateID("stack_template_123"),
 		Operation:       domain.OperationPlan,
-		SelectedRef:     "main",
+		SourceRef:       "main",
 		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
 		Status:          domain.TemplateRunWaitingApproval,
 		TriggerActor:    requesterSubject,
@@ -2923,7 +2928,7 @@ func TestApproveTemplateRunRejectsNonWaitingRun(t *testing.T) {
 		TenantID:        domain.TenantID("tenant_123"),
 		StackTemplateID: domain.StackTemplateID("stack_template_123"),
 		Operation:       domain.OperationPlan,
-		SelectedRef:     "main",
+		SourceRef:       "main",
 		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
 		Status:          domain.TemplateRunQueued,
 		TriggerActor:    domain.UserID("user_123"),
@@ -2951,7 +2956,7 @@ func TestRecordTemplateRunStatusUpdatesTenantScopedRun(t *testing.T) {
 		TenantID:        domain.TenantID("tenant_123"),
 		StackTemplateID: domain.StackTemplateID("stack_template_123"),
 		Operation:       domain.OperationPlan,
-		SelectedRef:     "main",
+		SourceRef:       "main",
 		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
 		Status:          domain.TemplateRunQueued,
 		TriggerActor:    domain.UserID("user_123"),
@@ -2961,7 +2966,7 @@ func TestRecordTemplateRunStatusUpdatesTenantScopedRun(t *testing.T) {
 		TenantID:        domain.TenantID("tenant_456"),
 		StackTemplateID: domain.StackTemplateID("stack_template_456"),
 		Operation:       domain.OperationPlan,
-		SelectedRef:     "main",
+		SourceRef:       "main",
 		WorkspaceName:   "mtp_other_prod_vpc_f47ac",
 		Status:          domain.TemplateRunQueued,
 		TriggerActor:    domain.UserID("user_456"),
@@ -3011,7 +3016,7 @@ func TestRecordTemplateRunStatusSetsCompletedAtForTerminalStatus(t *testing.T) {
 		StackTemplateID:    domain.StackTemplateID("stack_template_123"),
 		TemplateRevisionID: domain.TemplateRevisionID("template_rev_2"),
 		Operation:          domain.OperationPlan,
-		SelectedRef:        "main",
+		SourceRef:          "main",
 		WorkspaceName:      "mtp_acme_prod_vpc_a13f9c",
 		Status:             domain.TemplateRunRunning,
 		TriggerActor:       domain.UserID("user_123"),
@@ -3058,7 +3063,7 @@ func TestRecordTemplateRunStatusPersistsFailureSummary(t *testing.T) {
 		TenantID:        domain.TenantID("tenant_123"),
 		StackTemplateID: domain.StackTemplateID("stack_template_123"),
 		Operation:       domain.OperationPlan,
-		SelectedRef:     "main",
+		SourceRef:       "main",
 		WorkspaceName:   "workspace",
 		Status:          domain.TemplateRunRunning,
 		TriggerActor:    requesterSubject,
@@ -3114,7 +3119,7 @@ func TestRecordTemplateRunStatusReturnsNotFoundForOtherTenant(t *testing.T) {
 		TenantID:        domain.TenantID("tenant_123"),
 		StackTemplateID: domain.StackTemplateID("stack_template_123"),
 		Operation:       domain.OperationPlan,
-		SelectedRef:     "main",
+		SourceRef:       "main",
 		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
 		Status:          domain.TemplateRunQueued,
 		TriggerActor:    domain.UserID("user_123"),
@@ -3331,7 +3336,7 @@ func TestStackTemplatesNoLongerCarryRefColumns(t *testing.T) {
 	ctx := context.Background()
 	pool := openMigratedTestPool(t, ctx)
 
-	for _, column := range []string{"selected_ref", "last_applied_ref"} {
+	for _, column := range []string{"source_ref", "last_applied_ref"} {
 		var exists bool
 		if err := pool.QueryRow(ctx, `
 			select exists (
@@ -3358,13 +3363,13 @@ func TestStackTemplatesNoLongerCarryRefColumns(t *testing.T) {
 			from information_schema.columns
 			where table_schema = current_schema()
 				and table_name = 'template_runs'
-				and column_name = 'selected_ref'
+				and column_name = 'source_ref'
 		)
 	`).Scan(&runRefExists); err != nil {
-		t.Fatalf("check template_runs.selected_ref: %v", err)
+		t.Fatalf("check template_runs.source_ref: %v", err)
 	}
 	if !runRefExists {
-		t.Fatal("template_runs.selected_ref was dropped; runs must keep their own ref")
+		t.Fatal("template_runs.source_ref was dropped; runs must keep their own ref")
 	}
 }
 
@@ -3543,7 +3548,7 @@ func seedTemplateRun(t *testing.T, ctx context.Context, pool *pgxpool.Pool, run 
 			template_revision_id,
 			source_template_id,
 			operation,
-			selected_ref,
+			source_ref,
 			resolved_commit_sha,
 			workspace_name,
 			config_json,
@@ -3572,7 +3577,7 @@ func seedTemplateRun(t *testing.T, ctx context.Context, pool *pgxpool.Pool, run 
 		run.TemplateRevisionID,
 		run.SourceTemplateID,
 		run.Operation,
-		run.SelectedRef,
+		run.SourceRef,
 		run.ResolvedCommitSHA,
 		run.WorkspaceName,
 		defaultJSON(run.ConfigJSON),
@@ -3827,7 +3832,7 @@ func TestRecordTemplateRunStatusReconcilesInterruptedDestroyLifecycle(t *testing
 				TenantID:        tenantID,
 				StackTemplateID: stackTemplateID,
 				Operation:       domain.OperationDestroy,
-				SelectedRef:     "main",
+				SourceRef:       "main",
 				WorkspaceName:   "ws_" + suffix,
 				Status:          domain.TemplateRunApproved,
 				TriggerActor:    domain.UserID("user_123"),
@@ -4074,7 +4079,7 @@ func TestMigrationRenamesPlanPhaseSetupLogs(t *testing.T) {
 		TenantID:        domain.TenantID("tenant_123"),
 		StackTemplateID: domain.StackTemplateID("stack_template_123"),
 		Operation:       domain.OperationPlan,
-		SelectedRef:     "main",
+		SourceRef:       "main",
 		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
 		Status:          domain.TemplateRunCompleted,
 		TriggerActor:    domain.UserID("user_123"),

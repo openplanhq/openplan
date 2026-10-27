@@ -42,7 +42,7 @@ function run(overrides: Partial<TemplateRun> = {}): TemplateRun {
     stack_template_id: "stpl_1",
     template_revision_id: "rev_1",
     operation: "plan",
-    selected_ref: "main",
+    source_ref: "main",
     resolved_commit_sha: "abcdef1234567890",
     status: "queued",
     step: "",
