@@ -35,7 +35,7 @@ export default function PlatformAccessScreen() {
   return (
     <section className="mx-auto max-w-260" data-testid="platform-access-screen">
       {/* Root counts: it is a row on the list. */}
-      <PageHeader title="Access" count={grants.data && grants.data.length + 1} />
+      <PageHeader title="Access" />
       <AccessList
         roles={PLATFORM_ROLES}
         copy={{

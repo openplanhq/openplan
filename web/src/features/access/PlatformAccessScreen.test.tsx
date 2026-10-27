@@ -79,7 +79,7 @@ describe("PlatformAccessScreen", () => {
     renderScreen();
     await screen.findByTestId("grant-tom");
     expect(names()).toEqual(["Root", "Sam Park", "Lena Novak", "Tom Becker"]);
-    expect(screen.getByTestId("page-count").textContent).toBe("4");
+    expect(screen.queryByTestId("page-count")).toBeNull();
     expect(within(row("root")).queryAllByRole("button")).toEqual([]);
     expect(row("root").textContent).toContain("root");
     // The owner cut the line naming where root comes from (2026-10-19).
@@ -92,7 +92,6 @@ describe("PlatformAccessScreen", () => {
     await screen.findByTestId("grant-root");
     expect(row("root").textContent).toBe("openplan admin (you)admin@openplan.localroot");
     expect(screen.queryByTestId("access-empty")).toBeNull();
-    expect(screen.getByTestId("page-count").textContent).toBe("1");
   });
 
   it("removes an admin at once, the last one included, with nothing asked", async () => {

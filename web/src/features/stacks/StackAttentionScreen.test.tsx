@@ -84,11 +84,11 @@ describe("StackAttentionScreen", () => {
     expect(screen.getByTestId("attention-loading")).toBeTruthy();
   });
 
-  it("titles the page under a trail back to the stacks, with the number of items", () => {
+  it("titles the page under a trail back to the stacks, with no count", () => {
     renderScreen(testQueryClient([waiting(), failed()]));
 
     expect(screen.getByRole("heading", { level: 1, name: "Needs attention" })).toBeTruthy();
-    expect(screen.getByTestId("page-count").textContent).toBe("2");
+    expect(screen.queryByTestId("page-count")).toBeNull();
     const trail = within(screen.getByRole("navigation", { name: "Breadcrumb" }));
     expect(trail.getByRole("link", { name: "Stacks" }).getAttribute("href")).toBe("/stacks");
   });
@@ -97,7 +97,7 @@ describe("StackAttentionScreen", () => {
     renderScreen(testQueryClient([waiting(), failed()]));
 
     const group = within(screen.getByTestId("attention-group-waiting"));
-    expect(group.getByRole("heading", { level: 2 }).textContent).toBe("Waiting for approval1");
+    expect(group.getByRole("heading", { level: 2 }).textContent).toBe("Waiting for approval");
     const row = within(screen.getByTestId("attention-row-tpl_eks"));
     expect(row.getByRole("link", { name: "prod / eks-cluster" }).getAttribute("href")).toBe("/stacks/stack_prod/templates/tpl_eks");
     expect(row.getByText("Planned by Priya Shah")).toBeTruthy();
@@ -110,7 +110,7 @@ describe("StackAttentionScreen", () => {
     renderScreen(testQueryClient([waiting(), failed()]));
 
     const group = within(screen.getByTestId("attention-group-failed"));
-    expect(group.getByRole("heading", { level: 2 }).textContent).toBe("Destroy failed1");
+    expect(group.getByRole("heading", { level: 2 }).textContent).toBe("Destroy failed");
     const row = within(screen.getByTestId("attention-row-tpl_cdn"));
     expect(row.getByText("The destroy run stopped before it finished. Some resources may still exist.")).toBeTruthy();
     expect(row.getByRole("link", { name: "View run" }).getAttribute("href")).toBe("/stacks/stack_edge/templates/tpl_cdn/runs/3");

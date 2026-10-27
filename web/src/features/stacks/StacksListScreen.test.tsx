@@ -149,14 +149,14 @@ describe("StacksListScreen", () => {
     expect(retry.classList).not.toContain("bg-primary");
   });
 
-  it("titles the page with the number of stacks", () => {
+  it("titles the page with no count", () => {
     const queryClient = testQueryClient();
     seed(queryClient, { stacks: [stack(), stack({ id: "stack_2", name: "Billing", slug: "billing" })] });
 
     renderScreen(queryClient);
 
     expect(screen.getByRole("heading", { level: 1, name: "Stacks" })).toBeTruthy();
-    expect(screen.getByTestId("page-count").textContent).toBe("2");
+    expect(screen.queryByTestId("page-count")).toBeNull();
   });
 
   it("lists each stack with its template count, selecting it in place", () => {
@@ -342,23 +342,6 @@ describe("StacksListScreen", () => {
     expect(screen.queryByTestId("stacks-load-more")).toBeNull();
     const asked = fetchMock.mock.calls.map(([input]) => new URL(String(input), "http://localhost")).filter((url) => url.pathname.endsWith("/stacks"));
     expect(asked.map((url) => url.searchParams.get("cursor"))).toEqual(["page-2"]);
-  });
-
-  // There is no total to ask for, so the header counts the stacks only once
-  // every page is in, rather than counting the ones loaded so far.
-  it("counts the stacks in the header only once every page is loaded", async () => {
-    const queryClient = testQueryClient();
-    mockAPI({ "/stacks": async () => jsonResponse({ items: [stack({ id: "stack_2", name: "Billing", slug: "billing" })], next_cursor: null }) });
-    queryClient.setQueryData(queryKeys.stackList(TENANT, ""), {
-      pages: [{ items: [stack()], next_cursor: "page-2" }],
-      pageParams: [undefined]
-    });
-
-    renderScreen(queryClient);
-    expect(screen.queryByTestId("page-count")).toBeNull();
-
-    fireEvent.click(screen.getByTestId("stacks-load-more"));
-    await waitFor(() => expect(screen.getByTestId("page-count").textContent).toBe("2"));
   });
 
   it("keeps the stacks shown when the next page fails, and offers to try again", async () => {

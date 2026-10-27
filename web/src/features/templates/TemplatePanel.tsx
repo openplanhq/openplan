@@ -7,7 +7,7 @@ import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ApiRequestError } from "../../api/client";
 import { apiErrorMessage } from "../../api/problems";
 import { queryKeys } from "../../api/queryKeys";
-import { useDeleteTemplateMutation, useTemplateRevisionsQuery, useTemplateRevisionVariablesQuery, useTemplatesQuery } from "../../api/queries";
+import { useDeleteTemplateMutation, useTemplateRevisionsQuery, useTemplatesQuery } from "../../api/queries";
 import { problemTypes } from "../../api/types";
 import RequireCapability from "../../auth/RequireCapability";
 import { useTenantID } from "../../auth/useTenantID";
@@ -63,9 +63,6 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
   const revisionsQuery = useTemplateRevisionsQuery(tenantID, template?.id ?? "");
   const revisions = revisionsQuery.data ?? [];
   const latest = revisions.find((revision) => revision.id === template?.latest_template_revision_id) ?? revisions[0];
-  // No count while the previous revision's variables stand in for the newest.
-  const variablesQuery = useTemplateRevisionVariablesQuery(tenantID, latest?.id ?? "");
-  const variableCount = variablesQuery.isPlaceholderData ? undefined : variablesQuery.data?.length;
   const tab = templateTabOf(useLocation().pathname);
   const remove = useTemplateDelete(id);
 
@@ -212,8 +209,8 @@ export default function TemplatePanel({ sourceTemplateId, children }: { sourceTe
             <UnderlineTabs
               label="Template sections"
               tabs={[
-                { to: templatePath(id, "variables"), label: "Variables", current: tab === "variables", count: variableCount },
-                { to: templatePath(id, "revisions"), label: "Revisions", current: tab === "revisions", count: revisions.length }
+                { to: templatePath(id, "variables"), label: "Variables", current: tab === "variables" },
+                { to: templatePath(id, "revisions"), label: "Revisions", current: tab === "revisions" }
               ]}
             />
           )}

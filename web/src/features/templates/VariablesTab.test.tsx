@@ -121,14 +121,11 @@ describe("VariablesTab", () => {
     await waitFor(() => expect(screen.getByTestId("template-variables-loading").textContent).toContain("Loading variables…"));
     expect(within(screen.getByTestId("template-source")).getByRole("link", { name: /^Latest commit: ?9e7d3b2,/ })).toBeTruthy();
     expect(screen.queryByTestId("template-variable-cluster_name")).toBeNull();
-    // Nor does the tab count rev_1's variables.
-    expect(within(screen.getByRole("navigation", { name: "Template sections" })).getByRole("link", { name: "Variables" })).toBeTruthy();
 
     await act(async () => {
       resolveVariables(jsonResponse([variable({ template_revision_id: "rev_2", name: "cluster_version" })]));
     });
     await waitFor(() => expect(screen.getByTestId("template-variable-cluster_version")).toBeTruthy());
     expect(screen.getByTestId("template-variables").textContent).toContain("From the latest revision, 9e7d3b2.");
-    expect(within(screen.getByRole("navigation", { name: "Template sections" })).getByRole("link", { name: "Variables 1" })).toBeTruthy();
   });
 });

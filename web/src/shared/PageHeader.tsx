@@ -2,7 +2,6 @@ import { Fragment } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { Crumb } from "./Breadcrumb";
-import { Badge } from "@/components/ui/badge";
 import {
   Breadcrumb as BreadcrumbNav,
   BreadcrumbItem,
@@ -11,7 +10,7 @@ import {
   BreadcrumbSeparator
 } from "@/components/ui/breadcrumb";
 
-// openplan UI's page header: a 24px title with its count, an optional trail of
+// openplan UI's page header: a 24px title, an optional trail of
 // the pages above it ending in this one, a line under the title (the attention
 // summary), and the page's one action, right-aligned with the bottom of the
 // title block. On a phone the action drops under the title at full width.
@@ -20,13 +19,11 @@ import {
 // Breadcrumb as their title bar.
 export default function PageHeader({
   title,
-  count,
   trail,
   action,
   children
 }: {
   title: string;
-  count?: number;
   /** The pages above this one, each a link. The trail ends with this page. */
   trail?: Crumb[];
   action?: ReactNode;
@@ -61,14 +58,7 @@ export default function PageHeader({
             </BreadcrumbList>
           </BreadcrumbNav>
         )}
-        <div className="flex min-w-0 items-center gap-2.5">
-          <h1 className="font-heading text-page-title wrap-anywhere">{title}</h1>
-          {count !== undefined && (
-            <Badge variant="muted" className="bg-muted-strong" data-testid="page-count">
-              {count}
-            </Badge>
-          )}
-        </div>
+        <h1 className="font-heading text-page-title wrap-anywhere">{title}</h1>
         {children}
       </div>
       {action}

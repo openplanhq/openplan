@@ -62,7 +62,7 @@ export default function StackAttentionScreen() {
 
   return (
     <section className="mx-auto max-w-260">
-      <PageHeader title="Needs attention" count={items.length} trail={trail} />
+      <PageHeader title="Needs attention" trail={trail} />
       {items.length === 0 ? (
         <Empty className="gap-3 rounded-panel border border-solid bg-card px-5 py-14" data-testid="attention-empty">
           <EmptyHeader className="gap-3">
@@ -79,14 +79,14 @@ export default function StackAttentionScreen() {
       ) : (
         <div className="flex flex-col gap-7">
           {waiting.length > 0 && (
-            <AttentionGroup id="waiting" icon={Hourglass} iconClass="text-warning" title="Waiting for approval" count={waiting.length}>
+            <AttentionGroup id="waiting" icon={Hourglass} iconClass="text-warning" title="Waiting for approval">
               {waiting.map((item) => (
                 <AttentionRow key={item.stack_template.id} item={item} />
               ))}
             </AttentionGroup>
           )}
           {failed.length > 0 && (
-            <AttentionGroup id="failed" icon={TriangleAlert} iconClass="text-destructive" title="Destroy failed" count={failed.length}>
+            <AttentionGroup id="failed" icon={TriangleAlert} iconClass="text-destructive" title="Destroy failed">
               {failed.map((item) => (
                 <AttentionRow key={item.stack_template.id} item={item} />
               ))}
@@ -103,14 +103,12 @@ function AttentionGroup({
   icon: Icon,
   iconClass,
   title,
-  count,
   children
 }: {
   id: string;
   icon: LucideIcon;
   iconClass: string;
   title: string;
-  count: number;
   children: ReactNode;
 }) {
   return (
@@ -118,7 +116,6 @@ function AttentionGroup({
       <h2 id={`attention-${id}`} className="flex items-center gap-2 text-section-title">
         <Icon aria-hidden="true" className={cn("size-4", iconClass)} />
         {title}
-        <span className="font-medium text-subtle-foreground">{count}</span>
       </h2>
       <ul className="divide-y divide-divider overflow-hidden rounded-panel border bg-card">{children}</ul>
     </section>

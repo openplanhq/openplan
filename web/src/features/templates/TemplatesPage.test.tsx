@@ -67,11 +67,11 @@ afterEach(() => {
 });
 
 describe("TemplatesPage header", () => {
-  it("titles the page and counts templates, not revisions", () => {
+  it("titles the page with no count", () => {
     renderPage(seed([revision({ id: "rev_eks_2", source_template_id: "tpl_eks" }), eks, network, cdn]), "/templates");
 
     expect(screen.getByRole("heading", { level: 1, name: "Templates" })).toBeTruthy();
-    expect(screen.getByTestId("page-count").textContent).toBe("3");
+    expect(screen.queryByTestId("page-count")).toBeNull();
   });
 
   it("offers Register template only to people who can publish templates", () => {
@@ -147,11 +147,10 @@ describe("TemplatesPage list", () => {
   it("says when there are no templates at all", () => {
     renderPage(seed([]), "/templates");
     expect(screen.getByTestId("templates-none").textContent).toBe("No templates yet.");
-    expect(screen.getByTestId("page-count").textContent).toBe("0");
   });
 
   // A template exists from the moment it is registered, so one whose first
-  // sync has not produced a revision is listed and counted, and says it has
+  // sync has not produced a revision is listed, and says it has
   // nothing to install.
   it("lists a template no sync has produced a revision for yet, marked no revision", () => {
     const queryClient = testQueryClient();
@@ -161,7 +160,6 @@ describe("TemplatesPage list", () => {
     expect(screen.getByTestId("template-link-tpl_new").textContent).toContain("fresh");
     expect(screen.getByTestId("template-no-revision-tpl_new").textContent).toBe("no revision");
     expect(screen.queryByTestId("template-no-revision-tpl_eks")).toBeNull();
-    expect(screen.getByTestId("page-count").textContent).toBe("2");
   });
 
   // Idle grey on primary-soft is 4.3:1, under AA; the selected row's label

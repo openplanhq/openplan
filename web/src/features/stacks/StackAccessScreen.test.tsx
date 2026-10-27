@@ -130,7 +130,7 @@ describe("StackAccessScreen", () => {
     expect(names()).toEqual(["Priya Raman", "Sam Park", "Lena Novak", "Alex Kim", "Mei Chen"]);
     // "Name (you)": the marker joins the name (owner's pick, 2026-10-19).
     expect(row(ME).querySelector("span span")?.parentElement?.textContent).toBe("Sam Park (you)");
-    expect(screen.getByTestId("page-count").textContent).toBe("5");
+    expect(screen.queryByTestId("page-count")).toBeNull();
     expect(screen.getByRole("heading", { level: 1, name: "Access" })).toBeTruthy();
     // No line explains what the screen already shows (owner, 2026-10-19).
     for (const cut of ["Who can see and change", "Search for someone who has signed in", "Person"]) {
