@@ -3631,11 +3631,12 @@ func (repository *apiPlanChangeRepository) ListTemplateRunResourceChangesPage(_ 
 	return page, nil
 }
 
-// apiStackOverviewRepository holds a tenant's templates and waiting runs in
-// memory.
+// apiStackOverviewRepository holds a tenant's templates, its waiting runs and
+// each template's latest run in memory.
 type apiStackOverviewRepository struct {
 	templates []domain.StackTemplate
 	waiting   []domain.TemplateRun
+	latest    []domain.TemplateRun
 }
 
 func (repository *apiStackOverviewRepository) ListTenantStackTemplates(context.Context, domain.TenantID) ([]domain.StackTemplate, error) {
@@ -3647,6 +3648,10 @@ func (repository *apiStackOverviewRepository) ListTemplateRunsByStatus(_ context
 		return nil, nil
 	}
 	return repository.waiting, nil
+}
+
+func (repository *apiStackOverviewRepository) ListLatestTemplateRuns(context.Context, domain.TenantID) ([]domain.TemplateRun, error) {
+	return repository.latest, nil
 }
 
 // apiUnitOfWork applies writes immediately; transactional behaviour is proven

@@ -15,6 +15,7 @@ import (
 type fakeStackOverviewRepository struct {
 	templates      []domain.StackTemplate
 	runsByStatus   map[domain.TemplateRunStatus][]domain.TemplateRun
+	latestRuns     []domain.TemplateRun
 	templatesCalls int
 	templatesErr   error
 }
@@ -29,6 +30,10 @@ func (repository *fakeStackOverviewRepository) ListTenantStackTemplates(_ contex
 
 func (repository *fakeStackOverviewRepository) ListTemplateRunsByStatus(_ context.Context, _ domain.TenantID, status domain.TemplateRunStatus) ([]domain.TemplateRun, error) {
 	return repository.runsByStatus[status], nil
+}
+
+func (repository *fakeStackOverviewRepository) ListLatestTemplateRuns(context.Context, domain.TenantID) ([]domain.TemplateRun, error) {
+	return repository.latestRuns, nil
 }
 
 // runsPerTemplateRepository answers ListTemplateRuns per stack template, which

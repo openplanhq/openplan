@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/vishu42/openplan/internal/app"
 	"github.com/vishu42/openplan/internal/domain"
@@ -104,6 +105,84 @@ func TestListTemplateRunsByStatusReturnsOnlyThatStatusInTheTenant(t *testing.T) 
 	other, err := store.ListTemplateRunsByStatus(ctx, "tenant_456", domain.TemplateRunWaitingApproval)
 	if err != nil {
 		t.Fatalf("ListTemplateRunsByStatus(other tenant) returned error: %v", err)
+	}
+	if len(other) != 0 {
+		t.Fatalf("other tenant runs = %+v, want none", other)
+	}
+}
+
+func TestListLatestTemplateRunsReturnsEachTemplatesNewestRun(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := NewStore(pool)
+	seedStackWithTemplate(t, ctx, store)
+
+	second := domain.StackTemplate{
+		ID:                        "stack_template_second",
+		TenantID:                  "tenant_123",
+		StackID:                   "stack_123",
+		SourceTemplateID:          "source_template_vpc",
+		DesiredTemplateRevisionID: "template_rev_2",
+		WorkspaceName:             "mtp_acme_prod_vpc_second",
+		InstalledConfigJSON:       json.RawMessage(`{}`),
+		CreatedBy:                 "installer_123",
+		Lifecycle:                 domain.StackTemplateActive,
+	}
+	if err := store.CreateStackTemplate(ctx, second); err != nil {
+		t.Fatalf("CreateStackTemplate(second) returned error: %v", err)
+	}
+
+	// The failed plan came first, so the completed one is the template's
+	// latest: only the newest run of each template comes back.
+	older := time.Date(2026, 10, 3, 9, 0, 0, 0, time.UTC)
+	newer := older.Add(time.Hour)
+	run := func(id domain.TemplateRunID, stackTemplate domain.StackTemplateID, operation domain.OperationType, status domain.TemplateRunStatus, at time.Time, number int) domain.TemplateRun {
+		return domain.TemplateRun{
+			ID:                 id,
+			TenantID:           "tenant_123",
+			StackTemplateID:    stackTemplate,
+			TemplateRevisionID: "template_rev_2",
+			SourceTemplateID:   "source_template_vpc",
+			Operation:          operation,
+			SelectedRef:        "main",
+			WorkspaceName:      "mtp_acme_prod_vpc_a13f9c",
+			ConfigJSON:         json.RawMessage(`{}`),
+			Status:             status,
+			TriggerActor:       "user_123",
+			CreatedAt:          at,
+			RunNumber:          number,
+		}
+	}
+	seedTemplateRun(t, ctx, pool, run("run_old", "stack_template_123", domain.OperationPlan, domain.TemplateRunFailed, older, 1))
+	seedTemplateRun(t, ctx, pool, run("run_new", "stack_template_123", domain.OperationPlan, domain.TemplateRunCompleted, newer, 2))
+	seedTemplateRun(t, ctx, pool, run("run_other", "stack_template_second", domain.OperationApply, domain.TemplateRunFailed, older, 1))
+
+	runs, err := store.ListLatestTemplateRuns(ctx, "tenant_123")
+	if err != nil {
+		t.Fatalf("ListLatestTemplateRuns returned error: %v", err)
+	}
+	got := map[domain.StackTemplateID]domain.TemplateRunID{}
+	for _, run := range runs {
+		got[run.StackTemplateID] = run.ID
+	}
+	want := map[domain.StackTemplateID]domain.TemplateRunID{
+		"stack_template_123":    "run_new",
+		"stack_template_second": "run_other",
+	}
+	if len(runs) != len(want) {
+		t.Fatalf("runs = %v, want %v", got, want)
+	}
+	for stackTemplate, id := range want {
+		if got[stackTemplate] != id {
+			t.Errorf("template %s latest run = %q, want %q", stackTemplate, got[stackTemplate], id)
+		}
+	}
+
+	other, err := store.ListLatestTemplateRuns(ctx, "tenant_456")
+	if err != nil {
+		t.Fatalf("ListLatestTemplateRuns(other tenant) returned error: %v", err)
 	}
 	if len(other) != 0 {
 		t.Fatalf("other tenant runs = %+v, want none", other)

@@ -19,6 +19,9 @@ type StackOverviewRepository interface {
 	// ListTemplateRunsByStatus returns the tenant's runs in one status, most
 	// recent first.
 	ListTemplateRunsByStatus(ctx context.Context, tenantID domain.TenantID, status domain.TemplateRunStatus) ([]domain.TemplateRun, error)
+	// ListLatestTemplateRuns returns each stack template's newest run in the
+	// tenant, one per template that has run at all.
+	ListLatestTemplateRuns(ctx context.Context, tenantID domain.TenantID) ([]domain.TemplateRun, error)
 }
 
 // AttentionKind is why an installed template needs a person.
