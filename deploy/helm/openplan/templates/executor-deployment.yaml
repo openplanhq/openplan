@@ -28,16 +28,30 @@ spec:
       containers:
         - name: executor
           image: {{ include "openplan.image" $component }}
-          envFrom:
-            - secretRef:
-                name: {{ required "executor.existingSecret is required: the name of the Secret holding the executor's environment" .Values.executor.existingSecret }}
-          # env wins over envFrom, so a stray key in the Secret can't move the
-          # executor off the volumes below.
+          # Every setting comes from values, credentials by reference to a
+          # Secret key, so the values file is the whole of the executor's
+          # configuration.
           env:
             - name: EXECUTOR_RUN_ROOT
               value: /var/lib/openplan/runs
             - name: EXECUTOR_SANDBOX_STATE
               value: /var/lib/openplan/sandboxes
+            {{- include "openplan.temporalEnv" . | nindent 12 }}
+            - name: VALKEY_URL
+              value: {{ required "valkey.executor.url is required: the executor's Valkey URL, without the password" .Values.valkey.executor.url | quote }}
+            {{- include "openplan.secretEnv" (dict "name" "VALKEY_PASSWORD" "ref" .Values.valkey.executor.passwordSecret "path" "valkey.executor.passwordSecret") | nindent 12 }}
+            {{- include "openplan.s3Env" . | nindent 12 }}
+            {{- range $name, $value := dict
+                  "EXECUTOR_MAX_SESSIONS" .Values.executor.maxSessions
+                  "EXECUTOR_SANDBOX_MEMORY" .Values.executor.sandbox.memoryMiB
+                  "EXECUTOR_SANDBOX_CPUS" .Values.executor.sandbox.cpus
+                  "EXECUTOR_SANDBOX_PIDS" .Values.executor.sandbox.pids
+                  "EXECUTOR_SANDBOX_SUBNET" .Values.executor.sandbox.subnet }}
+            {{- if $value }}
+            - name: {{ $name }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- end }}
           # The release compose's settings: each activity runs in its own
           # gVisor sandbox, started with runsc as root with these seven
           # capabilities and no seccomp or AppArmor profile. The sandboxed
