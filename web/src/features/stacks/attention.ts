@@ -9,9 +9,16 @@ export interface StackAttention {
   applyFailed: number;
 }
 
-/** Which operation a run_failed item's run was: a plan or an apply. */
+/** What failed in a run_failed item's run: its plan, or its apply. An apply
+    run plans first, so one that failed with no plan (and not auto-approved)
+    failed planning and changed nothing; runIndicator's headline reads it the
+    same way. */
 export function failedOperation(item: AttentionItem): "plan" | "apply" {
-  return item.run?.operation === "apply" ? "apply" : "plan";
+  const run = item.run;
+  if (run?.operation !== "apply") {
+    return "plan";
+  }
+  return run.auto_approve || run.plan_summary ? "apply" : "plan";
 }
 
 /** Counts each stack's items, by kind, failed runs by operation. A stack

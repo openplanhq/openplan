@@ -47,7 +47,7 @@ function runFailed(operation: "plan" | "apply", overrides: Partial<AttentionItem
     at: "2026-10-03T11:00:00Z",
     stack: { id: "stack_dev", name: "dev", slug: "dev" },
     stack_template: { id: `tpl_${operation}`, workspace_name: `ws_${operation}`, display_name: operation === "plan" ? "supabase" : "vpc" },
-    run: { id: "run_2", run_number: 2, operation, status: "failed" } as TemplateRun,
+    run: { id: "run_2", run_number: 2, operation, status: "failed", plan_summary: operation === "apply" ? { add: 1, change: 0, destroy: 0 } : null } as TemplateRun,
     ...overrides
   };
 }
@@ -141,6 +141,14 @@ describe("StackAttentionScreen", () => {
     expect(plan.getByRole("link", { name: "View run" }).getAttribute("href")).toBe("/stacks/stack_dev/templates/tpl_plan/runs/2");
     const apply = within(screen.getByTestId("attention-row-tpl_apply"));
     expect(apply.getByText("The apply failed. Some changes may have been made.")).toBeTruthy();
+  });
+
+  // An apply whose own plan failed changed nothing, so it says so.
+  it("says nothing changed when an apply failed before it had a plan", () => {
+    const item = runFailed("apply");
+    renderScreen(testQueryClient([{ ...item, run: { ...item.run!, plan_summary: null } }]));
+
+    expect(within(screen.getByTestId("attention-row-tpl_apply")).getByText("The plan failed. Nothing was changed.")).toBeTruthy();
   });
 
   // The only item a failed plan: the page lists it rather than standing empty.

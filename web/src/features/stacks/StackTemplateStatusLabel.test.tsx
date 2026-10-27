@@ -27,7 +27,9 @@ function template(overrides: Partial<StackTemplate> = {}): StackTemplate {
 
 const waiting = { kind: "waiting_approval", at: "2026-10-03T09:30:00Z" } as AttentionItem;
 const failedPlan = { kind: "run_failed", at: "2026-10-03T11:00:00Z", run: { operation: "plan" } } as AttentionItem;
-const failedApply = { kind: "run_failed", at: "2026-10-03T11:00:00Z", run: { operation: "apply" } } as AttentionItem;
+const failedApply = { kind: "run_failed", at: "2026-10-03T11:00:00Z", run: { operation: "apply", plan_summary: { add: 1, change: 0, destroy: 0 } } } as AttentionItem;
+// An apply run whose own plan failed: nothing was applied.
+const applyFailedPlanning = { kind: "run_failed", at: "2026-10-03T11:00:00Z", run: { operation: "apply", plan_summary: null } } as AttentionItem;
 
 describe("stackTemplateIndicator", () => {
   // Every state is an icon and a word; only those that need a person are
@@ -43,7 +45,8 @@ describe("stackTemplateIndicator", () => {
     // The latest run failed: that, not the live state before it, is what
     // needs a person, whether or not the template was ever applied.
     ["plan failed", template(), failedPlan, TriangleAlert, "failed", true],
-    ["apply failed", template({ live_state: "matches", last_applied_at: "2026-09-22T10:00:00Z" }), failedApply, TriangleAlert, "failed", true]
+    ["apply failed", template({ live_state: "matches", last_applied_at: "2026-09-22T10:00:00Z" }), failedApply, TriangleAlert, "failed", true],
+    ["plan failed", template({ live_state: "matches" }), applyFailedPlanning, TriangleAlert, "failed", true]
   ] as const)("shows %s", (label, stackTemplate, attention, icon, tone, strong) => {
     expect(stackTemplateIndicator(stackTemplate, attention)).toEqual({ label, icon, tone, strong });
   });
