@@ -10,6 +10,10 @@ import { useTenantID } from "../../auth/useTenantID";
 // query polls. Without this the stack's page would keep the states it loaded:
 // the panel's header and the list's chips. The panel calls it, so it runs on
 // every tab.
+//
+// The attention list goes with it: it polls only every 30 s, so a plan that
+// just failed or started waiting would otherwise reach the template's status
+// and Needs attention that much later than the run itself.
 export function useRefreshStackOnRunChange(stackId: string, stackTemplateId: string): void {
   const tenantID = useTenantID();
   const queryClient = useQueryClient();
@@ -23,5 +27,6 @@ export function useRefreshStackOnRunChange(stackId: string, stackTemplateId: str
       return;
     }
     void queryClient.invalidateQueries({ queryKey: queryKeys.stack(tenantID, stackId) });
-  }, [settledRun, waitingRun, stackId, queryClient]);
+    void queryClient.invalidateQueries({ queryKey: queryKeys.attention(tenantID) });
+  }, [settledRun, waitingRun, stackId, tenantID, queryClient]);
 }
