@@ -182,7 +182,7 @@ services:
         condition: service_healthy
     environment:
       HTTP_ADDRESS: ":8081"
-      DATABASE_URL: postgres://openplan:openplan@postgres:5432/openplan?sslmode=disable
+      POSTGRES_URL: postgres://openplan:openplan@postgres:5432/openplan?sslmode=disable
       VALKEY_URL: redis://api:${VALKEY_API_PASSWORD:-api-local-only}@valkey:6379/0
       TEMPORAL_ADDRESS: temporal:7233
       OPENPLAN_ENVIRONMENT: development

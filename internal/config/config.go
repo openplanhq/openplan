@@ -36,7 +36,7 @@ type APIConfig struct {
 	// development install would fail: HTTPS URLs, secure cookies, and refusing
 	// the keys and passwords published in the examples.
 	Environment             Environment
-	DatabaseURL             string
+	PostgresURL             string
 	HTTPAddress             string
 	TemporalAddress         string
 	TemporalNamespace       string
@@ -152,7 +152,7 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	}
 
 	cfg := APIConfig{
-		DatabaseURL:       strings.TrimSpace(getenv("DATABASE_URL")),
+		PostgresURL:       strings.TrimSpace(getenv("POSTGRES_URL")),
 		HTTPAddress:       strings.TrimSpace(getenv("HTTP_ADDRESS")),
 		TemporalAddress:   strings.TrimSpace(getenv("TEMPORAL_ADDRESS")),
 		TemporalNamespace: strings.TrimSpace(getenv("TEMPORAL_NAMESPACE")),
@@ -191,8 +191,8 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	}
 	cfg.TerraformTimeout = terraformTimeout
 
-	if cfg.DatabaseURL == "" {
-		return APIConfig{}, fmt.Errorf("%w: DATABASE_URL is required", ErrInvalidConfig)
+	if cfg.PostgresURL == "" {
+		return APIConfig{}, fmt.Errorf("%w: POSTGRES_URL is required", ErrInvalidConfig)
 	}
 	if cfg.TemporalAddress == "" {
 		return APIConfig{}, fmt.Errorf("%w: TEMPORAL_ADDRESS is required", ErrInvalidConfig)

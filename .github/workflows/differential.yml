@@ -38,7 +38,7 @@ jobs:
         image: postgres:16-alpine
         env:
           # The Compose defaults from docker-compose.yaml / .env.example
-          # (APP_DB_USER, APP_DB_PASSWORD, APP_DB_NAME). These are throwaway
+          # (OPENPLAN_DB_USER, OPENPLAN_DB_PASSWORD, OPENPLAN_DB_NAME). These are throwaway
           # local-only credentials; a CI service database is never anything but.
           POSTGRES_USER: openplan
           POSTGRES_PASSWORD: openplan
