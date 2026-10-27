@@ -371,6 +371,10 @@ export function useApproveRunMutation(tenantID: string) {
       // for approval" without reading it again.
       queryClient.setQueryData(queryKeys.templateRun(tenantID, run.id), run);
       queryClient.invalidateQueries({ queryKey: queryKeys.attention(tenantID) });
+      // The runs list polls slowly while the run waits, and the stack's header
+      // and chips refresh only when that list sees the run settle; reading it
+      // now puts it back on the fast poll.
+      queryClient.invalidateQueries({ queryKey: queryKeys.templateRuns(tenantID, run.stack_template_id) });
     }
   });
 }
@@ -383,6 +387,12 @@ export function useDiscardRunMutation(tenantID: string) {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.templateRun(tenantID, variables.runID) });
       queryClient.invalidateQueries({ queryKey: queryKeys.attention(tenantID) });
+      // As on approval. A discard answers with nothing, so the template comes
+      // from the run on screen.
+      const run = queryClient.getQueryData<TemplateRun>(queryKeys.templateRun(tenantID, variables.runID));
+      if (run) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.templateRuns(tenantID, run.stack_template_id) });
+      }
     }
   });
 }

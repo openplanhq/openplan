@@ -470,7 +470,7 @@ describe("mutation hooks", () => {
   });
 
   it("approves a run and seeds that run's query cache with the approved run", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: "run_1", status: "approved" }));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: "run_1", stack_template_id: "st_1", status: "approved" }));
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), { id: "run_1", status: "waiting_approval" });
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
@@ -480,13 +480,19 @@ describe("mutation hooks", () => {
       await result.current.mutateAsync("run_1");
     });
 
-    expect(queryClient.getQueryData(queryKeys.templateRun("tenant_123", "run_1"))).toEqual({ id: "run_1", status: "approved" });
+    expect(queryClient.getQueryData(queryKeys.templateRun("tenant_123", "run_1"))).toEqual({
+      id: "run_1",
+      stack_template_id: "st_1",
+      status: "approved"
+    });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.attention("tenant_123") });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.templateRuns("tenant_123", "st_1") });
   });
 
-  it("discards a run and invalidates that run's query", async () => {
+  it("discards a run and invalidates that run's query and its template's runs", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
     const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), { id: "run_1", stack_template_id: "st_1", status: "waiting_approval" });
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
     const { result } = renderHook(() => useDiscardRunMutation("tenant_123"), { wrapper: wrapper(queryClient) });
 
@@ -495,5 +501,6 @@ describe("mutation hooks", () => {
     });
 
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.templateRun("tenant_123", "run_1") });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.templateRuns("tenant_123", "st_1") });
   });
 });
