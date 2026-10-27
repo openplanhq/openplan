@@ -39,11 +39,11 @@ func newDispatcher(temporalClient workflowClient, options ...DispatcherOptions) 
 	return dispatcher
 }
 
-// StartTemplateRun dispatches one TemplatePlanWorkflow execution to Temporal.
+// StartTemplatePlan dispatches one TemplatePlanWorkflow execution to Temporal.
 // The workflow ID is derived from tenant ID and run ID so repeated callers target
 // the same logical run. Workflows run on the control queue; the workflow itself
 // routes execution activities to the executor.
-func (dispatcher *Dispatcher) StartTemplateRun(ctx context.Context, input domain.TemplateRunWorkflowInput) error {
+func (dispatcher *Dispatcher) StartTemplatePlan(ctx context.Context, input domain.TemplateRunWorkflowInput) error {
 	// The timeout is stamped here rather than carried from the request: it is
 	// deployment configuration, not something a caller chose, and stamping it
 	// at dispatch means a run that sat in the queue across a reconfiguration

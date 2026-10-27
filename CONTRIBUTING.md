@@ -104,7 +104,7 @@ outright.
   and rename by adding the new column, copying into it, and dropping the old
   one in a later release.
 - **Work-queue payloads.** Rows in `work_queue` outlive the binary that wrote
-  them, and the new one decodes them. The payloads (`StartTemplateRunPayload`
+  them, and the new one decodes them. The payloads (`StartTemplatePlanPayload`
   and the rest, in `internal/app`) are the workflow inputs, so they change only
   additively: a new field must mean what it meant before when it is missing.
   Anything else is a new payload kind.

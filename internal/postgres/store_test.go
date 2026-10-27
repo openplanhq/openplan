@@ -2080,7 +2080,7 @@ func TestCreateTemplateRunPersistsRunFields(t *testing.T) {
 	}
 
 	var queuedStarts int
-	if err := pool.QueryRow(ctx, `select count(*) from work_queue where kind = 'start_template_run'`).Scan(&queuedStarts); err != nil {
+	if err := pool.QueryRow(ctx, `select count(*) from work_queue where kind = 'start_template_plan'`).Scan(&queuedStarts); err != nil {
 		t.Fatalf("count work queue rows: %v", err)
 	}
 	if queuedStarts != 0 {

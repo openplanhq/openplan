@@ -316,7 +316,7 @@ func assertAPIQueueSpecs(t *testing.T, registry *queue.SpecRegistry) {
 		t.Fatal("queue spec registry was not passed to the API store")
 	}
 	for _, kind := range []queue.Kind{
-		app.KindStartTemplateRun,
+		app.KindStartTemplatePlan,
 		app.KindStartTemplateSync,
 		app.KindStartTemplateApply,
 	} {
@@ -1166,7 +1166,7 @@ func (controller *recordingAPIQueueController) Run(ctx context.Context) {
 
 type recordingAPIDispatcher struct{}
 
-func (recordingAPIDispatcher) StartTemplateRun(context.Context, domain.TemplateRunWorkflowInput) error {
+func (recordingAPIDispatcher) StartTemplatePlan(context.Context, domain.TemplateRunWorkflowInput) error {
 	return nil
 }
 

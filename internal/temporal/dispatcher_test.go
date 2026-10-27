@@ -30,7 +30,7 @@ func TestStartTemplateRunExecutesWorkflow(t *testing.T) {
 		WorkspaceName:   "mtp_acme_prod_vpc_a13f9c",
 	}
 
-	if err := dispatcher.StartTemplateRun(context.Background(), input); err != nil {
+	if err := dispatcher.StartTemplatePlan(context.Background(), input); err != nil {
 		t.Fatalf("StartTemplateRun returned error: %v", err)
 	}
 
@@ -68,7 +68,7 @@ func TestStartTemplateRunStampsTheConfiguredTerraformTimeout(t *testing.T) {
 	workflowClient := &recordingWorkflowClient{}
 	dispatcher := newDispatcher(workflowClient, DispatcherOptions{TerraformTimeout: 90 * time.Minute})
 
-	if err := dispatcher.StartTemplateRun(context.Background(), domain.TemplateRunWorkflowInput{
+	if err := dispatcher.StartTemplatePlan(context.Background(), domain.TemplateRunWorkflowInput{
 		RunID:    domain.TemplateRunID("run_123"),
 		TenantID: domain.TenantID("tenant_123"),
 	}); err != nil {
@@ -93,7 +93,7 @@ func TestStartTemplateRunWithoutAConfiguredTimeoutLeavesItToTheWorkflow(t *testi
 	workflowClient := &recordingWorkflowClient{}
 	dispatcher := newDispatcher(workflowClient)
 
-	if err := dispatcher.StartTemplateRun(context.Background(), domain.TemplateRunWorkflowInput{
+	if err := dispatcher.StartTemplatePlan(context.Background(), domain.TemplateRunWorkflowInput{
 		RunID:    domain.TemplateRunID("run_123"),
 		TenantID: domain.TenantID("tenant_123"),
 	}); err != nil {
@@ -182,7 +182,7 @@ func TestStartTemplateRunWrapsClientError(t *testing.T) {
 	clientErr := errors.New("temporal unavailable")
 	dispatcher := newDispatcher(&recordingWorkflowClient{executeErr: clientErr})
 
-	err := dispatcher.StartTemplateRun(context.Background(), domain.TemplateRunWorkflowInput{
+	err := dispatcher.StartTemplatePlan(context.Background(), domain.TemplateRunWorkflowInput{
 		RunID:    domain.TemplateRunID("run_123"),
 		TenantID: domain.TenantID("tenant_123"),
 	})

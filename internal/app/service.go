@@ -210,7 +210,7 @@ type TemplateRunLogRepository interface {
 
 // WorkflowDispatcher starts workflows and sends workflow signals.
 type WorkflowDispatcher interface {
-	StartTemplateRun(ctx context.Context, input domain.TemplateRunWorkflowInput) error
+	StartTemplatePlan(ctx context.Context, input domain.TemplateRunWorkflowInput) error
 	StartTemplateSync(ctx context.Context, input domain.TemplateSyncWorkflowInput) error
 	// StartTemplateApply starts the workflow that applies an approved run's
 	// saved plan.
@@ -1006,8 +1006,8 @@ func (service *Service) StartTemplateRun(ctx context.Context, command StartTempl
 	}
 
 	input := templateRunWorkflowInput(run, templateRevision)
-	kind := KindStartTemplateRun
-	payload, err := json.Marshal(StartTemplateRunPayload(input))
+	kind := KindStartTemplatePlan
+	payload, err := json.Marshal(StartTemplatePlanPayload(input))
 	if command.AutoApprove {
 		kind = KindStartTemplateApply
 		payload, err = json.Marshal(StartTemplateApplyPayload(input))

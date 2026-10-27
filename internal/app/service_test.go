@@ -694,8 +694,8 @@ func TestStartTemplateRunCreatesQueuedRunWithoutDispatchingWorkflow(t *testing.T
 		t.Fatalf("created run ID = %q, want %q", runs.created.ID, run.ID)
 	}
 
-	if len(work.requests) != 1 || work.requests[0].Kind != KindStartTemplateRun {
-		t.Fatalf("queued requests = %#v, want one start_template_run request", work.requests)
+	if len(work.requests) != 1 || work.requests[0].Kind != KindStartTemplatePlan {
+		t.Fatalf("queued requests = %#v, want one start_template_plan request", work.requests)
 	}
 
 	if templates.gotGetTemplateTenantID != domain.TenantID("tenant_123") {
@@ -3242,7 +3242,7 @@ type recordingWorkflowDispatcher struct {
 	approvalRunID         domain.TemplateRunID
 }
 
-func (dispatcher *recordingWorkflowDispatcher) StartTemplateRun(_ context.Context, input domain.TemplateRunWorkflowInput) error {
+func (dispatcher *recordingWorkflowDispatcher) StartTemplatePlan(_ context.Context, input domain.TemplateRunWorkflowInput) error {
 	dispatcher.startTemplateRunCalls++
 	dispatcher.input = input
 	return nil
@@ -3656,10 +3656,10 @@ func TestStartTemplateRunPairsRunWithStartIntentInTransaction(t *testing.T) {
 	if work.inTxCalls != 1 || runs.created.ID != run.ID {
 		t.Fatalf("transaction calls = %d, run = %#v", work.inTxCalls, runs.created)
 	}
-	if len(work.requests) != 1 || work.requests[0].Kind != KindStartTemplateRun || work.requests[0].ActorSubject != oidcSubject || work.requests[0].TenantID != "tenant_123" {
+	if len(work.requests) != 1 || work.requests[0].Kind != KindStartTemplatePlan || work.requests[0].ActorSubject != oidcSubject || work.requests[0].TenantID != "tenant_123" {
 		t.Fatalf("requests = %#v", work.requests)
 	}
-	var payload StartTemplateRunPayload
+	var payload StartTemplatePlanPayload
 	if err := json.Unmarshal(work.requests[0].Payload, &payload); err != nil {
 		t.Fatalf("decode start intent: %v", err)
 	}

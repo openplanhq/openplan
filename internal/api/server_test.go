@@ -4196,7 +4196,7 @@ type recordingWorkflowDispatcher struct {
 	approvalRunID domain.TemplateRunID
 }
 
-func (dispatcher *recordingWorkflowDispatcher) StartTemplateRun(_ context.Context, input domain.TemplateRunWorkflowInput) error {
+func (dispatcher *recordingWorkflowDispatcher) StartTemplatePlan(_ context.Context, input domain.TemplateRunWorkflowInput) error {
 	dispatcher.input = input
 	return nil
 }
