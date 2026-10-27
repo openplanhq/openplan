@@ -18,9 +18,6 @@ set -eu
 # no tool. Keep in step with teardown.sh.
 TRAEFIK_CHART_VERSION=41.7.0
 NAMESPACE=openplan
-# The sub Dex issues for admin@openplan.local, from the userID in
-# dependencies.yaml and the "local" connector; the compose value.
-ROOT_SUBJECT=CiQ3YzRiMmYwZS0zZDFhLTRlOGItOWY2Yy0yYTVkOGUxYjBjNDcSBWxvY2Fs
 
 here=$(cd "$(dirname "$0")" && pwd)
 
@@ -105,50 +102,23 @@ else
 		temporal-db-password=$(fresh)
 		valkey-api-password=$(fresh)
 		valkey-executor-password=$(fresh)
+		minio-root-user=openplan
 		minio-root-password=$(fresh)
 		oidc-client-secret=$(fresh)
 	EOF
 	kube create secret generic evaluation-dependencies --from-env-file="$work/dependencies.env"
 fi
 
-# The chart's two Secrets, built from the passwords above. Keys are the
-# variables' names; the chart sets HTTP_ADDRESS, OPENPLAN_ENVIRONMENT,
-# OPENPLAN_PUBLIC_URL and the run directories itself. The executor gets no
-# database, no keys and no OIDC secret: secrets reach it sealed per run.
-echo "==> openplan-api-env and openplan-executor-env"
-s3_password=$(secret_value evaluation-dependencies minio-root-password)
-cat >"$work/s3.env" <<-EOF
-	ARTIFACT_STORE_KIND=s3
-	S3_BUCKET=openplan-artifacts
-	S3_REGION=us-east-1
-	S3_ENDPOINT=http://minio:9000
-	S3_FORCE_PATH_STYLE=true
-	S3_ACCESS_KEY_ID=openplan
-	S3_SECRET_ACCESS_KEY=$s3_password
-	TEMPORAL_ADDRESS=temporal:7233
-EOF
-if secret_exists openplan-api-env; then
-	echo "kept: openplan-api-env"
+# openplan's own keys, which no dependency holds. values.yaml reads every
+# other credential from evaluation-dependencies, where the dependencies read
+# them too.
+echo "==> openplan-keys"
+if secret_exists openplan-keys; then
+	echo "kept: openplan-keys"
 else
-	cat "$work/s3.env" - >"$work/api.env" <<-EOF
-		DATABASE_URL=postgres://openplan:$(secret_value evaluation-dependencies postgres-password)@postgres:5432/openplan?sslmode=disable
-		VALKEY_URL=redis://api:$(secret_value evaluation-dependencies valkey-api-password)@valkey:6379/0
-		CREDENTIAL_ENCRYPTION_KEY=$(fresh)
-		SESSION_ENCRYPTION_KEY=$(fresh)
-		OIDC_ISSUER_URL=https://dex.localhost/dex
-		OIDC_CLIENT_ID=openplan-api
-		OIDC_CLIENT_SECRET=$(secret_value evaluation-dependencies oidc-client-secret)
-		OPENPLAN_ROOT_SUBJECT=$ROOT_SUBJECT
-	EOF
-	kube create secret generic openplan-api-env --from-env-file="$work/api.env"
-fi
-if secret_exists openplan-executor-env; then
-	echo "kept: openplan-executor-env"
-else
-	cat "$work/s3.env" - >"$work/executor.env" <<-EOF
-		VALKEY_URL=redis://executor:$(secret_value evaluation-dependencies valkey-executor-password)@valkey:6379/0
-	EOF
-	kube create secret generic openplan-executor-env --from-env-file="$work/executor.env"
+	kube create secret generic openplan-keys \
+		--from-literal=session-encryption-key="$(fresh)" \
+		--from-literal=credential-encryption-key="$(fresh)"
 fi
 
 # The api discovers Dex at https://dex.localhost/dex while it boots, the same

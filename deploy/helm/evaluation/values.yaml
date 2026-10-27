@@ -3,16 +3,48 @@
 #
 #   helm install openplan deploy/helm/openplan -n openplan -f deploy/helm/evaluation/values.yaml
 #
-# Every name here is something setup.sh creates. Nothing in this file is a
-# chart default or adds a key to the chart.
+# Every host and Secret here is something setup.sh or dependencies.yaml
+# creates. The credentials are the ones the dependencies themselves read from
+# evaluation-dependencies, so each lives in one place. Nothing in this file is
+# a chart default or adds a key to the chart.
+
+temporal:
+  address: temporal:7233
+
+postgres:
+  url: postgres://openplan@postgres:5432/openplan?sslmode=disable
+  passwordSecret: {name: evaluation-dependencies, key: postgres-password}
+
+valkey:
+  api:
+    url: redis://api@valkey:6379/0
+    passwordSecret: {name: evaluation-dependencies, key: valkey-api-password}
+  executor:
+    url: redis://executor@valkey:6379/0
+    passwordSecret: {name: evaluation-dependencies, key: valkey-executor-password}
+
+s3:
+  bucket: openplan-artifacts
+  region: us-east-1
+  endpoint: http://minio:9000
+  forcePathStyle: true
+  # MinIO's root user and password.
+  accessKeyIDSecret: {name: evaluation-dependencies, key: minio-root-user}
+  secretAccessKeySecret: {name: evaluation-dependencies, key: minio-root-password}
+
+oidc:
+  issuerURL: https://dex.localhost/dex
+  clientID: openplan-api
+  clientSecretSecret: {name: evaluation-dependencies, key: oidc-client-secret}
 
 api:
-  existingSecret: openplan-api-env
+  # The sub Dex issues for admin@openplan.local, from the userID in
+  # dependencies.yaml and the "local" connector; the compose value.
+  rootSubject: CiQ3YzRiMmYwZS0zZDFhLTRlOGItOWY2Yy0yYTVkOGUxYjBjNDcSBWxvY2Fs
+  sessionEncryptionKeySecret: {name: openplan-keys, key: session-encryption-key}
+  credentialEncryptionKeySecret: {name: openplan-keys, key: credential-encryption-key}
   # Dex is served with the evaluation CA's certificate.
   trustedCASecret: openplan-trusted-ca
-
-executor:
-  existingSecret: openplan-executor-env
 
 ingress:
   className: traefik

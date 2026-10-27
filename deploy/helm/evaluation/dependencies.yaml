@@ -257,7 +257,7 @@ data:
   # deploy/dex/config.yaml served over HTTPS: the issuer and redirect move to
   # the Ingress hosts, because production mode refuses plain HTTP. The static
   # users and their userIDs are unchanged, so the admin's OIDC sub (and so
-  # OPENPLAN_ROOT_SUBJECT) is the compose value.
+  # api.rootSubject in values.yaml) is the compose value.
   config.yaml: |
     # The browser and the api both reach this through Traefik: the
     # browser at dex.localhost on loopback, the api through setup.sh's CoreDNS
@@ -536,7 +536,9 @@ spec:
           image: cgr.dev/chainguard/minio@sha256:d88920d6a50bd0b088223b688be3b76c63e6205dbe494437f67ba1240ea12880
           args: ["server", "/data"]
           env:
-            - {name: MINIO_ROOT_USER, value: openplan}
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef: {name: evaluation-dependencies, key: minio-root-user}
             - name: MINIO_ROOT_PASSWORD
               valueFrom:
                 secretKeyRef: {name: evaluation-dependencies, key: minio-root-password}
@@ -590,12 +592,15 @@ spec:
           image: cgr.dev/chainguard/minio-client@sha256:72f9978d415ea8294d78051fb3aee2fd258d449237633f77f100b5367bb5225d
           args: ["--config-dir", "/tmp/mc", "mb", "--ignore-existing", "evaluation/openplan-artifacts"]
           env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef: {name: evaluation-dependencies, key: minio-root-user}
             - name: MINIO_ROOT_PASSWORD
               valueFrom:
                 secretKeyRef: {name: evaluation-dependencies, key: minio-root-password}
             # mc's alias from the environment, so no `mc alias set` step.
             - name: MC_HOST_evaluation
-              value: http://openplan:$(MINIO_ROOT_PASSWORD)@minio:9000
+              value: http://$(MINIO_ROOT_USER):$(MINIO_ROOT_PASSWORD)@minio:9000
           volumeMounts:
             - name: tmp
               mountPath: /tmp
