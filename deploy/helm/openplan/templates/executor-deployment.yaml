@@ -43,7 +43,7 @@ spec:
           env:
             - name: EXECUTOR_RUN_ROOT
               value: /var/lib/openplan/runs
-            - name: EXECUTOR_SANDBOX_STATE
+            - name: EXECUTOR_SANDBOX_ROOT
               value: /var/lib/openplan/sandboxes
             {{- include "openplan.temporalEnv" . | nindent 12 }}
             {{- include "openplan.secretEnv" (dict "name" "VALKEY_URL" "ref" .Values.valkey.executor.urlSecret "path" "valkey.executor.urlSecret") | nindent 12 }}

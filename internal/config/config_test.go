@@ -630,7 +630,7 @@ func TestLoadExecutorConfigSandboxDefaultsAndValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := SandboxConfig{
-		Runsc: DefaultExecutorSandboxRunsc, State: DefaultExecutorSandboxState, MemoryMiB: 2048, CPUs: 2, Pids: 1024,
+		Runsc: DefaultExecutorSandboxRunsc, Root: DefaultExecutorSandboxRoot, MemoryMiB: 2048, CPUs: 2, Pids: 1024,
 		Subnet: netip.MustParsePrefix(DefaultExecutorSandboxSubnet),
 	}
 	if cfg.Sandbox != want {

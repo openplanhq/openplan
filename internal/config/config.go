@@ -19,7 +19,7 @@ const (
 	DefaultArtifactStoreFilesystemRoot = "/tmp/openplan/artifacts"
 	DefaultExecutorMaxSessions         = 20
 	DefaultExecutorSandboxRunsc        = "/usr/local/bin/runsc"
-	DefaultExecutorSandboxState        = "/var/lib/openplan/sandboxes"
+	DefaultExecutorSandboxRoot         = "/var/lib/openplan/sandboxes"
 	DefaultExecutorSandboxMemoryMiB    = 2048
 	DefaultExecutorSandboxCPUs         = 2
 	DefaultExecutorSandboxPids         = 1024
@@ -84,9 +84,9 @@ type ExecutorConfig struct {
 type SandboxConfig struct {
 	// Runsc is the runsc binary, with its gvisor-bin/ sidecars beside it.
 	Runsc string
-	// State holds runsc's state and the sandboxes' bundles. It must be
+	// Root holds runsc's state and the sandboxes' bundles. It must be
 	// ephemeral, as the run root is.
-	State string
+	Root string
 	// MemoryMiB, CPUs and Pids are each sandbox's limits.
 	MemoryMiB int64
 	CPUs      int64
@@ -229,7 +229,7 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 		cfg.MaxSessions = maxSessions
 	}
 	cfg.Sandbox = SandboxConfig{
-		Runsc: DefaultExecutorSandboxRunsc, State: DefaultExecutorSandboxState,
+		Runsc: DefaultExecutorSandboxRunsc, Root: DefaultExecutorSandboxRoot,
 		MemoryMiB: DefaultExecutorSandboxMemoryMiB, CPUs: DefaultExecutorSandboxCPUs, Pids: DefaultExecutorSandboxPids,
 		Subnet: netip.MustParsePrefix(DefaultExecutorSandboxSubnet),
 	}
@@ -244,8 +244,8 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 	if v := strings.TrimSpace(getenv("EXECUTOR_RUNSC")); v != "" {
 		cfg.Sandbox.Runsc = v
 	}
-	if v := strings.TrimSpace(getenv("EXECUTOR_SANDBOX_STATE")); v != "" {
-		cfg.Sandbox.State = v
+	if v := strings.TrimSpace(getenv("EXECUTOR_SANDBOX_ROOT")); v != "" {
+		cfg.Sandbox.Root = v
 	}
 	for _, setting := range []struct {
 		name  string

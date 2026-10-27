@@ -236,7 +236,7 @@ services:
       ARTIFACT_STORE_KIND: filesystem
       ARTIFACT_STORE_FILESYSTEM_ROOT: /var/lib/openplan/artifacts
       EXECUTOR_RUN_ROOT: /var/lib/openplan/runs
-      EXECUTOR_SANDBOX_STATE: /var/lib/openplan/sandboxes
+      EXECUTOR_SANDBOX_ROOT: /var/lib/openplan/sandboxes
     restart: on-failure
     # Each activity runs in a gVisor sandbox of its own (#245), started from
     # here with runsc: root with these seven capabilities, and Docker's
