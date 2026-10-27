@@ -1,0 +1,91 @@
+{{- $component := dict "context" $ "component" "executor" -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openplan.fullname" . }}-executor
+  labels:
+    {{- include "openplan.labels" $component | nindent 4 }}
+spec:
+  replicas: {{ .Values.executor.replicas }}
+  selector:
+    matchLabels:
+      {{- include "openplan.selectorLabels" $component | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "openplan.labels" $component | nindent 8 }}
+    spec:
+      # Each sandbox's network is routed through this pod's, which needs
+      # forwarding on. Kubernetes treats net.ipv4.ip_forward as an unsafe
+      # sysctl, but it is per network namespace and the pod shares one, so a
+      # privileged init container sets it once and the executor finds it on.
+      initContainers:
+        - name: enable-forwarding
+          image: {{ include "openplan.image" $component }}
+          command: ["sysctl", "-w", "net.ipv4.ip_forward=1"]
+          securityContext:
+            privileged: true
+      containers:
+        - name: executor
+          image: {{ include "openplan.image" $component }}
+          # Every setting comes from values, credentials by reference to a
+          # Secret key, so the values file is the whole of the executor's
+          # configuration.
+          env:
+            - name: EXECUTOR_RUN_ROOT
+              value: /var/lib/openplan/runs
+            - name: EXECUTOR_SANDBOX_STATE
+              value: /var/lib/openplan/sandboxes
+            {{- include "openplan.temporalEnv" . | nindent 12 }}
+            {{- include "openplan.secretEnv" (dict "name" "VALKEY_URL" "ref" .Values.valkey.executor.urlSecret "path" "valkey.executor.urlSecret") | nindent 12 }}
+            {{- include "openplan.s3Env" . | nindent 12 }}
+            {{- range $name, $value := dict
+                  "EXECUTOR_MAX_SESSIONS" .Values.executor.maxSessions
+                  "EXECUTOR_SANDBOX_MEMORY" .Values.executor.sandbox.memoryMiB
+                  "EXECUTOR_SANDBOX_CPUS" .Values.executor.sandbox.cpus
+                  "EXECUTOR_SANDBOX_PIDS" .Values.executor.sandbox.pids
+                  "EXECUTOR_SANDBOX_SUBNET" .Values.executor.sandbox.subnet }}
+            {{- if $value }}
+            - name: {{ $name }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- end }}
+          # The release compose's settings: each activity runs in its own
+          # gVisor sandbox, started with runsc as root with these seven
+          # capabilities and no seccomp or AppArmor profile. The sandboxed
+          # process itself runs unprivileged. The sandboxes' cgroups nest
+          # under this container's private cgroup namespace, which the
+          # runtime gives by default on cgroup v2; on a host namespace the
+          # executor refuses to start.
+          securityContext:
+            runAsUser: 0
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+              add: [SYS_ADMIN, SETUID, SETGID, SETFCAP, CHOWN, NET_ADMIN, NET_RAW]
+            seccompProfile:
+              type: Unconfined
+            appArmorProfile:
+              type: Unconfined
+          {{- with .Values.executor.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          # No probes: the executor serves nothing, and it exits at startup
+          # when anything it needs is missing.
+          volumeMounts:
+            - name: runs
+              mountPath: /var/lib/openplan/runs
+            - name: sandboxes
+              mountPath: /var/lib/openplan/sandboxes
+      # Both ephemeral, so a restarted executor starts with no runs and no
+      # sandboxes. The run root is disk-backed and mounted exec: providers
+      # are programs in the run's workspace.
+      volumes:
+        - name: runs
+          emptyDir:
+            sizeLimit: {{ .Values.executor.runRoot.sizeLimit }}
+        - name: sandboxes
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi

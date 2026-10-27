@@ -40,6 +40,12 @@ valkey:
     urlSecret:
       name: ""
       key: ""
+  executor:
+    # Required. The same Valkey as the executor user, which may only append to
+    # run logs: redis://executor:<password>@valkey:6379/0.
+    urlSecret:
+      name: ""
+      key: ""
 
 # Where run logs and plans are kept. S3 or any S3-compatible store; the
 # filesystem store can't work here, since the api and the executor run in
@@ -103,6 +109,31 @@ api:
   # Optional. The name of an existing Secret whose ca.crt the api trusts in
   # addition to the public roots, for an OIDC issuer behind an internal CA.
   trustedCASecret: ""
+
+# The executor gets Temporal, the executor's Valkey user and S3 from above, and
+# nothing else: no database, no keys, no OIDC secret.
+executor:
+  replicas: 1
+  # Set a memory limit of at least sandbox.memoryMiB times maxSessions, plus
+  # the executor's own headroom: every sandbox's memory is counted in this pod.
+  resources: {}
+  # The runs, each in its own sandbox, one executor holds at once. Empty means
+  # the executor's default.
+  maxSessions: ""
+  # Each sandbox's limits. Empty means the executor's default.
+  sandbox:
+    # MiB of memory.
+    memoryMiB: ""
+    cpus: ""
+    pids: ""
+    # The IPv4 subnet, /29 or larger, the sandboxes' addresses come from. Move
+    # it when it collides with a network the executor reaches, such as the
+    # cluster's pod or service CIDR. Empty means 10.237.0.0/24.
+    subnet: ""
+  runRoot:
+    # Disk for the workspaces of the runs in flight on one executor. The
+    # kubelet evicts the pod, and every run on it, when they outgrow it.
+    sizeLimit: 8Gi
 
 ingress:
   # The IngressClass to use. Empty means the cluster's default class.
