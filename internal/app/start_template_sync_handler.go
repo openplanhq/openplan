@@ -23,10 +23,10 @@ func startTemplateSyncKey(payload json.RawMessage) (string, error) {
 	if err := json.Unmarshal(payload, &parsed); err != nil {
 		return "", fmt.Errorf("decode start template sync payload: %w", err)
 	}
-	if parsed.TenantID == "" || parsed.RegistrationID == "" {
-		return "", fmt.Errorf("decode start template sync payload: tenant ID and registration ID are required")
+	if parsed.TenantID == "" || parsed.SyncID == "" {
+		return "", fmt.Errorf("decode start template sync payload: tenant ID and sync ID are required")
 	}
-	return "registration:" + string(parsed.TenantID) + "/" + string(parsed.RegistrationID), nil
+	return "sync:" + string(parsed.TenantID) + "/" + string(parsed.SyncID), nil
 }
 
 type StartTemplateSyncHandler struct{ dispatcher WorkflowDispatcher }

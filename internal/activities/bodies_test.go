@@ -104,7 +104,7 @@ func TestUploadLogBodyUploadsTheSpool(t *testing.T) {
 	logs := &recordingTemplateRunLogStore{}
 	bodies := &Bodies{logs: logs}
 	data, err := runBody(t, bodies, bodyUploadLog, uploadLogRequest{
-		TenantID: "tenant_123", RunID: "run_123", Phase: "plan", LogsDir: logsDir, FileName: "plan.log",
+		TenantID: "tenant_123", RunID: "run_123", Name: "plan", LogsDir: logsDir, FileName: "plan.log",
 	}, io.Discard)
 	if err != nil {
 		t.Fatalf("upload-log returned error: %v", err)
@@ -112,7 +112,7 @@ func TestUploadLogBodyUploadsTheSpool(t *testing.T) {
 	if logs.content != "Plan: 1 to add\n" {
 		t.Fatalf("uploaded %q", logs.content)
 	}
-	if !strings.Contains(string(data), `"phase":"plan"`) {
+	if !strings.Contains(string(data), `"name":"plan"`) {
 		t.Fatalf("result = %s, want the log's metadata", data)
 	}
 }

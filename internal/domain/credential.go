@@ -14,9 +14,10 @@ const (
 	CredentialScopeStackTemplate CredentialScope = "stack_template"
 )
 
-// CredentialSet is a reference to runtime execution credentials.
-type CredentialSet struct {
-	ID              CredentialSetID // Stable identifier used by API deletion and audit references.
+// Credential is one environment entry: a variable name and its encrypted
+// value, owned by a stack or overridden by one of its templates.
+type Credential struct {
+	ID              CredentialID    // Stable identifier used by API deletion and audit references.
 	TenantID        TenantID        // Tenant that owns the encrypted credential.
 	StackID         StackID         // Stack owner; empty when StackTemplateID is populated.
 	StackTemplateID StackTemplateID // Optional template owner for template-specific overrides.

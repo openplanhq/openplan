@@ -41,13 +41,13 @@ func NewLogStore(store ObjectStore) LogStore {
 	return LogStore{store: store, now: time.Now}
 }
 
-// PutTemplateRunLog uploads one phase log and returns the metadata describing
+// PutTemplateRunLog uploads one command's log and returns the metadata describing
 // it. It does not record that metadata: the uploader runs on the data plane,
 // which has no database, so the workflow hands the returned row to a control
 // activity instead. The key is deterministic, so a retried upload overwrites
 // rather than duplicates.
-func (store LogStore) PutTemplateRunLog(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, phase string, body io.Reader) (domain.TemplateRunLog, error) {
-	key, err := LogKey(tenantID, runID, phase)
+func (store LogStore) PutTemplateRunLog(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, name string, body io.Reader) (domain.TemplateRunLog, error) {
+	key, err := LogKey(tenantID, runID, name)
 	if err != nil {
 		return domain.TemplateRunLog{}, err
 	}
@@ -65,7 +65,7 @@ func (store LogStore) PutTemplateRunLog(ctx context.Context, tenantID domain.Ten
 	return domain.TemplateRunLog{
 		TenantID:    tenantID,
 		RunID:       runID,
-		Phase:       phase,
+		Name:        name,
 		ObjectKey:   key,
 		ContentType: logContentType,
 		SizeBytes:   int64(len(content)),
@@ -210,11 +210,11 @@ func PlanChangesKey(tenantID domain.TenantID, runID domain.TemplateRunID) (strin
 	return path.Join("tenants", string(tenantID), "runs", string(runID), "plan", "changes.json"), nil
 }
 
-func LogKey(tenantID domain.TenantID, runID domain.TemplateRunID, phase string) (string, error) {
-	if !safePathComponent(string(tenantID)) || !safePathComponent(string(runID)) || !safePathComponent(phase) {
-		return "", fmt.Errorf("tenant ID, run ID, and phase must be safe path components")
+func LogKey(tenantID domain.TenantID, runID domain.TemplateRunID, name string) (string, error) {
+	if !safePathComponent(string(tenantID)) || !safePathComponent(string(runID)) || !safePathComponent(name) {
+		return "", fmt.Errorf("tenant ID, run ID, and log name must be safe path components")
 	}
-	return path.Join("tenants", string(tenantID), "runs", string(runID), "logs", phase+".log"), nil
+	return path.Join("tenants", string(tenantID), "runs", string(runID), "logs", name+".log"), nil
 }
 
 type FilesystemStore struct {

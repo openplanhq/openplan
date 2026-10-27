@@ -29,26 +29,29 @@ const (
 	TemplateApplyWorkflowName = "TemplateApplyWorkflow"
 	TemplateSyncWorkflowName  = "TemplateSyncWorkflow"
 
-	RecordTemplateRunStatusActivityName          = "RecordTemplateRunStatus"
-	RecordTemplateRunLogActivityName             = "RecordTemplateRunLog"
-	RecordTemplateRunStepActivityName            = "RecordTemplateRunStep"
-	RecordTemplateRunEventActivityName           = "RecordTemplateRunEvent"
-	RecordTemplateRegistrationStatusActivityName = "RecordTemplateRegistrationStatus"
-	RecordTemplateRegistrationStepActivityName   = "RecordTemplateRegistrationStep"
-	PrepareWorkspaceActivityName                 = "PrepareWorkspace"
-	FetchSourceActivityName                      = "FetchSource"
-	RunTerraformActivityName                     = "RunTerraform"
-	UploadLogActivityName                        = "UploadLog"
-	SyncTemplateActivityName                     = "SyncTemplate"
-	SealSourceTokenActivityName                  = "SealSourceToken"
-	SealRunCredentialsActivityName               = "SealRunCredentials" //nolint:gosec // an activity name, not a credential
-	ReleaseRunKeyActivityName                    = "ReleaseRunKey"
-	CleanupWorkspaceActivityName                 = "CleanupWorkspace"
-	SealPlanKeyActivityName                      = "SealPlanKey"
-	UploadPlanActivityName                       = "UploadPlan"
-	DownloadPlanActivityName                     = "DownloadPlan"
-	FinishPlanActivityName                       = "FinishPlan"
-	BeginApplyActivityName                       = "BeginApply"
+	RecordTemplateRunStatusActivityName = "RecordTemplateRunStatus"
+	RecordTemplateRunLogActivityName    = "RecordTemplateRunLog"
+	RecordTemplateRunStepActivityName   = "RecordTemplateRunStep"
+	RecordTemplateRunEventActivityName  = "RecordTemplateRunEvent"
+	// The sync activities keep the names they had when a sync was called a
+	// registration: recorded workflow histories name them, and a renamed
+	// activity would fail those histories on replay.
+	RecordTemplateSyncStatusActivityName = "RecordTemplateRegistrationStatus"
+	RecordTemplateSyncStepActivityName   = "RecordTemplateRegistrationStep"
+	PrepareWorkspaceActivityName         = "PrepareWorkspace"
+	FetchSourceActivityName              = "FetchSource"
+	RunTerraformActivityName             = "RunTerraform"
+	UploadLogActivityName                = "UploadLog"
+	SyncTemplateActivityName             = "SyncTemplate"
+	SealSourceTokenActivityName          = "SealSourceToken"
+	SealRunCredentialsActivityName       = "SealRunCredentials" //nolint:gosec // an activity name, not a credential
+	ReleaseRunKeyActivityName            = "ReleaseRunKey"
+	CleanupWorkspaceActivityName         = "CleanupWorkspace"
+	SealPlanKeyActivityName              = "SealPlanKey"
+	UploadPlanActivityName               = "UploadPlan"
+	DownloadPlanActivityName             = "DownloadPlan"
+	FinishPlanActivityName               = "FinishPlan"
+	BeginApplyActivityName               = "BeginApply"
 )
 
 const (
@@ -394,8 +397,8 @@ type BeginApplyActivityOutput struct {
 
 // TemplateSyncWorkflowInput starts template metadata sync for a public GitHub template.
 type TemplateSyncWorkflowInput struct {
-	RegistrationID TemplateRegistrationID
-	TenantID       TenantID
+	SyncID   TemplateSyncID
+	TenantID TenantID
 	// SourceTemplateID is the template the sync writes its revision into. The
 	// API made it when the template was registered; the sync never creates
 	// one, so a template deleted mid-sync stays deleted.
@@ -406,9 +409,9 @@ type TemplateSyncWorkflowInput struct {
 	RootPath         string
 }
 
-// TemplateSyncActivityInput asks the control plane to sync one template registration source.
+// TemplateSyncActivityInput asks the control plane to sync one template source.
 type TemplateSyncActivityInput struct {
-	RegistrationID   TemplateRegistrationID
+	SyncID           TemplateSyncID
 	TenantID         TenantID
 	SourceTemplateID SourceTemplateID
 	RepoOwner        string
@@ -417,28 +420,28 @@ type TemplateSyncActivityInput struct {
 	RootPath         string
 }
 
-// TemplateSyncActivityOutput reports the sync result for one registration source.
+// TemplateSyncActivityOutput reports the sync result for one template source.
 type TemplateSyncActivityOutput struct {
-	Status             TemplateRegistrationStatus
+	Status             TemplateSyncState
 	TemplateRevisionID TemplateRevisionID
 	ResolvedCommitSHA  string
 	ErrorSummary       string
 }
 
-// TemplateRegistrationStatusActivityInput asks the control plane to persist one registration status transition.
-type TemplateRegistrationStatusActivityInput struct {
-	RegistrationID     TemplateRegistrationID
+// TemplateSyncStatusActivityInput asks the control plane to persist one sync status transition.
+type TemplateSyncStatusActivityInput struct {
+	SyncID             TemplateSyncID
 	TenantID           TenantID
-	Status             TemplateRegistrationStatus
+	Status             TemplateSyncState
 	TemplateRevisionID TemplateRevisionID
 	ResolvedCommitSHA  string
 	ErrorSummary       string
 }
 
-// TemplateRegistrationStepActivityInput records the step a running sync has
+// TemplateSyncStepActivityInput records the step a running sync has
 // started.
-type TemplateRegistrationStepActivityInput struct {
-	RegistrationID TemplateRegistrationID
-	TenantID       TenantID
-	Step           TemplateRegistrationStep
+type TemplateSyncStepActivityInput struct {
+	SyncID   TemplateSyncID
+	TenantID TenantID
+	Step     TemplateSyncStep
 }

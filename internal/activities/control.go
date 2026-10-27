@@ -136,7 +136,7 @@ func (activities *ControlActivities) RecordTemplateRunLog(ctx context.Context, l
 	if err != nil {
 		return err
 	}
-	log.Phase = name
+	log.Name = name
 	key, err := artifacts.LogKey(log.TenantID, log.RunID, name)
 	if err != nil {
 		return err

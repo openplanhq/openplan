@@ -7,7 +7,7 @@ import (
 	"github.com/vishu42/openplan/internal/domain"
 )
 
-// The response types below are the wire shape of runs, registrations,
+// The response types below are the wire shape of runs, syncs,
 // revisions and logs. The domain structs they are built from also carry what
 // the executor and the store need, so they are never serialised as they are:
 // a field reaches a client only when one of these types names it.
@@ -176,7 +176,7 @@ type templateResponse struct {
 
 // latestSyncResponse is a template's newest sync. Status is the shown one,
 // derived when the response is built (stalled is never stored), so it is not
-// the registration's status.
+// the stored state.
 type latestSyncResponse struct {
 	Status            string    `json:"status"`
 	ErrorSummary      string    `json:"error_summary"`
@@ -274,7 +274,7 @@ func newTemplateRunLogResponse(log domain.TemplateRunLog) templateRunLogResponse
 	return templateRunLogResponse{
 		TenantID:    string(log.TenantID),
 		RunID:       string(log.RunID),
-		Name:        log.Phase,
+		Name:        log.Name,
 		RunPhase:    string(log.RunPhase),
 		Seq:         log.Seq,
 		Command:     string(log.Command),

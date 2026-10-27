@@ -370,7 +370,7 @@ func (server *Server) debugf(format string, args ...any) {
 }
 
 // maxRequestBodyBytes caps every JSON request body. The largest legitimate one
-// is a credential set or a run's variables, a few kilobytes; a megabyte leaves
+// is a credential or a run's variables, a few kilobytes; a megabyte leaves
 // room for those to grow while keeping one request from holding unbounded
 // memory, since the body is buffered whole before it is validated.
 const maxRequestBodyBytes = 1 << 20
@@ -600,9 +600,9 @@ func (server *Server) handleCreateStack(response http.ResponseWriter, request *h
 		return
 	}
 
-	credentialIDs := make([]domain.CredentialSetID, 0, len(body.DefaultCredentialIDs))
+	credentialIDs := make([]domain.CredentialID, 0, len(body.DefaultCredentialIDs))
 	for _, id := range body.DefaultCredentialIDs {
-		credentialIDs = append(credentialIDs, domain.CredentialSetID(id))
+		credentialIDs = append(credentialIDs, domain.CredentialID(id))
 	}
 
 	stack, err := server.service.CreateStack(request.Context(), app.CreateStackCommand{
@@ -734,7 +734,7 @@ func (server *Server) handleDeleteStackCredential(response http.ResponseWriter, 
 	server.debugf("credential delete request scope=stack tenant_id=%s stack_id=%s credential_id=%s", request.PathValue("tenant_id"), request.PathValue("stack_id"), request.PathValue("credential_id"))
 	err := server.service.DeleteCredential(request.Context(), app.DeleteCredentialCommand{
 		TenantID: domain.TenantID(request.PathValue("tenant_id")), StackID: domain.StackID(request.PathValue("stack_id")),
-		CredentialID: domain.CredentialSetID(request.PathValue("credential_id")),
+		CredentialID: domain.CredentialID(request.PathValue("credential_id")),
 	})
 	if err != nil {
 		server.debugf("credential delete failed scope=stack tenant_id=%s stack_id=%s credential_id=%s error=%v", request.PathValue("tenant_id"), request.PathValue("stack_id"), request.PathValue("credential_id"), err)
@@ -790,7 +790,7 @@ func (server *Server) handleDeleteStackTemplateCredential(response http.Response
 	server.debugf("credential delete request scope=stack_template tenant_id=%s stack_template_id=%s credential_id=%s", request.PathValue("tenant_id"), request.PathValue("stack_template_id"), request.PathValue("credential_id"))
 	err := server.service.DeleteCredential(request.Context(), app.DeleteCredentialCommand{
 		TenantID: domain.TenantID(request.PathValue("tenant_id")), StackTemplateID: domain.StackTemplateID(request.PathValue("stack_template_id")),
-		CredentialID: domain.CredentialSetID(request.PathValue("credential_id")),
+		CredentialID: domain.CredentialID(request.PathValue("credential_id")),
 	})
 	if err != nil {
 		server.debugf("credential delete failed scope=stack_template tenant_id=%s stack_template_id=%s credential_id=%s error=%v", request.PathValue("tenant_id"), request.PathValue("stack_template_id"), request.PathValue("credential_id"), err)

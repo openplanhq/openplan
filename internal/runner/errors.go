@@ -60,7 +60,7 @@ func (e *GitCommandError) Unwrap() error {
 //
 // Git itself strips userinfo from URLs before printing them, so this is not the
 // only thing standing between a token and a log. It is the last one: Output is
-// persisted as a template registration's error summary and rendered in the UI,
+// persisted as a template sync's error summary and rendered in the UI,
 // so scrubbing here keeps that safe no matter which git flags a later change
 // introduces.
 func newGitCommandError(command GitCommand, output string, credential GitCredential, err error) *GitCommandError {

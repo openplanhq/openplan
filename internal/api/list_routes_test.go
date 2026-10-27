@@ -274,25 +274,25 @@ func TestListQueuePagesPastFifty(t *testing.T) {
 // value that is not sensitive needs the cipher to open it.
 type apiCredentialRepository struct{}
 
-func (apiCredentialRepository) CreateCredential(context.Context, domain.CredentialSet) error {
+func (apiCredentialRepository) CreateCredential(context.Context, domain.Credential) error {
 	return nil
 }
 
-func (apiCredentialRepository) ListCredentials(_ context.Context, _ domain.TenantID, scope domain.CredentialScope, ownerID string) ([]domain.CredentialSet, error) {
-	credential := domain.CredentialSet{ID: "cred_1", Name: "AWS_REGION", Sensitive: true}
+func (apiCredentialRepository) ListCredentials(_ context.Context, _ domain.TenantID, scope domain.CredentialScope, ownerID string) ([]domain.Credential, error) {
+	credential := domain.Credential{ID: "cred_1", Name: "AWS_REGION", Sensitive: true}
 	if scope == domain.CredentialScopeStack {
 		credential.StackID = domain.StackID(ownerID)
 	} else {
 		credential.StackTemplateID = domain.StackTemplateID(ownerID)
 	}
-	return []domain.CredentialSet{credential}, nil
+	return []domain.Credential{credential}, nil
 }
 
-func (apiCredentialRepository) DeleteCredential(context.Context, domain.TenantID, domain.CredentialSetID) error {
+func (apiCredentialRepository) DeleteCredential(context.Context, domain.TenantID, domain.CredentialID) error {
 	return nil
 }
 
-func (apiCredentialRepository) ListCredentialsForStackTemplate(context.Context, domain.TenantID, domain.StackTemplateID) ([]domain.CredentialSet, error) {
+func (apiCredentialRepository) ListCredentialsForStackTemplate(context.Context, domain.TenantID, domain.StackTemplateID) ([]domain.Credential, error) {
 	return nil, nil
 }
 

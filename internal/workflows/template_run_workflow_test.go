@@ -194,7 +194,7 @@ func TestTemplatePlanWorkflowRecordsCommandLogsOnControlQueue(t *testing.T) {
 		})
 	env.OnActivity(domain.RecordTemplateRunLogActivityName, mock.Anything, mock.Anything).
 		Return(func(_ context.Context, log domain.TemplateRunLog) error {
-			events = append(events, "log:"+log.Phase+":"+string(log.State))
+			events = append(events, "log:"+log.Name+":"+string(log.State))
 			return nil
 		})
 	env.OnActivity(domain.RecordTemplateRunStatusActivityName, mock.Anything, mock.Anything).
@@ -331,7 +331,7 @@ func TestTemplatePlanWorkflowRecordsALostLogWhenTheUploadFails(t *testing.T) {
 		Return(domain.TemplateRunLog{}, errors.New("store unavailable"))
 	env.OnActivity(domain.RecordTemplateRunLogActivityName, mock.Anything, mock.Anything).
 		Return(func(_ context.Context, log domain.TemplateRunLog) error {
-			recorded = append(recorded, log.Phase+":"+string(log.State)+":"+string(log.LostReason))
+			recorded = append(recorded, log.Name+":"+string(log.State)+":"+string(log.LostReason))
 			return nil
 		})
 	env.OnActivity(domain.RecordTemplateRunStatusActivityName, mock.Anything, mock.Anything).
@@ -382,7 +382,7 @@ func TestTemplatePlanWorkflowRecordsLostWhenTheUploadResultIsIncomplete(t *testi
 		})
 	env.OnActivity(domain.RecordTemplateRunLogActivityName, mock.Anything, mock.Anything).
 		Return(func(_ context.Context, log domain.TemplateRunLog) error {
-			recorded = append(recorded, log.Phase+":"+string(log.State)+":"+string(log.LostReason))
+			recorded = append(recorded, log.Name+":"+string(log.State)+":"+string(log.LostReason))
 			return nil
 		})
 	env.OnActivity(domain.RecordTemplateRunStatusActivityName, mock.Anything, mock.Anything).Return(nil)
@@ -444,8 +444,8 @@ func TestTemplatePlanWorkflowRecordsExecutorGoneWhenTheCommandHeartbeatTimesOut(
 		t.Fatal("no log recorded")
 	}
 	last := recorded[len(recorded)-1]
-	if last.Phase != "plan-3" || last.State != domain.TemplateRunLogLost || last.LostReason != domain.LogLostExecutorGone {
-		t.Fatalf("last recorded log = %s %s/%s, want plan-3 lost/%s", last.Phase, last.State, last.LostReason, domain.LogLostExecutorGone)
+	if last.Name != "plan-3" || last.State != domain.TemplateRunLogLost || last.LostReason != domain.LogLostExecutorGone {
+		t.Fatalf("last recorded log = %s %s/%s, want plan-3 lost/%s", last.Name, last.State, last.LostReason, domain.LogLostExecutorGone)
 	}
 }
 
@@ -506,8 +506,8 @@ func TestTemplatePlanWorkflowRecordsExecutorGoneWhenTheSessionFails(t *testing.T
 		t.Fatal("no log recorded")
 	}
 	last := recorded[len(recorded)-1]
-	if last.Phase != "plan-3" || last.State != domain.TemplateRunLogLost || last.LostReason != domain.LogLostExecutorGone {
-		t.Fatalf("last recorded log = %s %s/%s, want plan-3 lost/%s", last.Phase, last.State, last.LostReason, domain.LogLostExecutorGone)
+	if last.Name != "plan-3" || last.State != domain.TemplateRunLogLost || last.LostReason != domain.LogLostExecutorGone {
+		t.Fatalf("last recorded log = %s %s/%s, want plan-3 lost/%s", last.Name, last.State, last.LostReason, domain.LogLostExecutorGone)
 	}
 }
 
@@ -528,7 +528,7 @@ func TestTemplatePlanWorkflowKeepsGoingWhenRecordingALogFails(t *testing.T) {
 			if log.State != domain.TemplateRunLogComplete {
 				return nil
 			}
-			completeAttempts[log.Phase]++
+			completeAttempts[log.Name]++
 			return errors.New("database unavailable")
 		})
 	env.OnActivity(domain.RecordTemplateRunStatusActivityName, mock.Anything, mock.Anything).Return(nil)
@@ -1461,7 +1461,7 @@ const sessionCreationActivityName = "internalSessionCreationActivity"
 // wrote, described as RecordTemplateRunLog needs a complete log to be.
 func uploadedLog(input domain.UploadLogActivityInput) domain.TemplateRunLog {
 	return domain.TemplateRunLog{
-		Phase:       input.LogName,
+		Name:        input.LogName,
 		ObjectKey:   "logs/" + input.LogName + ".log",
 		ContentType: "text/plain; charset=utf-8",
 		SizeBytes:   42,
@@ -1855,7 +1855,7 @@ func TestTemplatePlanWorkflowPinsLogIdentityToTheRun(t *testing.T) {
 			return domain.TemplateRunLog{
 				TenantID:    domain.TenantID("tenant_victim"),
 				RunID:       domain.TemplateRunID("run_victim"),
-				Phase:       "apply-9",
+				Name:        "apply-9",
 				RunPhase:    domain.RunPhaseApply,
 				Seq:         9,
 				Command:     domain.TerraformCommandDestroy,
@@ -1895,21 +1895,21 @@ func TestTemplatePlanWorkflowPinsLogIdentityToTheRun(t *testing.T) {
 			t.Fatalf("recorded log row %d as %s, want %s", i, log.State, wantState)
 		}
 		if log.TenantID != input.TenantID {
-			t.Fatalf("recorded %s log tenant = %q, want %q", log.Phase, log.TenantID, input.TenantID)
+			t.Fatalf("recorded %s log tenant = %q, want %q", log.Name, log.TenantID, input.TenantID)
 		}
 		if log.RunID != input.RunID {
-			t.Fatalf("recorded %s log run = %q, want %q", log.Phase, log.RunID, input.RunID)
+			t.Fatalf("recorded %s log run = %q, want %q", log.Name, log.RunID, input.RunID)
 		}
-		if log.Phase != named[i/2] {
-			t.Fatalf("recorded log row %d as %q, want the workflow's name %q", i, log.Phase, named[i/2])
+		if log.Name != named[i/2] {
+			t.Fatalf("recorded log row %d as %q, want the workflow's name %q", i, log.Name, named[i/2])
 		}
 		// What wrote the log is the workflow's to say too: a plan workflow
 		// never runs a destroy.
 		if log.RunPhase != domain.RunPhasePlan || log.Command == domain.TerraformCommandDestroy {
-			t.Fatalf("recorded %s log as %s/%s, want the plan phase's own command", log.Phase, log.RunPhase, log.Command)
+			t.Fatalf("recorded %s log as %s/%s, want the plan phase's own command", log.Name, log.RunPhase, log.Command)
 		}
-		if want, _ := domain.RunLogName(log.RunPhase, log.Seq); want != log.Phase || log.Seq != i/2+1 {
-			t.Fatalf("recorded log row %d as %q, number %d, want %q, number %d", i, log.Phase, log.Seq, want, i/2+1)
+		if want, _ := domain.RunLogName(log.RunPhase, log.Seq); want != log.Name || log.Seq != i/2+1 {
+			t.Fatalf("recorded log row %d as %q, number %d, want %q, number %d", i, log.Name, log.Seq, want, i/2+1)
 		}
 	}
 }
@@ -1927,7 +1927,7 @@ func TestTemplatePlanWorkflowPinsLogIdentityOfFailedCommand(t *testing.T) {
 	hostileLog := domain.TemplateRunLog{
 		TenantID:    domain.TenantID("tenant_victim"),
 		RunID:       domain.TemplateRunID("run_victim"),
-		Phase:       "plan",
+		Name:        "plan",
 		ObjectKey:   "logs/plan.log",
 		ContentType: "text/plain; charset=utf-8",
 		UploadedAt:  time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC),
@@ -1959,7 +1959,7 @@ func TestTemplatePlanWorkflowPinsLogIdentityOfFailedCommand(t *testing.T) {
 	for _, log := range recorded {
 		if log.TenantID != input.TenantID || log.RunID != input.RunID {
 			t.Fatalf("recorded %s log identity = %q/%q, want %q/%q",
-				log.Phase, log.TenantID, log.RunID, input.TenantID, input.RunID)
+				log.Name, log.TenantID, log.RunID, input.TenantID, input.RunID)
 		}
 	}
 }

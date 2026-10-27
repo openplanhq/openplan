@@ -63,7 +63,7 @@ func TestMigrateAppliesSchema(t *testing.T) {
 		"template_run_logs",
 		"source_templates",
 		"template_revisions",
-		"template_registrations",
+		"template_syncs",
 		"template_variables",
 		"work_queue",
 		"security_audit_log",
@@ -566,7 +566,7 @@ func TestTemplateSourceMigrationBackfillsLegacyStackTemplateRevisionPointers(t *
 	}
 }
 
-func TestCreateAndGetTemplateRegistration(t *testing.T) {
+func TestCreateAndGetTemplateSync(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -574,76 +574,76 @@ func TestCreateAndGetTemplateRegistration(t *testing.T) {
 	store := NewStore(pool)
 	requestedAt := time.Date(2026, 7, 6, 11, 30, 0, 123456000, time.UTC)
 
-	registration := domain.TemplateRegistration{
-		ID:          domain.TemplateRegistrationID("template_registration_123"),
+	templateSync := domain.TemplateSync{
+		ID:          domain.TemplateSyncID("template_sync_123"),
 		TenantID:    domain.TenantID("tenant_123"),
 		RepoOwner:   "acme",
 		RepoName:    "infra-templates",
 		SourceRef:   "v0.0.1",
 		RootPath:    "modules/vpc",
-		Status:      domain.TemplateRegistrationPending,
+		Status:      domain.TemplateSyncStatePending,
 		RequestedBy: domain.UserID("user_123"),
 		RequestedAt: requestedAt,
 	}
 
-	if err := store.CreateTemplateRegistration(ctx, registration); err != nil {
-		t.Fatalf("CreateTemplateRegistration returned error: %v", err)
+	if err := store.CreateTemplateSync(ctx, templateSync); err != nil {
+		t.Fatalf("CreateTemplateSync returned error: %v", err)
 	}
 
-	got, err := store.GetTemplateRegistration(ctx, domain.TenantID("tenant_123"), domain.TemplateRegistrationID("template_registration_123"))
+	got, err := store.GetTemplateSync(ctx, domain.TenantID("tenant_123"), domain.TemplateSyncID("template_sync_123"))
 	if err != nil {
-		t.Fatalf("GetTemplateRegistration returned error: %v", err)
+		t.Fatalf("GetTemplateSync returned error: %v", err)
 	}
 	got.RequestedAt = got.RequestedAt.UTC()
 	got.CompletedAt = got.CompletedAt.UTC()
 
-	if got != registration {
-		t.Fatalf("registration = %#v, want %#v", got, registration)
+	if got != templateSync {
+		t.Fatalf("sync = %#v, want %#v", got, templateSync)
 	}
 
-	_, err = store.GetTemplateRegistration(ctx, domain.TenantID("tenant_456"), domain.TemplateRegistrationID("template_registration_123"))
+	_, err = store.GetTemplateSync(ctx, domain.TenantID("tenant_456"), domain.TemplateSyncID("template_sync_123"))
 	if !errors.Is(err, app.ErrNotFound) {
 		t.Fatalf("other tenant error = %v, want app.ErrNotFound", err)
 	}
 }
 
-func TestRecordTemplateRegistrationStatusUpdatesTerminalFields(t *testing.T) {
+func TestRecordTemplateSyncStatusUpdatesTerminalFields(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	pool := openMigratedTestPool(t, ctx)
 	store := NewStore(pool)
-	registration := domain.TemplateRegistration{
-		ID:          domain.TemplateRegistrationID("template_registration_123"),
+	templateSync := domain.TemplateSync{
+		ID:          domain.TemplateSyncID("template_sync_123"),
 		TenantID:    domain.TenantID("tenant_123"),
 		RepoOwner:   "acme",
 		RepoName:    "infra-templates",
 		SourceRef:   "v0.0.1",
 		RootPath:    "modules/vpc",
-		Status:      domain.TemplateRegistrationPending,
+		Status:      domain.TemplateSyncStatePending,
 		RequestedBy: domain.UserID("user_123"),
 		RequestedAt: time.Date(2026, 7, 6, 11, 30, 0, 0, time.UTC),
 	}
-	if err := store.CreateTemplateRegistration(ctx, registration); err != nil {
-		t.Fatalf("CreateTemplateRegistration returned error: %v", err)
+	if err := store.CreateTemplateSync(ctx, templateSync); err != nil {
+		t.Fatalf("CreateTemplateSync returned error: %v", err)
 	}
 
-	err := store.RecordTemplateRegistrationStatus(ctx, domain.TemplateRegistrationStatusActivityInput{
-		RegistrationID:     domain.TemplateRegistrationID("template_registration_123"),
+	err := store.RecordTemplateSyncStatus(ctx, domain.TemplateSyncStatusActivityInput{
+		SyncID:             domain.TemplateSyncID("template_sync_123"),
 		TenantID:           domain.TenantID("tenant_123"),
-		Status:             domain.TemplateRegistrationCompleted,
+		Status:             domain.TemplateSyncStateCompleted,
 		TemplateRevisionID: domain.TemplateRevisionID("template_123"),
 		ResolvedCommitSHA:  "abc123",
 	})
 	if err != nil {
-		t.Fatalf("RecordTemplateRegistrationStatus returned error: %v", err)
+		t.Fatalf("RecordTemplateSyncStatus returned error: %v", err)
 	}
 
-	got, err := store.GetTemplateRegistration(ctx, domain.TenantID("tenant_123"), domain.TemplateRegistrationID("template_registration_123"))
+	got, err := store.GetTemplateSync(ctx, domain.TenantID("tenant_123"), domain.TemplateSyncID("template_sync_123"))
 	if err != nil {
-		t.Fatalf("GetTemplateRegistration returned error: %v", err)
+		t.Fatalf("GetTemplateSync returned error: %v", err)
 	}
-	if got.Status != domain.TemplateRegistrationCompleted {
+	if got.Status != domain.TemplateSyncStateCompleted {
 		t.Fatalf("status = %q, want completed", got.Status)
 	}
 	if got.TemplateRevisionID != domain.TemplateRevisionID("template_123") {
@@ -653,28 +653,28 @@ func TestRecordTemplateRegistrationStatusUpdatesTerminalFields(t *testing.T) {
 		t.Fatalf("resolved sha = %q, want abc123", got.ResolvedCommitSHA)
 	}
 	if got.CompletedAt.IsZero() {
-		t.Fatal("completed_at was not set for terminal registration status")
+		t.Fatal("completed_at was not set for terminal sync status")
 	}
 }
 
-// Every step in domain.AllTemplateRegistrationSteps must round-trip through
+// Every step in domain.AllTemplateSyncSteps must round-trip through
 // the step column: 0028's check constraint is a copy of that list, and this
 // keeps the two from drifting apart unnoticed.
-func TestRecordTemplateRegistrationStepAcceptsEveryDomainStep(t *testing.T) {
+func TestRecordTemplateSyncStepAcceptsEveryDomainStep(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	pool := openMigratedTestPool(t, ctx)
 	store := NewStore(pool)
-	seedTemplateRegistration(t, ctx, store, "tenant_123", domain.TemplateRegistrationRunning)
+	seedTemplateSync(t, ctx, store, "tenant_123", domain.TemplateSyncStateRunning)
 
-	for _, step := range domain.AllTemplateRegistrationSteps {
-		if err := store.RecordTemplateRegistrationStep(ctx, domain.TemplateRegistrationStepActivityInput{
-			TenantID: "tenant_123", RegistrationID: "template_registration_123", Step: step,
+	for _, step := range domain.AllTemplateSyncSteps {
+		if err := store.RecordTemplateSyncStep(ctx, domain.TemplateSyncStepActivityInput{
+			TenantID: "tenant_123", SyncID: "template_sync_123", Step: step,
 		}); err != nil {
-			t.Fatalf("RecordTemplateRegistrationStep(%q) returned error: %v", step, err)
+			t.Fatalf("RecordTemplateSyncStep(%q) returned error: %v", step, err)
 		}
-		got, err := store.GetTemplateRegistration(ctx, "tenant_123", "template_registration_123")
+		got, err := store.GetTemplateSync(ctx, "tenant_123", "template_sync_123")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -684,19 +684,19 @@ func TestRecordTemplateRegistrationStepAcceptsEveryDomainStep(t *testing.T) {
 	}
 }
 
-// Only a running registration has a step to start: a pending or finished one
+// Only a running sync has a step to start: a pending or finished one
 // is not found.
-func TestRecordTemplateRegistrationStepNeedsARunningRegistration(t *testing.T) {
+func TestRecordTemplateSyncStepNeedsARunningSync(t *testing.T) {
 	t.Parallel()
 
 	for _, testCase := range []struct {
 		name   string
-		status domain.TemplateRegistrationStatus
+		status domain.TemplateSyncState
 		tenant domain.TenantID
 	}{
-		{name: "pending", status: domain.TemplateRegistrationPending, tenant: "tenant_123"},
-		{name: "completed", status: domain.TemplateRegistrationCompleted, tenant: "tenant_123"},
-		{name: "failed", status: domain.TemplateRegistrationFailed, tenant: "tenant_123"},
+		{name: "pending", status: domain.TemplateSyncStatePending, tenant: "tenant_123"},
+		{name: "completed", status: domain.TemplateSyncStateCompleted, tenant: "tenant_123"},
+		{name: "failed", status: domain.TemplateSyncStateFailed, tenant: "tenant_123"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
@@ -704,10 +704,10 @@ func TestRecordTemplateRegistrationStepNeedsARunningRegistration(t *testing.T) {
 			ctx := context.Background()
 			pool := openMigratedTestPool(t, ctx)
 			store := NewStore(pool)
-			seedTemplateRegistration(t, ctx, store, "tenant_123", testCase.status)
+			seedTemplateSync(t, ctx, store, "tenant_123", testCase.status)
 
-			err := store.RecordTemplateRegistrationStep(ctx, domain.TemplateRegistrationStepActivityInput{
-				TenantID: testCase.tenant, RegistrationID: "template_registration_123", Step: domain.TemplateRegistrationStepSyncing,
+			err := store.RecordTemplateSyncStep(ctx, domain.TemplateSyncStepActivityInput{
+				TenantID: testCase.tenant, SyncID: "template_sync_123", Step: domain.TemplateSyncStepSyncing,
 			})
 			if !errors.Is(err, ErrNotFound) {
 				t.Fatalf("error = %v, want ErrNotFound", err)
@@ -716,71 +716,71 @@ func TestRecordTemplateRegistrationStepNeedsARunningRegistration(t *testing.T) {
 	}
 }
 
-// A registration deleted with its template is done: recording its step or its
+// A sync deleted with its template is done: recording its step or its
 // status succeeds and changes nothing, so its sync ends instead of retrying.
-// Another tenant's registration is as absent as a deleted one, and stays as it
+// Another tenant's sync is as absent as a deleted one, and stays as it
 // was.
-func TestRecordingIntoAGoneTemplateRegistrationSucceeds(t *testing.T) {
+func TestRecordingIntoAGoneTemplateSyncSucceeds(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	pool := openMigratedTestPool(t, ctx)
 	store := NewStore(pool)
-	seedTemplateRegistration(t, ctx, store, "tenant_123", domain.TemplateRegistrationRunning)
+	seedTemplateSync(t, ctx, store, "tenant_123", domain.TemplateSyncStateRunning)
 
 	for _, testCase := range []struct {
-		name           string
-		tenant         domain.TenantID
-		registrationID domain.TemplateRegistrationID
+		name   string
+		tenant domain.TenantID
+		syncID domain.TemplateSyncID
 	}{
-		{name: "deleted", tenant: "tenant_123", registrationID: "template_registration_deleted"},
-		{name: "other tenant", tenant: "tenant_456", registrationID: "template_registration_123"},
+		{name: "deleted", tenant: "tenant_123", syncID: "template_sync_deleted"},
+		{name: "other tenant", tenant: "tenant_456", syncID: "template_sync_123"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			if err := store.RecordTemplateRegistrationStep(ctx, domain.TemplateRegistrationStepActivityInput{
-				TenantID: testCase.tenant, RegistrationID: testCase.registrationID, Step: domain.TemplateRegistrationStepSyncing,
+			if err := store.RecordTemplateSyncStep(ctx, domain.TemplateSyncStepActivityInput{
+				TenantID: testCase.tenant, SyncID: testCase.syncID, Step: domain.TemplateSyncStepSyncing,
 			}); err != nil {
-				t.Fatalf("RecordTemplateRegistrationStep returned error: %v", err)
+				t.Fatalf("RecordTemplateSyncStep returned error: %v", err)
 			}
-			if err := store.RecordTemplateRegistrationStatus(ctx, domain.TemplateRegistrationStatusActivityInput{
-				TenantID: testCase.tenant, RegistrationID: testCase.registrationID, Status: domain.TemplateRegistrationCompleted,
+			if err := store.RecordTemplateSyncStatus(ctx, domain.TemplateSyncStatusActivityInput{
+				TenantID: testCase.tenant, SyncID: testCase.syncID, Status: domain.TemplateSyncStateCompleted,
 			}); err != nil {
-				t.Fatalf("RecordTemplateRegistrationStatus returned error: %v", err)
+				t.Fatalf("RecordTemplateSyncStatus returned error: %v", err)
 			}
 		})
 	}
 
-	got, err := store.GetTemplateRegistration(ctx, "tenant_123", "template_registration_123")
+	got, err := store.GetTemplateSync(ctx, "tenant_123", "template_sync_123")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Status != domain.TemplateRegistrationRunning || got.Step != "" {
-		t.Fatalf("tenant_123's registration = %q at step %q, want running with no step", got.Status, got.Step)
+	if got.Status != domain.TemplateSyncStateRunning || got.Step != "" {
+		t.Fatalf("tenant_123's sync = %q at step %q, want running with no step", got.Status, got.Step)
 	}
 }
 
 // An unknown step is refused before it reaches the database.
-func TestRecordTemplateRegistrationStepRejectsAnUnknownStep(t *testing.T) {
+func TestRecordTemplateSyncStepRejectsAnUnknownStep(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	pool := openMigratedTestPool(t, ctx)
 	store := NewStore(pool)
-	seedTemplateRegistration(t, ctx, store, "tenant_123", domain.TemplateRegistrationRunning)
+	seedTemplateSync(t, ctx, store, "tenant_123", domain.TemplateSyncStateRunning)
 
-	err := store.RecordTemplateRegistrationStep(ctx, domain.TemplateRegistrationStepActivityInput{
-		TenantID: "tenant_123", RegistrationID: "template_registration_123", Step: "cloning",
+	err := store.RecordTemplateSyncStep(ctx, domain.TemplateSyncStepActivityInput{
+		TenantID: "tenant_123", SyncID: "template_sync_123", Step: "cloning",
 	})
 	if err == nil {
-		t.Fatal("RecordTemplateRegistrationStep accepted an unknown step")
+		t.Fatal("RecordTemplateSyncStep accepted an unknown step")
 	}
 }
 
-func seedTemplateRegistration(t *testing.T, ctx context.Context, store *Store, tenantID domain.TenantID, status domain.TemplateRegistrationStatus) {
+func seedTemplateSync(t *testing.T, ctx context.Context, store *Store, tenantID domain.TenantID, status domain.TemplateSyncState) {
 	t.Helper()
 
-	if err := store.CreateTemplateRegistration(ctx, domain.TemplateRegistration{
-		ID:          "template_registration_123",
+	if err := store.CreateTemplateSync(ctx, domain.TemplateSync{
+		ID:          "template_sync_123",
 		TenantID:    tenantID,
 		RepoOwner:   "acme",
 		RepoName:    "infra-templates",
@@ -790,7 +790,7 @@ func seedTemplateRegistration(t *testing.T, ctx context.Context, store *Store, t
 		RequestedBy: "user_123",
 		RequestedAt: time.Date(2026, 7, 6, 11, 30, 0, 0, time.UTC),
 	}); err != nil {
-		t.Fatalf("CreateTemplateRegistration returned error: %v", err)
+		t.Fatalf("CreateTemplateSync returned error: %v", err)
 	}
 }
 
@@ -991,7 +991,7 @@ func TestCreateAndGetStack(t *testing.T) {
 		Name:                 "Acme Prod",
 		Slug:                 "acme-prod",
 		Tags:                 map[string]string{"env": "prod"},
-		DefaultCredentialIDs: []domain.CredentialSetID{domain.CredentialSetID("credential_123")},
+		DefaultCredentialIDs: []domain.CredentialID{domain.CredentialID("credential_123")},
 		CreatedBy:            domain.UserID("user_123"),
 		CreatedAt:            createdAt,
 	}
@@ -1011,7 +1011,7 @@ func TestCreateAndGetStack(t *testing.T) {
 	if got.Tags["env"] != "prod" {
 		t.Fatalf("tags = %#v", got.Tags)
 	}
-	if len(got.DefaultCredentialIDs) != 1 || got.DefaultCredentialIDs[0] != domain.CredentialSetID("credential_123") {
+	if len(got.DefaultCredentialIDs) != 1 || got.DefaultCredentialIDs[0] != domain.CredentialID("credential_123") {
 		t.Fatalf("default credential IDs = %#v", got.DefaultCredentialIDs)
 	}
 	if !got.CreatedAt.Equal(createdAt) {
@@ -1112,7 +1112,7 @@ func TestCredentialSensitivityRoundTrips(t *testing.T) {
 	tenantID := domain.TenantID("tenant_123")
 	stackTemplate := seedCredentialOwners(t, ctx, store, tenantID)
 
-	written := []domain.CredentialSet{
+	written := []domain.Credential{
 		{ID: "cred_token", TenantID: tenantID, StackID: stackTemplate.StackID, Name: "CLOUD_TOKEN", Ciphertext: "sealed-token", Sensitive: true, CreatedAt: time.Now().UTC()},
 		{ID: "cred_region", TenantID: tenantID, StackID: stackTemplate.StackID, Name: "CLOUD_REGION", Ciphertext: "sealed-region", Sensitive: false, CreatedAt: time.Now().UTC()},
 		{ID: "cred_zone", TenantID: tenantID, StackTemplateID: stackTemplate.ID, Name: "CLOUD_ZONE", Ciphertext: "sealed-zone", Sensitive: false, CreatedAt: time.Now().UTC()},
@@ -1136,9 +1136,9 @@ func TestCredentialSensitivityRoundTrips(t *testing.T) {
 		t.Fatalf("ListCredentialsForStackTemplate returned error: %v", err)
 	}
 
-	assertSensitivity(t, "stack list", stackCredentials, map[domain.CredentialSetID]bool{"cred_token": true, "cred_region": false})
-	assertSensitivity(t, "stack template list", templateCredentials, map[domain.CredentialSetID]bool{"cred_zone": false})
-	assertSensitivity(t, "runtime list", runtimeCredentials, map[domain.CredentialSetID]bool{"cred_token": true, "cred_region": false, "cred_zone": false})
+	assertSensitivity(t, "stack list", stackCredentials, map[domain.CredentialID]bool{"cred_token": true, "cred_region": false})
+	assertSensitivity(t, "stack template list", templateCredentials, map[domain.CredentialID]bool{"cred_zone": false})
+	assertSensitivity(t, "runtime list", runtimeCredentials, map[domain.CredentialID]bool{"cred_token": true, "cred_region": false, "cred_zone": false})
 }
 
 // A row written without the column, as every row before 0039 was, is
@@ -1163,7 +1163,7 @@ func TestCredentialWithoutSensitivityIsSensitive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListCredentials returned error: %v", err)
 	}
-	assertSensitivity(t, "stack list", credentials, map[domain.CredentialSetID]bool{"cred_legacy": true})
+	assertSensitivity(t, "stack list", credentials, map[domain.CredentialID]bool{"cred_legacy": true})
 }
 
 // seedCredentialOwners stores a stack and one stack template in it, the two
@@ -1200,10 +1200,10 @@ func seedCredentialOwners(t *testing.T, ctx context.Context, store *Store, tenan
 	return stackTemplate
 }
 
-func assertSensitivity(t *testing.T, read string, credentials []domain.CredentialSet, want map[domain.CredentialSetID]bool) {
+func assertSensitivity(t *testing.T, read string, credentials []domain.Credential, want map[domain.CredentialID]bool) {
 	t.Helper()
 
-	got := make(map[domain.CredentialSetID]bool, len(credentials))
+	got := make(map[domain.CredentialID]bool, len(credentials))
 	for _, credential := range credentials {
 		got[credential.ID] = credential.Sensitive
 	}
@@ -2080,7 +2080,7 @@ func TestCreateTemplateRunPersistsRunFields(t *testing.T) {
 	}
 
 	var queuedStarts int
-	if err := pool.QueryRow(ctx, `select count(*) from work_queue where kind = 'start_template_run'`).Scan(&queuedStarts); err != nil {
+	if err := pool.QueryRow(ctx, `select count(*) from work_queue where kind = 'start_template_plan'`).Scan(&queuedStarts); err != nil {
 		t.Fatalf("count work queue rows: %v", err)
 	}
 	if queuedStarts != 0 {
@@ -2318,7 +2318,7 @@ func TestUnitOfWorkTemplateWritesRollbackTogether(t *testing.T) {
 	sentinel := errors.New("rollback")
 
 	err = store.InTx(ctx, func(ctx context.Context, repo app.TxRepo, _ queue.Enqueuer) error {
-		if err := repo.CreateTemplateRegistration(ctx, domain.TemplateRegistration{ID: "registration_123", TenantID: "tenant_123", RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc", Status: domain.TemplateRegistrationPending, RequestedBy: "user_123", RequestedAt: time.Date(2026, 8, 11, 10, 0, 0, 0, time.UTC)}); err != nil {
+		if err := repo.CreateTemplateSync(ctx, domain.TemplateSync{ID: "registration_123", TenantID: "tenant_123", RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc", Status: domain.TemplateSyncStatePending, RequestedBy: "user_123", RequestedAt: time.Date(2026, 8, 11, 10, 0, 0, 0, time.UTC)}); err != nil {
 			return err
 		}
 		if _, err := repo.CreateTemplateRun(ctx, domain.TemplateRun{ID: "run_created", TenantID: "tenant_123", StackTemplateID: "stack_template_123", TemplateRevisionID: "revision_123", Operation: domain.OperationPlan, SelectedRef: "main", WorkspaceName: "workspace", ConfigJSON: json.RawMessage(`{}`), Status: domain.TemplateRunQueued, TriggerActor: "user_123"}); err != nil {
@@ -2336,13 +2336,13 @@ func TestUnitOfWorkTemplateWritesRollbackTogether(t *testing.T) {
 		t.Fatalf("InTx error = %v, want rollback sentinel", err)
 	}
 
-	var registrations, createdRuns, approvals int
+	var syncs, createdRuns, approvals int
 	var approvalStatus, discardStatus domain.TemplateRunStatus
-	if err := pool.QueryRow(ctx, `select (select count(*) from template_registrations where id = 'registration_123'), (select count(*) from template_runs where id = 'run_created'), (select count(*) from template_run_approvals where run_id = 'run_approval'), (select status from template_runs where id = 'run_approval'), (select status from template_runs where id = 'run_discard')`).Scan(&registrations, &createdRuns, &approvals, &approvalStatus, &discardStatus); err != nil {
+	if err := pool.QueryRow(ctx, `select (select count(*) from template_syncs where id = 'registration_123'), (select count(*) from template_runs where id = 'run_created'), (select count(*) from template_run_approvals where run_id = 'run_approval'), (select status from template_runs where id = 'run_approval'), (select status from template_runs where id = 'run_discard')`).Scan(&syncs, &createdRuns, &approvals, &approvalStatus, &discardStatus); err != nil {
 		t.Fatalf("read transaction state: %v", err)
 	}
-	if registrations != 0 || createdRuns != 0 || approvals != 0 || approvalStatus != domain.TemplateRunWaitingApproval || discardStatus != domain.TemplateRunWaitingApproval {
-		t.Fatalf("registrations=%d createdRuns=%d approvals=%d approvalStatus=%q discardStatus=%q", registrations, createdRuns, approvals, approvalStatus, discardStatus)
+	if syncs != 0 || createdRuns != 0 || approvals != 0 || approvalStatus != domain.TemplateRunWaitingApproval || discardStatus != domain.TemplateRunWaitingApproval {
+		t.Fatalf("syncs=%d createdRuns=%d approvals=%d approvalStatus=%q discardStatus=%q", syncs, createdRuns, approvals, approvalStatus, discardStatus)
 	}
 }
 
@@ -2443,7 +2443,7 @@ func TestRecordTemplateRunLogUpsertsTenantScopedMetadata(t *testing.T) {
 	log := domain.TemplateRunLog{
 		TenantID:    domain.TenantID("tenant_123"),
 		RunID:       domain.TemplateRunID("run_123"),
-		Phase:       "plan-1",
+		Name:        "plan-1",
 		RunPhase:    domain.RunPhasePlan,
 		Seq:         1,
 		Command:     domain.TerraformCommandPlan,
@@ -2496,7 +2496,7 @@ func TestRecordTemplateRunLogWritesALiveRowThenCompletesIt(t *testing.T) {
 	live := domain.TemplateRunLog{
 		TenantID: "tenant_123",
 		RunID:    "run_123",
-		Phase:    "plan-1",
+		Name:     "plan-1",
 		RunPhase: domain.RunPhasePlan,
 		Seq:      1,
 		Command:  domain.TerraformCommandPlan,
@@ -2554,7 +2554,7 @@ func TestRecordTemplateRunLogWritesALostRowWithItsReason(t *testing.T) {
 	lost := domain.TemplateRunLog{
 		TenantID:   "tenant_123",
 		RunID:      "run_123",
-		Phase:      "plan-1",
+		Name:       "plan-1",
 		RunPhase:   domain.RunPhasePlan,
 		Seq:        1,
 		Command:    domain.TerraformCommandInit,
@@ -2574,7 +2574,7 @@ func TestRecordTemplateRunLogWritesALostRowWithItsReason(t *testing.T) {
 
 	unexplained := lost
 	unexplained.Seq = 2
-	unexplained.Phase = "plan-2"
+	unexplained.Name = "plan-2"
 	unexplained.LostReason = ""
 	err = store.RecordTemplateRunLog(ctx, unexplained)
 	if !violates(err, "23514", "template_run_logs_state_lost_reason_check") {
@@ -2621,7 +2621,7 @@ func TestRecordTemplateRunLogAcceptsEveryCommandInEitherPhase(t *testing.T) {
 			if err := store.RecordTemplateRunLog(ctx, domain.TemplateRunLog{
 				TenantID:    domain.TenantID("tenant_123"),
 				RunID:       domain.TemplateRunID("run_123"),
-				Phase:       phase,
+				Name:        phase,
 				RunPhase:    runPhase,
 				Seq:         seq,
 				Command:     command,
@@ -2673,7 +2673,7 @@ func TestListTemplateRunLogsReturnsTenantScopedMetadataInRunOrder(t *testing.T) 
 			t.Fatal(err)
 		}
 		return domain.TemplateRunLog{
-			TenantID: domain.TenantID(tenant), RunID: domain.TemplateRunID(run), Phase: name, RunPhase: phase, Seq: seq, Command: command,
+			TenantID: domain.TenantID(tenant), RunID: domain.TemplateRunID(run), Name: name, RunPhase: phase, Seq: seq, Command: command,
 			State: domain.TemplateRunLogComplete, ObjectKey: "tenants/" + tenant + "/runs/" + run + "/logs/" + name + ".log", ContentType: "text/plain; charset=utf-8", SizeBytes: 9, UploadedAt: at,
 		}
 	}
@@ -2696,7 +2696,7 @@ func TestListTemplateRunLogsReturnsTenantScopedMetadataInRunOrder(t *testing.T) 
 
 	phases := make([]string, 0, len(logs))
 	for _, log := range logs {
-		phases = append(phases, log.Phase)
+		phases = append(phases, log.Name)
 	}
 	if want := []string{"plan-1", "plan-2", "plan-10", "apply-1"}; !reflect.DeepEqual(phases, want) {
 		t.Fatalf("phases = %q, want %q", phases, want)
@@ -2736,7 +2736,7 @@ func TestRecordTemplateRunLogKeepsARepeatedCommandsLogs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(logs) != 2 || logs[0].Phase != "plan-1" || logs[1].Phase != "plan-4" {
+	if len(logs) != 2 || logs[0].Name != "plan-1" || logs[1].Name != "plan-4" {
 		t.Fatalf("logs = %+v, want plan-1 and plan-4, both init", logs)
 	}
 	got, err := store.GetTemplateRunLog(ctx, "tenant_123", "run_123", "plan-4")
@@ -2765,7 +2765,7 @@ func TestRecordTemplateRunLogReturnsNotFoundForOtherTenant(t *testing.T) {
 	err := store.RecordTemplateRunLog(ctx, domain.TemplateRunLog{
 		TenantID:    domain.TenantID("tenant_456"),
 		RunID:       domain.TemplateRunID("run_123"),
-		Phase:       "plan-1",
+		Name:        "plan-1",
 		RunPhase:    domain.RunPhasePlan,
 		Seq:         1,
 		Command:     domain.TerraformCommandPlan,
@@ -3422,15 +3422,15 @@ func openMigratedTestPool(t *testing.T, ctx context.Context) *pgxpool.Pool {
 	return pool
 }
 
-// CreateTemplateRegistration and GetTemplateRegistration let tests write and
-// read a registration row directly; the app writes one only inside a unit of
+// CreateTemplateSync and GetTemplateSync let tests write and
+// read a sync row directly; the app writes one only inside a unit of
 // work, and reads syncs through the template.
-func (store *Store) CreateTemplateRegistration(ctx context.Context, registration domain.TemplateRegistration) error {
-	return createTemplateRegistration(ctx, store.pool, registration)
+func (store *Store) CreateTemplateSync(ctx context.Context, templateSync domain.TemplateSync) error {
+	return createTemplateSync(ctx, store.pool, templateSync)
 }
 
-func (store *Store) GetTemplateRegistration(ctx context.Context, tenantID domain.TenantID, id domain.TemplateRegistrationID) (domain.TemplateRegistration, error) {
-	var registration domain.TemplateRegistration
+func (store *Store) GetTemplateSync(ctx context.Context, tenantID domain.TenantID, id domain.TemplateSyncID) (domain.TemplateSync, error) {
+	var templateSync domain.TemplateSync
 	var completedAt sql.NullTime
 	err := store.pool.QueryRow(ctx, `
 		select
@@ -3449,36 +3449,36 @@ func (store *Store) GetTemplateRegistration(ctx context.Context, tenantID domain
 			completed_at,
 			error_summary,
 			coalesce(source_template_id, '')
-		from template_registrations
+		from template_syncs
 		where tenant_id = $1
 			and id = $2
 	`, tenantID, id).Scan(
-		&registration.ID,
-		&registration.TenantID,
-		&registration.RepoOwner,
-		&registration.RepoName,
-		&registration.SourceRef,
-		&registration.RootPath,
-		&registration.Status,
-		&registration.Step,
-		&registration.TemplateRevisionID,
-		&registration.ResolvedCommitSHA,
-		&registration.RequestedBy,
-		&registration.RequestedAt,
+		&templateSync.ID,
+		&templateSync.TenantID,
+		&templateSync.RepoOwner,
+		&templateSync.RepoName,
+		&templateSync.SourceRef,
+		&templateSync.RootPath,
+		&templateSync.Status,
+		&templateSync.Step,
+		&templateSync.TemplateRevisionID,
+		&templateSync.ResolvedCommitSHA,
+		&templateSync.RequestedBy,
+		&templateSync.RequestedAt,
 		&completedAt,
-		&registration.ErrorSummary,
-		&registration.SourceTemplateID,
+		&templateSync.ErrorSummary,
+		&templateSync.SourceTemplateID,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.TemplateRegistration{}, app.ErrNotFound
+		return domain.TemplateSync{}, app.ErrNotFound
 	}
 	if err != nil {
-		return domain.TemplateRegistration{}, fmt.Errorf("get template registration: %w", err)
+		return domain.TemplateSync{}, fmt.Errorf("get template sync: %w", err)
 	}
 	if completedAt.Valid {
-		registration.CompletedAt = completedAt.Time
+		templateSync.CompletedAt = completedAt.Time
 	}
-	return registration, nil
+	return templateSync, nil
 }
 
 // seedSourceTemplate stores a template with id, which revisions and stack
@@ -4058,11 +4058,11 @@ func TestMigrationRenamesPlanPhaseSetupLogs(t *testing.T) {
 	ctx := context.Background()
 	pool := openTestPool(t, ctx)
 	// Stop the first migration short of 0024 by marking it applied, and hold
-	// back 0032, 0033 and 0035 too: their columns are not in the rows 0024
-	// converts.
+	// back 0032, 0033, 0035 and 0041 too: their columns are not in the rows
+	// 0024 converts.
 	if _, err := pool.Exec(ctx, `
 		create table schema_migrations (version text primary key, applied_at timestamptz not null default now());
-		insert into schema_migrations (version) values ('0024_run_phase_log_names'), ('0032_template_run_log_commands'), ('0033_template_run_log_names_derived'), ('0035_template_run_log_state');
+		insert into schema_migrations (version) values ('0024_run_phase_log_names'), ('0032_template_run_log_commands'), ('0033_template_run_log_names_derived'), ('0035_template_run_log_state'), ('0041_template_run_logs_name');
 	`); err != nil {
 		t.Fatal(err)
 	}
@@ -4347,9 +4347,9 @@ func TestSourceTemplateReadsItsLatestRevision(t *testing.T) {
 	}
 }
 
-// A registration records the template it syncs; one without a template
+// A sync records the template it syncs; one without a template
 // stores none rather than an empty id the key would refuse.
-func TestCreateTemplateRegistrationRecordsItsTemplate(t *testing.T) {
+func TestCreateTemplateSyncRecordsItsTemplate(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -4358,39 +4358,39 @@ func TestCreateTemplateRegistrationRecordsItsTemplate(t *testing.T) {
 	if _, err := store.CreateSourceTemplate(ctx, template); err != nil {
 		t.Fatalf("CreateSourceTemplate returned error: %v", err)
 	}
-	registration := domain.TemplateRegistration{
-		ID: "template_registration_1", TenantID: "tenant_123", SourceTemplateID: template.ID,
+	templateSync := domain.TemplateSync{
+		ID: "template_sync_1", TenantID: "tenant_123", SourceTemplateID: template.ID,
 		RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc",
-		Status: domain.TemplateRegistrationPending, RequestedBy: "user_123", RequestedAt: time.Now().UTC(),
+		Status: domain.TemplateSyncStatePending, RequestedBy: "user_123", RequestedAt: time.Now().UTC(),
 	}
-	if err := store.CreateTemplateRegistration(ctx, registration); err != nil {
-		t.Fatalf("CreateTemplateRegistration returned error: %v", err)
+	if err := store.CreateTemplateSync(ctx, templateSync); err != nil {
+		t.Fatalf("CreateTemplateSync returned error: %v", err)
 	}
-	unattached := registration
-	unattached.ID = "template_registration_2"
+	unattached := templateSync
+	unattached.ID = "template_sync_2"
 	unattached.SourceTemplateID = ""
-	if err := store.CreateTemplateRegistration(ctx, unattached); err != nil {
-		t.Fatalf("CreateTemplateRegistration without a template returned error: %v", err)
+	if err := store.CreateTemplateSync(ctx, unattached); err != nil {
+		t.Fatalf("CreateTemplateSync without a template returned error: %v", err)
 	}
 
-	for id, want := range map[domain.TemplateRegistrationID]domain.SourceTemplateID{
-		registration.ID: template.ID,
+	for id, want := range map[domain.TemplateSyncID]domain.SourceTemplateID{
+		templateSync.ID: template.ID,
 		unattached.ID:   "",
 	} {
-		got, err := store.GetTemplateRegistration(ctx, "tenant_123", id)
+		got, err := store.GetTemplateSync(ctx, "tenant_123", id)
 		if err != nil {
-			t.Fatalf("GetTemplateRegistration(%s) returned error: %v", id, err)
+			t.Fatalf("GetTemplateSync(%s) returned error: %v", id, err)
 		}
 		if got.SourceTemplateID != want {
-			t.Fatalf("registration %s template = %q, want %q", id, got.SourceTemplateID, want)
+			t.Fatalf("sync %s template = %q, want %q", id, got.SourceTemplateID, want)
 		}
 	}
 
-	unknown := registration
-	unknown.ID = "template_registration_3"
+	unknown := templateSync
+	unknown.ID = "template_sync_3"
 	unknown.SourceTemplateID = "source_template_unknown"
-	if err := store.CreateTemplateRegistration(ctx, unknown); err == nil {
-		t.Fatal("CreateTemplateRegistration of an unknown template succeeded, want the key to refuse it")
+	if err := store.CreateTemplateSync(ctx, unknown); err == nil {
+		t.Fatal("CreateTemplateSync of an unknown template succeeded, want the key to refuse it")
 	}
 }
 
@@ -4409,21 +4409,21 @@ func TestSourceTemplateReadsItsLatestSync(t *testing.T) {
 	seedSourceTemplate(t, ctx, store, "tenant_123", "source_template_never_synced")
 	base := time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC)
 
-	requestSync := func(id domain.TemplateRegistrationID, requestedAt time.Time) {
+	requestSync := func(id domain.TemplateSyncID, requestedAt time.Time) {
 		t.Helper()
-		if err := store.CreateTemplateRegistration(ctx, domain.TemplateRegistration{
+		if err := store.CreateTemplateSync(ctx, domain.TemplateSync{
 			ID: id, TenantID: "tenant_123", SourceTemplateID: template.ID,
 			RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc",
-			Status: domain.TemplateRegistrationPending, RequestedBy: "user_123", RequestedAt: requestedAt,
+			Status: domain.TemplateSyncStatePending, RequestedBy: "user_123", RequestedAt: requestedAt,
 		}); err != nil {
-			t.Fatalf("CreateTemplateRegistration(%s) returned error: %v", id, err)
+			t.Fatalf("CreateTemplateSync(%s) returned error: %v", id, err)
 		}
 	}
-	endSync := func(input domain.TemplateRegistrationStatusActivityInput) {
+	endSync := func(input domain.TemplateSyncStatusActivityInput) {
 		t.Helper()
 		input.TenantID = "tenant_123"
-		if err := store.RecordTemplateRegistrationStatus(ctx, input); err != nil {
-			t.Fatalf("RecordTemplateRegistrationStatus(%s) returned error: %v", input.RegistrationID, err)
+		if err := store.RecordTemplateSyncStatus(ctx, input); err != nil {
+			t.Fatalf("RecordTemplateSyncStatus(%s) returned error: %v", input.SyncID, err)
 		}
 	}
 	syncRevision := func(id domain.TemplateRevisionID, createdAt time.Time) domain.TemplateRevision {
@@ -4450,23 +4450,23 @@ func TestSourceTemplateReadsItsLatestSync(t *testing.T) {
 		return got.LatestSync
 	}
 
-	requestSync("template_registration_1", base)
-	endSync(domain.TemplateRegistrationStatusActivityInput{
-		RegistrationID: "template_registration_1", Status: domain.TemplateRegistrationFailed,
+	requestSync("template_sync_1", base)
+	endSync(domain.TemplateSyncStatusActivityInput{
+		SyncID: "template_sync_1", Status: domain.TemplateSyncStateFailed,
 		ErrorSummary: "clone failed",
 	})
-	requestSync("template_registration_2", base.Add(time.Minute))
-	if got := latestSync(); got.Status != domain.TemplateRegistrationPending || !got.CompletedAt.IsZero() {
+	requestSync("template_sync_2", base.Add(time.Minute))
+	if got := latestSync(); got.Status != domain.TemplateSyncStatePending || !got.CompletedAt.IsZero() {
 		t.Fatalf("latest sync while the second runs = %#v, want it pending with no completed_at", got)
 	}
 
 	revision := syncRevision("template_rev_1", base.Add(2*time.Minute))
-	endSync(domain.TemplateRegistrationStatusActivityInput{
-		RegistrationID: "template_registration_2", Status: domain.TemplateRegistrationCompleted,
+	endSync(domain.TemplateSyncStatusActivityInput{
+		SyncID: "template_sync_2", Status: domain.TemplateSyncStateCompleted,
 		TemplateRevisionID: revision.ID, ResolvedCommitSHA: "sha_1",
 	})
 	got := latestSync()
-	if got.Status != domain.TemplateRegistrationCompleted || got.ErrorSummary != "" ||
+	if got.Status != domain.TemplateSyncStateCompleted || got.ErrorSummary != "" ||
 		got.ResolvedCommitSHA != "sha_1" || !got.RequestedAt.Equal(base.Add(time.Minute)) ||
 		got.CompletedAt.IsZero() || got.RevisionPredatesRequest {
 		t.Fatalf("latest sync after a success = %#v, want the second sync, completed on a new revision", got)
@@ -4474,13 +4474,13 @@ func TestSourceTemplateReadsItsLatestSync(t *testing.T) {
 
 	// The same commit again: the upsert hands back the revision the second
 	// sync created, so this sync found nothing new.
-	requestSync("template_registration_3", base.Add(3*time.Minute))
+	requestSync("template_sync_3", base.Add(3*time.Minute))
 	reused := syncRevision("template_rev_again", base.Add(4*time.Minute))
 	if reused.ID != revision.ID {
 		t.Fatalf("upsert of a known commit returned %s, want the existing %s", reused.ID, revision.ID)
 	}
-	endSync(domain.TemplateRegistrationStatusActivityInput{
-		RegistrationID: "template_registration_3", Status: domain.TemplateRegistrationCompleted,
+	endSync(domain.TemplateSyncStatusActivityInput{
+		SyncID: "template_sync_3", Status: domain.TemplateSyncStateCompleted,
 		TemplateRevisionID: reused.ID, ResolvedCommitSHA: "sha_1",
 	})
 	if got := latestSync(); !got.RequestedAt.Equal(base.Add(3*time.Minute)) || !got.RevisionPredatesRequest ||
@@ -4516,19 +4516,19 @@ func TestSourceTemplateLatestSyncBreaksTiesByID(t *testing.T) {
 		t.Fatalf("CreateSourceTemplate returned error: %v", err)
 	}
 	requestedAt := time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC)
-	for _, registration := range []struct {
-		id     domain.TemplateRegistrationID
-		status domain.TemplateRegistrationStatus
+	for _, row := range []struct {
+		id     domain.TemplateSyncID
+		status domain.TemplateSyncState
 	}{
-		{id: "template_registration_b", status: domain.TemplateRegistrationFailed},
-		{id: "template_registration_a", status: domain.TemplateRegistrationInvalid},
+		{id: "template_sync_b", status: domain.TemplateSyncStateFailed},
+		{id: "template_sync_a", status: domain.TemplateSyncStateInvalid},
 	} {
-		if err := store.CreateTemplateRegistration(ctx, domain.TemplateRegistration{
-			ID: registration.id, TenantID: "tenant_123", SourceTemplateID: template.ID,
+		if err := store.CreateTemplateSync(ctx, domain.TemplateSync{
+			ID: row.id, TenantID: "tenant_123", SourceTemplateID: template.ID,
 			RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc",
-			Status: registration.status, RequestedBy: "user_123", RequestedAt: requestedAt,
+			Status: row.status, RequestedBy: "user_123", RequestedAt: requestedAt,
 		}); err != nil {
-			t.Fatalf("CreateTemplateRegistration(%s) returned error: %v", registration.id, err)
+			t.Fatalf("CreateTemplateSync(%s) returned error: %v", row.id, err)
 		}
 	}
 
@@ -4536,8 +4536,8 @@ func TestSourceTemplateLatestSyncBreaksTiesByID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSourceTemplate returned error: %v", err)
 	}
-	if got.LatestSync == nil || got.LatestSync.Status != domain.TemplateRegistrationFailed {
-		t.Fatalf("latest sync = %#v, want template_registration_b's failure", got.LatestSync)
+	if got.LatestSync == nil || got.LatestSync.Status != domain.TemplateSyncStateFailed {
+		t.Fatalf("latest sync = %#v, want template_sync_b's failure", got.LatestSync)
 	}
 }
 
@@ -4566,7 +4566,7 @@ func TestCreateStackTemplateOfAMissingTemplateIsNotFound(t *testing.T) {
 }
 
 // Deleting a template takes its revisions, their variables and its
-// registrations with it, and is refused while any stack has it installed.
+// syncs with it, and is refused while any stack has it installed.
 func TestSourceTemplateKeys(t *testing.T) {
 	t.Parallel()
 
@@ -4582,21 +4582,21 @@ func TestSourceTemplateKeys(t *testing.T) {
 	}, []domain.TemplateVariable{{Name: "region", Required: true}}); err != nil {
 		t.Fatalf("UpsertTemplateRevisionWithVariables returned error: %v", err)
 	}
-	if err := store.CreateTemplateRegistration(ctx, domain.TemplateRegistration{
-		ID: "template_registration_junk", TenantID: "tenant_123", SourceTemplateID: "source_template_junk",
+	if err := store.CreateTemplateSync(ctx, domain.TemplateSync{
+		ID: "template_sync_junk", TenantID: "tenant_123", SourceTemplateID: "source_template_junk",
 		RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "source_template_junk",
-		Status: domain.TemplateRegistrationCompleted, RequestedBy: "user_123", RequestedAt: time.Now().UTC(),
+		Status: domain.TemplateSyncStateCompleted, RequestedBy: "user_123", RequestedAt: time.Now().UTC(),
 	}); err != nil {
-		t.Fatalf("CreateTemplateRegistration returned error: %v", err)
+		t.Fatalf("CreateTemplateSync returned error: %v", err)
 	}
 
 	if _, err := pool.Exec(ctx, `delete from source_templates where id = 'source_template_junk'`); err != nil {
 		t.Fatalf("delete an uninstalled template: %v", err)
 	}
 	for table, query := range map[string]string{
-		"template_revisions":     `select count(*) from template_revisions where source_template_id = 'source_template_junk'`,
-		"template_variables":     `select count(*) from template_variables where template_revision_id = 'template_rev_junk'`,
-		"template_registrations": `select count(*) from template_registrations where id = 'template_registration_junk'`,
+		"template_revisions": `select count(*) from template_revisions where source_template_id = 'source_template_junk'`,
+		"template_variables": `select count(*) from template_variables where template_revision_id = 'template_rev_junk'`,
+		"template_syncs":     `select count(*) from template_syncs where id = 'template_sync_junk'`,
 	} {
 		var count int
 		if err := pool.QueryRow(ctx, query).Scan(&count); err != nil {
@@ -4740,20 +4740,20 @@ func holdTx(t *testing.T, ctx context.Context, pool *pgxpool.Pool, statement str
 
 // A sync can't be queued for a template that is gone: the key on the sync's
 // row refuses it, and the store says not found rather than failing.
-func TestCreateTemplateRegistrationOfAGoneTemplateIsNotFound(t *testing.T) {
+func TestCreateTemplateSyncOfAGoneTemplateIsNotFound(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	pool := openMigratedTestPool(t, ctx)
 	store := NewStore(pool)
 
-	err := store.CreateTemplateRegistration(ctx, domain.TemplateRegistration{
-		ID: "template_registration_gone", TenantID: "tenant_123", SourceTemplateID: "source_template_gone",
+	err := store.CreateTemplateSync(ctx, domain.TemplateSync{
+		ID: "template_sync_gone", TenantID: "tenant_123", SourceTemplateID: "source_template_gone",
 		RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc",
-		Status: domain.TemplateRegistrationPending, RequestedBy: "user_123", RequestedAt: time.Now().UTC(),
+		Status: domain.TemplateSyncStatePending, RequestedBy: "user_123", RequestedAt: time.Now().UTC(),
 	})
 	if !errors.Is(err, app.ErrNotFound) {
-		t.Fatalf("CreateTemplateRegistration error = %v, want app.ErrNotFound", err)
+		t.Fatalf("CreateTemplateSync error = %v, want app.ErrNotFound", err)
 	}
 }
 

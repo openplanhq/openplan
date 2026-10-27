@@ -278,7 +278,7 @@ func TestRecordTemplateRunLogDelegatesToRecorder(t *testing.T) {
 
 	recorder := &recordingLogMetadataRecorder{}
 	log := domain.TemplateRunLog{
-		TenantID: "tenant_123", RunID: "run_123", Phase: "plan-3", RunPhase: domain.RunPhasePlan, Seq: 3, Command: domain.TerraformCommandPlan,
+		TenantID: "tenant_123", RunID: "run_123", Name: "plan-3", RunPhase: domain.RunPhasePlan, Seq: 3, Command: domain.TerraformCommandPlan,
 		State:     domain.TemplateRunLogComplete,
 		ObjectKey: "tenants/tenant_123/runs/run_123/logs/plan-3.log", ContentType: "text/plain; charset=utf-8",
 		UploadedAt: time.Date(2026, 10, 17, 9, 0, 0, 0, time.UTC),
@@ -304,12 +304,12 @@ func TestRecordTemplateRunLogDelegatesToRecorder(t *testing.T) {
 
 	// The name and key follow the phase and number, whatever name came in.
 	renamed := log
-	renamed.Phase = "../plan"
+	renamed.Name = "../plan"
 	if err := NewControlActivities(&controlStoreStub{logs: recorder}, nil, nil).RecordTemplateRunLog(context.Background(), renamed); err != nil {
 		t.Fatalf("RecordTemplateRunLog returned error: %v", err)
 	}
-	if recorder.log.Phase != "plan-3" || recorder.log.ObjectKey != log.ObjectKey {
-		t.Fatalf("recorded %q at %q, want plan-3 at %q", recorder.log.Phase, recorder.log.ObjectKey, log.ObjectKey)
+	if recorder.log.Name != "plan-3" || recorder.log.ObjectKey != log.ObjectKey {
+		t.Fatalf("recorded %q at %q, want plan-3 at %q", recorder.log.Name, recorder.log.ObjectKey, log.ObjectKey)
 	}
 
 	unnumbered := log
@@ -444,8 +444,8 @@ func TestRunTerraformLogsUnderTheWorkflowsName(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("UploadLog(%s) returned error: %v", tt.runPhase, err)
 		}
-		if logStore.phase != tt.want {
-			t.Fatalf("%s init uploaded phase %q, want %q", tt.runPhase, logStore.phase, tt.want)
+		if logStore.name != tt.want {
+			t.Fatalf("%s init uploaded log %q, want %q", tt.runPhase, logStore.name, tt.want)
 		}
 		if logStore.content != "init stdout\n" {
 			t.Fatalf("uploaded content = %q", logStore.content)
@@ -651,22 +651,22 @@ func gitToken(env []string) string {
 type recordingTemplateRunLogStore struct {
 	tenantID domain.TenantID
 	runID    domain.TemplateRunID
-	phase    string
+	name     string
 	content  string
 	returned domain.TemplateRunLog
 	err      error
 }
 
-func (store *recordingTemplateRunLogStore) PutTemplateRunLog(_ context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, phase string, body io.Reader) (domain.TemplateRunLog, error) {
+func (store *recordingTemplateRunLogStore) PutTemplateRunLog(_ context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, name string, body io.Reader) (domain.TemplateRunLog, error) {
 	store.tenantID = tenantID
 	store.runID = runID
-	store.phase = phase
+	store.name = name
 	content, err := io.ReadAll(body)
 	if err != nil {
 		return domain.TemplateRunLog{}, err
 	}
 	store.content = string(content)
-	store.returned = domain.TemplateRunLog{TenantID: tenantID, RunID: runID, Phase: phase, ObjectKey: "logs/" + phase + ".log", SizeBytes: int64(len(content))}
+	store.returned = domain.TemplateRunLog{TenantID: tenantID, RunID: runID, Name: name, ObjectKey: "logs/" + name + ".log", SizeBytes: int64(len(content))}
 	return store.returned, store.err
 }
 
@@ -785,7 +785,7 @@ func fetchWithSealedToken(t *testing.T, tokens GitHubTokenSource, git *fakeGit, 
 	return err
 }
 
-// A run's checkout needs the credential just as a registration's clone does;
+// A run's checkout needs the credential just as a sync's clone does;
 // this is the path that feeds Terraform.
 func TestFetchSourcePassesInstallationTokenToCheckout(t *testing.T) {
 	t.Parallel()
@@ -897,7 +897,7 @@ func TestRunCredentialsRoundTripThroughTheRunKey(t *testing.T) {
 		t.Fatalf("PrepareWorkspace returned error: %v", err)
 	}
 	publicKey := workspace.PublicKey
-	store := &controlStoreStub{credentials: []domain.CredentialSet{
+	store := &controlStoreStub{credentials: []domain.Credential{
 		{StackID: "stack_123", Name: "AWS_SECRET_ACCESS_KEY", Ciphertext: "canary-7f3a", Sensitive: true},
 	}}
 	sealed, err := NewControlActivities(store, nil, nil).SealRunCredentials(context.Background(), domain.SealRunCredentialsActivityInput{
@@ -956,7 +956,7 @@ func TestPrepareWorkspaceReturnsRunPublicKey(t *testing.T) {
 // controlStoreStub satisfies ControlStore, delegating the writes to recorders a
 // test cares about.
 type controlStoreStub struct {
-	credentials []domain.CredentialSet
+	credentials []domain.Credential
 	status      *recordingStatusRecorder
 	logs        *recordingLogMetadataRecorder
 	planKey     []byte
@@ -983,7 +983,7 @@ func (store *controlStoreStub) RecordTemplateRunLog(ctx context.Context, log dom
 	return store.logs.RecordTemplateRunLog(ctx, log)
 }
 
-func (store *controlStoreStub) ListCredentialsForStackTemplate(context.Context, domain.TenantID, domain.StackTemplateID) ([]domain.CredentialSet, error) {
+func (store *controlStoreStub) ListCredentialsForStackTemplate(context.Context, domain.TenantID, domain.StackTemplateID) ([]domain.Credential, error) {
 	return store.credentials, nil
 }
 

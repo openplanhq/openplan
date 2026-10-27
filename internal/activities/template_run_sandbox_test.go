@@ -240,7 +240,7 @@ func TestUploadLogUploadsTheSpooledLog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UploadLog returned error: %v", err)
 	}
-	if log.Phase != "plan" {
+	if log.Name != "plan" {
 		t.Fatalf("log = %+v, want phase plan", log)
 	}
 	job := recorder.jobs[len(recorder.jobs)-1]

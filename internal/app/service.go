@@ -104,7 +104,7 @@ type TxRepo interface {
 	CreateSourceTemplate(ctx context.Context, template domain.SourceTemplate) (domain.SourceTemplate, error)
 	AppendAuditEvent(ctx context.Context, event domain.SecurityAuditEvent) error
 	CreateTemplateRun(ctx context.Context, run domain.TemplateRun) (int, error)
-	CreateTemplateRegistration(ctx context.Context, registration domain.TemplateRegistration) error
+	CreateTemplateSync(ctx context.Context, templateSync domain.TemplateSync) error
 	ApproveTemplateRun(ctx context.Context, approval domain.TemplateRunApproval) error
 	// DiscardTemplateRun discards a run waiting for approval, or approved but
 	// not yet claimed by its apply, and reports whether it did.
@@ -138,10 +138,10 @@ type StackTemplateRepository interface {
 
 // CredentialRepository persists encrypted, scope-owned Terraform credentials.
 type CredentialRepository interface {
-	CreateCredential(ctx context.Context, credential domain.CredentialSet) error
-	ListCredentials(ctx context.Context, tenantID domain.TenantID, scope domain.CredentialScope, ownerID string) ([]domain.CredentialSet, error)
-	DeleteCredential(ctx context.Context, tenantID domain.TenantID, id domain.CredentialSetID) error
-	ListCredentialsForStackTemplate(ctx context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID) ([]domain.CredentialSet, error)
+	CreateCredential(ctx context.Context, credential domain.Credential) error
+	ListCredentials(ctx context.Context, tenantID domain.TenantID, scope domain.CredentialScope, ownerID string) ([]domain.Credential, error)
+	DeleteCredential(ctx context.Context, tenantID domain.TenantID, id domain.CredentialID) error
+	ListCredentialsForStackTemplate(ctx context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID) ([]domain.Credential, error)
 }
 
 // CredentialCipher protects credential values before persistence, and opens
@@ -204,13 +204,13 @@ type TemplateRunLogReader interface {
 
 // TemplateRunLogRepository reads persisted log metadata for tenant-owned TemplateRuns.
 type TemplateRunLogRepository interface {
-	GetTemplateRunLog(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, phase string) (domain.TemplateRunLog, error)
+	GetTemplateRunLog(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, name string) (domain.TemplateRunLog, error)
 	ListTemplateRunLogs(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) ([]domain.TemplateRunLog, error)
 }
 
 // WorkflowDispatcher starts workflows and sends workflow signals.
 type WorkflowDispatcher interface {
-	StartTemplateRun(ctx context.Context, input domain.TemplateRunWorkflowInput) error
+	StartTemplatePlan(ctx context.Context, input domain.TemplateRunWorkflowInput) error
 	StartTemplateSync(ctx context.Context, input domain.TemplateSyncWorkflowInput) error
 	// StartTemplateApply starts the workflow that applies an approved run's
 	// saved plan.
@@ -228,9 +228,9 @@ type TemplateRunIDGenerator interface {
 	NewTemplateRunID() domain.TemplateRunID
 }
 
-// TemplateRegistrationIDGenerator creates TemplateRegistration identifiers.
-type TemplateRegistrationIDGenerator interface {
-	NewTemplateRegistrationID() domain.TemplateRegistrationID
+// TemplateSyncIDGenerator creates TemplateSync identifiers.
+type TemplateSyncIDGenerator interface {
+	NewTemplateSyncID() domain.TemplateSyncID
 }
 
 // StackIDGenerator creates Stack identifiers.
@@ -336,18 +336,18 @@ type Service struct {
 	Workflows                WorkflowDispatcher
 	StackIDs                 StackIDGenerator
 	StackTemplateIDs         StackTemplateIDGenerator
-	CredentialIDs            CredentialSetIDGenerator
+	CredentialIDs            CredentialIDGenerator
 	RunIDs                   TemplateRunIDGenerator
-	RegistrationIDs          TemplateRegistrationIDGenerator
+	SyncIDs                  TemplateSyncIDGenerator
 	Clock                    Clock
 	Audit                    AuditRepository
 	Users                    UserRepository
 }
 
-// CredentialSetIDGenerator creates credential identifiers.
-type CredentialSetIDGenerator interface {
-	// NewCredentialSetID returns a fresh identifier for a credential record.
-	NewCredentialSetID() domain.CredentialSetID
+// CredentialIDGenerator creates credential identifiers.
+type CredentialIDGenerator interface {
+	// NewCredentialID returns a fresh identifier for a credential record.
+	NewCredentialID() domain.CredentialID
 }
 
 // NewService creates a Service from app-owned dependencies.
@@ -362,8 +362,8 @@ func NewService(service Service) *Service {
 	if service.RunIDs == nil {
 		service.RunIDs = randomTemplateRunIDGenerator{}
 	}
-	if service.RegistrationIDs == nil {
-		service.RegistrationIDs = randomTemplateRegistrationIDGenerator{}
+	if service.SyncIDs == nil {
+		service.SyncIDs = randomTemplateSyncIDGenerator{}
 	}
 	if service.StackIDs == nil {
 		service.StackIDs = randomStackIDGenerator{}
@@ -372,7 +372,7 @@ func NewService(service Service) *Service {
 		service.StackTemplateIDs = randomStackTemplateIDGenerator{}
 	}
 	if service.CredentialIDs == nil {
-		service.CredentialIDs = randomCredentialSetIDGenerator{}
+		service.CredentialIDs = randomCredentialIDGenerator{}
 	}
 
 	return &service
@@ -421,11 +421,10 @@ type StartTemplateSyncCommand struct {
 }
 
 // StartedTemplateSync is a template and the sync that registering it, or
-// syncing it again, just queued. The sync is the registration row the
-// sync workflow records its progress into.
+// syncing it again, just queued. The sync is the row the sync workflow records its progress into.
 type StartedTemplateSync struct {
 	Template domain.SourceTemplate
-	Sync     domain.TemplateRegistration
+	Sync     domain.TemplateSync
 }
 
 // ListTemplatesCommand asks the app for one page of the tenant's templates.
@@ -460,7 +459,7 @@ type CreateStackCommand struct {
 	Name                 string
 	Slug                 string
 	Tags                 map[string]string
-	DefaultCredentialIDs []domain.CredentialSetID
+	DefaultCredentialIDs []domain.CredentialID
 }
 
 // StackView returns one stack with its installed templates.
@@ -529,14 +528,14 @@ type ListCredentialsCommand struct {
 // DeleteCredentialCommand asks the app to remove one scoped credential.
 type DeleteCredentialCommand struct {
 	TenantID        domain.TenantID
-	CredentialID    domain.CredentialSetID
+	CredentialID    domain.CredentialID
 	StackID         domain.StackID
 	StackTemplateID domain.StackTemplateID
 }
 
 // CredentialMetadata is the safe API representation of a credential.
 type CredentialMetadata struct {
-	ID        domain.CredentialSetID `json:"id"`
+	ID        domain.CredentialID    `json:"id"`
 	Name      string                 `json:"name"`
 	Scope     domain.CredentialScope `json:"scope"`
 	StackID   domain.StackID         `json:"stack_id,omitempty"`
@@ -729,20 +728,20 @@ func (service *Service) StartTemplateSync(ctx context.Context, command StartTemp
 // latest, which a read after the commit would also find, so the answer never
 // shows the sync it replaced.
 func (service *Service) queueTemplateSync(ctx context.Context, repository TxRepo, enqueuer queue.Enqueuer, template domain.SourceTemplate, actor domain.UserID) (StartedTemplateSync, error) {
-	templateSync := domain.TemplateRegistration{
-		ID:               service.RegistrationIDs.NewTemplateRegistrationID(),
+	templateSync := domain.TemplateSync{
+		ID:               service.SyncIDs.NewTemplateSyncID(),
 		TenantID:         template.TenantID,
 		SourceTemplateID: template.ID,
 		RepoOwner:        template.RepoOwner,
 		RepoName:         template.RepoName,
 		SourceRef:        template.SourceRef,
 		RootPath:         template.RootPath,
-		Status:           domain.TemplateRegistrationPending,
+		Status:           domain.TemplateSyncStatePending,
 		RequestedBy:      actor,
 		RequestedAt:      service.Clock.Now(),
 	}
 	payload, err := json.Marshal(StartTemplateSyncPayload(domain.TemplateSyncWorkflowInput{
-		RegistrationID:   templateSync.ID,
+		SyncID:           templateSync.ID,
 		TenantID:         templateSync.TenantID,
 		SourceTemplateID: templateSync.SourceTemplateID,
 		RepoOwner:        templateSync.RepoOwner,
@@ -753,7 +752,7 @@ func (service *Service) queueTemplateSync(ctx context.Context, repository TxRepo
 	if err != nil {
 		return StartedTemplateSync{}, fmt.Errorf("encode start template sync payload: %w", err)
 	}
-	if err := repository.CreateTemplateRegistration(ctx, templateSync); err != nil {
+	if err := repository.CreateTemplateSync(ctx, templateSync); err != nil {
 		return StartedTemplateSync{}, err
 	}
 	if err := enqueuer.Enqueue(ctx, queue.Request{
@@ -807,7 +806,7 @@ func (service *Service) CreateStack(ctx context.Context, command CreateStackComm
 		// stack that exists is always one its creator can reach.
 		Status:               domain.StackStatusReady,
 		Tags:                 cloneStringMap(command.Tags),
-		DefaultCredentialIDs: append([]domain.CredentialSetID(nil), command.DefaultCredentialIDs...),
+		DefaultCredentialIDs: append([]domain.CredentialID(nil), command.DefaultCredentialIDs...),
 		CreatedBy:            actor,
 		CreatedAt:            service.Clock.Now(),
 	}
@@ -1006,8 +1005,8 @@ func (service *Service) StartTemplateRun(ctx context.Context, command StartTempl
 	}
 
 	input := templateRunWorkflowInput(run, templateRevision)
-	kind := KindStartTemplateRun
-	payload, err := json.Marshal(StartTemplateRunPayload(input))
+	kind := KindStartTemplatePlan
+	payload, err := json.Marshal(StartTemplatePlanPayload(input))
 	if command.AutoApprove {
 		kind = KindStartTemplateApply
 		payload, err = json.Marshal(StartTemplateApplyPayload(input))
@@ -1090,8 +1089,8 @@ func (service *Service) CreateCredential(ctx context.Context, command CreateCred
 	if err != nil {
 		return CredentialMetadata{}, fmt.Errorf("encrypt credential: %w", err)
 	}
-	credential := domain.CredentialSet{
-		ID:              service.CredentialIDs.NewCredentialSetID(),
+	credential := domain.Credential{
+		ID:              service.CredentialIDs.NewCredentialID(),
 		TenantID:        command.TenantID,
 		StackID:         stackID,
 		StackTemplateID: templateID,
@@ -1202,7 +1201,7 @@ func (service *Service) DeleteCredential(ctx context.Context, command DeleteCred
 // sensitive, and returns "" for one that is: a sensitive value is never opened
 // for a read. A value that won't open means a wrong or missing key, an
 // operator fault, so the caller fails the whole read rather than hide the row.
-func (service *Service) openCredentialValue(credential domain.CredentialSet) (string, error) {
+func (service *Service) openCredentialValue(credential domain.Credential) (string, error) {
 	if credential.Sensitive {
 		return "", nil
 	}
@@ -1218,7 +1217,7 @@ func (service *Service) openCredentialValue(credential domain.CredentialSet) (st
 
 // credentialMetadata strips the ciphertext and carries the plaintext value
 // only for a credential that is not sensitive.
-func credentialMetadata(credential domain.CredentialSet, value string) CredentialMetadata {
+func credentialMetadata(credential domain.Credential, value string) CredentialMetadata {
 	metadata := CredentialMetadata{ID: credential.ID, Name: credential.Name, Scope: credentialScope(credential), StackID: credential.StackID, Template: credential.StackTemplateID, Sensitive: credential.Sensitive, CreatedAt: credential.CreatedAt}
 	if !credential.Sensitive {
 		metadata.Value = value
@@ -1227,7 +1226,7 @@ func credentialMetadata(credential domain.CredentialSet, value string) Credentia
 }
 
 // credentialScope derives the public scope from the populated owner column.
-func credentialScope(credential domain.CredentialSet) domain.CredentialScope {
+func credentialScope(credential domain.Credential) domain.CredentialScope {
 	if credential.StackTemplateID != "" {
 		return domain.CredentialScopeStackTemplate
 	}
@@ -2524,7 +2523,7 @@ func validateCreateStackCommand(command CreateStackCommand) error {
 	if !validStackTags(command.Tags) {
 		problems = append(problems, fieldError(ErrInvalidCommand, IssueInvalidFormat, "tags are invalid", "tags"))
 	}
-	if !validCredentialSetIDs(command.DefaultCredentialIDs) {
+	if !validCredentialIDs(command.DefaultCredentialIDs) {
 		problems = append(problems, fieldError(ErrInvalidCommand, IssueInvalid,
 			"default_credential_ids must not contain an empty id", "default_credential_ids"))
 	}
@@ -3008,7 +3007,7 @@ func validTagValue(value string) bool {
 	return true
 }
 
-func validCredentialSetIDs(ids []domain.CredentialSetID) bool {
+func validCredentialIDs(ids []domain.CredentialID) bool {
 	for _, id := range ids {
 		if strings.TrimSpace(string(id)) == "" {
 			return false
@@ -3089,10 +3088,10 @@ func (randomTemplateRunIDGenerator) NewTemplateRunID() domain.TemplateRunID {
 	return randomID[domain.TemplateRunID]("run")
 }
 
-type randomTemplateRegistrationIDGenerator struct{}
+type randomTemplateSyncIDGenerator struct{}
 
-func (randomTemplateRegistrationIDGenerator) NewTemplateRegistrationID() domain.TemplateRegistrationID {
-	return randomID[domain.TemplateRegistrationID]("template_registration")
+func (randomTemplateSyncIDGenerator) NewTemplateSyncID() domain.TemplateSyncID {
+	return randomID[domain.TemplateSyncID]("template_sync")
 }
 
 type randomStackIDGenerator struct{}
@@ -3107,9 +3106,9 @@ func (randomStackTemplateIDGenerator) NewStackTemplateID() domain.StackTemplateI
 	return randomID[domain.StackTemplateID]("stack_template")
 }
 
-type randomCredentialSetIDGenerator struct{}
+type randomCredentialIDGenerator struct{}
 
-// NewCredentialSetID creates a random identifier for a persisted credential record.
-func (randomCredentialSetIDGenerator) NewCredentialSetID() domain.CredentialSetID {
-	return randomID[domain.CredentialSetID]("credential")
+// NewCredentialID creates a random identifier for a persisted credential record.
+func (randomCredentialIDGenerator) NewCredentialID() domain.CredentialID {
+	return randomID[domain.CredentialID]("credential")
 }

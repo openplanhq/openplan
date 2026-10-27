@@ -111,7 +111,7 @@ func TestCreateStackDerivesSlugAndPersistsStack(t *testing.T) {
 		Tags: map[string]string{
 			"env": "prod",
 		},
-		DefaultCredentialIDs: []domain.CredentialSetID{domain.CredentialSetID("credential_123")},
+		DefaultCredentialIDs: []domain.CredentialID{domain.CredentialID("credential_123")},
 	})
 	if err != nil {
 		t.Fatalf("CreateStack returned error: %v", err)
@@ -135,7 +135,7 @@ func TestCreateStackDerivesSlugAndPersistsStack(t *testing.T) {
 	if stacks.created.Tags["env"] != "prod" {
 		t.Fatalf("persisted tags = %#v", stacks.created.Tags)
 	}
-	if len(stacks.created.DefaultCredentialIDs) != 1 || stacks.created.DefaultCredentialIDs[0] != domain.CredentialSetID("credential_123") {
+	if len(stacks.created.DefaultCredentialIDs) != 1 || stacks.created.DefaultCredentialIDs[0] != domain.CredentialID("credential_123") {
 		t.Fatalf("default credential IDs = %#v", stacks.created.DefaultCredentialIDs)
 	}
 }
@@ -235,8 +235,8 @@ func TestCreateStackRejectsEmptyDefaultCredentialID(t *testing.T) {
 	_, err := service.CreateStack(authenticatedContext(), CreateStackCommand{
 		TenantID: domain.TenantID("tenant_123"),
 		Name:     "Acme Prod",
-		DefaultCredentialIDs: []domain.CredentialSetID{
-			domain.CredentialSetID(""),
+		DefaultCredentialIDs: []domain.CredentialID{
+			domain.CredentialID(""),
 		},
 	})
 	if !errors.Is(err, ErrInvalidCommand) {
@@ -694,8 +694,8 @@ func TestStartTemplateRunCreatesQueuedRunWithoutDispatchingWorkflow(t *testing.T
 		t.Fatalf("created run ID = %q, want %q", runs.created.ID, run.ID)
 	}
 
-	if len(work.requests) != 1 || work.requests[0].Kind != KindStartTemplateRun {
-		t.Fatalf("queued requests = %#v, want one start_template_run request", work.requests)
+	if len(work.requests) != 1 || work.requests[0].Kind != KindStartTemplatePlan {
+		t.Fatalf("queued requests = %#v, want one start_template_plan request", work.requests)
 	}
 
 	if templates.gotGetTemplateTenantID != domain.TenantID("tenant_123") {
@@ -1541,19 +1541,19 @@ func TestStartTemplateRunUsesDefaultRunIDGenerator(t *testing.T) {
 	}
 }
 
-func TestRegisterTemplateCreatesPendingRegistrationAndDispatchesWorkflow(t *testing.T) {
+func TestRegisterTemplateCreatesPendingSyncAndDispatchesWorkflow(t *testing.T) {
 	t.Parallel()
 
 	ctx := authenticatedContext()
 	now := time.Date(2026, 7, 6, 10, 30, 0, 0, time.UTC)
-	registrations := &recordingTemplateRegistrationRepository{}
-	work := &recordingUnitOfWork{templateRegistrations: registrations}
+	syncs := &recordingTemplateSyncRepository{}
+	work := &recordingUnitOfWork{templateSyncs: syncs}
 
 	service := NewService(Service{
-		Authorization:   testPlatformAuthorizer(t),
-		Work:            work,
-		RegistrationIDs: fixedTemplateRegistrationIDGenerator{id: domain.TemplateRegistrationID("template_registration_123")},
-		Clock:           fixedClock{now: now},
+		Authorization: testPlatformAuthorizer(t),
+		Work:          work,
+		SyncIDs:       fixedTemplateSyncIDGenerator{id: domain.TemplateSyncID("template_sync_123")},
+		Clock:         fixedClock{now: now},
 	})
 
 	started, err := service.RegisterTemplate(ctx, RegisterTemplateCommand{
@@ -1583,29 +1583,29 @@ func TestRegisterTemplateCreatesPendingRegistrationAndDispatchesWorkflow(t *test
 	}
 	// The answer already reads the sync it queued as the template's latest.
 	wantStarted := wantTemplate
-	wantStarted.LatestSync = &domain.LatestTemplateSync{Status: domain.TemplateRegistrationPending, RequestedAt: now}
+	wantStarted.LatestSync = &domain.LatestTemplateSync{Status: domain.TemplateSyncStatePending, RequestedAt: now}
 	if !reflect.DeepEqual(started.Template, wantStarted) {
 		t.Fatalf("started.Template = %#v, want %#v", started.Template, wantStarted)
 	}
 
-	registration := started.Sync
-	if registration.SourceTemplateID != wantTemplate.ID {
-		t.Fatalf("registration.SourceTemplateID = %q, want %q", registration.SourceTemplateID, wantTemplate.ID)
+	templateSync := started.Sync
+	if templateSync.SourceTemplateID != wantTemplate.ID {
+		t.Fatalf("templateSync.SourceTemplateID = %q, want %q", templateSync.SourceTemplateID, wantTemplate.ID)
 	}
-	if registration.ID != domain.TemplateRegistrationID("template_registration_123") {
-		t.Fatalf("registration.ID = %q, want template_registration_123", registration.ID)
+	if templateSync.ID != domain.TemplateSyncID("template_sync_123") {
+		t.Fatalf("templateSync.ID = %q, want template_sync_123", templateSync.ID)
 	}
-	if registration.Status != domain.TemplateRegistrationPending {
-		t.Fatalf("registration.Status = %q, want %q", registration.Status, domain.TemplateRegistrationPending)
+	if templateSync.Status != domain.TemplateSyncStatePending {
+		t.Fatalf("templateSync.Status = %q, want %q", templateSync.Status, domain.TemplateSyncStatePending)
 	}
-	if registration.RequestedBy != domain.UserID(oidcSubject) {
-		t.Fatalf("registration.RequestedBy = %q, want %q", registration.RequestedBy, oidcSubject)
+	if templateSync.RequestedBy != domain.UserID(oidcSubject) {
+		t.Fatalf("templateSync.RequestedBy = %q, want %q", templateSync.RequestedBy, oidcSubject)
 	}
-	if !registration.RequestedAt.Equal(now) {
-		t.Fatalf("registration.RequestedAt = %v, want %v", registration.RequestedAt, now)
+	if !templateSync.RequestedAt.Equal(now) {
+		t.Fatalf("templateSync.RequestedAt = %v, want %v", templateSync.RequestedAt, now)
 	}
-	if registrations.created != registration {
-		t.Fatalf("created registration = %#v, want %#v", registrations.created, registration)
+	if syncs.created != templateSync {
+		t.Fatalf("created sync = %#v, want %#v", syncs.created, templateSync)
 	}
 	if len(work.requests) != 1 || work.requests[0].Kind != KindStartTemplateSync {
 		t.Fatalf("queued requests = %#v, want one start_template_sync request", work.requests)
@@ -1634,12 +1634,12 @@ func TestRegisterTemplateDoesNotDispatchWhenPersistenceFails(t *testing.T) {
 	t.Parallel()
 
 	persistErr := errors.New("database unavailable")
-	registrations := &recordingTemplateRegistrationRepository{createErr: persistErr}
-	work := &recordingUnitOfWork{templateRegistrations: registrations}
+	syncs := &recordingTemplateSyncRepository{createErr: persistErr}
+	work := &recordingUnitOfWork{templateSyncs: syncs}
 	service := NewService(Service{
-		Authorization:   testPlatformAuthorizer(t),
-		Work:            work,
-		RegistrationIDs: fixedTemplateRegistrationIDGenerator{id: domain.TemplateRegistrationID("template_registration_123")},
+		Authorization: testPlatformAuthorizer(t),
+		Work:          work,
+		SyncIDs:       fixedTemplateSyncIDGenerator{id: domain.TemplateSyncID("template_sync_123")},
 	})
 
 	_, err := service.RegisterTemplate(authenticatedContext(), RegisterTemplateCommand{
@@ -2240,7 +2240,7 @@ func TestGetTemplateRunLogChecksRunOwnershipBeforeReadingLog(t *testing.T) {
 		log: domain.TemplateRunLog{
 			TenantID:  domain.TenantID("tenant_123"),
 			RunID:     domain.TemplateRunID("run_123"),
-			Phase:     "plan",
+			Name:      "plan",
 			ObjectKey: "tenants/tenant_123/runs/run_123/logs/plan.log",
 		},
 	}
@@ -2273,14 +2273,14 @@ func TestGetTemplateRunLogChecksRunOwnershipBeforeReadingLog(t *testing.T) {
 	if logs.gotRunID != domain.TemplateRunID("run_123") {
 		t.Fatalf("log run = %q, want run_123", logs.gotRunID)
 	}
-	if logs.gotPhase != "plan" {
-		t.Fatalf("log phase = %q, want plan", logs.gotPhase)
+	if logs.gotName != "plan" {
+		t.Fatalf("log phase = %q, want plan", logs.gotName)
 	}
 	if logs.gotObjectKey != "tenants/tenant_123/runs/run_123/logs/plan.log" {
 		t.Fatalf("log object key = %q, want metadata object key", logs.gotObjectKey)
 	}
-	if metadata.gotGetPhase != "plan" {
-		t.Fatalf("metadata phase = %q, want plan", metadata.gotGetPhase)
+	if metadata.gotGetName != "plan" {
+		t.Fatalf("metadata phase = %q, want plan", metadata.gotGetName)
 	}
 }
 
@@ -2358,7 +2358,7 @@ func TestGetTemplateRunLogMapsMissingLogToNotFound(t *testing.T) {
 		log: domain.TemplateRunLog{
 			TenantID:  domain.TenantID("tenant_123"),
 			RunID:     domain.TemplateRunID("run_123"),
-			Phase:     "plan",
+			Name:      "plan",
 			ObjectKey: "tenants/tenant_123/runs/run_123/logs/plan.log",
 		},
 	}
@@ -2414,7 +2414,7 @@ func TestListTemplateRunLogsChecksRunOwnershipBeforeListingMetadata(t *testing.T
 			{
 				TenantID:    domain.TenantID("tenant_123"),
 				RunID:       domain.TemplateRunID("run_123"),
-				Phase:       "plan-1",
+				Name:        "plan-1",
 				RunPhase:    domain.RunPhasePlan,
 				Seq:         1,
 				Command:     domain.TerraformCommandInit,
@@ -2476,7 +2476,7 @@ func liveRunLog() domain.TemplateRunLog {
 	return domain.TemplateRunLog{
 		TenantID: domain.TenantID("tenant_123"),
 		RunID:    domain.TemplateRunID("run_123"),
-		Phase:    "plan-1",
+		Name:     "plan-1",
 		RunPhase: domain.RunPhasePlan,
 		Seq:      1,
 		Command:  domain.TerraformCommandInit,
@@ -3046,14 +3046,14 @@ type recordingTemplateRunLogReader struct {
 	err          error
 	gotTenantID  domain.TenantID
 	gotRunID     domain.TemplateRunID
-	gotPhase     string
+	gotName      string
 	gotObjectKey string
 }
 
 func (reader *recordingTemplateRunLogReader) ReadTemplateRunLog(_ context.Context, log domain.TemplateRunLog) ([]byte, error) {
 	reader.gotTenantID = log.TenantID
 	reader.gotRunID = log.RunID
-	reader.gotPhase = log.Phase
+	reader.gotName = log.Name
 	reader.gotObjectKey = log.ObjectKey
 	if reader.err != nil {
 		return nil, reader.err
@@ -3066,17 +3066,17 @@ type recordingTemplateRunLogRepository struct {
 	logs            []domain.TemplateRunLog
 	gotGetTenantID  domain.TenantID
 	gotGetRunID     domain.TemplateRunID
-	gotGetPhase     string
+	gotGetName      string
 	gotListTenantID domain.TenantID
 	gotListRunID    domain.TemplateRunID
 	getErr          error
 	listErr         error
 }
 
-func (repository *recordingTemplateRunLogRepository) GetTemplateRunLog(_ context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, phase string) (domain.TemplateRunLog, error) {
+func (repository *recordingTemplateRunLogRepository) GetTemplateRunLog(_ context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, name string) (domain.TemplateRunLog, error) {
 	repository.gotGetTenantID = tenantID
 	repository.gotGetRunID = runID
-	repository.gotGetPhase = phase
+	repository.gotGetName = name
 	if repository.getErr != nil {
 		return domain.TemplateRunLog{}, repository.getErr
 	}
@@ -3092,16 +3092,16 @@ func (repository *recordingTemplateRunLogRepository) ListTemplateRunLogs(_ conte
 	return repository.logs, nil
 }
 
-type recordingTemplateRegistrationRepository struct {
-	created   domain.TemplateRegistration
+type recordingTemplateSyncRepository struct {
+	created   domain.TemplateSync
 	createErr error
 }
 
-func (repository *recordingTemplateRegistrationRepository) CreateTemplateRegistration(_ context.Context, registration domain.TemplateRegistration) error {
+func (repository *recordingTemplateSyncRepository) CreateTemplateSync(_ context.Context, templateSync domain.TemplateSync) error {
 	if repository.createErr != nil {
 		return repository.createErr
 	}
-	repository.created = registration
+	repository.created = templateSync
 	return nil
 }
 
@@ -3242,7 +3242,7 @@ type recordingWorkflowDispatcher struct {
 	approvalRunID         domain.TemplateRunID
 }
 
-func (dispatcher *recordingWorkflowDispatcher) StartTemplateRun(_ context.Context, input domain.TemplateRunWorkflowInput) error {
+func (dispatcher *recordingWorkflowDispatcher) StartTemplatePlan(_ context.Context, input domain.TemplateRunWorkflowInput) error {
 	dispatcher.startTemplateRunCalls++
 	dispatcher.input = input
 	return nil
@@ -3289,11 +3289,11 @@ func (generator fixedTemplateRunIDGenerator) NewTemplateRunID() domain.TemplateR
 	return generator.runID
 }
 
-type fixedTemplateRegistrationIDGenerator struct {
-	id domain.TemplateRegistrationID
+type fixedTemplateSyncIDGenerator struct {
+	id domain.TemplateSyncID
 }
 
-func (generator fixedTemplateRegistrationIDGenerator) NewTemplateRegistrationID() domain.TemplateRegistrationID {
+func (generator fixedTemplateSyncIDGenerator) NewTemplateSyncID() domain.TemplateSyncID {
 	return generator.id
 }
 
@@ -3318,13 +3318,13 @@ func (clock fixedClock) Now() time.Time {
 // against a real database in internal/postgres/unitofwork_test.go, so here it
 // only needs to record what the service asked for.
 type recordingUnitOfWork struct {
-	stacks                StackRepository
-	templateRuns          TemplateRunRepository
-	templateRegistrations *recordingTemplateRegistrationRepository
-	audits                []domain.SecurityAuditEvent
-	requests              []queue.Request
-	err                   error
-	inTxCalls             int
+	stacks        StackRepository
+	templateRuns  TemplateRunRepository
+	templateSyncs *recordingTemplateSyncRepository
+	audits        []domain.SecurityAuditEvent
+	requests      []queue.Request
+	err           error
+	inTxCalls     int
 	// createdTemplates are the templates a register asked to store.
 	// storedTemplate, when set, is what the store already holds for the
 	// source, as after an earlier register; createTemplateErr fails the write.
@@ -3379,11 +3379,11 @@ func (unit *recordingUnitOfWork) CreateTemplateRun(ctx context.Context, run doma
 	return unit.templateRuns.CreateTemplateRun(ctx, run)
 }
 
-func (unit *recordingUnitOfWork) CreateTemplateRegistration(ctx context.Context, registration domain.TemplateRegistration) error {
-	if unit.templateRegistrations == nil {
+func (unit *recordingUnitOfWork) CreateTemplateSync(ctx context.Context, templateSync domain.TemplateSync) error {
+	if unit.templateSyncs == nil {
 		return nil
 	}
-	return unit.templateRegistrations.CreateTemplateRegistration(ctx, registration)
+	return unit.templateSyncs.CreateTemplateSync(ctx, templateSync)
 }
 
 func (unit *recordingUnitOfWork) ApproveTemplateRun(ctx context.Context, approval domain.TemplateRunApproval) error {
@@ -3408,16 +3408,16 @@ func (unit *recordingUnitOfWork) Enqueue(_ context.Context, requests ...queue.Re
 	return nil
 }
 
-func TestRegisterTemplatePairsRegistrationWithSyncIntentInTransaction(t *testing.T) {
+func TestRegisterTemplatePairsSyncWithSyncIntentInTransaction(t *testing.T) {
 	t.Parallel()
 
-	registrations := &recordingTemplateRegistrationRepository{}
-	work := &recordingUnitOfWork{templateRegistrations: registrations}
+	syncs := &recordingTemplateSyncRepository{}
+	work := &recordingUnitOfWork{templateSyncs: syncs}
 	service := NewService(Service{
-		Authorization:   testPlatformAuthorizer(t),
-		Work:            work,
-		RegistrationIDs: fixedTemplateRegistrationIDGenerator{id: "registration_123"},
-		Clock:           fixedClock{now: time.Date(2026, 8, 11, 10, 0, 0, 0, time.UTC)},
+		Authorization: testPlatformAuthorizer(t),
+		Work:          work,
+		SyncIDs:       fixedTemplateSyncIDGenerator{id: "registration_123"},
+		Clock:         fixedClock{now: time.Date(2026, 8, 11, 10, 0, 0, 0, time.UTC)},
 	})
 
 	started, err := service.RegisterTemplate(authenticatedContext(), RegisterTemplateCommand{
@@ -3426,9 +3426,9 @@ func TestRegisterTemplatePairsRegistrationWithSyncIntentInTransaction(t *testing
 	if err != nil {
 		t.Fatalf("RegisterTemplate returned error: %v", err)
 	}
-	registration := started.Sync
-	if work.inTxCalls != 1 || len(work.createdTemplates) != 1 || registrations.created.ID != registration.ID {
-		t.Fatalf("transaction calls = %d, templates = %#v, registration = %#v", work.inTxCalls, work.createdTemplates, registrations.created)
+	templateSync := started.Sync
+	if work.inTxCalls != 1 || len(work.createdTemplates) != 1 || syncs.created.ID != templateSync.ID {
+		t.Fatalf("transaction calls = %d, templates = %#v, sync = %#v", work.inTxCalls, work.createdTemplates, syncs.created)
 	}
 	if len(work.requests) != 1 || work.requests[0].Kind != KindStartTemplateSync || work.requests[0].ActorSubject != oidcSubject || work.requests[0].TenantID != "tenant_123" {
 		t.Fatalf("requests = %#v", work.requests)
@@ -3437,7 +3437,7 @@ func TestRegisterTemplatePairsRegistrationWithSyncIntentInTransaction(t *testing
 	if err := json.Unmarshal(work.requests[0].Payload, &payload); err != nil {
 		t.Fatalf("decode sync intent: %v", err)
 	}
-	if payload.RegistrationID != registration.ID || payload.TenantID != registration.TenantID || payload.RepoOwner != "acme" || payload.RepoName != "infra" || payload.SourceRef != "main" || payload.RootPath != "modules/vpc" {
+	if payload.SyncID != templateSync.ID || payload.TenantID != templateSync.TenantID || payload.RepoOwner != "acme" || payload.RepoName != "infra" || payload.SourceRef != "main" || payload.RootPath != "modules/vpc" {
 		t.Fatalf("sync payload = %#v", payload)
 	}
 	// The sync writes into this template and never creates one, so a payload
@@ -3456,14 +3456,14 @@ func TestRegisterTemplateAgainSyncsTheStoredTemplate(t *testing.T) {
 		ID: "source_template_stored", TenantID: "tenant_123", RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc",
 		Name: "vpc", LatestTemplateRevisionID: "revision_1",
 	}
-	registrations := &recordingTemplateRegistrationRepository{}
-	work := &recordingUnitOfWork{templateRegistrations: registrations, storedTemplate: stored}
+	syncs := &recordingTemplateSyncRepository{}
+	work := &recordingUnitOfWork{templateSyncs: syncs, storedTemplate: stored}
 	now := time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC)
 	service := NewService(Service{
-		Authorization:   testPlatformAuthorizer(t),
-		Work:            work,
-		RegistrationIDs: fixedTemplateRegistrationIDGenerator{id: "registration_again"},
-		Clock:           fixedClock{now: now},
+		Authorization: testPlatformAuthorizer(t),
+		Work:          work,
+		SyncIDs:       fixedTemplateSyncIDGenerator{id: "registration_again"},
+		Clock:         fixedClock{now: now},
 	})
 
 	started, err := service.RegisterTemplate(authenticatedContext(), RegisterTemplateCommand{
@@ -3472,29 +3472,29 @@ func TestRegisterTemplateAgainSyncsTheStoredTemplate(t *testing.T) {
 	require.NoError(t, err)
 
 	wantTemplate := stored
-	wantTemplate.LatestSync = &domain.LatestTemplateSync{Status: domain.TemplateRegistrationPending, RequestedAt: now}
+	wantTemplate.LatestSync = &domain.LatestTemplateSync{Status: domain.TemplateSyncStatePending, RequestedAt: now}
 	assert.Equal(t, wantTemplate, started.Template)
-	assert.Equal(t, domain.SourceTemplateID("source_template_stored"), registrations.created.SourceTemplateID)
+	assert.Equal(t, domain.SourceTemplateID("source_template_stored"), syncs.created.SourceTemplateID)
 	require.Len(t, work.requests, 1)
 	var payload StartTemplateSyncPayload
 	require.NoError(t, json.Unmarshal(work.requests[0].Payload, &payload))
 	assert.Equal(t, domain.SourceTemplateID("source_template_stored"), payload.SourceTemplateID)
-	assert.Equal(t, domain.TemplateRegistrationID("registration_again"), payload.RegistrationID)
+	assert.Equal(t, domain.TemplateSyncID("registration_again"), payload.SyncID)
 }
 
 func TestRegisterTemplateQueuesNoSyncWhenTheTemplateIsNotStored(t *testing.T) {
 	t.Parallel()
 
 	storeErr := errors.New("database unavailable")
-	registrations := &recordingTemplateRegistrationRepository{}
-	work := &recordingUnitOfWork{templateRegistrations: registrations, createTemplateErr: storeErr}
+	syncs := &recordingTemplateSyncRepository{}
+	work := &recordingUnitOfWork{templateSyncs: syncs, createTemplateErr: storeErr}
 	service := NewService(Service{Authorization: testPlatformAuthorizer(t), Work: work})
 
 	_, err := service.RegisterTemplate(authenticatedContext(), RegisterTemplateCommand{
 		TenantID: "tenant_123", RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: ".",
 	})
 	require.ErrorIs(t, err, storeErr)
-	assert.Empty(t, registrations.created.ID)
+	assert.Empty(t, syncs.created.ID)
 	assert.Empty(t, work.requests)
 }
 
@@ -3504,19 +3504,19 @@ func TestStartTemplateSyncQueuesASyncOfTheStoredTemplate(t *testing.T) {
 	template := domain.SourceTemplate{
 		ID: "source_template_vpc", TenantID: "tenant_123", RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc",
 		LatestSync: &domain.LatestTemplateSync{
-			Status: domain.TemplateRegistrationFailed, ErrorSummary: "clone failed",
+			Status: domain.TemplateSyncStateFailed, ErrorSummary: "clone failed",
 			RequestedAt: time.Date(2026, 10, 20, 9, 0, 0, 0, time.UTC), CompletedAt: time.Date(2026, 10, 20, 9, 1, 0, 0, time.UTC),
 		},
 	}
 	templates := &recordingSourceTemplateRepository{template: template}
-	registrations := &recordingTemplateRegistrationRepository{}
-	work := &recordingUnitOfWork{templateRegistrations: registrations}
+	syncs := &recordingTemplateSyncRepository{}
+	work := &recordingUnitOfWork{templateSyncs: syncs}
 	now := time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC)
 	service := NewService(Service{
 		Authorization:   testPlatformAuthorizer(t),
 		Work:            work,
 		SourceTemplates: templates,
-		RegistrationIDs: fixedTemplateRegistrationIDGenerator{id: "registration_sync"},
+		SyncIDs:         fixedTemplateSyncIDGenerator{id: "registration_sync"},
 		Clock:           fixedClock{now: now},
 	})
 
@@ -3525,24 +3525,24 @@ func TestStartTemplateSyncQueuesASyncOfTheStoredTemplate(t *testing.T) {
 
 	// The sync just queued replaces the failed one as the template's latest.
 	wantTemplate := template
-	wantTemplate.LatestSync = &domain.LatestTemplateSync{Status: domain.TemplateRegistrationPending, RequestedAt: now}
+	wantTemplate.LatestSync = &domain.LatestTemplateSync{Status: domain.TemplateSyncStatePending, RequestedAt: now}
 	assert.Equal(t, wantTemplate, started.Template)
 	assert.Equal(t, domain.TenantID("tenant_123"), templates.gotTenantID)
 	assert.Equal(t, domain.SourceTemplateID("source_template_vpc"), templates.gotID)
 	assert.Empty(t, work.createdTemplates, "a Sync never stores a template")
-	want := domain.TemplateRegistration{
+	want := domain.TemplateSync{
 		ID: "registration_sync", TenantID: "tenant_123", SourceTemplateID: "source_template_vpc",
 		RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc",
-		Status: domain.TemplateRegistrationPending, RequestedBy: oidcSubject, RequestedAt: now,
+		Status: domain.TemplateSyncStatePending, RequestedBy: oidcSubject, RequestedAt: now,
 	}
 	assert.Equal(t, want, started.Sync)
-	assert.Equal(t, want, registrations.created)
+	assert.Equal(t, want, syncs.created)
 	require.Len(t, work.requests, 1)
 	assert.Equal(t, KindStartTemplateSync, work.requests[0].Kind)
 	var payload StartTemplateSyncPayload
 	require.NoError(t, json.Unmarshal(work.requests[0].Payload, &payload))
 	assert.Equal(t, StartTemplateSyncPayload{
-		RegistrationID: "registration_sync", TenantID: "tenant_123", SourceTemplateID: "source_template_vpc",
+		SyncID: "registration_sync", TenantID: "tenant_123", SourceTemplateID: "source_template_vpc",
 		RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc",
 	}, payload)
 }
@@ -3656,10 +3656,10 @@ func TestStartTemplateRunPairsRunWithStartIntentInTransaction(t *testing.T) {
 	if work.inTxCalls != 1 || runs.created.ID != run.ID {
 		t.Fatalf("transaction calls = %d, run = %#v", work.inTxCalls, runs.created)
 	}
-	if len(work.requests) != 1 || work.requests[0].Kind != KindStartTemplateRun || work.requests[0].ActorSubject != oidcSubject || work.requests[0].TenantID != "tenant_123" {
+	if len(work.requests) != 1 || work.requests[0].Kind != KindStartTemplatePlan || work.requests[0].ActorSubject != oidcSubject || work.requests[0].TenantID != "tenant_123" {
 		t.Fatalf("requests = %#v", work.requests)
 	}
-	var payload StartTemplateRunPayload
+	var payload StartTemplatePlanPayload
 	if err := json.Unmarshal(work.requests[0].Payload, &payload); err != nil {
 		t.Fatalf("decode start intent: %v", err)
 	}
@@ -3896,11 +3896,11 @@ func TestDefaultIDGeneratorsMintPrefixedRandomIDs(t *testing.T) {
 	t.Parallel()
 
 	generators := map[string]func() string{
-		"run":                   func() string { return string(randomTemplateRunIDGenerator{}.NewTemplateRunID()) },
-		"template_registration": func() string { return string(randomTemplateRegistrationIDGenerator{}.NewTemplateRegistrationID()) },
-		"stack":                 func() string { return string(randomStackIDGenerator{}.NewStackID()) },
-		"stack_template":        func() string { return string(randomStackTemplateIDGenerator{}.NewStackTemplateID()) },
-		"credential":            func() string { return string(randomCredentialSetIDGenerator{}.NewCredentialSetID()) },
+		"run":            func() string { return string(randomTemplateRunIDGenerator{}.NewTemplateRunID()) },
+		"template_sync":  func() string { return string(randomTemplateSyncIDGenerator{}.NewTemplateSyncID()) },
+		"stack":          func() string { return string(randomStackIDGenerator{}.NewStackID()) },
+		"stack_template": func() string { return string(randomStackTemplateIDGenerator{}.NewStackTemplateID()) },
+		"credential":     func() string { return string(randomCredentialIDGenerator{}.NewCredentialID()) },
 	}
 
 	for prefix, generate := range generators {

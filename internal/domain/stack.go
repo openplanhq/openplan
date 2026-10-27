@@ -25,9 +25,9 @@ type Stack struct {
 	Status   StackStatus       `json:"status"`
 	Tags     map[string]string `json:"tags"`
 	// DefaultCredentialIDs is retained for backward-compatible reads; new credentials are scope-owned records.
-	DefaultCredentialIDs []CredentialSetID `json:"default_credential_ids"`
-	CreatedBy            UserID            `json:"created_by"`
-	CreatedAt            time.Time         `json:"created_at"`
+	DefaultCredentialIDs []CredentialID `json:"default_credential_ids"`
+	CreatedBy            UserID         `json:"created_by"`
+	CreatedAt            time.Time      `json:"created_at"`
 }
 
 // StackRun represents a coordinated multi-template operation.

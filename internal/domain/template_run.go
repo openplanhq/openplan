@@ -370,9 +370,9 @@ const (
 type TemplateRunLog struct {
 	TenantID TenantID      `json:"tenant_id"`
 	RunID    TemplateRunID `json:"run_id"`
-	// Phase is the log's name, unique within the run: the key it is stored
-	// and read under (RunLogName), not something to show.
-	Phase string `json:"phase"`
+	// Name is unique within the run: the key the log is stored and read
+	// under (RunLogName), not something to show.
+	Name string `json:"name"`
 	// RunPhase and Command are what wrote the log: the run's plan or apply,
 	// and the Terraform command it ran. Seq is its place among the phase's
 	// logs, from 1, which is the order they ran in.

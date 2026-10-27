@@ -32,8 +32,8 @@ func (repo *txRepo) CreateTemplateRun(ctx context.Context, run domain.TemplateRu
 	return createTemplateRun(ctx, repo.tx, run)
 }
 
-func (repo *txRepo) CreateTemplateRegistration(ctx context.Context, registration domain.TemplateRegistration) error {
-	return createTemplateRegistration(ctx, repo.tx, registration)
+func (repo *txRepo) CreateTemplateSync(ctx context.Context, templateSync domain.TemplateSync) error {
+	return createTemplateSync(ctx, repo.tx, templateSync)
 }
 
 func (repo *txRepo) ApproveTemplateRun(ctx context.Context, approval domain.TemplateRunApproval) error {
