@@ -2795,10 +2795,10 @@ components:
         command_error:
           type: string
           description: |
-            Terraform's own first error from the command the run failed in, as
-            it printed it, redacted. Empty when the run did not fail in a
-            Terraform command. `error_summary` still holds the workflow's
-            wrapper around it.
+            The first error the Terraform or OpenTofu command the run failed in
+            printed, as it printed it: redacted, and cut to 4096 bytes. Empty
+            when the run did not fail in a command. `error_summary` still holds
+            the workflow's wrapper around it.
         run_number:
           type: integer
           minimum: 1
@@ -2923,10 +2923,9 @@ components:
         command_error:
           type: string
           description: |
-            Terraform's own first error from the command the run failed in, as
-            it printed it, redacted. Empty when the run did not fail in a
-            Terraform command. `error_summary` still holds the workflow's
-            wrapper around it.
+            The first error the Terraform or OpenTofu command this execution
+            failed in printed, as it printed it: redacted, and cut to 4096
+            bytes. Empty when this execution did not fail in a command.
         summary:
           type: [object, "null"]
           description: |
