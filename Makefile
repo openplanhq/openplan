@@ -34,11 +34,16 @@ GOVULNCHECK := go run golang.org/x/vuln/cmd/govulncheck@v1.1.4
 
 .DEFAULT_GOAL := help
 
-.PHONY: help api-docs-preview api-docs-lint postman-collection lint vulncheck differential-test sandbox-test workflow-replay
+.PHONY: help check api-docs-preview api-docs-lint postman-collection lint vulncheck differential-test sandbox-test workflow-replay
 
 help: ## List the available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+
+# What CI runs, in Linux containers, so a change can pass here before it is
+# pushed. See scripts/check.sh for what it covers and what it leaves out.
+check: ## Run the CI checks locally (needs only Docker)
+	scripts/check.sh
 
 api-docs-preview: ## Build and serve the API reference (docs/openapi.yaml)
 	npx $(REDOCLY) build-docs $(SPEC) -o tmp/api-docs/index.html

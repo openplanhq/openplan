@@ -24,6 +24,9 @@ on:
       - "scripts/workflow-replay.sh"
       - ".github/workflows/workflow-replay.yml"
   pull_request:
+    # ready_for_review: a draft PR runs nothing (see the job's `if`), so the
+    # run it skipped happens when the PR is marked ready.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "internal/workflows/**"
       - "internal/domain/**"
@@ -44,6 +47,9 @@ jobs:
   replay:
     name: workflow replay (last release vs this change)
     runs-on: ubuntu-latest
+    # Draft PRs skip: iterate with `make check` locally, and GitHub checks
+    # the PR once it is marked ready.
+    if: github.event.pull_request.draft != true
 
     steps:
       - uses: actions/checkout@v4

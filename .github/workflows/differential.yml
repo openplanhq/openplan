@@ -18,6 +18,15 @@ on:
   push:
     branches: [main]
   pull_request:
+    # ready_for_review: a draft PR runs nothing (see the job's `if`), so the
+    # run it skipped happens when the PR is marked ready.
+    types: [opened, synchronize, reopened, ready_for_review]
+    # The same changes ci.yml's Go jobs skip: they cannot reach this test.
+    paths-ignore:
+      - "web/**"
+      - "site/**"
+      - "deploy/helm/**"
+      - "**/*.md"
   workflow_dispatch:
 
 concurrency:
@@ -31,6 +40,9 @@ jobs:
   differential:
     name: differential (authorization vs upstream OpenFGA)
     runs-on: ubuntu-latest
+    # Draft PRs skip: iterate with `make check` locally, and GitHub checks
+    # the PR once it is marked ready.
+    if: github.event.pull_request.draft != true
 
     services:
       postgres:
