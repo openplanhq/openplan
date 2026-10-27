@@ -1,18 +1,21 @@
-import { CircleAlert, Loader2 } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiErrorMessage, fieldsShown } from "../../api/problems";
 import { useCreateStackMutation } from "../../api/queries";
 import { useTenantID } from "../../auth/useTenantID";
-import Breadcrumb from "../../shared/Breadcrumb";
+import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
+import { fieldLabelClass, inputClass } from "../../shared/fieldClass";
+import PageHeader from "../../shared/PageHeader";
 import { useFieldErrors } from "../../shared/useFieldErrors";
-import { Alert, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
+// Create stack, on openplan UI: its header and trail on the canvas, and the
+// form in one card at the width of a form column (the owner's pick on issue
+// 524).
 export default function CreateStackScreen() {
   const tenantID = useTenantID();
   const navigate = useNavigate();
@@ -33,7 +36,7 @@ export default function CreateStackScreen() {
       navigate(`/stacks/${result.id}`);
     } catch (err) {
       // The name's own problems show under it, including a clash on the slug
-      // the server made from it; the alert says anything else.
+      // the server made from it; the line under the button says anything else.
       nameErrors.show(err);
       setErrorMessage(apiErrorMessage(err, "Failed to create stack", fieldsShown("#/", ["name"])));
     }
@@ -42,7 +45,7 @@ export default function CreateStackScreen() {
   if (mutation.isSuccess && mutation.data) {
     return (
       <section data-testid="create-stack-success">
-        <p className="text-muted-foreground">Redirecting to your new stack…</p>
+        <p className="text-meta text-muted-foreground">Redirecting to your new stack…</p>
       </section>
     );
   }
@@ -52,60 +55,53 @@ export default function CreateStackScreen() {
     // away while a `[data-unsaved='true']` element is mounted, so a
     // half-typed stack name is never wiped out by a background sign-in
     // redirect.
-    <section data-unsaved={trimmed !== "" ? "true" : undefined}>
-      <Breadcrumb items={[{ label: "Stacks", to: "/stacks" }, { label: "Create stack" }]} />
+    <section className="mx-auto max-w-140" data-unsaved={trimmed !== "" ? "true" : undefined}>
+      <PageHeader title="Create stack" trail={[{ label: "Stacks", to: "/stacks" }]} />
 
-      <Card>
-        <CardContent className="grid gap-4">
-          {errorMessage && (
-            <Alert variant="destructive" data-testid="create-stack-error">
-              <CircleAlert aria-hidden="true" />
-              <AlertTitle>{errorMessage}</AlertTitle>
-            </Alert>
+      <form
+        className="flex flex-col items-start gap-5 rounded-panel border bg-card px-7 pt-6 pb-7"
+        onSubmit={handleSubmit}
+      >
+        <div className="flex flex-col gap-1.5 self-stretch">
+          <Label htmlFor="create-stack-name" className={fieldLabelClass}>
+            Name
+          </Label>
+          <Input
+            id="create-stack-name"
+            value={name}
+            onChange={(event) => {
+              setName(event.target.value);
+              nameErrors.clear("name");
+            }}
+            aria-invalid={nameErrors.errors.name ? true : undefined}
+            aria-describedby={nameErrors.errors.name ? "create-stack-name-error" : undefined}
+            placeholder="prod"
+            autoComplete="off"
+            autoFocus
+            className={inputClass}
+          />
+          {nameErrors.errors.name && (
+            <ErrorLine id="create-stack-name-error" live={false}>
+              {nameErrors.errors.name}
+            </ErrorLine>
           )}
-
-          {/* Two columns on a wide screen, as the legacy form grid had, so
-              the name field takes half the card. The button takes a row of
-              its own and its own width, or the full width on a phone. */}
-          <form className="grid gap-5 md:grid-cols-2" onSubmit={handleSubmit}>
-            <div className="grid gap-2">
-              <Label htmlFor="create-stack-name">Name</Label>
-              <Input
-                id="create-stack-name"
-                value={name}
-                onChange={(event) => {
-                  setName(event.target.value);
-                  nameErrors.clear("name");
-                }}
-                aria-invalid={nameErrors.errors.name ? true : undefined}
-                aria-describedby={nameErrors.errors.name ? "create-stack-name-error" : undefined}
-                placeholder="e.g. Production"
-                autoFocus
-                className="pointer-coarse:h-11"
-              />
-              {nameErrors.errors.name && (
-                <ErrorLine id="create-stack-name-error" live={false}>
-                  {nameErrors.errors.name}
-                </ErrorLine>
-              )}
-            </div>
-            <Button
-              type="submit"
-              className="w-full pointer-coarse:h-11 md:col-span-2 md:w-auto md:justify-self-start"
-              disabled={trimmed === "" || mutation.isPending}
-            >
-              {mutation.isPending ? (
-                <>
-                  <Loader2 data-icon="inline-start" aria-hidden="true" className="animate-spin" />
-                  Creating…
-                </>
-              ) : (
-                "Create stack"
-              )}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+        </div>
+        <button
+          type="submit"
+          className={cn(buttonClass("primary"), "pointer-coarse:h-11")}
+          disabled={trimmed === "" || mutation.isPending}
+        >
+          {mutation.isPending ? (
+            <>
+              <LoaderCircle data-icon="inline-start" aria-hidden="true" className="animate-spin" />
+              Creating…
+            </>
+          ) : (
+            "Create stack"
+          )}
+        </button>
+        {errorMessage && <ErrorLine testId="create-stack-error">{errorMessage}</ErrorLine>}
+      </form>
     </section>
   );
 }

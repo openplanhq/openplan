@@ -11,7 +11,6 @@ import StackAttentionScreen from "../features/stacks/StackAttentionScreen";
 import StackPage from "../features/stacks/StackPage";
 import StackIndexPanel from "../features/stacks/StackIndexPanel";
 import AddStackTemplateScreen from "../features/stacks/AddStackTemplateScreen";
-import StackSectionLayout from "../features/stacks/StackSectionLayout";
 import TemplatePanel from "../features/stacks/TemplatePanel";
 import TemplateRunsTab from "../features/stacks/TemplateRunsTab";
 import TemplateVariablesTab from "../features/stacks/TemplateVariablesTab";
@@ -81,6 +80,7 @@ export const routeConfig: RouteObject[] = [
           {
             path: "stacks/new",
             element: <RequireCapability capability="can_create_stack" mode="route" />,
+            handle: canvas,
             children: [{ index: true, element: <CreateStackScreen /> }]
           },
           {
@@ -127,18 +127,14 @@ export const routeConfig: RouteObject[] = [
                   }
                 ]
               },
-              // Environment keeps its page, under a breadcrumb, until it is redesigned.
+              // Environment and Access are on openplan UI: each its own header
+              // and trail, on the canvas.
               {
-                element: <StackSectionLayout />,
-                children: [
-                  {
-                    path: "environment",
-                    element: <RequireCapability capability="can_manage_access" mode="route" />,
-                    children: [{ index: true, element: <EnvironmentScreen /> }]
-                  }
-                ]
+                path: "environment",
+                element: <RequireCapability capability="can_manage_access" mode="route" />,
+                handle: canvas,
+                children: [{ index: true, element: <EnvironmentScreen /> }]
               },
-              // Access is on openplan UI: its own header and trail, on the canvas.
               {
                 path: "access",
                 element: <RequireCapability capability="can_manage_access" mode="route" />,

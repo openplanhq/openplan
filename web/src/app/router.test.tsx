@@ -127,7 +127,7 @@ describe("routeConfig", () => {
     expect(testRouter.state.location.pathname).toBe("/stacks/stack_1");
   });
 
-  it("renders Environment under a Stacks / stack / Environment breadcrumb", async () => {
+  it("renders Environment on the canvas under a Stacks / stack trail", async () => {
     const { routeConfig } = await import("./router");
     const { queryKeys } = await import("../api/queryKeys");
     const queryClient = stackQueryClient(queryKeys);
@@ -142,9 +142,9 @@ describe("routeConfig", () => {
       </QueryClientProvider>
     );
 
-    expect(markup).toContain('data-testid="stack-section-layout"');
+    expect(markup).toContain("data-canvas");
     expect(markup).toContain('href="/stacks/stack_1"');
-    expect(markup).toMatch(/<h1[^>]*aria-current="page"[^>]*>Environment<\/h1>/);
+    expect(markup).toMatch(/<h1[^>]*>Environment<\/h1>/);
   });
 
   it("renders the stacks list screen at /stacks", async () => {
