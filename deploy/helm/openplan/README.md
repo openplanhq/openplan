@@ -53,16 +53,17 @@ kubectl label namespace openplan pod-security.kubernetes.io/enforce=privileged
 
 **2. Put the credentials in Secrets.** Every setting is a value (step 4)
 except the credentials, because values are stored in the release and usually
-committed to git. Values name each credential by the Secret and the key
-holding it, so the Secrets can have any names, and a credential your cluster
-already holds (a database password from an operator, say) can be used where it
-is. For example:
+committed to git. The Postgres and Valkey URLs are credentials too, since
+each carries its password. Values name each credential by the Secret and the
+key holding it, so the Secrets can have any names, and a credential your
+cluster already holds (a database URL from an operator, say) can be used where
+it is. For example:
 
 ```sh
 kubectl -n openplan create secret generic openplan-credentials \
-  --from-literal=postgres-password=<password> \
-  --from-literal=valkey-api-password=<password> \
-  --from-literal=valkey-executor-password=<password> \
+  --from-literal=database-url='postgres://openplan:<password>@<host>:5432/openplan?sslmode=require' \
+  --from-literal=valkey-api-url='redis://api:<password>@<host>:6379/0' \
+  --from-literal=valkey-executor-url='redis://executor:<password>@<host>:6379/0' \
   --from-literal=s3-access-key-id=<key id> \
   --from-literal=s3-secret-access-key=<secret key> \
   --from-literal=oidc-client-secret=<openplan's client secret in Dex> \
@@ -70,11 +71,10 @@ kubectl -n openplan create secret generic openplan-credentials \
   --from-literal=credential-encryption-key=$(openssl rand -hex 32)
 ```
 
-The executor reads only its Valkey password and the S3 key, whichever Secret
-they're in. It never gets the database password, the encryption keys or the
-OIDC secret. A password may contain any character: the chart passes the
-Postgres and Valkey passwords apart from their URLs, and openplan escapes them
-for you.
+The executor reads only its Valkey URL and the S3 key, whichever Secret
+they're in. It never gets the database URL, the encryption keys or the OIDC
+secret. A password inside a URL must be URL-escaped: `@ / : % #` and spaces
+break it as they are. `openssl rand -hex 32` makes one that needs no escaping.
 
 **3. Create the TLS Secret for your host.**
 
@@ -96,15 +96,12 @@ below lists the rest.
 temporal:
   address: temporal-frontend.temporal:7233
 postgres:
-  url: postgres://openplan@postgres.example.internal:5432/openplan?sslmode=require
-  passwordSecret: {name: openplan-credentials, key: postgres-password}
+  urlSecret: {name: openplan-credentials, key: database-url}
 valkey:
   api:
-    url: redis://api@valkey.example.internal:6379/0
-    passwordSecret: {name: openplan-credentials, key: valkey-api-password}
+    urlSecret: {name: openplan-credentials, key: valkey-api-url}
   executor:
-    url: redis://executor@valkey.example.internal:6379/0
-    passwordSecret: {name: openplan-credentials, key: valkey-executor-password}
+    urlSecret: {name: openplan-credentials, key: valkey-executor-url}
 s3:
   bucket: openplan-artifacts
   region: us-east-1
@@ -158,12 +155,9 @@ the key in it.
 | `image.tag` | the chart's version | Override only to test a build that isn't a release. |
 | `temporal.address` | required | The Temporal frontend, `host:port`. |
 | `temporal.namespace` | `default` | The Temporal namespace openplan's workflows run in. |
-| `postgres.url` | required | The api's database as a URL without the password. |
-| `postgres.passwordSecret` | required | The database user's password. |
-| `valkey.api.url` | required | Valkey as the `api` user, without the password: `redis://api@<host>:6379/0`, or `rediss://` for TLS. The database must be 0. |
-| `valkey.api.passwordSecret` | required | The `api` user's password. |
-| `valkey.executor.url` | required | The same Valkey as the `executor` user. |
-| `valkey.executor.passwordSecret` | required | The `executor` user's password. |
+| `postgres.urlSecret` | required | The api's database URL, password included. |
+| `valkey.api.urlSecret` | required | Valkey as the `api` user, password included: `redis://api:<password>@<host>:6379/0`, or `rediss://` for TLS. The database must be 0. |
+| `valkey.executor.urlSecret` | required | The same Valkey as the `executor` user. |
 | `s3.bucket`, `s3.region` | required | The bucket for run logs and plans. |
 | `s3.endpoint` | AWS | The endpoint of an S3-compatible store other than AWS. |
 | `s3.forcePathStyle` | `false` | Address the bucket by path, which most stores other than AWS need. |
