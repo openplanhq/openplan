@@ -2447,17 +2447,20 @@ components:
       properties:
         kind:
           type: string
-          enum: [waiting_approval, destroy_failed]
+          enum: [waiting_approval, destroy_failed, run_failed]
           description: |
             `waiting_approval` is a plan with changes waiting to be approved
             or discarded. `destroy_failed` is a destroy that stopped before it
-            finished, so some resources may still exist.
+            finished, so some resources may still exist. `run_failed` is a
+            plan or apply that failed and is still the template's latest run;
+            any newer run on the template, whatever its outcome, clears it.
+            The run's `operation` says which.
         at:
           type: string
           description: |
             When the item began to need a person: when the plan finished, or
-            when the destroy stopped. An RFC 3339 timestamp, absent when
-            unknown.
+            when the destroy, plan or apply stopped. An RFC 3339 timestamp,
+            absent when unknown.
         stack:
           type: object
           properties:
@@ -2473,8 +2476,9 @@ components:
           required: [id, display_name]
         run:
           description: |
-            The plan waiting for approval, or the destroy that failed. Null
-            for a failed template with no destroy run on record.
+            The plan waiting for approval, the destroy that failed, or the
+            plan or apply that failed. Null for a failed template with no
+            destroy run on record.
           oneOf:
             - $ref: "#/components/schemas/TemplateRun"
             - type: "null"

@@ -34,6 +34,10 @@ const (
 	// AttentionDestroyFailed is a destroy that stopped before it finished, so
 	// some of the template's resources may still exist.
 	AttentionDestroyFailed AttentionKind = "destroy_failed"
+	// AttentionRunFailed is a plan or apply that failed and is still the
+	// template's latest run. Any newer run, whatever its outcome, clears it.
+	// A failed destroy is AttentionDestroyFailed instead.
+	AttentionRunFailed AttentionKind = "run_failed"
 )
 
 // AttentionItem is one installed template that needs a person.
@@ -41,11 +45,12 @@ type AttentionItem struct {
 	Kind          AttentionKind
 	Stack         domain.Stack
 	StackTemplate StackTemplateView
-	// Run is the plan waiting for approval, or the destroy that failed. Nil
-	// for a failed template with no destroy run on record.
+	// Run is the plan waiting for approval, the destroy that failed, or the
+	// plan or apply that failed. Nil for a failed template with no destroy run
+	// on record.
 	Run *domain.TemplateRun
 	// At is when the item began to need a person: when the plan finished, or
-	// when the destroy stopped. Zero when neither is known.
+	// when the destroy, plan or apply stopped. Zero when that is not known.
 	At time.Time
 }
 
@@ -63,9 +68,10 @@ type StackSummary struct {
 	TemplateCount int
 }
 
-// ListAttention returns the plans waiting for approval and the failed destroys
-// on every stack the caller can view: waiting plans first, then failures,
-// each newest first. Viewing is enough; approving is checked where it happens.
+// ListAttention returns the plans waiting for approval, the failed destroys
+// and the failed plans and applies on every stack the caller can view: waiting
+// plans first, newest first, then every failure, newest first. Viewing is
+// enough; approving is checked where it happens.
 func (service *Service) ListAttention(ctx context.Context, command ListAttentionCommand) ([]AttentionItem, error) {
 	if command.TenantID == "" {
 		return nil, fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
@@ -91,6 +97,12 @@ func (service *Service) ListAttention(ctx context.Context, command ListAttention
 	}
 	items = append(items, failed...)
 
+	latest, err := service.StackOverview.ListLatestTemplateRuns(ctx, command.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("list attention: list latest runs: %w", err)
+	}
+	items = append(items, runFailedItems(stacks, templates, latest)...)
+
 	views := make([]*StackTemplateView, len(items))
 	var runs []*domain.TemplateRun
 	for i := range items {
@@ -109,8 +121,9 @@ func (service *Service) ListAttention(ctx context.Context, command ListAttention
 	}
 
 	sort.SliceStable(items, func(i, j int) bool {
-		if items[i].Kind != items[j].Kind {
-			return items[i].Kind == AttentionWaitingApproval
+		iWaiting, jWaiting := items[i].Kind == AttentionWaitingApproval, items[j].Kind == AttentionWaitingApproval
+		if iWaiting != jWaiting {
+			return iWaiting
 		}
 		if !items[i].At.Equal(items[j].At) {
 			return items[i].At.After(items[j].At)
@@ -142,6 +155,41 @@ func waitingItems(
 		}
 		items = append(items, AttentionItem{
 			Kind:          AttentionWaitingApproval,
+			Stack:         stacks[stackTemplate.StackID],
+			StackTemplate: StackTemplateView{StackTemplate: stackTemplate},
+			Run:           &run,
+			At:            at,
+		})
+	}
+	return items
+}
+
+// runFailedItems turns each visible template's latest run into an item when
+// that run is a failed plan or apply. A failed destroy is left out: the
+// template's failed lifecycle already lists it as destroy_failed.
+func runFailedItems(
+	stacks map[domain.StackID]domain.Stack,
+	templates map[domain.StackTemplateID]domain.StackTemplate,
+	latest []domain.TemplateRun,
+) []AttentionItem {
+	items := []AttentionItem{}
+	for i := range latest {
+		run := latest[i]
+		if run.Status != domain.TemplateRunFailed || run.Operation == domain.OperationDestroy {
+			continue
+		}
+		stackTemplate, ok := templates[run.StackTemplateID]
+		if !ok {
+			continue
+		}
+		// A run that failed before it recorded an end has only its request
+		// time to go by.
+		at := run.CompletedAt
+		if at.IsZero() {
+			at = run.CreatedAt
+		}
+		items = append(items, AttentionItem{
+			Kind:          AttentionRunFailed,
 			Stack:         stacks[stackTemplate.StackID],
 			StackTemplate: StackTemplateView{StackTemplate: stackTemplate},
 			Run:           &run,

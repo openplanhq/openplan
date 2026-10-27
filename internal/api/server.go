@@ -1152,14 +1152,15 @@ type stackListItemResponse struct {
 
 // attentionItemResponse is one installed template that needs a person.
 type attentionItemResponse struct {
-	// Kind is waiting_approval or destroy_failed.
+	// Kind is waiting_approval, destroy_failed or run_failed.
 	Kind string `json:"kind"`
 	// At is when the item began to need a person; omitted when unknown.
 	At            string                         `json:"at,omitempty"`
 	Stack         attentionStackResponse         `json:"stack"`
 	StackTemplate attentionStackTemplateResponse `json:"stack_template"`
-	// Run is the plan waiting for approval or the destroy that failed; null
-	// for a failed template with no destroy run on record.
+	// Run is the plan waiting for approval, the destroy that failed, or the
+	// plan or apply that failed; null for a failed template with no destroy
+	// run on record.
 	Run *templateRunResponse `json:"run"`
 }
 

@@ -1321,6 +1321,61 @@ func TestListAttentionReturnsWaitingPlans(t *testing.T) {
 	}
 }
 
+func TestListAttentionReturnsAFailedPlan(t *testing.T) {
+	t.Parallel()
+
+	failedAt := time.Date(2026, 10, 3, 11, 0, 0, 0, time.UTC)
+	deps := newAPITestDependencies(t)
+	deps.stacks.list = []domain.Stack{{ID: "stack_123", TenantID: "tenant_123", Name: "Acme Prod", Slug: "acme-prod"}}
+	deps.stackOverview.templates = []domain.StackTemplate{{
+		ID:                        "stack_template_123",
+		StackID:                   "stack_123",
+		DesiredTemplateRevisionID: "template_123",
+		WorkspaceName:             "acme-prod-template_123",
+		Lifecycle:                 domain.StackTemplateActive,
+	}}
+	deps.stackOverview.latest = []domain.TemplateRun{{
+		ID:              "run_124",
+		TenantID:        "tenant_123",
+		StackTemplateID: "stack_template_123",
+		Operation:       domain.OperationPlan,
+		Status:          domain.TemplateRunFailed,
+		TriggerActor:    "user_123",
+		RunNumber:       8,
+		CompletedAt:     failedAt,
+	}}
+	deps.templates.templates = []domain.TemplateRevision{{ID: "template_123", RepoName: "infra-modules", RootPath: "modules/eks-cluster"}}
+	server := NewServer(deps.service(), configuredTenantID)
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, authenticatedRequest(http.MethodGet, "/v1/tenants/tenant_123/attention", nil))
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	type attentionItem struct {
+		Kind string `json:"kind"`
+		At   string `json:"at"`
+		Run  *struct {
+			ID        string `json:"id"`
+			Operation string `json:"operation"`
+			Status    string `json:"status"`
+			RunNumber int    `json:"run_number"`
+		} `json:"run"`
+	}
+	body := decodeItems[attentionItem](t, response)
+	if len(body) != 1 {
+		t.Fatalf("len(body) = %d, want 1", len(body))
+	}
+	item := body[0]
+	if item.Kind != "run_failed" || item.At != "2026-10-03T11:00:00Z" {
+		t.Errorf("kind, at = %q, %q", item.Kind, item.At)
+	}
+	if item.Run == nil || item.Run.ID != "run_124" || item.Run.Operation != "plan" || item.Run.Status != "failed" || item.Run.RunNumber != 8 {
+		t.Errorf("run = %+v", item.Run)
+	}
+}
+
 func TestListAttentionReturnsAnEmptyList(t *testing.T) {
 	t.Parallel()
 
