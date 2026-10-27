@@ -394,12 +394,12 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 	}
 	// Before the control worker: an API that takes run activities but cannot
 	// end a log's stream leaves its viewers watching a command already over.
-	liveLogs, err := deps.dialLiveLogs(ctx, cfg.LiveLogURL)
+	liveLogs, err := deps.dialLiveLogs(ctx, cfg.ValkeyURL)
 	if err != nil {
 		return fmt.Errorf("live logs: %w", err)
 	}
 	defer liveLogs.Close()
-	liveLogReaders, err := deps.dialLiveLogReaders(ctx, cfg.LiveLogURL)
+	liveLogReaders, err := deps.dialLiveLogReaders(ctx, cfg.ValkeyURL)
 	if err != nil {
 		return fmt.Errorf("live log readers: %w", err)
 	}

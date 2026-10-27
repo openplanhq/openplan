@@ -66,8 +66,8 @@ func TestLoadAPIConfigReadsAPISettings(t *testing.T) {
 	if cfg.TemporalNamespace != "openplan" {
 		t.Fatalf("TemporalNamespace = %q", cfg.TemporalNamespace)
 	}
-	if cfg.LiveLogURL != "redis://valkey:6379/0" {
-		t.Fatalf("LiveLogURL = %q", cfg.LiveLogURL)
+	if cfg.ValkeyURL != "redis://valkey:6379/0" {
+		t.Fatalf("ValkeyURL = %q", cfg.ValkeyURL)
 	}
 	if cfg.Security.TenantID != "default" {
 		t.Fatalf("Security.TenantID = %q, want default", cfg.Security.TenantID)
@@ -493,8 +493,8 @@ func TestLoadExecutorConfigReadsExecutorSettings(t *testing.T) {
 	if cfg.TemporalAddress != "localhost:7233" || cfg.TemporalNamespace != "openplan" {
 		t.Fatalf("temporal = %q in %q", cfg.TemporalAddress, cfg.TemporalNamespace)
 	}
-	if cfg.LiveLogURL != "redis://valkey:6379/0" {
-		t.Fatalf("LiveLogURL = %q", cfg.LiveLogURL)
+	if cfg.ValkeyURL != "redis://valkey:6379/0" {
+		t.Fatalf("ValkeyURL = %q", cfg.ValkeyURL)
 	}
 	if cfg.RunRoot != "/var/lib/openplan/runs" {
 		t.Fatalf("RunRoot = %q, want /var/lib/openplan/runs", cfg.RunRoot)
@@ -558,7 +558,7 @@ func TestExecutorConfigHoldsNoControlPlaneSettings(t *testing.T) {
 	for field := range configType.Fields() {
 		got = append(got, field.Name)
 	}
-	want := []string{"TemporalAddress", "TemporalNamespace", "RunRoot", "ArtifactStore", "LiveLogURL", "MaxSessions", "Sandbox"}
+	want := []string{"TemporalAddress", "TemporalNamespace", "RunRoot", "ArtifactStore", "ValkeyURL", "MaxSessions", "Sandbox"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("ExecutorConfig fields = %v, want %v", got, want)
 	}

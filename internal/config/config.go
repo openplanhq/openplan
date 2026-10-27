@@ -39,9 +39,9 @@ type APIConfig struct {
 	ArtifactStore           ArtifactStoreConfig
 	Security                SecurityConfig
 	CredentialEncryptionKey Secret
-	// LiveLogURL is the Valkey, as a redis:// or rediss:// URL, that the api
+	// ValkeyURL is the Valkey, as a redis:// or rediss:// URL, that the api
 	// tails running commands' output from.
-	LiveLogURL string
+	ValkeyURL string
 	// GitHubApp mints installation tokens for template sync, which runs on the
 	// control plane.
 	GitHubApp GitHubAppConfig
@@ -56,7 +56,7 @@ type APIConfig struct {
 // tenant Terraform, so it carries no database URL and no key: anything added
 // here is readable by every template that runs.
 //
-// LiveLogURL is a credential all the same, and acceptable here because what
+// ValkeyURL is a credential all the same, and acceptable here because what
 // it grants is small: its Valkey user may only append to and expire runlog:*
 // streams, never read one or touch another key. And tofu's environment is
 // built from scratch, so the URL is not in a template's process to begin with.
@@ -66,9 +66,9 @@ type ExecutorConfig struct {
 	// RunRoot is where each run's workspace is checked out.
 	RunRoot       string
 	ArtifactStore ArtifactStoreConfig
-	// LiveLogURL is the Valkey, as a redis:// or rediss:// URL, that the
+	// ValkeyURL is the Valkey, as a redis:// or rediss:// URL, that the
 	// executor streams running commands' output to.
-	LiveLogURL string
+	ValkeyURL string
 	// MaxSessions caps the sessions, and so the runs, this executor holds at
 	// once. Each runs its activities in sandboxes of their own.
 	MaxSessions int
@@ -130,7 +130,7 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 		TemporalAddress:   strings.TrimSpace(getenv("TEMPORAL_ADDRESS")),
 		TemporalNamespace: strings.TrimSpace(getenv("TEMPORAL_NAMESPACE")),
 		ArtifactStore:     artifactStore,
-		LiveLogURL:        strings.TrimSpace(getenv("VALKEY_URL")),
+		ValkeyURL:         strings.TrimSpace(getenv("VALKEY_URL")),
 		Security:          security,
 	}
 	if cfg.HTTPAddress == "" {
@@ -145,7 +145,7 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 		if err := refusePublishedKey("CREDENTIAL_ENCRYPTION_KEY", credentialKey); err != nil {
 			return APIConfig{}, err
 		}
-		if err := refusePublishedValkeyPassword("VALKEY_URL", cfg.LiveLogURL); err != nil {
+		if err := refusePublishedValkeyPassword("VALKEY_URL", cfg.ValkeyURL); err != nil {
 			return APIConfig{}, err
 		}
 	}
@@ -169,7 +169,7 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	if cfg.TemporalAddress == "" {
 		return APIConfig{}, fmt.Errorf("%w: TEMPORAL_ADDRESS is required", ErrInvalidConfig)
 	}
-	if cfg.LiveLogURL == "" {
+	if cfg.ValkeyURL == "" {
 		return APIConfig{}, fmt.Errorf("%w: VALKEY_URL is required", ErrInvalidConfig)
 	}
 
@@ -187,7 +187,7 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 		TemporalNamespace: strings.TrimSpace(getenv("TEMPORAL_NAMESPACE")),
 		RunRoot:           strings.TrimSpace(getenv("EXECUTOR_RUN_ROOT")),
 		ArtifactStore:     artifactStore,
-		LiveLogURL:        strings.TrimSpace(getenv("VALKEY_URL")),
+		ValkeyURL:         strings.TrimSpace(getenv("VALKEY_URL")),
 	}
 	if cfg.RunRoot == "" {
 		cfg.RunRoot = DefaultExecutorRunRoot
@@ -246,7 +246,7 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 	if cfg.TemporalAddress == "" {
 		return ExecutorConfig{}, fmt.Errorf("%w: TEMPORAL_ADDRESS is required", ErrInvalidConfig)
 	}
-	if cfg.LiveLogURL == "" {
+	if cfg.ValkeyURL == "" {
 		return ExecutorConfig{}, fmt.Errorf("%w: VALKEY_URL is required", ErrInvalidConfig)
 	}
 
