@@ -31,6 +31,7 @@ type templateRunResponse struct {
 	CreatedAt               time.Time                      `json:"created_at"`
 	CompletedAt             time.Time                      `json:"completed_at,omitzero"`
 	ErrorSummary            string                         `json:"error_summary"`
+	CommandError            string                         `json:"command_error"`
 	RunNumber               int                            `json:"run_number"`
 	AutoApprove             bool                           `json:"auto_approve"`
 	PlanSummary             *planSummaryResponse           `json:"plan_summary"`
@@ -114,6 +115,7 @@ type templateRunExecutionResponse struct {
 	StartedAt        time.Time                 `json:"started_at"`
 	FinishedAt       time.Time                 `json:"finished_at,omitzero"`
 	ErrorSummary     string                    `json:"error_summary"`
+	CommandError     string                    `json:"command_error"`
 	Summary          *planSummaryResponse      `json:"summary"`
 	Steps            []templateRunStepResponse `json:"steps"`
 }
@@ -216,6 +218,7 @@ func newTemplateRunResponse(run domain.TemplateRun) templateRunResponse {
 		CreatedAt:               run.CreatedAt,
 		CompletedAt:             run.CompletedAt,
 		ErrorSummary:            run.ErrorSummary,
+		CommandError:            run.CommandError,
 		RunNumber:               run.RunNumber,
 		AutoApprove:             run.AutoApprove,
 		PlanSummary:             newPlanSummaryResponse(run.PlanSummary),
@@ -250,6 +253,7 @@ func newTemplateRunExecutionResponse(execution domain.TemplateRunWorkflowExecuti
 		StartedAt:        execution.StartedAt,
 		FinishedAt:       execution.FinishedAt,
 		ErrorSummary:     execution.ErrorSummary,
+		CommandError:     execution.CommandError,
 		Summary:          newPlanSummaryResponse(execution.Summary),
 		Steps:            steps,
 	}

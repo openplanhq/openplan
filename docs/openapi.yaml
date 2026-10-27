@@ -2792,6 +2792,13 @@ components:
         error_summary:
           type: string
           description: Why the run failed, from its failed workflow execution. Empty otherwise.
+        command_error:
+          type: string
+          description: |
+            Terraform's own first error from the command the run failed in, as
+            it printed it, redacted. Empty when the run did not fail in a
+            Terraform command. `error_summary` still holds the workflow's
+            wrapper around it.
         run_number:
           type: integer
           minimum: 1
@@ -2845,7 +2852,7 @@ components:
       required:
         [id, tenant_id, stack_template_id, template_revision_id, operation,
          selected_ref, resolved_commit_sha, status, step, trigger_actor,
-         trigger_actor_display_name, created_at, error_summary, run_number,
+         trigger_actor_display_name, created_at, error_summary, command_error, run_number,
          auto_approve, plan_summary, plan_changes]
 
     TemplateRunStatus:
@@ -2913,6 +2920,13 @@ components:
           format: date-time
           description: Absent while the execution runs.
         error_summary: { type: string, description: Why it failed. Empty otherwise. }
+        command_error:
+          type: string
+          description: |
+            Terraform's own first error from the command the run failed in, as
+            it printed it, redacted. Empty when the run did not fail in a
+            Terraform command. `error_summary` still holds the workflow's
+            wrapper around it.
         summary:
           type: [object, "null"]
           description: |
@@ -2927,7 +2941,7 @@ components:
           type: array
           description: The steps it ran, in the order they started.
           items: { $ref: "#/components/schemas/TemplateRunStepExecution" }
-      required: [phase, actor, actor_display_name, status, started_at, error_summary, summary, steps]
+      required: [phase, actor, actor_display_name, status, started_at, error_summary, command_error, summary, steps]
 
     TemplateRunStepExecution:
       type: object

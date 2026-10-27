@@ -54,7 +54,7 @@ func TestTemplateRunResponseFields(t *testing.T) {
 	response := newTemplateRunResponse(fullTemplateRun())
 
 	assert.Equal(t, []string{
-		"auto_approve", "completed_at", "created_at", "error_summary", "executions", "id",
+		"auto_approve", "command_error", "completed_at", "created_at", "error_summary", "executions", "id",
 		"operation", "plan_changes", "plan_summary", "resolved_commit_sha", "run_number", "selected_ref",
 		"stack_template_id", "status", "step", "template_revision_id", "tenant_id",
 		"trigger_actor", "trigger_actor_display_name",
@@ -67,11 +67,29 @@ func TestTemplateRunResponseFields(t *testing.T) {
 
 	require.Len(t, response.Executions, 1)
 	assert.Equal(t, []string{
-		"actor", "actor_display_name", "error_summary", "finished_at", "phase", "started_at",
+		"actor", "actor_display_name", "command_error", "error_summary", "finished_at", "phase", "started_at",
 		"status", "steps", "summary",
 	}, jsonKeys(t, response.Executions[0]))
 	assert.Equal(t, []string{"finished_at", "started_at", "status", "step"}, jsonKeys(t, response.Executions[0].Steps[0]))
 	assert.Equal(t, []string{"add", "change", "destroy"}, jsonKeys(t, response.PlanSummary))
+}
+
+// Issue 522: what Terraform said reaches the run and its execution as it was
+// stored, and an empty one is still sent, so a client reads "" rather than a
+// missing field.
+func TestTemplateRunResponseCarriesTheCommandError(t *testing.T) {
+	t.Parallel()
+
+	run := fullTemplateRun()
+	run.CommandError = "Error: bad creds"
+	run.Executions[0].CommandError = "Error: bad creds"
+	response := newTemplateRunResponse(run)
+	assert.Equal(t, "Error: bad creds", response.CommandError)
+	assert.Equal(t, "Error: bad creds", response.Executions[0].CommandError)
+
+	encoded, err := json.Marshal(newTemplateRunResponse(fullTemplateRun()))
+	require.NoError(t, err)
+	assert.Contains(t, string(encoded), `"command_error":""`)
 }
 
 // A run still in flight has no completion time, and a listed run carries no
