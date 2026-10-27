@@ -33,7 +33,7 @@ real TLS, real keys and an OIDC provider reachable over HTTPS.
 | Postgres | A database the api owns. The api migrates it at startup. |
 | Temporal | A frontend address both the api and the executor reach, and a namespace (default `default`). |
 | Dex | An OAuth client for openplan with redirect URL `https://<host>/v1/auth/callback`, at an HTTPS issuer URL that resolves the same way from the browser and from the api pod. Other identity providers connect through Dex. |
-| S3 | A bucket for run logs and plans, with an access key. Any S3-compatible store works (`S3_ENDPOINT`, `S3_FORCE_PATH_STYLE`). |
+| S3 | A bucket for run logs and plans, with an access key. Any S3-compatible store works (`s3.endpoint`, `s3.forcePathStyle`). |
 | Valkey | Two ACL users: `api`, and `executor`, which may only append. The `valkey` service in `docker-compose.release.yaml` has the exact rules. Turn the default user off. |
 
 **S3 is required.** The filesystem artifact store doesn't work in this chart:
@@ -51,53 +51,30 @@ kubectl create namespace openplan
 kubectl label namespace openplan pod-security.kubernetes.io/enforce=privileged
 ```
 
-**2. Create one Secret for the api and one for the executor.** Every key in
-a Secret becomes an environment variable of that component under the same
-name. Keep them apart: the executor gets no database, no encryption keys and
-no OIDC secret.
-
-The api's Secret:
-
-| Key | Value |
-|---|---|
-| `DATABASE_URL` | Postgres URL for openplan's database |
-| `TEMPORAL_ADDRESS` | Temporal frontend, `host:port` |
-| `VALKEY_URL` | `redis://api:<password>@<host>:6379/0` |
-| `CREDENTIAL_ENCRYPTION_KEY` | 32 random bytes as hex: `openssl rand -hex 32` |
-| `SESSION_ENCRYPTION_KEY` | 32 random bytes as hex, different from the one above |
-| `OIDC_ISSUER_URL` | Dex's issuer, `https://...` |
-| `OIDC_CLIENT_ID` | openplan's client ID in Dex |
-| `OIDC_CLIENT_SECRET` | openplan's client secret in Dex |
-| `OPENPLAN_ROOT_SUBJECT` | The OIDC `sub` of the first administrator |
-| `ARTIFACT_STORE_KIND` | `s3` |
-| `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | The bucket and its key |
-| `S3_ENDPOINT`, `S3_FORCE_PATH_STYLE` | Optional; for a store other than AWS |
-| `TEMPORAL_NAMESPACE` | Optional; default `default` |
-| `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY` | Optional, set both or neither; a GitHub App that clones template repositories |
-| `OPENPLAN_TERRAFORM_TIMEOUT` | Optional; the longest one Terraform command may run, as a duration such as `90m` |
-
-The executor's Secret:
-
-| Key | Value |
-|---|---|
-| `TEMPORAL_ADDRESS` | The same as the api's |
-| `VALKEY_URL` | `redis://executor:<password>@<host>:6379/0` |
-| `ARTIFACT_STORE_KIND` and the `S3_*` keys | The same as the api's |
-| `TEMPORAL_NAMESPACE` | Optional; the same as the api's |
-| `EXECUTOR_MAX_SESSIONS` | Optional; runs at once on one executor, default 20 |
-| `EXECUTOR_SANDBOX_MEMORY` | Optional; MiB per sandbox, default 2048 |
-| `EXECUTOR_SANDBOX_CPUS`, `EXECUTOR_SANDBOX_PIDS` | Optional; per sandbox, default 2 and 1024 |
-
-For example, from two env files you keep out of version control:
+**2. Put the credentials in Secrets.** Every setting is a value (step 4)
+except the credentials, because values are stored in the release and usually
+committed to git. Values name each credential by the Secret and the key
+holding it, so the Secrets can have any names, and a credential your cluster
+already holds (a database password from an operator, say) can be used where it
+is. For example:
 
 ```sh
-kubectl -n openplan create secret generic openplan-api-env --from-env-file=api.env
-kubectl -n openplan create secret generic openplan-executor-env --from-env-file=executor.env
+kubectl -n openplan create secret generic openplan-credentials \
+  --from-literal=postgres-password=<password> \
+  --from-literal=valkey-api-password=<password> \
+  --from-literal=valkey-executor-password=<password> \
+  --from-literal=s3-access-key-id=<key id> \
+  --from-literal=s3-secret-access-key=<secret key> \
+  --from-literal=oidc-client-secret=<openplan's client secret in Dex> \
+  --from-literal=session-encryption-key=$(openssl rand -hex 32) \
+  --from-literal=credential-encryption-key=$(openssl rand -hex 32)
 ```
 
-The chart sets `HTTP_ADDRESS`, `OPENPLAN_ENVIRONMENT`, `OPENPLAN_PUBLIC_URL`,
-`EXECUTOR_RUN_ROOT` and `EXECUTOR_SANDBOX_STATE` itself. The same keys in a
-Secret are ignored.
+The executor reads only its Valkey password and the S3 key, whichever Secret
+they're in. It never gets the database password, the encryption keys or the
+OIDC secret. A password may contain any character: the chart passes the
+Postgres and Valkey passwords apart from their URLs, and openplan escapes them
+for you.
 
 **3. Create the TLS Secret for your host.**
 
@@ -112,14 +89,37 @@ The api trusts it in addition to the public roots:
 kubectl -n openplan create secret generic openplan-trusted-ca --from-file=ca.crt=internal-ca.crt
 ```
 
-**4. Write a values file.**
+**4. Write a values file.** This one sets every required value; "Values"
+below lists the rest.
 
 ```yaml
+temporal:
+  address: temporal-frontend.temporal:7233
+postgres:
+  url: postgres://openplan@postgres.example.internal:5432/openplan?sslmode=require
+  passwordSecret: {name: openplan-credentials, key: postgres-password}
+valkey:
+  api:
+    url: redis://api@valkey.example.internal:6379/0
+    passwordSecret: {name: openplan-credentials, key: valkey-api-password}
+  executor:
+    url: redis://executor@valkey.example.internal:6379/0
+    passwordSecret: {name: openplan-credentials, key: valkey-executor-password}
+s3:
+  bucket: openplan-artifacts
+  region: us-east-1
+  accessKeyIDSecret: {name: openplan-credentials, key: s3-access-key-id}
+  secretAccessKeySecret: {name: openplan-credentials, key: s3-secret-access-key}
+oidc:
+  issuerURL: https://dex.example.com/dex
+  clientID: openplan
+  clientSecretSecret: {name: openplan-credentials, key: oidc-client-secret}
 api:
-  existingSecret: openplan-api-env
+  rootSubject: <the OIDC sub of the first administrator>
+  sessionEncryptionKeySecret: {name: openplan-credentials, key: session-encryption-key}
+  credentialEncryptionKeySecret: {name: openplan-credentials, key: credential-encryption-key}
   trustedCASecret: openplan-trusted-ca   # only for an internal CA
 executor:
-  existingSecret: openplan-executor-env
   resources:
     limits:
       memory: 41Gi   # see "Sizing the executor"
@@ -144,19 +144,45 @@ it can't be scheduled or refuses to start, the UI still works, but every
 plan fails after a minute and every apply after ten, for want of an executor.
 
 **6. Sign in** at `https://<host>` as the user whose `sub` you set in
-`OPENPLAN_ROOT_SUBJECT`.
+`api.rootSubject`.
 
 ## Values
+
+Every setting the chart passes to openplan is here. A key ending in `Secret`
+names a credential as `{name, key}`: the Secret in the release namespace and
+the key in it.
 
 | Key | Default | What it does |
 |---|---|---|
 | `image.registry` | `ghcr.io/openplanhq` | Where the `openplan-api`, `openplan-executor` and `openplan-web` images come from. Point it at a mirror in a network without internet access. |
 | `image.tag` | the chart's version | Override only to test a build that isn't a release. |
-| `api.existingSecret` | required | The api's Secret. |
+| `temporal.address` | required | The Temporal frontend, `host:port`. |
+| `temporal.namespace` | `default` | The Temporal namespace openplan's workflows run in. |
+| `postgres.url` | required | The api's database as a URL without the password. |
+| `postgres.passwordSecret` | required | The database user's password. |
+| `valkey.api.url` | required | Valkey as the `api` user, without the password: `redis://api@<host>:6379/0`, or `rediss://` for TLS. The database must be 0. |
+| `valkey.api.passwordSecret` | required | The `api` user's password. |
+| `valkey.executor.url` | required | The same Valkey as the `executor` user. |
+| `valkey.executor.passwordSecret` | required | The `executor` user's password. |
+| `s3.bucket`, `s3.region` | required | The bucket for run logs and plans. |
+| `s3.endpoint` | AWS | The endpoint of an S3-compatible store other than AWS. |
+| `s3.forcePathStyle` | `false` | Address the bucket by path, which most stores other than AWS need. |
+| `s3.accessKeyIDSecret`, `s3.secretAccessKeySecret` | required | The bucket's access key. |
+| `oidc.issuerURL` | required | Dex's issuer, `https://...`. |
+| `oidc.clientID` | required | openplan's client ID in Dex. |
+| `oidc.clientSecretSecret` | required | openplan's client secret in Dex. |
+| `api.rootSubject` | required | The OIDC `sub` of the first administrator. |
+| `api.sessionEncryptionKeySecret` | required | 32 random bytes as hex (`openssl rand -hex 32`) that seal sign-in sessions. |
+| `api.credentialEncryptionKeySecret` | required | 32 random bytes as hex, different from the session key, that encrypt stored credentials. |
+| `api.terraformTimeout` | openplan's default | The longest one Terraform command may run, as a duration such as `90m`. |
+| `api.githubApp.id`, `api.githubApp.privateKeySecret` | none | A GitHub App that clones private template repositories. Set both or neither. |
 | `api.trustedCASecret` | none | A Secret whose `ca.crt` the api trusts, for Dex behind an internal CA. |
-| `executor.existingSecret` | required | The executor's Secret. |
-| `executor.replicas` | `1` | Executors. Each runs up to `EXECUTOR_MAX_SESSIONS` runs at once. |
+| `executor.replicas` | `1` | Executors. Each runs up to `executor.maxSessions` runs at once. |
 | `executor.resources` | none | Requests and limits for the executor container. |
+| `executor.maxSessions` | `20` | Runs at once on one executor, each in its own sandbox. |
+| `executor.sandbox.memoryMiB` | `2048` | Memory per sandbox, in MiB. |
+| `executor.sandbox.cpus`, `executor.sandbox.pids` | `2`, `1024` | CPUs and processes per sandbox. |
+| `executor.sandbox.subnet` | `10.237.0.0/24` | The IPv4 subnet the sandboxes' addresses come from, `/29` or larger. Move it if it collides with your pod or service CIDR. |
 | `executor.runRoot.sizeLimit` | `8Gi` | Disk for the workspaces of the runs in flight on one executor. |
 | `ingress.className` | the cluster default | The IngressClass. |
 | `ingress.host` | required | The host openplan is served on. The api's public URL is `https://<host>`. |
@@ -168,10 +194,10 @@ the key.
 ## Sizing the executor
 
 Every sandbox's memory counts against the executor pod. Set the executor's
-memory limit to at least `EXECUTOR_SANDBOX_MEMORY` × `EXECUTOR_MAX_SESSIONS`,
+memory limit to at least `executor.sandbox.memoryMiB` × `executor.maxSessions`,
 plus about 1 GiB for the executor itself. The defaults, 2048 MiB × 20
 sessions, need 40 GiB of runs, so a limit around 41 GiB. To fit a smaller
-node, lower `EXECUTOR_MAX_SESSIONS` in the executor's Secret, then the limit.
+node, lower `executor.maxSessions`, then the limit.
 
 A limit set without a request is also the request, so the scheduler needs a
 node with that much allocatable memory. With the defaults' 41 GiB limit on a
@@ -213,7 +239,7 @@ executor pod, and every run on it fails.
   mounted `noexec`; IP forwarding off because the init container was blocked
   by Pod Security.
 - **The api restarts at startup.** It checks its configuration and fetches
-  Dex's discovery document at startup, and its log names what failed. If Dex can't be reached, check that `OIDC_ISSUER_URL` resolves from
+  Dex's discovery document at startup, and its log names what failed. If Dex can't be reached, check that `oidc.issuerURL` resolves from
   inside the pod, and that the api trusts Dex's certificate (set
   `api.trustedCASecret` for an internal CA).
 
@@ -241,7 +267,7 @@ how it went.
 `deploy/helm/evaluation/` in the repository sets up everything above on
 Docker Desktop's Kubernetes, so you can try the chart without your own
 services: single-pod Postgres, Temporal, Dex, Valkey and MinIO, ingress-nginx,
-a local CA, fresh keys and the two Secrets. It is for evaluation only: one
+a local CA, fresh keys and the credentials Secret. It is for evaluation only: one
 replica of everything, no backups, no persistence you should trust.
 
 From a checkout, with Docker Desktop's Kubernetes on and selected:
