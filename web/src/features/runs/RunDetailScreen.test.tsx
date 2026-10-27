@@ -43,6 +43,7 @@ function run(overrides: Partial<TemplateRun> = {}): TemplateRun {
     trigger_actor_display_name: "user_123",
     created_at: "2026-07-20T00:00:00Z",
     error_summary: "",
+    command_error: "",
     run_number: 1,
     auto_approve: false,
     plan_summary: null,
@@ -814,6 +815,114 @@ describe("RunDetailScreen", () => {
     expect(screen.getByText("template run activity failed: log upload failed")).toBeTruthy();
     // A finished run takes no actions, so none are offered.
     expect(screen.queryByRole("button", { name: /Cancel/ })).toBeNull();
+  });
+
+  // Issue 522: a run that failed in a command leads with what the command
+  // said; the workflow's wrapper waits behind Show details.
+  it("leads a failed run with the command error", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(
+      queryKeys.templateRun("tenant_123", "run_1"),
+      run({
+        status: "failed",
+        step: "initializing",
+        command_error: "Error: validating provider credentials: 403\n\n  on providers.tf line 1",
+        error_summary: "template run activity failed: run terraform: init: exit status 1"
+      })
+    );
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/logs")) {
+        return jsonResponse([runLog({ name: "plan-1" })]);
+      }
+      if (url.endsWith("/logs/plan-1")) {
+        return new Response("init log body", { status: 200, headers: { "content-type": "text/plain" } });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    renderScreen(queryClient);
+
+    const panel = screen.getByTestId("run-detail-command-error");
+    await waitFor(() => expect(within(panel).getByText("tofu init failed")).toBeTruthy());
+    // The command's own words, newlines kept.
+    expect(within(panel).getByText(/validating provider credentials: 403/).textContent).toBe(
+      "Error: validating provider credentials: 403\n\n  on providers.tf line 1"
+    );
+    // A record, not something that just happened.
+    expect(panel.getAttribute("role")).toBeNull();
+    expect(screen.queryByText("template run activity failed: run terraform: init: exit status 1")).toBeNull();
+    fireEvent.click(within(panel).getByRole("button", { name: "Show details" }));
+    expect(screen.getByText("template run activity failed: run terraform: init: exit status 1")).toBeTruthy();
+  });
+
+  // The failed command is the last that ran, so its log is the last one.
+  it("names the last command that ran, across phases", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(
+      queryKeys.templateRun("tenant_123", "run_1"),
+      run({ operation: "apply", status: "failed", step: "applying", command_error: "Error: apply broke", error_summary: "wrapper" })
+    );
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/logs")) {
+        return jsonResponse(["plan-1", "plan-2", "plan-3", "apply-1", "apply-2", "apply-3"].map((name) => runLog({ name })));
+      }
+      return new Response("log body", { status: 200, headers: { "content-type": "text/plain" } });
+    });
+
+    renderScreen(queryClient);
+
+    const panel = screen.getByTestId("run-detail-command-error");
+    await waitFor(() => expect(within(panel).getByText("tofu apply failed")).toBeTruthy());
+  });
+
+  it("names no command while the logs cannot be read", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(
+      queryKeys.templateRun("tenant_123", "run_1"),
+      run({ status: "failed", step: "planning", command_error: "Error: plan broke", error_summary: "wrapper" })
+    );
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ title: "boom" }, 500));
+
+    renderScreen(queryClient);
+
+    await waitFor(() => expect(screen.getByText("Could not load this run's logs.")).toBeTruthy());
+    expect(within(screen.getByTestId("run-detail-command-error")).getByText("The command failed")).toBeTruthy();
+  });
+
+  // A blank command error has nothing to lead with.
+  it("falls back to the summary when the command error is blank", () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(
+      queryKeys.templateRun("tenant_123", "run_1"),
+      run({ status: "failed", command_error: "  \n", error_summary: "template run activity failed: plan broke" })
+    );
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([]));
+
+    renderScreen(queryClient);
+
+    expect(screen.queryByTestId("run-detail-command-error")).toBeNull();
+    expect(screen.getByText("template run activity failed: plan broke")).toBeTruthy();
+  });
+
+  it("falls back to the summary when the run did not fail in a command", () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(
+      queryKeys.templateRun("tenant_123", "run_1"),
+      run({ status: "failed", error_summary: "template run activity failed: claim failed" })
+    );
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([]));
+
+    renderScreen(queryClient);
+
+    expect(screen.queryByTestId("run-detail-command-error")).toBeNull();
+    expect(screen.getByText("template run activity failed: claim failed")).toBeTruthy();
   });
 
   it("offers Approve and Discard for a plan waiting for approval, and shows what it would change", async () => {

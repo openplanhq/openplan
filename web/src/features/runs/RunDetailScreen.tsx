@@ -18,6 +18,7 @@ import { useTenantID } from "../../auth/useTenantID";
 import { formatDateTime } from "../../shared/formatTimestamp";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
+import ErrorPanel from "../../shared/ErrorPanel";
 import PlanDiff from "../../shared/PlanDiff";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,7 @@ import RunChanges, { RunViewFrame } from "./RunChanges";
 import RunLogsPanel from "./RunLogsPanel";
 import { defaultRunView } from "./planChanges";
 import type { RunView } from "./planChanges";
+import type { TemplateRun, TemplateRunLog } from "../../api/types";
 import SegmentedControl from "../../shared/SegmentedControl";
 import { runProgressTag } from "./runIndicator";
 import RunStatusLabel from "./RunStatusLabel";
@@ -236,11 +238,33 @@ export default function RunDetailScreen() {
               {run.selected_ref} @ {run.resolved_commit_sha.slice(0, 7)}
             </Fact>
           </dl>
-          {run.error_summary && <ErrorLine live={false}>{run.error_summary}</ErrorLine>}
+          {run.command_error.trim() ? (
+            <CommandErrorPanel run={run} logs={logsQuery.data} />
+          ) : (
+            run.error_summary && <ErrorLine live={false}>{run.error_summary}</ErrorLine>
+          )}
         </>
       )}
       {runView}
     </section>
+  );
+}
+
+// A run that failed in a command leads with what the command printed, under
+// the command's name; the workflow's wrapper around it waits behind Show
+// details (issue 522). The failed command is the last that ran, so its log is
+// the last one; until the logs load, the title names no command.
+function CommandErrorPanel({ run, logs }: { run: TemplateRun; logs: TemplateRunLog[] | undefined }) {
+  const command = logs?.[logs.length - 1]?.command_line;
+  return (
+    <ErrorPanel
+      title={command ? `${command} failed` : "The command failed"}
+      output={run.command_error}
+      details={run.error_summary}
+      detailsCollapsed
+      live={false}
+      testId="run-detail-command-error"
+    />
   );
 }
 
