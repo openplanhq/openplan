@@ -3,15 +3,12 @@
 temporal:
   address: temporal:7233
 postgres:
-  url: postgres://openplan@postgres:5432/openplan
-  passwordSecret: {name: openplan-postgres, key: password}
+  urlSecret: {name: openplan-postgres, key: url}
 valkey:
   api:
-    url: redis://api@valkey:6379/0
-    passwordSecret: {name: openplan-valkey, key: api}
+    urlSecret: {name: openplan-valkey, key: api-url}
   executor:
-    url: redis://executor@valkey:6379/0
-    passwordSecret: {name: openplan-valkey, key: executor}
+    urlSecret: {name: openplan-valkey, key: executor-url}
 s3:
   bucket: openplan-artifacts
   region: us-east-1

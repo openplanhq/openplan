@@ -177,8 +177,8 @@ jobs:
       - name: template fails without each required value
         run: |
           # Each Secret reference is required twice over: its name and its key.
-          refs="postgres.passwordSecret valkey.api.passwordSecret valkey.executor.passwordSecret s3.accessKeyIDSecret s3.secretAccessKeySecret oidc.clientSecretSecret api.sessionEncryptionKeySecret api.credentialEncryptionKeySecret"
-          keys="temporal.address postgres.url valkey.api.url valkey.executor.url s3.bucket s3.region oidc.issuerURL oidc.clientID api.rootSubject ingress.host ingress.tlsSecretName"
+          refs="postgres.urlSecret valkey.api.urlSecret valkey.executor.urlSecret s3.accessKeyIDSecret s3.secretAccessKeySecret oidc.clientSecretSecret api.sessionEncryptionKeySecret api.credentialEncryptionKeySecret"
+          keys="temporal.address s3.bucket s3.region oidc.issuerURL oidc.clientID api.rootSubject ingress.host ingress.tlsSecretName"
           for ref in $refs; do keys="$keys $ref.name $ref.key"; done
           for key in $keys; do
             if out=$(helm template openplan deploy/helm/openplan -f deploy/helm/openplan/ci/values.yaml --set "$key=" 2>&1); then
