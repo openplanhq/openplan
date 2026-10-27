@@ -180,7 +180,7 @@ func (store *Store) FinishTemplatePlan(ctx context.Context, input domain.FinishP
 		// run approved, or claimed by its apply, fails and rolls back the
 		// writes above: the run is past waiting, and a running apply is not
 		// the plan's to end.
-		ended, err := finishRunningExecution(ctx, tx, input.TenantID, input.RunID, domain.RunPhasePlan, domain.TemplateRunExecutionSucceeded, "")
+		ended, err := finishRunningExecution(ctx, tx, input.TenantID, input.RunID, domain.RunPhasePlan, domain.TemplateRunExecutionSucceeded, "", "")
 		if err != nil {
 			return "", err
 		}
@@ -228,7 +228,7 @@ func (store *Store) BeginTemplateApply(ctx context.Context, tenantID domain.Tena
 	if commandTag.RowsAffected() != 1 {
 		return false, nil
 	}
-	if _, err := insertWorkflowExecution(ctx, tx, tenantID, runID, domain.RunPhaseApply, workflowID, domain.TemplateRunExecutionRunning, ""); err != nil {
+	if _, err := insertWorkflowExecution(ctx, tx, tenantID, runID, domain.RunPhaseApply, workflowID, domain.TemplateRunExecutionRunning, "", ""); err != nil {
 		return false, err
 	}
 	if err := tx.Commit(ctx); err != nil {

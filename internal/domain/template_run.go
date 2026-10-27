@@ -240,6 +240,9 @@ type TemplateRunWorkflowExecution struct {
 	StartedAt    time.Time `json:"started_at"`
 	FinishedAt   time.Time `json:"finished_at,omitzero"`
 	ErrorSummary string    `json:"error_summary"`
+	// CommandError is what the Terraform command it failed in said, its first
+	// error block; empty when it did not fail in one.
+	CommandError string `json:"command_error"`
 	// Summary is what a plan would change, or what an apply did. Nil for a
 	// plan with no changes, and until it is known.
 	Summary *PlanSummary               `json:"summary"`
@@ -290,6 +293,9 @@ type TemplateRun struct {
 	// ErrorSummary is why the run failed: its failed workflow execution's
 	// error. Empty otherwise.
 	ErrorSummary string `json:"error_summary"`
+	// CommandError is that failed execution's CommandError: what Terraform
+	// said, apart from the workflow's wrapper in ErrorSummary.
+	CommandError string `json:"command_error"`
 	// RunNumber counts runs within one stack template, from 1. It is what
 	// people see and what URLs carry; ID stays the identity everywhere else.
 	RunNumber int `json:"run_number"`
