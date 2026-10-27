@@ -44,7 +44,7 @@ Call with (dict "context" $ "component" "api").
 {{/*
 An environment variable read from a key of an existing Secret, so the
 credential never passes through values. Call with
-(dict "name" "DATABASE_PASSWORD" "ref" .Values.postgres.passwordSecret "path" "postgres.passwordSecret");
+(dict "name" "DATABASE_URL" "ref" .Values.postgres.urlSecret "path" "postgres.urlSecret");
 path is the ref's place in values, for the error naming it.
 */}}
 {{- define "openplan.secretEnv" -}}
