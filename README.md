@@ -184,6 +184,7 @@ one before it left.
 ## Documentation
 
 - [Local development](docs/development.md)
+- [Install on Kubernetes with Helm](deploy/helm/openplan/README.md)
 - [Architecture and product model](docs/architecture.md)
 - [Apply run sequence](docs/apply-run-sequence.md)
 - [Authentication and authorization](docs/authentication.md)
