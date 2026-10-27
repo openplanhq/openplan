@@ -46,9 +46,7 @@ spec:
             - name: EXECUTOR_SANDBOX_STATE
               value: /var/lib/openplan/sandboxes
             {{- include "openplan.temporalEnv" . | nindent 12 }}
-            - name: VALKEY_URL
-              value: {{ required "valkey.executor.url is required: the executor's Valkey URL, without the password" .Values.valkey.executor.url | quote }}
-            {{- include "openplan.secretEnv" (dict "name" "VALKEY_PASSWORD" "ref" .Values.valkey.executor.passwordSecret "path" "valkey.executor.passwordSecret") | nindent 12 }}
+            {{- include "openplan.secretEnv" (dict "name" "VALKEY_URL" "ref" .Values.valkey.executor.urlSecret "path" "valkey.executor.urlSecret") | nindent 12 }}
             {{- include "openplan.s3Env" . | nindent 12 }}
             {{- range $name, $value := dict
                   "EXECUTOR_MAX_SESSIONS" .Values.executor.maxSessions

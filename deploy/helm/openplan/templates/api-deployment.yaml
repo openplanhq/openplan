@@ -36,12 +36,8 @@ spec:
             - name: OPENPLAN_PUBLIC_URL
               value: {{ printf "https://%s" (required "ingress.host is required: the host openplan is served on" .Values.ingress.host) | quote }}
             {{- include "openplan.temporalEnv" . | nindent 12 }}
-            - name: DATABASE_URL
-              value: {{ required "postgres.url is required: the api's database, without the password" .Values.postgres.url | quote }}
-            {{- include "openplan.secretEnv" (dict "name" "DATABASE_PASSWORD" "ref" .Values.postgres.passwordSecret "path" "postgres.passwordSecret") | nindent 12 }}
-            - name: VALKEY_URL
-              value: {{ required "valkey.api.url is required: the api's Valkey URL, without the password" .Values.valkey.api.url | quote }}
-            {{- include "openplan.secretEnv" (dict "name" "VALKEY_PASSWORD" "ref" .Values.valkey.api.passwordSecret "path" "valkey.api.passwordSecret") | nindent 12 }}
+            {{- include "openplan.secretEnv" (dict "name" "DATABASE_URL" "ref" .Values.postgres.urlSecret "path" "postgres.urlSecret") | nindent 12 }}
+            {{- include "openplan.secretEnv" (dict "name" "VALKEY_URL" "ref" .Values.valkey.api.urlSecret "path" "valkey.api.urlSecret") | nindent 12 }}
             {{- include "openplan.s3Env" . | nindent 12 }}
             - name: OIDC_ISSUER_URL
               value: {{ required "oidc.issuerURL is required: the OIDC issuer, over HTTPS" .Values.oidc.issuerURL | quote }}
