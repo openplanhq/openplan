@@ -1,7 +1,8 @@
 #!/bin/sh
 # EVALUATION ONLY. Prepares Docker Desktop's Kubernetes for the openplan chart
-# in production mode: an ingress controller, a local CA and certificate for
-# openplan.localhost and dex.localhost, fresh keys and passwords, a CoreDNS
+# in production mode: an ingress controller, a certificate for
+# openplan.localhost and dex.localhost from mkcert's local CA, which this
+# machine's browsers trust, fresh keys and passwords, a CoreDNS
 # rewrite so pods reach Dex at the browser's issuer, and the dependencies in
 # dependencies.yaml. Then:
 #
@@ -29,8 +30,16 @@ if [ "$context" != docker-desktop ]; then
 	exit 1
 fi
 
-# Key material is written here and nowhere else, and removed on exit. The CA's
-# private key goes with it: nothing can be signed by this CA after setup.
+# mkcert makes the certificate and gets its CA trusted by this machine's
+# browsers, so openplan.localhost opens without a warning. Checked before
+# anything is installed, so a missing tool leaves nothing half done.
+if ! command -v mkcert >/dev/null 2>&1; then
+	echo "setup.sh: needs mkcert (macOS: brew install mkcert; others: https://github.com/FiloSottile/mkcert#installation)." >&2
+	exit 1
+fi
+
+# The certificate's key is written here and nowhere else, and removed on exit.
+# mkcert's CA key stays in `mkcert -CAROOT`, as for any mkcert certificate.
 work=$(mktemp -d)
 chmod 700 "$work"
 trap 'rm -rf "$work"' EXIT
@@ -61,34 +70,14 @@ echo "==> TLS certificate and CA"
 if secret_exists openplan-tls; then
 	echo "kept: openplan-tls and openplan-trusted-ca"
 else
-	cat >"$work/openssl.cnf" <<-'EOF'
-		[req]
-		distinguished_name = dn
-		[dn]
-		[ca]
-		basicConstraints = critical, CA:TRUE, pathlen:0
-		keyUsage = critical, keyCertSign, cRLSign
-		subjectKeyIdentifier = hash
-		[leaf]
-		basicConstraints = critical, CA:FALSE
-		keyUsage = critical, digitalSignature, keyEncipherment
-		extendedKeyUsage = serverAuth
-		subjectAltName = DNS:openplan.localhost, DNS:dex.localhost
-	EOF
-	openssl req -x509 -new -nodes -newkey rsa:2048 -days 365 \
-		-subj "/CN=openplan evaluation CA" \
-		-config "$work/openssl.cnf" -extensions ca \
-		-keyout "$work/ca.key" -out "$work/ca.crt" 2>/dev/null
-	# 365 days: browsers and macOS refuse longer-lived server certificates.
-	openssl req -new -nodes -newkey rsa:2048 \
-		-subj "/CN=openplan.localhost" -config "$work/openssl.cnf" \
-		-keyout "$work/tls.key" -out "$work/tls.csr" 2>/dev/null
-	openssl x509 -req -days 365 -in "$work/tls.csr" \
-		-CA "$work/ca.crt" -CAkey "$work/ca.key" -CAcreateserial \
-		-extfile "$work/openssl.cnf" -extensions leaf \
-		-out "$work/tls.crt" 2>/dev/null
+	# -install adds mkcert's CA to the system trust store (and Firefox's, when
+	# NSS's certutil is present); it asks for a password the first time and is
+	# a no-op after. The api trusts the same CA, mounted from
+	# openplan-trusted-ca, to reach Dex at dex.localhost.
+	mkcert -install
+	mkcert -cert-file "$work/tls.crt" -key-file "$work/tls.key" openplan.localhost dex.localhost
 	# The CA Secret first: openplan-tls is what marks this step done.
-	kube create secret generic openplan-trusted-ca --from-file=ca.crt="$work/ca.crt"
+	kube create secret generic openplan-trusted-ca --from-file=ca.crt="$(mkcert -CAROOT)/rootCA.pem"
 	kube create secret tls openplan-tls --cert="$work/tls.crt" --key="$work/tls.key"
 fi
 
@@ -155,9 +144,5 @@ Ready. Next:
   helm install openplan deploy/helm/openplan -n $NAMESPACE -f deploy/helm/evaluation/values.yaml
 
 Then open https://openplan.localhost and sign in as admin@openplan.local /
-admin-local-only. To stop the browser's certificate warning, trust the local
-CA (macOS; remove it again from Keychain Access when you're done):
-
-  kubectl -n $NAMESPACE get secret openplan-trusted-ca -o 'jsonpath={.data.ca\.crt}' | base64 -d > openplan-evaluation-ca.crt
-  security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db openplan-evaluation-ca.crt
+admin-local-only.
 EOF
