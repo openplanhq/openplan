@@ -18,3 +18,5 @@ worktrees
 /api
 /worker
 /executor
+
+.impeccable/
