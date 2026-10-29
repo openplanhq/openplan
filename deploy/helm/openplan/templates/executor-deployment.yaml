@@ -22,6 +22,9 @@ spec:
       initContainers:
         - name: enable-forwarding
           image: {{ include "openplan.image" $component }}
+          {{- with $.Values.image.pullPolicy }}
+          imagePullPolicy: {{ . }}
+          {{- end }}
           command: ["sysctl", "-w", "net.ipv4.ip_forward=1"]
           securityContext:
             privileged: true
@@ -37,6 +40,9 @@ spec:
       containers:
         - name: executor
           image: {{ include "openplan.image" $component }}
+          {{- with $.Values.image.pullPolicy }}
+          imagePullPolicy: {{ . }}
+          {{- end }}
           # Every setting comes from values, credentials by reference to a
           # Secret key, so the values file is the whole of the executor's
           # configuration.

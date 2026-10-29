@@ -153,6 +153,7 @@ the key in it.
 |---|---|---|
 | `image.registry` | `ghcr.io/openplanhq` | Where the `openplan-api`, `openplan-executor` and `openplan-web` images come from. Point it at a mirror in a network without internet access. |
 | `image.tag` | the chart's version | Override only to test a build that isn't a release. |
+| `image.pullPolicy` | Kubernetes' default | `Always` for a tag that moves, such as `main`; otherwise a node keeps running the image it pulled first. |
 | `temporal.address` | required | The Temporal frontend, `host:port`. |
 | `temporal.namespace` | `default` | The Temporal namespace openplan's workflows run in. |
 | `postgres.urlSecret` | required | The api's database URL, password included. |
@@ -291,13 +292,13 @@ installed (`brew install mkcert` on macOS):
 
 ```sh
 ./deploy/helm/evaluation/setup.sh
-helm install openplan deploy/helm/openplan -n openplan -f deploy/helm/evaluation/values.yaml \
-  --set image.tag=main
+helm install openplan deploy/helm/openplan -n openplan -f deploy/helm/evaluation/values.yaml
 ```
 
 A chart from a checkout carries a placeholder version (`0.0.0-dev`) with no
-images behind it, so set `image.tag`: `main` for the latest build, or the
-release you checked out without its `v`, such as `1.0.0`.
+images behind it, so the evaluation values run `main`'s latest build. For the
+release you checked out, add `--set image.tag=` and its version without the
+`v`, such as `1.0.0`.
 
 Then open `https://openplan.localhost` and sign in as
 `admin@openplan.local` / `admin-local-only`. `setup.sh` runs `mkcert -install`,

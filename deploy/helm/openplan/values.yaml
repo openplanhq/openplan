@@ -15,6 +15,10 @@ image:
   # Empty means the chart's appVersion, so a chart release runs the images it
   # was released with.
   tag: ""
+  # Empty leaves Kubernetes' default: IfNotPresent for any tag but latest. Set
+  # Always for a tag that moves, such as main, or a node keeps running the
+  # image it pulled first.
+  pullPolicy: ""
 
 temporal:
   # Required. The Temporal frontend, host:port.
