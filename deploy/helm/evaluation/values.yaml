@@ -9,6 +9,12 @@
 # openplan-credentials. Nothing in this file is
 # a chart default or adds a key to the chart.
 
+# The evaluation runs a moving tag (--set image.tag=main), and Docker Desktop
+# keeps every image it pulled: without Always, a reinstall runs whichever main
+# it pulled first, which can be older than the chart in the checkout.
+image:
+  pullPolicy: Always
+
 temporal:
   address: temporal:7233
 

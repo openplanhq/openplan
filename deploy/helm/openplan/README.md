@@ -153,6 +153,7 @@ the key in it.
 |---|---|---|
 | `image.registry` | `ghcr.io/openplanhq` | Where the `openplan-api`, `openplan-executor` and `openplan-web` images come from. Point it at a mirror in a network without internet access. |
 | `image.tag` | the chart's version | Override only to test a build that isn't a release. |
+| `image.pullPolicy` | Kubernetes' default | `Always` for a tag that moves, such as `main`; otherwise a node keeps running the image it pulled first. |
 | `temporal.address` | required | The Temporal frontend, `host:port`. |
 | `temporal.namespace` | `default` | The Temporal namespace openplan's workflows run in. |
 | `postgres.urlSecret` | required | The api's database URL, password included. |
