@@ -282,10 +282,12 @@ how it went.
 `deploy/helm/evaluation/` in the repository sets up everything above on
 Docker Desktop's Kubernetes, so you can try the chart without your own
 services: single-pod Postgres, Temporal, Dex, Valkey and MinIO, Traefik,
-a local CA, fresh keys and the credentials Secret. It is for evaluation
-only: one replica of everything, no backups, no persistence you should trust.
+a certificate from [mkcert](https://github.com/FiloSottile/mkcert)'s local CA,
+fresh keys and the credentials Secret. It is for evaluation only: one replica
+of everything, no backups, no persistence you should trust.
 
-From a checkout, with Docker Desktop's Kubernetes on and selected:
+From a checkout, with Docker Desktop's Kubernetes on and selected and mkcert
+installed (`brew install mkcert` on macOS):
 
 ```sh
 ./deploy/helm/evaluation/setup.sh
@@ -298,10 +300,11 @@ images behind it, so set `image.tag`: `main` for the latest build, or the
 release you checked out without its `v`, such as `1.0.0`.
 
 Then open `https://openplan.localhost` and sign in as
-`admin@openplan.local` / `admin-local-only`. `setup.sh` prints how to trust
-the local CA on macOS, so the browser stops warning. The harness runs the
-chart's defaults, which fit in Docker Desktop's VM of about 8 GiB: one run at
-a time, and a second run waits for the first. To remove everything:
+`admin@openplan.local` / `admin-local-only`. `setup.sh` runs `mkcert -install`,
+which adds mkcert's CA to the system trust store (asking for your password the
+first time), so the browser trusts the site without a warning. The harness
+runs the chart's defaults, which fit in Docker Desktop's VM of about 8 GiB: one
+run at a time, and a second run waits for the first. To remove everything:
 
 ```sh
 ./deploy/helm/evaluation/teardown.sh

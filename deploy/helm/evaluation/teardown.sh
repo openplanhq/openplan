@@ -1,7 +1,9 @@
 #!/bin/sh
 # EVALUATION ONLY. Undoes setup.sh: deletes the openplan namespace (the chart's
 # release, the dependencies, their volumes and every Secret with it),
-# Traefik, and the CoreDNS rewrite. Nothing is kept.
+# Traefik, and the CoreDNS rewrite. mkcert's CA stays trusted: it is this
+# machine's, not the harness's, and other projects may use it; remove it with
+# `mkcert -uninstall`.
 set -eu
 
 NAMESPACE=openplan
