@@ -2593,7 +2593,11 @@ components:
           $ref: "#/components/schemas/StackTemplateConfig"
           description: |
             Optional. Omit to carry the current config forward; supply it when
-            the target revision's variables changed.
+            the target revision's variables changed. A carried value is kept
+            only for a variable the target still declares and doesn't mark
+            `sensitive`: a variable the target made sensitive loses its value
+            here, and takes it from its `TF_VAR_<name>` secret, or its default
+            when no secret sets it.
       required: [target_template_revision_id]
 
     StackTemplate:

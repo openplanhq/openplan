@@ -494,7 +494,7 @@ At runtime, these values are rendered into Terraform variable input, such as:
 terraform.tfvars.json
 ```
 
-That config is stored in the clear and returned to everyone who can view the stack, so it never holds the value of a variable marked `sensitive = true`: config validation refuses one with issue `sensitive`. A sensitive variable's value comes from an Environment secret named `TF_VAR_<name>`, on the stack or on the installed template. Secrets are encrypted, write-only and blanked in run logs; the config goes as `-var-file`, which outranks `TF_VAR_`, and since config never names a sensitive variable the secret is what Terraform reads.
+That config is stored in the clear and returned to everyone who can view the stack, so it never holds the value of a variable marked `sensitive = true`: config validation refuses one with issue `sensitive`. A sensitive variable's value comes from an Environment secret named `TF_VAR_<name>`, on the stack or on the installed template. Secrets are encrypted, write-only and blanked in run logs; the config goes as `-var-file`, which outranks `TF_VAR_`, and since config never names a sensitive variable the secret is what Terraform reads, unless the template's own `terraform.tfvars` or `*.auto.tfvars` sets it: Terraform ranks those above `TF_VAR_` too.
 
 Runner secrets are execution credentials, not template input values. Examples:
 

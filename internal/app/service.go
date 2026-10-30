@@ -2764,8 +2764,9 @@ func validateGetTemplateRunLogCommand(command GetTemplateRunLogCommand) error {
 }
 
 // validateTemplateConfig reports every variable that is wrong, not just the
-// first, so a form can mark all of them at once. The order is stable: unknown
-// and null values by name, then missing required ones in declared order.
+// first, so a form can mark all of them at once. The order is stable: each
+// sent value's problem (unknown, sensitive, null, invalid) by name, then
+// missing required ones in declared order.
 func validateTemplateConfig(raw json.RawMessage, variables []domain.TemplateVariable) (json.RawMessage, error) {
 	if len(raw) == 0 {
 		raw = json.RawMessage(`{}`)
