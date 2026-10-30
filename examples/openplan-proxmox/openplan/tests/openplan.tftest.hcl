@@ -1,6 +1,5 @@
 mock_provider "kubernetes" {}
 mock_provider "helm" {}
-mock_provider "random" {}
 
 override_data {
   target = data.terraform_remote_state.cluster
@@ -16,7 +15,7 @@ override_data {
 
 variables {
   environment       = "prod"
-  image_tag         = "sha-abc"
+  image_tag         = "sha-0123456789abcdef0123456789abcdef01234567"
   root_subject      = "CiQ3YzRiMmYwZS0zZDFhLTRlOGItOWY2Yy0yYTVkOGUxYjBjNDcSBWxvY2Fs"
   cluster_workspace = "mtp_acme_prod_cluster_ab12cd34"
   state_bucket      = "openplan-state"
@@ -34,7 +33,7 @@ run "chart_from_checkout" {
 run "values_point_at_dependencies" {
   assert {
     condition = yamldecode(helm_release.openplan.values[0]) == {
-      image    = { tag = "sha-abc" }
+      image    = { tag = "sha-0123456789abcdef0123456789abcdef01234567" }
       temporal = { address = "temporal:7233" }
       postgres = { urlSecret = { name = "openplan-credentials", key = "database-url" } }
       valkey = {
@@ -78,6 +77,54 @@ run "url_output" {
   }
 }
 
+run "release_tags_accepted" {
+  command = plan
+
+  variables {
+    image_tag = "v0.5.0"
+  }
+}
+
+run "moving_and_short_tags_refused" {
+  command = plan
+
+  variables {
+    image_tag = "v0.5"
+  }
+
+  expect_failures = [var.image_tag]
+}
+
+run "main_refused" {
+  command = plan
+
+  variables {
+    image_tag = "main"
+  }
+
+  expect_failures = [var.image_tag]
+}
+
+run "short_sha_refused" {
+  command = plan
+
+  variables {
+    image_tag = "sha-0123abc"
+  }
+
+  expect_failures = [var.image_tag]
+}
+
+run "fractional_replicas_refused" {
+  command = plan
+
+  variables {
+    executor_replicas = 1.5
+  }
+
+  expect_failures = [var.executor_replicas]
+}
+
 run "latest_refused" {
   command = plan
 
@@ -96,6 +143,19 @@ run "empty_tag_refused" {
   }
 
   expect_failures = [var.image_tag]
+}
+
+run "one_missing_credential_fails" {
+  command = plan
+
+  variables {
+    cluster_workspace            = null
+    kube_host                    = "https://10.10.10.10:6443"
+    kube_cluster_ca_data         = "Y2E="
+    kube_client_certificate_data = "Y2VydA=="
+  }
+
+  expect_failures = [var.kube_client_key_data]
 }
 
 run "no_connection_fails" {

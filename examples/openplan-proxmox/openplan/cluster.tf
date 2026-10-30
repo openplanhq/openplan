@@ -31,7 +31,8 @@ locals {
     host                   = local.cluster.api_url
     cluster_ca_certificate = base64decode(local.cluster.cluster_ca_data)
     client_certificate     = base64decode(local.cluster.client_certificate_data)
-    client_key             = base64decode(local.cluster.client_key_data)
+    # terraform_remote_state drops the sensitive mark on outputs it reads.
+    client_key = sensitive(base64decode(local.cluster.client_key_data))
     } : {
     host                   = var.kube_host
     cluster_ca_certificate = base64decode(var.kube_cluster_ca_data)

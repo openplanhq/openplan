@@ -25,8 +25,11 @@ variable "image_tag" {
   type        = string
 
   validation {
-    condition     = var.image_tag != "" && var.image_tag != "latest" && var.image_tag != "main"
-    error_message = "image_tag must name one build, a release or sha-<commit>: latest and main move, so an apply would run whatever they point at that day."
+    # The tags that never move: a release's full version, or a main build's
+    # full commit. latest, main, v0 and v0.5 move, and a node that pulled one
+    # keeps running whatever it pointed at then.
+    condition     = can(regex("^(v?[0-9]+\\.[0-9]+\\.[0-9]+|sha-[0-9a-f]{40})$", var.image_tag))
+    error_message = "image_tag must name one build: a release (v0.5.0) or a main build's full commit (sha-<40 hex characters>)."
   }
 }
 
@@ -44,6 +47,11 @@ variable "executor_replicas" {
   description = "Executors; each runs one Terraform run at a time."
   type        = number
   default     = 1
+
+  validation {
+    condition     = var.executor_replicas >= 1 && floor(var.executor_replicas) == var.executor_replicas
+    error_message = "executor_replicas must be a whole number, at least 1."
+  }
 }
 
 variable "cluster_workspace" {

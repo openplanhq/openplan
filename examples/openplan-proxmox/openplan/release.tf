@@ -5,13 +5,16 @@ locals {
 # The chart from the checkout this template runs from: no release has shipped
 # the chart yet, and this way the chart and the template are always one
 # commit. The names below are the Secrets and Services the dependencies
-# template makes.
+# template makes, openplan's keys included: they encrypt what its Postgres
+# holds, so they live and die with it, not with this release.
 resource "helm_release" "openplan" {
   name      = "openplan"
   namespace = var.namespace
   chart     = "${path.module}/../../../deploy/helm/openplan"
   wait      = true
   timeout   = 600
+  # One Secret per revision otherwise, forever.
+  max_history = 10
 
   values = [yamlencode({
     image    = { tag = var.image_tag }
@@ -36,8 +39,8 @@ resource "helm_release" "openplan" {
     }
     api = {
       rootSubject                   = var.root_subject
-      sessionEncryptionKeySecret    = { name = kubernetes_secret_v1.keys.metadata[0].name, key = "session-encryption-key" }
-      credentialEncryptionKeySecret = { name = kubernetes_secret_v1.keys.metadata[0].name, key = "credential-encryption-key" }
+      sessionEncryptionKeySecret    = { name = "openplan-keys", key = "session-encryption-key" }
+      credentialEncryptionKeySecret = { name = "openplan-keys", key = "credential-encryption-key" }
       trustedCASecret               = "openplan-trusted-ca"
     }
     executor = { replicas = var.executor_replicas }
