@@ -203,3 +203,26 @@ run "broadcast_address_fails" {
   expect_failures = [var.addresses]
 }
 
+
+run "cpu_weight_passed" {
+  # prod outweighs bench when both want the host's CPU; the planned token may
+  # set this, unlike affinity.
+  variables {
+    cpu_units = 200
+  }
+
+  assert {
+    condition     = alltrue([for vm in proxmox_virtual_environment_vm.node : vm.cpu[0].units == 200])
+    error_message = "every VM must carry the environment's CPU weight"
+  }
+}
+
+run "cpu_weight_out_of_range_fails" {
+  command = plan
+
+  variables {
+    cpu_units = 0
+  }
+
+  expect_failures = [var.cpu_units]
+}

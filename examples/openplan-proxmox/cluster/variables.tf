@@ -120,6 +120,17 @@ variable "cpu_affinity" {
   default     = null
 }
 
+variable "cpu_units" {
+  description = "This environment's CPU weight against the host's other VMs when they compete (cgroup v2 weight, Proxmox's default 100). Give prod more than bench, such as 200 and 50, so a benchmark never slows prod."
+  type        = number
+  default     = 100
+
+  validation {
+    condition     = var.cpu_units >= 1 && var.cpu_units <= 10000 && floor(var.cpu_units) == var.cpu_units
+    error_message = "cpu_units must be a whole number from 1 to 10000."
+  }
+}
+
 variable "k3s_version" {
   description = "The k3s release every node installs, such as v1.36.5+k3s1."
   type        = string

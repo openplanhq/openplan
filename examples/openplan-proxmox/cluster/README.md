@@ -73,6 +73,7 @@ Besides the state bucket's (see the example's README):
 | `node_name` | | the Proxmox node |
 | `addresses` | | one per node, the server first; at least two, all inside `network_cidr` |
 | `cpu_affinity` | none | host threads, such as `0-2,6-8`, so environments don't share physical cores. Proxmox lets only `root@pam` set it, even through a token, so with the role above leave it empty |
+| `cpu_units` | `100` | CPU weight when environments compete; give `prod` more than `bench` (say `200` and `50`) so a benchmark never slows prod |
 | `k3s_version` | | such as `v1.36.5+k3s1` |
 | `ssh_authorized_key` | | a public key that can SSH into the nodes as `debian` |
 | `cores` | `4` | per node |

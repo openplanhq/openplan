@@ -105,6 +105,7 @@ resource "proxmox_virtual_environment_vm" "node" {
     cores    = var.cores
     type     = "host"
     affinity = var.cpu_affinity
+    units    = var.cpu_units
   }
 
   # Ballooning off: Kubernetes schedules against the memory a node reports,
