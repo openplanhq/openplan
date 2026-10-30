@@ -76,6 +76,11 @@ cluster this example made, `dependencies` reads the cluster template's state
 instead. Its workspace name is in the cluster template's run logs, on the
 line where tofu says it switched to workspace `"<name>"`.
 
+It also makes openplan's session and credential keys (Secret
+`openplan-keys`), beside the database the credential key encrypts: destroying
+this template destroys every credential that openplan stored, and its state,
+in a versioned bucket, is the key's backup.
+
 Its outputs are what the machine you open openplan from needs, and what
 openplan's own module takes: `openplan_host`, `dex_issuer_url`,
 `oidc_client_id`, `root_subject`, and `ca_certificate`.

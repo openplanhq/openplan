@@ -240,3 +240,12 @@ run "cluster_workspace_needs_bucket" {
 
   expect_failures = [var.state_bucket]
 }
+
+run "keys_beside_the_database" {
+  # openplan's credential key encrypts what this template's Postgres holds,
+  # so the two share one lifetime.
+  assert {
+    condition     = kubernetes_secret_v1.keys.metadata[0].name == "openplan-keys" && toset(keys(kubernetes_secret_v1.keys.data)) == toset(["session-encryption-key", "credential-encryption-key"])
+    error_message = "dependencies must make openplan-keys with both keys"
+  }
+}

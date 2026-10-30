@@ -97,3 +97,27 @@ resource "kubernetes_secret_v1" "dex_config" {
     "config.yaml" = local.dex_config
   }
 }
+
+# openplan's session and credential keys. The credential key encrypts every
+# credential openplan stores in this template's Postgres, so it lives and dies
+# with that database: here, not in the openplan template, whose release can
+# be reinstalled. Its backup is this module's state, in a versioned bucket.
+resource "random_bytes" "session_key" {
+  length = 32
+}
+
+resource "random_bytes" "credential_key" {
+  length = 32
+}
+
+resource "kubernetes_secret_v1" "keys" {
+  metadata {
+    name      = "openplan-keys"
+    namespace = kubernetes_namespace_v1.openplan.metadata[0].name
+  }
+
+  data = {
+    session-encryption-key    = random_bytes.session_key.hex
+    credential-encryption-key = random_bytes.credential_key.hex
+  }
+}
