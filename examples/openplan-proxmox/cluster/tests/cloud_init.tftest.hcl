@@ -10,12 +10,13 @@ mock_provider "proxmox" {
   }
 }
 
-mock_provider "http" {}
-
-override_data {
-  target = data.http.api_ready
-  values = { status_code = 200 }
+# The cluster's API isn't there in a test; pretend it answered.
+mock_provider "http" {
+  mock_data "http" {
+    defaults = { status_code = 200 }
+  }
 }
+
 
 variables {
   environment                  = "prod"

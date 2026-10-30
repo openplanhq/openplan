@@ -78,6 +78,22 @@ variable "addresses" {
     ])
     error_message = "Every address must be inside network_cidr."
   }
+
+  validation {
+    condition     = length(distinct(var.addresses)) == length(var.addresses)
+    error_message = "Two nodes can't share an address."
+  }
+
+  # The network's own address, its broadcast address and the gateway are
+  # taken; a node given one never comes up on the network.
+  validation {
+    condition = length(setintersection(toset(var.addresses), toset([
+      cidrhost(var.network_cidr, 0),
+      cidrhost(var.network_cidr, -1),
+      var.gateway,
+    ]))) == 0
+    error_message = "No address may be the network's, its broadcast address or the gateway."
+  }
 }
 
 variable "cores" {
@@ -99,8 +115,9 @@ variable "disk_gib" {
 }
 
 variable "cpu_affinity" {
-  description = "The host threads this environment's VMs run on, such as 0-2,6-8, so two environments never share a physical core."
+  description = "The host threads this environment's VMs run on, such as 0-2,6-8, so two environments never share a physical core. Proxmox lets only root@pam set it: empty leaves the VMs unpinned."
   type        = string
+  default     = null
 }
 
 variable "k3s_version" {
@@ -122,7 +139,7 @@ variable "proxmox_ssh_private_key_data" {
   sensitive   = true
 
   validation {
-    condition     = var.proxmox_ssh_private_key_data != null
+    condition     = var.proxmox_ssh_private_key_data != null && can(base64decode(var.proxmox_ssh_private_key_data))
     error_message = "Set the stack credential TF_VAR_proxmox_ssh_private_key_data to the base64 of the SSH key for the Proxmox host (base64 < key | tr -d '\\n')."
   }
 }

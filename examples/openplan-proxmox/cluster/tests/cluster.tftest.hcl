@@ -10,13 +10,13 @@ mock_provider "proxmox" {
 }
 mock_provider "tls" {}
 mock_provider "random" {}
-mock_provider "http" {}
-
 # The cluster's API isn't there in a test; pretend it answered.
-override_data {
-  target = data.http.api_ready
-  values = { status_code = 200 }
+mock_provider "http" {
+  mock_data "http" {
+    defaults = { status_code = 200 }
+  }
 }
+
 
 variables {
   environment                  = "prod"
@@ -132,3 +132,74 @@ run "missing_ssh_key_fails" {
 
   expect_failures = [var.proxmox_ssh_private_key_data]
 }
+
+run "instance_id_fixed_per_node" {
+  # Proxmox derives cloud-init's instance-id from the content unless one is
+  # given, so any later change would make a reboot re-run cloud-init.
+  assert {
+    condition = alltrue([
+      for i, f in proxmox_virtual_environment_file.meta_data :
+      yamldecode(f.source_raw[0].data)["instance-id"] == "openplan-prod-${i}"
+    ])
+    error_message = "every node needs a fixed instance-id"
+  }
+
+  assert {
+    condition     = length(proxmox_virtual_environment_file.meta_data) == 2
+    error_message = "expected one meta-data snippet per node"
+  }
+}
+
+run "affinity_optional" {
+  # Proxmox lets only root@pam set affinity, so the template must work
+  # without it.
+  variables {
+    cpu_affinity = null
+  }
+
+  assert {
+    condition     = alltrue([for vm in proxmox_virtual_environment_vm.node : vm.cpu[0].affinity == null])
+    error_message = "no affinity must be set when cpu_affinity is null"
+  }
+}
+
+run "duplicate_address_fails" {
+  command = plan
+
+  variables {
+    addresses = ["10.10.10.10", "10.10.10.10"]
+  }
+
+  expect_failures = [var.addresses]
+}
+
+run "gateway_address_fails" {
+  command = plan
+
+  variables {
+    addresses = ["10.10.10.1", "10.10.10.11"]
+  }
+
+  expect_failures = [var.addresses]
+}
+
+run "network_address_fails" {
+  command = plan
+
+  variables {
+    addresses = ["10.10.10.0", "10.10.10.11"]
+  }
+
+  expect_failures = [var.addresses]
+}
+
+run "broadcast_address_fails" {
+  command = plan
+
+  variables {
+    addresses = ["10.10.10.10", "10.10.10.255"]
+  }
+
+  expect_failures = [var.addresses]
+}
+

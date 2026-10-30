@@ -5,7 +5,13 @@ Debian 13 cloud image, k3s at a pinned version with its own Traefik off (the
 `dependencies` module installs one). The module makes the cluster's CAs and a
 cluster-admin certificate itself, so the apply ends holding a way into the
 cluster, which `dependencies` and `openplan` read from this module's state.
-The apply waits until the API answers `/readyz`.
+The apply waits for the API to answer `/readyz`, and warns if it never does:
+a warning rather than an error, so a cluster that's down can still be
+planned and destroyed.
+
+Cloud-init runs once, at a node's first boot, so a changed `k3s_version`,
+`ssh_authorized_key` or cloud-init template reaches new nodes only and never
+replaces a running one. Upgrading k3s on running nodes is a separate step.
 
 ## On the Proxmox host first
 
@@ -30,9 +36,17 @@ network its own runs travel over.
 
   The machine running openplan then needs a route to `10.10.10.0/24` via the
   host (macOS: `sudo networksetup -setadditionalroutes "Wi-Fi" 10.10.10.0 255.255.255.0 <host>`).
-- **An API token** for a user whose role holds `VM.*`,
-  `Datastore.AllocateSpace`, `Datastore.AllocateTemplate`,
-  `Datastore.Audit`, `SDN.Use` and `Sys.Audit`.
+- **An API token** for a user with a role holding what the module calls
+  (downloading the image needs `Sys.AccessNetwork`, deleting files on
+  destroy needs `Datastore.Allocate`; on Proxmox 8, use `VM.Monitor` in place
+  of `VM.GuestAgent.Audit`):
+
+  ```bash
+  pveum role add OpenplanCluster -privs "VM.Allocate VM.Audit VM.Config.CDROM VM.Config.CPU VM.Config.Cloudinit VM.Config.Disk VM.Config.HWType VM.Config.Memory VM.Config.Network VM.Config.Options VM.PowerMgmt VM.GuestAgent.Audit Datastore.Allocate Datastore.AllocateSpace Datastore.AllocateTemplate Datastore.Audit Sys.Audit Sys.AccessNetwork SDN.Use"
+  pveum user add openplan@pve
+  pveum acl modify / -user openplan@pve -role OpenplanCluster
+  pveum user token add openplan@pve tofu --privsep 0
+  ```
 - **The `import` and `snippets` content types** on the storage the image and
   cloud-init files go to (`local` by default).
 - **An SSH user and key** that can write the snippets directory
@@ -58,7 +72,7 @@ Besides the state bucket's (see the example's README):
 | `environment` | | names the VMs (`openplan-<environment>-<index>`) and every file left on the host |
 | `node_name` | | the Proxmox node |
 | `addresses` | | one per node, the server first; at least two, all inside `network_cidr` |
-| `cpu_affinity` | | host threads, such as `0-2,6-8`, so environments don't share physical cores |
+| `cpu_affinity` | none | host threads, such as `0-2,6-8`, so environments don't share physical cores. Proxmox lets only `root@pam` set it, even through a token, so with the role above leave it empty |
 | `k3s_version` | | such as `v1.36.5+k3s1` |
 | `ssh_authorized_key` | | a public key that can SSH into the nodes as `debian` |
 | `cores` | `4` | per node |
@@ -73,9 +87,12 @@ Besides the state bucket's (see the example's README):
 | `snippets_datastore` | `local` | needs `snippets` |
 | `image_url` | Debian 13 `genericcloud-amd64`, latest | downloaded once; a newer upstream image doesn't replace running VMs |
 
-The server's cloud-init file, on the host's snippets storage, holds the
-cluster's CA keys. The host's root can already read every VM's disk, so that
-adds no one who can reach them.
+The cluster's CA keys are in two places: the server's cloud-init file on the
+host's snippets storage (mode 0600, root's), and this module's state in the
+bucket. Anyone who can read either can make cluster-admin certificates for
+ten years, and nothing short of rebuilding the cluster revokes them, so keep
+the bucket's token to this stack. The admin certificate itself renews on an
+apply in its last 30 days, which changes the outputs once a year.
 
 ## Outputs
 
