@@ -190,7 +190,9 @@ func TestSyncTemplateSupportsRepositoryRootPath(t *testing.T) {
 	}
 }
 
-func TestSyncTemplateRejectsSensitiveVariables(t *testing.T) {
+// A real module marks its passwords and keys sensitive; it registers as it is,
+// and the flag travels with the variable so config can refuse a value for it.
+func TestSyncTemplateKeepsSensitiveVariables(t *testing.T) {
 	t.Parallel()
 
 	store := &recordingTemplateSyncStore{}
@@ -223,14 +225,14 @@ variable "password" {
 	if err != nil {
 		t.Fatalf("SyncTemplate returned error: %v", err)
 	}
-	if output.Status != domain.TemplateSyncStateInvalid {
-		t.Fatalf("status = %q, want invalid", output.Status)
+	if output.Status != domain.TemplateSyncStateCompleted {
+		t.Fatalf("status = %q, want completed (error summary %q)", output.Status, output.ErrorSummary)
 	}
-	if !strings.Contains(output.ErrorSummary, "sensitive variables") {
-		t.Fatalf("error summary = %q", output.ErrorSummary)
+	if len(store.variables) != 1 {
+		t.Fatalf("len(variables) = %d, want 1", len(store.variables))
 	}
-	if store.template.ID != "" {
-		t.Fatalf("template revision ID = %q, want no persisted template revision", store.template.ID)
+	if store.variables[0].Name != "password" || !store.variables[0].Sensitive {
+		t.Fatalf("password variable = %#v, want sensitive", store.variables[0])
 	}
 }
 

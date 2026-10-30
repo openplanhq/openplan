@@ -167,7 +167,7 @@ func TestTemplateSyncWorkflowRecordsInvalidSync(t *testing.T) {
 	env.OnActivity(domain.SyncTemplateActivityName, mock.Anything, mock.Anything).
 		Return(domain.TemplateSyncActivityOutput{
 			Status:       domain.TemplateSyncStateInvalid,
-			ErrorSummary: "sensitive variables are not supported: password",
+			ErrorSummary: "resolve repository head: empty commit sha",
 		}, nil)
 
 	env.ExecuteWorkflow(TemplateSyncWorkflow, input)
@@ -176,7 +176,7 @@ func TestTemplateSyncWorkflowRecordsInvalidSync(t *testing.T) {
 	if terminal.Status != domain.TemplateSyncStateInvalid {
 		t.Fatalf("terminal status = %q, want invalid", terminal.Status)
 	}
-	if terminal.ErrorSummary != "sensitive variables are not supported: password" {
+	if terminal.ErrorSummary != "resolve repository head: empty commit sha" {
 		t.Fatalf("error summary = %q", terminal.ErrorSummary)
 	}
 }
