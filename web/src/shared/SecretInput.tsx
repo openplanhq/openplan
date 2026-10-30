@@ -4,7 +4,7 @@ import { InputGroup, InputGroupAddon, InputGroupTextarea } from "@/components/ui
 import { cn } from "@/lib/utils";
 import { buttonClass } from "./buttonClass";
 import { inputGroupClass } from "./fieldClass";
-import { valueTextClass } from "./ValueTextarea";
+import { valueTextClass, writingAssistantsOff } from "./ValueTextarea";
 
 type SecretInputProps = ComponentProps<"textarea"> & {
   /** Whether the typed value shows as text. The caller holds it, so it can
@@ -31,7 +31,7 @@ export default function SecretInput({ revealed, onRevealedChange, className, ...
   return (
     // The group grows with the box, and its toggle stays by the first line
     // instead of drifting to the middle of a tall key.
-    <InputGroup className={cn(inputGroupClass, "h-auto items-start pointer-coarse:h-auto")}>
+    <InputGroup className={inputGroupClass}>
       <InputGroupTextarea
         rows={1}
         {...props}
@@ -41,6 +41,7 @@ export default function SecretInput({ revealed, onRevealedChange, className, ...
         spellCheck={false}
         autoCorrect="off"
         autoCapitalize="off"
+        {...writingAssistantsOff}
         className={cn(valueTextClass, className)}
       />
       {/* py-1.25 centres the 24px button on the box's first line: 5px

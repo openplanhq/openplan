@@ -265,6 +265,42 @@ describe("EnvironmentScreen", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  // Enter used to add the entry, so a habitual Enter after a token, or a
+  // token copied from a file, now leaves a line break at its end. It is sent
+  // as typed, so the box says so rather than letting the provider fail later.
+  it("says when a one-line value ends with a line break", () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    renderScreen(queryClient);
+    const value = secrets().getByLabelText<HTMLTextAreaElement>("Value");
+    const note = "Ends with a line break, which is saved as part of the value.";
+
+    fireEvent.change(value, { target: { value: "hunter2\n" } });
+    const shown = secrets().getByText(note);
+    expect(value.getAttribute("aria-describedby")).toContain(shown.id);
+
+    // A key's last line break is part of the key, not a slip.
+    fireEvent.change(value, { target: { value: "-----BEGIN KEY-----\nabc\n-----END KEY-----\n" } });
+    expect(secrets().queryByText(note)).toBeNull();
+    fireEvent.change(value, { target: { value: "hunter2" } });
+    expect(secrets().queryByText(note)).toBeNull();
+  });
+
+  // Writing assistants skip password inputs but read textareas, and the mask
+  // is only drawn: the DOM holds the plain secret.
+  it("keeps writing assistants out of both Value boxes", () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    renderScreen(queryClient);
+
+    for (const box of [secrets().getByLabelText("Value"), variables().getByLabelText("Value")]) {
+      expect(box.getAttribute("data-gramm")).toBe("false");
+      expect(box.getAttribute("data-gramm_editor")).toBe("false");
+      expect(box.getAttribute("data-enable-grammarly")).toBe("false");
+      expect(box.getAttribute("data-lt-active")).toBe("false");
+    }
+  });
+
   it("masks a secret until Show value", async () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
@@ -522,6 +558,22 @@ describe("EnvironmentScreen", () => {
     // fold them into one.
     expect(shown.classList).toContain("whitespace-pre");
     expect(shown.classList).not.toContain("truncate");
+  });
+
+  // A CA certificate runs to twenty lines and a chain to seventy; a row that
+  // showed them all would bury the other entries and push the form away.
+  it("lists a long plain value's first three lines and how many more", () => {
+    const queryClient = testQueryClient();
+    const certificate = "-----BEGIN CERTIFICATE-----\nl2\nl3\nl4\nl5\n-----END CERTIFICATE-----\n";
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), [
+      { ...credential, name: "CA_CERT", sensitive: false, value: certificate, created_at: "2026-07-19T12:00:00Z" }
+    ]);
+    renderScreen(queryClient);
+
+    const shown = variables().getByText("-----BEGIN CERTIFICATE-----\nl2\nl3", { normalizer: getDefaultNormalizer({ collapseWhitespace: false }) });
+    expect(variables().getByText("3 more lines")).toBeTruthy();
+    // The whole value, trailing line break and all, is still in the title.
+    expect(shown.closest("[title]")?.getAttribute("title")).toBe(certificate);
   });
 
   // An entry whose flag is missing is kept on the side that never shows a value.

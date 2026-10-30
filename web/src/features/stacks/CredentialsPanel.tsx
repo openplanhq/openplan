@@ -55,6 +55,7 @@ export default function CredentialsPanel({ kind, note, emptyTitle, emptyDescript
   const nameId = useId();
   const valueId = useId();
   const errorId = useId();
+  const lineBreakNoteId = useId();
 
   /** Validates the form, sends the value once, then clears it from local state. */
   async function submit() {
@@ -97,6 +98,12 @@ export default function CredentialsPanel({ kind, note, emptyTitle, emptyDescript
   // it means retyping a password from scratch.
   const hasUnsavedCredential = name !== "" || value !== "";
   const secret = kind === "secret";
+  // A value is sent exactly as typed, so a one-line token followed by a
+  // habitual Enter, or copied from a file, keeps its line break and fails
+  // wherever it is used. A key's final line break is part of the key, so
+  // only a single line ending in one gets the note.
+  const strayLineBreak = /^[^\n]+\n+$/.test(value);
+  const valueDescribedBy = [invalid.value ? errorId : "", strayLineBreak ? lineBreakNoteId : ""].filter(Boolean).join(" ") || undefined;
 
   return (
     <div className="flex min-w-0 flex-col gap-5" data-unsaved={hasUnsavedCredential ? "true" : undefined}>
@@ -134,9 +141,7 @@ export default function CredentialsPanel({ kind, note, emptyTitle, emptyDescript
                   // holds, each cut to the row; the whole of it is in the
                   // title. It is the content here, so it takes the name's
                   // colour, inset like the Value box's text.
-                  <span className="min-w-0 overflow-hidden pl-3.25 font-mono text-meta text-ellipsis whitespace-pre" title={credential.value}>
-                    {credential.value}
-                  </span>
+                  <ListedValue value={credential.value ?? ""} />
                 )}
                 <span className="flex min-w-0 items-center justify-end gap-2">
                   <span className="truncate text-meta text-muted-foreground">Added {formatTimestamp(credential.created_at)}</span>
@@ -188,34 +193,43 @@ export default function CredentialsPanel({ kind, note, emptyTitle, emptyDescript
             <Label htmlFor={valueId} className={fieldLabelClass}>
               Value
             </Label>
-            {secret ? (
-              <SecretInput
-                id={valueId}
-                revealed={valueRevealed}
-                onRevealedChange={setValueRevealed}
-                // A textarea is never a password field, so no password
-                // manager fills a saved one in or offers to save the
-                // secret; off keeps other autofill out of it too.
-                autoComplete="off"
-                placeholder="Secret value"
-                value={value}
-                onChange={(event) => setValue(event.target.value)}
-                aria-invalid={invalid.value ? true : undefined}
-                aria-describedby={invalid.value ? errorId : undefined}
-              />
-            ) : (
-              // A variable is read back anyway, so its box is plain text; it
-              // still keeps the value out of autofill and spellcheck.
-              <ValueTextarea
-                id={valueId}
-                placeholder="us-east-1"
-                autoComplete="off"
-                value={value}
-                onChange={(event) => setValue(event.target.value)}
-                aria-invalid={invalid.value ? true : undefined}
-                aria-describedby={invalid.value ? errorId : undefined}
-              />
-            )}
+            {/* The note sits under the box in the same cell, so the Name box
+                and Add keep their place beside the box's top edge. */}
+            <div className="flex min-w-0 flex-col gap-1.5">
+              {secret ? (
+                <SecretInput
+                  id={valueId}
+                  revealed={valueRevealed}
+                  onRevealedChange={setValueRevealed}
+                  // A textarea is never a password field, so no password
+                  // manager fills a saved one in or offers to save the
+                  // secret; off keeps other autofill out of it too.
+                  autoComplete="off"
+                  placeholder="Secret value"
+                  value={value}
+                  onChange={(event) => setValue(event.target.value)}
+                  aria-invalid={invalid.value ? true : undefined}
+                  aria-describedby={valueDescribedBy}
+                />
+              ) : (
+                // A variable is read back anyway, so its box is plain text; it
+                // still keeps the value out of autofill and spellcheck.
+                <ValueTextarea
+                  id={valueId}
+                  placeholder="us-east-1"
+                  autoComplete="off"
+                  value={value}
+                  onChange={(event) => setValue(event.target.value)}
+                  aria-invalid={invalid.value ? true : undefined}
+                  aria-describedby={valueDescribedBy}
+                />
+              )}
+              {strayLineBreak && (
+                <p id={lineBreakNoteId} className="text-caption text-muted-foreground">
+                  Ends with a line break, which is saved as part of the value.
+                </p>
+              )}
+            </div>
           </div>
           {/* The button names what it adds, so the form says which tab it
               belongs to right where someone submits it. Disabled while a
@@ -227,5 +241,35 @@ export default function CredentialsPanel({ kind, note, emptyTitle, emptyDescript
       </div>
       {error && <ErrorLine id={errorId}>{error}</ErrorLine>}
     </div>
+  );
+}
+
+/** How many of a variable's lines its row shows before saying how many more. */
+const LISTED_LINES = 3;
+
+/**
+ * A saved variable's value in its row: up to three lines, each cut to the
+ * column, then how many more it holds. A CA certificate runs to twenty lines
+ * and a chain to seventy, and a row that showed them all would bury the
+ * other entries and push the form off the screen. The whole value stays in
+ * the title.
+ */
+function ListedValue({ value }: { value: string }) {
+  // A final line break ends the last line; it doesn't start another.
+  const lines = value.replace(/\n$/, "").split("\n");
+  const more = lines.length - LISTED_LINES;
+  return (
+    // Its first line is the row's baseline, so a flex column, whose
+    // baseline is its first child's.
+    <span className="flex min-w-0 flex-col pl-3.25">
+      <span className="overflow-hidden font-mono text-meta text-ellipsis whitespace-pre" title={value}>
+        {lines.slice(0, LISTED_LINES).join("\n")}
+      </span>
+      {more > 0 && (
+        <span className="text-caption text-muted-foreground">
+          {more} more {more === 1 ? "line" : "lines"}
+        </span>
+      )}
+    </span>
   );
 }

@@ -11,12 +11,13 @@ const FOCUS = cn(
 /** For shadcn's Input. */
 export const inputClass = cn("h-9 px-3 font-mono text-meta placeholder:text-subtle-foreground pointer-coarse:h-11", FOCUS);
 
-/** For shadcn's InputGroup holding one control and a trailing button: the
-    Input's 36px box and focus ring, drawn on the group when its control has
-    focus. The button keeps its own ring, so the field's isn't drawn while the
-    button is focused. */
+/** For shadcn's InputGroup holding a textarea and a trailing button: the
+    Input's focus ring, drawn on the group when its textarea has focus, and
+    the button kept by the first line. The group's own rule sizes it to the
+    textarea, so it grows with what is typed. The button keeps its own ring,
+    so the field's isn't drawn while the button is focused. */
 export const inputGroupClass = cn(
-  "h-9 pointer-coarse:h-11",
+  "items-start",
   "has-[[data-slot=input-group-control]:focus-visible]:border-input has-[[data-slot=input-group-control]:focus-visible]:ring-0",
   "has-[[data-slot=input-group-control]:focus-visible]:outline-solid has-[[data-slot=input-group-control]:focus-visible]:outline-2",
   "has-[[data-slot=input-group-control]:focus-visible]:outline-offset-2 has-[[data-slot=input-group-control]:focus-visible]:outline-ring"

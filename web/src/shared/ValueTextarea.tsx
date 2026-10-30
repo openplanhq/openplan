@@ -10,6 +10,16 @@ import { textareaClass } from "./fieldClass";
     own, so there is no resize handle. */
 export const valueTextClass = "min-h-0 max-h-80 resize-none px-3 py-2 font-mono text-meta placeholder:text-subtle-foreground pointer-coarse:py-3";
 
+/** Opts both Value boxes out of Grammarly and LanguageTool. Those extensions
+    leave password inputs alone but read textareas, and a secret's mask is
+    only drawn: the box holds the plain value they would send away. */
+export const writingAssistantsOff = {
+  "data-gramm": "false",
+  "data-gramm_editor": "false",
+  "data-enable-grammarly": "false",
+  "data-lt-active": "false"
+} as const;
+
 /**
  * openplan UI's Value box for an environment entry that is read back, a
  * variable: shadcn's Textarea, so a multi-line value such as a CA
@@ -28,6 +38,7 @@ export default function ValueTextarea({ className, ...props }: ComponentProps<"t
       spellCheck={false}
       autoCorrect="off"
       autoCapitalize="off"
+      {...writingAssistantsOff}
       className={cn(textareaClass, valueTextClass, className)}
     />
   );
