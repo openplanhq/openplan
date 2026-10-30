@@ -472,8 +472,8 @@ describe("AddStackTemplateScreen", () => {
   });
 
   // A required sensitive variable doesn't block the install: its value comes
-  // from a TF_VAR_ secret, and the installed template doesn't exist yet, so
-  // the line points at the stack's Environment.
+  // from a TF_VAR_ secret in the template's own Environment, once it's added.
+  // No link: following it would throw away what was picked and typed here.
   it("adds a template with a sensitive variable without sending it", async () => {
     const queryClient = testQueryClient();
     seedTemplates(queryClient, [templateRevision()]);
@@ -488,7 +488,8 @@ describe("AddStackTemplateScreen", () => {
     renderScreen(queryClient);
 
     await chooseTemplate(userEvent.setup(), "vpc");
-    expect(screen.getByRole("link", { name: "Environment" }).getAttribute("href")).toBe("/stacks/stack_1/environment");
+    expect(screen.queryByRole("link", { name: "Environment" })).toBeNull();
+    expect(screen.getByText(/in its Environment\./)).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/region/), { target: { value: "eu-west-1" } });
     fireEvent.click(screen.getByRole("button", { name: "Add template" }));
 

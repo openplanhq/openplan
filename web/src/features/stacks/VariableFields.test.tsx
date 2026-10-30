@@ -28,7 +28,7 @@ function renderFields(variables: TemplateVariable[], props: Partial<React.Compon
         variableValues={{}}
         onVariableValueChange={onVariableValueChange}
         emptyMessage="No variables."
-        environmentPath="/stacks/s1/templates/t1/environment"
+        secrets={{ canSet: true, environmentPath: "/stacks/s1/templates/t1/environment" }}
         {...props}
       />
     </MemoryRouter>
@@ -55,8 +55,30 @@ describe("VariableFields", () => {
     expect(screen.queryByLabelText(/db_password/)).toBeNull();
     expect(screen.getByLabelText("region")).toBeTruthy();
     expect(screen.getByText("TF_VAR_db_password")).toBeTruthy();
-    expect(screen.getByText("Sensitive")).toBeTruthy();
+    expect(screen.getByText("sensitive")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Environment" }).getAttribute("href")).toBe("/stacks/s1/templates/t1/environment");
+  });
+
+  // Environment is owner-only: a link would lead a viewer or an operator to
+  // Not permitted, so they're told who sets it instead.
+  it("tells someone who can't add secrets that an owner sets it", () => {
+    renderFields([variable({ name: "db_password", sensitive: true })], {
+      secrets: { canSet: false, environmentPath: "/stacks/s1/templates/t1/environment" }
+    });
+
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.getByText(/An owner sets it as the secret/)).toBeTruthy();
+    expect(screen.getByText("TF_VAR_db_password")).toBeTruthy();
+  });
+
+  // Before the template is installed it has no Environment to link to, and a
+  // stack secret would reach every template in the stack, so the row points
+  // at the template's own Environment, after the add.
+  it("says to set it once the template is added, without a link", () => {
+    renderFields([variable({ name: "db_password", sensitive: true })], { secrets: { canSet: true } });
+
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.getByText(/^Once added, set it as the secret/).textContent).toBe("Once added, set it as the secret TF_VAR_db_password in its Environment.");
   });
 
   it.each(["string", "number", "bool"])("keeps a one-line input for %s, its type as the placeholder only", (type) => {

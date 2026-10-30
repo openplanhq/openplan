@@ -10,6 +10,7 @@ import {
   useTemplatesQuery
 } from "../../api/queries";
 import type { Template } from "../../api/types";
+import { useStackCapabilities } from "../../auth/useStackCapabilities";
 import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
@@ -40,6 +41,7 @@ import { cn } from "@/lib/utils";
 export default function AddStackTemplateScreen() {
   const tenantID = useTenantID();
   const { stackId = "" } = useParams<{ stackId: string }>();
+  const canSetSecrets = useStackCapabilities(stackId)?.can_manage_access === true;
   const navigate = useNavigate();
   const [chosenTemplateID, setChosenTemplateID] = useState("");
   // "" until someone picks a revision in the select: the newest active one.
@@ -318,9 +320,9 @@ export default function AddStackTemplateScreen() {
                   }}
                   emptyMessage="This template declares no variables."
                   errors={variableErrors.errors}
-                  // Not installed yet, so it has no Environment of its own; a
-                  // stack secret reaches every template the stack installs.
-                  environmentPath={`/stacks/${stackId}/environment`}
+                  // Not installed yet, so no Environment to link to: the row
+                  // points at the template's own, once it's added.
+                  secrets={{ canSet: canSetSecrets }}
                 />
               </div>
             )}

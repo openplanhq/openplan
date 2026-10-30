@@ -77,6 +77,11 @@ export default function VariablesTab() {
       <p className="text-meta text-muted-foreground">
         From the latest revision, <span className="font-mono text-code-foreground">{shortCommitSHA(latest.resolved_commit_sha)}</span>. A required
         variable needs a value when the template is added to a stack.
+        {/* Only when one is: config is stored in the clear, so a sensitive
+            variable's value comes from a secret, never from the stack's form. */}
+        {variables.some((templateVariable) => templateVariable.sensitive) && (
+          <> A secret one takes its value from an Environment secret named <span className="font-mono text-code-foreground">TF_VAR_</span> and its name.</>
+        )}
       </p>
       {/* Fixed columns in a frame that scrolls sideways on a phone. */}
       <div className="overflow-x-auto rounded-lg border">
@@ -103,8 +108,11 @@ export default function VariablesTab() {
                 <TableCell className={cn(cellClass, "font-mono text-caption whitespace-normal text-muted-foreground wrap-anywhere")}>
                   <Breakable pieces={typePieces(templateVariable.type_expression || "any")} />
                 </TableCell>
-                <TableCell className={cn(cellClass, "text-meta", templateVariable.required ? "font-medium text-foreground" : "text-muted-foreground")}>
-                  {templateVariable.required ? "required" : "optional"}
+                {/* A secret is set by an owner in Environment, never in the
+                    stack's form; required or not, the person registering
+                    the template needs to know it goes there. */}
+                <TableCell className={cn(cellClass, "text-meta", templateVariable.required || templateVariable.sensitive ? "font-medium text-foreground" : "text-muted-foreground")}>
+                  {templateVariable.sensitive ? "secret" : templateVariable.required ? "required" : "optional"}
                 </TableCell>
                 <TableCell className={cn(cellClass, "text-meta whitespace-normal text-muted-foreground")}>{templateVariable.description}</TableCell>
               </TableRow>

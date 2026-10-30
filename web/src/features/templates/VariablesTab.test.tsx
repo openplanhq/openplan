@@ -66,6 +66,17 @@ describe("VariablesTab", () => {
     expect(screen.getByRole("table").querySelector("colgroup")).not.toBeNull();
   });
 
+  // A sensitive variable's value never comes from a stack's config, so the
+  // registrar sees "secret" in place of required or optional, and the note
+  // says where its value comes from.
+  it("marks a sensitive variable as a secret and says where its value comes from", () => {
+    renderTab(seed([variable(), variable({ name: "db_password", sensitive: true })]));
+
+    expect(within(screen.getByTestId("template-variable-db_password")).getByText("secret").className).toContain("font-medium");
+    expect(within(screen.getByTestId("template-variable-cluster_name")).getByText("required")).toBeTruthy();
+    expect(screen.getByTestId("template-variables").textContent).toContain("A secret one takes its value from an Environment secret named TF_VAR_ and its name.");
+  });
+
   it("wraps a long type only at its structure, never inside a word (#459)", () => {
     renderTab(seed([variable({ name: "node_pools", type_expression: "map(object({ size = optional(number), labels = optional(map(string)) }))" })]));
     const cell = within(screen.getByTestId("template-variable-node_pools")).getByText(/^map\(object/);

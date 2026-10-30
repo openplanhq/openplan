@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTemplateRevisionVariablesQuery, useTemplateRevisionsQuery, useChangeStackTemplateRevisionMutation } from "../../api/queries";
+import { useStackCapabilities } from "../../auth/useStackCapabilities";
 import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
@@ -34,6 +35,7 @@ import { cn } from "@/lib/utils";
 export default function ChangeRevisionScreen() {
   const tenantID = useTenantID();
   const { stackId, stackTemplate } = useStackTemplate();
+  const canSetSecrets = useStackCapabilities(stackId)?.can_manage_access === true;
   const navigate = useNavigate();
   const [chosenTargetID, setChosenTargetID] = useState("");
   const [editedValues, setEditedValues] = useState<Record<string, string>>({});
@@ -247,7 +249,7 @@ export default function ChangeRevisionScreen() {
                   }}
                   emptyMessage="This revision declares no variables."
                   errors={variableErrors.errors}
-                  environmentPath={stackTemplatePath(stackId, stackTemplate.id, "environment")}
+                  secrets={{ canSet: canSetSecrets, environmentPath: stackTemplatePath(stackId, stackTemplate.id, "environment") }}
                 />
               </>
             )}

@@ -1,8 +1,9 @@
 import { useId } from "react";
-import { LockKeyhole } from "lucide-react";
+import { Lock } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { TemplateVariable } from "../../api/types";
 import ErrorLine from "../../shared/ErrorLine";
+import StatusLabel from "../../shared/StatusLabel";
 import { inputClass, textareaClass } from "../../shared/fieldClass";
 import { isStructuredVariable } from "./stackWorkflow";
 import { Input } from "@/components/ui/input";
@@ -18,9 +19,20 @@ interface VariableFieldsProps {
   emptyMessage: string;
   /** What the server refused about each variable, by name. */
   errors?: Record<string, string>;
-  /** Where a sensitive variable's secret is added: the installed template's
-      Environment, or the stack's while the template isn't installed yet. */
-  environmentPath: string;
+  /** Who can set a sensitive variable's secret, and where. */
+  secrets: SecretSetting;
+}
+
+/** Where a sensitive variable's TF_VAR_ secret is set, and whether this
+    person can set it. */
+export interface SecretSetting {
+  /** The stack's can_manage_access: only an owner can add secrets, and the
+      Environment screens are closed to everyone else. */
+  canSet: boolean;
+  /** The installed template's Environment. Absent while the template isn't
+      installed yet, which also means no link: following one mid-form would
+      throw away what was picked and typed. */
+  environmentPath?: string;
 }
 
 /**
@@ -46,7 +58,7 @@ export default function VariableFields({
   disabled = false,
   emptyMessage,
   errors = {},
-  environmentPath
+  secrets
 }: VariableFieldsProps) {
   const idPrefix = useId();
   if (variables.length === 0) {
@@ -61,7 +73,7 @@ export default function VariableFields({
         const typeId = `${id}-type`;
         const description = variable.description.trim();
         if (variable.sensitive) {
-          return <SensitiveVariable key={variable.name} variable={variable} description={description} environmentPath={environmentPath} />;
+          return <SensitiveVariable key={variable.name} variable={variable} description={description} secrets={secrets} />;
         }
         const error = errors[variable.name];
         const typeExpression = variable.type_expression.trim();
@@ -133,10 +145,27 @@ export default function VariableFields({
  * A variable marked sensitive, with no box: config is stored in the clear and
  * shown to everyone who can view the stack, so the server refuses a value for
  * it. Its value comes from an Environment secret named TF_VAR_<name>, and the
- * row says which and links to where it is added. The name keeps the label's
- * look and its required mark; "Sensitive" is the icon and the word.
+ * row says which, who sets it and where. The name keeps the label's look and
+ * its required mark; "sensitive" is a StatusLabel, icon and word.
  */
-function SensitiveVariable({ variable, description, environmentPath }: { variable: TemplateVariable; description: string; environmentPath: string }) {
+function SensitiveVariable({ variable, description, secrets }: { variable: TemplateVariable; description: string; secrets: SecretSetting }) {
+  const { canSet, environmentPath } = secrets;
+  // The installed template's own Environment, never the stack's: a stack
+  // secret reaches every template the stack installs, and template code is
+  // untrusted.
+  const where = environmentPath ? (
+    canSet ? (
+      <Link to={environmentPath} className="font-medium text-primary hover:underline">
+        Environment
+      </Link>
+    ) : (
+      "Environment"
+    )
+  ) : (
+    "its Environment"
+  );
+  const who = canSet ? "set it" : "an owner sets it";
+  const lead = environmentPath ? who.charAt(0).toUpperCase() + who.slice(1) : `Once added, ${who}`;
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -144,17 +173,14 @@ function SensitiveVariable({ variable, description, environmentPath }: { variabl
           {variable.name}
           {variable.required ? " *" : ""}
         </p>
-        <span className="inline-flex items-center gap-1 text-caption text-muted-foreground">
-          <LockKeyhole aria-hidden="true" className="size-3" strokeWidth={2.25} />
-          Sensitive
-        </span>
+        <StatusLabel icon={Lock} tone="settled">
+          sensitive
+        </StatusLabel>
       </div>
-      <p className="text-meta text-muted-foreground">
-        Set it as the secret <code className="font-mono text-code-foreground">{`TF_VAR_${variable.name}`}</code> in{" "}
-        <Link to={environmentPath} className="font-medium text-primary hover:underline">
-          Environment
-        </Link>
-        .
+      {/* A TF_VAR_ name has no break points of its own, so a long one breaks
+          anywhere rather than widening the column. */}
+      <p className="text-meta text-muted-foreground wrap-anywhere">
+        {lead} as the secret <code className="font-mono text-code-foreground">{`TF_VAR_${variable.name}`}</code> in {where}.
       </p>
       {description && <p className="text-caption text-muted-foreground">{description}</p>}
     </div>
