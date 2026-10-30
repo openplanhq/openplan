@@ -163,9 +163,6 @@ func (activities *TemplateSyncActivities) SyncTemplate(ctx context.Context, inpu
 	if err != nil {
 		return invalidTemplateSyncOutput("infer template variables: %v", err), nil
 	}
-	if sensitive := sensitiveVariableNames(variables); len(sensitive) > 0 {
-		return invalidTemplateSyncOutput("sensitive variables are not supported: %s", strings.Join(sensitive, ", ")), nil
-	}
 
 	templateRevision := domain.TemplateRevision{
 		ID:                templateRevisionID,
@@ -521,17 +518,6 @@ func hclBoolValue(attr *hcl.Attribute) (bool, error) {
 		return false, fmt.Errorf("must be a bool, got %s", value.Type().FriendlyName())
 	}
 	return value.True(), nil
-}
-
-func sensitiveVariableNames(variables []domain.TemplateVariable) []string {
-	var names []string
-	for _, variable := range variables {
-		if variable.Sensitive {
-			names = append(names, variable.Name)
-		}
-	}
-	sort.Strings(names)
-	return names
 }
 
 // template_4b93175b6dcb1641073fcd42475912a3

@@ -2788,6 +2788,13 @@ func validateTemplateConfig(raw json.RawMessage, variables []domain.TemplateVari
 		case !ok:
 			problems = append(problems, fieldError(ErrStackTemplateConfigInvalid, IssueUnknown,
 				name+" is not a variable of this template", "config", name))
+		// Config is stored in the clear and returned to everyone who can view
+		// the stack, so it never holds a sensitive value, not even a null. The
+		// value comes from an Environment secret, which is encrypted,
+		// write-only and blanked in run logs.
+		case variable.Sensitive:
+			problems = append(problems, fieldError(ErrStackTemplateConfigInvalid, IssueSensitive,
+				name+" is sensitive: set it as the secret TF_VAR_"+name+" in Environment", "config", name))
 		case string(config[name]) == "null":
 			// A required variable's null is reported below, as missing.
 			if !variable.Required {
@@ -2801,7 +2808,9 @@ func validateTemplateConfig(raw json.RawMessage, variables []domain.TemplateVari
 		}
 	}
 	for _, variable := range variables {
-		if variable.Required {
+		// A sensitive variable can't come through config, so its absence here
+		// says nothing; tofu names it at plan if no secret sets it.
+		if variable.Required && !variable.Sensitive {
 			value, ok := config[variable.Name]
 			if !ok || string(value) == "null" {
 				problems = append(problems, fieldError(ErrStackTemplateConfigInvalid, IssueRequired,
@@ -2843,6 +2852,12 @@ func carryForwardConfig(desiredConfigJSON json.RawMessage, variables []domain.Te
 
 	carried := make(map[string]json.RawMessage)
 	for _, variable := range variables {
+		// A variable the target revision made sensitive loses its old
+		// plaintext value: config may not hold it, and keeping it would leave
+		// the secret readable.
+		if variable.Sensitive {
+			continue
+		}
 		value, ok := current[variable.Name]
 		if ok {
 			carried[variable.Name] = value

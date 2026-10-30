@@ -848,6 +848,55 @@ func TestChangeStackTemplateRevisionCarriesForwardCompatibleConfig(t *testing.T)
 	}
 }
 
+// A new revision can turn a variable the stack already set into a sensitive
+// one. Its plaintext value is dropped on the way forward rather than kept in
+// config, and the change isn't refused over a field the form doesn't show.
+func TestChangeStackTemplateRevisionDropsAValueThatBecameSensitive(t *testing.T) {
+	t.Parallel()
+
+	stackTemplates := &recordingStackTemplateRepository{
+		stackTemplate: domain.StackTemplate{
+			ID:                        domain.StackTemplateID("stack_template_123"),
+			TenantID:                  domain.TenantID("tenant_123"),
+			TemplateID:                domain.TemplateID("source_template_db"),
+			DesiredTemplateRevisionID: domain.TemplateRevisionID("template_rev_1"),
+			DesiredConfigJSON:         json.RawMessage(`{"region":"us-east-1","password":"hunter2"}`),
+			Lifecycle:                 domain.StackTemplateActive,
+		},
+	}
+	templates := &recordingTemplateRevisionRepository{
+		template: domain.TemplateRevision{
+			ID:         domain.TemplateRevisionID("template_rev_2"),
+			TenantID:   domain.TenantID("tenant_123"),
+			TemplateID: domain.TemplateID("source_template_db"),
+			Status:     domain.TemplateRevisionActive,
+		},
+		variables: []domain.TemplateVariable{
+			{Name: "region", Required: true},
+			{Name: "password", Required: true, Sensitive: true},
+		},
+	}
+	service := NewService(Service{
+		TemplateRuns:             &recordingTemplateRunRepository{},
+		Authorization:            testPlatformAuthorizer(t),
+		StackTemplates:           stackTemplates,
+		TemplateRevisionMetadata: templates,
+		TemplateRevisions:        templates,
+	})
+
+	_, err := service.ChangeStackTemplateRevision(authenticatedContext(), ChangeStackTemplateRevisionCommand{
+		TenantID:                 domain.TenantID("tenant_123"),
+		StackTemplateID:          domain.StackTemplateID("stack_template_123"),
+		TargetTemplateRevisionID: domain.TemplateRevisionID("template_rev_2"),
+	})
+	if err != nil {
+		t.Fatalf("ChangeStackTemplateRevision returned error: %v", err)
+	}
+	if string(stackTemplates.gotConfigJSON) != `{"region":"us-east-1"}` {
+		t.Fatalf("carried config = %s, want region only", stackTemplates.gotConfigJSON)
+	}
+}
+
 func TestChangeStackTemplateRevisionRejectsDifferentTemplate(t *testing.T) {
 	t.Parallel()
 
