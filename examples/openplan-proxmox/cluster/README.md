@@ -88,7 +88,7 @@ Besides the state bucket's (see the example's README):
 | `image_url` | Debian 13 `genericcloud-amd64`, latest | downloaded once; a newer upstream image doesn't replace running VMs |
 
 The cluster's CA keys are in two places: the server's cloud-init file on the
-host's snippets storage (mode 0600, root's), and this module's state in the
+host's snippets storage (mode 0600), and this module's state in the
 bucket. Anyone who can read either can make cluster-admin certificates for
 ten years, and nothing short of rebuilding the cluster revokes them, so keep
 the bucket's token to this stack. The admin certificate itself renews on an
