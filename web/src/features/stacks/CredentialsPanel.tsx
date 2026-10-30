@@ -5,6 +5,7 @@ import type { CredentialMetadata, CredentialRequest } from "../../api/types";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
 import SecretInput from "../../shared/SecretInput";
+import ValueTextarea from "../../shared/ValueTextarea";
 import { fieldLabelClass, inputClass } from "../../shared/fieldClass";
 import { formatTimestamp } from "../../shared/formatTimestamp";
 import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty";
@@ -120,16 +121,20 @@ export default function CredentialsPanel({ kind, note, emptyTitle, emptyDescript
           <ul className="col-span-3 grid grid-cols-subgrid divide-y divide-divider overflow-hidden rounded-lg border">
             {credentials.map((credential) => (
               // pl-3 inside the list's 1px border starts the name where a
-              // box's text starts: 1px border, 12px inset.
-              <li key={credential.id} className="col-span-3 grid min-h-12 grid-cols-subgrid items-center py-2 pr-2 pl-3">
+              // box's text starts: 1px border, 12px inset. Baseline, not
+              // centre: a one-line row looks the same either way, and a
+              // multi-line value keeps the name, date and delete on its
+              // first line.
+              <li key={credential.id} className="col-span-3 grid min-h-12 grid-cols-subgrid items-baseline py-2 pr-2 pl-3">
                 <span className={cn("min-w-0 truncate font-mono text-meta", secret && "col-span-2")} title={credential.name}>
                   {credential.name}
                 </span>
                 {!secret && (
-                  // The value a variable was saved with, cut to the row; the
-                  // whole of it is in the title. It is the content here, so
-                  // it takes the name's colour, inset like the Value box's text.
-                  <span className="min-w-0 truncate pl-3.25 font-mono text-meta" title={credential.value}>
+                  // The value a variable was saved with, a line per line it
+                  // holds, each cut to the row; the whole of it is in the
+                  // title. It is the content here, so it takes the name's
+                  // colour, inset like the Value box's text.
+                  <span className="min-w-0 overflow-hidden pl-3.25 font-mono text-meta text-ellipsis whitespace-pre" title={credential.value}>
                     {credential.value}
                   </span>
                 )}
@@ -149,16 +154,22 @@ export default function CredentialsPanel({ kind, note, emptyTitle, emptyDescript
             ))}
           </ul>
         )}
-        {/* A form, so Enter in either box adds the entry. The Show value
-            toggle is type=button and never submits it. */}
+        {/* A form, so Enter in the Name box adds the entry. In the Value
+            box Enter is a line break, so a key typed or pasted a line at a
+            time is never sent half done; the button adds it. The Show
+            value toggle is type=button and never submits it.
+            Each field spans the form's two rows, label over box, and the
+            button sits in the second row, so the labels share a line and
+            the boxes and the button share a top edge: as the Value box
+            grows, the Name box and Add stay where they are. */}
         <form
-          className="col-span-3 grid grid-cols-subgrid items-end"
+          className="col-span-3 grid grid-cols-subgrid gap-y-1.5"
           onSubmit={(event) => {
             event.preventDefault();
             void submit();
           }}
         >
-          <div className="flex min-w-0 flex-col gap-1.5">
+          <div className="row-span-2 grid min-w-0 grid-rows-subgrid">
             <Label htmlFor={nameId} className={fieldLabelClass}>
               Name
             </Label>
@@ -173,7 +184,7 @@ export default function CredentialsPanel({ kind, note, emptyTitle, emptyDescript
               className={inputClass}
             />
           </div>
-          <div className="flex min-w-0 flex-col gap-1.5">
+          <div className="row-span-2 grid min-w-0 grid-rows-subgrid">
             <Label htmlFor={valueId} className={fieldLabelClass}>
               Value
             </Label>
@@ -182,10 +193,10 @@ export default function CredentialsPanel({ kind, note, emptyTitle, emptyDescript
                 id={valueId}
                 revealed={valueRevealed}
                 onRevealedChange={setValueRevealed}
-                // Not a login: keeps password managers from filling a saved
-                // password in, or offering to save the secret as one, in either
-                // state of the toggle.
-                autoComplete="new-password"
+                // A textarea is never a password field, so no password
+                // manager fills a saved one in or offers to save the
+                // secret; off keeps other autofill out of it too.
+                autoComplete="off"
                 placeholder="Secret value"
                 value={value}
                 onChange={(event) => setValue(event.target.value)}
@@ -195,25 +206,21 @@ export default function CredentialsPanel({ kind, note, emptyTitle, emptyDescript
             ) : (
               // A variable is read back anyway, so its box is plain text; it
               // still keeps the value out of autofill and spellcheck.
-              <Input
+              <ValueTextarea
                 id={valueId}
                 placeholder="us-east-1"
                 autoComplete="off"
-                spellCheck={false}
-                autoCorrect="off"
-                autoCapitalize="off"
                 value={value}
                 onChange={(event) => setValue(event.target.value)}
                 aria-invalid={invalid.value ? true : undefined}
                 aria-describedby={invalid.value ? errorId : undefined}
-                className={inputClass}
               />
             )}
           </div>
           {/* The button names what it adds, so the form says which tab it
               belongs to right where someone submits it. Disabled while a
               request is out, which also stops Enter from sending twice. */}
-          <button type="submit" className={cn(buttonClass("outline", "lg"), "w-full pointer-coarse:h-11")} disabled={busy}>
+          <button type="submit" className={cn(buttonClass("outline", "lg"), "col-start-3 row-start-2 w-full pointer-coarse:h-11")} disabled={busy}>
             {secret ? "Add secret" : "Add variable"}
           </button>
         </form>

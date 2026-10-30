@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, getDefaultNormalizer, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -35,6 +35,9 @@ const secrets = () => within(screen.getByTestId("environment-secrets"));
 const variables = () => within(screen.getByTestId("environment-variables"));
 // The page's breadcrumb is a list too, so the entries are looked up in the card.
 const card = () => within(screen.getByTestId("environment-card"));
+// A secret's box is masked with -webkit-text-security, which jsdom's CSS
+// parser drops, so this reads the property React set on the style object.
+const masking = (element: HTMLElement) => (element.style as unknown as Record<string, string | undefined>).WebkitTextSecurity ?? "";
 
 function renderScreen(queryClient: QueryClient) {
   // The trail names the stack, so the page reads it; seeded, it sends nothing.
@@ -171,8 +174,8 @@ describe("EnvironmentScreen", () => {
     const user = userEvent.setup();
 
     const name = secrets().getByLabelText<HTMLInputElement>("Name");
-    const value = secrets().getByLabelText<HTMLInputElement>("Value");
-    expect(value.type).toBe("password");
+    const value = secrets().getByLabelText<HTMLTextAreaElement>("Value");
+    expect(masking(value)).toBe("disc");
     await user.type(name, "TF_VAR_TEST");
     await user.type(value, "secret-value");
     await user.click(screen.getByRole("button", { name: "Add secret" }));
@@ -192,27 +195,90 @@ describe("EnvironmentScreen", () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     renderScreen(queryClient);
     const user = userEvent.setup();
-    const value = secrets().getByLabelText<HTMLInputElement>("Value");
+    const value = secrets().getByLabelText<HTMLTextAreaElement>("Value");
     const toggle = screen.getByRole("button", { name: "Show value" });
 
-    expect(value.type).toBe("password");
+    expect(masking(value)).toBe("disc");
     expect(toggle.getAttribute("aria-pressed")).toBe("false");
     await user.type(value, "secret-value");
 
     await user.click(toggle);
-    expect(value.type).toBe("text");
+    expect(masking(value)).toBe("");
     expect(toggle.getAttribute("aria-pressed")).toBe("true");
     expect(value.value).toBe("secret-value");
-    // Revealed, it still isn't a login field, and it keeps the text away
-    // from spellcheck.
-    expect(value.getAttribute("autocomplete")).toBe("new-password");
+    // Revealed, it still keeps autofill out, and the text away from
+    // spellcheck and correction.
+    expect(value.getAttribute("autocomplete")).toBe("off");
     expect(value.getAttribute("spellcheck")).toBe("false");
+    expect(value.getAttribute("autocorrect")).toBe("off");
+    expect(value.getAttribute("autocapitalize")).toBe("off");
 
     await user.click(toggle);
-    expect(value.type).toBe("password");
+    expect(masking(value)).toBe("disc");
     expect(toggle.getAttribute("aria-pressed")).toBe("false");
     expect(toggle.getAttribute("type")).toBe("button");
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  // A PEM key is many lines, and a broken line break breaks the key. The box
+  // hands CRLF over as LF, as a textarea does; nothing else is changed, the
+  // trailing newline included.
+  it("sends a pasted multi-line secret with its line breaks", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) =>
+      init?.method === "POST" ? jsonResponse(credential, 201) : jsonResponse([credential])
+    );
+    renderScreen(queryClient);
+    const value = secrets().getByLabelText<HTMLTextAreaElement>("Value");
+
+    fireEvent.change(secrets().getByLabelText("Name"), { target: { value: "TF_VAR_ssh_private_key" } });
+    fireEvent.change(value, { target: { value: "-----BEGIN KEY-----\r\nabc\n-----END KEY-----\n" } });
+    expect(value.value).toBe("-----BEGIN KEY-----\nabc\n-----END KEY-----\n");
+    fireEvent.click(screen.getByRole("button", { name: "Add secret" }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining("/stacks/stack_1/credentials"),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ name: "TF_VAR_ssh_private_key", value: "-----BEGIN KEY-----\nabc\n-----END KEY-----\n", sensitive: true })
+      })
+    ));
+  });
+
+  // Enter is a line break in a multi-line value, so it can't also add the
+  // entry: a key pasted or typed a line at a time is never sent half done.
+  it("Enter in the value box adds a line, not the entry", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    renderScreen(queryClient);
+    const user = userEvent.setup();
+    const value = secrets().getByLabelText<HTMLTextAreaElement>("Value");
+
+    // A name too, so an add, if Enter made one, would get past the check.
+    await user.type(secrets().getByLabelText("Name"), "TF_VAR_TEST");
+    await user.type(value, "a{Enter}b");
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(value.value).toBe("a\nb");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("masks a secret until Show value", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    renderScreen(queryClient);
+    const user = userEvent.setup();
+    const value = secrets().getByLabelText<HTMLTextAreaElement>("Value");
+    const toggle = secrets().getByRole("button", { name: "Show value" });
+
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    expect(masking(value)).toBe("disc");
+
+    await user.click(toggle);
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    expect(masking(value)).toBe("");
   });
 
   it("hides the Value box again after an add", async () => {
@@ -223,16 +289,16 @@ describe("EnvironmentScreen", () => {
     );
     renderScreen(queryClient);
     const user = userEvent.setup();
-    const value = secrets().getByLabelText<HTMLInputElement>("Value");
+    const value = secrets().getByLabelText<HTMLTextAreaElement>("Value");
 
     await user.type(secrets().getByLabelText("Name"), "TF_VAR_TEST");
     await user.type(value, "secret-value");
     await user.click(screen.getByRole("button", { name: "Show value" }));
-    expect(value.type).toBe("text");
+    expect(masking(value)).toBe("");
     await user.click(screen.getByRole("button", { name: "Add secret" }));
 
     await waitFor(() => expect(value.value).toBe(""));
-    expect(value.type).toBe("password");
+    expect(masking(value)).toBe("disc");
     expect(screen.getByRole("button", { name: "Show value" }).getAttribute("aria-pressed")).toBe("false");
   });
 
@@ -244,7 +310,7 @@ describe("EnvironmentScreen", () => {
     );
     renderScreen(queryClient);
     const user = userEvent.setup();
-    const value = secrets().getByLabelText<HTMLInputElement>("Value");
+    const value = secrets().getByLabelText<HTMLTextAreaElement>("Value");
 
     await user.type(secrets().getByLabelText("Name"), "TF_VAR_TEST");
     await user.type(value, "secret-value");
@@ -252,7 +318,7 @@ describe("EnvironmentScreen", () => {
     await user.click(screen.getByRole("button", { name: "Add secret" }));
 
     await screen.findByRole("alert");
-    expect(value.type).toBe("text");
+    expect(masking(value)).toBe("");
   });
 
   it("keeps what was typed, and says why, when the add fails", async () => {
@@ -279,7 +345,7 @@ describe("EnvironmentScreen", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("A credential with this name already exists here.");
     expect(screen.getAllByRole("alert")).toHaveLength(1);
-    expect(secrets().getByLabelText<HTMLInputElement>("Value").value).toBe("secret-value");
+    expect(secrets().getByLabelText<HTMLTextAreaElement>("Value").value).toBe("secret-value");
     // The clash is the name's, so the name is the field marked, and it
     // points at the line that says why.
     const name = secrets().getByLabelText("Name");
@@ -304,7 +370,7 @@ describe("EnvironmentScreen", () => {
     renderScreen(queryClient);
     const user = userEvent.setup();
     const name = secrets().getByLabelText<HTMLInputElement>("Name");
-    const value = secrets().getByLabelText<HTMLInputElement>("Value");
+    const value = secrets().getByLabelText<HTMLTextAreaElement>("Value");
 
     await user.type(name, "TF_VAR_TEST");
     await user.type(value, "secret-value");
@@ -356,8 +422,11 @@ describe("EnvironmentScreen", () => {
     renderScreen(queryClient);
 
     expect(secrets().getByLabelText("Name").getAttribute("data-slot")).toBe("input");
-    // The Value box is shadcn's input group: its input and the reveal button.
+    // The Value box is shadcn's input group: its textarea and the reveal
+    // button. A variable's is shadcn's Textarea.
     expect(secrets().getByLabelText("Value").getAttribute("data-slot")).toBe("input-group-control");
+    expect(secrets().getByLabelText("Value").tagName).toBe("TEXTAREA");
+    expect(variables().getByLabelText("Value").getAttribute("data-slot")).toBe("textarea");
   });
 
   // Every control takes a 44px target on a coarse pointer.
@@ -368,7 +437,10 @@ describe("EnvironmentScreen", () => {
     renderScreen(queryClient);
 
     expect(secrets().getByLabelText("Name").classList).toContain("pointer-coarse:h-11");
-    expect(secrets().getByLabelText("Value").closest("[data-slot='input-group']")!.classList).toContain("pointer-coarse:h-11");
+    // A Value box grows with its content, so its one-line height comes
+    // from its padding: 12px around an 18px line, inside a 1px border.
+    expect(secrets().getByLabelText("Value").classList).toContain("pointer-coarse:py-3");
+    expect(variables().getByLabelText("Value").classList).toContain("pointer-coarse:py-3");
     expect(screen.getByRole("button", { name: "Add secret" }).classList).toContain("pointer-coarse:h-11");
     expect(screen.getByRole("button", { name: "Delete TF_VAR_TEST" }).classList).toContain("pointer-coarse:size-11");
   });
@@ -435,6 +507,23 @@ describe("EnvironmentScreen", () => {
     expect(variables().getByText("Set as environment variables when Terraform runs. Values are shown here, so keep credentials in Secrets.")).toBeTruthy();
   });
 
+  // A variable can be a multi-line value, a CA certificate say: the list keeps
+  // its lines apart instead of running them together.
+  it("shows a multi-line plain value with its line breaks", () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), [
+      { ...credential, name: "CA_CERT", sensitive: false, value: "line1\nline2", created_at: "2026-07-19T12:00:00Z" }
+    ]);
+    renderScreen(queryClient);
+
+    const shown = variables().getByText("line1\nline2", { normalizer: getDefaultNormalizer({ collapseWhitespace: false }) });
+    expect(shown.getAttribute("title")).toBe("line1\nline2");
+    // white-space: pre keeps each line on its own; truncate's nowrap would
+    // fold them into one.
+    expect(shown.classList).toContain("whitespace-pre");
+    expect(shown.classList).not.toContain("truncate");
+  });
+
   // An entry whose flag is missing is kept on the side that never shows a value.
   it("keeps an entry with no sensitive flag in Secrets", () => {
     const queryClient = testQueryClient();
@@ -458,9 +547,9 @@ describe("EnvironmentScreen", () => {
     const user = userEvent.setup();
 
     await user.click(screen.getByRole("button", { name: "Variables" }));
-    const value = variables().getByLabelText<HTMLInputElement>("Value");
+    const value = variables().getByLabelText<HTMLTextAreaElement>("Value");
     // A plain box: no mask and no Show value button.
-    expect(value.type).toBe("text");
+    expect(masking(value)).toBe("");
     expect(variables().queryByRole("button", { name: "Show value" })).toBeNull();
     expect(value.getAttribute("spellcheck")).toBe("false");
     await user.type(variables().getByLabelText("Name"), "AWS_REGION");
@@ -475,8 +564,9 @@ describe("EnvironmentScreen", () => {
     expect(value.value).toBe("");
   });
 
-  // The row is a form: Enter in a box adds, and Show value only toggles.
-  it("adds on Enter, and Show value never submits", async () => {
+  // The row is a form: Enter in the Name box adds, and Show value only
+  // toggles. Enter in the Value box is a line break (tested above).
+  it("adds on Enter in the Name box, and Show value never submits", async () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) =>
@@ -487,7 +577,7 @@ describe("EnvironmentScreen", () => {
     const posts = () => fetchSpy.mock.calls.filter(([, init]) => init?.method === "POST").length;
 
     await user.type(secrets().getByLabelText("Name"), "TF_VAR_TEST");
-    const value = secrets().getByLabelText<HTMLInputElement>("Value");
+    const value = secrets().getByLabelText<HTMLTextAreaElement>("Value");
     await user.type(value, "secret-value");
     const toggle = secrets().getByRole("button", { name: "Show value" });
     await user.click(toggle);
@@ -496,7 +586,7 @@ describe("EnvironmentScreen", () => {
     expect(posts()).toBe(0);
     expect(value.value).toBe("secret-value");
 
-    await user.type(value, "{Enter}");
+    await user.type(secrets().getByLabelText("Name"), "{Enter}");
     await waitFor(() => expect(posts()).toBe(1));
     await waitFor(() => expect(value.value).toBe(""));
   });
@@ -514,13 +604,13 @@ describe("EnvironmentScreen", () => {
     await user.click(screen.getByRole("button", { name: "Variables" }));
 
     expect(variables().getByLabelText<HTMLInputElement>("Name").value).toBe("");
-    expect(variables().getByLabelText<HTMLInputElement>("Value").value).toBe("");
+    expect(variables().getByLabelText<HTMLTextAreaElement>("Value").value).toBe("");
     // Hidden, the draft still holds off the re-auth redirect.
     expect(document.querySelector("[data-unsaved='true']")).not.toBeNull();
 
     await user.click(screen.getByRole("button", { name: "Secrets" }));
-    const value = secrets().getByLabelText<HTMLInputElement>("Value");
+    const value = secrets().getByLabelText<HTMLTextAreaElement>("Value");
     expect(value.value).toBe("ghp_secret");
-    expect(value.type).toBe("password");
+    expect(masking(value)).toBe("disc");
   });
 });
