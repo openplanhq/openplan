@@ -74,7 +74,7 @@ openplan can't pass one template's outputs to another, and a sensitive
 output (the cluster's client key) never shows in a log to be copied, so on a
 cluster this example made, `dependencies` reads the cluster template's state
 instead. Its workspace name is in the cluster template's run logs, on the
-line `Switched to workspace "<name>"`.
+line where tofu says it switched to workspace `"<name>"`.
 
 Its outputs are what the machine you open openplan from needs, and what
 openplan's own module takes: `openplan_host`, `dex_issuer_url`,
