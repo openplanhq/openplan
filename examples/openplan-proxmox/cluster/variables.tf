@@ -1,0 +1,128 @@
+variable "environment" {
+  description = "The environment this cluster is, such as prod or bench. It names the VMs and every file left on the host."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]{0,15}$", var.environment))
+    error_message = "environment must be lowercase letters, digits and hyphens, starting with a letter, at most 16 characters."
+  }
+}
+
+variable "node_name" {
+  description = "The Proxmox node the VMs run on."
+  type        = string
+}
+
+variable "vm_datastore" {
+  description = "Where the VMs' disks and cloud-init drives go."
+  type        = string
+  default     = "local-lvm"
+}
+
+variable "image_datastore" {
+  description = "Where the downloaded cloud image goes; it needs the import content type."
+  type        = string
+  default     = "local"
+}
+
+variable "snippets_datastore" {
+  description = "Where the cloud-init files go; it needs the snippets content type."
+  type        = string
+  default     = "local"
+}
+
+variable "image_url" {
+  description = "The Debian cloud image the VMs boot from. Downloaded once: a newer upstream image doesn't replace running VMs."
+  type        = string
+  default     = "https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2"
+}
+
+variable "bridge" {
+  description = "The bridge the VMs' one NIC joins."
+  type        = string
+  default     = "vmbr1"
+}
+
+variable "network_cidr" {
+  description = "The bridge's network."
+  type        = string
+  default     = "10.10.10.0/24"
+}
+
+variable "gateway" {
+  description = "The bridge's gateway, the Proxmox host on a NAT bridge."
+  type        = string
+  default     = "10.10.10.1"
+}
+
+variable "dns_servers" {
+  description = "The VMs' DNS servers."
+  type        = list(string)
+  default     = ["1.1.1.1", "9.9.9.9"]
+}
+
+variable "addresses" {
+  description = "One address per node, without a prefix. The first is the k3s server; the rest are agents."
+  type        = list(string)
+
+  validation {
+    condition     = length(var.addresses) >= 2
+    error_message = "A cluster needs at least two nodes: a server and an agent."
+  }
+
+  validation {
+    condition = alltrue([
+      for address in var.addresses :
+      can(cidrhost("${address}/${split("/", var.network_cidr)[1]}", 0)) &&
+      try(cidrhost("${address}/${split("/", var.network_cidr)[1]}", 0), "") == cidrhost(var.network_cidr, 0)
+    ])
+    error_message = "Every address must be inside network_cidr."
+  }
+}
+
+variable "cores" {
+  description = "vCPUs per node."
+  type        = number
+  default     = 4
+}
+
+variable "memory_mib" {
+  description = "Memory per node, fixed: ballooning is off so a node never shrinks under its pods."
+  type        = number
+  default     = 6144
+}
+
+variable "disk_gib" {
+  description = "Disk per node."
+  type        = number
+  default     = 40
+}
+
+variable "cpu_affinity" {
+  description = "The host threads this environment's VMs run on, such as 0-2,6-8, so two environments never share a physical core."
+  type        = string
+}
+
+variable "k3s_version" {
+  description = "The k3s release every node installs, such as v1.36.5+k3s1."
+  type        = string
+}
+
+variable "ssh_authorized_key" {
+  description = "A public key that can SSH into every node as debian, for when one needs a look."
+  type        = string
+}
+
+# A credential, never stack config: set it as TF_VAR_proxmox_ssh_private_key_data.
+# Base64, because a credential's value is one line and a key is several.
+variable "proxmox_ssh_private_key_data" {
+  description = "Base64 of the private key bpg uses to SSH into the Proxmox host, which it needs to upload cloud-init files. Credential TF_VAR_proxmox_ssh_private_key_data."
+  type        = string
+  default     = null
+  sensitive   = true
+
+  validation {
+    condition     = var.proxmox_ssh_private_key_data != null
+    error_message = "Set the stack credential TF_VAR_proxmox_ssh_private_key_data to the base64 of the SSH key for the Proxmox host (base64 < key | tr -d '\\n')."
+  }
+}
