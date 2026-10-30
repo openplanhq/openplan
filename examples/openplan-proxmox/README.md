@@ -44,10 +44,10 @@ is a single line, so certificates are base64, as kubeconfig holds them
 | `AWS_ENDPOINT_URL_S3` | no | `https://<account-id>.r2.cloudflarestorage.com` |
 | `AWS_ACCESS_KEY_ID` | yes | the R2 token's access key |
 | `AWS_SECRET_ACCESS_KEY` | yes | the R2 token's secret |
-| `TF_VAR_kube_host` | no | the cluster's API server URL |
-| `TF_VAR_kube_cluster_ca_data` | no | the cluster CA, base64 |
-| `TF_VAR_kube_client_certificate_data` | no | a cluster-admin client certificate, base64 |
-| `TF_VAR_kube_client_key_data` | yes | its key, base64 |
+| `TF_VAR_kube_host` | no | the cluster's API server URL, unless `cluster_workspace` is set |
+| `TF_VAR_kube_cluster_ca_data` | no | the cluster CA, base64, unless `cluster_workspace` is set |
+| `TF_VAR_kube_client_certificate_data` | no | a cluster-admin client certificate, base64, unless `cluster_workspace` is set |
+| `TF_VAR_kube_client_key_data` | yes | its key, base64, unless `cluster_workspace` is set |
 | `TF_VAR_kube_tls_server_name` | no | only when the API's address isn't in its certificate |
 | `TF_VAR_dex_admin_password_hash` | yes | a bcrypt hash of the administrator's password |
 
@@ -67,6 +67,14 @@ htpasswd -BnC 10 admin | cut -d: -f2
 | `dns_mode` | `k3s` | `k3s` writes k3s's `coredns-custom`; `none` leaves CoreDNS alone |
 | `dex_admin_email` | | the administrator's sign-in email |
 | `dex_admin_user_id` | derived from the issuer | the administrator's Dex userID, which fixes `root_subject` |
+| `cluster_workspace` | | the workspace of this stack's `cluster` template; set, the connection comes from its state and no `TF_VAR_kube_*` credential is needed |
+| `state_bucket` | | with `cluster_workspace`: the bucket in `TF_CLI_ARGS_init` |
+
+openplan can't pass one template's outputs to another, and a sensitive
+output (the cluster's client key) never shows in a log to be copied, so on a
+cluster this example made, `dependencies` reads the cluster template's state
+instead. Its workspace name is in the cluster template's run logs, on the
+line `Switched to workspace "<name>"`.
 
 Its outputs are what the machine you open openplan from needs, and what
 openplan's own module takes: `openplan_host`, `dex_issuer_url`,

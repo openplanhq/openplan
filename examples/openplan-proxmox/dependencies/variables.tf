@@ -47,6 +47,23 @@ variable "dex_admin_user_id" {
   }
 }
 
+variable "cluster_workspace" {
+  description = "The workspace of this stack's cluster template, shown in its run logs (\"Switched to workspace\"). Set, the connection comes from that template's state and no TF_VAR_kube_* credential is needed."
+  type        = string
+  default     = null
+}
+
+variable "state_bucket" {
+  description = "The bucket the cluster template's state is in: the one in TF_CLI_ARGS_init."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.cluster_workspace == null || var.state_bucket != null
+    error_message = "state_bucket is needed to read the cluster template's state: the bucket in TF_CLI_ARGS_init."
+  }
+}
+
 # The connection and the password hash are credentials, never stack config:
 # set them as stack credentials named TF_VAR_<variable>. The null default keeps
 # them out of the stack's form, and the check turns a missing one into a plan
@@ -78,8 +95,8 @@ variable "kube_host" {
   default     = null
 
   validation {
-    condition     = var.kube_host != null
-    error_message = "Set the stack credential TF_VAR_kube_host to the cluster's API server URL."
+    condition     = var.cluster_workspace != null || var.kube_host != null
+    error_message = "Set cluster_workspace to read the cluster template's state, or the stack credential TF_VAR_kube_host to the cluster's API server URL."
   }
 }
 
@@ -89,8 +106,8 @@ variable "kube_cluster_ca_data" {
   default     = null
 
   validation {
-    condition     = var.kube_cluster_ca_data != null
-    error_message = "Set the stack credential TF_VAR_kube_cluster_ca_data to the cluster CA, base64 as in kubeconfig's certificate-authority-data."
+    condition     = var.cluster_workspace != null || var.kube_cluster_ca_data != null
+    error_message = "Set cluster_workspace to read the cluster template's state, or the stack credential TF_VAR_kube_cluster_ca_data to the cluster CA, base64 as in kubeconfig's certificate-authority-data."
   }
 }
 
@@ -100,8 +117,8 @@ variable "kube_client_certificate_data" {
   default     = null
 
   validation {
-    condition     = var.kube_client_certificate_data != null
-    error_message = "Set the stack credential TF_VAR_kube_client_certificate_data to the admin client certificate, base64 as in kubeconfig's client-certificate-data."
+    condition     = var.cluster_workspace != null || var.kube_client_certificate_data != null
+    error_message = "Set cluster_workspace to read the cluster template's state, or the stack credential TF_VAR_kube_client_certificate_data to the admin client certificate, base64 as in kubeconfig's client-certificate-data."
   }
 }
 
@@ -112,8 +129,8 @@ variable "kube_client_key_data" {
   sensitive   = true
 
   validation {
-    condition     = var.kube_client_key_data != null
-    error_message = "Set the stack credential TF_VAR_kube_client_key_data to the admin client key, base64 as in kubeconfig's client-key-data."
+    condition     = var.cluster_workspace != null || var.kube_client_key_data != null
+    error_message = "Set cluster_workspace to read the cluster template's state, or the stack credential TF_VAR_kube_client_key_data to the admin client key, base64 as in kubeconfig's client-key-data."
   }
 }
 

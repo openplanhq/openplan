@@ -200,3 +200,43 @@ run "bad_environment_fails" {
 
   expect_failures = [var.environment]
 }
+
+run "connection_from_cluster_state" {
+  # The cluster template's outputs, read from its state: no kube_* credential
+  # needed, and the client key never leaves state.
+  override_data {
+    target = data.terraform_remote_state.cluster
+    values = {
+      outputs = {
+        api_url                 = "https://10.10.10.10:6443"
+        cluster_ca_data         = "Y2E="
+        client_certificate_data = "Y2VydA=="
+        client_key_data         = "a2V5"
+      }
+    }
+  }
+
+  variables {
+    cluster_workspace            = "mtp_acme_prod_cluster_ab12cd34"
+    state_bucket                 = "openplan-state"
+    kube_host                    = null
+    kube_cluster_ca_data         = null
+    kube_client_certificate_data = null
+    kube_client_key_data         = null
+  }
+
+  assert {
+    condition     = local.kube.host == "https://10.10.10.10:6443" && local.kube.client_key == "key"
+    error_message = "the connection isn't taken from the cluster's state"
+  }
+}
+
+run "cluster_workspace_needs_bucket" {
+  command = plan
+
+  variables {
+    cluster_workspace = "mtp_acme_prod_cluster_ab12cd34"
+  }
+
+  expect_failures = [var.state_bucket]
+}

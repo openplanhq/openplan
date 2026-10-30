@@ -1,17 +1,17 @@
 provider "kubernetes" {
-  host                   = var.kube_host
-  cluster_ca_certificate = base64decode(var.kube_cluster_ca_data)
-  client_certificate     = base64decode(var.kube_client_certificate_data)
-  client_key             = base64decode(var.kube_client_key_data)
+  host                   = local.kube.host
+  cluster_ca_certificate = local.kube.cluster_ca_certificate
+  client_certificate     = local.kube.client_certificate
+  client_key             = local.kube.client_key
   tls_server_name        = var.kube_tls_server_name
 }
 
 provider "helm" {
   kubernetes = {
-    host                   = var.kube_host
-    cluster_ca_certificate = base64decode(var.kube_cluster_ca_data)
-    client_certificate     = base64decode(var.kube_client_certificate_data)
-    client_key             = base64decode(var.kube_client_key_data)
+    host                   = local.kube.host
+    cluster_ca_certificate = local.kube.cluster_ca_certificate
+    client_certificate     = local.kube.client_certificate
+    client_key             = local.kube.client_key
     tls_server_name        = var.kube_tls_server_name
   }
 }
