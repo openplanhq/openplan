@@ -2172,6 +2172,7 @@ components:
             - too_long
             - out_of_range
             - duplicate
+            - sensitive
         detail:
           type: string
           description: One sentence for people, naming the field.
@@ -2368,14 +2369,18 @@ components:
         description: { type: string }
         required:
           type: boolean
-          description: True when the variable has no default and must be supplied in `config`.
+          description: |
+            True when the variable has no default and must be supplied: in
+            `config`, or, when it is `sensitive`, as an Environment secret
+            named `TF_VAR_<name>`.
         has_default: { type: boolean }
         sensitive:
           type: boolean
           description: |
-            Marked sensitive in Terraform. A client should mask it — but note
-            that `config` is stored in the clear. Secrets belong in
-            credentials, not in variables.
+            Marked sensitive in Terraform. Its value can't go in `config`,
+            which is stored in the clear: it comes from an Environment secret
+            named `TF_VAR_<name>`, which is write-only and blanked in run
+            logs. See `StackTemplateConfig`.
         has_validation: { type: boolean }
       required:
         [template_revision_id, name, type_expression, description, required,
@@ -2555,6 +2560,14 @@ components:
         checked here, and Terraform reports it at plan. `null` is refused:
         leave a variable out to use its default. The value is stored and
         passed to the run as sent, not as converted.
+
+        A variable marked `sensitive` takes no value here: config is stored
+        in the clear and returned to everyone who can view the stack. A key
+        for one, `null` included, is refused with `422 validation-failed`,
+        pointer `#/config/<name>` and issue `sensitive`. Set its value as an
+        Environment secret named `TF_VAR_<name>`, on the stack or on the
+        installed template; a required one with no secret fails at plan,
+        where Terraform names it.
       example:
         region: us-east-1
         azs: [us-east-1a, us-east-1b]

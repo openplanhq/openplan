@@ -10,7 +10,7 @@ This document describes openplan's current MVP product model, system architectur
 
 - Let users register Terraform templates from GitHub repositories.
 - Let users create stacks and add templates to those stacks.
-- Let users configure non-sensitive Terraform variables from the UI.
+- Let users configure Terraform variables from the UI, with sensitive ones set as Environment secrets.
 - Run Terraform `plan`, `apply`, and `destroy` from the UI.
 - Use a Go workflow engine to orchestrate long-running operations.
 - Start every Terraform run in a fresh empty working directory.
@@ -80,7 +80,7 @@ The UI supports:
 - Creating stacks.
 - Adding tags to stacks as key-value pairs.
 - Adding templates to stacks.
-- Entering non-sensitive template input values.
+- Entering template input values, and the Environment secrets that set sensitive ones.
 - Triggering `plan`, `apply`, and `destroy`.
 - Viewing run lifecycle, activity events, and live logs.
 - Pressing a dummy approval button for apply operations.
@@ -480,9 +480,9 @@ Each run should record backend identity metadata, such as backend type and a nor
 
 Template input schema is not declared in `template.yaml`.
 
-The platform infers Terraform variables from root module `.tf` files and lets users enter non-sensitive values from the UI.
+The platform infers Terraform variables from root module `.tf` files and lets users enter their values from the UI.
 
-Non-sensitive values are stored per `StackTemplate`:
+Values are stored per `StackTemplate`:
 
 ```text
 StackTemplate.config_json
@@ -494,7 +494,7 @@ At runtime, these values are rendered into Terraform variable input, such as:
 terraform.tfvars.json
 ```
 
-The platform does not collect secret Terraform input values in MVP. Templates should fetch secret material directly from Vault using Terraform providers/data sources.
+That config is stored in the clear and returned to everyone who can view the stack, so it never holds the value of a variable marked `sensitive = true`: config validation refuses one with issue `sensitive`. A sensitive variable's value comes from an Environment secret named `TF_VAR_<name>`, on the stack or on the installed template. Secrets are encrypted, write-only and blanked in run logs; the config goes as `-var-file`, which outranks `TF_VAR_`, and since config never names a sensitive variable the secret is what Terraform reads.
 
 Runner secrets are execution credentials, not template input values. Examples:
 
@@ -1029,7 +1029,7 @@ Future design should answer:
 
 ### Variable Input Limits
 
-The MVP infers Terraform variables and supports non-sensitive UI-entered values, but advanced variable editing rules are deferred.
+The MVP infers Terraform variables and supports UI-entered values, with sensitive ones set as `TF_VAR_` secrets, but advanced variable editing rules are deferred.
 
 Future design should answer:
 
@@ -1037,7 +1037,6 @@ Future design should answer:
 - whether unsupported complex values require raw JSON input
 - how nullable values are represented
 - how Terraform validation metadata is surfaced
-- how sensitive variables are displayed as unsupported in the UI
 
 ### Observability
 
