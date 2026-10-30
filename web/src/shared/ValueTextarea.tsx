@@ -24,7 +24,7 @@ export const writingAssistantsOff = {
  * openplan UI's Value box for an environment entry that is read back, a
  * variable: shadcn's Textarea, so a multi-line value such as a CA
  * certificate keeps its line breaks, where an input would fold them into
- * spaces. Enter is a new line here, never a submit.
+ * spaces. Enter is a line break unless the caller's onKeyDown takes it.
  */
 export default function ValueTextarea({ className, ...props }: ComponentProps<"textarea">) {
   return (

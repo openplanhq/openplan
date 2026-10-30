@@ -246,9 +246,32 @@ describe("EnvironmentScreen", () => {
     ));
   });
 
-  // Enter is a line break in a multi-line value, so it can't also add the
-  // entry: a key pasted or typed a line at a time is never sent half done.
-  it("Enter in the value box adds a line, not the entry", async () => {
+  // Most values are one line, a token or a password, and Enter added them
+  // when the box was an input; it still does, without a line break.
+  it("Enter adds a one-line value", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) =>
+      init?.method === "POST" ? jsonResponse(credential, 201) : jsonResponse([credential])
+    );
+    renderScreen(queryClient);
+    const user = userEvent.setup();
+
+    await user.type(secrets().getByLabelText("Name"), "TF_VAR_TEST");
+    await user.type(secrets().getByLabelText("Value"), "hunter2{Enter}");
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining("/stacks/stack_1/credentials"),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ name: "TF_VAR_TEST", value: "hunter2", sensitive: true })
+      })
+    ));
+  });
+
+  // Once a value spans lines, a pasted key, Enter is a line break, so a key
+  // being edited is never sent half done; the button adds it.
+  it("Enter in a value that spans lines adds a line, not the entry", async () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
     const fetchSpy = vi.spyOn(globalThis, "fetch");
@@ -258,15 +281,31 @@ describe("EnvironmentScreen", () => {
 
     // A name too, so an add, if Enter made one, would get past the check.
     await user.type(secrets().getByLabelText("Name"), "TF_VAR_TEST");
-    await user.type(value, "a{Enter}b");
+    fireEvent.change(value, { target: { value: "a\nb" } });
+    await user.type(value, "{Enter}c");
 
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(value.value).toBe("a\nb");
+    expect(value.value).toBe("a\nb\nc");
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  // Enter used to add the entry, so a habitual Enter after a token, or a
-  // token copied from a file, now leaves a line break at its end. It is sent
+  // A key can still be typed in by hand: Shift+Enter starts its second line.
+  it("Shift+Enter starts a second line", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    renderScreen(queryClient);
+    const user = userEvent.setup();
+    const value = secrets().getByLabelText<HTMLTextAreaElement>("Value");
+
+    await user.type(secrets().getByLabelText("Name"), "TF_VAR_TEST");
+    await user.type(value, "a{Shift>}{Enter}{/Shift}b");
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(value.value).toBe("a\nb");
+  });
+
+  // A token copied from a file can carry a line break at its end. It is sent
   // as typed, so the box says so rather than letting the provider fail later.
   it("says when a one-line value ends with a line break", () => {
     const queryClient = testQueryClient();
@@ -617,7 +656,7 @@ describe("EnvironmentScreen", () => {
   });
 
   // The row is a form: Enter in the Name box adds, and Show value only
-  // toggles. Enter in the Value box is a line break (tested above).
+  // toggles. Enter in the Value box adds only a one-line value (tested above).
   it("adds on Enter in the Name box, and Show value never submits", async () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);

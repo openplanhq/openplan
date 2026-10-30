@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import type { KeyboardEvent } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 import { apiErrorMessage, fieldErrors } from "../../api/problems";
 import type { CredentialMetadata, CredentialRequest } from "../../api/types";
@@ -98,12 +99,29 @@ export default function CredentialsPanel({ kind, note, emptyTitle, emptyDescript
   // it means retyping a password from scratch.
   const hasUnsavedCredential = name !== "" || value !== "";
   const secret = kind === "secret";
-  // A value is sent exactly as typed, so a one-line token followed by a
-  // habitual Enter, or copied from a file, keeps its line break and fails
-  // wherever it is used. A key's final line break is part of the key, so
-  // only a single line ending in one gets the note.
+  // A value is sent exactly as typed, so a one-line token copied from a file
+  // keeps the line break at its end and fails wherever it is used. A key's
+  // final line break is part of the key, so only a single line ending in one
+  // gets the note.
   const strayLineBreak = /^[^\n]+\n+$/.test(value);
   const valueDescribedBy = [invalid.value ? errorId : "", strayLineBreak ? lineBreakNoteId : ""].filter(Boolean).join(" ") || undefined;
+
+  /** Enter adds a one-line value, as it did when the box was an input: most
+      values are a token or a password. Once the value spans lines, a pasted
+      key, Enter is a line break, so a key being edited is never sent half
+      done; Shift+Enter starts a second line by hand. */
+  function addOnEnter(event: KeyboardEvent<HTMLTextAreaElement>) {
+    // isComposing: Enter that commits an input method's text isn't an add.
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing || value.includes("\n")) {
+      return;
+    }
+    event.preventDefault();
+    // The disabled button stops a second add while one is out; this path
+    // doesn't go through the button, so it checks the same thing.
+    if (!busy) {
+      void submit();
+    }
+  }
 
   return (
     <div className="flex min-w-0 flex-col gap-5" data-unsaved={hasUnsavedCredential ? "true" : undefined}>
@@ -159,10 +177,9 @@ export default function CredentialsPanel({ kind, note, emptyTitle, emptyDescript
             ))}
           </ul>
         )}
-        {/* A form, so Enter in the Name box adds the entry. In the Value
-            box Enter is a line break, so a key typed or pasted a line at a
-            time is never sent half done; the button adds it. The Show
-            value toggle is type=button and never submits it.
+        {/* A form, so Enter in the Name box adds the entry; in the Value
+            box it adds a one-line value (addOnEnter). The Show value toggle
+            is type=button and never submits it.
             Each field spans the form's two rows, label over box, and the
             button sits in the second row, so the labels share a line and
             the boxes and the button share a top edge: as the Value box
@@ -208,6 +225,7 @@ export default function CredentialsPanel({ kind, note, emptyTitle, emptyDescript
                   placeholder="Secret value"
                   value={value}
                   onChange={(event) => setValue(event.target.value)}
+                  onKeyDown={addOnEnter}
                   aria-invalid={invalid.value ? true : undefined}
                   aria-describedby={valueDescribedBy}
                 />
@@ -220,6 +238,7 @@ export default function CredentialsPanel({ kind, note, emptyTitle, emptyDescript
                   autoComplete="off"
                   value={value}
                   onChange={(event) => setValue(event.target.value)}
+                  onKeyDown={addOnEnter}
                   aria-invalid={invalid.value ? true : undefined}
                   aria-describedby={valueDescribedBy}
                 />
