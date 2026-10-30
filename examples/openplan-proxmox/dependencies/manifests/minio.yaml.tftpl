@@ -1,0 +1,117 @@
+# MinIO no longer publishes images to Docker Hub or Quay, so these are
+# Chainguard's builds, pinned by digest: the free tier tags only :latest.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minio-data
+  namespace: ${namespace}
+  labels:
+    app.kubernetes.io/part-of: openplan
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+  namespace: ${namespace}
+  labels:
+    app.kubernetes.io/part-of: openplan
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+        app.kubernetes.io/part-of: openplan
+    spec:
+      securityContext:
+        # The image runs as 65532; let it write the volume.
+        fsGroup: 65532
+      containers:
+        - name: minio
+          image: cgr.dev/chainguard/minio@sha256:d88920d6a50bd0b088223b688be3b76c63e6205dbe494437f67ba1240ea12880
+          args: ["server", "/data"]
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef: {name: openplan-dependencies, key: minio-root-user}
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: openplan-dependencies, key: minio-root-password}
+          ports:
+            - containerPort: 9000
+          readinessProbe:
+            httpGet:
+              path: /minio/health/ready
+              port: 9000
+            periodSeconds: 5
+          resources:
+            requests: {cpu: 250m, memory: 512Mi}
+            limits: {cpu: 250m, memory: 512Mi}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: minio-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+  namespace: ${namespace}
+  labels:
+    app.kubernetes.io/part-of: openplan
+spec:
+  selector:
+    app: minio
+  ports:
+    - port: 9000
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-bucket
+  namespace: ${namespace}
+  labels:
+    app.kubernetes.io/part-of: openplan
+spec:
+  # The image has no shell to loop in; until MinIO is ready, the Job's own
+  # retries are the loop.
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: make-bucket
+          image: cgr.dev/chainguard/minio-client@sha256:72f9978d415ea8294d78051fb3aee2fd258d449237633f77f100b5367bb5225d
+          args: ["--config-dir", "/tmp/mc", "mb", "--ignore-existing", "local/openplan-artifacts"]
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef: {name: openplan-dependencies, key: minio-root-user}
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: openplan-dependencies, key: minio-root-password}
+            # mc's alias from the environment, so no `mc alias set` step.
+            - name: MC_HOST_local
+              value: http://$(MINIO_ROOT_USER):$(MINIO_ROOT_PASSWORD)@minio:9000
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: 100m, memory: 128Mi}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

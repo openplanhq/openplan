@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: valkey
+  namespace: ${namespace}
+  labels:
+    app.kubernetes.io/part-of: openplan
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: valkey
+  template:
+    metadata:
+      labels:
+        app: valkey
+        app.kubernetes.io/part-of: openplan
+    spec:
+      containers:
+        - name: valkey
+          image: valkey/valkey:8.1.10-alpine
+          # docker-compose.release.yaml's command line: memory only,
+          # noeviction, the default user off, the api allowed to read and
+          # append, the executor only to append. Kubernetes expands $(VAR)
+          # from the env below.
+          args:
+            - valkey-server
+            - --maxmemory
+            - 256mb
+            - --maxmemory-policy
+            - noeviction
+            - --save
+            - ""
+            - --appendonly
+            - "no"
+            - --user
+            - default
+            - "off"
+            - --user
+            - api
+            - "on"
+            - ">$(VALKEY_API_PASSWORD)"
+            - "~runlog:*"
+            - +ping
+            - +xread
+            - +xrange
+            - +xrevrange
+            - +xadd
+            - +expire
+            - --user
+            - executor
+            - "on"
+            - ">$(VALKEY_EXECUTOR_PASSWORD)"
+            - "~runlog:*"
+            - +ping
+            - +xadd
+            - +expire
+          env:
+            - name: VALKEY_API_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: openplan-dependencies, key: valkey-api-password}
+            - name: VALKEY_EXECUTOR_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: openplan-dependencies, key: valkey-executor-password}
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "valkey-cli --no-auth-warning --user api --pass \"$VALKEY_API_PASSWORD\" ping | grep -q PONG"]
+            periodSeconds: 5
+          # 256 MiB of data plus Valkey's own overhead.
+          resources:
+            requests: {cpu: 100m, memory: 320Mi}
+            limits: {cpu: 100m, memory: 320Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: valkey
+  namespace: ${namespace}
+  labels:
+    app.kubernetes.io/part-of: openplan
+spec:
+  selector:
+    app: valkey
+  ports:
+    - port: 6379
