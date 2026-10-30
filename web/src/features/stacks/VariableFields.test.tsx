@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TemplateVariable } from "../../api/types";
 import VariableFields from "./VariableFields";
@@ -21,13 +22,16 @@ function variable(overrides: Partial<TemplateVariable> = {}): TemplateVariable {
 function renderFields(variables: TemplateVariable[], props: Partial<React.ComponentProps<typeof VariableFields>> = {}) {
   const onVariableValueChange = vi.fn();
   render(
-    <VariableFields
-      variables={variables}
-      variableValues={{}}
-      onVariableValueChange={onVariableValueChange}
-      emptyMessage="No variables."
-      {...props}
-    />
+    <MemoryRouter>
+      <VariableFields
+        variables={variables}
+        variableValues={{}}
+        onVariableValueChange={onVariableValueChange}
+        emptyMessage="No variables."
+        environmentPath="/stacks/s1/templates/t1/environment"
+        {...props}
+      />
+    </MemoryRouter>
   );
   return { onVariableValueChange };
 }
@@ -42,6 +46,18 @@ function describedBy(field: HTMLElement): string[] {
 
 describe("VariableFields", () => {
   afterEach(cleanup);
+
+  // A sensitive value can't go in config, which is stored in the clear, so
+  // the form has no box for it: it names the secret that sets it instead.
+  it("draws a sensitive variable without an input, naming its secret", () => {
+    renderFields([variable({ name: "db_password", sensitive: true, required: true }), variable({ name: "region" })]);
+
+    expect(screen.queryByLabelText(/db_password/)).toBeNull();
+    expect(screen.getByLabelText("region")).toBeTruthy();
+    expect(screen.getByText("TF_VAR_db_password")).toBeTruthy();
+    expect(screen.getByText("Sensitive")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Environment" }).getAttribute("href")).toBe("/stacks/s1/templates/t1/environment");
+  });
 
   it.each(["string", "number", "bool"])("keeps a one-line input for %s, its type as the placeholder only", (type) => {
     renderFields([variable({ name: "v", type_expression: type })]);

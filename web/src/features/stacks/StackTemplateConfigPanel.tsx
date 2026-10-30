@@ -15,6 +15,8 @@ interface StackTemplateConfigPanelProps {
   // disabled: the capability gate's denied-with-reason state (AUTH-020).
   disabledReason?: string;
   errors?: Record<string, string>;
+  /** Where a sensitive variable's secret is added: this template's Environment. */
+  environmentPath: string;
 }
 
 /**
@@ -30,7 +32,8 @@ export default function StackTemplateConfigPanel({
   onSave,
   saveBusy,
   disabledReason,
-  errors
+  errors,
+  environmentPath
 }: StackTemplateConfigPanelProps) {
   const locked = Boolean(disabledReason);
   return (
@@ -47,6 +50,7 @@ export default function StackTemplateConfigPanel({
         disabled={locked}
         emptyMessage="This template declares no variables."
         errors={errors}
+        environmentPath={environmentPath}
       />
       <button
         type="button"

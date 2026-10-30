@@ -64,6 +64,10 @@ export default function ChangeRevisionScreen() {
   // The config sent covers the target revision's variables only, so anything
   // the new revision dropped is excluded structurally.
   const targetVariables = [...partition.added, ...partition.carried];
+  // A variable the stack set while it was plain, which the target marks
+  // sensitive: its value can't come along, since config may not hold it, so
+  // it is called out like a dropped one, with the secret that replaces it.
+  const nowSensitive = partition.carried.filter((variable) => variable.sensitive && stackTemplate.config[variable.name] != null);
   const baseValues = variableValuesFromConfig(stackTemplate.config, targetVariables);
   const variableValues: Record<string, string> = {};
   for (const variable of targetVariables) {
@@ -214,7 +218,7 @@ export default function ChangeRevisionScreen() {
                 {/* What the change does to the config, stated outright: new
                     variables in muted text, dropped ones in warning, since
                     their values will be lost. */}
-                {(partition.added.length > 0 || partition.removed.length > 0) && (
+                {(partition.added.length > 0 || partition.removed.length > 0 || nowSensitive.length > 0) && (
                   <ul className="flex flex-col gap-1 text-meta">
                     {partition.added.map((variable) => (
                       <li key={`added-${variable.name}`} className="text-muted-foreground wrap-anywhere" data-testid={`change-revision-added-${variable.name}`}>
@@ -224,6 +228,12 @@ export default function ChangeRevisionScreen() {
                     {partition.removed.map((variable) => (
                       <li key={`removed-${variable.name}`} className="text-warning wrap-anywhere" data-testid={`change-revision-removed-${variable.name}`}>
                         <span className="font-mono">{variable.name}</span> is no longer used and will be dropped.
+                      </li>
+                    ))}
+                    {nowSensitive.map((variable) => (
+                      <li key={`now-sensitive-${variable.name}`} className="text-warning wrap-anywhere" data-testid={`change-revision-now-sensitive-${variable.name}`}>
+                        <span className="font-mono">{variable.name}</span> is now sensitive, so its value won't carry over. Set it as the secret{" "}
+                        <span className="font-mono">{`TF_VAR_${variable.name}`}</span>.
                       </li>
                     ))}
                   </ul>
@@ -237,6 +247,7 @@ export default function ChangeRevisionScreen() {
                   }}
                   emptyMessage="This revision declares no variables."
                   errors={variableErrors.errors}
+                  environmentPath={stackTemplatePath(stackId, stackTemplate.id, "environment")}
                 />
               </>
             )}

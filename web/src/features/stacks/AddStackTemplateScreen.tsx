@@ -318,6 +318,9 @@ export default function AddStackTemplateScreen() {
                   }}
                   emptyMessage="This template declares no variables."
                   errors={variableErrors.errors}
+                  // Not installed yet, so it has no Environment of its own; a
+                  // stack secret reaches every template the stack installs.
+                  environmentPath={`/stacks/${stackId}/environment`}
                 />
               </div>
             )}

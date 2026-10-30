@@ -114,10 +114,15 @@ export interface EncodedConfig {
 // configFromVariableValues turns the field text into the request's config.
 // Empty text means "not set", so the variable is left out and its default
 // applies. The shape against the type is the server's check, not this one's.
+// A sensitive variable is never sent, whatever text its slot holds: config is
+// stored in the clear, and its value comes from a TF_VAR_ secret.
 export function configFromVariableValues(variables: TemplateVariable[], values: Record<string, string>): EncodedConfig {
   const config: Record<string, unknown> = {};
   const errors: Record<string, string> = {};
   for (const variable of variables) {
+    if (variable.sensitive) {
+      continue;
+    }
     const text = values[variable.name]?.trim() ?? "";
     if (text === "") {
       continue;

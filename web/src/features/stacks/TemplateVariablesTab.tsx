@@ -11,6 +11,7 @@ import { useLockState, variablesLockReason } from "../runs/lockReasons";
 import StackTemplateConfigPanel from "./StackTemplateConfigPanel";
 import { useStackTemplate } from "./stackTemplateContext";
 import { canSaveInstalledTemplateConfig, configFromVariableValues, variableValuesFromConfig } from "./stackWorkflow";
+import { stackTemplatePath } from "./templateSelection";
 import RequestIdNote from "../../shared/RequestIdNote";
 import { cn } from "@/lib/utils";
 
@@ -111,6 +112,7 @@ export default function TemplateVariablesTab() {
         onSave={() => void handleSave()}
         saveBusy={updateStackTemplateConfigMutation.isPending}
         disabledReason={lockReason || undefined}
+        environmentPath={stackTemplatePath(stackId, stackTemplate.id, "environment")}
       />
       {errorMessage && <ErrorLine>{errorMessage}</ErrorLine>}
     </div>
