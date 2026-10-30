@@ -36,6 +36,17 @@ variable "dex_admin_email" {
   type        = string
 }
 
+variable "dex_admin_user_id" {
+  description = "The administrator's Dex userID, which fixes their OIDC subject (root_subject). Empty derives a stable one from the issuer."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.dex_admin_user_id == null || can(regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", var.dex_admin_user_id))
+    error_message = "dex_admin_user_id must be a lowercase UUID."
+  }
+}
+
 # The connection and the password hash are credentials, never stack config:
 # set them as stack credentials named TF_VAR_<variable>. The null default keeps
 # them out of the stack's form, and the check turns a missing one into a plan
@@ -51,6 +62,13 @@ variable "dex_admin_password_hash" {
   validation {
     condition     = var.dex_admin_password_hash != null
     error_message = "Set the stack credential TF_VAR_dex_admin_password_hash to a bcrypt hash of the administrator's password."
+  }
+
+  # A plaintext password would pass Dex's config load and crash-loop Dex, and
+  # the apply would sit out its rollout timeout before saying so.
+  validation {
+    condition     = var.dex_admin_password_hash == null || can(regex("^\\$2[aby]\\$[0-9]{2}\\$[./A-Za-z0-9]{53}$", var.dex_admin_password_hash))
+    error_message = "TF_VAR_dex_admin_password_hash must be a bcrypt hash, not the password: htpasswd -BnC 10 admin | cut -d: -f2"
   }
 }
 

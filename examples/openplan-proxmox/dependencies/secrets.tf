@@ -64,17 +64,29 @@ resource "kubernetes_secret_v1" "credentials" {
   }
 }
 
-resource "random_uuid" "dex_admin" {}
-
 locals {
+  # A fixed userID, so the administrator's subject, and so root in openplan,
+  # survives every apply. Derived rather than generated: a generated one is
+  # unknown at the first plan, and kubernetes_manifest refuses any manifest
+  # that isn't wholly known then. A subject isn't a secret.
+  dex_admin_user_id = coalesce(var.dex_admin_user_id, uuidv5("url", "${local.issuer_url}/admin"))
+
   # The OIDC subject Dex issues a static user: base64 of the protobuf
   # {1: userID, 2: connector "local"}. A UUID is 36 bytes, so its length byte
   # is 0x24, "$".
-  root_subject = base64encode(format("\n$%s\u0012\u0005local", random_uuid.dex_admin.result))
+  root_subject = base64encode(format("\n$%s\u0012\u0005local", local.dex_admin_user_id))
+
+  dex_config = templatefile("${path.module}/manifests/dex-config.yaml.tftpl", {
+    issuer_url    = local.issuer_url
+    redirect_uri  = "https://${local.openplan_host}/v1/auth/callback"
+    admin_email   = var.dex_admin_email
+    admin_user_id = local.dex_admin_user_id
+    # Base64, so Dex's environment expansion leaves the hash's "$" alone.
+    admin_hash = base64encode(var.dex_admin_password_hash)
+  })
 }
 
-# A Secret, not a ConfigMap: it holds the database password's variable name
-# and the administrator's password hash.
+# A Secret, not a ConfigMap: it holds the administrator's password hash.
 resource "kubernetes_secret_v1" "dex_config" {
   metadata {
     name      = "dex-config"
@@ -82,13 +94,6 @@ resource "kubernetes_secret_v1" "dex_config" {
   }
 
   data = {
-    "config.yaml" = templatefile("${path.module}/manifests/dex-config.yaml.tftpl", {
-      issuer_url    = local.issuer_url
-      redirect_uri  = "https://${local.openplan_host}/v1/auth/callback"
-      admin_email   = var.dex_admin_email
-      admin_user_id = random_uuid.dex_admin.result
-      # Base64, so Dex's environment expansion leaves the hash's "$" alone.
-      admin_hash = base64encode(var.dex_admin_password_hash)
-    })
+    "config.yaml" = local.dex_config
   }
 }

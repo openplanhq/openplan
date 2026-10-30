@@ -10,15 +10,14 @@ variables {
   kube_client_certificate_data = "Y2VydA=="
   kube_client_key_data         = "a2V5"
   dex_admin_email              = "admin@example.com"
-  dex_admin_password_hash      = "$2a$10$abcdefghijklmnopqrstuv"
+  dex_admin_password_hash      = "$2y$10$abcdefghijklmnopqrstuuJ8kGq6Y0b8lJcEoYQyqzP6hVbB7m0yC"
 }
 
 run "root_subject_matches_dex" {
   # The harness's admin has this userID, and the harness pins the subject Dex
   # issues for it; the module has to compute the same string.
-  override_resource {
-    target = random_uuid.dex_admin
-    values = { result = "7c4b2f0e-3d1a-4e8b-9f6c-2a5d8e1b0c47" }
+  variables {
+    dex_admin_user_id = "7c4b2f0e-3d1a-4e8b-9f6c-2a5d8e1b0c47"
   }
 
   assert {
@@ -122,6 +121,74 @@ run "missing_password_hash_fails" {
   }
 
   expect_failures = [var.dex_admin_password_hash]
+}
+
+run "user_id_stable_per_environment" {
+  # Without a userID set, the subject must not change between plans, or the
+  # administrator would lose root on the next apply.
+  assert {
+    condition     = output.root_subject == base64encode(format("\n$%s\u0012\u0005local", uuidv5("url", "https://dex.prod.home.arpa/dex/admin")))
+    error_message = "the default userID is not derived from the environment's issuer"
+  }
+}
+
+run "plaintext_password_refused" {
+  command = plan
+
+  variables {
+    dex_admin_password_hash = "hunter2"
+  }
+
+  expect_failures = [var.dex_admin_password_hash]
+}
+
+run "jobs_named_by_content" {
+  # A Job's pod template is immutable, so a changed Job must be a new one.
+  assert {
+    condition = alltrue([
+      for key, m in kubernetes_manifest.dependency :
+      can(regex("^(postgres-init|minio-bucket)-[0-9a-f]{8}$", m.manifest.metadata.name)) if m.manifest.kind == "Job"
+    ])
+    error_message = "a Job's name doesn't carry a hash of its spec"
+  }
+
+  assert {
+    condition = alltrue([
+      for m in kubernetes_manifest.dependency :
+      try(m.manifest.spec.template.metadata.labels, null) == null if m.manifest.kind == "Job"
+    ])
+    error_message = "a Job's pod template sets labels, which the API server adds to and the provider then reports as an inconsistent result"
+  }
+}
+
+run "missing_host_fails" {
+  command = plan
+
+  variables {
+    kube_host = null
+  }
+
+  expect_failures = [var.kube_host]
+}
+
+run "missing_ca_fails" {
+  command = plan
+
+  variables {
+    kube_cluster_ca_data = null
+  }
+
+  expect_failures = [var.kube_cluster_ca_data]
+}
+
+run "missing_client_certificate_fails" {
+  command = plan
+
+  variables {
+    kube_client_certificate_data = null
+  }
+
+  expect_failures = [var.kube_client_certificate_data]
 }
 
 run "bad_environment_fails" {

@@ -20,6 +20,10 @@ as the root path, for example `examples/openplan-proxmox/dependencies`. One
 stack is one environment (`local`, `prod`, `bench`) and installs the modules
 in the order of the table above. Destroy them in reverse.
 
+One environment per cluster: `dependencies` owns cluster-wide objects (the
+`traefik` release and namespace, k3s's `coredns-custom`), so a second
+environment on the same cluster would collide with the first.
+
 ## State
 
 Every module keeps its state in one S3-compatible bucket (the example uses
@@ -62,6 +66,7 @@ htpasswd -BnC 10 admin | cut -d: -f2
 | `namespace` | `openplan` | |
 | `dns_mode` | `k3s` | `k3s` writes k3s's `coredns-custom`; `none` leaves CoreDNS alone |
 | `dex_admin_email` | | the administrator's sign-in email |
+| `dex_admin_user_id` | derived from the issuer | the administrator's Dex userID, which fixes `root_subject` |
 
 Its outputs are what the machine you open openplan from needs, and what
 openplan's own module takes: `openplan_host`, `dex_issuer_url`,
@@ -69,7 +74,7 @@ openplan's own module takes: `openplan_host`, `dex_issuer_url`,
 
 After an apply, on the machine you'll open openplan from:
 
-- trust `ca_certificate` (macOS:
+- save the `ca_certificate` output as `ca.pem` and trust it (macOS:
   `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ca.pem`);
 - point both hosts at Traefik in `/etc/hosts`: the cluster's node address,
   or `127.0.0.1` on Docker Desktop.
@@ -88,13 +93,23 @@ rewrite would collide with these.
 - Install with `dns_mode = "none"`. Docker Desktop's CoreDNS has no import
   hook, and writing its whole Corefile from a module would delete it on
   destroy, so add the rewrite once by hand, as `setup.sh` does (here for
-  `environment = "local"`):
+  `environment = "local"`). It does nothing if the rewrite is already there:
 
 ```bash
-kubectl -n kube-system get configmap coredns -o jsonpath='{.data.Corefile}' \
-  | awk '{ print } NR == 1 { print "    rewrite name exact dex.local.home.arpa traefik.traefik.svc.cluster.local answer auto" }' \
-  > /tmp/Corefile
-kubectl -n kube-system create configmap coredns --from-file=Corefile=/tmp/Corefile --dry-run=client -o yaml \
-  | kubectl apply -f -
+name=dex.local.home.arpa
+kubectl -n kube-system get configmap coredns -o jsonpath='{.data.Corefile}' > /tmp/Corefile
+grep -q "$name" /tmp/Corefile || {
+  awk -v n="$name" '{ print } NR == 1 { print "    rewrite name exact " n " traefik.traefik.svc.cluster.local answer auto" }' /tmp/Corefile > /tmp/Corefile.new
+  kubectl -n kube-system create configmap coredns --from-file=Corefile=/tmp/Corefile.new --dry-run=client -o yaml | kubectl apply -f -
+  kubectl -n kube-system rollout restart deployment/coredns
+}
+```
+
+After destroying the stack, take it out again:
+
+```bash
+name=dex.local.home.arpa
+kubectl -n kube-system get configmap coredns -o jsonpath='{.data.Corefile}' | grep -v "$name" > /tmp/Corefile.new
+kubectl -n kube-system create configmap coredns --from-file=Corefile=/tmp/Corefile.new --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n kube-system rollout restart deployment/coredns
 ```
