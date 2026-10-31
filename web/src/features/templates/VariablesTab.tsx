@@ -13,7 +13,9 @@ import { Breakable, piecesAfter } from "../../shared/breakAfter";
 
 // 8px either side of a column boundary makes the 16px between columns, and
 // 16px at the row's ends. Name 200, type 120 and value 90, plus that padding.
-const cellClass = "px-2 py-2 first:pl-4 last:pr-4";
+// Baseline, not the table's centring: a row shares one baseline, so a value
+// stays beside the first line of a name that wraps or carries a tag.
+const cellClass = "px-2 py-2 align-baseline first:pl-4 last:pr-4";
 
 // A type expression wraps only at its structure: after an opening bracket, a
 // comma or a space (which the browser already breaks at), never inside a

@@ -89,6 +89,17 @@ describe("VariablesTab", () => {
     expect(screen.getByTestId("template-variables").textContent).toContain("A sensitive one gets its value from an Environment secret named TF_VAR_ and its name.");
   });
 
+  // A tag under a long name makes the row two lines tall; the type, value and
+  // description stay beside the name's first line instead of centring.
+  it("sets every cell on the row's baseline", () => {
+    renderTab(seed([variable({ name: "proxmox_ssh_private_key_data", sensitive: true })]));
+
+    for (const cell of within(screen.getByTestId("template-variable-proxmox_ssh_private_key_data")).getAllByRole("cell")) {
+      expect(cell.className).toContain("align-baseline");
+      expect(cell.className).not.toContain("align-middle");
+    }
+  });
+
   it("wraps a long type only at its structure, never inside a word (#459)", () => {
     renderTab(seed([variable({ name: "node_pools", type_expression: "map(object({ size = optional(number), labels = optional(map(string)) }))" })]));
     const cell = within(screen.getByTestId("template-variable-node_pools")).getByText(/^map\(object/);
