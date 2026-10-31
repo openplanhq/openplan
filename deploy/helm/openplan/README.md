@@ -278,35 +278,38 @@ refuses to start rather than running without a sandbox. The first install on
 a managed cluster is the real test; if you make it, please open an issue with
 how it went.
 
-## Trying it on Docker Desktop (evaluation only)
+## On Docker Desktop
 
-`deploy/helm/evaluation/` in the repository sets up everything above on
-Docker Desktop's Kubernetes, so you can try the chart without your own
+`deploy/docker-desktop/` in the repository sets up everything above on
+Docker Desktop's Kubernetes, so you can run the chart without your own
 services: single-pod Postgres, Temporal, Dex, Valkey and MinIO, Traefik,
 a certificate from [mkcert](https://github.com/FiloSottile/mkcert)'s local CA,
-fresh keys and the credentials Secret. It is for evaluation only: one replica
+fresh keys and the credentials Secret. It is not a production setup: one replica
 of everything, no backups, no persistence you should trust.
 
 From a checkout, with Docker Desktop's Kubernetes on and selected and mkcert
 installed (`brew install mkcert` on macOS):
 
 ```sh
-./deploy/helm/evaluation/setup.sh
-helm install openplan deploy/helm/openplan -n openplan -f deploy/helm/evaluation/values.yaml
+./deploy/docker-desktop/setup.sh
+helm install openplan deploy/helm/openplan -n openplan -f deploy/docker-desktop/values.yaml
 ```
 
 A chart from a checkout carries a placeholder version (`0.0.0-dev`) with no
-images behind it, so the evaluation values run `main`'s latest build. For the
+images behind it, so `values.yaml` there runs `main`'s latest build. For the
 release you checked out, add `--set image.tag=` and its version without the
 `v`, such as `1.0.0`.
 
 Then open `https://openplan.localhost` and sign in as
 `admin@openplan.local` / `admin-local-only`. `setup.sh` runs `mkcert -install`,
 which adds mkcert's CA to the system trust store (asking for your password the
-first time), so the browser trusts the site without a warning. The harness
+first time), so the browser trusts the site without a warning. This setup
 runs the chart's defaults, which fit in Docker Desktop's VM of about 8 GiB: one
 run at a time, and a second run waits for the first. To remove everything:
 
 ```sh
-./deploy/helm/evaluation/teardown.sh
+./deploy/docker-desktop/teardown.sh
 ```
+
+To have Argo CD install the same thing and keep it on `main` instead, see
+[`deploy/docker-desktop/argocd/`](../../docker-desktop/argocd/README.md).

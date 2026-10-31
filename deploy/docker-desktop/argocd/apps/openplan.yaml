@@ -1,0 +1,44 @@
+# openplan's chart from main, with deploy/docker-desktop/values.yaml: every host and
+# Secret they name is one dependencies.yaml or bootstrap.sh makes.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: openplan
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/openplanhq/openplan.git
+    targetRevision: main
+    path: deploy/helm/openplan
+    helm:
+      releaseName: openplan
+      valueFiles:
+        - ../../docker-desktop/values.yaml
+      parameters:
+        # publish.yml pushes sha-<commit> for every push to main. Argo fills
+        # in the commit it synced, so the chart and the images always come
+        # from the same commit and each merge rolls the pods. The values
+        # file's `main` tag can't do that: when only the image moves, Argo
+        # sees no change. Until publish.yml has pushed a new commit's images
+        # the api can't start, since it's replaced in one step.
+        - name: image.tag
+          value: sha-$ARGOCD_APP_REVISION
+          forceString: true
+        # A sha- tag never moves, so a pulled image is always the right one.
+        - name: image.pullPolicy
+          value: IfNotPresent
+        # cert-manager writes the issuing CA into the certificate's Secret as
+        # ca.crt, the only key the chart mounts, so the api trusts Dex's
+        # certificate without a Secret of its own.
+        - name: api.trustedCASecret
+          value: openplan-tls
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openplan
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

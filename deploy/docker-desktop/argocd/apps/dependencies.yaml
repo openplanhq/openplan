@@ -1,0 +1,35 @@
+# Postgres, Temporal, Dex, Valkey and MinIO: deploy/docker-desktop's
+# manifests, from main and unchanged, so this install and the by-hand setup
+# never drift apart. They read the Secrets bootstrap.sh makes.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dependencies
+  namespace: argocd
+  annotations:
+    # If this file leaves apps/, the root would prune this Application, and
+    # the finalizer would then delete the openplan namespace: its volumes and
+    # the keys bootstrap.sh made. Deleting the root on purpose (teardown.sh)
+    # still removes it.
+    argocd.argoproj.io/sync-options: Prune=false
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/openplanhq/openplan.git
+    targetRevision: main
+    path: deploy/docker-desktop
+    directory:
+      # The folder also holds values.yaml, setup.sh's scripts and argocd/.
+      include: dependencies.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openplan
+  syncPolicy:
+    automated:
+      # Postgres's and MinIO's data are PersistentVolumeClaims in this file:
+      # a manifest that drops one on main must not delete the data with it.
+      # The annotation above covers this Application itself being pruned.
+      prune: false
+      selfHeal: true

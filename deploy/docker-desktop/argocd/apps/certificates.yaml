@@ -1,0 +1,43 @@
+# The certificate for openplan.localhost and dex.localhost, signed by the
+# dedicated mkcert root that bootstrap.sh loads into the mkcert-ca Secret. The Mac
+# trusts that root, so the browser opens both hosts without a warning.
+#
+# Both kinds come from cert-manager's CRDs, which don't exist until the
+# cert-manager Application has synced: the dry run is skipped, the later
+# wave lets the Applications go first, and the root's retry waits out the
+# rest.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: mkcert
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  ca:
+    # A ClusterIssuer reads its Secret from cert-manager's own namespace.
+    secretName: mkcert-ca
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: openplan-tls
+  namespace: openplan
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  # The name values.yaml and dependencies.yaml's Dex Ingress expect.
+  secretName: openplan-tls
+  dnsNames:
+    - openplan.localhost
+    - dex.localhost
+  # Apple requires the serverAuth extended key usage on TLS server
+  # certificates, and cert-manager leaves it out unless asked.
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+  issuerRef:
+    kind: ClusterIssuer
+    name: mkcert

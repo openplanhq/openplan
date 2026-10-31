@@ -1,0 +1,42 @@
+# The ingress controller, as deploy/docker-desktop/setup.sh installs it: the
+# same pinned chart and the same settings, so the Ingresses in openplan's chart
+# and dependencies.yaml behave here as they do with setup.sh.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: traefik
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://traefik.github.io/charts
+    chart: traefik
+    targetRevision: 41.7.0
+    helm:
+      # Only the Ingress provider is on, so Traefik's CRDs have no use, and
+      # leaving them out means nothing outlives teardown.
+      skipCrds: true
+      valuesObject:
+        providers:
+          kubernetesCRD:
+            enabled: false
+        # Over plain HTTP the browser drops openplan's Secure sign-in cookies,
+        # so port 80 only redirects.
+        ports:
+          web:
+            http:
+              redirections:
+                entryPoint:
+                  to: websecure
+                  scheme: https
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: traefik
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

@@ -1,16 +1,16 @@
-# EVALUATION ONLY. Values for installing the chart against setup.sh's
+# Values for installing the chart against setup.sh's
 # dependencies on Docker Desktop:
 #
-#   helm install openplan deploy/helm/openplan -n openplan -f deploy/helm/evaluation/values.yaml
+#   helm install openplan deploy/helm/openplan -n openplan -f deploy/docker-desktop/values.yaml
 #
 # Every host and Secret here is something setup.sh or dependencies.yaml
 # creates. A credential the dependencies read too comes from
-# evaluation-dependencies, where they read it; the rest, setup.sh puts in
+# openplan-dependencies, where they read it; the rest, setup.sh puts in
 # openplan-credentials. Nothing in this file is
 # a chart default or adds a key to the chart.
 
 # A checkout's chart carries the placeholder version 0.0.0-dev, which has no
-# images, so the evaluation runs main's. main moves, and Docker Desktop keeps
+# images, so these values run main's. main moves, and Docker Desktop keeps
 # every image it pulled: without Always, a reinstall runs whichever main it
 # pulled first, which can be older than the chart in the checkout.
 image:
@@ -35,13 +35,13 @@ s3:
   endpoint: http://minio:9000
   forcePathStyle: true
   # MinIO's root user and password.
-  accessKeyIDSecret: {name: evaluation-dependencies, key: minio-root-user}
-  secretAccessKeySecret: {name: evaluation-dependencies, key: minio-root-password}
+  accessKeyIDSecret: {name: openplan-dependencies, key: minio-root-user}
+  secretAccessKeySecret: {name: openplan-dependencies, key: minio-root-password}
 
 oidc:
   issuerURL: https://dex.localhost/dex
   clientID: openplan-api
-  clientSecretSecret: {name: evaluation-dependencies, key: oidc-client-secret}
+  clientSecretSecret: {name: openplan-dependencies, key: oidc-client-secret}
 
 api:
   # The sub Dex issues for admin@openplan.local, from the userID in
@@ -49,7 +49,7 @@ api:
   rootSubject: CiQ3YzRiMmYwZS0zZDFhLTRlOGItOWY2Yy0yYTVkOGUxYjBjNDcSBWxvY2Fs
   sessionEncryptionKeySecret: {name: openplan-credentials, key: session-encryption-key}
   credentialEncryptionKeySecret: {name: openplan-credentials, key: credential-encryption-key}
-  # Dex is served with the evaluation CA's certificate.
+  # Dex is served with a certificate from mkcert's local CA.
   trustedCASecret: openplan-trusted-ca
 
 ingress:

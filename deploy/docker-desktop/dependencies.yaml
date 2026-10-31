@@ -1,15 +1,15 @@
-# EVALUATION ONLY. Not part of the openplan chart and not a way to run
+# Docker Desktop only. Not part of the openplan chart and not a way to run
 # openplan's dependencies in production: every component is a single pod with
 # no backups, no replication and no tuning.
 #
 # The services openplan needs, on Docker Desktop's Kubernetes, so the chart can
-# be installed and tried in production mode: Postgres (with the Dex and
+# run in production mode: Postgres (with the Dex and
 # Temporal databases), Temporal, Dex at https://dex.localhost/dex, Valkey with
 # the api and executor users, and an S3 store (MinIO) with the artifacts
-# bucket. Apply it with setup.sh, which first creates the Secrets every pod
-# here reads; applied on its own, the pods wait for them.
+# bucket. setup.sh and argocd/bootstrap.sh create the Secrets every pod here
+# reads before it's applied; applied on its own, the pods wait for them.
 #
-# Passwords come from the evaluation-dependencies Secret that setup.sh fills
+# Passwords come from the openplan-dependencies Secret those scripts fill
 # with fresh values, because production mode refuses the published ones.
 
 apiVersion: v1
@@ -17,7 +17,7 @@ kind: Namespace
 metadata:
   name: openplan
   labels:
-    app.kubernetes.io/part-of: openplan-evaluation
+    app.kubernetes.io/part-of: openplan
     app.kubernetes.io/component: namespace
     # The executor runs gVisor as root with SYS_ADMIN, which every lower
     # Pod Security level refuses.
@@ -31,7 +31,7 @@ metadata:
   name: postgres-data
   namespace: openplan
   labels:
-    app.kubernetes.io/part-of: openplan-evaluation
+    app.kubernetes.io/part-of: openplan
 spec:
   accessModes: [ReadWriteOnce]
   resources:
@@ -44,7 +44,7 @@ metadata:
   name: postgres
   namespace: openplan
   labels:
-    app.kubernetes.io/part-of: openplan-evaluation
+    app.kubernetes.io/part-of: openplan
 spec:
   replicas: 1
   # Two pods on one data directory would corrupt it.
@@ -57,7 +57,7 @@ spec:
     metadata:
       labels:
         app: postgres
-        app.kubernetes.io/part-of: openplan-evaluation
+        app.kubernetes.io/part-of: openplan
     spec:
       containers:
         - name: postgres
@@ -69,7 +69,7 @@ spec:
               value: postgres
             - name: POSTGRES_PASSWORD
               valueFrom:
-                secretKeyRef: {name: evaluation-dependencies, key: postgres-password}
+                secretKeyRef: {name: openplan-dependencies, key: postgres-password}
             # A subdirectory, so initdb never meets whatever the volume's root
             # holds.
             - name: PGDATA
@@ -94,7 +94,7 @@ metadata:
   name: postgres
   namespace: openplan
   labels:
-    app.kubernetes.io/part-of: openplan-evaluation
+    app.kubernetes.io/part-of: openplan
 spec:
   selector:
     app: postgres
@@ -107,7 +107,7 @@ metadata:
   name: postgres-init
   namespace: openplan
   labels:
-    app.kubernetes.io/part-of: openplan-evaluation
+    app.kubernetes.io/part-of: openplan
 data:
   # deploy/release/init-databases.sh, with the role passwords read from the
   # environment instead of written in: production mode needs fresh ones.
@@ -140,13 +140,13 @@ metadata:
   name: postgres-init
   namespace: openplan
   labels:
-    app.kubernetes.io/part-of: openplan-evaluation
+    app.kubernetes.io/part-of: openplan
 spec:
   backoffLimit: 6
   template:
     metadata:
       labels:
-        app.kubernetes.io/part-of: openplan-evaluation
+        app.kubernetes.io/part-of: openplan
     spec:
       restartPolicy: OnFailure
       containers:
@@ -159,13 +159,13 @@ spec:
             - {name: PGDATABASE, value: postgres}
             - name: PGPASSWORD
               valueFrom:
-                secretKeyRef: {name: evaluation-dependencies, key: postgres-password}
+                secretKeyRef: {name: openplan-dependencies, key: postgres-password}
             - name: DEX_DB_PASSWORD
               valueFrom:
-                secretKeyRef: {name: evaluation-dependencies, key: dex-db-password}
+                secretKeyRef: {name: openplan-dependencies, key: dex-db-password}
             - name: TEMPORAL_DB_PASSWORD
               valueFrom:
-                secretKeyRef: {name: evaluation-dependencies, key: temporal-db-password}
+                secretKeyRef: {name: openplan-dependencies, key: temporal-db-password}
           volumeMounts:
             - name: scripts
               mountPath: /scripts
@@ -182,7 +182,7 @@ metadata:
   name: temporal
   namespace: openplan
   labels:
-    app.kubernetes.io/part-of: openplan-evaluation
+    app.kubernetes.io/part-of: openplan
 spec:
   replicas: 1
   selector:
@@ -192,7 +192,7 @@ spec:
     metadata:
       labels:
         app: temporal
-        app.kubernetes.io/part-of: openplan-evaluation
+        app.kubernetes.io/part-of: openplan
     spec:
       # Kubernetes has no depends_on: wait for the init Job's last database
       # here, rather than crash-loop into a long restart backoff.
@@ -206,7 +206,7 @@ spec:
             - {name: PGDATABASE, value: temporal_visibility}
             - name: PGPASSWORD
               valueFrom:
-                secretKeyRef: {name: evaluation-dependencies, key: temporal-db-password}
+                secretKeyRef: {name: openplan-dependencies, key: temporal-db-password}
       containers:
         - name: temporal
           image: temporalio/auto-setup:1.28.1
@@ -217,7 +217,7 @@ spec:
             - {name: POSTGRES_USER, value: temporal}
             - name: POSTGRES_PWD
               valueFrom:
-                secretKeyRef: {name: evaluation-dependencies, key: temporal-db-password}
+                secretKeyRef: {name: openplan-dependencies, key: temporal-db-password}
             # The temporal role has no CREATEDB; the init Job made both
             # databases.
             - {name: SKIP_DB_CREATE, value: "true"}
@@ -237,7 +237,7 @@ metadata:
   name: temporal
   namespace: openplan
   labels:
-    app.kubernetes.io/part-of: openplan-evaluation
+    app.kubernetes.io/part-of: openplan
 spec:
   selector:
     app: temporal
@@ -252,7 +252,7 @@ metadata:
   name: dex
   namespace: openplan
   labels:
-    app.kubernetes.io/part-of: openplan-evaluation
+    app.kubernetes.io/part-of: openplan
 data:
   # deploy/dex/config.yaml served over HTTPS: the issuer and redirect move to
   # the Ingress hosts, because production mode refuses plain HTTP. The static
@@ -315,7 +315,7 @@ metadata:
   name: dex
   namespace: openplan
   labels:
-    app.kubernetes.io/part-of: openplan-evaluation
+    app.kubernetes.io/part-of: openplan
 spec:
   replicas: 1
   selector:
@@ -325,7 +325,7 @@ spec:
     metadata:
       labels:
         app: dex
-        app.kubernetes.io/part-of: openplan-evaluation
+        app.kubernetes.io/part-of: openplan
     spec:
       initContainers:
         - name: wait-for-database
@@ -337,7 +337,7 @@ spec:
             - {name: PGDATABASE, value: dex}
             - name: PGPASSWORD
               valueFrom:
-                secretKeyRef: {name: evaluation-dependencies, key: dex-db-password}
+                secretKeyRef: {name: openplan-dependencies, key: dex-db-password}
       containers:
         - name: dex
           image: ghcr.io/dexidp/dex:v2.45.1
@@ -346,10 +346,10 @@ spec:
             - {name: DEX_DB_USER, value: dex}
             - name: DEX_DB_PASSWORD
               valueFrom:
-                secretKeyRef: {name: evaluation-dependencies, key: dex-db-password}
+                secretKeyRef: {name: openplan-dependencies, key: dex-db-password}
             - name: OIDC_CLIENT_SECRET
               valueFrom:
-                secretKeyRef: {name: evaluation-dependencies, key: oidc-client-secret}
+                secretKeyRef: {name: openplan-dependencies, key: oidc-client-secret}
           ports:
             - containerPort: 5556
           readinessProbe:
@@ -371,7 +371,7 @@ metadata:
   name: dex
   namespace: openplan
   labels:
-    app.kubernetes.io/part-of: openplan-evaluation
+    app.kubernetes.io/part-of: openplan
 spec:
   selector:
     app: dex
@@ -384,11 +384,11 @@ metadata:
   name: dex
   namespace: openplan
   labels:
-    app.kubernetes.io/part-of: openplan-evaluation
+    app.kubernetes.io/part-of: openplan
 spec:
   ingressClassName: traefik
   tls:
-    # The one evaluation certificate covers openplan.localhost and
+    # The one certificate covers openplan.localhost and
     # dex.localhost.
     - hosts: [dex.localhost]
       secretName: openplan-tls
@@ -412,7 +412,7 @@ metadata:
   name: valkey
   namespace: openplan
   labels:
-    app.kubernetes.io/part-of: openplan-evaluation
+    app.kubernetes.io/part-of: openplan
 spec:
   replicas: 1
   selector:
@@ -422,7 +422,7 @@ spec:
     metadata:
       labels:
         app: valkey
-        app.kubernetes.io/part-of: openplan-evaluation
+        app.kubernetes.io/part-of: openplan
     spec:
       containers:
         - name: valkey
@@ -466,10 +466,10 @@ spec:
           env:
             - name: VALKEY_API_PASSWORD
               valueFrom:
-                secretKeyRef: {name: evaluation-dependencies, key: valkey-api-password}
+                secretKeyRef: {name: openplan-dependencies, key: valkey-api-password}
             - name: VALKEY_EXECUTOR_PASSWORD
               valueFrom:
-                secretKeyRef: {name: evaluation-dependencies, key: valkey-executor-password}
+                secretKeyRef: {name: openplan-dependencies, key: valkey-executor-password}
           ports:
             - containerPort: 6379
           readinessProbe:
@@ -483,7 +483,7 @@ metadata:
   name: valkey
   namespace: openplan
   labels:
-    app.kubernetes.io/part-of: openplan-evaluation
+    app.kubernetes.io/part-of: openplan
 spec:
   selector:
     app: valkey
@@ -501,7 +501,7 @@ metadata:
   name: minio-data
   namespace: openplan
   labels:
-    app.kubernetes.io/part-of: openplan-evaluation
+    app.kubernetes.io/part-of: openplan
 spec:
   accessModes: [ReadWriteOnce]
   resources:
@@ -514,7 +514,7 @@ metadata:
   name: minio
   namespace: openplan
   labels:
-    app.kubernetes.io/part-of: openplan-evaluation
+    app.kubernetes.io/part-of: openplan
 spec:
   replicas: 1
   strategy:
@@ -526,7 +526,7 @@ spec:
     metadata:
       labels:
         app: minio
-        app.kubernetes.io/part-of: openplan-evaluation
+        app.kubernetes.io/part-of: openplan
     spec:
       securityContext:
         # The image runs as 65532; let it write the volume.
@@ -538,10 +538,10 @@ spec:
           env:
             - name: MINIO_ROOT_USER
               valueFrom:
-                secretKeyRef: {name: evaluation-dependencies, key: minio-root-user}
+                secretKeyRef: {name: openplan-dependencies, key: minio-root-user}
             - name: MINIO_ROOT_PASSWORD
               valueFrom:
-                secretKeyRef: {name: evaluation-dependencies, key: minio-root-password}
+                secretKeyRef: {name: openplan-dependencies, key: minio-root-password}
           ports:
             - containerPort: 9000
           readinessProbe:
@@ -563,7 +563,7 @@ metadata:
   name: minio
   namespace: openplan
   labels:
-    app.kubernetes.io/part-of: openplan-evaluation
+    app.kubernetes.io/part-of: openplan
 spec:
   selector:
     app: minio
@@ -576,7 +576,7 @@ metadata:
   name: minio-bucket
   namespace: openplan
   labels:
-    app.kubernetes.io/part-of: openplan-evaluation
+    app.kubernetes.io/part-of: openplan
 spec:
   # The image has no shell to loop in; until MinIO is ready, the Job's own
   # retries are the loop.
@@ -584,22 +584,22 @@ spec:
   template:
     metadata:
       labels:
-        app.kubernetes.io/part-of: openplan-evaluation
+        app.kubernetes.io/part-of: openplan
     spec:
       restartPolicy: OnFailure
       containers:
         - name: make-bucket
           image: cgr.dev/chainguard/minio-client@sha256:72f9978d415ea8294d78051fb3aee2fd258d449237633f77f100b5367bb5225d
-          args: ["--config-dir", "/tmp/mc", "mb", "--ignore-existing", "evaluation/openplan-artifacts"]
+          args: ["--config-dir", "/tmp/mc", "mb", "--ignore-existing", "local/openplan-artifacts"]
           env:
             - name: MINIO_ROOT_USER
               valueFrom:
-                secretKeyRef: {name: evaluation-dependencies, key: minio-root-user}
+                secretKeyRef: {name: openplan-dependencies, key: minio-root-user}
             - name: MINIO_ROOT_PASSWORD
               valueFrom:
-                secretKeyRef: {name: evaluation-dependencies, key: minio-root-password}
+                secretKeyRef: {name: openplan-dependencies, key: minio-root-password}
             # mc's alias from the environment, so no `mc alias set` step.
-            - name: MC_HOST_evaluation
+            - name: MC_HOST_local
               value: http://$(MINIO_ROOT_USER):$(MINIO_ROOT_PASSWORD)@minio:9000
           volumeMounts:
             - name: tmp
