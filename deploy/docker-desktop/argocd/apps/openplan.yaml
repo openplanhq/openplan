@@ -1,4 +1,4 @@
-# openplan's chart from main, with the evaluation's values: every host and
+# openplan's chart from main, with deploy/docker-desktop/values.yaml: every host and
 # Secret they name is one dependencies.yaml or bootstrap.sh makes.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -16,7 +16,7 @@ spec:
     helm:
       releaseName: openplan
       valueFiles:
-        - ../evaluation/values.yaml
+        - ../../docker-desktop/values.yaml
       parameters:
         # publish.yml pushes sha-<commit> for every push to main. Argo fills
         # in the commit it synced, so the chart and the images always come

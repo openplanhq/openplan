@@ -1,7 +1,9 @@
 # The one Application bootstrap.sh applies by hand. Everything else Argo CD
 # runs comes from apps/, read from git, so the install is whatever this folder
-# says on the revision below. bootstrap.sh replaces develop with
-# $ROOT_REVISION, which is how a branch is tried before it merges.
+# says on the revision below. It's main, like the files the child Applications
+# read, so a change that moves one of those files reaches this install in the
+# same release as the Applications that use it. bootstrap.sh replaces main
+# with $ROOT_REVISION, which is how a branch is tried before it merges.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -15,8 +17,8 @@ spec:
   project: default
   source:
     repoURL: https://github.com/openplanhq/openplan.git
-    targetRevision: develop
-    path: examples/openplan-docker-desktop/apps
+    targetRevision: main
+    path: deploy/docker-desktop/argocd/apps
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

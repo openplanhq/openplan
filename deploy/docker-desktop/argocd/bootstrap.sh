@@ -8,7 +8,7 @@
 # so passwords generated in a chart would change on every sync, under data
 # already stored with them.
 #
-#   ROOT_REVISION   the git revision root.yaml follows (default: develop)
+#   ROOT_REVISION   the git revision root.yaml follows (default: main)
 #   OPENPLAN_CAROOT the dedicated mkcert root (default:
 #                   ~/.local/share/mkcert-openplan)
 #
@@ -18,11 +18,10 @@ set -eu
 
 ARGOCD_CHART_VERSION=10.11.6
 NAMESPACE=openplan
-ROOT_REVISION=${ROOT_REVISION:-develop}
+ROOT_REVISION=${ROOT_REVISION:-main}
 OPENPLAN_CAROOT=${OPENPLAN_CAROOT:-$HOME/.local/share/mkcert-openplan}
 
 here=$(cd "$(dirname "$0")" && pwd)
-repo=$(cd "$here/../.." && pwd)
 
 # Every guard runs before anything changes, so a refusal leaves the cluster
 # and the Mac as they were.
@@ -39,11 +38,12 @@ if ! command -v mkcert >/dev/null 2>&1; then
 	echo "bootstrap.sh: needs mkcert (macOS: brew install mkcert)." >&2
 	exit 1
 fi
-# The evaluation harness claims the same namespace, Traefik and CoreDNS line.
+# The by-hand setup (../setup.sh) claims the same namespace, Traefik and
+# CoreDNS line.
 # setup.sh installs Traefik as a Helm release; Argo CD doesn't, so a release
-# means the harness is here.
+# means the by-hand setup is here.
 if helm status traefik -n traefik >/dev/null 2>&1; then
-	echo "bootstrap.sh: the evaluation harness is installed; remove it first with deploy/helm/evaluation/teardown.sh." >&2
+	echo "bootstrap.sh: the by-hand setup (deploy/docker-desktop/setup.sh) is installed; remove it first with deploy/docker-desktop/teardown.sh." >&2
 	exit 1
 fi
 
@@ -77,13 +77,13 @@ fi
 # The Secrets below live in it, so it exists before Argo CD does. Argo CD's
 # dependencies Application takes it over from the same manifest.
 echo "==> namespace $NAMESPACE"
-kubectl apply -f "$repo/deploy/helm/evaluation/dependencies.yaml" -l app.kubernetes.io/component=namespace
+kubectl apply -f "$here/../dependencies.yaml" -l app.kubernetes.io/component=namespace
 
-# Keep these two Secrets in step with deploy/helm/evaluation/setup.sh: both
+# Keep these two Secrets in step with deploy/docker-desktop/setup.sh: both
 # read the same dependencies.yaml and values.yaml.
 echo "==> dependency passwords"
-if secret_exists evaluation-dependencies; then
-	echo "kept: evaluation-dependencies"
+if secret_exists openplan-dependencies; then
+	echo "kept: openplan-dependencies"
 else
 	cat >"$work/dependencies.env" <<-EOF
 		postgres-password=$(fresh)
@@ -95,7 +95,7 @@ else
 		minio-root-password=$(fresh)
 		oidc-client-secret=$(fresh)
 	EOF
-	kube create secret generic evaluation-dependencies --from-env-file="$work/dependencies.env"
+	kube create secret generic openplan-dependencies --from-env-file="$work/dependencies.env"
 fi
 
 echo "==> openplan-credentials"
@@ -105,9 +105,9 @@ else
 	kube create secret generic openplan-credentials \
 		--from-literal=session-encryption-key="$(fresh)" \
 		--from-literal=credential-encryption-key="$(fresh)" \
-		--from-literal=database-url="postgres://openplan:$(secret_value evaluation-dependencies postgres-password)@postgres:5432/openplan?sslmode=disable" \
-		--from-literal=valkey-api-url="redis://api:$(secret_value evaluation-dependencies valkey-api-password)@valkey:6379/0" \
-		--from-literal=valkey-executor-url="redis://executor:$(secret_value evaluation-dependencies valkey-executor-password)@valkey:6379/0"
+		--from-literal=database-url="postgres://openplan:$(secret_value openplan-dependencies postgres-password)@postgres:5432/openplan?sslmode=disable" \
+		--from-literal=valkey-api-url="redis://api:$(secret_value openplan-dependencies valkey-api-password)@valkey:6379/0" \
+		--from-literal=valkey-executor-url="redis://executor:$(secret_value openplan-dependencies valkey-executor-password)@valkey:6379/0"
 fi
 
 # The api discovers Dex at https://dex.localhost/dex, the URL the browser
@@ -137,7 +137,7 @@ helm upgrade --install argocd argo-cd --repo https://argoproj.github.io/argo-hel
 	--wait --timeout 300s >/dev/null
 
 echo "==> root Application, following $ROOT_REVISION"
-sed "s|targetRevision: develop|targetRevision: $ROOT_REVISION|" "$here/root.yaml" | kubectl apply -f -
+sed "s|targetRevision: main|targetRevision: $ROOT_REVISION|" "$here/root.yaml" | kubectl apply -f -
 
 cat <<EOF
 

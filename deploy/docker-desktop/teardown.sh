@@ -1,8 +1,8 @@
 #!/bin/sh
-# EVALUATION ONLY. Undoes setup.sh: deletes the openplan namespace (the chart's
+# Undoes setup.sh: deletes the openplan namespace (the chart's
 # release, the dependencies, their volumes and every Secret with it),
 # Traefik, and the CoreDNS rewrite. mkcert's CA stays trusted: it is this
-# machine's, not the harness's, and other projects may use it; remove it with
+# machine's, not this setup's, and other projects may use it; remove it with
 # `mkcert -uninstall`.
 set -eu
 
@@ -10,7 +10,7 @@ NAMESPACE=openplan
 
 context=$(kubectl config current-context)
 if [ "$context" != docker-desktop ]; then
-	echo "teardown.sh: kubectl's context is '$context'; this harness runs only on docker-desktop." >&2
+	echo "teardown.sh: kubectl's context is '$context'; this runs only on docker-desktop." >&2
 	exit 1
 fi
 

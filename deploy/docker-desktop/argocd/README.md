@@ -1,9 +1,9 @@
 # openplan on Docker Desktop, kept on main by Argo CD
 
-A homelab example, not a supported topology. It runs openplan on Docker
+A homelab setup, not a supported topology. It runs openplan on Docker
 Desktop's Kubernetes and lets Argo CD keep it on openplan's `main`: every
 merge to `main` becomes an upgrade of a running install with real stacks.
-It's the openplan that applies [`examples/openplan-proxmox`](../openplan-proxmox).
+It's the openplan that applies [`examples/openplan-proxmox`](../../../examples/openplan-proxmox).
 
 Argo CD installs, from git:
 
@@ -11,10 +11,10 @@ Argo CD installs, from git:
 |---|---|---|
 | `traefik` | the ingress controller | Traefik's chart, pinned |
 | `cert-manager` | issues the TLS certificate | cert-manager's chart, pinned |
-| `dependencies` | Postgres, Temporal, Dex, Valkey, MinIO | `deploy/helm/evaluation/dependencies.yaml` on `main` |
+| `dependencies` | Postgres, Temporal, Dex, Valkey, MinIO | `deploy/docker-desktop/dependencies.yaml` on `main` |
 | `openplan` | the api, executor and web | `deploy/helm/openplan` on `main`, images of the same commit |
 
-The dependencies are the evaluation harness's: single pods with no replication
+The dependencies are the ones [`../setup.sh`](../setup.sh) installs: single pods with no replication
 or backups. Nothing here is precious; stacks keep their Terraform state in
 their own backend.
 
@@ -23,14 +23,15 @@ their own backend.
 - Docker Desktop with Kubernetes on (kubeadm, one node), and `kubectl`'s
   context set to `docker-desktop`.
 - `helm` and `mkcert` (`brew install helm mkcert`).
-- The evaluation harness removed (`deploy/helm/evaluation/teardown.sh`): it
+- The by-hand setup (`deploy/docker-desktop/setup.sh`) removed with
+  `deploy/docker-desktop/teardown.sh`: it
   uses the same namespace, ingress and DNS entry, and the bootstrap refuses
   to run alongside it.
 
 ## Bring it up
 
 ```sh
-examples/openplan-docker-desktop/bootstrap.sh
+deploy/docker-desktop/argocd/bootstrap.sh
 ```
 
 It makes the parts that can't live in git, then hands over to Argo CD:
@@ -51,9 +52,10 @@ Then open https://openplan.localhost once every Application is Synced and
 Healthy (`kubectl -n argocd get applications -w`), and sign in as
 `admin@openplan.local` / `admin-local-only`.
 
-The root Application follows `develop`, so a change to this folder applies
-without waiting for a release. To try a branch, run the bootstrap with
-`ROOT_REVISION=<branch>`; rerunning it with the default switches back.
+The root Application follows `main`, like everything it installs, so a change
+to this folder reaches the install in the same release as the files it points
+at. To try a branch, run the bootstrap with `ROOT_REVISION=<branch>`;
+rerunning it with the default switches back.
 Rerunning is always safe: the root, the Secrets and the certificate are kept.
 
 ## Following main
@@ -75,7 +77,7 @@ Argo CD recreates it.
 ## Tear it down
 
 ```sh
-examples/openplan-docker-desktop/teardown.sh
+deploy/docker-desktop/argocd/teardown.sh
 ```
 
 It removes everything the bootstrap and Argo CD added, stacks and stored

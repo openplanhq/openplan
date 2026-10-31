@@ -1,6 +1,6 @@
-# The ingress controller, as deploy/helm/evaluation/setup.sh installs it: the
+# The ingress controller, as deploy/docker-desktop/setup.sh installs it: the
 # same pinned chart and the same settings, so the Ingresses in openplan's chart
-# and dependencies.yaml behave here as they do in the evaluation.
+# and dependencies.yaml behave here as they do with setup.sh.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

@@ -1,12 +1,12 @@
 #!/bin/sh
-# EVALUATION ONLY. Prepares Docker Desktop's Kubernetes for the openplan chart
+# Prepares Docker Desktop's Kubernetes for the openplan chart
 # in production mode: an ingress controller, a certificate for
 # openplan.localhost and dex.localhost from mkcert's local CA, which this
 # machine's browsers trust, fresh keys and passwords, a CoreDNS
 # rewrite so pods reach Dex at the browser's issuer, and the dependencies in
 # dependencies.yaml. Then:
 #
-#   helm install openplan <chart> -n openplan -f deploy/helm/evaluation/values.yaml
+#   helm install openplan <chart> -n openplan -f deploy/docker-desktop/values.yaml
 #
 # Rerunning is safe: Secrets that exist are kept, so keys and passwords never
 # change under data that was sealed or stored with them. teardown.sh undoes
@@ -15,7 +15,7 @@ set -eu
 
 # Traefik is the ingress controller: ingress-nginx was retired in March 2026
 # and gets no more security fixes. Pinned, so a rerun installs what was
-# evaluated. Helm is already needed to install openplan's chart, so this adds
+# tested. Helm is already needed to install openplan's chart, so this adds
 # no tool. Keep in step with teardown.sh.
 TRAEFIK_CHART_VERSION=41.7.0
 NAMESPACE=openplan
@@ -23,10 +23,10 @@ NAMESPACE=openplan
 here=$(cd "$(dirname "$0")" && pwd)
 
 # This script rewrites cluster DNS and installs cluster-wide objects; aimed at
-# any cluster but the local one, that is damage, not an evaluation.
+# any cluster but the local one, that is damage.
 context=$(kubectl config current-context)
 if [ "$context" != docker-desktop ]; then
-	echo "setup.sh: kubectl's context is '$context'; this harness runs only on docker-desktop." >&2
+	echo "setup.sh: kubectl's context is '$context'; this runs only on docker-desktop." >&2
 	exit 1
 fi
 
@@ -82,8 +82,8 @@ else
 fi
 
 echo "==> dependency passwords"
-if secret_exists evaluation-dependencies; then
-	echo "kept: evaluation-dependencies"
+if secret_exists openplan-dependencies; then
+	echo "kept: openplan-dependencies"
 else
 	cat >"$work/dependencies.env" <<-EOF
 		postgres-password=$(fresh)
@@ -95,13 +95,13 @@ else
 		minio-root-password=$(fresh)
 		oidc-client-secret=$(fresh)
 	EOF
-	kube create secret generic evaluation-dependencies --from-env-file="$work/dependencies.env"
+	kube create secret generic openplan-dependencies --from-env-file="$work/dependencies.env"
 fi
 
 # What openplan reads that no dependency holds as it is: its two keys, and the
 # database and Valkey URLs, which carry the dependencies' passwords. The
 # passwords are hex, so they go into the URLs unescaped. values.yaml reads the
-# rest from evaluation-dependencies, where the dependencies read them too.
+# rest from openplan-dependencies, where the dependencies read them too.
 echo "==> openplan-credentials"
 if secret_exists openplan-credentials; then
 	echo "kept: openplan-credentials"
@@ -109,9 +109,9 @@ else
 	kube create secret generic openplan-credentials \
 		--from-literal=session-encryption-key="$(fresh)" \
 		--from-literal=credential-encryption-key="$(fresh)" \
-		--from-literal=database-url="postgres://openplan:$(secret_value evaluation-dependencies postgres-password)@postgres:5432/openplan?sslmode=disable" \
-		--from-literal=valkey-api-url="redis://api:$(secret_value evaluation-dependencies valkey-api-password)@valkey:6379/0" \
-		--from-literal=valkey-executor-url="redis://executor:$(secret_value evaluation-dependencies valkey-executor-password)@valkey:6379/0"
+		--from-literal=database-url="postgres://openplan:$(secret_value openplan-dependencies postgres-password)@postgres:5432/openplan?sslmode=disable" \
+		--from-literal=valkey-api-url="redis://api:$(secret_value openplan-dependencies valkey-api-password)@valkey:6379/0" \
+		--from-literal=valkey-executor-url="redis://executor:$(secret_value openplan-dependencies valkey-executor-password)@valkey:6379/0"
 fi
 
 # The api discovers Dex at https://dex.localhost/dex while it boots, the same
@@ -141,7 +141,7 @@ cat <<EOF
 
 Ready. Next:
 
-  helm install openplan deploy/helm/openplan -n $NAMESPACE -f deploy/helm/evaluation/values.yaml
+  helm install openplan deploy/helm/openplan -n $NAMESPACE -f deploy/docker-desktop/values.yaml
 
 Then open https://openplan.localhost and sign in as admin@openplan.local /
 admin-local-only.
