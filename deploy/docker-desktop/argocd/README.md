@@ -1,8 +1,8 @@
-# openplan on Docker Desktop, kept on main by Argo CD
+# openplan on Docker Desktop, kept on develop by Argo CD
 
 A homelab setup, not a supported topology. It runs openplan on Docker
-Desktop's Kubernetes and lets Argo CD keep it on openplan's `main`: every
-merge to `main` becomes an upgrade of a running install with real stacks.
+Desktop's Kubernetes and lets Argo CD keep it on openplan's `develop`: every
+merge to `develop` becomes an upgrade of a running install with real stacks.
 It's the openplan that applies [`examples/openplan-proxmox`](../../../examples/openplan-proxmox).
 
 Argo CD installs, from git:
@@ -11,8 +11,8 @@ Argo CD installs, from git:
 |---|---|---|
 | `traefik` | the ingress controller | Traefik's chart, pinned |
 | `cert-manager` | issues the TLS certificate | cert-manager's chart, pinned |
-| `dependencies` | Postgres, Temporal, Dex, Valkey, MinIO | `deploy/docker-desktop/dependencies.yaml` on `main` |
-| `openplan` | the api, executor and web | `deploy/helm/openplan` on `main`, images of the same commit |
+| `dependencies` | Postgres, Temporal, Dex, Valkey, MinIO | `deploy/docker-desktop/dependencies.yaml` on `develop` |
+| `openplan` | the api, executor and web | the newest develop chart, `oci://ghcr.io/openplanhq/charts-develop/openplan`, with `deploy/docker-desktop/values.yaml` from `develop` |
 
 The dependencies are the ones [`../setup.sh`](../setup.sh) installs: single pods with no replication
 or backups. Nothing here is precious; stacks keep their Terraform state in
@@ -52,25 +52,40 @@ Then open https://openplan.localhost once every Application is Synced and
 Healthy (`kubectl -n argocd get applications -w`), and sign in as
 `admin@openplan.local` / `admin-local-only`.
 
-The root Application follows `main`, like everything it installs, so a change
-to this folder reaches the install in the same release as the files it points
-at. To try a branch, run the bootstrap with `ROOT_REVISION=<branch>`;
+The root Application follows `develop`, so a change to this folder applies
+once it merges. To try a branch, run the bootstrap with `ROOT_REVISION=<branch>`;
 rerunning it with the default switches back.
 Rerunning is always safe: the root, the Secrets and the certificate are kept.
 
-## Following main
+## Following develop
 
-The `openplan` Application renders the chart at the commit `main` points to
-and runs the images `publish.yml` pushed for that commit (`sha-<commit>`).
-Argo CD checks git every few minutes, so a merge to `main` rolls the pods with
-no hand step. Two things come with that:
+A merge to `develop` reaches the pods in three steps:
 
-- **The api is down until the new images exist.** It's replaced in one step,
-  and Argo CD usually sees the merge before `publish.yml` has pushed the
-  images. If a publish fails, the api stays down until the next good one.
+1. `publish.yml` builds that commit's images and pushes them as `sha-<commit>`.
+2. Once they're published and verified, it pushes the chart
+   `oci://ghcr.io/openplanhq/charts-develop/openplan` at version
+   `0.0.0-develop.<run number>`, whose `appVersion` is `sha-<commit>`.
+3. Argo CD checks GHCR every few minutes, sees a higher version, and rolls
+   the pods onto that commit's images. They already exist, so the api is only
+   down for its own restart.
+
+What comes with that:
+
+- **A failed build never reaches the install.** It publishes no chart, so the
+  install stays on the last good build.
+- **Values and dependencies lead the images.** `values.yaml` and
+  `dependencies.yaml` apply as soon as they merge; the chart and images
+  follow when the build finishes.
 - **A run in flight is lost** when the executor is replaced.
+- **To hold or roll back,** set the chart source's `targetRevision` in
+  `apps/openplan.yaml` to one version, such as `0.0.0-develop.42`.
 
-A change to `dependencies.yaml` on `main` that alters an init Job fails the
+**Once, after the first develop build:** GHCR creates the
+`charts-develop/openplan` package private, and Argo CD reads it without
+credentials. Make it public in the package's settings on GitHub; until then
+the `openplan` Application shows a pull error.
+
+A change to `dependencies.yaml` on `develop` that alters an init Job fails the
 `dependencies` sync, since a Job can't be changed in place. Delete the Job and
 Argo CD recreates it.
 

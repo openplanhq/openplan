@@ -1,5 +1,13 @@
-# openplan's chart from main, with deploy/docker-desktop/values.yaml: every host and
-# Secret they name is one dependencies.yaml or bootstrap.sh makes.
+# openplan's newest develop chart, with deploy/docker-desktop/values.yaml from
+# develop: every host and Secret those values name is one dependencies.yaml or
+# bootstrap.sh makes.
+#
+# The chart, not git, decides when this rolls. publish.yml pushes
+# 0.0.0-develop.<run number> only after that build's images are published and
+# verified, so following the highest version never rolls onto images that are
+# still building, and a failed build never reaches this install. Following the
+# develop branch instead would take the api down after every merge until its
+# images existed, since the api is replaced in one step.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -9,32 +17,35 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
-  source:
-    repoURL: https://github.com/openplanhq/openplan.git
-    targetRevision: main
-    path: deploy/helm/openplan
-    helm:
-      releaseName: openplan
-      valueFiles:
-        - ../../docker-desktop/values.yaml
-      parameters:
-        # publish.yml pushes sha-<commit> for every push to main. Argo fills
-        # in the commit it synced, so the chart and the images always come
-        # from the same commit and each merge rolls the pods. The values
-        # file's `main` tag can't do that: when only the image moves, Argo
-        # sees no change. Until publish.yml has pushed a new commit's images
-        # the api can't start, since it's replaced in one step.
-        - name: image.tag
-          value: sha-$ARGOCD_APP_REVISION
-          forceString: true
-        # A sha- tag never moves, so a pulled image is always the right one.
-        - name: image.pullPolicy
-          value: IfNotPresent
-        # cert-manager writes the issuing CA into the certificate's Secret as
-        # ca.crt, the only key the chart mounts, so the api trusts Dex's
-        # certificate without a Secret of its own.
-        - name: api.trustedCASecret
-          value: openplan-tls
+  sources:
+    # charts-develop-repo.yaml registers this path as an OCI Helm repository.
+    # The range includes prereleases, and that package holds only develop
+    # builds, so the highest match is the newest build. Pin a version here to
+    # hold the install on one build.
+    - repoURL: ghcr.io/openplanhq/charts-develop
+      chart: openplan
+      targetRevision: ">=0.0.0-0"
+      helm:
+        releaseName: openplan
+        valueFiles:
+          - $values/deploy/docker-desktop/values.yaml
+        parameters:
+          # Empty, so the chart falls back to its appVersion, sha-<commit>:
+          # the images of the build that published it. values.yaml's `main`
+          # is for the by-hand setup.
+          - name: image.tag
+            value: ""
+          # A sha- tag never moves, so a pulled image is always the right one.
+          - name: image.pullPolicy
+            value: IfNotPresent
+          # cert-manager writes the issuing CA into the certificate's Secret
+          # as ca.crt, the only key the chart mounts, so the api trusts Dex's
+          # certificate without a Secret of its own.
+          - name: api.trustedCASecret
+            value: openplan-tls
+    - repoURL: https://github.com/openplanhq/openplan.git
+      targetRevision: develop
+      ref: values
   destination:
     server: https://kubernetes.default.svc
     namespace: openplan

@@ -1,0 +1,16 @@
+# Tells Argo CD that ghcr.io/openplanhq/charts-develop is an OCI Helm
+# repository, which an Application can't say about its own source. No
+# credentials: the package is public. GHCR creates it private on publish.yml's
+# first develop push, and the owner makes it public once (README).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: charts-develop
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  type: helm
+  name: charts-develop
+  url: ghcr.io/openplanhq/charts-develop
+  enableOCI: "true"
