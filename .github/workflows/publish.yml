@@ -66,8 +66,12 @@ on:
         required: true
         type: string
 
+# A newer push to a ref cancels the older build of it. A manual re-publish gets
+# a group of its own: it runs on the default branch, develop, and sharing
+# develop's group would let a merge cancel a release halfway through re-pointing
+# its tags, or the re-publish cancel a develop build before its chart.
 concurrency:
-  group: publish-${{ github.ref }}
+  group: publish-${{ github.event_name == 'workflow_dispatch' && format('dispatch-{0}', inputs.tag) || github.ref }}
   cancel-in-progress: true
 
 env:
