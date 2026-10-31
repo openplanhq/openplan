@@ -77,3 +77,9 @@ Argo CD recreates it.
 ```sh
 examples/openplan-docker-desktop/teardown.sh
 ```
+
+It removes everything the bootstrap and Argo CD added, stacks and stored
+credentials included, and leaves the cluster as it was. It's safe to run
+twice, or after a bootstrap that stopped halfway. The dedicated mkcert root
+stays trusted by the Mac, because removing it needs your password; the
+script prints the command.
