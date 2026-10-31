@@ -1,0 +1,48 @@
+# Issues openplan-tls from the dedicated mkcert root (certificates.yaml), so
+# the certificate is declared here instead of made by hand.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://charts.jetstack.io
+    chart: cert-manager
+    targetRevision: v1.21.3
+    helm:
+      valuesObject:
+        crds:
+          enabled: true
+          # Without the keep policy, deleting this Application deletes the
+          # CRDs too, so teardown leaves the cluster as it found it.
+          keep: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+  # cert-manager's cainjector writes the webhook's CA into these after Argo
+  # applies them; without this the Application never stops being OutOfSync,
+  # and self-heal would keep wiping the CA out.
+  ignoreDifferences:
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      jqPathExpressions:
+        - .webhooks[]?.clientConfig.caBundle
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+      jqPathExpressions:
+        - .webhooks[]?.clientConfig.caBundle
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # bootstrap.sh already made the namespace for the CA Secret.
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true
+      # The CRDs are too large for client-side apply's last-applied
+      # annotation.
+      - ServerSideApply=true

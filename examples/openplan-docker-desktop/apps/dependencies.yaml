@@ -1,0 +1,28 @@
+# Postgres, Temporal, Dex, Valkey and MinIO: the evaluation harness's
+# manifests, from main and unchanged, so this install and the evaluation never
+# drift apart. They read the Secrets bootstrap.sh makes.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dependencies
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/openplanhq/openplan.git
+    targetRevision: main
+    path: deploy/helm/evaluation
+    directory:
+      # The folder also holds values.yaml and the harness's scripts.
+      include: dependencies.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openplan
+  syncPolicy:
+    automated:
+      # Postgres's and MinIO's data are PersistentVolumeClaims in this file:
+      # a manifest that drops one on main must not delete the data with it.
+      prune: false
+      selfHeal: true

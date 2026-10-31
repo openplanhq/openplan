@@ -1,0 +1,35 @@
+# The one Application bootstrap.sh applies by hand. Everything else Argo CD
+# runs comes from apps/, read from git, so the install is whatever this folder
+# says on the revision below. bootstrap.sh replaces develop with
+# $ROOT_REVISION, which is how a branch is tried before it merges.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: openplan-docker-desktop
+  namespace: argocd
+  # Deleting this Application deletes every child Application and, through
+  # their own finalizers, everything they installed. teardown.sh relies on it.
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/openplanhq/openplan.git
+    targetRevision: develop
+    path: examples/openplan-docker-desktop/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    # The certificate objects in apps/ can't apply until cert-manager has
+    # installed its CRDs, which happens in a child Application this sync
+    # creates. Retrying is what waits for them.
+    retry:
+      limit: 10
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 3m
