@@ -16,7 +16,7 @@ name: differential
 
 on:
   push:
-    branches: [main]
+    branches: [develop, main]
   pull_request:
     # ready_for_review: a draft PR runs nothing (see the job's `if`), so the
     # run it skipped happens when the PR is marked ready.
@@ -31,7 +31,7 @@ on:
 
 concurrency:
   group: differential-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/develop' && github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
