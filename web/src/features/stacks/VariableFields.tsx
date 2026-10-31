@@ -167,7 +167,7 @@ function SensitiveVariable({ variable, description, secrets }: { variable: Templ
   const lead = environmentPath ? who.charAt(0).toUpperCase() + who.slice(1) : `Once added, ${who}`;
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <p className="m-0 font-mono text-meta leading-label font-medium wrap-anywhere">
           {variable.name}
           {variable.required ? " *" : ""}
