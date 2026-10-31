@@ -55,7 +55,11 @@ describe("VariableFields", () => {
     expect(screen.queryByLabelText(/db_password/)).toBeNull();
     expect(screen.getByLabelText("region")).toBeTruthy();
     expect(screen.getByText("TF_VAR_db_password")).toBeTruthy();
-    expect(screen.getByText("sensitive")).toBeTruthy();
+    // The same tag the template page puts after the name, not a status: one
+    // look for one fact on every screen.
+    const tag = screen.getByText("sensitive");
+    expect(tag.className).toContain("text-tag-foreground");
+    expect(tag.closest("[data-tone]")).toBeNull();
     expect(screen.getByRole("link", { name: "Environment" }).getAttribute("href")).toBe("/stacks/s1/templates/t1/environment");
   });
 

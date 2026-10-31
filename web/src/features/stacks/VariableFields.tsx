@@ -1,9 +1,7 @@
 import { useId } from "react";
-import { Lock } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { TemplateVariable } from "../../api/types";
 import ErrorLine from "../../shared/ErrorLine";
-import StatusLabel from "../../shared/StatusLabel";
 import { inputClass, textareaClass } from "../../shared/fieldClass";
 import { isStructuredVariable } from "./stackWorkflow";
 import { Input } from "@/components/ui/input";
@@ -146,7 +144,8 @@ export default function VariableFields({
  * shown to everyone who can view the stack, so the server refuses a value for
  * it. Its value comes from an Environment secret named TF_VAR_<name>, and the
  * row says which, who sets it and where. The name keeps the label's look and
- * its required mark; "sensitive" is a StatusLabel, icon and word.
+ * its required mark; "sensitive" is the tag the template page puts after the
+ * name, so the fact looks the same on every screen.
  */
 function SensitiveVariable({ variable, description, secrets }: { variable: TemplateVariable; description: string; secrets: SecretSetting }) {
   const { canSet, environmentPath } = secrets;
@@ -173,9 +172,7 @@ function SensitiveVariable({ variable, description, secrets }: { variable: Templ
           {variable.name}
           {variable.required ? " *" : ""}
         </p>
-        <StatusLabel icon={Lock} tone="settled">
-          sensitive
-        </StatusLabel>
+        <span className="rounded-sm border bg-canvas px-1.75 py-px font-mono text-caption text-tag-foreground">sensitive</span>
       </div>
       {/* A TF_VAR_ name has no break points of its own, so a long one breaks
           anywhere rather than widening the column. */}
