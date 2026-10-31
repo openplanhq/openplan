@@ -80,7 +80,7 @@ export default function VariablesTab() {
         {/* Only when one is: config is stored in the clear, so a sensitive
             variable's value comes from a secret, never from the stack's form. */}
         {variables.some((templateVariable) => templateVariable.sensitive) && (
-          <> A secret one takes its value from an Environment secret named <span className="font-mono text-code-foreground">TF_VAR_</span> and its name.</>
+          <> A sensitive one gets its value from an Environment secret named <span className="font-mono text-code-foreground">TF_VAR_</span> and its name.</>
         )}
       </p>
       {/* Fixed columns in a frame that scrolls sideways on a phone. */}
@@ -104,15 +104,24 @@ export default function VariablesTab() {
           <TableBody>
             {variables.map((templateVariable) => (
               <TableRow key={templateVariable.name} className="h-12 border-divider hover:bg-transparent" data-testid={`template-variable-${templateVariable.name}`}>
-                <TableCell className={cn(cellClass, "font-mono text-meta whitespace-normal wrap-anywhere")}>{templateVariable.name}</TableCell>
+                <TableCell className={cn(cellClass, "font-mono text-meta whitespace-normal wrap-anywhere")}>
+                  {/* Sensitive is a fact about the variable, not about whether it
+                      needs a value, so it rides with the name in the Tag look
+                      "latest" uses, and wraps under a long name. */}
+                  {templateVariable.sensitive ? (
+                    <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                      <span>{templateVariable.name}</span>
+                      <span className="rounded-sm border bg-canvas px-1.75 py-px font-mono text-caption text-tag-foreground">sensitive</span>
+                    </span>
+                  ) : (
+                    templateVariable.name
+                  )}
+                </TableCell>
                 <TableCell className={cn(cellClass, "font-mono text-caption whitespace-normal text-muted-foreground wrap-anywhere")}>
                   <Breakable pieces={typePieces(templateVariable.type_expression || "any")} />
                 </TableCell>
-                {/* A secret is set by an owner in Environment, never in the
-                    stack's form; required or not, the person registering
-                    the template needs to know it goes there. */}
-                <TableCell className={cn(cellClass, "text-meta", templateVariable.required || templateVariable.sensitive ? "font-medium text-foreground" : "text-muted-foreground")}>
-                  {templateVariable.sensitive ? "secret" : templateVariable.required ? "required" : "optional"}
+                <TableCell className={cn(cellClass, "text-meta", templateVariable.required ? "font-medium text-foreground" : "text-muted-foreground")}>
+                  {templateVariable.required ? "required" : "optional"}
                 </TableCell>
                 <TableCell className={cn(cellClass, "text-meta whitespace-normal text-muted-foreground")}>{templateVariable.description}</TableCell>
               </TableRow>

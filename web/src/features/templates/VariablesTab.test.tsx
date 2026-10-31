@@ -66,15 +66,27 @@ describe("VariablesTab", () => {
     expect(screen.getByRole("table").querySelector("colgroup")).not.toBeNull();
   });
 
-  // A sensitive variable's value never comes from a stack's config, so the
-  // registrar sees "secret" in place of required or optional, and the note
-  // says where its value comes from.
-  it("marks a sensitive variable as a secret and says where its value comes from", () => {
-    renderTab(seed([variable(), variable({ name: "db_password", sensitive: true })]));
+  // Sensitive and required are separate facts: a secret can be either. Value
+  // keeps saying required or optional, a sensitive tag follows the name, and
+  // the note says where a sensitive value comes from.
+  it("tags a sensitive variable by its name and keeps required or optional in Value", () => {
+    renderTab(
+      seed([
+        variable({ name: "db_password", sensitive: true }),
+        variable({ name: "api_token", sensitive: true, required: false, has_default: true }),
+        variable()
+      ])
+    );
 
-    expect(within(screen.getByTestId("template-variable-db_password")).getByText("secret").className).toContain("font-medium");
-    expect(within(screen.getByTestId("template-variable-cluster_name")).getByText("required")).toBeTruthy();
-    expect(screen.getByTestId("template-variables").textContent).toContain("A secret one takes its value from an Environment secret named TF_VAR_ and its name.");
+    const required = within(screen.getByTestId("template-variable-db_password"));
+    expect(required.getByText("sensitive")).toBeTruthy();
+    expect(required.getByText("required").className).toContain("font-medium");
+    expect(required.queryByText("secret")).toBeNull();
+    const optional = within(screen.getByTestId("template-variable-api_token"));
+    expect(optional.getByText("sensitive")).toBeTruthy();
+    expect(optional.getByText("optional")).toBeTruthy();
+    expect(within(screen.getByTestId("template-variable-cluster_name")).queryByText("sensitive")).toBeNull();
+    expect(screen.getByTestId("template-variables").textContent).toContain("A sensitive one gets its value from an Environment secret named TF_VAR_ and its name.");
   });
 
   it("wraps a long type only at its structure, never inside a word (#459)", () => {
