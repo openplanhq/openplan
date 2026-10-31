@@ -32,6 +32,12 @@ spec:
   dnsNames:
     - openplan.localhost
     - dex.localhost
+  # macOS refuses a TLS server certificate without the serverAuth extended key
+  # usage, and cert-manager leaves it out unless asked.
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
   issuerRef:
     kind: ClusterIssuer
     name: mkcert
