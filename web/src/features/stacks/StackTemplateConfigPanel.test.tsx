@@ -26,6 +26,7 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof StackTemplat
     canSave: true,
     onSave: vi.fn(),
     saveBusy: false,
+    secrets: { canSet: true, environmentPath: "/stacks/s1/templates/t1/environment" },
     ...overrides
   };
   render(<StackTemplateConfigPanel {...props} />);

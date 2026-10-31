@@ -2,6 +2,7 @@ import { Loader2 } from "lucide-react";
 import type { TemplateVariable } from "../../api/types";
 import { buttonClass } from "../../shared/buttonClass";
 import VariableFields from "./VariableFields";
+import type { SecretSetting } from "./VariableFields";
 import { cn } from "@/lib/utils";
 
 interface StackTemplateConfigPanelProps {
@@ -15,6 +16,8 @@ interface StackTemplateConfigPanelProps {
   // disabled: the capability gate's denied-with-reason state (AUTH-020).
   disabledReason?: string;
   errors?: Record<string, string>;
+  /** Who can set a sensitive variable's secret, and this template's Environment. */
+  secrets: SecretSetting;
 }
 
 /**
@@ -30,7 +33,8 @@ export default function StackTemplateConfigPanel({
   onSave,
   saveBusy,
   disabledReason,
-  errors
+  errors,
+  secrets
 }: StackTemplateConfigPanelProps) {
   const locked = Boolean(disabledReason);
   return (
@@ -47,6 +51,7 @@ export default function StackTemplateConfigPanel({
         disabled={locked}
         emptyMessage="This template declares no variables."
         errors={errors}
+        secrets={secrets}
       />
       <button
         type="button"

@@ -1,6 +1,9 @@
 import { useId } from "react";
+import { Lock } from "lucide-react";
+import { Link } from "react-router-dom";
 import type { TemplateVariable } from "../../api/types";
 import ErrorLine from "../../shared/ErrorLine";
+import StatusLabel from "../../shared/StatusLabel";
 import { inputClass, textareaClass } from "../../shared/fieldClass";
 import { isStructuredVariable } from "./stackWorkflow";
 import { Input } from "@/components/ui/input";
@@ -16,6 +19,20 @@ interface VariableFieldsProps {
   emptyMessage: string;
   /** What the server refused about each variable, by name. */
   errors?: Record<string, string>;
+  /** Who can set a sensitive variable's secret, and where. */
+  secrets: SecretSetting;
+}
+
+/** Where a sensitive variable's TF_VAR_ secret is set, and whether this
+    person can set it. */
+export interface SecretSetting {
+  /** The stack's can_manage_access: only an owner can add secrets, and the
+      Environment screens are closed to everyone else. */
+  canSet: boolean;
+  /** The installed template's Environment. Absent while the template isn't
+      installed yet, which also means no link: following one mid-form would
+      throw away what was picked and typed. */
+  environmentPath?: string;
 }
 
 /**
@@ -40,7 +57,8 @@ export default function VariableFields({
   onVariableValueChange,
   disabled = false,
   emptyMessage,
-  errors = {}
+  errors = {},
+  secrets
 }: VariableFieldsProps) {
   const idPrefix = useId();
   if (variables.length === 0) {
@@ -54,6 +72,9 @@ export default function VariableFields({
         const errorId = `${id}-error`;
         const typeId = `${id}-type`;
         const description = variable.description.trim();
+        if (variable.sensitive) {
+          return <SensitiveVariable key={variable.name} variable={variable} description={description} secrets={secrets} />;
+        }
         const error = errors[variable.name];
         const typeExpression = variable.type_expression.trim();
         const structured = isStructuredVariable(variable);
@@ -116,6 +137,52 @@ export default function VariableFields({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * A variable marked sensitive, with no box: config is stored in the clear and
+ * shown to everyone who can view the stack, so the server refuses a value for
+ * it. Its value comes from an Environment secret named TF_VAR_<name>, and the
+ * row says which, who sets it and where. The name keeps the label's look and
+ * its required mark; "sensitive" is a StatusLabel, icon and word.
+ */
+function SensitiveVariable({ variable, description, secrets }: { variable: TemplateVariable; description: string; secrets: SecretSetting }) {
+  const { canSet, environmentPath } = secrets;
+  // The installed template's own Environment, never the stack's: a stack
+  // secret reaches every template the stack installs, and template code is
+  // untrusted.
+  const where = environmentPath ? (
+    canSet ? (
+      <Link to={environmentPath} className="font-medium text-primary hover:underline">
+        Environment
+      </Link>
+    ) : (
+      "Environment"
+    )
+  ) : (
+    "its Environment"
+  );
+  const who = canSet ? "set it" : "an owner sets it";
+  const lead = environmentPath ? who.charAt(0).toUpperCase() + who.slice(1) : `Once added, ${who}`;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <p className="m-0 font-mono text-meta leading-label font-medium wrap-anywhere">
+          {variable.name}
+          {variable.required ? " *" : ""}
+        </p>
+        <StatusLabel icon={Lock} tone="settled">
+          sensitive
+        </StatusLabel>
+      </div>
+      {/* A TF_VAR_ name has no break points of its own, so a long one breaks
+          anywhere rather than widening the column. */}
+      <p className="text-meta text-muted-foreground wrap-anywhere">
+        {lead} as the secret <code className="font-mono text-code-foreground">{`TF_VAR_${variable.name}`}</code> in {where}.
+      </p>
+      {description && <p className="text-caption text-muted-foreground">{description}</p>}
     </div>
   );
 }

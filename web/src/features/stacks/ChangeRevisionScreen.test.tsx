@@ -255,6 +255,39 @@ describe("ChangeRevisionScreen", () => {
     });
   });
 
+  // The stack set password while it was a plain variable. The target revision
+  // marks it sensitive, so its old value can't come along: config may not hold
+  // it. The screen says so, like a dropped variable, and names the secret.
+  it("says a value that became sensitive won't carry, and doesn't send it", async () => {
+    const queryClient = testQueryClient();
+    const installed = stackTemplate({ config: { region: "us-east-1", password: "hunter2" } });
+    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([installed]));
+    seedTemplates(queryClient, [
+      templateRevision({ id: "rev_next", source_ref: "main", resolved_commit_sha: "9f21abc0000000" }),
+      templateRevision({ id: "rev_current" })
+    ]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_current"), [
+      variable({ name: "region" }),
+      variable({ name: "password" })
+    ]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_next"), [
+      variable({ name: "region", template_revision_id: "rev_next" }),
+      variable({ name: "password", template_revision_id: "rev_next", sensitive: true })
+    ]);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "st_1" }), { status: 200, headers: { "content-type": "application/json" } })
+    );
+
+    renderScreen(queryClient, installed);
+
+    expect(screen.getByTestId("change-revision-now-sensitive-password").textContent).toContain("TF_VAR_password");
+    fireEvent.click(screen.getByRole("button", { name: /Change revision/ }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string).config).toEqual({ region: "us-east-1" });
+  });
+
   it("renders the loading state instead of a false diff while the target revision's variables have not loaded", () => {
     const queryClient = testQueryClient();
     queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([stackTemplate()]));
