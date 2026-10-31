@@ -1,0 +1,30 @@
+# Argo CD's own settings. bootstrap.sh installs Argo CD with them once; from
+# then on apps/argocd.yaml applies them from develop, so a change here reaches
+# the install when it merges, like everything else Argo CD runs.
+
+# Its own Dex, notifications and ApplicationSet controller go unused here.
+dex:
+  enabled: false
+notifications:
+  enabled: false
+applicationSet:
+  replicas: 0
+
+# Without the keep policy, uninstalling Argo CD (teardown.sh) removes its CRDs
+# too.
+crds:
+  keep: false
+
+# The UI at https://argocd.localhost, through Traefik, with the
+# argocd-server-tls certificate apps/certificates.yaml issues. Traefik
+# terminates TLS, so the server speaks plain HTTP behind it; its own
+# self-signed TLS is one Traefik couldn't verify.
+configs:
+  params:
+    server.insecure: true
+server:
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    hostname: argocd.localhost
+    tls: true

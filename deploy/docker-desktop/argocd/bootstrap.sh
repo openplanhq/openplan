@@ -16,7 +16,6 @@
 # under stored data. teardown.sh undoes all of it.
 set -eu
 
-ARGOCD_CHART_VERSION=10.11.6
 NAMESPACE=openplan
 ROOT_REVISION=${ROOT_REVISION:-develop}
 OPENPLAN_CAROOT=${OPENPLAN_CAROOT:-$HOME/.local/share/mkcert-openplan}
@@ -125,25 +124,21 @@ else
 	kubectl -n kube-system rollout status deployment/coredns --timeout=120s
 fi
 
-# Its own Dex, notifications and ApplicationSet controller go unused here.
-# Without the keep policy, uninstalling it removes its CRDs too. Its UI is
-# served at https://argocd.localhost through Traefik, with the argocd-server-tls
-# certificate apps/certificates.yaml issues; insecure mode makes the server
-# speak plain HTTP behind Traefik, which terminates TLS, instead of its own
-# self-signed TLS that Traefik couldn't verify.
+# Installed here only the first time, with the settings and chart version
+# apps/argocd.yaml uses; from then on that Application manages Argo CD from
+# git, so rerunning this never changes Argo CD's settings. To repair an Argo
+# CD broken by a bad settings change, see the README.
 echo "==> Argo CD"
-helm upgrade --install argocd argo-cd --repo https://argoproj.github.io/argo-helm \
-	--version "$ARGOCD_CHART_VERSION" -n argocd --create-namespace \
-	--set dex.enabled=false \
-	--set notifications.enabled=false \
-	--set applicationSet.replicas=0 \
-	--set crds.keep=false \
-	--set 'configs.params.server\.insecure=true' \
-	--set server.ingress.enabled=true \
-	--set server.ingress.ingressClassName=traefik \
-	--set server.ingress.hostname=argocd.localhost \
-	--set server.ingress.tls=true \
-	--wait --timeout 300s >/dev/null
+if helm status argocd -n argocd >/dev/null 2>&1; then
+	echo "kept: Argo CD manages itself (apps/argocd.yaml)"
+else
+	# The only bare-digits targetRevision in apps/argocd.yaml is the chart's.
+	argocd_chart_version=$(sed -n 's/^ *targetRevision: \([0-9][0-9.]*\)$/\1/p' "$here/apps/argocd.yaml")
+	helm install argocd argo-cd --repo https://argoproj.github.io/argo-helm \
+		--version "$argocd_chart_version" -n argocd --create-namespace \
+		-f "$here/argocd-values.yaml" \
+		--wait --timeout 300s >/dev/null
+fi
 
 echo "==> root Application, following $ROOT_REVISION"
 sed "s|targetRevision: develop|targetRevision: $ROOT_REVISION|" "$here/root.yaml" | kubectl apply -f -

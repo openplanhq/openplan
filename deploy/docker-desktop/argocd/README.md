@@ -70,6 +70,28 @@ once it merges. To try a branch, run the bootstrap with `ROOT_REVISION=<branch>`
 rerunning it with the default switches back.
 Rerunning is always safe: the root, the Secrets and the certificate are kept.
 
+## Argo CD's own settings
+
+Argo CD manages its own install: [`apps/argocd.yaml`](apps/argocd.yaml)
+renders the `argo-cd` chart with [`argocd-values.yaml`](argocd-values.yaml)
+from `develop`, so a change to either reaches the install when it merges. The
+bootstrap installs Argo CD only the first time, with the same file and chart
+version, so rerunning it never changes Argo CD.
+
+It never prunes its own install, because a bad render that dropped the CRDs
+would delete every Application with them. A setting that removes a resource
+leaves it behind until you delete it by hand.
+
+If a bad change breaks Argo CD so it can't fix itself, revert the change on
+`develop`, then put the settings back by hand with the version from
+`apps/argocd.yaml`:
+
+```sh
+helm --kube-context docker-desktop upgrade argocd argo-cd \
+  --repo https://argoproj.github.io/argo-helm --version <version> -n argocd \
+  -f deploy/docker-desktop/argocd/argocd-values.yaml --force-conflicts
+```
+
 ## Following develop
 
 A merge to `develop` reaches the pods in three steps:
