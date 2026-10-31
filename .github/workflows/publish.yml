@@ -1,4 +1,5 @@
-# Publish the openplan images, and on a release the Helm chart, to GHCR.
+# Publish the openplan images, and for a release or a develop build the Helm
+# chart, to GHCR.
 #
 # Without this, `docker compose up` builds every image from source on a
 # stranger's machine, which takes minutes and is the first thing that makes
@@ -9,6 +10,7 @@
 #
 #   release published -> 0.1.0, v0.1.0, v0.1, v0, latest
 #   main push         -> main and the commit SHA, never latest
+#   develop push      -> the commit SHA only, plus a develop chart (below)
 #
 # A `main` build is not something to pin to. It exists so a clone of main has
 # something to pull, and so a bug on main is reproducible against an exact
@@ -39,15 +41,22 @@
 # this workflow exists to remove. So the builds only ever write staging tags,
 # and the merge job publishes the real ones and then verifies them.
 #
-# The chart is published only for a release, after the merge, because its
-# default image tag is its appVersion: a chart pushed before its images exist
-# installs pods that cannot pull. A `main` build gets no chart; the repo's
-# `0.0.0-dev` placeholder is not a version anyone should install.
+# The chart is published only after the merge, because its default image tag
+# is its appVersion: a chart pushed before its images exist installs pods that
+# cannot pull. A release gets oci://ghcr.io/openplanhq/charts/openplan at its
+# version. A develop build gets oci://ghcr.io/openplanhq/charts-develop/openplan
+# at 0.0.0-develop.<run number>, appVersion sha-<commit>: the run number only
+# grows, so "highest version" is "newest build", and the Docker Desktop install
+# (deploy/docker-desktop/argocd) follows it. That chart existing is the signal
+# the images are there, so the install never rolls onto images still building.
+# A separate package keeps those builds out of the release chart's version
+# list. A `main` build gets no chart; the repo's `0.0.0-dev` placeholder is not
+# a version anyone should install.
 name: publish
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
     tags: ["v*"]
   # Lets a release be re-published after a packaging fix, without a new commit.
   workflow_dispatch:
@@ -88,8 +97,11 @@ jobs:
     timeout-minutes: 5
     outputs:
       tags: ${{ steps.tags.outputs.tags }}
-      # Empty on a main build, which is how the chart job knows to skip.
-      version: ${{ steps.tags.outputs.version }}
+      # The chart to publish. chart_version is empty on a main build, which is
+      # how the chart job knows to skip.
+      chart_version: ${{ steps.tags.outputs.chart_version }}
+      app_version: ${{ steps.tags.outputs.app_version }}
+      chart_repo: ${{ steps.tags.outputs.chart_repo }}
     steps:
       - name: derive tags
         id: tags
@@ -121,7 +133,19 @@ jobs:
             exit 1
           fi
 
-          if [ -z "$version" ]; then
+          chart_version=""
+          app_version=""
+          chart_repo=""
+
+          if [ -z "$version" ] && [ "$REF_NAME" = develop ]; then
+            # A develop build: commit-identified images, and a chart whose
+            # run-number version orders the builds. See the header.
+            tags="sha-$GITHUB_SHA"
+            chart_version="0.0.0-develop.$GITHUB_RUN_NUMBER"
+            app_version="sha-$GITHUB_SHA"
+            chart_repo=charts-develop
+            echo "Publishing develop build $GITHUB_SHA as $tags, chart $chart_version"
+          elif [ -z "$version" ]; then
             # A main build: commit-identified, and never latest. See the header.
             tags="main,sha-$GITHUB_SHA"
             echo "Publishing main build $GITHUB_SHA as $tags"
@@ -132,11 +156,18 @@ jobs:
             major="$(echo "$version" | cut -d. -f1)"
             minor="$(echo "$version" | cut -d. -f1,2)"
             tags="$version,v$version,v$minor,v$major,latest"
+            chart_version="$version"
+            app_version="$version"
+            chart_repo=charts
             echo "Publishing release $version as $tags"
           fi
 
-          echo "tags=$tags" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          {
+            echo "tags=$tags"
+            echo "chart_version=$chart_version"
+            echo "app_version=$app_version"
+            echo "chart_repo=$chart_repo"
+          } >> "$GITHUB_OUTPUT"
 
   # Builds one architecture and pushes it under staging tags that record the
   # architecture: `0.1.0-amd64`, `0.1.0-arm64`. The real tags are only ever
@@ -325,13 +356,15 @@ jobs:
             done < <(echo "$TAG_LIST" | tr ',' '\n')
           done
 
-  # Packages the chart with the release version as both its version and its
-  # appVersion, so `helm install --version X.Y.Z` pulls images tagged X.Y.Z.
-  # Chart.yaml keeps 0.0.0-dev in the repo; the version only exists here.
+  # Packages the chart with the version and appVersion the plan derived: a
+  # release's version for both, so `helm install --version X.Y.Z` pulls images
+  # tagged X.Y.Z; a develop build's run-number version with its sha- tag as
+  # appVersion. Chart.yaml keeps 0.0.0-dev in the repo; the version only exists
+  # here.
   chart:
     name: publish chart
     needs: [plan, merge]
-    if: needs.plan.outputs.version != ''
+    if: needs.plan.outputs.chart_version != ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -345,12 +378,13 @@ jobs:
 
       - name: package
         env:
-          VERSION: ${{ needs.plan.outputs.version }}
+          CHART_VERSION: ${{ needs.plan.outputs.chart_version }}
+          APP_VERSION: ${{ needs.plan.outputs.app_version }}
         run: |
           set -euo pipefail
           helm package deploy/helm/openplan \
-            --version "$VERSION" \
-            --app-version "$VERSION" \
+            --version "$CHART_VERSION" \
+            --app-version "$APP_VERSION" \
             --destination "$RUNNER_TEMP/chart"
 
       # The token on stdin, never on the command line, where the process list
@@ -362,9 +396,11 @@ jobs:
         run: echo "$TOKEN" | helm registry login "$REGISTRY" --username "$ACTOR" --password-stdin
 
       # helm push appends the chart name, so this lands at
-      # oci://ghcr.io/openplanhq/charts/openplan:X.Y.Z. GHCR creates the package
-      # private on the first push; the owner makes it public once.
+      # oci://ghcr.io/openplanhq/<chart_repo>/openplan:<chart_version>. GHCR
+      # creates each package (charts, charts-develop) private on its first push;
+      # the owner makes it public once.
       - name: push
         env:
-          VERSION: ${{ needs.plan.outputs.version }}
-        run: helm push "$RUNNER_TEMP/chart/openplan-$VERSION.tgz" "oci://$REGISTRY/$OWNER/charts"
+          CHART_VERSION: ${{ needs.plan.outputs.chart_version }}
+          CHART_REPO: ${{ needs.plan.outputs.chart_repo }}
+        run: helm push "$RUNNER_TEMP/chart/openplan-$CHART_VERSION.tgz" "oci://$REGISTRY/$OWNER/$CHART_REPO"
