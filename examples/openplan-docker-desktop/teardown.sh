@@ -15,6 +15,11 @@ if [ "$context" != docker-desktop ]; then
 	echo "teardown.sh: kubectl's context is '$context'; this runs only on docker-desktop." >&2
 	exit 1
 fi
+# Pinned on every call from here: the current context can change in another
+# terminal during the long waits below, and the check above reads it only
+# once. A switch mid-run must not delete CRDs on another cluster.
+kubectl() { command kubectl --context docker-desktop "$@"; }
+helm() { command helm --kube-context docker-desktop "$@"; }
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT

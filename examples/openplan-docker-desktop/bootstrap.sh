@@ -31,6 +31,10 @@ if [ "$context" != docker-desktop ]; then
 	echo "bootstrap.sh: kubectl's context is '$context'; this runs only on docker-desktop." >&2
 	exit 1
 fi
+# Pinned on every call from here: the current context can change in another
+# terminal while this runs, and the check above reads it only once.
+kubectl() { command kubectl --context docker-desktop "$@"; }
+helm() { command helm --kube-context docker-desktop "$@"; }
 if ! command -v mkcert >/dev/null 2>&1; then
 	echo "bootstrap.sh: needs mkcert (macOS: brew install mkcert)." >&2
 	exit 1
