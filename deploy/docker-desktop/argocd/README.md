@@ -52,6 +52,19 @@ Then open https://openplan.localhost once every Application is Synced and
 Healthy (`kubectl -n argocd get applications -w`), and sign in as
 `admin@openplan.local` / `admin-local-only`.
 
+Argo CD's own UI is https://argocd.localhost, with the same certificate root,
+so no warning. Sign in as `admin` with the password from
+
+```sh
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d
+```
+
+Then change it under User Info and delete that Secret: Docker Desktop
+publishes Traefik on every network interface, so the page is reachable from
+your network too, and Argo CD's admin can change anything in the cluster. The
+`argocd` CLI works through the same host with
+`argocd login argocd.localhost --grpc-web`.
+
 The root Application follows `develop`, so a change to this folder applies
 once it merges. To try a branch, run the bootstrap with `ROOT_REVISION=<branch>`;
 rerunning it with the default switches back.

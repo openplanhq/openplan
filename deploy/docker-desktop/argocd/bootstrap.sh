@@ -126,7 +126,11 @@ else
 fi
 
 # Its own Dex, notifications and ApplicationSet controller go unused here.
-# Without the keep policy, uninstalling it removes its CRDs too.
+# Without the keep policy, uninstalling it removes its CRDs too. Its UI is
+# served at https://argocd.localhost through Traefik, with the argocd-server-tls
+# certificate apps/certificates.yaml issues; insecure mode makes the server
+# speak plain HTTP behind Traefik, which terminates TLS, instead of its own
+# self-signed TLS that Traefik couldn't verify.
 echo "==> Argo CD"
 helm upgrade --install argocd argo-cd --repo https://argoproj.github.io/argo-helm \
 	--version "$ARGOCD_CHART_VERSION" -n argocd --create-namespace \
@@ -134,6 +138,11 @@ helm upgrade --install argocd argo-cd --repo https://argoproj.github.io/argo-hel
 	--set notifications.enabled=false \
 	--set applicationSet.replicas=0 \
 	--set crds.keep=false \
+	--set 'configs.params.server\.insecure=true' \
+	--set server.ingress.enabled=true \
+	--set server.ingress.ingressClassName=traefik \
+	--set server.ingress.hostname=argocd.localhost \
+	--set server.ingress.tls=true \
 	--wait --timeout 300s >/dev/null
 
 echo "==> root Application, following $ROOT_REVISION"
@@ -148,11 +157,8 @@ Argo CD is installing the rest. Watch it with:
 Once every Application is Synced and Healthy, open https://openplan.localhost
 and sign in as admin@openplan.local / admin-local-only.
 
-Argo CD's own UI:
-
-  kubectl -n argocd port-forward svc/argocd-server 8080:443
-
-then https://localhost:8080 as admin, with the password from
+Argo CD's own UI is https://argocd.localhost (once the root has issued its
+certificate), as admin, with the password from
 
   kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d
 EOF
