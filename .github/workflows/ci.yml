@@ -11,12 +11,12 @@
 #
 # On a PR, each job runs only when the change can affect it (the `changes`
 # job), and a draft PR runs nothing: `make check` runs all of this locally
-# first. A push to main always runs every job.
+# first. A push to develop or main always runs every job.
 name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [develop, main]
   pull_request:
     # ready_for_review: a draft PR runs nothing (see the job's `if`), so the
     # run it skipped happens when the PR is marked ready.
@@ -25,17 +25,18 @@ on:
 
 # One run per branch. A new push to a PR supersedes the run still testing the
 # commit it replaced, so nobody waits on an answer to a question they already
-# changed. main is never cancelled: its result is the record of what shipped.
+# changed. develop and main are never cancelled: their result is the record of
+# what landed.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/develop' && github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
 
 jobs:
   # Which jobs this PR's files can affect. Outside a PR every output is true,
-  # so main is always checked in full.
+  # so develop and main are always checked in full.
   changes:
     name: changes
     runs-on: ubuntu-latest

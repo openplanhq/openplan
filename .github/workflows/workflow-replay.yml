@@ -15,7 +15,7 @@ name: workflow-replay
 
 on:
   push:
-    branches: [main]
+    branches: [develop, main]
     paths:
       - "internal/workflows/**"
       - "internal/domain/**"
@@ -38,7 +38,7 @@ on:
 
 concurrency:
   group: workflow-replay-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/develop' && github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
