@@ -1,5 +1,5 @@
 #!/bin/sh
-# Brings up openplan on Docker Desktop's Kubernetes, kept on main by Argo CD.
+# Brings up openplan on Docker Desktop's Kubernetes, kept on develop by Argo CD.
 # This script makes only what can't live in git: a dedicated mkcert root the
 # Mac trusts, the Secrets, and the CoreDNS rewrite. Then it installs Argo CD
 # and applies root.yaml; Argo CD installs everything else from apps/.
@@ -8,7 +8,7 @@
 # so passwords generated in a chart would change on every sync, under data
 # already stored with them.
 #
-#   ROOT_REVISION   the git revision root.yaml follows (default: main)
+#   ROOT_REVISION   the git revision root.yaml follows (default: develop)
 #   OPENPLAN_CAROOT the dedicated mkcert root (default:
 #                   ~/.local/share/mkcert-openplan)
 #
@@ -18,7 +18,7 @@ set -eu
 
 ARGOCD_CHART_VERSION=10.11.6
 NAMESPACE=openplan
-ROOT_REVISION=${ROOT_REVISION:-main}
+ROOT_REVISION=${ROOT_REVISION:-develop}
 OPENPLAN_CAROOT=${OPENPLAN_CAROOT:-$HOME/.local/share/mkcert-openplan}
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -137,7 +137,7 @@ helm upgrade --install argocd argo-cd --repo https://argoproj.github.io/argo-hel
 	--wait --timeout 300s >/dev/null
 
 echo "==> root Application, following $ROOT_REVISION"
-sed "s|targetRevision: main|targetRevision: $ROOT_REVISION|" "$here/root.yaml" | kubectl apply -f -
+sed "s|targetRevision: develop|targetRevision: $ROOT_REVISION|" "$here/root.yaml" | kubectl apply -f -
 
 cat <<EOF
 

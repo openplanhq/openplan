@@ -311,5 +311,5 @@ run at a time, and a second run waits for the first. To remove everything:
 ./deploy/docker-desktop/teardown.sh
 ```
 
-To have Argo CD install the same thing and keep it on `main` instead, see
+To have Argo CD install the same thing and keep it on `develop` instead, see
 [`deploy/docker-desktop/argocd/`](../../docker-desktop/argocd/README.md).
