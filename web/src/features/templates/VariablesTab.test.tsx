@@ -66,6 +66,40 @@ describe("VariablesTab", () => {
     expect(screen.getByRole("table").querySelector("colgroup")).not.toBeNull();
   });
 
+  // Sensitive and required are separate facts: a secret can be either. Value
+  // keeps saying required or optional, a sensitive tag follows the name, and
+  // the note says where a sensitive value comes from.
+  it("tags a sensitive variable by its name and keeps required or optional in Value", () => {
+    renderTab(
+      seed([
+        variable({ name: "db_password", sensitive: true }),
+        variable({ name: "api_token", sensitive: true, required: false, has_default: true }),
+        variable()
+      ])
+    );
+
+    const required = within(screen.getByTestId("template-variable-db_password"));
+    expect(required.getByText("sensitive")).toBeTruthy();
+    expect(required.getByText("required").className).toContain("font-medium");
+    expect(required.queryByText("secret")).toBeNull();
+    const optional = within(screen.getByTestId("template-variable-api_token"));
+    expect(optional.getByText("sensitive")).toBeTruthy();
+    expect(optional.getByText("optional")).toBeTruthy();
+    expect(within(screen.getByTestId("template-variable-cluster_name")).queryByText("sensitive")).toBeNull();
+    expect(screen.getByTestId("template-variables").textContent).toContain("A sensitive one gets its value from an Environment secret named TF_VAR_ and its name.");
+  });
+
+  // A tag under a long name makes the row two lines tall; the type, value and
+  // description stay beside the name's first line instead of centring.
+  it("sets every cell on the row's baseline", () => {
+    renderTab(seed([variable({ name: "proxmox_ssh_private_key_data", sensitive: true })]));
+
+    for (const cell of within(screen.getByTestId("template-variable-proxmox_ssh_private_key_data")).getAllByRole("cell")) {
+      expect(cell.className).toContain("align-baseline");
+      expect(cell.className).not.toContain("align-middle");
+    }
+  });
+
   it("wraps a long type only at its structure, never inside a word (#459)", () => {
     renderTab(seed([variable({ name: "node_pools", type_expression: "map(object({ size = optional(number), labels = optional(map(string)) }))" })]));
     const cell = within(screen.getByTestId("template-variable-node_pools")).getByText(/^map\(object/);

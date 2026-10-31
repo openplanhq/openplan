@@ -471,6 +471,33 @@ describe("AddStackTemplateScreen", () => {
     expect(JSON.parse(init.body as string).config).toEqual({ subnets: ["10.0.1.0/24", "10.0.2.0/24"] });
   });
 
+  // A required sensitive variable doesn't block the install: its value comes
+  // from a TF_VAR_ secret in the template's own Environment, once it's added.
+  // No link: following it would throw away what was picked and typed here.
+  it("adds a template with a sensitive variable without sending it", async () => {
+    const queryClient = testQueryClient();
+    seedTemplates(queryClient, [templateRevision()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [
+      variable({ name: "db_password", sensitive: true, required: true }),
+      variable({ name: "region" })
+    ]);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "st_new" }), { status: 200, headers: { "content-type": "application/json" } })
+    );
+
+    renderScreen(queryClient);
+
+    await chooseTemplate(userEvent.setup(), "vpc");
+    expect(screen.queryByRole("link", { name: "Environment" })).toBeNull();
+    expect(screen.getByText(/in its Environment\./)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/region/), { target: { value: "eu-west-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add template" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string).config).toEqual({ region: "eu-west-1" });
+  });
+
   // Text that isn't JSON can't be sent as a value, so it's refused under its
   // field without asking the server.
   it("refuses a structured value that isn't JSON before any request", async () => {

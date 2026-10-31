@@ -154,6 +154,17 @@ describe("stack workflow helpers", () => {
     expect(configFromVariableValues(variables, { region: "", size: "" })).toEqual({ config: {}, errors: {} });
   });
 
+  // Whatever text sits in a sensitive variable's slot, it is never sent: the
+  // server would refuse it, and config is stored in the clear.
+  it("leaves sensitive variables out of the config", () => {
+    const variables = [templateVariable({ name: "db_password", sensitive: true }), templateVariable({ name: "region" })];
+
+    expect(configFromVariableValues(variables, { db_password: "hunter2", region: "eu-west-1" })).toEqual({
+      config: { region: "eu-west-1" },
+      errors: {}
+    });
+  });
+
   it("edits every type but string, number and bool as JSON, untyped included", () => {
     for (const type of ["string", "number", "bool", " bool\n"]) {
       expect(isStructuredVariable(templateVariable({ type_expression: type }))).toBe(false);

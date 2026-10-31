@@ -59,6 +59,52 @@ func TestValidateTemplateConfigReportsARequiredNullOnce(t *testing.T) {
 	assertFieldIssues(t, err, "config/a required")
 }
 
+// Config is stored in the clear and shown to every stack viewer, so a value
+// for a sensitive variable is refused, and the refusal names the secret that
+// sets it instead.
+func TestValidateTemplateConfigRefusesASensitiveVariable(t *testing.T) {
+	t.Parallel()
+
+	variables := []domain.TemplateVariable{
+		{Name: "password", Required: true, Sensitive: true},
+		{Name: "region"},
+	}
+	_, err := validateTemplateConfig(json.RawMessage(`{"password": "hunter2", "region": "eu-west-1"}`), variables)
+
+	if !errors.Is(err, ErrStackTemplateConfigInvalid) {
+		t.Fatalf("error = %v, want ErrStackTemplateConfigInvalid", err)
+	}
+	assertFieldIssues(t, err, "config/password sensitive")
+	if !strings.Contains(err.Error(), "set it as the secret TF_VAR_password in Environment") {
+		t.Fatalf("error = %q, want it to name the secret", err)
+	}
+}
+
+// Even a null is a value for a sensitive variable: one sensitive error, not
+// a null or a required one on the same field.
+func TestValidateTemplateConfigRefusesASensitiveNullOnce(t *testing.T) {
+	t.Parallel()
+
+	variables := []domain.TemplateVariable{{Name: "password", Required: true, Sensitive: true}}
+	_, err := validateTemplateConfig(json.RawMessage(`{"password": null}`), variables)
+	assertFieldIssues(t, err, "config/password sensitive")
+}
+
+// A sensitive variable's value comes from a TF_VAR_ secret, never config, so
+// leaving it out of config can't make the config incomplete.
+func TestValidateTemplateConfigDoesNotRequireASensitiveVariable(t *testing.T) {
+	t.Parallel()
+
+	variables := []domain.TemplateVariable{{Name: "password", Required: true, Sensitive: true}}
+	normalized, err := validateTemplateConfig(json.RawMessage(`{}`), variables)
+	if err != nil {
+		t.Fatalf("validateTemplateConfig returned error: %v", err)
+	}
+	if string(normalized) != `{}` {
+		t.Fatalf("normalized = %s, want {}", normalized)
+	}
+}
+
 func TestValidateTemplateConfigRejectsANonObject(t *testing.T) {
 	t.Parallel()
 

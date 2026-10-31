@@ -13,7 +13,9 @@ import { Breakable, piecesAfter } from "../../shared/breakAfter";
 
 // 8px either side of a column boundary makes the 16px between columns, and
 // 16px at the row's ends. Name 200, type 120 and value 90, plus that padding.
-const cellClass = "px-2 py-2 first:pl-4 last:pr-4";
+// Baseline, not the table's centring: a row shares one baseline, so a value
+// stays beside the first line of a name that wraps or carries a tag.
+const cellClass = "px-2 py-2 align-baseline first:pl-4 last:pr-4";
 
 // A type expression wraps only at its structure: after an opening bracket, a
 // comma or a space (which the browser already breaks at), never inside a
@@ -77,6 +79,11 @@ export default function VariablesTab() {
       <p className="text-meta text-muted-foreground">
         From the latest revision, <span className="font-mono text-code-foreground">{shortCommitSHA(latest.resolved_commit_sha)}</span>. A required
         variable needs a value when the template is added to a stack.
+        {/* Only when one is: config is stored in the clear, so a sensitive
+            variable's value comes from a secret, never from the stack's form. */}
+        {variables.some((templateVariable) => templateVariable.sensitive) && (
+          <> A sensitive one gets its value from an Environment secret named <span className="font-mono text-code-foreground">TF_VAR_</span> and its name.</>
+        )}
       </p>
       {/* Fixed columns in a frame that scrolls sideways on a phone. */}
       <div className="overflow-x-auto rounded-lg border">
@@ -99,7 +106,19 @@ export default function VariablesTab() {
           <TableBody>
             {variables.map((templateVariable) => (
               <TableRow key={templateVariable.name} className="h-12 border-divider hover:bg-transparent" data-testid={`template-variable-${templateVariable.name}`}>
-                <TableCell className={cn(cellClass, "font-mono text-meta whitespace-normal wrap-anywhere")}>{templateVariable.name}</TableCell>
+                <TableCell className={cn(cellClass, "font-mono text-meta whitespace-normal wrap-anywhere")}>
+                  {/* Sensitive is a fact about the variable, not about whether it
+                      needs a value, so it rides with the name in the Tag look
+                      "latest" uses, and wraps under a long name. */}
+                  {templateVariable.sensitive ? (
+                    <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                      <span>{templateVariable.name}</span>
+                      <span className="rounded-sm border bg-canvas px-1.75 py-px font-mono text-caption text-tag-foreground">sensitive</span>
+                    </span>
+                  ) : (
+                    templateVariable.name
+                  )}
+                </TableCell>
                 <TableCell className={cn(cellClass, "font-mono text-caption whitespace-normal text-muted-foreground wrap-anywhere")}>
                   <Breakable pieces={typePieces(templateVariable.type_expression || "any")} />
                 </TableCell>

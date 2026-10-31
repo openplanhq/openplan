@@ -24,6 +24,7 @@ const (
 	IssueTooLong           Issue = "too_long"
 	IssueOutOfRange        Issue = "out_of_range"
 	IssueDuplicate         Issue = "duplicate"
+	IssueSensitive         Issue = "sensitive"
 )
 
 // FieldError is one problem with one field of a request. It wraps the

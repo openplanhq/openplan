@@ -85,7 +85,8 @@ export type ProblemIssue =
   | "not_signed_in"
   | "too_long"
   | "out_of_range"
-  | "duplicate";
+  | "duplicate"
+  | "sensitive";
 
 export interface ProblemFieldError {
   // A JSON Pointer into the request body, e.g. "#/config/region", or the

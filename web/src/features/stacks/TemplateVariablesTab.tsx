@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import { useTemplateRevisionVariablesQuery, useUpdateStackTemplateConfigMutation } from "../../api/queries";
 import { apiErrorMessage, fieldsShown } from "../../api/problems";
+import { useStackCapabilities } from "../../auth/useStackCapabilities";
 import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
@@ -11,6 +12,7 @@ import { useLockState, variablesLockReason } from "../runs/lockReasons";
 import StackTemplateConfigPanel from "./StackTemplateConfigPanel";
 import { useStackTemplate } from "./stackTemplateContext";
 import { canSaveInstalledTemplateConfig, configFromVariableValues, variableValuesFromConfig } from "./stackWorkflow";
+import { stackTemplatePath } from "./templateSelection";
 import RequestIdNote from "../../shared/RequestIdNote";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +22,7 @@ import { cn } from "@/lib/utils";
 export default function TemplateVariablesTab() {
   const tenantID = useTenantID();
   const { stackId, stackTemplate } = useStackTemplate();
+  const canSetSecrets = useStackCapabilities(stackId)?.can_manage_access === true;
   const [editedValues, setEditedValues] = useState<Record<string, string>>({});
   const [errorMessage, setErrorMessage] = useState("");
   const variableErrors = useFieldErrors("#/config/");
@@ -111,6 +114,7 @@ export default function TemplateVariablesTab() {
         onSave={() => void handleSave()}
         saveBusy={updateStackTemplateConfigMutation.isPending}
         disabledReason={lockReason || undefined}
+        secrets={{ canSet: canSetSecrets, environmentPath: stackTemplatePath(stackId, stackTemplate.id, "environment") }}
       />
       {errorMessage && <ErrorLine>{errorMessage}</ErrorLine>}
     </div>
