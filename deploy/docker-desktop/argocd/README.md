@@ -5,7 +5,7 @@ Desktop's Kubernetes and lets Argo CD keep it on openplan's `develop`: every
 merge to `develop` becomes an upgrade of a running install with real stacks.
 It's the openplan that applies [`examples/openplan-proxmox`](../../../examples/openplan-proxmox).
 
-Argo CD installs, from git:
+Argo CD installs, from git and GHCR:
 
 | Application | What | From |
 |---|---|---|
@@ -78,12 +78,17 @@ What comes with that:
   follow when the build finishes.
 - **A run in flight is lost** when the executor is replaced.
 - **To hold or roll back,** set the chart source's `targetRevision` in
-  `apps/openplan.yaml` to one version, such as `0.0.0-develop.42`.
+  `apps/openplan.yaml` to one version, such as `0.0.0-develop.42`, and commit
+  it where the root reads: on `develop`, or on a branch you bootstrap with
+  `ROOT_REVISION`. An edit to the live Application is undone by the root's
+  self-heal.
 
 **Once, after the first develop build:** GHCR creates the
 `charts-develop/openplan` package private, and Argo CD reads it without
-credentials. Make it public in the package's settings on GitHub; until then
-the `openplan` Application shows a pull error.
+credentials. Make it public in the package's settings on GitHub. Until then,
+and before the first develop chart exists at all, the `openplan` Application
+shows a ComparisonError about listing the chart's tags, and any pods already
+running keep running.
 
 A change to `dependencies.yaml` on `develop` that alters an init Job fails the
 `dependencies` sync, since a Job can't be changed in place. Delete the Job and
