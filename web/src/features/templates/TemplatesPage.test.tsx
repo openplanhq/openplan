@@ -275,7 +275,9 @@ describe("TemplatesPage after a delete", () => {
     const note = await screen.findByTestId("template-deleted");
     expect(note.textContent).toBe("Deleted eks-typo.");
     expect(note.getAttribute("role")).toBe("status");
-    expect(document.activeElement).toBe(note);
+    // The note focuses itself in an effect, which React runs as a task of its
+    // own after the navigation commits; findBy can return between the two.
+    await waitFor(() => expect(document.activeElement).toBe(note));
   });
 
   it("says nothing on an ordinary visit", () => {
