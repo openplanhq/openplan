@@ -7,10 +7,10 @@ provider "kubernetes" {
 }
 
 provider "helm" {
-  # The chart comes from this checkout and its version never changes, so
-  # without a rendered manifest a change to the chart alone would plan as no
-  # change and never reach the cluster. With it, the plan shows the upgrade's
-  # manifest diff. The chart puts no secret in a manifest: only secretKeyRefs.
+  # Without a rendered manifest, an upgrade's plan shows only the version
+  # changing. With it, the plan shows what the new chart changes in the
+  # cluster, which is what a reviewer approves. The chart puts no secret in a
+  # manifest: only secretKeyRefs.
   experiments = {
     manifest = true
   }

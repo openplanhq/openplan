@@ -2,22 +2,24 @@ locals {
   openplan_host = "openplan.${var.environment}.${var.domain}"
 }
 
-# The chart from the checkout this template runs from: no release has shipped
-# the chart yet, and this way the chart and the template are always one
-# commit. The names below are the Secrets and Services the dependencies
-# template makes, openplan's keys included: they encrypt what its Postgres
-# holds, so they live and die with it, not with this release.
+# The published chart at one version. No image tag is set, so the chart runs
+# the images of the build it was published with: chart and images can't
+# drift apart, and the template installs the same thing from any git ref.
+# The names below are the Secrets and Services the dependencies template
+# makes, openplan's keys included: they encrypt what its Postgres holds, so
+# they live and die with it, not with this release.
 resource "helm_release" "openplan" {
-  name      = "openplan"
-  namespace = var.namespace
-  chart     = "${path.module}/../../../deploy/helm/openplan"
-  wait      = true
-  timeout   = 600
+  name       = "openplan"
+  namespace  = var.namespace
+  repository = var.chart_repository
+  chart      = "openplan"
+  version    = var.chart_version
+  wait       = true
+  timeout    = 600
   # One Secret per revision otherwise, forever.
   max_history = 10
 
   values = [yamlencode({
-    image    = { tag = var.image_tag }
     temporal = { address = "temporal:7233" }
     postgres = { urlSecret = { name = "openplan-credentials", key = "database-url" } }
     valkey = {

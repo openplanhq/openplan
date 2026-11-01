@@ -20,16 +20,22 @@ variable "namespace" {
   default     = "openplan"
 }
 
-variable "image_tag" {
-  description = "The openplan images to run: a release (v0.5.0) or a main build (sha-<commit>). Changing it upgrades openplan in place."
+variable "chart_repository" {
+  description = "The registry the openplan chart comes from: releases at oci://ghcr.io/openplanhq/charts, every develop build at oci://ghcr.io/openplanhq/charts-develop."
+  type        = string
+  default     = "oci://ghcr.io/openplanhq/charts"
+}
+
+variable "chart_version" {
+  description = "The openplan chart to install, which also picks its images: a release (0.5.0) or a develop build (0.0.0-develop.146). Changing it upgrades openplan in place."
   type        = string
 
   validation {
-    # The tags that never move: a release's full version, or a main build's
-    # full commit. latest, main, v0 and v0.5 move, and a node that pulled one
-    # keeps running whatever it pointed at then.
-    condition     = can(regex("^(v?[0-9]+\\.[0-9]+\\.[0-9]+|sha-[0-9a-f]{40})$", var.image_tag))
-    error_message = "image_tag must name one build: a release (v0.5.0) or a main build's full commit (sha-<40 hex characters>)."
+    # One exact version. Helm also takes a range, such as >=0.0.0-0, but a
+    # range resolves anew at every plan, so a newer chart would upgrade
+    # openplan without anyone changing the stack.
+    condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$", var.chart_version))
+    error_message = "chart_version must be one exact chart version: a release (0.5.0) or a develop build (0.0.0-develop.146)."
   }
 }
 
