@@ -15,25 +15,34 @@ override_data {
 
 variables {
   environment       = "prod"
-  image_tag         = "sha-0123456789abcdef0123456789abcdef01234567"
+  chart_version     = "0.5.0"
   root_subject      = "CiQ3YzRiMmYwZS0zZDFhLTRlOGItOWY2Yy0yYTVkOGUxYjBjNDcSBWxvY2Fs"
   cluster_workspace = "mtp_acme_prod_cluster_ab12cd34"
   state_bucket      = "openplan-state"
 }
 
-run "chart_from_checkout" {
-  # The chart ships with no release yet, so it comes from the same checkout
-  # as this template: chart and template are always one commit.
+run "release_chart_by_default" {
   assert {
-    condition     = fileexists("${helm_release.openplan.chart}/Chart.yaml") && endswith(helm_release.openplan.chart, "/deploy/helm/openplan")
-    error_message = "the release doesn't install the chart from deploy/helm/openplan in this checkout"
+    condition     = helm_release.openplan.repository == "oci://ghcr.io/openplanhq/charts" && helm_release.openplan.chart == "openplan" && helm_release.openplan.version == "0.5.0"
+    error_message = "the release doesn't install openplan 0.5.0 from the release charts"
+  }
+}
+
+run "develop_chart" {
+  variables {
+    chart_repository = "oci://ghcr.io/openplanhq/charts-develop"
+    chart_version    = "0.0.0-develop.146"
+  }
+
+  assert {
+    condition     = helm_release.openplan.repository == "oci://ghcr.io/openplanhq/charts-develop" && helm_release.openplan.version == "0.0.0-develop.146"
+    error_message = "the release doesn't install the develop chart it was given"
   }
 }
 
 run "values_point_at_dependencies" {
   assert {
     condition = yamldecode(helm_release.openplan.values[0]) == {
-      image    = { tag = "sha-0123456789abcdef0123456789abcdef01234567" }
       temporal = { address = "temporal:7233" }
       postgres = { urlSecret = { name = "openplan-credentials", key = "database-url" } }
       valkey = {
@@ -77,44 +86,6 @@ run "url_output" {
   }
 }
 
-run "release_tags_accepted" {
-  command = plan
-
-  variables {
-    image_tag = "v0.5.0"
-  }
-}
-
-run "moving_and_short_tags_refused" {
-  command = plan
-
-  variables {
-    image_tag = "v0.5"
-  }
-
-  expect_failures = [var.image_tag]
-}
-
-run "main_refused" {
-  command = plan
-
-  variables {
-    image_tag = "main"
-  }
-
-  expect_failures = [var.image_tag]
-}
-
-run "short_sha_refused" {
-  command = plan
-
-  variables {
-    image_tag = "sha-0123abc"
-  }
-
-  expect_failures = [var.image_tag]
-}
-
 run "fractional_replicas_refused" {
   command = plan
 
@@ -125,24 +96,34 @@ run "fractional_replicas_refused" {
   expect_failures = [var.executor_replicas]
 }
 
-run "latest_refused" {
+run "version_range_refused" {
   command = plan
 
   variables {
-    image_tag = "latest"
+    chart_version = ">=0.0.0-0"
   }
 
-  expect_failures = [var.image_tag]
+  expect_failures = [var.chart_version]
 }
 
-run "empty_tag_refused" {
+run "short_version_refused" {
   command = plan
 
   variables {
-    image_tag = ""
+    chart_version = "0.5"
   }
 
-  expect_failures = [var.image_tag]
+  expect_failures = [var.chart_version]
+}
+
+run "empty_version_refused" {
+  command = plan
+
+  variables {
+    chart_version = ""
+  }
+
+  expect_failures = [var.chart_version]
 }
 
 run "one_missing_credential_fails" {
