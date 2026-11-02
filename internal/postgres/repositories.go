@@ -80,7 +80,9 @@ func (store *Store) CreateCredential(ctx context.Context, credential domain.Cred
 	return nil
 }
 
-// ListCredentials returns encrypted credential records owned directly by one scope owner.
+// ListCredentials returns encrypted credential records owned directly by one
+// scope owner, oldest first: the order they were added in, so a new one lands
+// at the end of the list rather than somewhere in the middle (#570).
 func (store *Store) ListCredentials(ctx context.Context, tenantID domain.TenantID, scope domain.CredentialScope, ownerID string) ([]domain.Credential, error) {
 	column := "stack_id"
 	if scope == domain.CredentialScopeStackTemplate {
@@ -93,7 +95,7 @@ func (store *Store) ListCredentials(ctx context.Context, tenantID domain.TenantI
 		select id, tenant_id, stack_id, stack_template_id, name, ciphertext, sensitive, created_at
 		from scoped_credentials
 		where tenant_id = $1 and %s = $2
-		order by name
+		order by created_at, id
 	`, column), tenantID, ownerID)
 	if err != nil {
 		return nil, fmt.Errorf("list credentials: %w", err)

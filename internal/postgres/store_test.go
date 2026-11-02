@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1172,6 +1173,45 @@ func TestCredentialWithoutSensitivityIsSensitive(t *testing.T) {
 		t.Fatalf("ListCredentials returned error: %v", err)
 	}
 	assertSensitivity(t, "stack list", credentials, map[domain.CredentialID]bool{"cred_legacy": true})
+}
+
+// A scope's list is in the order its entries were added, not by name, so a
+// new one lands at the end (#570).
+func TestCredentialsListOldestFirst(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := NewStore(pool)
+	tenantID := domain.TenantID("tenant_123")
+	stackTemplate := seedCredentialOwners(t, ctx, store, tenantID)
+
+	added := time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC)
+	for i, name := range []string{"ZONE", "ACCOUNT", "REGION"} {
+		credential := domain.Credential{
+			ID:         domain.CredentialID("cred_" + name),
+			TenantID:   tenantID,
+			StackID:    stackTemplate.StackID,
+			Name:       name,
+			Ciphertext: "sealed",
+			CreatedAt:  added.Add(time.Duration(i) * time.Minute),
+		}
+		if err := store.CreateCredential(ctx, credential); err != nil {
+			t.Fatalf("CreateCredential(%s) returned error: %v", name, err)
+		}
+	}
+
+	credentials, err := store.ListCredentials(ctx, tenantID, domain.CredentialScopeStack, string(stackTemplate.StackID))
+	if err != nil {
+		t.Fatalf("ListCredentials returned error: %v", err)
+	}
+	var names []string
+	for _, credential := range credentials {
+		names = append(names, credential.Name)
+	}
+	if want := []string{"ZONE", "ACCOUNT", "REGION"}; !slices.Equal(names, want) {
+		t.Fatalf("names = %v, want %v", names, want)
+	}
 }
 
 // seedCredentialOwners stores a stack and one stack template in it, the two

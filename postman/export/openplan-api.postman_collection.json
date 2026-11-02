@@ -746,7 +746,7 @@
                 "credentials"
               ]
             },
-            "description": "Metadata for every credential, and the value of each one that is not\nsensitive. Sensitive values are never returned."
+            "description": "Metadata for every credential, and the value of each one that is not\nsensitive, oldest first. Sensitive values are never returned."
           }
         },
         {
@@ -860,7 +860,7 @@
                 "credentials"
               ]
             },
-            "description": "Metadata for every credential, and the value of each one that is not\nsensitive. Sensitive values are never returned."
+            "description": "Metadata for every credential, and the value of each one that is not\nsensitive, oldest first. Sensitive values are never returned."
           }
         },
         {
