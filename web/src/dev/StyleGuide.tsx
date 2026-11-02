@@ -154,17 +154,30 @@ function WithRouter({ children }: { children: ReactNode }) {
   return useInRouterContext() ? <>{children}</> : <MemoryRouter>{children}</MemoryRouter>;
 }
 
+// A row's start and time taken, as RunLogsPanel draws them.
+function SpecimenStepTime({ at, took }: { at: string; took: string }) {
+  return (
+    <>
+      <time>{at}</time>
+      <span aria-hidden="true" className="text-separator">
+        ·
+      </span>
+      <span>{took}</span>
+    </>
+  );
+}
+
 function LogStepsSpecimen() {
   const [open, setOpen] = useState<Record<string, boolean>>({ "plan-3": true });
   const setStep = (name: string) => (isOpen: boolean) => setOpen((current) => ({ ...current, [name]: isOpen }));
   return (
     <div className="divide-y divide-divider">
       <LogPhase title="Plan" detail="started by Priya Raman · 3 Oct, 15:00">
-        <LogStep name="plan-1" label="tofu init" open={open["plan-1"] ?? false} onOpenChange={setStep("plan-1")}>
+        <LogStep name="plan-1" label="tofu init" meta={<SpecimenStepTime at="15:00:02" took="12s" />} open={open["plan-1"] ?? false} onOpenChange={setStep("plan-1")}>
           {`Initializing the backend...
 Successfully configured the backend "s3"!`}
         </LogStep>
-        <LogStep name="plan-3" label="tofu plan" open={open["plan-3"] ?? false} onOpenChange={setStep("plan-3")}>
+        <LogStep name="plan-3" label="tofu plan" meta={<SpecimenStepTime at="15:00:16" took="41s" />} open={open["plan-3"] ?? false} onOpenChange={setStep("plan-3")}>
           {`OpenTofu will perform the following actions:
 Plan: 3 to add, 1 to change, 0 to destroy.
 Error: creating S3 Bucket: BucketAlreadyExists`}

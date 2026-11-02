@@ -70,10 +70,15 @@ export default function RunDetailScreen() {
   const logsQuery = useTemplateRunLogsQuery(tenantID, runId, progressTag);
 
   const changesQuery = useTemplateRunChangesQuery(tenantID, runId, run?.plan_changes?.state ?? "");
-  // The view the person picked holds while the run polls; until they pick,
-  // the run's state picks. Keyed on the run, so another run starts fresh.
-  const [picked, setPicked] = useState<{ runId: string; view: RunView } | null>(null);
-  const view: RunView = picked?.runId === runId ? picked.view : run ? defaultRunView(run) : "logs";
+  // The run's state picks the view once, when the run first loads, and then
+  // it holds: nothing the run does moves it under the reader (issue 568).
+  // Only the person moves it, by switching, or by approving, which starts the
+  // apply whose logs come next. Keyed on the run, so another run starts fresh.
+  const [shown, setShown] = useState<{ runId: string; view: RunView } | null>(null);
+  if (run?.id === runId && shown?.runId !== runId) {
+    setShown({ runId, view: defaultRunView(run) });
+  }
+  const view: RunView = shown?.runId === runId ? shown.view : "logs";
 
   const approveRunMutation = useApproveRunMutation(tenantID);
   const discardRunMutation = useDiscardRunMutation(tenantID);
@@ -94,6 +99,7 @@ export default function RunDetailScreen() {
   async function handleApprove() {
     await runAction(async () => {
       await approveRunMutation.mutateAsync(runId);
+      setShown({ runId, view: "logs" });
     });
   }
 
@@ -110,7 +116,7 @@ export default function RunDetailScreen() {
     <SegmentedControl
       label="Run views"
       value={view}
-      onChange={(next) => setPicked({ runId, view: next })}
+      onChange={(next) => setShown({ runId, view: next })}
       options={[
         { value: "changes", label: "Changes" },
         { value: "logs", label: "Logs" }

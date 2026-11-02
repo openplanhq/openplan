@@ -344,6 +344,48 @@ describe("RunDetailScreen", () => {
     expect(within(applyGroup).getByRole("button", { name: "tofu apply" }).getAttribute("aria-expanded")).toBe("true");
   });
 
+  // Each command's row says when it started and, once done, how long it
+  // took, from the step the workflow recorded for it (issue 571).
+  it("times each command from its phase's steps", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(
+      queryKeys.templateRun("tenant_123", "run_1"),
+      run({
+        status: "running",
+        executions: [
+          {
+            phase: "plan",
+            actor: "user_123",
+            actor_display_name: "Priya Raman",
+            started_at: "2026-07-20T10:00:00Z",
+            steps: [
+              { step: "preparing_workspace", started_at: "2026-07-20T10:00:00Z", finished_at: "2026-07-20T10:00:02Z" },
+              { step: "initializing", started_at: "2026-07-20T10:00:02Z", finished_at: "2026-07-20T10:04:07Z" },
+              { step: "planning", started_at: "2026-07-20T10:04:09Z" }
+            ]
+          }
+        ]
+      })
+    );
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/logs")) {
+        return jsonResponse([runLog({ name: "plan-1" }), runLog({ name: "plan-3" })]);
+      }
+      return new Response("log body", { status: 200, headers: { "content-type": "text/plain" } });
+    });
+
+    renderScreen(queryClient);
+
+    const panel = screen.getByTestId("run-logs-panel");
+    const init = await within(panel).findByRole("button", { name: /^tofu init/ });
+    expect(init.textContent).toMatch(/^tofu init\d\d:\d\d:02·4m 5s$/);
+    expect(init.querySelector("time")?.getAttribute("dateTime")).toBe("2026-07-20T10:00:02Z");
+    // The plan is still running: its start, and no time taken yet.
+    expect(within(panel).getByRole("button", { name: /^tofu plan/ }).textContent).toMatch(/^tofu plan\d\d:\d\d:09$/);
+  });
+
   it("labels a log by its name when the API sends no command line", async () => {
     const queryClient = testQueryClient();
     seedCapabilities(queryClient, allAllowed);
@@ -962,10 +1004,12 @@ describe("RunDetailScreen", () => {
 
     renderScreen(queryClient);
     const user = userEvent.setup();
-    const destroyTrigger = screen.getByRole("button", { name: /Destroy 4/ });
+    // The button names the action; the count is the dialog's (issue 569).
+    const destroyTrigger = screen.getByRole("button", { name: "Destroy" });
     await user.click(destroyTrigger);
 
     const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText("Destroy 4 resources?")).toBeTruthy();
     await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
     await user.tab();
     await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
@@ -990,7 +1034,7 @@ describe("RunDetailScreen", () => {
     );
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
     // The approval's own answer moves the run off waiting_approval.
-    await waitFor(() => expect(screen.queryByRole("button", { name: /Destroy 4/ })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Destroy" })).toBeNull());
   });
 
   it("hides Approve when canApprove is denied", async () => {
@@ -1155,6 +1199,55 @@ describe("RunDetailScreen changes", () => {
     });
     expect(screen.getByRole("button", { name: "Logs" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByTestId("run-logs-panel")).toBeTruthy();
+  });
+
+  // The run picks the view once; after that only the person moves it, and
+  // approving starts the apply, whose logs come next (issue 568).
+  it("holds its view as the run moves on, and moves to the logs on Approve", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    const waiting = run({ operation: "apply", status: "waiting_approval", plan_changes: { state: "complete", total: 3 } });
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), waiting);
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (init?.method === "POST") {
+        return jsonResponse({ ...waiting, status: "approved" }, 202);
+      }
+      if (url.includes("/changes")) {
+        return jsonResponse(changes);
+      }
+      if (url.includes("/stack-templates/stpl_1/runs")) {
+        return jsonResponse([{ ...waiting, status: "approved" }]);
+      }
+      return jsonResponse([]);
+    });
+    renderScreen(queryClient);
+
+    // Each view draws the switch in its own frame, so it is found afresh.
+    const pressed = (name: string) => screen.getByRole("button", { name }).getAttribute("aria-pressed");
+    expect(pressed("Changes")).toBe("true");
+    await userEvent.click(screen.getByRole("button", { name: "Approve" }));
+    await waitFor(() => expect(pressed("Logs")).toBe("true"));
+
+    // The apply finishing, with a list to read, doesn't take the logs away.
+    act(() => {
+      queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), { ...waiting, status: "completed" });
+    });
+    expect(pressed("Logs")).toBe("true");
+  });
+
+  it("opens an apply in flight on its logs, though its plan has a list", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(
+      queryKeys.templateRun("tenant_123", "run_1"),
+      run({ operation: "apply", status: "approved", plan_changes: { state: "complete", total: 3 } })
+    );
+    stubAPI();
+    renderScreen(queryClient);
+
+    expect(screen.getByRole("button", { name: "Logs" }).getAttribute("aria-pressed")).toBe("true");
+    await waitFor(() => expect(screen.getByText("plan-3 log body")).toBeTruthy());
   });
 
   it("says when the list is cut short, and opens an unlisted plan on its logs", async () => {

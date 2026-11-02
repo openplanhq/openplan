@@ -98,7 +98,8 @@ function StackTemplateRow({
 }) {
   const label = stackTemplateLabel(stackTemplate);
   const activity = stackTemplateActivity(stackTemplate, attention);
-  const waiting = stackTemplate.pending_plan_run_id !== "";
+  // As the status label reads it: a pending plan is still pending while it applies.
+  const waiting = attention?.kind === "waiting_approval";
   const failed = stackTemplate.lifecycle === "failed";
   const runFailed = attention?.kind === "run_failed" ? failedOperation(attention) : null;
 

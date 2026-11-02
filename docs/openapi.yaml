@@ -763,7 +763,7 @@ paths:
       summary: List stack-scoped credentials
       description: |
         Metadata for every credential, and the value of each one that is not
-        sensitive. Sensitive values are never returned.
+        sensitive, oldest first. Sensitive values are never returned.
       operationId: listStackCredentials
       responses:
         "200":
@@ -1152,7 +1152,7 @@ paths:
       summary: List template-scoped credentials
       description: |
         Metadata for every credential, and the value of each one that is not
-        sensitive. Sensitive values are never returned.
+        sensitive, oldest first. Sensitive values are never returned.
       operationId: listStackTemplateCredentials
       responses:
         "200":

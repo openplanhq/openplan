@@ -121,6 +121,16 @@ describe("the view a run opens on", () => {
     expect(defaultRunView(run({ plan_changes: { state: "truncated", total: 4000 } }))).toBe("changes");
     expect(defaultRunView(run({ plan_changes: { state: "unavailable", total: null } }))).toBe("logs");
     expect(defaultRunView(run({ status: "running", plan_changes: null, plan_summary: null }))).toBe("logs");
+    expect(defaultRunView(run({ status: "completed", operation: "apply" }))).toBe("changes");
+  });
+
+  // A command running is what moves, so its log is what to watch, even when
+  // its plan has a list (issue 568).
+  it("opens a run in flight on Logs, list or not", () => {
+    expect(defaultRunView(run({ status: "approved" }))).toBe("logs");
+    expect(defaultRunView(run({ status: "running" }))).toBe("logs");
+    expect(defaultRunView(run({ status: "queued" }))).toBe("logs");
+    expect(defaultRunView(run({ status: "waiting_approval" }))).toBe("changes");
     expect(defaultRunView(run({ status: "failed" }))).toBe("logs");
     expect(defaultRunView(run({ status: "completed", plan_changes: null, plan_summary: null }))).toBe("logs");
   });

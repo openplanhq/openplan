@@ -319,7 +319,7 @@ export interface TemplateRun {
 export type RunPhase = "plan" | "apply";
 
 // One workflow that carried a run. The fields the UI reads; the API returns
-// its status, steps and summary too.
+// its status and summary too.
 export interface TemplateRunExecution {
   phase: RunPhase;
   // Who started it: the requester for a plan or an auto-approved apply, the
@@ -327,6 +327,17 @@ export interface TemplateRunExecution {
   actor: string;
   actor_display_name: string;
   started_at: string;
+  // The steps it took, in order. Absent on runs from before steps were
+  // recorded.
+  steps?: TemplateRunStepExecution[];
+}
+
+// One step of an execution. A step runs until the next one starts, or until
+// its execution ends; finished_at is absent while it runs.
+export interface TemplateRunStepExecution {
+  step: TemplateRunStep;
+  started_at: string;
+  finished_at?: string;
 }
 
 // Why an installed template needs a person: a plan waiting to be approved or

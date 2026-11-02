@@ -45,13 +45,14 @@ export function isApplied(run: TemplateRun): boolean {
 
 /**
  * The view a run opens on: its changes when there is a list to read, and its
- * logs otherwise. While planning, after a failure, for an auto-approved apply
- * and when the list is unavailable, the log is the only record of what
- * changes; for a plan with nothing to change, the log says so as plainly as
- * the Changes view would.
+ * logs otherwise. While a command runs, planning or applying, its log is
+ * what moves, so a run in flight opens on it even when its plan has a list.
+ * After a failure, for an auto-approved apply and when the list is
+ * unavailable, the log is the only record of what changes; for a plan with
+ * nothing to change, the log says so as plainly as the Changes view would.
  */
 export function defaultRunView(run: TemplateRun): RunView {
-  if (run.status === "failed") {
+  if (run.status === "failed" || (run.status !== "waiting_approval" && !isTerminalRunStatus(run.status))) {
     return "logs";
   }
   const state = run.plan_changes?.state;

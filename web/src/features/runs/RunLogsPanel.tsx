@@ -4,10 +4,17 @@ import { Ban, FileText, TriangleAlert } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { templateRunLogEventsURL } from "../../api/client";
 import { useTemplateRunLogQuery } from "../../api/queries";
-import type { RunPhase, TemplateRunExecution, TemplateRunLog, TemplateRunLogLostReason } from "../../api/types";
+import type {
+  RunPhase,
+  TemplateRunExecution,
+  TemplateRunLog,
+  TemplateRunLogLostReason,
+  TemplateRunStep,
+  TemplateRunStepExecution
+} from "../../api/types";
 import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
-import { formatDateTime } from "../../shared/formatTimestamp";
+import { formatDateTime, formatDuration, formatTimeOfDay } from "../../shared/formatTimestamp";
 import { LogPhase, LogStep } from "../../shared/LogSteps";
 import StatusLabel from "../../shared/StatusLabel";
 import type { StatusLabelTone } from "../../shared/StatusLabel";
@@ -57,6 +64,7 @@ export default function RunLogsPanel({ runId, logs, executions, failed, finished
                 key={log.name}
                 name={log.name}
                 label={log.command_line}
+                meta={stepTime(commandStep(log, executions))}
                 open={open[log.name] ?? false}
                 onOpenChange={(isOpen) => setOpen((current) => ({ ...current, [log.name]: isOpen }))}
               >
@@ -114,6 +122,50 @@ function phaseDetail(phase: RunPhase, executions: TemplateRunExecution[] | undef
       <time dateTime={execution.started_at} title={execution.started_at}>
         {formatDateTime(execution.started_at)}
       </time>
+    </>
+  );
+}
+
+// The workflow records a step for each command it runs, named for the
+// command (terraformCommandSteps in internal/workflows/template_run.go), so a command's
+// row reads its times from that step of its phase's execution.
+const STEP_OF_COMMAND: Record<string, TemplateRunStep> = {
+  init: "initializing",
+  select_workspace: "selecting_workspace",
+  plan: "planning",
+  plan_destroy: "planning",
+  apply: "applying",
+  destroy: "applying",
+  apply_auto_approve: "applying"
+};
+
+function commandStep(log: TemplateRunLog, executions: TemplateRunExecution[] | undefined): TemplateRunStepExecution | undefined {
+  const step = STEP_OF_COMMAND[log.command];
+  return executions?.find((execution) => execution.phase === log.run_phase)?.steps?.find((candidate) => candidate.step === step);
+}
+
+// When a command started, to the second (the phase header gives the day), and
+// once it ends, how long it took (issue 571). A command still running shows
+// only its start: its log's dots say it is going. Nothing until the run's
+// steps arrive.
+function stepTime(step: TemplateRunStepExecution | undefined): ReactNode {
+  if (!step) {
+    return null;
+  }
+  const took = step.finished_at ? formatDuration(step.started_at, step.finished_at) : "";
+  return (
+    <>
+      <time dateTime={step.started_at} title={step.started_at}>
+        {formatTimeOfDay(step.started_at)}
+      </time>
+      {took && (
+        <>
+          <span aria-hidden="true" className="text-separator">
+            ·
+          </span>
+          <span>{took}</span>
+        </>
+      )}
     </>
   );
 }

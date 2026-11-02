@@ -35,6 +35,9 @@ interface LogStepProps {
   // the API could not give still says which log it is. Two steps can share a
   // label, as a run's two "tofu init" steps do, but never a name.
   label?: ReactNode;
+  // What the row says about the command beside its name, set at its right
+  // edge: in a run, when it started and how long it took.
+  meta?: ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   // Mounted only while the row is open, so a log fetched by a component
@@ -45,7 +48,7 @@ interface LogStepProps {
 
 // The list clips to its rounded corners, which would cut off a focus ring drawn
 // outside these full-width rows, so the rings are drawn inside them.
-export function LogStep({ name, label, open, onOpenChange, children }: LogStepProps) {
+export function LogStep({ name, label, meta, open, onOpenChange, children }: LogStepProps) {
   return (
     <Collapsible open={open} onOpenChange={onOpenChange} render={<li />}>
       <CollapsibleTrigger className="group flex min-h-10 w-full items-center gap-2 px-4 text-left font-mono text-meta outline-none transition-colors hover:bg-canvas focus-visible:inset-ring-2 focus-visible:inset-ring-ring pointer-coarse:min-h-11">
@@ -54,6 +57,7 @@ export function LogStep({ name, label, open, onOpenChange, children }: LogStepPr
           aria-hidden="true"
         />
         {label || name}
+        {meta && <span className="ml-auto flex shrink-0 items-center gap-1.5 font-sans text-caption text-muted-foreground tabular-nums">{meta}</span>}
       </CollapsibleTrigger>
       <CollapsibleContent render={<div />} className="border-t border-divider bg-canvas">
         <ScrollArea data-testid={`log-scroll-area-${name}`} className="max-h-115">

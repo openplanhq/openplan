@@ -28,7 +28,9 @@ interface WaitingRunActionsProps {
 //
 // On a destroy run approving destroys what the template manages, so the
 // red button opens an AlertDialog before the irreversible approval. The dialog
-// offers Cancel and Confirm destroy; the Settings button only plans it.
+// offers Cancel and Confirm destroy; the Settings button only plans it. The
+// button is the action's name alone; the count is the dialog's, where it is
+// read as a number of resources (issue 569).
 export default function WaitingRunActions({ run, stackId, approveBusy, discardBusy, onApprove, onDiscard }: WaitingRunActionsProps) {
   const count = run.plan_summary?.destroy ?? 0;
   const title = `Destroy ${count} ${count === 1 ? "resource" : "resources"}`;
@@ -48,7 +50,7 @@ export default function WaitingRunActions({ run, stackId, approveBusy, discardBu
               render={<Button variant="destructive" className="pointer-coarse:h-11" disabled={approveBusy} title={title} />}
             >
               <Trash2 className="size-4" />
-              Destroy {count}
+              Destroy
             </AlertDialogTrigger>
             <AlertDialogContent>
               <div className="grid gap-2">
