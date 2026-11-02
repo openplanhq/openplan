@@ -140,7 +140,8 @@ describe("TemplateRunActions", () => {
 
     renderActions(queryClient);
 
-    expect(screen.getByTestId("template-run-actions-note").textContent).toBe("Plan shows what would change. Apply saves a plan that waits for approval.");
+    // Free buttons need no sentence: the note is only ever a lock's reason.
+    expect(screen.queryByTestId("template-run-actions-note")).toBeNull();
     expect(isDisabled(screen.getByRole("button", { name: /Plan/ }))).toBe(false);
     expect(isDisabled(screen.getByRole("button", { name: /^Apply$/ }))).toBe(false);
     expect(button(/Approve|Cancel|Discard/)).toBeNull();

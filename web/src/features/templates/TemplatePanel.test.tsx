@@ -76,9 +76,9 @@ describe("TemplatePanel header", () => {
     expect(screen.getByText("kubernetes")).toBeTruthy();
   });
 
-  it("tells publishers, and only publishers, how to add a description", () => {
+  it("tells publishers, and only publishers, that the description is missing", () => {
     renderPanel(seed(), "/templates/tpl_rds/variables");
-    expect(screen.getByTestId("template-no-description").textContent).toContain("template.yaml");
+    expect(screen.getByTestId("template-no-description").textContent).toBe("No description");
     expect(screen.queryByTestId("template-description")).toBeNull();
     cleanup();
 
@@ -108,10 +108,12 @@ describe("TemplatePanel header", () => {
     expect(root.getAttribute("href")).toBe("https://github.com/acme/edge/tree/v2.0.1");
   });
 
-  it("lays the four facts out as one row of equal columns under the name, none cut short", () => {
+  // jsdom lays nothing out, so this pins the class that lets each fact take
+  // its own width and wrap whole, instead of squeezing into a fixed column.
+  it("flows the four facts in one row under the name, none cut short", () => {
     renderPanel(seed(), "/templates/tpl_1/variables");
     const source = screen.getByTestId("template-source");
-    expect(source.className).toContain("grid-cols-4");
+    expect(source.className).toContain("flex-wrap");
     expect(source.querySelectorAll("li")).toHaveLength(4);
     expect(source.querySelector(".truncate")).toBeNull();
     expect(screen.getByRole("heading", { level: 2 }).compareDocumentPosition(source) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

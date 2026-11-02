@@ -6,7 +6,6 @@ import CredentialsPanel from "./CredentialsPanel";
 type EnvironmentTab = "secrets" | "variables";
 
 interface TabCopy {
-  note: string;
   emptyTitle: string;
   emptyDescription: string;
 }

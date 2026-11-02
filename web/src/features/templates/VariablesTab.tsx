@@ -7,7 +7,6 @@ import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { useTemplate } from "./templateContext";
-import { shortCommitSHA } from "./templateWorkflow";
 import RequestIdNote from "../../shared/RequestIdNote";
 import { Breakable, piecesAfter } from "../../shared/breakAfter";
 
@@ -76,15 +75,6 @@ export default function VariablesTab() {
 
   return (
     <section className="flex min-w-0 flex-col gap-3" data-testid="template-variables">
-      <p className="text-meta text-muted-foreground">
-        From the latest revision, <span className="font-mono text-code-foreground">{shortCommitSHA(latest.resolved_commit_sha)}</span>. A required
-        variable needs a value when the template is added to a stack.
-        {/* Only when one is: config is stored in the clear, so a sensitive
-            variable's value comes from a secret, never from the stack's form. */}
-        {variables.some((templateVariable) => templateVariable.sensitive) && (
-          <> A sensitive one gets its value from an Environment secret named <span className="font-mono text-code-foreground">TF_VAR_</span> and its name.</>
-        )}
-      </p>
       {/* Fixed columns in a frame that scrolls sideways on a phone. */}
       <div className="overflow-x-auto rounded-lg border">
         <Table className="min-w-2xl">

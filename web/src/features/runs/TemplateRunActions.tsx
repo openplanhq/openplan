@@ -10,7 +10,7 @@ import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
 import { cn } from "@/lib/utils";
-import { runActionsNote, startRunLockReason, useLockState } from "./lockReasons";
+import { startRunLockReason, useLockState } from "./lockReasons";
 import { isRunInFlightError } from "./runErrors";
 
 interface TemplateRunActionsProps {
@@ -36,7 +36,8 @@ export default function TemplateRunActions({ stackId, stackTemplate }: TemplateR
 
   const startRunMutation = useStartTemplateRunMutation(tenantID);
   const startingOperation = startRunMutation.isPending ? startRunMutation.variables?.body.operation : undefined;
-  const disabled = startRunLockReason(lock) !== "" || startingOperation !== undefined;
+  const lockReason = startRunLockReason(lock);
+  const disabled = lockReason !== "" || startingOperation !== undefined;
 
   async function startRun(operation: "plan" | "apply") {
     setErrorMessage("");
@@ -55,10 +56,13 @@ export default function TemplateRunActions({ stackId, stackTemplate }: TemplateR
   return (
     <div className="flex flex-col gap-3" data-testid="template-run-actions">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-        <p className="text-meta text-muted-foreground" data-testid="template-run-actions-note">
-          {runActionsNote(lock)}
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Only a lock gets a sentence; free buttons speak for themselves. */}
+        {lockReason && (
+          <p className="text-meta text-muted-foreground" data-testid="template-run-actions-note">
+            {lockReason}
+          </p>
+        )}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           {/* Auto apply is an approval given in advance, so it is offered
               only to someone who could approve a plan. */}
           <RequireCapability capability="can_approve" stackId={stackId}>

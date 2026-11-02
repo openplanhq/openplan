@@ -84,7 +84,6 @@ describe("EnvironmentScreen", () => {
 
     expect(screen.getByTestId("environment-screen")).toBeTruthy();
     expect(screen.getByText("TF_VAR_TEST")).toBeTruthy();
-    expect(secrets().getByText("Set as environment variables when Terraform runs. Write-only: a value can't be read back once added.")).toBeTruthy();
     expect(screen.queryByText("secret-value")).toBeNull();
   });
 
@@ -579,7 +578,6 @@ describe("EnvironmentScreen", () => {
     expect(rows.map((row) => row.textContent)).toEqual(["AWS_REGIONeu-west-1Added 19 Jul 2026"]);
     expect(within(rows[0]).getByText("eu-west-1").getAttribute("title")).toBe("eu-west-1");
     expect(screen.getByRole("button", { name: "Add variable" })).toBeTruthy();
-    expect(variables().getByText("Set as environment variables when Terraform runs. Values are shown here, so keep credentials in Secrets.")).toBeTruthy();
   });
 
   // A variable can be a multi-line value, a CA certificate say: the list keeps

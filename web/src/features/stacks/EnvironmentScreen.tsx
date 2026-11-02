@@ -63,12 +63,10 @@ export default function EnvironmentScreen() {
     content = (
       <EnvironmentTabs
         secrets={{
-          note: "Set as environment variables when Terraform runs. Write-only: a value can't be read back once added.",
           emptyTitle: "No secrets in this environment",
           emptyDescription: "Secrets added here are available to every template in this stack."
         }}
         variables={{
-          note: "Set as environment variables when Terraform runs. Values are shown here, so keep credentials in Secrets.",
           emptyTitle: "No variables in this environment",
           emptyDescription: "Variables added here are available to every template in this stack."
         }}
