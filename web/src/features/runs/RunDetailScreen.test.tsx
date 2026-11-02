@@ -1159,6 +1159,55 @@ describe("RunDetailScreen changes", () => {
     expect(screen.getByTestId("run-logs-panel")).toBeTruthy();
   });
 
+  // The run picks the view once; after that only the person moves it, and
+  // approving starts the apply, whose logs come next (issue 568).
+  it("holds its view as the run moves on, and moves to the logs on Approve", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    const waiting = run({ operation: "apply", status: "waiting_approval", plan_changes: { state: "complete", total: 3 } });
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), waiting);
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (init?.method === "POST") {
+        return jsonResponse({ ...waiting, status: "approved" }, 202);
+      }
+      if (url.includes("/changes")) {
+        return jsonResponse(changes);
+      }
+      if (url.includes("/stack-templates/stpl_1/runs")) {
+        return jsonResponse([{ ...waiting, status: "approved" }]);
+      }
+      return jsonResponse([]);
+    });
+    renderScreen(queryClient);
+
+    // Each view draws the switch in its own frame, so it is found afresh.
+    const pressed = (name: string) => screen.getByRole("button", { name }).getAttribute("aria-pressed");
+    expect(pressed("Changes")).toBe("true");
+    await userEvent.click(screen.getByRole("button", { name: "Approve" }));
+    await waitFor(() => expect(pressed("Logs")).toBe("true"));
+
+    // The apply finishing, with a list to read, doesn't take the logs away.
+    act(() => {
+      queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), { ...waiting, status: "completed" });
+    });
+    expect(pressed("Logs")).toBe("true");
+  });
+
+  it("opens an apply in flight on its logs, though its plan has a list", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(
+      queryKeys.templateRun("tenant_123", "run_1"),
+      run({ operation: "apply", status: "approved", plan_changes: { state: "complete", total: 3 } })
+    );
+    stubAPI();
+    renderScreen(queryClient);
+
+    expect(screen.getByRole("button", { name: "Logs" }).getAttribute("aria-pressed")).toBe("true");
+    await waitFor(() => expect(screen.getByText("plan-3 log body")).toBeTruthy());
+  });
+
   it("says when the list is cut short, and opens an unlisted plan on its logs", async () => {
     const queryClient = testQueryClient();
     seedCapabilities(queryClient, allAllowed);
