@@ -247,6 +247,15 @@ describe("TemplatePanel", () => {
         stackTemplate({ display_name: "eks-cluster", source_ref: "v1.4.0", pending_plan_run_id: "run_14", pending_plan_at: "2026-10-03T09:30:00Z" })
       ])
     );
+    queryClient.setQueryData(queryKeys.attention("tenant_123"), [
+      {
+        kind: "waiting_approval",
+        at: "2026-10-03T09:30:00Z",
+        stack: { id: "stack_1", name: "Payments", slug: "payments" },
+        stack_template: { id: "st_1", workspace_name: "eks-cluster", display_name: "eks-cluster" },
+        run: null
+      }
+    ]);
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/runs");
 

@@ -41,7 +41,9 @@ describe("stackTemplateIndicator", () => {
     ["destroy failed", template({ lifecycle: "failed" }), undefined, TriangleAlert, "failed", true],
     ["destroying", template({ lifecycle: "destroying" }), undefined, LoaderCircle, "settled", false],
     ["waiting for approval", template({ live_state: "differs" }), waiting, Hourglass, "attention", true],
-    ["waiting for approval", template({ live_state: "differs", pending_plan_run_id: "run_14" }), undefined, Hourglass, "attention", true],
+    // An approved plan stays the template's pending plan while it applies;
+    // with no waiting item, nothing waits (issue 567).
+    ["changed", template({ live_state: "differs", pending_plan_run_id: "run_14" }), undefined, Diff, "attention", false],
     // The latest run failed: that, not the live state before it, is what
     // needs a person, whether or not the template was ever applied.
     ["plan failed", template(), failedPlan, TriangleAlert, "failed", true],
@@ -61,10 +63,8 @@ describe("stackTemplateActivity", () => {
     expect(stackTemplateActivity(template({ lifecycle: "destroying", last_applied_at: "2026-09-22T10:00:00Z" }), undefined)).toBe("");
   });
 
-  it("dates a waiting plan from the template's own pending plan when there is no attention item", () => {
-    expect(stackTemplateActivity(template({ pending_plan_run_id: "run_14", pending_plan_at: "2026-10-03T09:30:00Z" }), undefined)).toMatch(
-      /^Planned 3 Oct, \d\d:\d\d$/
-    );
+  it("doesn't call a plan that is applying planned", () => {
+    expect(stackTemplateActivity(template({ pending_plan_run_id: "run_14", pending_plan_at: "2026-10-03T09:30:00Z" }), undefined)).toBe("Never applied");
   });
 
   it("dates a failed plan or apply from when it stopped", () => {

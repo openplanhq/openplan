@@ -73,10 +73,18 @@ const failedItem: AttentionItem = {
   run: null
 };
 
+const waitingItem: AttentionItem = {
+  kind: "waiting_approval",
+  at: "2026-10-03T09:30:00Z",
+  stack: { id: "stack_1", name: "Payments", slug: "payments" },
+  stack_template: { id: "eks-cluster", workspace_name: "eks-cluster", display_name: "eks-cluster" },
+  run: null
+};
+
 function seed(templates: StackTemplate[], capabilities: StackCapabilities = allAllowed): QueryClient {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   queryClient.setQueryData(queryKeys.stack(TENANT, "stack_1"), view(templates, capabilities));
-  queryClient.setQueryData(queryKeys.attention(TENANT), [failedItem]);
+  queryClient.setQueryData(queryKeys.attention(TENANT), [waitingItem, failedItem]);
   for (const stackTemplate of templates) {
     queryClient.setQueryData(queryKeys.templateRuns(TENANT, stackTemplate.id), pagesOf([]));
   }
@@ -222,8 +230,10 @@ describe("StackPage selection", () => {
     renderPage(queryClient, "/stacks/stack_1");
     expect(screen.getByRole("heading", { level: 2, name: "eks-cluster" })).toBeTruthy();
 
+    // Approved: the plan leaves the attention list, though eks-cluster keeps
+    // it as its pending plan until the apply ends (issue 567).
     act(() => {
-      queryClient.setQueryData(queryKeys.stack(TENANT, "stack_1"), view([network, { ...eks, pending_plan_run_id: "", pending_plan_at: undefined }]));
+      queryClient.setQueryData(queryKeys.attention(TENANT), [failedItem]);
     });
     // The list has caught up: the plan is gone from eks-cluster's row.
     await waitFor(() => expect(within(screen.getByTestId("stack-template-link-eks-cluster")).queryByText("plan to approve")).toBeNull());
