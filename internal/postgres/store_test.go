@@ -882,6 +882,74 @@ func TestUpsertTemplateRevisionWithVariablesCreatesAndReusesImmutableRevision(t 
 	}
 }
 
+// A revision's subject is written with the row and never changes: a later
+// sync of the same commit gets back the subject first stored.
+func TestTemplateRevisionCommitSubjectIsWrittenOnceAndReadEverywhere(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := NewStore(pool)
+	seedTemplate(t, ctx, store, "tenant_123", "source_template_vpc")
+	revision := domain.TemplateRevision{
+		ID:                domain.TemplateRevisionID("template_123"),
+		TenantID:          domain.TenantID("tenant_123"),
+		TemplateID:        domain.TemplateID("source_template_vpc"),
+		RepoOwner:         "acme",
+		RepoName:          "infra-templates",
+		SourceRef:         "main",
+		ResolvedCommitSHA: "abc123",
+		CommitSubject:     "Bump the EKS module",
+		RootPath:          "modules/vpc",
+		Name:              "vpc",
+		Status:            domain.TemplateRevisionActive,
+	}
+
+	const want = "Bump the EKS module"
+	created, err := store.UpsertTemplateRevisionWithVariables(ctx, revision, nil)
+	if err != nil {
+		t.Fatalf("UpsertTemplateRevisionWithVariables returned error: %v", err)
+	}
+	if created.CommitSubject != want {
+		t.Fatalf("created subject = %q, want %q", created.CommitSubject, want)
+	}
+
+	got, err := store.GetTemplateRevision(ctx, revision.TenantID, revision.ID)
+	if err != nil {
+		t.Fatalf("GetTemplateRevision returned error: %v", err)
+	}
+	if got.CommitSubject != want {
+		t.Fatalf("get subject = %q, want %q", got.CommitSubject, want)
+	}
+
+	listed, err := store.ListTemplateRevisions(ctx, revision.TenantID)
+	if err != nil {
+		t.Fatalf("ListTemplateRevisions returned error: %v", err)
+	}
+	if len(listed) != 1 || listed[0].CommitSubject != want {
+		t.Fatalf("listed = %#v, want one revision with subject %q", listed, want)
+	}
+
+	page, err := store.ListTemplateRevisionsBySourcePage(ctx, revision.TenantID, revision.TemplateID, nil, 10)
+	if err != nil {
+		t.Fatalf("ListTemplateRevisionsBySourcePage returned error: %v", err)
+	}
+	if len(page) != 1 || page[0].CommitSubject != want {
+		t.Fatalf("page = %#v, want one revision with subject %q", page, want)
+	}
+
+	resynced := revision
+	resynced.ID = domain.TemplateRevisionID("template_456")
+	resynced.CommitSubject = "changed"
+	reused, err := store.UpsertTemplateRevisionWithVariables(ctx, resynced, nil)
+	if err != nil {
+		t.Fatalf("second UpsertTemplateRevisionWithVariables returned error: %v", err)
+	}
+	if reused.ID != revision.ID || reused.CommitSubject != want {
+		t.Fatalf("reused = %q with subject %q, want %q with %q", reused.ID, reused.CommitSubject, revision.ID, want)
+	}
+}
+
 // A sync writes into the template the API registered and never creates one:
 // a template deleted while its sync ran stays deleted, and the sync is told
 // it is gone.

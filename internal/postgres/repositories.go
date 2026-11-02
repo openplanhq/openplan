@@ -390,20 +390,7 @@ func (store *Store) GetTemplateRevisionVariables(ctx context.Context, tenantID d
 // ListTemplateRevisions returns every revision of the tenant, newest first.
 func (store *Store) ListTemplateRevisions(ctx context.Context, tenantID domain.TenantID) ([]domain.TemplateRevision, error) {
 	rows, err := store.pool.Query(ctx, `
-		select
-			id,
-			tenant_id,
-			template_id,
-			repo_owner,
-			repo_name,
-			source_ref,
-			resolved_commit_sha,
-			root_path,
-			name,
-			description,
-			tags_json,
-			status,
-			created_at
+		select`+templateRevisionColumns+`
 		from template_revisions
 		where tenant_id = $1
 		order by created_at desc, id desc
@@ -667,20 +654,7 @@ func (store *Store) ListTemplateRevisionsBySourcePage(ctx context.Context, tenan
 		afterID = after.ID
 	}
 	rows, err := store.pool.Query(ctx, `
-		select
-			id,
-			tenant_id,
-			template_id,
-			repo_owner,
-			repo_name,
-			source_ref,
-			resolved_commit_sha,
-			root_path,
-			name,
-			description,
-			tags_json,
-			status,
-			created_at
+		select`+templateRevisionColumns+`
 		from template_revisions
 		where tenant_id = $1
 			and template_id = $2
@@ -1067,20 +1041,7 @@ func (store *Store) CreateStackTemplate(ctx context.Context, stackTemplate domai
 
 func (store *Store) GetTemplateRevision(ctx context.Context, tenantID domain.TenantID, templateRevisionID domain.TemplateRevisionID) (domain.TemplateRevision, error) {
 	row := store.pool.QueryRow(ctx, `
-		select
-			id,
-			tenant_id,
-			template_id,
-			repo_owner,
-			repo_name,
-			source_ref,
-			resolved_commit_sha,
-			root_path,
-			name,
-			description,
-			tags_json,
-			status,
-			created_at
+		select`+templateRevisionColumns+`
 		from template_revisions
 		where tenant_id = $1
 			and id = $2
@@ -1949,6 +1910,25 @@ const stackTemplateColumns = `
 	lifecycle
 `
 
+// templateRevisionColumns are a template_revisions row's columns in the order
+// scanTemplateRevision scans them, for a select list or a returning clause.
+const templateRevisionColumns = `
+	id,
+	tenant_id,
+	template_id,
+	repo_owner,
+	repo_name,
+	source_ref,
+	resolved_commit_sha,
+	commit_subject,
+	root_path,
+	name,
+	description,
+	tags_json,
+	status,
+	created_at
+`
+
 type stackTemplateScanner interface {
 	Scan(dest ...any) error
 }
@@ -2024,6 +2004,7 @@ func scanTemplateRevision(scanner templateScanner) (domain.TemplateRevision, err
 		&templateRevision.RepoName,
 		&templateRevision.SourceRef,
 		&templateRevision.ResolvedCommitSHA,
+		&templateRevision.CommitSubject,
 		&templateRevision.RootPath,
 		&templateRevision.Name,
 		&templateRevision.Description,
@@ -2229,43 +2210,13 @@ func nullJSON(input json.RawMessage) any {
 }
 
 func insertTemplateRevision(ctx context.Context, tx pgx.Tx, templateRevision domain.TemplateRevision, tagsJSON []byte) (domain.TemplateRevision, bool, error) {
-	var inserted domain.TemplateRevision
-	var insertedTagsJSON []byte
-	err := tx.QueryRow(ctx, `
-		insert into template_revisions (
-			id,
-			tenant_id,
-			template_id,
-			repo_owner,
-			repo_name,
-			source_ref,
-			resolved_commit_sha,
-			root_path,
-			name,
-			description,
-			tags_json,
-			status,
-			created_at
-		) values (
-			$1, $2, $3, $4, $5, $6, $7, $8,
-			$9, $10, $11::jsonb, $12, coalesce($13::timestamptz, now())
+	inserted, err := scanTemplateRevision(tx.QueryRow(ctx, `
+		insert into template_revisions (`+templateRevisionColumns+`) values (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9,
+			$10, $11, $12::jsonb, $13, coalesce($14::timestamptz, now())
 		)
 		on conflict (tenant_id, template_id, resolved_commit_sha) do nothing
-		returning
-			id,
-			tenant_id,
-			template_id,
-			repo_owner,
-			repo_name,
-			source_ref,
-			resolved_commit_sha,
-			root_path,
-			name,
-			description,
-			tags_json,
-			status,
-			created_at
-	`,
+		returning`+templateRevisionColumns,
 		templateRevision.ID,
 		templateRevision.TenantID,
 		templateRevision.TemplateID,
@@ -2273,33 +2224,15 @@ func insertTemplateRevision(ctx context.Context, tx pgx.Tx, templateRevision dom
 		templateRevision.RepoName,
 		templateRevision.SourceRef,
 		templateRevision.ResolvedCommitSHA,
+		templateRevision.CommitSubject,
 		templateRevision.RootPath,
 		templateRevision.Name,
 		templateRevision.Description,
 		tagsJSON,
 		templateRevision.Status,
 		nullTime(templateRevision.CreatedAt),
-	).Scan(
-		&inserted.ID,
-		&inserted.TenantID,
-		&inserted.TemplateID,
-		&inserted.RepoOwner,
-		&inserted.RepoName,
-		&inserted.SourceRef,
-		&inserted.ResolvedCommitSHA,
-		&inserted.RootPath,
-		&inserted.Name,
-		&inserted.Description,
-		&insertedTagsJSON,
-		&inserted.Status,
-		&inserted.CreatedAt,
-	)
+	))
 	if err == nil {
-		tags, err := decodeTemplateRevisionTags(insertedTagsJSON)
-		if err != nil {
-			return domain.TemplateRevision{}, false, fmt.Errorf("unmarshal inserted template revision tags: %w", err)
-		}
-		inserted.Tags = tags
 		return inserted, true, nil
 	}
 	if foreignKeyViolation(err, "template_revisions_template_id_fkey") {
@@ -2317,23 +2250,8 @@ func insertTemplateRevision(ctx context.Context, tx pgx.Tx, templateRevision dom
 }
 
 func selectTemplateRevisionByIdentity(ctx context.Context, tx pgx.Tx, templateRevision domain.TemplateRevision) (domain.TemplateRevision, error) {
-	var selected domain.TemplateRevision
-	var tagsJSON []byte
-	err := tx.QueryRow(ctx, `
-		select
-			id,
-			tenant_id,
-			template_id,
-			repo_owner,
-			repo_name,
-			source_ref,
-			resolved_commit_sha,
-			root_path,
-			name,
-			description,
-			tags_json,
-			status,
-			created_at
+	selected, err := scanTemplateRevision(tx.QueryRow(ctx, `
+		select`+templateRevisionColumns+`
 		from template_revisions
 		where tenant_id = $1
 			and template_id = $2
@@ -2342,32 +2260,13 @@ func selectTemplateRevisionByIdentity(ctx context.Context, tx pgx.Tx, templateRe
 		templateRevision.TenantID,
 		templateRevision.TemplateID,
 		templateRevision.ResolvedCommitSHA,
-	).Scan(
-		&selected.ID,
-		&selected.TenantID,
-		&selected.TemplateID,
-		&selected.RepoOwner,
-		&selected.RepoName,
-		&selected.SourceRef,
-		&selected.ResolvedCommitSHA,
-		&selected.RootPath,
-		&selected.Name,
-		&selected.Description,
-		&tagsJSON,
-		&selected.Status,
-		&selected.CreatedAt,
-	)
+	))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.TemplateRevision{}, app.ErrNotFound
 	}
 	if err != nil {
 		return domain.TemplateRevision{}, fmt.Errorf("select template revision by identity: %w", err)
 	}
-	tags, err := decodeTemplateRevisionTags(tagsJSON)
-	if err != nil {
-		return domain.TemplateRevision{}, fmt.Errorf("unmarshal selected template revision tags: %w", err)
-	}
-	selected.Tags = tags
 	return selected, nil
 }
 

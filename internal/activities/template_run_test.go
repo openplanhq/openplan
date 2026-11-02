@@ -581,8 +581,9 @@ type fakeGit struct {
 	// token is the installation token the networked commands authenticated
 	// with, empty when they authenticated nothing.
 	token string
-	// head is what rev-parse HEAD prints.
-	head string
+	// head and subject are the HEAD commit git log prints.
+	head    string
+	subject string
 	// populate fills a finished clone; nil lays out an empty modules/vpc, the
 	// template root most tests name.
 	populate func(dest string) error
@@ -592,7 +593,7 @@ type fakeGit struct {
 }
 
 // Run answers the commands LocalGitRunner issues: clone for a ref; init, fetch
-// and checkout for a commit; rev-parse for the head.
+// and checkout for a commit; log for the head.
 func (git *fakeGit) Run(_ context.Context, _ string, env []string, stdout io.Writer, _ io.Writer, _ string, args ...string) error {
 	git.calls++
 	// The commands that work inside a clone name it first, with -C.
@@ -615,8 +616,8 @@ func (git *fakeGit) Run(_ context.Context, _ string, env []string, stdout io.Wri
 		return git.err
 	case "checkout":
 		return git.finish()
-	case "rev-parse":
-		_, err := io.WriteString(stdout, git.head+"\n")
+	case "log": // -C <dest> log -1 --no-show-signature --format=%H%n%s
+		_, err := io.WriteString(stdout, git.head+"\n"+git.subject+"\n")
 		return err
 	}
 	return nil
