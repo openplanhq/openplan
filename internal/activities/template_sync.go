@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
@@ -138,12 +139,11 @@ func (activities *TemplateSyncActivities) SyncTemplate(ctx context.Context, inpu
 		return invalidTemplateSyncOutput("clone repository %s/%s at %q: %v%s", input.RepoOwner, input.RepoName, input.SourceRef, err, hint), nil
 	}
 
-	// resolve SHA of head
-	resolvedSHA, err := activities.git.ResolveHead(ctx, repoPath)
+	head, err := activities.git.ResolveHead(ctx, repoPath)
 	if err != nil {
 		return invalidTemplateSyncOutput("resolve repository head: %v", err), nil
 	}
-	resolvedSHA = strings.TrimSpace(resolvedSHA)
+	resolvedSHA := head.SHA
 	if resolvedSHA == "" {
 		return invalidTemplateSyncOutput("resolve repository head: empty commit sha"), nil
 	}
@@ -172,6 +172,7 @@ func (activities *TemplateSyncActivities) SyncTemplate(ctx context.Context, inpu
 		RepoName:          input.RepoName,
 		SourceRef:         input.SourceRef,
 		ResolvedCommitSHA: resolvedSHA,
+		CommitSubject:     cleanCommitSubject(head.Subject),
 		RootPath:          rootPath,
 		Name:              metadata.Name,
 		Description:       metadata.Description,
@@ -194,6 +195,31 @@ func (activities *TemplateSyncActivities) SyncTemplate(ctx context.Context, inpu
 		TemplateRevisionID: persisted.ID,
 		ResolvedCommitSHA:  persisted.ResolvedCommitSHA,
 	}, nil
+}
+
+// maxCommitSubjectRunes keeps every real subject whole (convention is 50 to 72
+// characters) while bounding one a hostile template makes megabytes long.
+const maxCommitSubjectRunes = 500
+
+// cleanCommitSubject turns a commit's subject into one line fit to store and
+// show. It is the template author's text, and the template is untrusted: a NUL
+// would fail the Postgres insert, invalid UTF-8 likewise, and a bidi override
+// would reverse how the text after it reads, the SHA shown beside it included.
+func cleanCommitSubject(raw string) string {
+	subject := strings.Map(func(r rune) rune {
+		switch {
+		case unicode.Is(unicode.Bidi_Control, r):
+			return -1
+		case unicode.IsControl(r):
+			return ' '
+		}
+		return r
+	}, strings.ToValidUTF8(raw, "�"))
+	subject = strings.Join(strings.Fields(subject), " ")
+	if runes := []rune(subject); len(runes) > maxCommitSubjectRunes {
+		subject = string(runes[:maxCommitSubjectRunes-1]) + "…"
+	}
+	return subject
 }
 
 // gitHubRepoURL builds the clone URL for owner/repo.

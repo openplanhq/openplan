@@ -203,6 +203,7 @@ type TemplateRevision struct {
 	RepoName          string                 `json:"repo_name"`
 	SourceRef         string                 `json:"source_ref"`
 	ResolvedCommitSHA string                 `json:"resolved_commit_sha"`
+	CommitSubject     string                 `json:"commit_subject"`
 	RootPath          string                 `json:"root_path"`
 	Name              string                 `json:"name"`
 	Description       string                 `json:"description"`

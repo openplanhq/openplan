@@ -90,7 +90,7 @@ func TestLocalGitRunnerReportsWhichCheckoutStepFailed(t *testing.T) {
 func TestLocalGitRunnerResolvesHead(t *testing.T) {
 	t.Parallel()
 
-	executor := &recordingCommandExecutor{stdout: "abc123\n"}
+	executor := &recordingCommandExecutor{stdout: "abc123\nBump the EKS module\n"}
 	runner := NewLocalGitRunnerWithExecutor(executor)
 
 	got, err := runner.ResolveHead(context.Background(), "/tmp/repo")
@@ -98,19 +98,73 @@ func TestLocalGitRunnerResolvesHead(t *testing.T) {
 		t.Fatalf("ResolveHead returned error: %v", err)
 	}
 
-	if got != "abc123" {
-		t.Fatalf("sha = %q, want abc123", got)
+	if want := (Commit{SHA: "abc123", Subject: "Bump the EKS module"}); got != want {
+		t.Fatalf("commit = %#v, want %#v", got, want)
 	}
 	want := []recordedCommand{
 		{
 			dir:  "",
 			name: "git",
-			args: []string{"-C", "/tmp/repo", "rev-parse", "HEAD"},
+			args: []string{"-C", "/tmp/repo", "log", "-1", "--format=%H%n%s"},
 			env:  gitEnvironment(GitCredential{}),
 		},
 	}
 	if !reflect.DeepEqual(executor.commands, want) {
 		t.Fatalf("commands = %#v, want %#v", executor.commands, want)
+	}
+}
+
+// A warning git prints on stderr must never become part of the SHA or the
+// subject: both are stored and the SHA is checked out by every later run.
+func TestLocalGitRunnerResolveHeadReadsStdoutOnly(t *testing.T) {
+	t.Parallel()
+
+	executor := &recordingCommandExecutor{stdout: "abc123\nBump\n", stderr: "warning: refname is ambiguous\n"}
+	runner := NewLocalGitRunnerWithExecutor(executor)
+
+	got, err := runner.ResolveHead(context.Background(), "/tmp/repo")
+	if err != nil {
+		t.Fatalf("ResolveHead returned error: %v", err)
+	}
+	if want := (Commit{SHA: "abc123", Subject: "Bump"}); got != want {
+		t.Fatalf("commit = %#v, want %#v", got, want)
+	}
+}
+
+func TestLocalGitRunnerResolveHeadWithAnEmptySubject(t *testing.T) {
+	t.Parallel()
+
+	executor := &recordingCommandExecutor{stdout: "abc123\n\n"}
+	runner := NewLocalGitRunnerWithExecutor(executor)
+
+	got, err := runner.ResolveHead(context.Background(), "/tmp/repo")
+	if err != nil {
+		t.Fatalf("ResolveHead returned error: %v", err)
+	}
+	if want := (Commit{SHA: "abc123"}); got != want {
+		t.Fatalf("commit = %#v, want %#v", got, want)
+	}
+}
+
+// git explains a failure on stderr, so the error keeps it even though a
+// success reads stdout alone.
+func TestLocalGitRunnerResolveHeadFailureKeepsBothStreams(t *testing.T) {
+	t.Parallel()
+
+	commandErr := errors.New("exit status 128")
+	executor := &recordingCommandExecutor{stderr: "fatal: not a git repository\n", errs: []error{commandErr}}
+	runner := NewLocalGitRunnerWithExecutor(executor)
+
+	_, err := runner.ResolveHead(context.Background(), "/tmp/repo")
+	var cmdErr *GitCommandError
+	if !errors.As(err, &cmdErr) {
+		t.Fatalf("error = %v, want *GitCommandError", err)
+	}
+	if cmdErr.Command != GitCommandResolveHead {
+		t.Fatalf("cmdErr.Command = %q, want %q", cmdErr.Command, GitCommandResolveHead)
+	}
+	if !strings.Contains(cmdErr.Output, "fatal: not a git repository") {
+		t.Fatalf("cmdErr.Output = %q, want git's stderr", cmdErr.Output)
 	}
 }
 

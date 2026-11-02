@@ -126,6 +126,68 @@ variable "cidr" {
 	}
 }
 
+// The subject is the template author's text, written as they like: sync keeps
+// one clean line of it, short enough to store and show.
+func TestCleanCommitSubject(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "plain", raw: "Bump the EKS module", want: "Bump the EKS module"},
+		// A NUL would fail the Postgres insert; a tab is spacing.
+		{name: "control characters", raw: "Fix\tthe\x00 VPC", want: "Fix the VPC"},
+		// Only the ESC is a control character; what follows it is printable.
+		{name: "terminal escape", raw: "\x1b[31mred\x1b[0m", want: "[31mred [0m"},
+		// A bidi override would reverse the text shown after it, the SHA beside it included.
+		{name: "bidi override", raw: "‮gnp.exe", want: "gnp.exe"},
+		{name: "invalid UTF-8", raw: "caf\xe9", want: "caf�"},
+		{name: "padded", raw: "  padded  ", want: "padded"},
+		{name: "empty", raw: "", want: ""},
+		{name: "at the cap", raw: strings.Repeat("é", 500), want: strings.Repeat("é", 500)},
+		{name: "over the cap", raw: strings.Repeat("a", 600), want: strings.Repeat("a", 499) + "…"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := cleanCommitSubject(tc.raw); got != tc.want {
+				t.Fatalf("cleanCommitSubject(%q) = %q, want %q", tc.raw, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSyncTemplateStoresTheCleanedCommitSubject(t *testing.T) {
+	t.Parallel()
+
+	store := &recordingTemplateSyncStore{}
+	git := vpcTemplateGit(t)
+	git.subject = "Bump\x00 the EKS module"
+	activities := newTestTemplateSyncActivities(t, store, git)
+
+	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
+		TenantID:   domain.TenantID("tenant_123"),
+		TemplateID: domain.TemplateID("source_template_123"),
+		RepoOwner:  "acme",
+		RepoName:   "infra-templates",
+		SourceRef:  "main",
+		RootPath:   "modules/vpc",
+	})
+	if err != nil {
+		t.Fatalf("SyncTemplate returned error: %v", err)
+	}
+	if output.Status != domain.TemplateSyncStateCompleted {
+		t.Fatalf("status = %q, want completed", output.Status)
+	}
+	if store.template.ResolvedCommitSHA != "abc123" {
+		t.Fatalf("template sha = %q, want abc123", store.template.ResolvedCommitSHA)
+	}
+	if store.template.CommitSubject != "Bump the EKS module" {
+		t.Fatalf("commit subject = %q, want %q", store.template.CommitSubject, "Bump the EKS module")
+	}
+}
+
 func TestSyncTemplateRejectsUnsafeRootPath(t *testing.T) {
 	t.Parallel()
 
