@@ -54,11 +54,6 @@ export function startRunLockReason(state: LockState): string {
   return "";
 }
 
-/** The sentence beside Plan and Apply: why they are locked, else what they do. */
-export function runActionsNote(state: LockState): string {
-  return startRunLockReason(state) || "Plan shows what would change. Apply saves a plan that waits for approval.";
-}
-
 /**
  * Why a template in this lifecycle cannot make this change, or "" when it
  * can. The server refuses every one for any template that is not active.

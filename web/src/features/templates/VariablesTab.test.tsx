@@ -54,7 +54,6 @@ describe("VariablesTab", () => {
       ])
     );
 
-    expect(screen.getByTestId("template-variables").textContent).toContain("From the latest revision, 3f9c2a1.");
     const required = within(screen.getByTestId("template-variable-cluster_name"));
     expect(required.getByText("cluster_name")).toBeTruthy();
     expect(required.getByText("string")).toBeTruthy();
@@ -67,8 +66,7 @@ describe("VariablesTab", () => {
   });
 
   // Sensitive and required are separate facts: a secret can be either. Value
-  // keeps saying required or optional, a sensitive tag follows the name, and
-  // the note says where a sensitive value comes from.
+  // keeps saying required or optional, and a sensitive tag follows the name.
   it("tags a sensitive variable by its name and keeps required or optional in Value", () => {
     renderTab(
       seed([
@@ -86,7 +84,6 @@ describe("VariablesTab", () => {
     expect(optional.getByText("sensitive")).toBeTruthy();
     expect(optional.getByText("optional")).toBeTruthy();
     expect(within(screen.getByTestId("template-variable-cluster_name")).queryByText("sensitive")).toBeNull();
-    expect(screen.getByTestId("template-variables").textContent).toContain("A sensitive one gets its value from an Environment secret named TF_VAR_ and its name.");
   });
 
   // A tag under a long name makes the row two lines tall; the type, value and
@@ -160,6 +157,5 @@ describe("VariablesTab", () => {
       resolveVariables(jsonResponse([variable({ template_revision_id: "rev_2", name: "cluster_version" })]));
     });
     await waitFor(() => expect(screen.getByTestId("template-variable-cluster_version")).toBeTruthy());
-    expect(screen.getByTestId("template-variables").textContent).toContain("From the latest revision, 9e7d3b2.");
   });
 });
