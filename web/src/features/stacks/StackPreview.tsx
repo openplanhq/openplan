@@ -49,11 +49,7 @@ export default function StackPreview({
       <div className="flex flex-col gap-4 border-b border-divider px-7 py-6 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 flex-col gap-2">
           <h2 className="font-heading text-title wrap-anywhere">{stack.name}</h2>
-          {/* A derived slug only repeats the name; with no tags either, the
-              line goes. */}
-          {(!stack.slug_is_derived || Object.keys(stack.tags).length > 0) && (
-            <StackMeta stack={stack} hideSlug={stack.slug_is_derived} />
-          )}
+          <StackMeta stack={stack} />
         </div>
         {/* The buttons hold their row: a long stack name wraps instead. */}
         <div className="flex shrink-0 flex-wrap items-center gap-2" data-testid="stack-preview-actions">

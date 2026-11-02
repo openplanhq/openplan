@@ -147,13 +147,23 @@ afterEach(() => {
 });
 
 describe("StackPage header", () => {
-  it("titles the page with the stack, a trail back to Stacks, its slug and its tags", () => {
+  it("titles the page with the stack, a trail back to Stacks and its tags", () => {
     renderPage(seed([network]), "/stacks/stack_1");
 
     expect(screen.getByRole("heading", { level: 1, name: "Payments" })).toBeTruthy();
     expect(within(screen.getByRole("navigation", { name: "Breadcrumb" })).getByRole("link", { name: "Stacks" }).getAttribute("href")).toBe("/stacks");
-    expect(screen.getByText("payments")).toBeTruthy();
     expect(screen.getByText("env: production")).toBeTruthy();
+    // A slug derived from the name only repeats it.
+    expect(screen.queryByText("payments")).toBeNull();
+  });
+
+  it("shows a slug of the stack's own under its name", () => {
+    const queryClient = seed([network]);
+    const given = view([network]);
+    queryClient.setQueryData(queryKeys.stack(TENANT, "stack_1"), { ...given, stack: { ...given.stack, slug: "pay-eu", slug_is_derived: false } });
+    renderPage(queryClient, "/stacks/stack_1");
+
+    expect(screen.getByText("pay-eu")).toBeTruthy();
   });
 
   it("offers Environment and Access only to people who may manage access", () => {
