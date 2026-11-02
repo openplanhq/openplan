@@ -962,10 +962,12 @@ describe("RunDetailScreen", () => {
 
     renderScreen(queryClient);
     const user = userEvent.setup();
-    const destroyTrigger = screen.getByRole("button", { name: /Destroy 4/ });
+    // The button names the action; the count is the dialog's (issue 569).
+    const destroyTrigger = screen.getByRole("button", { name: "Destroy" });
     await user.click(destroyTrigger);
 
     const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText("Destroy 4 resources?")).toBeTruthy();
     await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
     await user.tab();
     await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
@@ -990,7 +992,7 @@ describe("RunDetailScreen", () => {
     );
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
     // The approval's own answer moves the run off waiting_approval.
-    await waitFor(() => expect(screen.queryByRole("button", { name: /Destroy 4/ })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Destroy" })).toBeNull());
   });
 
   it("hides Approve when canApprove is denied", async () => {
