@@ -214,7 +214,7 @@ func cleanCommitSubject(raw string) string {
 			return ' '
 		}
 		return r
-	}, strings.ToValidUTF8(raw, "�"))
+	}, strings.ToValidUTF8(raw, "\ufffd"))
 	subject = strings.Join(strings.Fields(subject), " ")
 	if runes := []rune(subject); len(runes) > maxCommitSubjectRunes {
 		subject = string(runes[:maxCommitSubjectRunes-1]) + "…"

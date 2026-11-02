@@ -142,8 +142,8 @@ func TestCleanCommitSubject(t *testing.T) {
 		// Only the ESC is a control character; what follows it is printable.
 		{name: "terminal escape", raw: "\x1b[31mred\x1b[0m", want: "[31mred [0m"},
 		// A bidi override would reverse the text shown after it, the SHA beside it included.
-		{name: "bidi override", raw: "‮gnp.exe", want: "gnp.exe"},
-		{name: "invalid UTF-8", raw: "caf\xe9", want: "caf�"},
+		{name: "bidi override", raw: "\u202egnp.exe", want: "gnp.exe"},
+		{name: "invalid UTF-8", raw: "caf\xe9", want: "caf\ufffd"},
 		{name: "padded", raw: "  padded  ", want: "padded"},
 		{name: "empty", raw: "", want: ""},
 		{name: "at the cap", raw: strings.Repeat("é", 500), want: strings.Repeat("é", 500)},
