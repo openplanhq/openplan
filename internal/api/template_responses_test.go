@@ -156,9 +156,23 @@ func TestTemplateRevisionResponseFields(t *testing.T) {
 	})
 
 	assert.Equal(t, []string{
-		"created_at", "description", "id", "name", "repo_name", "repo_owner", "resolved_commit_sha",
+		"commit_subject", "created_at", "description", "id", "name", "repo_name", "repo_owner", "resolved_commit_sha",
 		"root_path", "source_ref", "status", "tags", "template_id", "tenant_id",
 	}, jsonKeys(t, response))
+}
+
+// The subject is always sent, "" when the revision has none, so a client never
+// has to tell a missing field from an empty one.
+func TestTemplateRevisionResponseCommitSubject(t *testing.T) {
+	t.Parallel()
+
+	encoded, err := json.Marshal(newTemplateRevisionResponse(domain.TemplateRevision{ID: "rev-1", CommitSubject: "Bump"}))
+	require.NoError(t, err)
+	assert.Contains(t, string(encoded), `"commit_subject":"Bump"`)
+
+	encoded, err = json.Marshal(newTemplateRevisionResponse(domain.TemplateRevision{ID: "rev-1"}))
+	require.NoError(t, err)
+	assert.Contains(t, string(encoded), `"commit_subject":""`)
 }
 
 // A revision registered without tags lists them as [], never null: every

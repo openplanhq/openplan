@@ -1920,6 +1920,7 @@ const templateRevisionColumns = `
 	repo_name,
 	source_ref,
 	resolved_commit_sha,
+	commit_subject,
 	root_path,
 	name,
 	description,
@@ -2003,6 +2004,7 @@ func scanTemplateRevision(scanner templateScanner) (domain.TemplateRevision, err
 		&templateRevision.RepoName,
 		&templateRevision.SourceRef,
 		&templateRevision.ResolvedCommitSHA,
+		&templateRevision.CommitSubject,
 		&templateRevision.RootPath,
 		&templateRevision.Name,
 		&templateRevision.Description,
@@ -2210,8 +2212,8 @@ func nullJSON(input json.RawMessage) any {
 func insertTemplateRevision(ctx context.Context, tx pgx.Tx, templateRevision domain.TemplateRevision, tagsJSON []byte) (domain.TemplateRevision, bool, error) {
 	inserted, err := scanTemplateRevision(tx.QueryRow(ctx, `
 		insert into template_revisions (`+templateRevisionColumns+`) values (
-			$1, $2, $3, $4, $5, $6, $7, $8,
-			$9, $10, $11::jsonb, $12, coalesce($13::timestamptz, now())
+			$1, $2, $3, $4, $5, $6, $7, $8, $9,
+			$10, $11, $12::jsonb, $13, coalesce($14::timestamptz, now())
 		)
 		on conflict (tenant_id, template_id, resolved_commit_sha) do nothing
 		returning`+templateRevisionColumns,
@@ -2222,6 +2224,7 @@ func insertTemplateRevision(ctx context.Context, tx pgx.Tx, templateRevision dom
 		templateRevision.RepoName,
 		templateRevision.SourceRef,
 		templateRevision.ResolvedCommitSHA,
+		templateRevision.CommitSubject,
 		templateRevision.RootPath,
 		templateRevision.Name,
 		templateRevision.Description,
