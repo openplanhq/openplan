@@ -344,6 +344,48 @@ describe("RunDetailScreen", () => {
     expect(within(applyGroup).getByRole("button", { name: "tofu apply" }).getAttribute("aria-expanded")).toBe("true");
   });
 
+  // Each command's row says when it started and, once done, how long it
+  // took, from the step the workflow recorded for it (issue 571).
+  it("times each command from its phase's steps", async () => {
+    const queryClient = testQueryClient();
+    seedCapabilities(queryClient, allAllowed);
+    queryClient.setQueryData(
+      queryKeys.templateRun("tenant_123", "run_1"),
+      run({
+        status: "running",
+        executions: [
+          {
+            phase: "plan",
+            actor: "user_123",
+            actor_display_name: "Priya Raman",
+            started_at: "2026-07-20T10:00:00Z",
+            steps: [
+              { step: "preparing_workspace", started_at: "2026-07-20T10:00:00Z", finished_at: "2026-07-20T10:00:02Z" },
+              { step: "initializing", started_at: "2026-07-20T10:00:02Z", finished_at: "2026-07-20T10:04:07Z" },
+              { step: "planning", started_at: "2026-07-20T10:04:09Z" }
+            ]
+          }
+        ]
+      })
+    );
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/logs")) {
+        return jsonResponse([runLog({ name: "plan-1" }), runLog({ name: "plan-3" })]);
+      }
+      return new Response("log body", { status: 200, headers: { "content-type": "text/plain" } });
+    });
+
+    renderScreen(queryClient);
+
+    const panel = screen.getByTestId("run-logs-panel");
+    const init = await within(panel).findByRole("button", { name: /^tofu init/ });
+    expect(init.textContent).toMatch(/^tofu init\d\d:\d\d:02·4m 5s$/);
+    expect(init.querySelector("time")?.getAttribute("dateTime")).toBe("2026-07-20T10:00:02Z");
+    // The plan is still running: its start, and no time taken yet.
+    expect(within(panel).getByRole("button", { name: /^tofu plan/ }).textContent).toMatch(/^tofu plan\d\d:\d\d:09$/);
+  });
+
   it("labels a log by its name when the API sends no command line", async () => {
     const queryClient = testQueryClient();
     seedCapabilities(queryClient, allAllowed);
