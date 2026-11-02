@@ -616,7 +616,7 @@ func (git *fakeGit) Run(_ context.Context, _ string, env []string, stdout io.Wri
 		return git.err
 	case "checkout":
 		return git.finish()
-	case "log": // -C <dest> log -1 --format=%H%n%s
+	case "log": // -C <dest> log -1 --no-show-signature --format=%H%n%s
 		_, err := io.WriteString(stdout, git.head+"\n"+git.subject+"\n")
 		return err
 	}

@@ -101,11 +101,13 @@ func TestLocalGitRunnerResolvesHead(t *testing.T) {
 	if want := (Commit{SHA: "abc123", Subject: "Bump the EKS module"}); got != want {
 		t.Fatalf("commit = %#v, want %#v", got, want)
 	}
+	// --no-show-signature: a host gitconfig with log.showSignature=true would
+	// otherwise print the signature check first, and it would be read as the SHA.
 	want := []recordedCommand{
 		{
 			dir:  "",
 			name: "git",
-			args: []string{"-C", "/tmp/repo", "log", "-1", "--format=%H%n%s"},
+			args: []string{"-C", "/tmp/repo", "log", "-1", "--no-show-signature", "--format=%H%n%s"},
 			env:  gitEnvironment(GitCredential{}),
 		},
 	}
