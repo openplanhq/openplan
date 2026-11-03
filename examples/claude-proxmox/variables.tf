@@ -111,6 +111,65 @@ variable "cpu_units" {
   }
 }
 
+variable "git_user_name" {
+  description = "The name on commits made from the VM."
+  type        = string
+}
+
+variable "git_user_email" {
+  description = "The email on commits made from the VM."
+  type        = string
+}
+
+variable "setup_repository" {
+  description = "The GitHub repository, as owner/name, that holds the Claude setup; the VM clones it and runs its bootstrap.sh."
+  type        = string
+  default     = "openplanhq/ai-os"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", var.setup_repository))
+    error_message = "setup_repository must be owner/name."
+  }
+}
+
+variable "repositories" {
+  description = "The other GitHub repositories the VM clones, as owner/name. Each with an entry in the setup repository's claude/repos/ gets its CLAUDE.local.md."
+  type        = list(string)
+  default     = ["openplanhq/openplan"]
+
+  validation {
+    condition     = alltrue([for repo in var.repositories : can(regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", repo))])
+    error_message = "Every repository must be owner/name."
+  }
+}
+
+# Credentials, never stack config: TF_VAR_github_token and
+# TF_VAR_claude_code_oauth_token. Each is held to its own characters, so one
+# pasted with a line ending is refused here rather than failing on the VM.
+variable "github_token" {
+  description = "A fine-grained GitHub token for the setup repository and the others, with read and write on contents, pull requests and issues. Credential TF_VAR_github_token."
+  type        = string
+  default     = null
+  sensitive   = true
+
+  validation {
+    condition     = var.github_token != null && can(regex("^[A-Za-z0-9_]+$", var.github_token))
+    error_message = "Set the stack credential TF_VAR_github_token to a GitHub token, with no trailing newline or space."
+  }
+}
+
+variable "claude_code_oauth_token" {
+  description = "Claude Code's login, from claude setup-token. Credential TF_VAR_claude_code_oauth_token."
+  type        = string
+  default     = null
+  sensitive   = true
+
+  validation {
+    condition     = var.claude_code_oauth_token != null && can(regex("^[A-Za-z0-9_-]+$", var.claude_code_oauth_token))
+    error_message = "Set the stack credential TF_VAR_claude_code_oauth_token to the token claude setup-token prints, with no trailing newline or space."
+  }
+}
+
 variable "ssh_authorized_key" {
   description = "A public key that can SSH into the VM as debian, which is how sessions reach it."
   type        = string

@@ -14,8 +14,50 @@ locals {
       ssh_authorized_keys = [var.ssh_authorized_key]
     }]
     package_update = true
-    packages       = ["qemu-guest-agent"]
-    runcmd         = ["systemctl enable --now qemu-guest-agent"]
+    # make and Docker for openplan's `make check`, which runs everything else
+    # in containers; the rest for the setup.
+    packages = ["qemu-guest-agent", "git", "gh", "jq", "curl", "tmux", "make", "docker.io"]
+
+    # The tokens are written after debian exists (defer), straight into its
+    # home: a new parent directory would be root's.
+    write_files = [
+      {
+        path        = "/usr/local/lib/claude-proxmox/setup.sh"
+        permissions = "0755"
+        content = templatefile("${path.module}/cloud-init/setup.sh.tftpl", {
+          user             = local.user
+          git_user_name    = var.git_user_name
+          git_user_email   = var.git_user_email
+          setup_repository = var.setup_repository
+          repositories     = var.repositories
+        })
+      },
+      {
+        path        = "/home/${local.user}/.github-token"
+        content     = var.github_token
+        owner       = "${local.user}:${local.user}"
+        permissions = "0600"
+        defer       = true
+      },
+      {
+        path        = "/home/${local.user}/.claude-env"
+        content     = "export CLAUDE_CODE_OAUTH_TOKEN='${var.claude_code_oauth_token}'\nexport PATH=\"$HOME/.local/bin:$PATH\"\n"
+        owner       = "${local.user}:${local.user}"
+        permissions = "0600"
+        defer       = true
+      },
+    ]
+
+    # The setup runs as debian once it can use Docker and has a systemd
+    # manager of its own, which bootstrap.sh's vault-sync timer needs; lingering
+    # keeps that manager up with nobody logged in.
+    runcmd = [
+      "systemctl enable --now qemu-guest-agent",
+      "usermod -aG docker ${local.user}",
+      "loginctl enable-linger ${local.user}",
+      "systemctl start user@$(id -u ${local.user}).service",
+      "runuser -u ${local.user} -- env HOME=/home/${local.user} XDG_RUNTIME_DIR=/run/user/$(id -u ${local.user}) /usr/local/lib/claude-proxmox/setup.sh",
+    ]
   }
   user_data = "#cloud-config\n${yamlencode(local.cloud_config)}"
 }

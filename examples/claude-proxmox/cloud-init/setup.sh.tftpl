@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# The VM's setup as ${user}, run once by cloud-init at first boot, after root's
+# part (packages, the docker group, lingering). Safe to run again by hand: a
+# repo already cloned is kept.
+set -euo pipefail
+
+# gh keeps the token in its own config, and git asks gh for it, so the file
+# that brought it goes whether the login worked or not.
+trap 'rm -f "$HOME/.github-token"' EXIT
+
+git config --global user.name '${replace(git_user_name, "'", "'\\''")}'
+git config --global user.email '${replace(git_user_email, "'", "'\\''")}'
+
+gh auth login --with-token < "$HOME/.github-token"
+gh auth setup-git
+
+# The paths the setup repo's instructions use: ~/projects/github/<owner>/<repo>.
+%{ for repo in concat([setup_repository], repositories) ~}
+[ -d "$HOME/projects/github/${repo}" ] || gh repo clone "${repo}" "$HOME/projects/github/${repo}"
+%{ endfor ~}
+
+# Into ~/.local/bin; it updates itself from then on.
+curl -fsSL https://claude.ai/install.sh | bash
+
+# Above Debian's early return for non-interactive shells, so a command run over
+# SSH gets the token and ~/.local/bin too.
+line='[ -f ~/.claude-env ] && . ~/.claude-env'
+grep -qxF "$line" ~/.bashrc || { printf '%s\n' "$line" | cat - ~/.bashrc > ~/.bashrc.new && mv ~/.bashrc.new ~/.bashrc; }
+
+"$HOME/projects/github/${setup_repository}/bootstrap.sh"
+
+# CLAUDE.local.md is gitignored, so a clone doesn't bring the loader that
+# points a repo at its entry in the setup repo; write it as project-init does.
+for repo in ${join(" ", repositories)}; do
+  entry="projects/github/${setup_repository}/claude/repos/$${repo#*/}.md"
+  [ -f "$HOME/$entry" ] || continue
+  dir="$HOME/projects/github/$repo"
+  { [ -f "$dir/AGENTS.md" ] && echo '@AGENTS.md'; echo "@~/$entry"; } > "$dir/CLAUDE.local.md"
+done
