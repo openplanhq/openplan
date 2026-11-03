@@ -212,12 +212,6 @@ export function revisionCountLabel(count: number): string {
   return count === 1 ? "1 revision" : `${count} revisions`;
 }
 
-export function templateRevisionLabel(templateRevision: TemplateRevision): string {
-  const name = templateRevision.name.trim() || `${templateRevision.repo_owner}/${templateRevision.repo_name}`;
-  const shortSHA = shortCommitSHA(templateRevision.resolved_commit_sha);
-  return shortSHA ? `${name} @ ${templateRevision.source_ref} · ${shortSHA}` : `${name} @ ${templateRevision.source_ref}`;
-}
-
 export function shortCommitSHA(commitSHA: string): string {
   return commitSHA.trim().slice(0, 7);
 }

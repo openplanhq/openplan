@@ -335,6 +335,7 @@ function templateRevision(overrides: Partial<TemplateRevision>): TemplateRevisio
     repo_name: "terraform-template",
     source_ref: "main",
     resolved_commit_sha: "abc123",
+    commit_subject: "",
     root_path: ".",
     name: "Terraform Template",
     description: "",

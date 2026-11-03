@@ -73,13 +73,28 @@ func (runner *LocalGitRunner) CheckoutCommit(ctx context.Context, repoURL string
 	return nil
 }
 
-func (runner *LocalGitRunner) ResolveHead(ctx context.Context, repoPath string) (string, error) {
-	environment := gitEnvironment(GitCredential{})
-	output, err := runner.combinedOutput(ctx, environment, "git", "-C", repoPath, "rev-parse", "HEAD")
+// Commit is a clone's HEAD: its SHA and its subject line as git prints it,
+// the first paragraph of the message joined onto one line. The subject is
+// the template author's text, so callers clean it before storing it.
+type Commit struct {
+	SHA     string
+	Subject string
+}
+
+// ResolveHead reads the clone's HEAD in one git call. Nothing but the SHA and
+// the subject may reach stdout, since the SHA is stored and every later run
+// checks it out: stdout is parsed alone, so a warning on stderr can't leak in,
+// and --no-show-signature stops a host's log.showSignature from printing a
+// signature check first. A failure still reports both streams, since git
+// explains itself on stderr.
+func (runner *LocalGitRunner) ResolveHead(ctx context.Context, repoPath string) (Commit, error) {
+	var stdout, stderr bytes.Buffer
+	err := runner.executor.Run(ctx, "", gitEnvironment(GitCredential{}), &stdout, &stderr, "git", "-C", repoPath, "log", "-1", "--no-show-signature", "--format=%H%n%s")
 	if err != nil {
-		return "", newGitCommandError(GitCommandResolveHead, output, GitCredential{}, err)
+		return Commit{}, newGitCommandError(GitCommandResolveHead, stdout.String()+stderr.String(), GitCredential{}, err)
 	}
-	return strings.TrimSpace(output), nil
+	sha, subject, _ := strings.Cut(strings.TrimRight(stdout.String(), "\n"), "\n")
+	return Commit{SHA: strings.TrimSpace(sha), Subject: subject}, nil
 }
 
 // combinedOutput runs a git command and returns its combined stdout/stderr,

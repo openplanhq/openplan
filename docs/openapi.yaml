@@ -2340,6 +2340,12 @@ components:
           type: string
           description: The ref as requested. A label — the commit is what is used.
         resolved_commit_sha: { type: string }
+        commit_subject:
+          type: string
+          description: |
+            The commit's subject line as its author wrote it, cleaned to one
+            line of at most 500 characters. Empty when the revision was synced
+            before openplan read subjects, or the commit has none.
         root_path: { type: string }
         name: { type: string }
         description: { type: string }
@@ -2350,7 +2356,8 @@ components:
         created_at: { type: string, format: date-time }
       required:
         [id, tenant_id, template_id, repo_owner, repo_name, source_ref,
-         resolved_commit_sha, root_path, name, description, status, created_at]
+         resolved_commit_sha, commit_subject, root_path, name, description,
+         status, created_at]
 
     TemplateRevisionStatus:
       type: string

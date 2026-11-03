@@ -61,6 +61,7 @@ function templateRevision(overrides: Partial<TemplateRevision> = {}): TemplateRe
     repo_name: "vpc",
     source_ref: "main",
     resolved_commit_sha: "abcdef1234567890",
+    commit_subject: "",
     root_path: ".",
     name: "vpc",
     description: "",
@@ -105,7 +106,7 @@ function testQueryClient(): QueryClient {
 function seedChangeable(queryClient: QueryClient) {
   queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([stackTemplate()]));
   seedTemplates(queryClient, [
-    templateRevision({ id: "rev_next", source_ref: "main", resolved_commit_sha: "9f21abc0000000" }),
+    templateRevision({ id: "rev_next", source_ref: "main", resolved_commit_sha: "9f21abc0000000", commit_subject: "Bump the EKS module to 20.8" }),
     templateRevision({ id: "rev_current" })
   ]);
   queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_current"), [
@@ -177,6 +178,72 @@ describe("ChangeRevisionScreen", () => {
     renderScreen(queryClient);
 
     expect(shownTarget()).toContain("9f21abc");
+  });
+
+  it("names each option's commit subject", async () => {
+    const queryClient = testQueryClient();
+    seedChangeable(queryClient);
+
+    renderScreen(queryClient);
+
+    expect(shownTarget()).toContain("Bump the EKS module to 20.8");
+    await userEvent.setup().click(targetSelect());
+    const option = within(await screen.findByRole("listbox")).getByRole("option", { name: /9f21abc/ });
+    expect(option.textContent).toContain("Bump the EKS module to 20.8");
+    expect(within(option).getByTestId("revision-subject").getAttribute("title")).toBe("Bump the EKS module to 20.8");
+  });
+
+  // "latest" is the template's newest active revision, as on Add template:
+  // never merely the first option, which is only the newest other revision.
+  it("marks the newest active revision latest, and no other", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([stackTemplate()]));
+    seedTemplates(queryClient, [
+      templateRevision({ id: "rev_newest", resolved_commit_sha: "1111111000000000" }),
+      templateRevision({ id: "rev_middle", resolved_commit_sha: "2222222000000000" }),
+      templateRevision({ id: "rev_current" })
+    ]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_current"), [variable()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_newest"), [variable({ template_revision_id: "rev_newest" })]);
+
+    renderScreen(queryClient);
+
+    const options = await targetOptions();
+    expect(options.find((label) => label.includes("1111111"))).toContain("latest");
+    expect(options.find((label) => label.includes("2222222"))).not.toContain("latest");
+  });
+
+  it("marks no option latest when the stack already runs the newest revision", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([stackTemplate()]));
+    seedTemplates(queryClient, [templateRevision({ id: "rev_current" }), templateRevision({ id: "rev_older", resolved_commit_sha: "0000000000000000" })]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_current"), [variable()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_older"), [variable({ template_revision_id: "rev_older" })]);
+
+    renderScreen(queryClient);
+
+    const options = await targetOptions();
+    expect(options).toHaveLength(1);
+    expect(options[0]).not.toContain("latest");
+  });
+
+  it("shows the SHA alone for an option with no subject", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([stackTemplate()]));
+    seedTemplates(queryClient, [templateRevision({ id: "rev_older", resolved_commit_sha: "0000000000000000" }), templateRevision({ id: "rev_current" })]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_current"), [variable()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_older"), [variable({ template_revision_id: "rev_older" })]);
+
+    renderScreen(queryClient);
+
+    expect(shownTarget()).toContain("0000000");
+    expect(targetSelect().querySelector('[data-testid="revision-subject"]')).toBeNull();
+    // Alone, the commit is the value, in the select's own text, never muted
+    // like a placeholder.
+    expect(targetSelect().querySelector('[data-slot="select-value"] .text-muted-foreground')).toBeNull();
+    await userEvent.setup().click(targetSelect());
+    const option = within(await screen.findByRole("listbox")).getByRole("option", { name: /0000000/ });
+    expect(within(option).queryByTestId("revision-subject")).toBeNull();
   });
 
   it("allows selecting an active same-source revision even when its commit is older", async () => {

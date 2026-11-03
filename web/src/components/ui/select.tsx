@@ -119,7 +119,10 @@ function SelectItem({
       )}
       {...props}
     >
-      <SelectPrimitive.ItemText className="flex flex-1 shrink-0 gap-2 whitespace-nowrap">
+      {/* Edited from the CLI's output: min-w-0 in place of shrink-0, so a long
+          option (a commit subject on Change revision) is cut with an ellipsis
+          instead of running past the popup's edge and being clipped. */}
+      <SelectPrimitive.ItemText className="flex min-w-0 flex-1 gap-2 whitespace-nowrap">
         {children}
       </SelectPrimitive.ItemText>
       <SelectPrimitive.ItemIndicator

@@ -8,27 +8,11 @@ import {
   revisionSourceLabel,
   searchTemplates,
   templateDisplayName,
-  templateRevisionLabel,
   templateRootPathLabel,
   templatesByName,
   templatesWithRevision
 } from "./templateWorkflow";
 import { template } from "./testSupport";
-
-describe("template workflow helpers", () => {
-  it("formats menu labels from persisted template revision rows", () => {
-    const selectedTemplateRevision = templateRevision({
-      id: "template_123",
-      repo_owner: "acme",
-      repo_name: "infra",
-      source_ref: "main",
-      resolved_commit_sha: "abcdef1234567890",
-      name: ""
-    });
-
-    expect(templateRevisionLabel(selectedTemplateRevision)).toBe("acme/infra @ main · abcdef1");
-  });
-});
 
 describe("templateDisplayName", () => {
   it("prefers the revision's own name", () => {
@@ -133,6 +117,7 @@ function templateRevision(overrides: Partial<TemplateRevision>): TemplateRevisio
     repo_name: "terraform-template",
     source_ref: "main",
     resolved_commit_sha: "abc123",
+    commit_subject: "",
     root_path: ".",
     name: "Terraform Template",
     description: "",
