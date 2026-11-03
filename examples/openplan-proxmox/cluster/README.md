@@ -99,4 +99,5 @@ apply in its last 30 days, which changes the outputs once a year.
 
 `api_url`, `cluster_ca_data`, `client_certificate_data`, `client_key_data`
 (sensitive) and `node_addresses`. The certificates are base64, as kubeconfig
-holds them.
+holds them. 
+
