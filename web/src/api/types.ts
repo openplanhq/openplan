@@ -142,6 +142,8 @@ export interface TemplateRevision {
   repo_name: string;
   source_ref: string;
   resolved_commit_sha: string;
+  /** The commit's subject line, "" when the revision has none. */
+  commit_subject: string;
   root_path: string;
   name: string;
   description: string;

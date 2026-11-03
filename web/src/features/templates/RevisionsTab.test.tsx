@@ -10,7 +10,7 @@ import RevisionsTab from "./RevisionsTab";
 import TemplatePanel from "./TemplatePanel";
 import { authValue, revision, TENANT, testQueryClient, seedTemplates } from "./testSupport";
 
-const newest = revision({ id: "rev_3", resolved_commit_sha: "e3a7c4d000", created_at: "2026-09-30T10:00:00Z" });
+const newest = revision({ id: "rev_3", resolved_commit_sha: "e3a7c4d000", commit_subject: "Bump the EKS module to 20.8", created_at: "2026-09-30T10:00:00Z" });
 const middle = revision({ id: "rev_2", resolved_commit_sha: "b51f08a000", created_at: "2026-09-14T10:00:00Z", status: "validating" });
 const oldest = revision({ id: "rev_1", resolved_commit_sha: "0c9d2e6000", created_at: "2026-08-28T10:00:00Z" });
 
@@ -61,6 +61,32 @@ describe("RevisionsTab", () => {
     const link = within(screen.getByTestId("revision-row-rev_2")).getByRole("link", { name: /^b51f08a,/ });
     expect(link.getAttribute("href")).toBe("https://github.com/acme/infra-modules/commit/b51f08a000");
     expect(link.getAttribute("target")).toBe("_blank");
+  });
+
+  it("shows each commit's subject on one line, whole on hover", () => {
+    renderTab(seed());
+    const subject = within(screen.getByTestId("revision-row-rev_3")).getByTestId("revision-subject");
+    expect(subject.textContent).toBe("Bump the EKS module to 20.8");
+    expect(subject.getAttribute("title")).toBe("Bump the EKS module to 20.8");
+    expect(subject.className).toContain("truncate");
+  });
+
+  it("shows the SHA alone for a commit with no subject", () => {
+    renderTab(seed());
+    const row = screen.getByTestId("revision-row-rev_1");
+    expect(within(row).queryByTestId("revision-subject")).toBeNull();
+    expect(row.querySelector('[title=""]')).toBeNull();
+    expect(within(row).getByRole("link", { name: /^0c9d2e6,/ })).toBeTruthy();
+  });
+
+  // The subject is the template author's text: it reads as written, never as markup.
+  it("shows a subject's markup as text", () => {
+    const queryClient = testQueryClient();
+    seedTemplates(queryClient, [revision({ id: "rev_3", commit_subject: "<img src=x onerror=alert(1)>" })]);
+    renderTab(queryClient);
+    const row = screen.getByTestId("revision-row-rev_3");
+    expect(within(row).getByTestId("revision-subject").textContent).toBe("<img src=x onerror=alert(1)>");
+    expect(row.querySelector("img")).toBeNull();
   });
 
   it("says nothing about an active revision, and names any other state", () => {

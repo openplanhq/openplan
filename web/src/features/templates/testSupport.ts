@@ -18,6 +18,7 @@ export function revision(overrides: Partial<TemplateRevision> = {}): TemplateRev
     repo_name: "infra-modules",
     source_ref: "main",
     resolved_commit_sha: "3f9c2a1d8e7b6a5c4d3e2f1a0b9c8d7e6f5a4b3c",
+    commit_subject: "",
     root_path: "aws/eks",
     name: "eks",
     description: "An EKS cluster with one managed node group.",
