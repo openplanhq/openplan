@@ -25,9 +25,7 @@ export default function RevisionsTab() {
         revision it was added with until someone changes it.
       </p>
       <div className="overflow-x-auto rounded-lg border">
-        {/* Fixed layout: the columns keep their widths, so a long subject is cut
-            with an ellipsis instead of widening the table. */}
-        <Table className="min-w-md table-fixed">
+        <Table className="min-w-md">
           <colgroup>
             <col />
             <col className="w-28" />

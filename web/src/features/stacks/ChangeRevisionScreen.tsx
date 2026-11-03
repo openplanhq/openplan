@@ -188,6 +188,9 @@ export default function ChangeRevisionScreen() {
               <Label htmlFor="change-revision-target" className={fieldLabelClass}>
                 Revision
               </Label>
+              {/* SelectValue's children, not Base UI's items labels: closed, a
+                  revision is one line (its subject, then its commit), while each
+                  option is two (the subject over commit, date and latest). */}
               <Select
                 value={targetRevision?.id ?? null}
                 onValueChange={(revisionID) => {
@@ -198,12 +201,14 @@ export default function ChangeRevisionScreen() {
                 }}
               >
                 <SelectTrigger id="change-revision-target" data-testid="change-revision-target-select" className={selectTriggerClass}>
-                  {/* Closed, one line: the subject, then the commit. */}
                   <SelectValue className="min-w-0">
                     {targetRevision && (
                       <>
-                        <RevisionSubject subject={targetRevision.commit_subject} className="font-sans font-normal" />
-                        <span className="shrink-0 text-caption text-muted-foreground">{shortCommitSHA(targetRevision.resolved_commit_sha)}</span>
+                        <RevisionSubject subject={targetRevision.commit_subject} className="font-normal" />
+                        {/* Beside a subject the commit steps back; alone, it is the value. */}
+                        <span className={cn("shrink-0", targetRevision.commit_subject && "text-caption text-muted-foreground")}>
+                          {shortCommitSHA(targetRevision.resolved_commit_sha)}
+                        </span>
                       </>
                     )}
                   </SelectValue>
@@ -211,7 +216,6 @@ export default function ChangeRevisionScreen() {
                 <SelectContent>
                   {candidates.map((candidate) => (
                     <SelectItem key={candidate.id} value={candidate.id} className="py-1.5 pointer-coarse:min-h-11">
-                      {/* Open, two lines: the subject over the commit, its date, and whether it is the newest. */}
                       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                         <RevisionSubject subject={candidate.commit_subject} />
                         <span className="flex items-baseline gap-1.5 text-caption text-muted-foreground">
