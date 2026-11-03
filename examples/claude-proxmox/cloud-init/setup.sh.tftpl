@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # The VM's setup as ${user}, run once by cloud-init at first boot, after root's
-# part (packages, the docker group, lingering). Safe to run again by hand: a
-# repo already cloned is kept.
+# part (packages, the docker group, lingering). When a download fails halfway,
+# run it again over SSH: gh is logged in by then, and a repo already cloned is
+# kept.
 set -euo pipefail
 
 # gh keeps the token in its own config, and git asks gh for it, so the file
@@ -11,7 +12,7 @@ trap 'rm -f "$HOME/.github-token"' EXIT
 git config --global user.name '${replace(git_user_name, "'", "'\\''")}'
 git config --global user.email '${replace(git_user_email, "'", "'\\''")}'
 
-gh auth login --with-token < "$HOME/.github-token"
+gh auth status >/dev/null 2>&1 || gh auth login --with-token < "$HOME/.github-token"
 gh auth setup-git
 
 # The paths the setup repo's instructions use: ~/projects/github/<owner>/<repo>.

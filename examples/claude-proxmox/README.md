@@ -68,7 +68,10 @@ one means a rebuild.
 
 Both tokens end up in the cloud-init file on the host's snippets storage
 (mode 0600) and in this module's state in the bucket, so keep the bucket's
-token to this stack.
+token to this stack. On the VM they're in cloud-init's copy of that file, on
+its cloud-init drive and, for GitHub, in `gh`'s own config (a VM has no
+keyring), all within reach of `debian`, which has sudo. So the token's reach
+is the containment, not where it's stored.
 
 ## Variables
 
@@ -107,7 +110,9 @@ cd ~/projects/github/openplanhq/openplan && claude
 
 The setup takes a few minutes after the apply ends. When something is
 missing, `cloud-init status --long` says whether it finished, and
-`/var/log/cloud-init-output.log` has the setup's output.
+`/var/log/cloud-init-output.log` has the setup's output. A setup stopped by a
+failed download can be finished by running it again as `debian`:
+`/usr/local/lib/claude-proxmox/setup.sh`.
 
 ## Applying from a laptop
 

@@ -23,9 +23,9 @@ variables {
 run "packages" {
   assert {
     condition = toset(yamldecode(proxmox_virtual_environment_file.user_data.source_raw[0].data).packages) == toset([
-      "qemu-guest-agent", "git", "gh", "jq", "curl", "tmux", "make", "docker.io",
+      "qemu-guest-agent", "git", "gh", "jq", "curl", "tmux", "make", "docker.io", "docker-cli", "docker-buildx",
     ])
-    error_message = "the VM needs git, gh, jq, curl, tmux, make and Docker for the setup and for make check"
+    error_message = "the VM needs git, gh, jq, curl, tmux, make and Docker with its CLI and buildx (only Recommends of docker.io) for the setup and for make check"
   }
 }
 
@@ -66,11 +66,10 @@ run "tokens_round_trip" {
   }
 
   assert {
-    condition = alltrue([
-      for f in yamldecode(proxmox_virtual_environment_file.user_data.source_raw[0].data).write_files :
-      f.owner == "debian:debian" && f.permissions == "0600" && f.defer && length(split(var.claude_code_oauth_token, f.content)) == 2
-      if f.path == "/home/debian/.claude-env"
-    ])
+    condition = length([
+      for f in yamldecode(proxmox_virtual_environment_file.user_data.source_raw[0].data).write_files : f
+      if f.path == "/home/debian/.claude-env" && f.owner == "debian:debian" && f.permissions == "0600" && f.defer && length(split(var.claude_code_oauth_token, f.content)) == 2
+    ]) == 1
     error_message = "Claude's token must be in .claude-env exactly once, readable by debian only"
   }
 }
@@ -105,14 +104,18 @@ run "setup_script" {
       for f in yamldecode(proxmox_virtual_environment_file.user_data.source_raw[0].data).write_files :
       f.permissions == "0755" && alltrue([
         for want in [
-          "gh auth login --with-token < \"$HOME/.github-token\"",
+          # Logged in already on a re-run, when the token file is gone.
+          "gh auth status >/dev/null 2>&1 || gh auth login --with-token < \"$HOME/.github-token\"",
           "rm -f \"$HOME/.github-token\"",
           "gh auth setup-git",
           "gh repo clone \"openplanhq/ai-os\" \"$HOME/projects/github/openplanhq/ai-os\"",
           "gh repo clone \"openplanhq/openplan\" \"$HOME/projects/github/openplanhq/openplan\"",
           "https://claude.ai/install.sh",
           "\"$HOME/projects/github/openplanhq/ai-os/bootstrap.sh\"",
-          "CLAUDE.local.md",
+          # The loader loop's own lines, not the comment above it.
+          "/claude/repos/",
+          "echo '@AGENTS.md'",
+          "> \"$dir/CLAUDE.local.md\"",
         ] : strcontains(f.content, want)
       ])
       if f.path == "/usr/local/lib/claude-proxmox/setup.sh"

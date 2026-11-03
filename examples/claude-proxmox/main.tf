@@ -15,8 +15,9 @@ locals {
     }]
     package_update = true
     # make and Docker for openplan's `make check`, which runs everything else
-    # in containers; the rest for the setup.
-    packages = ["qemu-guest-agent", "git", "gh", "jq", "curl", "tmux", "make", "docker.io"]
+    # in containers; the rest for the setup. docker.io only recommends its CLI
+    # and buildx, and the executor's Dockerfile needs buildx for TARGETARCH.
+    packages = ["qemu-guest-agent", "git", "gh", "jq", "curl", "tmux", "make", "docker.io", "docker-cli", "docker-buildx"]
 
     # The tokens are written after debian exists (defer), straight into its
     # home: a new parent directory would be root's.
