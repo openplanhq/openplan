@@ -9,7 +9,9 @@ import ErrorLine from "../../shared/ErrorLine";
 import { fieldLabelClass, selectTriggerClass } from "../../shared/fieldClass";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import { lifecycleLockReason } from "../runs/lockReasons";
-import { templateRevisionLabel } from "../templates/templateWorkflow";
+import { formatTimestamp } from "../../shared/formatTimestamp";
+import RevisionSubject from "../templates/RevisionSubject";
+import { activeRevisions, shortCommitSHA } from "../templates/templateWorkflow";
 import PanelTrail from "./PanelTrail";
 import { useStackTemplate } from "./stackTemplateContext";
 import {
@@ -169,8 +171,8 @@ export default function ChangeRevisionScreen() {
     );
   }
 
-  // Select shows the chosen option's label from these.
-  const targetItems = candidates.map((candidate) => ({ value: candidate.id, label: templateRevisionLabel(candidate) }));
+  // The newest active revision is "latest", as Add template marks it.
+  const latestID = activeRevisions(templateRevisionsQuery.data ?? [])[0]?.id;
 
   return (
     <section className="flex min-w-0 flex-col gap-5" data-testid="change-revision-stack-template-screen" data-unsaved={hasUnsavedValues ? "true" : undefined}>
@@ -187,7 +189,6 @@ export default function ChangeRevisionScreen() {
                 Revision
               </Label>
               <Select
-                items={targetItems}
                 value={targetRevision?.id ?? null}
                 onValueChange={(revisionID) => {
                   // Base UI types the value as nullable; a target is always chosen.
@@ -197,12 +198,38 @@ export default function ChangeRevisionScreen() {
                 }}
               >
                 <SelectTrigger id="change-revision-target" data-testid="change-revision-target-select" className={selectTriggerClass}>
-                  <SelectValue />
+                  {/* Closed, one line: the subject, then the commit. */}
+                  <SelectValue className="min-w-0">
+                    {targetRevision && (
+                      <>
+                        <RevisionSubject subject={targetRevision.commit_subject} className="font-sans font-normal" />
+                        <span className="shrink-0 text-caption text-muted-foreground">{shortCommitSHA(targetRevision.resolved_commit_sha)}</span>
+                      </>
+                    )}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {targetItems.map((item) => (
-                    <SelectItem key={item.value} value={item.value} className="font-mono text-meta pointer-coarse:min-h-11">
-                      {item.label}
+                  {candidates.map((candidate) => (
+                    <SelectItem key={candidate.id} value={candidate.id} className="py-1.5 pointer-coarse:min-h-11">
+                      {/* Open, two lines: the subject over the commit, its date, and whether it is the newest. */}
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <RevisionSubject subject={candidate.commit_subject} />
+                        <span className="flex items-baseline gap-1.5 text-caption text-muted-foreground">
+                          <span className="font-mono">{shortCommitSHA(candidate.resolved_commit_sha)}</span>
+                          <span aria-hidden="true" className="text-separator">
+                            ·
+                          </span>
+                          {formatTimestamp(candidate.created_at)}
+                          {candidate.id === latestID && (
+                            <>
+                              <span aria-hidden="true" className="text-separator">
+                                ·
+                              </span>
+                              latest
+                            </>
+                          )}
+                        </span>
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>

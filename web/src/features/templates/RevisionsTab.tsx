@@ -4,6 +4,7 @@ import StatusLabel from "../../shared/StatusLabel";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { revisionIndicator } from "./revisionIndicator";
+import RevisionSubject from "./RevisionSubject";
 import { useTemplate } from "./templateContext";
 import { githubLinks } from "./templateLinks";
 import { shortCommitSHA } from "./templateWorkflow";
@@ -11,8 +12,9 @@ import { shortCommitSHA } from "./templateWorkflow";
 const cellClass = "px-2 py-2 first:pl-4 last:pr-4";
 
 // /templates/:id/revisions: every commit registered from the template's ref,
-// in the API's order, newest first. Each commit links to GitHub. An active
-// revision needs no word; any other state says what it is.
+// in the API's order, newest first. Each row leads with the commit's subject,
+// since that is what tells commits apart, and the commit under it links to
+// GitHub. An active revision needs no word; any other state says what it is.
 export default function RevisionsTab() {
   const { template, revisions, latest } = useTemplate();
 
@@ -23,10 +25,12 @@ export default function RevisionsTab() {
         revision it was added with until someone changes it.
       </p>
       <div className="overflow-x-auto rounded-lg border">
-        <Table className="min-w-md">
+        {/* Fixed layout: the columns keep their widths, so a long subject is cut
+            with an ellipsis instead of widening the table. */}
+        <Table className="min-w-md table-fixed">
           <colgroup>
-            <col className="w-56" />
             <col />
+            <col className="w-28" />
           </colgroup>
           <TableHeader>
             <TableRow className="border-divider hover:bg-transparent">
@@ -43,20 +47,25 @@ export default function RevisionsTab() {
               return (
                 <TableRow key={templateRevision.id} className="h-12 border-divider hover:bg-transparent" data-testid={`revision-row-${templateRevision.id}`}>
                   <TableCell className={cellClass}>
-                    <span className="flex flex-wrap items-center gap-2">
-                      <ExternalLink href={githubLinks(templateRevision).commit} site="GitHub">
-                        {shortCommitSHA(templateRevision.resolved_commit_sha)}
-                      </ExternalLink>
-                      {templateRevision.id === latest.id && (
-                        <span className="rounded-sm border bg-canvas px-1.75 py-px font-mono text-caption text-tag-foreground" data-testid="revision-latest">
-                          latest
-                        </span>
-                      )}
-                      {indicator && (
-                        <StatusLabel icon={indicator.icon} tone={indicator.tone} strong={indicator.strong}>
-                          {indicator.label}
-                        </StatusLabel>
-                      )}
+                    <span className="flex min-w-0 flex-col gap-1">
+                      <RevisionSubject subject={templateRevision.commit_subject} />
+                      {/* At least the latest Tag's height, so a row with the Tag or a
+                          state stands no taller than one with the commit alone. */}
+                      <span className="flex min-h-5 flex-wrap items-center gap-2">
+                        <ExternalLink href={githubLinks(templateRevision).commit} site="GitHub" className="text-caption text-muted-foreground">
+                          {shortCommitSHA(templateRevision.resolved_commit_sha)}
+                        </ExternalLink>
+                        {templateRevision.id === latest.id && (
+                          <span className="rounded-sm border bg-canvas px-1.75 py-px font-mono text-caption text-tag-foreground" data-testid="revision-latest">
+                            latest
+                          </span>
+                        )}
+                        {indicator && (
+                          <StatusLabel icon={indicator.icon} tone={indicator.tone} strong={indicator.strong}>
+                            {indicator.label}
+                          </StatusLabel>
+                        )}
+                      </span>
                     </span>
                   </TableCell>
                   <TableCell className={cn(cellClass, "text-meta text-muted-foreground")}>

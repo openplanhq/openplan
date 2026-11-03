@@ -73,6 +73,7 @@ function templateRevision(overrides: Partial<TemplateRevision> = {}): TemplateRe
     repo_name: "vpc",
     source_ref: "main",
     resolved_commit_sha: "abcdef1234567890",
+    commit_subject: "",
     root_path: ".",
     name: "vpc",
     description: "",
