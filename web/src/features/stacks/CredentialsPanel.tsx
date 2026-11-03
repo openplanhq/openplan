@@ -20,8 +20,6 @@ export type CredentialKind = "secret" | "variable";
 
 interface CredentialsPanelProps {
   kind: CredentialKind;
-  /** What these entries are for, above the list. */
-  note: string;
   /** The empty state's title and its line, shown in place of an empty list. */
   emptyTitle: string;
   emptyDescription: string;
@@ -33,9 +31,9 @@ interface CredentialsPanelProps {
 }
 
 /**
- * One tab of a stack's or a template's environment: a note on what the
- * entries are for, the list (the name, for a variable its value, when it was
- * added, and delete), and the form that adds one. A secret panel lists names
+ * One tab of a stack's or a template's environment: the list (the name, for
+ * a variable its value, when it was added, and delete), and the form that
+ * adds one. A secret panel lists names
  * only, since a sensitive value never comes back from the server, and masks
  * its Value box; a variable panel shows each value and takes it in plain
  * text. The kind decides the `sensitive` flag every entry is sent with, so
@@ -43,7 +41,7 @@ interface CredentialsPanelProps {
  * from the caller: the template's tab and the stack's Environment page share
  * this panel.
  */
-export default function CredentialsPanel({ kind, note, emptyTitle, emptyDescription, credentials, loading, busy, onCreate, onDelete }: CredentialsPanelProps) {
+export default function CredentialsPanel({ kind, emptyTitle, emptyDescription, credentials, loading, busy, onCreate, onDelete }: CredentialsPanelProps) {
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
   // Whether the Value box shows what is typed. It starts hidden, and goes
@@ -125,7 +123,6 @@ export default function CredentialsPanel({ kind, note, emptyTitle, emptyDescript
 
   return (
     <div className="flex min-w-0 flex-col gap-5" data-unsaved={hasUnsavedCredential ? "true" : undefined}>
-      <p className="text-meta text-muted-foreground">{note}</p>
       {/* One grid holds the list and the form, and each row is a subgrid of
           it, so a saved name and value sit right above the Name and Value
           boxes; grid-cols-environment's last track fits a row's date and

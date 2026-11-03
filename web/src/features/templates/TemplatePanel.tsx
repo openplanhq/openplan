@@ -145,7 +145,7 @@ export default function TemplatePanel({ templateId, children }: { templateId?: s
     <ErrorPanel testId="template-delete-error" title="Could not delete this template" details={remove.refusal.message} />
   ) : null;
   const source = (
-    <ul aria-label="Source on GitHub" className="grid min-w-0 grid-cols-4 items-start gap-x-6 text-caption" data-testid="template-source">
+    <ul aria-label="Source on GitHub" className="flex min-w-0 flex-wrap items-start gap-x-6 gap-y-2 text-caption" data-testid="template-source">
       <SourceFact icon={BookMarked} term="Repository" href={links.repository}>
         {`${template.repo_owner}/${template.repo_name}`}
       </SourceFact>
@@ -155,8 +155,6 @@ export default function TemplatePanel({ templateId, children }: { templateId?: s
       <SourceFact icon={GitBranch} term="Ref" href={links.ref}>
         {template.source_ref}
       </SourceFact>
-      {/* Its column stays empty with no commit, so the other three sit
-          where they sit for every template. */}
       {latest && (
         <SourceFact icon={GitCommitHorizontal} term="Latest commit" href={links.commit}>
           {shortCommitSHA(latest.resolved_commit_sha)}
@@ -177,9 +175,8 @@ export default function TemplatePanel({ templateId, children }: { templateId?: s
         </p>
       ) : (
         <RequireCapability capability="can_manage_templates">
-          <p className="max-w-170 text-caption text-muted-foreground" data-testid="template-no-description">
-            No description. Add a <span className="font-mono text-code-foreground">template.yaml</span> beside the module with a name, a description
-            and tags.
+          <p className="text-caption text-muted-foreground" data-testid="template-no-description">
+            No description
           </p>
         </RequireCapability>
       )}
@@ -292,9 +289,9 @@ function useTemplateDelete(id: string) {
 
 // One fact of the source line: an icon saying what it is (its word is in a
 // tooltip and, for a screen reader, in the link), then its value as a link to
-// GitHub. The four sit in equal columns, as one row of a table, so each starts
-// at the same place whatever the others hold. A long value wraps inside its
-// column after a "/" or "-", never cut, never mid-name.
+// GitHub. The four flow left to right and wrap as whole facts, so a path or a
+// branch reads on one line; only a value wider than the panel wraps inside
+// itself, after a "/" or "-", never cut, never mid-name.
 function SourceFact({ icon: Icon, term, href, mono = true, children }: { icon: LucideIcon; term: string; href: string; mono?: boolean; children: string }) {
   return (
     <li className="flex min-w-0 items-start gap-1.5">

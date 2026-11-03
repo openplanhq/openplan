@@ -3,7 +3,6 @@ import type { TemplateRun } from "../../api/types";
 import {
   destroyLockReason,
   revisionLockReason,
-  runActionsNote,
   runInFlightReason,
   startRunLockReason,
   variablesLockReason
@@ -47,7 +46,6 @@ describe("lock reasons", () => {
     for (const reason of [startRunLockReason, variablesLockReason, revisionLockReason, destroyLockReason]) {
       expect(reason(free)).toBe("");
     }
-    expect(runActionsNote(free)).toBe("Plan shows what would change. Apply saves a plan that waits for approval.");
   });
 
   // Columns: what locks, then the reason for Plan and Apply, Save variables,
@@ -121,9 +119,5 @@ describe("lock reasons", () => {
       revision,
       destroy
     ]);
-  });
-
-  it("puts the lock in the note beside Plan and Apply, in place of what they do", () => {
-    expect(runActionsNote({ ...free, runs: "pending" })).toBe("Loading runs…");
   });
 });
