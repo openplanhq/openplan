@@ -111,6 +111,8 @@ run "setup_script" {
           "gh repo clone \"openplanhq/ai-os\" \"$HOME/projects/github/openplanhq/ai-os\"",
           "gh repo clone \"openplanhq/openplan\" \"$HOME/projects/github/openplanhq/openplan\"",
           "https://claude.ai/install.sh",
+          # The token logs in, but a session would open on the first-run screens.
+          ".hasCompletedOnboarding = true",
           "\"$HOME/projects/github/openplanhq/ai-os/bootstrap.sh\"",
           # The loader loop's own lines, not the comment above it.
           "/claude/repos/",

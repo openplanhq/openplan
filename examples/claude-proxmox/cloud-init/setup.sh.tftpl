@@ -23,6 +23,14 @@ gh auth setup-git
 # Into ~/.local/bin; it updates itself from then on.
 curl -fsSL https://claude.ai/install.sh | bash
 
+# The token logs Claude Code in, but a session would still open on the
+# first-run screens, which nobody is there to click through. mktemp keeps the
+# file 0600.
+claude_json="$HOME/.claude.json"
+[ -f "$claude_json" ] || echo '{}' > "$claude_json"
+tmp="$(mktemp "$claude_json.XXXXXX")"
+jq '.hasCompletedOnboarding = true' "$claude_json" > "$tmp" && mv "$tmp" "$claude_json"
+
 # Above Debian's early return for non-interactive shells, so a command run over
 # SSH gets the token and ~/.local/bin too.
 line='[ -f ~/.claude-env ] && . ~/.claude-env'
