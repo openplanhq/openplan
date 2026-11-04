@@ -120,6 +120,17 @@ run "setup_script" {
     error_message = "the setup script must log in to gh, drop the token file, clone the setup repo, install Claude Code and run bootstrap.sh"
   }
 
+  # The installer puts claude in ~/.local/bin, which cloud-init's PATH lacks,
+  # and bootstrap.sh needs claude to install the plugins and the MCP server.
+  assert {
+    condition = alltrue([
+      for f in yamldecode(proxmox_virtual_environment_file.user_data.source_raw[0].data).write_files :
+      can(regex("(?s)export PATH=\"\\$HOME/\\.local/bin:\\$PATH\".*\"\\$HOME/projects/github/openplanhq/ai-os/bootstrap\\.sh\"", f.content))
+      if f.path == "/usr/local/lib/claude-proxmox/setup.sh"
+    ])
+    error_message = "the setup script must put ~/.local/bin on PATH before it runs bootstrap.sh"
+  }
+
   # The other repos and their loaders are sessions/', on the running VM.
   assert {
     condition = alltrue([
