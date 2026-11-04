@@ -55,9 +55,7 @@ run "tokens_round_trip" {
   }
 
   assert {
-    condition = alltrue([
-      for f in yamldecode(proxmox_virtual_environment_file.user_data.source_raw[0].data).write_files : !endswith(f.path, ".claude-env")
-    ])
+    condition     = !strcontains(proxmox_virtual_environment_file.user_data.source_raw[0].data, "CLAUDE_CODE_OAUTH_TOKEN")
     error_message = "no Claude token reaches the VM: Remote Control needs the full login, which is done on the VM"
   }
 }
@@ -100,14 +98,16 @@ run "setup_script" {
           "https://claude.ai/install.sh",
           # A session would otherwise open on the first-run screens.
           ".hasCompletedOnboarding = true",
-          # A command run over SSH, past Debian's early return, finds claude.
+          # A command run over SSH finds claude: the line goes on top of
+          # .bashrc, above Debian's early return for non-interactive shells.
           "line='export PATH=\"$HOME/.local/bin:$PATH\"'",
+          "printf '%s\\n' \"$line\" | cat - ~/.bashrc",
           "\"$HOME/projects/github/openplanhq/ai-os/bootstrap.sh\"",
         ] : strcontains(f.content, want)
       ])
       if f.path == "/usr/local/lib/claude-proxmox/setup.sh"
     ])
-    error_message = "the setup script must log in to gh, drop the token file, clone the setup repo, install Claude Code and run bootstrap.sh"
+    error_message = "the setup script must log in to gh, drop the token file, clone the setup repo, install Claude Code, put ~/.local/bin on PATH at the top of .bashrc and run bootstrap.sh"
   }
 
   # The installer puts claude in ~/.local/bin, which cloud-init's PATH lacks,

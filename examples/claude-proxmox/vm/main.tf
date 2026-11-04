@@ -76,7 +76,7 @@ resource "proxmox_download_file" "image" {
 }
 
 # Uploaded over SSH: Proxmox's API takes no snippets. It holds the VM's
-# tokens, so it's readable by root only.
+# GitHub token, so it's readable by root only.
 #
 # Cloud-init runs once, at the VM's first boot, so this only ever matters to a
 # new VM. A change to it must not touch the running one: a new file gets a new

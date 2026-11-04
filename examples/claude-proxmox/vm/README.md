@@ -60,6 +60,11 @@ Claude Code takes no credential here. Remote Control needs the full claude.ai
 login, which you do once on the VM with `claude auth login`. A
 `claude setup-token` token can't start Remote Control sessions.
 
+A stack set up before this still holds `TF_VAR_claude_code_oauth_token`.
+Delete it: nothing reads it, and an apply ignores it. The VM that stack built
+keeps the old token in `~/.claude-env`, where it outranks the full login in
+SSH shells, until the VM is rebuilt.
+
 The GitHub token is what agents push with, unattended, so it reaches only
 what they work on. On GitHub, Settings → Developer settings → Fine-grained
 tokens: the resource owner that holds the repositories (its settings must
