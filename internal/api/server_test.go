@@ -3722,6 +3722,9 @@ type apiUnitOfWork struct {
 	requests      []queue.Request
 	audits        []domain.SecurityAuditEvent
 	err           error
+	// changeTemplateRefErr fails a ref change; without it the store answers
+	// with the template on its new ref.
+	changeTemplateRefErr error
 }
 
 func (unit *apiUnitOfWork) InTx(ctx context.Context, fn func(context.Context, app.TxRepo, queue.Enqueuer) error) error {
@@ -3741,6 +3744,13 @@ func (unit *apiUnitOfWork) CreateStack(ctx context.Context, stack domain.Stack) 
 // CreateTemplate returns the template as given: no test here reads it back.
 func (unit *apiUnitOfWork) CreateTemplate(_ context.Context, template domain.Template) (domain.Template, error) {
 	return template, nil
+}
+
+func (unit *apiUnitOfWork) ChangeTemplateRef(_ context.Context, tenantID domain.TenantID, id domain.TemplateID, sourceRef string) (domain.Template, error) {
+	if unit.changeTemplateRefErr != nil {
+		return domain.Template{}, unit.changeTemplateRefErr
+	}
+	return domain.Template{ID: id, TenantID: tenantID, RepoOwner: "acme", RepoName: "infra-templates", SourceRef: sourceRef, RootPath: "modules/vpc"}, nil
 }
 
 func (unit *apiUnitOfWork) AppendAuditEvent(_ context.Context, event domain.SecurityAuditEvent) error {

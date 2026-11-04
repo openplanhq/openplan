@@ -139,6 +139,7 @@ func Sentinels() []error {
 		ErrDuplicateCredentialName,
 		ErrCredentialEncryptionUnavailable,
 		ErrTemplateInUse,
+		ErrDuplicateTemplateSource,
 		ErrTemplateRunLogLive,
 		ErrTemplateRunLogLost,
 		ErrForbidden,

@@ -3359,6 +3359,16 @@ type recordingUnitOfWork struct {
 	createdTemplates  []domain.Template
 	storedTemplate    domain.Template
 	createTemplateErr error
+	// refChanges are the ref changes asked of the store, which answers with
+	// storedTemplate on the new ref; changeTemplateRefErr fails the change.
+	refChanges           []templateRefChange
+	changeTemplateRefErr error
+}
+
+type templateRefChange struct {
+	tenantID   domain.TenantID
+	templateID domain.TemplateID
+	sourceRef  string
 }
 
 func newRecordingWork(stacks StackRepository) *recordingUnitOfWork {
@@ -3392,6 +3402,16 @@ func (unit *recordingUnitOfWork) CreateTemplate(_ context.Context, template doma
 	if unit.storedTemplate.ID != "" {
 		return unit.storedTemplate, nil
 	}
+	return template, nil
+}
+
+func (unit *recordingUnitOfWork) ChangeTemplateRef(_ context.Context, tenantID domain.TenantID, id domain.TemplateID, sourceRef string) (domain.Template, error) {
+	unit.refChanges = append(unit.refChanges, templateRefChange{tenantID: tenantID, templateID: id, sourceRef: sourceRef})
+	if unit.changeTemplateRefErr != nil {
+		return domain.Template{}, unit.changeTemplateRefErr
+	}
+	template := unit.storedTemplate
+	template.TenantID, template.ID, template.SourceRef = tenantID, id, sourceRef
 	return template, nil
 }
 

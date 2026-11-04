@@ -284,7 +284,7 @@ func (store *Store) UpsertTemplateRevisionWithVariables(ctx context.Context, tem
 	if err != nil {
 		return domain.TemplateRevision{}, err
 	}
-	if err := recordLatestTemplateRevision(ctx, tx, inserted); err != nil {
+	if err := recordLatestTemplateRevision(ctx, tx, inserted, templateRevision.SourceRef); err != nil {
 		return domain.TemplateRevision{}, err
 	}
 	if !insertedNew {
@@ -456,6 +456,39 @@ func createTemplate(ctx context.Context, exec pgxExecutor, template domain.Templ
 		return domain.Template{}, fmt.Errorf("read created template: %w", err)
 	}
 	return stored, nil
+}
+
+// ChangeTemplateRef points the template at another ref of its repository.
+func (store *Store) ChangeTemplateRef(ctx context.Context, tenantID domain.TenantID, id domain.TemplateID, sourceRef string) (domain.Template, error) {
+	return changeTemplateRef(ctx, store.pool, tenantID, id, sourceRef)
+}
+
+// changeTemplateRef moves only the ref: the template keeps its id, its
+// revisions and every stack that installed it. The source's unique index
+// refuses a ref another template of the same repository and path follows.
+func changeTemplateRef(ctx context.Context, exec pgxExecutor, tenantID domain.TenantID, id domain.TemplateID, sourceRef string) (domain.Template, error) {
+	result, err := exec.Exec(ctx, `
+		update templates
+		set source_ref = $3, updated_at = now()
+		where tenant_id = $1 and id = $2
+	`, tenantID, id, sourceRef)
+	if duplicateConstraint(err, "templates_identity_idx") {
+		return domain.Template{}, app.ErrDuplicateTemplateSource
+	}
+	if err != nil {
+		return domain.Template{}, fmt.Errorf("change template ref: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return domain.Template{}, app.ErrNotFound
+	}
+	changed, err := scanTemplate(exec.QueryRow(ctx, selectTemplatesSQL+`
+		where st.tenant_id = $1
+			and st.id = $2
+	`, tenantID, id))
+	if err != nil {
+		return domain.Template{}, fmt.Errorf("read changed template: %w", err)
+	}
+	return changed, nil
 }
 
 func (store *Store) GetTemplate(ctx context.Context, tenantID domain.TenantID, id domain.TemplateID) (domain.Template, error) {
@@ -2158,18 +2191,25 @@ func foreignKeyViolation(err error, constraint string) bool {
 	return errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.ConstraintName == constraint
 }
 
-func recordLatestTemplateRevision(ctx context.Context, tx pgx.Tx, templateRevision domain.TemplateRevision) error {
+// recordLatestTemplateRevision makes the revision the template's latest,
+// unless the template's ref changed after the sync that found it started:
+// that sync's revision stays as history, and the ref the template follows now
+// decides what is latest. syncRef is the ref the sync ran with, not the
+// revision's stored one, since a ref that fast-forwarded onto a commit the
+// template already has reuses a revision recorded under the old ref.
+func recordLatestTemplateRevision(ctx context.Context, tx pgx.Tx, templateRevision domain.TemplateRevision, syncRef string) error {
 	commandTag, err := tx.Exec(ctx, `
 		update templates
 		set
-			latest_template_revision_id = $1,
-			updated_at = now()
+			latest_template_revision_id = case when source_ref = $4 then $1 else latest_template_revision_id end,
+			updated_at = case when source_ref = $4 then now() else updated_at end
 		where tenant_id = $2
 			and id = $3
 	`,
 		templateRevision.ID,
 		templateRevision.TenantID,
 		templateRevision.TemplateID,
+		syncRef,
 	)
 	if err != nil {
 		return fmt.Errorf("record latest template revision: %w", err)

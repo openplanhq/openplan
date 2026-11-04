@@ -44,6 +44,9 @@ var (
 	// ErrTemplateInUse refuses deleting a template that a stack has
 	// installed, in any lifecycle, destroyed included.
 	ErrTemplateInUse = errors.New("template is installed in a stack")
+	// ErrDuplicateTemplateSource refuses pointing a template at a ref that
+	// another template of the same repository and path already follows.
+	ErrDuplicateTemplateSource = errors.New("another template follows this source")
 	// ErrTemplateRunLogLive and ErrTemplateRunLogLost refuse a log body that
 	// is not in the object store: one still being written, or one that
 	// never will be.
@@ -102,6 +105,11 @@ type TxRepo interface {
 	// already exists, and returns whichever is stored, so registering a
 	// source twice lands on one template.
 	CreateTemplate(ctx context.Context, template domain.Template) (domain.Template, error)
+	// ChangeTemplateRef points the template at another ref of its
+	// repository and returns it as stored. It is ErrNotFound when the tenant
+	// has no such template, and ErrDuplicateTemplateSource when another
+	// template already follows that ref.
+	ChangeTemplateRef(ctx context.Context, tenantID domain.TenantID, id domain.TemplateID, sourceRef string) (domain.Template, error)
 	AppendAuditEvent(ctx context.Context, event domain.SecurityAuditEvent) error
 	CreateTemplateRun(ctx context.Context, run domain.TemplateRun) (int, error)
 	CreateTemplateSync(ctx context.Context, templateSync domain.TemplateSync) error
