@@ -9,6 +9,8 @@ mock_provider "proxmox" {
   }
 }
 
+mock_provider "tls" {}
+
 variables {
   node_name                    = "pve"
   address                      = "10.10.10.20"
@@ -73,6 +75,21 @@ run "user_data_is_cloud_config" {
   assert {
     condition     = yamldecode(proxmox_virtual_environment_file.user_data.source_raw[0].data).users[0].ssh_authorized_keys[0] == var.ssh_authorized_key
     error_message = "the key must reach debian's authorized_keys intact"
+  }
+}
+
+# sessions/ reaches the VM with the automation key and these outputs.
+run "automation_key_authorized" {
+  assert {
+    condition = yamldecode(proxmox_virtual_environment_file.user_data.source_raw[0].data).users[0].ssh_authorized_keys == [
+      var.ssh_authorized_key, trimspace(tls_private_key.automation.public_key_openssh),
+    ]
+    error_message = "debian must authorize the maintainer's key and the automation key, nothing else"
+  }
+
+  assert {
+    condition     = output.user == "debian" && output.setup_repository == "openplanhq/ai-os"
+    error_message = "sessions/ needs the VM's user and setup repository from its outputs"
   }
 }
 

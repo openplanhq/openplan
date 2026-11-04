@@ -109,20 +109,25 @@ run "setup_script" {
           "rm -f \"$HOME/.github-token\"",
           "gh auth setup-git",
           "gh repo clone \"openplanhq/ai-os\" \"$HOME/projects/github/openplanhq/ai-os\"",
-          "gh repo clone \"openplanhq/openplan\" \"$HOME/projects/github/openplanhq/openplan\"",
           "https://claude.ai/install.sh",
           # The token logs in, but a session would open on the first-run screens.
           ".hasCompletedOnboarding = true",
           "\"$HOME/projects/github/openplanhq/ai-os/bootstrap.sh\"",
-          # The loader loop's own lines, not the comment above it.
-          "/claude/repos/",
-          "echo '@AGENTS.md'",
-          "> \"$dir/CLAUDE.local.md\"",
         ] : strcontains(f.content, want)
       ])
       if f.path == "/usr/local/lib/claude-proxmox/setup.sh"
     ])
-    error_message = "the setup script must log in to gh, drop the token file, clone both repos, install Claude Code, run bootstrap.sh and write the loaders"
+    error_message = "the setup script must log in to gh, drop the token file, clone the setup repo, install Claude Code and run bootstrap.sh"
+  }
+
+  # The other repos and their loaders are sessions/', on the running VM.
+  assert {
+    condition = alltrue([
+      for f in yamldecode(proxmox_virtual_environment_file.user_data.source_raw[0].data).write_files :
+      !strcontains(f.content, "CLAUDE.local.md") && !strcontains(f.content, "openplanhq/openplan")
+      if f.path == "/usr/local/lib/claude-proxmox/setup.sh"
+    ])
+    error_message = "the setup script clones only the setup repo and writes no loader"
   }
 
   assert {

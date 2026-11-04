@@ -15,10 +15,9 @@ git config --global user.email '${replace(git_user_email, "'", "'\\''")}'
 gh auth status >/dev/null 2>&1 || gh auth login --with-token < "$HOME/.github-token"
 gh auth setup-git
 
-# The paths the setup repo's instructions use: ~/projects/github/<owner>/<repo>.
-%{ for repo in concat([setup_repository], repositories) ~}
-[ -d "$HOME/projects/github/${repo}" ] || gh repo clone "${repo}" "$HOME/projects/github/${repo}"
-%{ endfor ~}
+# The path the setup repo's instructions use: ~/projects/github/<owner>/<repo>.
+# The other repos are sessions/', which clones them on the running VM.
+[ -d "$HOME/projects/github/${setup_repository}" ] || gh repo clone "${setup_repository}" "$HOME/projects/github/${setup_repository}"
 
 # Into ~/.local/bin; it updates itself from then on.
 curl -fsSL https://claude.ai/install.sh | bash
@@ -37,12 +36,3 @@ line='[ -f ~/.claude-env ] && . ~/.claude-env'
 grep -qxF "$line" ~/.bashrc || { printf '%s\n' "$line" | cat - ~/.bashrc > ~/.bashrc.new && mv ~/.bashrc.new ~/.bashrc; }
 
 "$HOME/projects/github/${setup_repository}/bootstrap.sh"
-
-# CLAUDE.local.md is gitignored, so a clone doesn't bring the loader that
-# points a repo at its entry in the setup repo; write it as project-init does.
-for repo in ${join(" ", repositories)}; do
-  entry="projects/github/${setup_repository}/claude/repos/$${repo#*/}.md"
-  [ -f "$HOME/$entry" ] || continue
-  dir="$HOME/projects/github/$repo"
-  { [ -f "$dir/AGENTS.md" ] && echo '@AGENTS.md'; echo "@~/$entry"; } > "$dir/CLAUDE.local.md"
-done

@@ -132,22 +132,11 @@ variable "setup_repository" {
   }
 }
 
-variable "repositories" {
-  description = "The other GitHub repositories the VM clones, as owner/name. Each with an entry in the setup repository's claude/repos/ gets its CLAUDE.local.md."
-  type        = list(string)
-  default     = ["openplanhq/openplan"]
-
-  validation {
-    condition     = alltrue([for repo in var.repositories : can(regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", repo))])
-    error_message = "Every repository must be owner/name."
-  }
-}
-
 # Credentials, never stack config: TF_VAR_github_token and
 # TF_VAR_claude_code_oauth_token. Each is held to its own characters, so one
 # pasted with a line ending is refused here rather than failing on the VM.
 variable "github_token" {
-  description = "A fine-grained GitHub token for the setup repository and the others, with read and write on contents, pull requests and issues. Credential TF_VAR_github_token."
+  description = "A fine-grained GitHub token for the setup repository and the repos sessions/ clones, with read and write on contents, pull requests and issues. Credential TF_VAR_github_token."
   type        = string
   default     = null
   sensitive   = true

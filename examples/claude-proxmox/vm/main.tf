@@ -1,3 +1,9 @@
+# The key sessions/ connects with, beside the maintainer's own. It lives in
+# this stack's state and reaches sessions/ through it, never through a log.
+resource "tls_private_key" "automation" {
+  algorithm = "ED25519"
+}
+
 locals {
   prefix = split("/", var.network_cidr)[1]
   user   = "debian"
@@ -11,7 +17,7 @@ locals {
       groups              = ["sudo"]
       shell               = "/bin/bash"
       sudo                = "ALL=(ALL) NOPASSWD:ALL"
-      ssh_authorized_keys = [var.ssh_authorized_key]
+      ssh_authorized_keys = [var.ssh_authorized_key, trimspace(tls_private_key.automation.public_key_openssh)]
     }]
     package_update = true
     # make and Docker for openplan's `make check`, which runs everything else
@@ -30,7 +36,6 @@ locals {
           git_user_name    = var.git_user_name
           git_user_email   = var.git_user_email
           setup_repository = var.setup_repository
-          repositories     = var.repositories
         })
       },
       {

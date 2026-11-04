@@ -8,5 +8,9 @@ terraform {
       source  = "bpg/proxmox"
       version = "~> 0.119"
     }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.4"
+    }
   }
 }
