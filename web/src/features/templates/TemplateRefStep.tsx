@@ -106,20 +106,27 @@ export function TemplateRefStep({
   );
 }
 
-// The state of a template's ref change. A refusal stays with the template it
-// was about, as Delete's does; after a change focus goes back to Change ref.
+// The state of a template's ref change. The panel stays mounted from one
+// template to the next, so the step closes when the template changes, and an
+// answer acts only on a step still open for its template: one that lands
+// after the person moved on, or opened Delete, leaves focus where they put it.
+// After a change focus goes back to Change ref.
 export function useTemplateRefChange(id: string) {
   const tenantID = useTenantID();
   const changeTemplateRefMutation = useChangeTemplateRefMutation(tenantID);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [openFor, setOpenFor] = useState<string | null>(null);
+  // openFor as of now, for an answer that arrives after renders moved on.
+  const openNow = useRef<string | null>(null);
   const [refusal, setRefusal] = useState<{ id: string; message: string } | null>(null);
   const busy = changeTemplateRefMutation.isPending;
 
   function dismiss() {
+    openNow.current = null;
     setOpenFor(null);
     setRefusal(null);
   }
+  useEffect(dismiss, [id]);
 
   return {
     triggerRef,
@@ -127,6 +134,7 @@ export function useTemplateRefChange(id: string) {
     busy,
     refusal: refusal?.id === id ? refusal.message : null,
     ask() {
+      openNow.current = id;
       setRefusal(null);
       setOpenFor(id);
     },
@@ -143,9 +151,15 @@ export function useTemplateRefChange(id: string) {
       setRefusal(null);
       try {
         await changeTemplateRefMutation.mutateAsync({ templateID: id, sourceRef });
+        if (openNow.current !== id) {
+          return;
+        }
         dismiss();
         triggerRef.current?.focus();
       } catch (error) {
+        if (openNow.current !== id) {
+          return;
+        }
         const taken = error instanceof ApiRequestError && error.type === problemTypes.duplicateTemplateSource;
         setRefusal({ id, message: taken ? `Another template already follows ${sourceRef}.` : apiErrorMessage(error, "Request failed") });
       }

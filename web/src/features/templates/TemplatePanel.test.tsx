@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../../auth/AuthContext";
@@ -267,6 +267,19 @@ describe("TemplatePanel ref change", () => {
     return within(screen.getByTestId("template-ref-step")).getByRole("button", { name: "Change ref" });
   }
 
+  // Holds the PATCH until answered; sent() waits for it to go out, since the
+  // mutation sends it a tick after the submit.
+  function holdChange() {
+    let answer: ((response: Response) => void) | null = null;
+    vi.mocked(globalThis.fetch).mockImplementation((_input, init) =>
+      init?.method === "PATCH" ? new Promise<Response>((resolve) => (answer = resolve)) : new Promise<Response>(() => {})
+    );
+    return {
+      sent: () => waitFor(() => expect(answer).not.toBeNull()),
+      answer: (response: Response) => act(async () => answer?.(response))
+    };
+  }
+
   it("is not offered to people who cannot publish templates", () => {
     renderPanel(seed(), "/templates/tpl_1/variables", false);
     expect(screen.queryByTestId("template-change-ref")).toBeNull();
@@ -378,6 +391,51 @@ describe("TemplatePanel ref change", () => {
     expect(screen.getByTestId("template-delete-confirm")).toBeTruthy();
   });
 
+  it("leaves focus alone when the person moves to another template before the change lands", async () => {
+    const patch = holdChange();
+    const router = renderPanel(seed(), "/templates/tpl_1/variables");
+
+    fireEvent.click(screen.getByTestId("template-change-ref"));
+    fireEvent.change(refInput(), { target: { value: "develop" } });
+    fireEvent.click(submitButton());
+    await patch.sent();
+    await act(() => router.navigate("/templates/tpl_rds/variables"));
+    screen.getByRole("heading", { level: 2, name: "rds" });
+    (document.activeElement as HTMLElement | null)?.blur();
+
+    await patch.answer(jsonResponse(template({ source_ref: "develop" })));
+    expect(document.activeElement).not.toBe(screen.getByTestId("template-change-ref"));
+  });
+
+  it("leaves focus on Delete's question when Delete is pressed before the change lands", async () => {
+    const patch = holdChange();
+    renderPanel(seed(), "/templates/tpl_1/variables");
+
+    fireEvent.click(screen.getByTestId("template-change-ref"));
+    fireEvent.change(refInput(), { target: { value: "develop" } });
+    fireEvent.click(submitButton());
+    await patch.sent();
+    fireEvent.click(screen.getByTestId("template-delete"));
+    const cancel = within(screen.getByTestId("template-delete-confirm")).getByRole("button", { name: "Cancel" });
+    expect(document.activeElement).toBe(cancel);
+
+    await patch.answer(jsonResponse(template({ source_ref: "develop" })));
+    // The change landed: the panel shows the new ref.
+    await waitFor(() => within(screen.getByTestId("template-source")).getByRole("link", { name: /^Ref: ?develop,/ }));
+    expect(document.activeElement).toBe(cancel);
+  });
+
+  it("drops an open step when the person moves to another template", async () => {
+    const router = renderPanel(seed(), "/templates/tpl_1/variables");
+
+    fireEvent.click(screen.getByTestId("template-change-ref"));
+    await act(() => router.navigate("/templates/tpl_rds/variables"));
+    await act(() => router.navigate("/templates/tpl_1/variables"));
+
+    expect(screen.queryByTestId("template-ref-step")).toBeNull();
+    expect(screen.getByTestId("template-change-ref").getAttribute("aria-expanded")).toBe("false");
+  });
+
   it("links the ref the template follows, not its latest revision's", () => {
     const queryClient = seed();
     queryClient.setQueryData(queryKeys.templates(TENANT), [template({ id: "tpl_1", source_ref: "develop", latest_template_revision_id: "rev_2" })]);
@@ -472,6 +530,16 @@ describe("TemplatePanel delete", () => {
     const confirm = screen.getByTestId("template-delete-confirm");
     expect(within(confirm).getByText("Delete eks-typo?")).toBeTruthy();
     expect(confirm.textContent).not.toContain("revisions");
+  });
+
+  it("drops its question when the person moves to another template", async () => {
+    const router = renderPanel(seed(), "/templates/tpl_1/variables");
+
+    fireEvent.click(screen.getByTestId("template-delete"));
+    await act(() => router.navigate("/templates/tpl_rds/variables"));
+    await act(() => router.navigate("/templates/tpl_1/variables"));
+
+    expect(screen.queryByTestId("template-delete-confirm")).toBeNull();
   });
 
   it("says a stack has installed it when the server refuses with template-in-use", async () => {

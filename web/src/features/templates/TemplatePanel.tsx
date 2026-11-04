@@ -270,7 +270,8 @@ type DeleteRefusal = "in-use" | { message: string };
 // else deleted first (404) ends where a delete does.
 //
 // The state belongs to the template it was asked about, so moving to another
-// template drops a question or a refusal rather than carrying it over.
+// template drops a question or a refusal rather than carrying it over, and
+// coming back finds neither.
 function useTemplateDelete(id: string) {
   const tenantID = useTenantID();
   const navigate = useNavigate();
@@ -280,6 +281,10 @@ function useTemplateDelete(id: string) {
   const [askedFor, setAskedFor] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<{ id: string; refusal: DeleteRefusal } | null>(null);
   const busy = deleteTemplateMutation.isPending;
+  useEffect(() => {
+    setAskedFor(null);
+    setRefusal(null);
+  }, [id]);
 
   function done(name: string) {
     // Replace: Back must not return to the address of a template that is gone.
