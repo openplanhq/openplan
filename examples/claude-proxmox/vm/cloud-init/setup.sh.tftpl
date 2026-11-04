@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# The VM's setup as ${user}, run once by cloud-init at first boot, after root's
+# part (packages, the docker group, lingering). When a download fails halfway,
+# run it again over SSH: gh is logged in by then, and a repo already cloned is
+# kept.
+set -euo pipefail
+
+# gh keeps the token in its own config, and git asks gh for it, so the file
+# that brought it goes whether the login worked or not.
+trap 'rm -f "$HOME/.github-token"' EXIT
+
+git config --global user.name '${replace(git_user_name, "'", "'\\''")}'
+git config --global user.email '${replace(git_user_email, "'", "'\\''")}'
+
+gh auth status >/dev/null 2>&1 || gh auth login --with-token < "$HOME/.github-token"
+gh auth setup-git
+
+# The path the setup repo's instructions use: ~/projects/github/<owner>/<repo>.
+# The other repos are sessions/', which clones them on the running VM.
+[ -d "$HOME/projects/github/${setup_repository}" ] || gh repo clone "${setup_repository}" "$HOME/projects/github/${setup_repository}"
+
+# Into ~/.local/bin; it updates itself from then on.
+curl -fsSL https://claude.ai/install.sh | bash
+
+# The token logs Claude Code in, but a session would still open on the
+# first-run screens, which nobody is there to click through. mktemp keeps the
+# file 0600.
+claude_json="$HOME/.claude.json"
+[ -f "$claude_json" ] || echo '{}' > "$claude_json"
+tmp="$(mktemp "$claude_json.XXXXXX")"
+jq '.hasCompletedOnboarding = true' "$claude_json" > "$tmp" && mv "$tmp" "$claude_json"
+
+# Above Debian's early return for non-interactive shells, so a command run over
+# SSH gets the token and ~/.local/bin too.
+line='[ -f ~/.claude-env ] && . ~/.claude-env'
+grep -qxF "$line" ~/.bashrc || { printf '%s\n' "$line" | cat - ~/.bashrc > ~/.bashrc.new && mv ~/.bashrc.new ~/.bashrc; }
+
+"$HOME/projects/github/${setup_repository}/bootstrap.sh"
