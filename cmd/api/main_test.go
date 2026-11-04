@@ -913,6 +913,10 @@ func (recordingStore) CreateTemplate(_ context.Context, template domain.Template
 	return template, nil
 }
 
+func (recordingStore) ChangeTemplateRef(_ context.Context, tenantID domain.TenantID, id domain.TemplateID, sourceRef string) (domain.Template, error) {
+	return domain.Template{ID: id, TenantID: tenantID, SourceRef: sourceRef}, nil
+}
+
 func (recordingStore) GetTemplate(context.Context, domain.TenantID, domain.TemplateID) (domain.Template, error) {
 	return domain.Template{}, nil
 }

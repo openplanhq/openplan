@@ -679,7 +679,7 @@ func TestCreateTemplateAnswersTheTemplate(t *testing.T) {
 	if response.Code != http.StatusAccepted {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusAccepted, response.Body.String())
 	}
-	wantID := string(domain.TemplateIDFor("tenant_123", "acme", "infra-templates", "modules/vpc", "v0.0.1"))
+	wantID := string(deps.templateID)
 	if got, want := response.Header().Get("Location"), "/v1/tenants/tenant_123/templates/"+wantID; got != want {
 		t.Fatalf("Location = %q, want %q", got, want)
 	}
@@ -921,6 +921,91 @@ func TestStartTemplateSyncRefusals(t *testing.T) {
 			}
 			if len(deps.work.requests) != 0 {
 				t.Fatalf("queued requests = %#v, want none", deps.work.requests)
+			}
+		})
+	}
+}
+
+func TestUpdateTemplateChangesItsRef(t *testing.T) {
+	t.Parallel()
+
+	deps := newAPITestDependencies(t)
+	server := NewServer(deps.service(), configuredTenantID)
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, authenticatedRequest(http.MethodPatch, "/v1/tenants/tenant_123/templates/template_vm", strings.NewReader(`{"source_ref":"develop"}`)))
+
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusAccepted, response.Body.String())
+	}
+	if got, want := response.Header().Get("Location"), "/v1/tenants/tenant_123/templates/template_vm"; got != want {
+		t.Fatalf("Location = %q, want %q", got, want)
+	}
+	var body templateResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.ID != "template_vm" || body.SourceRef != "develop" {
+		t.Fatalf("template = %#v, want template_vm on develop", body)
+	}
+	if body.LatestSync == nil || body.LatestSync.Status != "syncing" {
+		t.Fatalf("latest_sync = %#v, want the sync just queued, syncing", body.LatestSync)
+	}
+	if len(deps.work.requests) != 1 || deps.work.requests[0].Kind != app.KindStartTemplateSync {
+		t.Fatalf("queued requests = %#v, want one start_template_sync request", deps.work.requests)
+	}
+	var payload app.StartTemplateSyncPayload
+	if err := json.Unmarshal(deps.work.requests[0].Payload, &payload); err != nil {
+		t.Fatalf("decode sync intent: %v", err)
+	}
+	if payload.SourceRef != "develop" {
+		t.Fatalf("queued sync ref = %q, want develop", payload.SourceRef)
+	}
+}
+
+func TestUpdateTemplateRefusals(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name     string
+		tier     string
+		body     string
+		storeErr error
+		status   int
+		slug     string
+		pointer  string
+	}{
+		{name: "other fields", tier: "admin", body: `{"source_ref":"develop","repo_name":"other"}`, status: http.StatusBadRequest},
+		{name: "no ref", tier: "admin", body: `{}`, status: http.StatusUnprocessableEntity, slug: "validation-failed", pointer: "#/source_ref"},
+		{name: "taken ref", tier: "admin", body: `{"source_ref":"develop"}`, storeErr: app.ErrDuplicateTemplateSource, status: http.StatusConflict, slug: "duplicate-template-source", pointer: "#/source_ref"},
+		{name: "unknown template", tier: "admin", body: `{"source_ref":"develop"}`, storeErr: app.ErrNotFound, status: http.StatusNotFound},
+		{name: "platform viewer", tier: "viewer", body: `{"source_ref":"develop"}`, status: http.StatusForbidden},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			deps := newAPITestDependencies(t).withPlatformTier(test.tier)
+			server := NewServer(deps.service(), configuredTenantID)
+			deps.work.changeTemplateRefErr = test.storeErr
+			response := httptest.NewRecorder()
+
+			server.ServeHTTP(response, authenticatedRequest(http.MethodPatch, "/v1/tenants/tenant_123/templates/template_vm", strings.NewReader(test.body)))
+
+			if response.Code != test.status {
+				t.Fatalf("status = %d, want %d; body = %s", response.Code, test.status, response.Body.String())
+			}
+			if len(deps.work.requests) != 0 {
+				t.Fatalf("queued requests = %#v, want none", deps.work.requests)
+			}
+			if test.slug == "" {
+				return
+			}
+			body := decodeProblem(t, response)
+			if body.Type != problemTypeURI(test.slug) {
+				t.Fatalf("type = %q, want %q", body.Type, problemTypeURI(test.slug))
+			}
+			if len(body.Errors) != 1 || body.Errors[0].Pointer != test.pointer {
+				t.Fatalf("errors = %#v, want one on %s", body.Errors, test.pointer)
 			}
 		})
 	}
@@ -3494,6 +3579,7 @@ type apiTestDependencies struct {
 	// stack.
 	createdStackID  domain.StackID
 	stackTemplateID domain.StackTemplateID
+	templateID      domain.TemplateID
 	runID           domain.TemplateRunID
 	syncID          domain.TemplateSyncID
 	now             time.Time
@@ -3535,6 +3621,7 @@ func newBareAPITestDependencies(t *testing.T) *apiTestDependencies {
 		stackID:         domain.StackID("stack_123"),
 		createdStackID:  domain.StackID("stack_new"),
 		stackTemplateID: domain.StackTemplateID("stack_template_123"),
+		templateID:      domain.TemplateID("template_minted"),
 		runID:           domain.TemplateRunID("run_123"),
 		syncID:          domain.TemplateSyncID("template_sync_123"),
 		now:             time.Date(2026, 7, 3, 12, 0, 0, 0, time.UTC),
@@ -3665,6 +3752,7 @@ func (deps *apiTestDependencies) service() *app.Service {
 		StackTemplateIDs:         fixedStackTemplateIDGenerator{id: deps.stackTemplateID},
 		RunIDs:                   fixedTemplateRunIDGenerator{runID: deps.runID},
 		SyncIDs:                  fixedTemplateSyncIDGenerator{id: deps.syncID},
+		TemplateIDs:              fixedTemplateIDGenerator{id: deps.templateID},
 		Clock:                    fixedClock{now: deps.now},
 	})
 }
@@ -3719,6 +3807,9 @@ type apiUnitOfWork struct {
 	requests      []queue.Request
 	audits        []domain.SecurityAuditEvent
 	err           error
+	// changeTemplateRefErr fails a ref change; without it the store answers
+	// with the template on its new ref.
+	changeTemplateRefErr error
 }
 
 func (unit *apiUnitOfWork) InTx(ctx context.Context, fn func(context.Context, app.TxRepo, queue.Enqueuer) error) error {
@@ -3738,6 +3829,13 @@ func (unit *apiUnitOfWork) CreateStack(ctx context.Context, stack domain.Stack) 
 // CreateTemplate returns the template as given: no test here reads it back.
 func (unit *apiUnitOfWork) CreateTemplate(_ context.Context, template domain.Template) (domain.Template, error) {
 	return template, nil
+}
+
+func (unit *apiUnitOfWork) ChangeTemplateRef(_ context.Context, tenantID domain.TenantID, id domain.TemplateID, sourceRef string) (domain.Template, error) {
+	if unit.changeTemplateRefErr != nil {
+		return domain.Template{}, unit.changeTemplateRefErr
+	}
+	return domain.Template{ID: id, TenantID: tenantID, RepoOwner: "acme", RepoName: "infra-templates", SourceRef: sourceRef, RootPath: "modules/vpc"}, nil
 }
 
 func (unit *apiUnitOfWork) AppendAuditEvent(_ context.Context, event domain.SecurityAuditEvent) error {
@@ -4234,6 +4332,14 @@ type fixedTemplateRunIDGenerator struct {
 
 func (generator fixedTemplateRunIDGenerator) NewTemplateRunID() domain.TemplateRunID {
 	return generator.runID
+}
+
+type fixedTemplateIDGenerator struct {
+	id domain.TemplateID
+}
+
+func (generator fixedTemplateIDGenerator) NewTemplateID() domain.TemplateID {
+	return generator.id
 }
 
 type fixedTemplateSyncIDGenerator struct {

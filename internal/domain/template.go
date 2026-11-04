@@ -3,11 +3,8 @@ package domain
 // The template catalogue: sources, revisions, syncs, variables.
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"path/filepath"
 	"slices"
-	"strings"
 	"time"
 )
 
@@ -166,21 +163,6 @@ func (sync LatestTemplateSync) StatusAt(now time.Time) TemplateSyncStatus {
 	// The status check constraint admits no other status; were one stored,
 	// failed is the reading that asks for another sync.
 	return TemplateSyncFailed
-}
-
-// TemplateIDFor derives the id of the template a source names, so
-// registering the same source twice lands on the same template. rootPath is
-// the cleaned root path. The hash is over the values joined by NUL, which no
-// value may contain, so two different sources never join to the same input.
-func TemplateIDFor(tenantID TenantID, repoOwner, repoName, rootPath, sourceRef string) TemplateID {
-	sum := sha256.Sum256([]byte(strings.Join([]string{
-		string(tenantID),
-		repoOwner,
-		repoName,
-		rootPath,
-		sourceRef,
-	}, "\x00")))
-	return TemplateID("template_" + hex.EncodeToString(sum[:16]))
 }
 
 // FallbackTemplateName names a template whose source does not name itself:

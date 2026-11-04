@@ -206,6 +206,52 @@
           }
         },
         {
+          "name": "Change a template's ref",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 202', () =\u003e pm.response.to.have.status(202));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_ref\": \"{{template_source_ref}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/{{tenant_id}}/templates/{{template_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "{{tenant_id}}",
+                "templates",
+                "{{template_id}}"
+              ]
+            },
+            "description": "Points the template at another ref of its repository: the branch a\nfeature merged into, or a newer tag. Only `source_ref` changes. The\ntemplate keeps its id, its revisions and every stack that installed\nit, and a sync from the new ref starts at once; the answer's\n`latest_sync` is that sync.\n\nStacks don't move on their own: each moves to a commit on the new\nref with change-revision, then a plan and an apply. A sync still\nrunning on the old ref records its revision but never becomes the\ntemplate's latest. Sending the template's current ref only syncs it\nagain.\n\nSends the template's own ref, so it only syncs again; set another ref to move it."
+          }
+        },
+        {
           "name": "Delete a template",
           "event": [
             {

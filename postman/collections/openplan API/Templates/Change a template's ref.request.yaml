@@ -1,0 +1,31 @@
+$kind: http-request
+description: |-
+  Points the template at another ref of its repository: the branch a
+  feature merged into, or a newer tag. Only `source_ref` changes. The
+  template keeps its id, its revisions and every stack that installed
+  it, and a sync from the new ref starts at once; the answer's
+  `latest_sync` is that sync.
+
+  Stacks don't move on their own: each moves to a commit on the new
+  ref with change-revision, then a plan and an apply. A sync still
+  running on the old ref records its revision but never becomes the
+  template's latest. Sending the template's current ref only syncs it
+  again.
+
+  Sends the template's own ref, so it only syncs again; set another ref to move it.
+method: PATCH
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/templates/{{template_id}}'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "source_ref": "{{template_source_ref}}"
+    }
+scripts:
+  - type: afterResponse
+    code: pm.test('status is 202', () => pm.response.to.have.status(202));
+    language: text/javascript
+order: 4000
