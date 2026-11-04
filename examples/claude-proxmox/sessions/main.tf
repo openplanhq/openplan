@@ -19,10 +19,19 @@ data "terraform_remote_state" "vm" {
     skip_s3_checksum            = true
   }
 
-  # A workspace with no state reads as no outputs, not as an error.
+  # A workspace with no state reads as no outputs, not as an error. The
+  # defaults let a destroy still plan once vm/ is gone, where this
+  # postcondition only warns.
+  defaults = {
+    address                = ""
+    user                   = ""
+    setup_repository       = ""
+    automation_private_key = ""
+  }
+
   lifecycle {
     postcondition {
-      condition     = can(self.outputs.automation_private_key)
+      condition     = try(self.outputs.automation_private_key, "") != ""
       error_message = "No vm/ state in workspace \"${var.vm_workspace}\": install vm/ first, and set vm_workspace to the workspace in its run log."
     }
   }
@@ -31,8 +40,10 @@ data "terraform_remote_state" "vm" {
 locals {
   vm = data.terraform_remote_state.vm.outputs
 
-  # Everything a provisioner needs, in input: a destroy-time provisioner can
-  # read nothing but self.
+  # How a provisioner reaches the VM. A destroy-time provisioner can read only
+  # self, so it's in triggers_replace: terraform_data copies input, unmarked,
+  # into an output a plan prints. And a rebuilt VM, with its new key, gets its
+  # unit and sessions back on the next apply.
   connection = {
     host = local.vm.address
     user = local.vm.user
@@ -60,14 +71,14 @@ locals {
 }
 
 resource "terraform_data" "unit" {
-  triggers_replace = sha256(local.unit)
-  input            = merge(local.connection, { unit = local.unit })
+  triggers_replace = merge(local.connection, { unit = sha256(local.unit) })
+  input            = { unit = local.unit }
 
   connection {
     type        = "ssh"
-    host        = self.input.host
-    user        = self.input.user
-    private_key = self.input.private_key
+    host        = self.triggers_replace.host
+    user        = self.triggers_replace.user
+    private_key = self.triggers_replace.private_key
   }
 
   provisioner "remote-exec" {
@@ -78,32 +89,35 @@ resource "terraform_data" "unit" {
     ]
   }
 
+  # Best effort, as is a session's: a VM that's gone or rebuilt has nothing to
+  # stop, and a destroy that can't finish can't be undone from openplan.
   provisioner "remote-exec" {
-    when   = destroy
-    inline = ["rm -f ~/.config/systemd/user/claude-rc@.service", "systemctl --user daemon-reload"]
+    when       = destroy
+    on_failure = continue
+    inline     = ["rm -f ~/.config/systemd/user/claude-rc@.service", "systemctl --user daemon-reload"]
   }
 }
 
-# Keyed by repo, and replaced only when its repo or the unit changes, so adding
-# or removing one leaves the others' services running.
+# Keyed by repo, and replaced only when its repo, the unit or the VM changes,
+# so adding or removing one leaves the others' services running.
 resource "terraform_data" "session" {
   for_each = toset(var.repositories)
 
-  triggers_replace = [each.key, terraform_data.unit.triggers_replace]
-  input = merge(local.connection, {
+  triggers_replace = merge(local.connection, { repo = each.key, unit = terraform_data.unit.triggers_replace.unit })
+  input = {
     start = templatefile("${path.module}/scripts/session.sh.tftpl", {
       repo  = each.key
       entry = "projects/github/${local.vm.setup_repository}/claude/repos/${split("/", each.key)[1]}.md"
     })
     # The clone stays: it may hold unpushed work.
     stop = "systemctl --user disable --now \"claude-rc@$(systemd-escape \"${each.key}\").service\" || true"
-  })
+  }
 
   connection {
     type        = "ssh"
-    host        = self.input.host
-    user        = self.input.user
-    private_key = self.input.private_key
+    host        = self.triggers_replace.host
+    user        = self.triggers_replace.user
+    private_key = self.triggers_replace.private_key
   }
 
   provisioner "remote-exec" {
@@ -111,7 +125,8 @@ resource "terraform_data" "session" {
   }
 
   provisioner "remote-exec" {
-    when   = destroy
-    inline = [self.input.stop]
+    when       = destroy
+    on_failure = continue
+    inline     = [self.input.stop]
   }
 }

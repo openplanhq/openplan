@@ -4,8 +4,8 @@ The repositories on the [`vm/`](../vm/README.md) VM: for each, a clone at
 `~/projects/github/<owner>/<repo>`, its `CLAUDE.local.md`, and a Remote
 Control session as a systemd user service, `claude-rc@<owner>/<repo>`
 escaped. Register it with `examples/claude-proxmox/sessions` as its root path,
-and install it after `vm/` and the one-time steps in the
-[top-level README](../README.md).
+and install it in the [top-level README](../README.md)'s order: after `vm/`
+and `claude auth login`, before trusting each clone.
 
 It works over SSH, as `vm/`'s user with `vm/`'s automation key, both read from
 `vm/`'s state. So openplan's executor needs a route to the VM's address, as it
@@ -40,7 +40,9 @@ logged it in with, or the login that replaced it.
   hold unpushed work.
 - **A change to the unit** restarts every session, so a running one picks it
   up. A session in progress is cut off.
+- **A rebuilt VM,** with its new key, gets the unit, clones and services back.
 - **Destroy** disables every service and removes the unit. The clones stay.
+  It's best effort: with the VM gone or unreachable, it finishes anyway.
 
 A session shows in Claude's Remote Control list under its repository's name.
 On the VM, `systemctl --user status 'claude-rc@*'` and

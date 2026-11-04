@@ -1,7 +1,8 @@
 set -eu
 
-# Kept on a re-run, and on a destroy: the clone may hold unpushed work.
-[ -d "$HOME/projects/github/${repo}" ] || gh repo clone "${repo}" "$HOME/projects/github/${repo}"
+# Kept on a re-run, and on a destroy: the clone may hold unpushed work. A
+# folder made by hand, say to trust it early, is still cloned into.
+[ -d "$HOME/projects/github/${repo}/.git" ] || gh repo clone "${repo}" "$HOME/projects/github/${repo}"
 
 # CLAUDE.local.md is gitignored, so a clone doesn't bring the loader that
 # points a repo at its entry in the setup repo; write it as project-init does.

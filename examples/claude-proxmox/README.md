@@ -17,18 +17,17 @@ repository never costs the VM or the work on it.
 ## Order
 
 1. Install `vm/`. Its setup takes a few minutes after the apply ends.
-2. On the VM, once (`ssh debian@<address>`):
-   - `claude auth login`, the full claude.ai login Remote Control needs;
-   - trust each repository `sessions/` will clone, by running `claude` in it
-     once. A parent folder's trust doesn't count, and a service in a folder
-     that isn't trusted yet retries every 15 seconds until it is.
+2. On the VM (`ssh debian@<address>`), run `claude auth login`: the full
+   claude.ai login Remote Control needs.
 3. Install `sessions/` with `vm_workspace` set to the workspace in `vm/`'s run
-   log.
+   log. It clones each repository and starts its service.
+4. Trust each clone by running `claude` in it once; a parent folder's trust
+   doesn't count. Until then its service retries every 15 seconds, and it
+   connects on the next try after.
 
-Destroy in reverse: `sessions/`, then `vm/`. `sessions/` reaches the VM over
-SSH with `vm/`'s key, so it can't stop its services once the VM is gone, and a
-rebuilt VM has a new key. To rebuild the VM, destroy `sessions/` first and
-install it again after.
+Destroy in reverse: `sessions/`, then `vm/`. A rebuilt VM has a new key, so
+the next apply of `sessions/` puts its unit and services back; it needs steps
+2 and 4 again.
 
 ## Credentials
 

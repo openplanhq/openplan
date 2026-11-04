@@ -13,7 +13,7 @@ clone of the setup repository (`openplanhq/ai-os` by default) with its
 
 Cloud-init runs once. A rotated token, a new key or a changed setup reaches a
 new VM only, never the running one, so rebuilding is a destroy and an apply,
-with `sessions/` destroyed first and installed again after. That loses only
+then an apply of `sessions/` to bring the sessions back. That loses only
 what wasn't pushed: the setup's vault sync pushes its notes, and Claude Code
 and the setup repository update themselves.
 

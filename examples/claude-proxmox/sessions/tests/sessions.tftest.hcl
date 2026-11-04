@@ -27,9 +27,11 @@ run "one_session_per_repo" {
 
   assert {
     condition = alltrue([
-      for repo, s in terraform_data.session : s.triggers_replace == [repo, terraform_data.unit.triggers_replace]
+      for repo, s in terraform_data.session :
+      keys(s.triggers_replace) == ["host", "private_key", "repo", "unit", "user"] &&
+      s.triggers_replace.repo == repo && s.triggers_replace.unit == terraform_data.unit.triggers_replace.unit
     ])
-    error_message = "a session is replaced only when its repo or the unit changes"
+    error_message = "a session is replaced only when its repo, the unit or the VM changes"
   }
 }
 
@@ -39,7 +41,8 @@ run "start_script" {
   assert {
     condition = alltrue([
       for want in [
-        "gh repo clone \"openplanhq/ai-os\" \"$HOME/projects/github/openplanhq/ai-os\"",
+        # A folder made by hand, say to trust it, is still cloned into.
+        "[ -d \"$HOME/projects/github/openplanhq/ai-os/.git\" ] || gh repo clone \"openplanhq/ai-os\" \"$HOME/projects/github/openplanhq/ai-os\"",
         # A repo with no entry in the setup repo gets no loader, and that's no error.
         "[ -f \"$HOME/projects/github/openplanhq/ai-os/claude/repos/ai-os.md\" ]",
         "systemd-escape \"openplanhq/ai-os\"",
@@ -66,8 +69,8 @@ run "unit_change_reaches_sessions" {
 
   assert {
     condition = alltrue([
-      for s in values(terraform_data.session) : contains(s.triggers_replace, terraform_data.unit.triggers_replace)
-    ]) && terraform_data.unit.triggers_replace == sha256(terraform_data.unit.input.unit)
+      for s in values(terraform_data.session) : s.triggers_replace.unit == terraform_data.unit.triggers_replace.unit
+    ]) && terraform_data.unit.triggers_replace.unit == sha256(terraform_data.unit.input.unit)
     error_message = "every session is replaced, and so restarted, when the unit changes"
   }
 }
@@ -91,15 +94,30 @@ run "unit_is_the_proven_one" {
   }
 }
 
+# The connection is in the triggers: a rebuilt VM, with a new key, gets its
+# unit and sessions back on the next apply.
 run "connects_with_vm_outputs" {
   command = plan
 
   assert {
     condition = alltrue([
       for s in concat(values(terraform_data.session), [terraform_data.unit]) :
-      s.input.host == "10.10.10.20" && s.input.user == "debian"
+      s.triggers_replace.host == "10.10.10.20" && s.triggers_replace.user == "debian" && nonsensitive(s.triggers_replace.private_key) == "KEY"
     ])
-    error_message = "sessions/ reaches the VM at vm/'s address, as vm/'s user"
+    error_message = "sessions/ reaches the VM at vm/'s address, as vm/'s user, with vm/'s key"
+  }
+}
+
+# terraform_data copies input, unmarked, into an output that a destroy or a
+# replacement prints in the run log.
+run "key_not_in_input" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for s in concat(values(terraform_data.session), [terraform_data.unit]) : !can(s.input.private_key)
+    ])
+    error_message = "the automation key must stay out of input, or a plan prints it"
   }
 }
 
