@@ -13,6 +13,17 @@ if [ -f "$HOME/${entry}" ]; then
   } > "$HOME/projects/github/${repo}/CLAUDE.local.md"
 fi
 
+# The service has no terminal for Remote Control's two questions. In an
+# untrusted clone it exits "Workspace not trusted", and with "Enable Remote
+# Control?" unanswered it hangs without connecting. So answer both the way the
+# prompts would: trust per git root, the other once per machine. A broken
+# ~/.claude.json fails the apply here, before a service waits on it.
+claude_json="$HOME/.claude.json"
+[ -f "$claude_json" ] || echo '{}' > "$claude_json"
+tmp="$(mktemp "$claude_json.XXXXXX")"
+jq --arg p "$HOME/projects/github/${repo}" '.remoteDialogSeen = true | .projects[$p].hasTrustDialogAccepted = true' "$claude_json" > "$tmp"
+mv "$tmp" "$claude_json"
+
 # restart, not start: a changed unit reaches a service that's already running.
 unit="claude-rc@$(systemd-escape "${repo}").service"
 systemctl --user enable "$unit"

@@ -64,6 +64,30 @@ run "start_script" {
   }
 }
 
+# A service has no terminal. In an untrusted clone Remote Control exits
+# "Workspace not trusted", and with its one-time question unanswered it hangs
+# without ever connecting (both seen on the VM, #590).
+run "start_trusts_the_clone" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for want in [
+        "[ -f \"$claude_json\" ] || echo '{}' > \"$claude_json\"",
+        "--arg p \"$HOME/projects/github/openplanhq/ai-os\"",
+        ".remoteDialogSeen = true",
+        ".projects[$p].hasTrustDialogAccepted = true",
+      ] : strcontains(terraform_data.session["openplanhq/ai-os"].input.start, want)
+    ])
+    error_message = "start must mark the clone trusted and Remote Control's question answered in ~/.claude.json, creating the file if Claude Code has never run"
+  }
+
+  assert {
+    condition     = can(regex("(?s)hasTrustDialogAccepted.*systemctl --user restart", terraform_data.session["openplanhq/ai-os"].input.start))
+    error_message = "the clone must be trusted before its service starts, or the first start fails as untrusted"
+  }
+}
+
 run "unit_change_reaches_sessions" {
   command = plan
 
