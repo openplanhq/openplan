@@ -64,6 +64,35 @@ run "start_script" {
   }
 }
 
+# A service has no terminal. In an untrusted clone Remote Control exits
+# "Workspace not trusted", and with its one-time question unanswered it hangs
+# without ever connecting (both seen on the VM, #590).
+run "start_trusts_the_clone" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for want in [
+        # An empty file counts as missing: jq would turn it into nothing.
+        "[ -s \"$claude_json\" ] || echo '{}' > \"$claude_json\"",
+        "--arg p \"$HOME/projects/github/openplanhq/ai-os\"",
+        ".remoteDialogSeen = true",
+        ".projects[$p].hasTrustDialogAccepted = true",
+        # Separate lines, so a jq failure stops the script under set -e.
+        "> \"$tmp\"\nmv \"$tmp\" \"$claude_json\"",
+      ] : strcontains(terraform_data.session["openplanhq/ai-os"].input.start, want)
+    ])
+    error_message = "start must mark the clone trusted and Remote Control's question answered in ~/.claude.json, creating the file if Claude Code has never run"
+  }
+
+  # A Claude save, or another repo's script, can rename over our write and
+  # drop the entry; nothing re-runs this script, so it must fail instead.
+  assert {
+    condition     = can(regex("(?s)hasTrustDialogAccepted = true.*\nmv .*jq -e [^\n]*\\.remoteDialogSeen and \\.projects\\[\\$p\\]\\.hasTrustDialogAccepted.*systemctl --user restart", terraform_data.session["openplanhq/ai-os"].input.start))
+    error_message = "start must check the entry survived, after the write and before its service starts, or a lost write leaves the clone untrusted for good"
+  }
+}
+
 run "unit_change_reaches_sessions" {
   command = plan
 

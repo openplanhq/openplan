@@ -4,8 +4,9 @@ The repositories on the [`vm/`](../vm/README.md) VM: for each, a clone at
 `~/projects/github/<owner>/<repo>`, its `CLAUDE.local.md`, and a Remote
 Control session as a systemd user service, `claude-rc@<owner>/<repo>`
 escaped. Register it with `examples/claude-proxmox/sessions` as its root path,
-and install it in the [top-level README](../README.md)'s order: after `vm/`
-and `claude auth login`, before trusting each clone.
+and install it in the [top-level README](../README.md)'s order: after `vm/`.
+Its sessions connect once `claude auth login` has been run on the VM, before
+or after the install.
 
 It works over SSH, as `vm/`'s user with `vm/`'s automation key, both read from
 `vm/`'s state. So openplan's executor needs a route to the VM's address, as it
@@ -32,8 +33,10 @@ logged it in with, or the login that replaced it.
 - **The first apply** writes the shared unit,
   `~/.config/systemd/user/claude-rc@.service`. Then for each repository it
   clones it if it's missing, writes the `CLAUDE.local.md` that points it at
-  its entry in the setup repository's `claude/repos/` (no entry, no file), and
-  enables and starts its service.
+  its entry in the setup repository's `claude/repos/` (no entry, no file),
+  marks the clone trusted in `~/.claude.json`, and enables and starts its
+  service. A service has no terminal for Remote Control's questions, so the
+  apply also answers "Enable Remote Control?" in that file, once per VM.
 - **Adding a repository** does that for the new one only. The others keep
   running.
 - **Removing one** disables and stops its service. Its clone stays: it may
