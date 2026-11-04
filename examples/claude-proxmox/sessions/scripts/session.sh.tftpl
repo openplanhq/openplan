@@ -19,10 +19,16 @@ fi
 # prompts would: trust per git root, the other once per machine. A broken
 # ~/.claude.json fails the apply here, before a service waits on it.
 claude_json="$HOME/.claude.json"
-[ -f "$claude_json" ] || echo '{}' > "$claude_json"
+[ -s "$claude_json" ] || echo '{}' > "$claude_json"
 tmp="$(mktemp "$claude_json.XXXXXX")"
 jq --arg p "$HOME/projects/github/${repo}" '.remoteDialogSeen = true | .projects[$p].hasTrustDialogAccepted = true' "$claude_json" > "$tmp"
 mv "$tmp" "$claude_json"
+# A Claude save that read the file before the mv, or another repo's script
+# running alongside, can rename over it and drop the entry. Nothing re-runs
+# this script, so fail the apply rather than leave the clone untrusted; the
+# next apply replaces the session and writes it again.
+sleep 1
+jq -e --arg p "$HOME/projects/github/${repo}" '.remoteDialogSeen and .projects[$p].hasTrustDialogAccepted' "$claude_json" > /dev/null
 
 # restart, not start: a changed unit reaches a service that's already running.
 unit="claude-rc@$(systemd-escape "${repo}").service"
