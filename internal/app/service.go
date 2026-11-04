@@ -437,6 +437,14 @@ type StartTemplateSyncCommand struct {
 	TemplateID domain.TemplateID
 }
 
+// ChangeTemplateRefCommand points a template at another ref of its
+// repository.
+type ChangeTemplateRefCommand struct {
+	TenantID   domain.TenantID
+	TemplateID domain.TemplateID
+	SourceRef  string
+}
+
 // StartedTemplateSync is a template and the sync that registering it, or
 // syncing it again, just queued. The sync is the row the sync workflow records its progress into.
 type StartedTemplateSync struct {
@@ -737,6 +745,43 @@ func (service *Service) StartTemplateSync(ctx context.Context, command StartTemp
 		return err
 	}); err != nil {
 		return StartedTemplateSync{}, fmt.Errorf("start template sync: %w", err)
+	}
+	return started, nil
+}
+
+// ChangeTemplateRef points a template at another ref of its repository, a
+// branch a feature merged into or a newer tag, and queues a sync from there.
+// The template keeps its id, its revisions and every stack that installed
+// it; a stack moves to a commit on the new ref with ChangeStackTemplateRevision.
+// A sync still running on the old ref records its revision as history but
+// never becomes the template's latest. The change and its sync commit
+// together.
+func (service *Service) ChangeTemplateRef(ctx context.Context, command ChangeTemplateRefCommand) (StartedTemplateSync, error) {
+	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanManageTemplates); err != nil {
+		return StartedTemplateSync{}, err
+	}
+	actor, err := authenticatedActor(ctx)
+	if err != nil {
+		return StartedTemplateSync{}, err
+	}
+	if err := validateTemplateCommand(command.TenantID, command.TemplateID); err != nil {
+		return StartedTemplateSync{}, err
+	}
+	sourceRef := strings.TrimSpace(command.SourceRef)
+	if sourceRef == "" {
+		return StartedTemplateSync{}, fieldError(ErrInvalidCommand, IssueRequired, "source_ref is required", "source_ref")
+	}
+
+	var started StartedTemplateSync
+	if err := service.Work.InTx(ctx, func(ctx context.Context, repository TxRepo, enqueuer queue.Enqueuer) error {
+		template, err := repository.ChangeTemplateRef(ctx, command.TenantID, command.TemplateID, sourceRef)
+		if err != nil {
+			return err
+		}
+		started, err = service.queueTemplateSync(ctx, repository, enqueuer, template, actor)
+		return err
+	}); err != nil {
+		return StartedTemplateSync{}, fmt.Errorf("change template ref: %w", err)
 	}
 	return started, nil
 }

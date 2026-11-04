@@ -1677,6 +1677,147 @@ func TestRegisterTemplateDoesNotDispatchWhenPersistenceFails(t *testing.T) {
 	}
 }
 
+func TestChangeTemplateRefStoresTheRefAndQueuesASync(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 11, 4, 9, 0, 0, 0, time.UTC)
+	syncs := &recordingTemplateSyncRepository{}
+	work := &recordingUnitOfWork{templateSyncs: syncs, storedTemplate: domain.Template{
+		RepoOwner: "acme", RepoName: "infra", SourceRef: "feat/vm", RootPath: "vm",
+	}}
+	service := NewService(Service{
+		Authorization: testPlatformAuthorizer(t),
+		Work:          work,
+		SyncIDs:       fixedTemplateSyncIDGenerator{id: "template_sync_123"},
+		Clock:         fixedClock{now: now},
+	})
+
+	started, err := service.ChangeTemplateRef(authenticatedContext(), ChangeTemplateRefCommand{
+		TenantID: "tenant_123", TemplateID: "template_vm", SourceRef: " develop ",
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, []templateRefChange{{tenantID: "tenant_123", templateID: "template_vm", sourceRef: "develop"}}, work.refChanges)
+	assert.Equal(t, 1, work.inTxCalls, "the change and its sync commit together")
+	assert.Equal(t, domain.TemplateID("template_vm"), started.Template.ID)
+	assert.Equal(t, "develop", started.Template.SourceRef)
+	assert.Equal(t, &domain.LatestTemplateSync{Status: domain.TemplateSyncStatePending, RequestedAt: now}, started.Template.LatestSync)
+	require.Len(t, work.requests, 1)
+	assert.Equal(t, KindStartTemplateSync, work.requests[0].Kind)
+	var payload StartTemplateSyncPayload
+	require.NoError(t, json.Unmarshal(work.requests[0].Payload, &payload))
+	assert.Equal(t, domain.TemplateID("template_vm"), payload.TemplateID)
+	assert.Equal(t, "develop", payload.SourceRef, "the sync clones the new ref")
+	assert.Equal(t, "develop", syncs.created.SourceRef)
+}
+
+func TestChangeTemplateRefRequiresARef(t *testing.T) {
+	t.Parallel()
+
+	work := &recordingUnitOfWork{templateSyncs: &recordingTemplateSyncRepository{}}
+	service := NewService(Service{Authorization: testPlatformAuthorizer(t), Work: work})
+
+	_, err := service.ChangeTemplateRef(authenticatedContext(), ChangeTemplateRefCommand{
+		TenantID: "tenant_123", TemplateID: "template_vm", SourceRef: "  ",
+	})
+	if !errors.Is(err, ErrInvalidCommand) {
+		t.Fatalf("error = %v, want ErrInvalidCommand", err)
+	}
+	assertFieldIssues(t, err, "source_ref required")
+	assert.Empty(t, work.refChanges)
+	assert.Empty(t, work.requests)
+}
+
+func TestChangeTemplateRefNeedsManageTemplates(t *testing.T) {
+	t.Parallel()
+
+	work := &recordingUnitOfWork{templateSyncs: &recordingTemplateSyncRepository{}}
+	service := NewService(Service{Authorization: testPlatformAuthorizer(t), Work: work})
+
+	_, err := service.ChangeTemplateRef(platformContext("ungranted-subject"), ChangeTemplateRefCommand{
+		TenantID: "tenant_123", TemplateID: "template_vm", SourceRef: "develop",
+	})
+	if !errors.Is(err, ErrForbidden) {
+		t.Fatalf("error = %v, want ErrForbidden", err)
+	}
+	assert.Empty(t, work.refChanges)
+	assert.Empty(t, work.requests)
+}
+
+func TestChangeTemplateRefPassesOnATakenSource(t *testing.T) {
+	t.Parallel()
+
+	work := &recordingUnitOfWork{templateSyncs: &recordingTemplateSyncRepository{}, changeTemplateRefErr: ErrDuplicateTemplateSource}
+	service := NewService(Service{Authorization: testPlatformAuthorizer(t), Work: work})
+
+	_, err := service.ChangeTemplateRef(authenticatedContext(), ChangeTemplateRefCommand{
+		TenantID: "tenant_123", TemplateID: "template_vm", SourceRef: "develop",
+	})
+	if !errors.Is(err, ErrDuplicateTemplateSource) {
+		t.Fatalf("error = %v, want ErrDuplicateTemplateSource", err)
+	}
+	assert.Empty(t, work.requests, "a refused change queues no sync")
+}
+
+// Registering a source after another template's ref moved off it makes a
+// template under a freshly minted id, never one derived from the source.
+func TestRegisterAfterAChangeMintsANewTemplate(t *testing.T) {
+	t.Parallel()
+
+	work := &recordingUnitOfWork{templateSyncs: &recordingTemplateSyncRepository{}}
+	service := NewService(Service{
+		Authorization: testPlatformAuthorizer(t),
+		Work:          work,
+		TemplateIDs:   fixedTemplateIDGenerator{id: "template_main_again"},
+	})
+	_, err := service.ChangeTemplateRef(authenticatedContext(), ChangeTemplateRefCommand{
+		TenantID: "tenant_123", TemplateID: "template_main", SourceRef: "develop",
+	})
+	require.NoError(t, err)
+
+	_, err = service.RegisterTemplate(authenticatedContext(), RegisterTemplateCommand{
+		TenantID: "tenant_123", RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "vm",
+	})
+	require.NoError(t, err)
+	require.Len(t, work.createdTemplates, 1)
+	assert.Equal(t, domain.TemplateID("template_main_again"), work.createdTemplates[0].ID)
+}
+
+// After a template's ref changes, its stacks move with Change revision: a
+// revision from the new ref is a revision of the same template.
+func TestChangeStackTemplateRevisionAcceptsARevisionFromTheNewRef(t *testing.T) {
+	t.Parallel()
+
+	stackTemplates := &recordingStackTemplateRepository{
+		stackTemplate: domain.StackTemplate{
+			ID:                        "stack_template_123",
+			TenantID:                  "tenant_123",
+			TemplateID:                "template_vm",
+			DesiredTemplateRevisionID: "revision_feat",
+			Lifecycle:                 domain.StackTemplateActive,
+		},
+	}
+	revisions := &recordingTemplateRevisionRepository{
+		template: domain.TemplateRevision{
+			ID: "revision_develop", TenantID: "tenant_123", TemplateID: "template_vm", SourceRef: "develop", Status: domain.TemplateRevisionActive,
+		},
+	}
+	service := NewService(Service{
+		TemplateRuns:             &recordingTemplateRunRepository{},
+		Authorization:            testPlatformAuthorizer(t),
+		StackTemplates:           stackTemplates,
+		TemplateRevisionMetadata: revisions,
+		TemplateRevisions:        revisions,
+	})
+
+	updated, err := service.ChangeStackTemplateRevision(authenticatedContext(), ChangeStackTemplateRevisionCommand{
+		TenantID: "tenant_123", StackTemplateID: "stack_template_123", TargetTemplateRevisionID: "revision_develop",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, domain.TemplateRevisionID("revision_develop"), updated.DesiredTemplateRevisionID)
+	assert.Equal(t, "develop", updated.SourceRef)
+}
+
 func TestApproveRunRecordsApprovalAndQueuesTheApply(t *testing.T) {
 	t.Parallel()
 
