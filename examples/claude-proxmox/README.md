@@ -18,7 +18,12 @@ repository never costs the VM or the work on it.
 
 1. Install `vm/`. Its setup takes a few minutes after the apply ends.
 2. On the VM (`ssh debian@<address>`), run `claude auth login`: the full
-   claude.ai login Remote Control needs.
+   claude.ai login Remote Control needs. It stays a step by hand, because
+   Claude Code can't sign in unattended. The login prints a URL that you open
+   in a browser elsewhere, and you paste the code it shows back into the VM.
+   The token `vm/` logs in with can only make model requests, not Remote
+   Control sessions. Copying a login from another machine isn't documented,
+   and one machine's refresh can revoke the other's copy.
 3. Install `sessions/` with `vm_workspace` set to the workspace in `vm/`'s run
    log. It clones each repository and starts its service.
 4. Trust each clone by running `claude` in it once; a parent folder's trust
