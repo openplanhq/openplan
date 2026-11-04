@@ -1,0 +1,151 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: ${namespace}
+  labels:
+    app.kubernetes.io/part-of: openplan
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: ${namespace}
+  labels:
+    app.kubernetes.io/part-of: openplan
+spec:
+  replicas: 1
+  # Two pods on one data directory would corrupt it.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+        app.kubernetes.io/part-of: openplan
+    spec:
+      containers:
+        - name: postgres
+          image: ${postgres_image}
+          env:
+            - name: POSTGRES_USER
+              value: openplan
+            - name: POSTGRES_DB
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: openplan-dependencies, key: postgres-password}
+            # A subdirectory, so initdb never meets whatever the volume's root
+            # holds.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "openplan", "-d", "postgres"]
+            periodSeconds: 5
+          resources:
+            requests: {cpu: 500m, memory: 512Mi}
+            limits: {cpu: 500m, memory: 512Mi}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: postgres-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: ${namespace}
+  labels:
+    app.kubernetes.io/part-of: openplan
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: ${namespace}
+  labels:
+    app.kubernetes.io/part-of: openplan
+data:
+  # deploy/release/init-databases.sh, with the role passwords read from the
+  # environment. Idempotent, so the Job can run again against a populated
+  # database.
+  init-databases.sh: |
+    set -eu
+    until pg_isready -q; do sleep 2; done
+    psql -v ON_ERROR_STOP=1 \
+      -v dex_password="$DEX_DB_PASSWORD" \
+      -v temporal_password="$TEMPORAL_DB_PASSWORD" <<'EOSQL'
+    SELECT 'CREATE DATABASE openplan OWNER openplan'
+    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'openplan')\gexec
+
+    SELECT format('CREATE ROLE dex LOGIN PASSWORD %L', :'dex_password')
+    WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'dex')\gexec
+    SELECT 'CREATE DATABASE dex OWNER dex'
+    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'dex')\gexec
+
+    SELECT format('CREATE ROLE temporal LOGIN PASSWORD %L', :'temporal_password')
+    WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'temporal')\gexec
+    SELECT 'CREATE DATABASE temporal OWNER temporal'
+    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'temporal')\gexec
+    SELECT 'CREATE DATABASE temporal_visibility OWNER temporal'
+    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'temporal_visibility')\gexec
+    EOSQL
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgres-init
+  namespace: ${namespace}
+  labels:
+    app.kubernetes.io/part-of: openplan
+spec:
+  backoffLimit: 6
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: init-databases
+          image: ${postgres_image}
+          command: ["sh", "/scripts/init-databases.sh"]
+          env:
+            - {name: PGHOST, value: postgres}
+            - {name: PGUSER, value: openplan}
+            - {name: PGDATABASE, value: postgres}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef: {name: openplan-dependencies, key: postgres-password}
+            - name: DEX_DB_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: openplan-dependencies, key: dex-db-password}
+            - name: TEMPORAL_DB_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: openplan-dependencies, key: temporal-db-password}
+          resources:
+            requests: {cpu: 100m, memory: 64Mi}
+            limits: {cpu: 100m, memory: 64Mi}
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+      volumes:
+        - name: scripts
+          configMap:
+            name: postgres-init

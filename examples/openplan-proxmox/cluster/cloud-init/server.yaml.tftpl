@@ -1,0 +1,35 @@
+#cloud-config
+hostname: ${hostname}
+users:
+  - name: debian
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - ${ssh_authorized_key}
+package_update: true
+packages: [qemu-guest-agent, curl]
+# In place before k3s's first start, so k3s signs with these instead of
+# generating its own.
+write_files:
+  - path: /var/lib/rancher/k3s/server/tls/server-ca.crt
+    permissions: "0600"
+    content: |
+      ${indent(6, server_ca_cert)}
+  - path: /var/lib/rancher/k3s/server/tls/server-ca.key
+    permissions: "0600"
+    content: |
+      ${indent(6, server_ca_key)}
+  - path: /var/lib/rancher/k3s/server/tls/client-ca.crt
+    permissions: "0600"
+    content: |
+      ${indent(6, client_ca_cert)}
+  - path: /var/lib/rancher/k3s/server/tls/client-ca.key
+    permissions: "0600"
+    content: |
+      ${indent(6, client_ca_key)}
+runcmd:
+  - systemctl enable --now qemu-guest-agent
+  # Traefik off: the dependencies template installs its own, the same on
+  # every cluster.
+  - curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION='${k3s_version}' K3S_TOKEN='${token}' sh -s - server --disable traefik --tls-san ${address} --node-ip ${address}
