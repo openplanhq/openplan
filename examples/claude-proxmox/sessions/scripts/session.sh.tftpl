@@ -1,7 +1,12 @@
 set -eu
 
+# This can run straight after vm/'s apply, while its first-boot setup still
+# logs gh in and clones the setup repo that the loader below points at. Wait
+# for it; how it ended doesn't matter here, as a failed setup fails the clone.
+cloud-init status --wait > /dev/null || true
+
 # Kept on a re-run, and on a destroy: the clone may hold unpushed work. A
-# folder made by hand, say to trust it early, is still cloned into.
+# folder made by hand is still cloned into.
 [ -d "$HOME/projects/github/${repo}/.git" ] || gh repo clone "${repo}" "$HOME/projects/github/${repo}"
 
 # CLAUDE.local.md is gitignored, so a clone doesn't bring the loader that
@@ -12,6 +17,23 @@ if [ -f "$HOME/${entry}" ]; then
     echo "@~/${entry}"
   } > "$HOME/projects/github/${repo}/CLAUDE.local.md"
 fi
+
+# The service has no terminal for Remote Control's two questions. In an
+# untrusted clone it exits "Workspace not trusted", and with "Enable Remote
+# Control?" unanswered it hangs without connecting. So answer both the way the
+# prompts would: trust per git root, the other once per machine. A broken
+# ~/.claude.json fails the apply here, before a service waits on it.
+claude_json="$HOME/.claude.json"
+[ -s "$claude_json" ] || echo '{}' > "$claude_json"
+tmp="$(mktemp "$claude_json.XXXXXX")"
+jq --arg p "$HOME/projects/github/${repo}" '.remoteDialogSeen = true | .projects[$p].hasTrustDialogAccepted = true' "$claude_json" > "$tmp"
+mv "$tmp" "$claude_json"
+# A Claude save that read the file before the mv, or another repo's script
+# running alongside, can rename over it and drop the entry. Nothing re-runs
+# this script, so fail the apply rather than leave the clone untrusted; the
+# next apply replaces the session and writes it again.
+sleep 1
+jq -e --arg p "$HOME/projects/github/${repo}" '.remoteDialogSeen and .projects[$p].hasTrustDialogAccepted' "$claude_json" > /dev/null
 
 # restart, not start: a changed unit reaches a service that's already running.
 unit="claude-rc@$(systemd-escape "${repo}").service"
