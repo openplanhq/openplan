@@ -1,0 +1,18 @@
+set -eu
+
+# Kept on a re-run, and on a destroy: the clone may hold unpushed work.
+[ -d "$HOME/projects/github/${repo}" ] || gh repo clone "${repo}" "$HOME/projects/github/${repo}"
+
+# CLAUDE.local.md is gitignored, so a clone doesn't bring the loader that
+# points a repo at its entry in the setup repo; write it as project-init does.
+if [ -f "$HOME/${entry}" ]; then
+  {
+    if [ -f "$HOME/projects/github/${repo}/AGENTS.md" ]; then echo '@AGENTS.md'; fi
+    echo "@~/${entry}"
+  } > "$HOME/projects/github/${repo}/CLAUDE.local.md"
+fi
+
+# restart, not start: a changed unit reaches a service that's already running.
+unit="claude-rc@$(systemd-escape "${repo}").service"
+systemctl --user enable "$unit"
+systemctl --user restart "$unit"
