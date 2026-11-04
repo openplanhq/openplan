@@ -13,9 +13,10 @@ clone of the setup repository (`openplanhq/ai-os` by default) with its
 
 Cloud-init runs once. A rotated token, a new key or a changed setup reaches a
 new VM only, never the running one, so rebuilding is a destroy and an apply,
-then an apply of `sessions/` to bring the sessions back. That loses only
-what wasn't pushed: the setup's vault sync pushes its notes, and Claude Code
-and the setup repository update themselves.
+then an apply of `sessions/` and `claude auth login` on the VM to bring the
+sessions back. That loses only what wasn't pushed, and the login: the
+setup's vault sync pushes its notes, and Claude Code and the setup
+repository update themselves.
 
 ## On the Proxmox host first
 
@@ -119,9 +120,10 @@ that state, so the key never shows in a log.
 
 ## Using it
 
-The Remote Control sessions are `sessions/`'. Either way, Claude Code needs
-its login first: `ssh debian@<address>` and run `claude auth login` once.
-For a terminal session, run Claude Code in a repository there, inside `tmux`
+The Remote Control sessions are `sessions/`'. Those and terminal sessions
+both need Claude Code's login: `ssh debian@<address>` and run
+`claude auth login`. For a terminal session, run Claude Code in a repository
+there, inside `tmux`
 so it outlives the connection:
 
 ```bash

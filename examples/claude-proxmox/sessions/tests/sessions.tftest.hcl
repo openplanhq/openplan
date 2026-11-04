@@ -41,7 +41,7 @@ run "start_script" {
   assert {
     condition = alltrue([
       for want in [
-        # A folder made by hand, say to trust it, is still cloned into.
+        # A folder made by hand is still cloned into.
         "[ -d \"$HOME/projects/github/openplanhq/ai-os/.git\" ] || gh repo clone \"openplanhq/ai-os\" \"$HOME/projects/github/openplanhq/ai-os\"",
         # A repo with no entry in the setup repo gets no loader, and that's no error.
         "[ -f \"$HOME/projects/github/openplanhq/ai-os/claude/repos/ai-os.md\" ]",
@@ -52,6 +52,13 @@ run "start_script" {
       ] : strcontains(terraform_data.session["openplanhq/ai-os"].input.start, want)
     ])
     error_message = "start must clone the repo if it's missing, write its loader when the setup repo has an entry, and enable and restart its instance"
+  }
+
+  # sessions/ can be installed straight after vm/, while its first-boot setup
+  # still logs gh in and clones the setup repo this script reads.
+  assert {
+    condition     = can(regex("(?s)cloud-init status --wait[^\n]*\n.*gh repo clone", terraform_data.session["openplanhq/ai-os"].input.start))
+    error_message = "start must wait for vm/'s first-boot setup before it clones"
   }
 
   # A hyphen is escaped in an instance name, so both sides must escape the same string.
