@@ -95,6 +95,13 @@ var overrides = map[string]override{
 		}),
 		test: save("template_id", "pm.response.json().id"),
 	},
+	// The run's template keeps the ref it registered, so its later requests
+	// are unaffected: sending the same ref only syncs it again.
+	"updateTemplate": {
+		jsonBody: jsonObject([][2]string{{"source_ref", "{{template_source_ref}}"}}),
+		expect:   []int{202},
+		note:     "Sends the template's own ref, so it only syncs again; set another ref to move it.",
+	},
 	// A run's later requests install the template it registered, so deleting
 	// it would break them: the delete targets delete_template_id instead,
 	// which nothing sets, and skips while it is empty.

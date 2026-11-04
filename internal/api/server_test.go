@@ -926,6 +926,91 @@ func TestStartTemplateSyncRefusals(t *testing.T) {
 	}
 }
 
+func TestUpdateTemplateChangesItsRef(t *testing.T) {
+	t.Parallel()
+
+	deps := newAPITestDependencies(t)
+	server := NewServer(deps.service(), configuredTenantID)
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, authenticatedRequest(http.MethodPatch, "/v1/tenants/tenant_123/templates/template_vm", strings.NewReader(`{"source_ref":"develop"}`)))
+
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusAccepted, response.Body.String())
+	}
+	if got, want := response.Header().Get("Location"), "/v1/tenants/tenant_123/templates/template_vm"; got != want {
+		t.Fatalf("Location = %q, want %q", got, want)
+	}
+	var body templateResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.ID != "template_vm" || body.SourceRef != "develop" {
+		t.Fatalf("template = %#v, want template_vm on develop", body)
+	}
+	if body.LatestSync == nil || body.LatestSync.Status != "syncing" {
+		t.Fatalf("latest_sync = %#v, want the sync just queued, syncing", body.LatestSync)
+	}
+	if len(deps.work.requests) != 1 || deps.work.requests[0].Kind != app.KindStartTemplateSync {
+		t.Fatalf("queued requests = %#v, want one start_template_sync request", deps.work.requests)
+	}
+	var payload app.StartTemplateSyncPayload
+	if err := json.Unmarshal(deps.work.requests[0].Payload, &payload); err != nil {
+		t.Fatalf("decode sync intent: %v", err)
+	}
+	if payload.SourceRef != "develop" {
+		t.Fatalf("queued sync ref = %q, want develop", payload.SourceRef)
+	}
+}
+
+func TestUpdateTemplateRefusals(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name     string
+		tier     string
+		body     string
+		storeErr error
+		status   int
+		slug     string
+		pointer  string
+	}{
+		{name: "other fields", tier: "admin", body: `{"source_ref":"develop","repo_name":"other"}`, status: http.StatusBadRequest},
+		{name: "no ref", tier: "admin", body: `{}`, status: http.StatusUnprocessableEntity, slug: "validation-failed", pointer: "#/source_ref"},
+		{name: "taken ref", tier: "admin", body: `{"source_ref":"develop"}`, storeErr: app.ErrDuplicateTemplateSource, status: http.StatusConflict, slug: "duplicate-template-source", pointer: "#/source_ref"},
+		{name: "unknown template", tier: "admin", body: `{"source_ref":"develop"}`, storeErr: app.ErrNotFound, status: http.StatusNotFound},
+		{name: "platform viewer", tier: "viewer", body: `{"source_ref":"develop"}`, status: http.StatusForbidden},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			deps := newAPITestDependencies(t).withPlatformTier(test.tier)
+			server := NewServer(deps.service(), configuredTenantID)
+			deps.work.changeTemplateRefErr = test.storeErr
+			response := httptest.NewRecorder()
+
+			server.ServeHTTP(response, authenticatedRequest(http.MethodPatch, "/v1/tenants/tenant_123/templates/template_vm", strings.NewReader(test.body)))
+
+			if response.Code != test.status {
+				t.Fatalf("status = %d, want %d; body = %s", response.Code, test.status, response.Body.String())
+			}
+			if len(deps.work.requests) != 0 {
+				t.Fatalf("queued requests = %#v, want none", deps.work.requests)
+			}
+			if test.slug == "" {
+				return
+			}
+			body := decodeProblem(t, response)
+			if body.Type != problemTypeURI(test.slug) {
+				t.Fatalf("type = %q, want %q", body.Type, problemTypeURI(test.slug))
+			}
+			if len(body.Errors) != 1 || body.Errors[0].Pointer != test.pointer {
+				t.Fatalf("errors = %#v, want one on %s", body.Errors, test.pointer)
+			}
+		})
+	}
+}
+
 func TestDeleteTemplate(t *testing.T) {
 	t.Parallel()
 
