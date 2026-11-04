@@ -19,7 +19,6 @@ variables {
   git_user_name                = "Test Owner"
   git_user_email               = "owner@example.invalid"
   github_token                 = "github_pat_11TEST_abc"
-  claude_code_oauth_token      = "sk-ant-oat01-TEST_abc-def"
 }
 
 run "vm_shape" {

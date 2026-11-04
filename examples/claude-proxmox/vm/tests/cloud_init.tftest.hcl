@@ -17,7 +17,6 @@ variables {
   git_user_name                = "Test Owner"
   git_user_email               = "owner@example.invalid"
   github_token                 = "github_pat_11TEST_abc"
-  claude_code_oauth_token      = "sk-ant-oat01-TEST_abc-def"
 }
 
 run "packages" {
@@ -40,16 +39,6 @@ run "github_token_with_newline" {
   expect_failures = [var.github_token]
 }
 
-run "claude_token_with_space" {
-  command = plan
-
-  variables {
-    claude_code_oauth_token = "sk-ant-oat01-TEST_abc-def "
-  }
-
-  expect_failures = [var.claude_code_oauth_token]
-}
-
 run "tokens_round_trip" {
   assert {
     condition = one([
@@ -66,11 +55,10 @@ run "tokens_round_trip" {
   }
 
   assert {
-    condition = length([
-      for f in yamldecode(proxmox_virtual_environment_file.user_data.source_raw[0].data).write_files : f
-      if f.path == "/home/debian/.claude-env" && f.owner == "debian:debian" && f.permissions == "0600" && f.defer && length(split(var.claude_code_oauth_token, f.content)) == 2
-    ]) == 1
-    error_message = "Claude's token must be in .claude-env exactly once, readable by debian only"
+    condition = alltrue([
+      for f in yamldecode(proxmox_virtual_environment_file.user_data.source_raw[0].data).write_files : !endswith(f.path, ".claude-env")
+    ])
+    error_message = "no Claude token reaches the VM: Remote Control needs the full login, which is done on the VM"
   }
 }
 
@@ -110,8 +98,10 @@ run "setup_script" {
           "gh auth setup-git",
           "gh repo clone \"openplanhq/ai-os\" \"$HOME/projects/github/openplanhq/ai-os\"",
           "https://claude.ai/install.sh",
-          # The token logs in, but a session would open on the first-run screens.
+          # A session would otherwise open on the first-run screens.
           ".hasCompletedOnboarding = true",
+          # A command run over SSH, past Debian's early return, finds claude.
+          "line='export PATH=\"$HOME/.local/bin:$PATH\"'",
           "\"$HOME/projects/github/openplanhq/ai-os/bootstrap.sh\"",
         ] : strcontains(f.content, want)
       ])
@@ -125,7 +115,7 @@ run "setup_script" {
   assert {
     condition = alltrue([
       for f in yamldecode(proxmox_virtual_environment_file.user_data.source_raw[0].data).write_files :
-      can(regex("(?s)export PATH=\"\\$HOME/\\.local/bin:\\$PATH\".*\"\\$HOME/projects/github/openplanhq/ai-os/bootstrap\\.sh\"", f.content))
+      can(regex("(?ms)^export PATH=\"\\$HOME/\\.local/bin:\\$PATH\"$.*\"\\$HOME/projects/github/openplanhq/ai-os/bootstrap\\.sh\"", f.content))
       if f.path == "/usr/local/lib/claude-proxmox/setup.sh"
     ])
     error_message = "the setup script must put ~/.local/bin on PATH before it runs bootstrap.sh"
@@ -144,7 +134,7 @@ run "setup_script" {
   assert {
     condition = alltrue([
       for f in yamldecode(proxmox_virtual_environment_file.user_data.source_raw[0].data).write_files :
-      !strcontains(f.content, var.github_token) && !strcontains(f.content, var.claude_code_oauth_token)
+      !strcontains(f.content, var.github_token)
       if f.path == "/usr/local/lib/claude-proxmox/setup.sh"
     ])
     error_message = "the setup script is world-readable, so it must carry no token"

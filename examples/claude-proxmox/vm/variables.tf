@@ -132,9 +132,10 @@ variable "setup_repository" {
   }
 }
 
-# Credentials, never stack config: TF_VAR_github_token and
-# TF_VAR_claude_code_oauth_token. Each is held to its own characters, so one
-# pasted with a line ending is refused here rather than failing on the VM.
+# A credential, never stack config: TF_VAR_github_token. It's held to its own
+# characters, so one pasted with a line ending is refused here rather than
+# failing on the VM. Claude Code takes no token: Remote Control needs the full
+# claude.ai login, which is done on the VM.
 variable "github_token" {
   description = "A fine-grained GitHub token for the setup repository and the repos sessions/ clones, with read and write on contents, pull requests and issues. Credential TF_VAR_github_token."
   type        = string
@@ -144,18 +145,6 @@ variable "github_token" {
   validation {
     condition     = var.github_token != null && can(regex("^[A-Za-z0-9_]+$", var.github_token))
     error_message = "Set the stack credential TF_VAR_github_token to a GitHub token, with no trailing newline or space."
-  }
-}
-
-variable "claude_code_oauth_token" {
-  description = "Claude Code's login, from claude setup-token. Credential TF_VAR_claude_code_oauth_token."
-  type        = string
-  default     = null
-  sensitive   = true
-
-  validation {
-    condition     = var.claude_code_oauth_token != null && can(regex("^[A-Za-z0-9_-]+$", var.claude_code_oauth_token))
-    error_message = "Set the stack credential TF_VAR_claude_code_oauth_token to the token claude setup-token prints, with no trailing newline or space."
   }
 }
 

@@ -25,7 +25,7 @@ locals {
     # and buildx, and the executor's Dockerfile needs buildx for TARGETARCH.
     packages = ["qemu-guest-agent", "git", "gh", "jq", "curl", "tmux", "make", "docker.io", "docker-cli", "docker-buildx"]
 
-    # The tokens are written after debian exists (defer), straight into its
+    # The token is written after debian exists (defer), straight into its
     # home: a new parent directory would be root's.
     write_files = [
       {
@@ -41,13 +41,6 @@ locals {
       {
         path        = "/home/${local.user}/.github-token"
         content     = var.github_token
-        owner       = "${local.user}:${local.user}"
-        permissions = "0600"
-        defer       = true
-      },
-      {
-        path        = "/home/${local.user}/.claude-env"
-        content     = "export CLAUDE_CODE_OAUTH_TOKEN='${var.claude_code_oauth_token}'\nexport PATH=\"$HOME/.local/bin:$PATH\"\n"
         owner       = "${local.user}:${local.user}"
         permissions = "0600"
         defer       = true

@@ -55,7 +55,10 @@ Set these on the stack. Each value is a single line.
 | `PROXMOX_VE_SSH_USERNAME` | no | the SSH user above |
 | `TF_VAR_proxmox_ssh_private_key_data` | yes | its private key, base64: `base64 < key \| tr -d '\n'` |
 | `TF_VAR_github_token` | yes | a fine-grained GitHub token, below |
-| `TF_VAR_claude_code_oauth_token` | yes | what `claude setup-token` prints, on a machine where you're signed in to Claude Code |
+
+Claude Code takes no credential here. Remote Control needs the full claude.ai
+login, which you do once on the VM with `claude auth login`. A
+`claude setup-token` token can't start Remote Control sessions.
 
 The GitHub token is what agents push with, unattended, so it reaches only
 what they work on. On GitHub, Settings → Developer settings → Fine-grained
@@ -64,12 +67,12 @@ allow fine-grained tokens), only `setup_repository` and the repositories
 `sessions/` clones, and read and write on Contents, Pull requests and Issues.
 Give it an expiry; a new one means a rebuild.
 
-Both tokens end up in the cloud-init file on the host's snippets storage
+The token ends up in the cloud-init file on the host's snippets storage
 (mode 0600) and in this module's state in the bucket, so keep the bucket's
-token to this stack. On the VM they're in cloud-init's copy of that file, on
-its cloud-init drive and, for GitHub, in `gh`'s own config (a VM has no
-keyring), all within reach of `debian`, which has sudo. So the token's reach
-is the containment, not where it's stored.
+token to this stack. On the VM it's in cloud-init's copy of that file, on
+its cloud-init drive and in `gh`'s own config (a VM has no keyring), all
+within reach of `debian`, which has sudo. So the token's reach is the
+containment, not where it's stored.
 
 ## Variables
 
@@ -111,9 +114,10 @@ that state, so the key never shows in a log.
 
 ## Using it
 
-The Remote Control sessions are `sessions/`'. For a terminal session,
-`ssh debian@<address>` and run Claude Code in a repository there, inside
-`tmux` so it outlives the connection:
+The Remote Control sessions are `sessions/`'. Either way, Claude Code needs
+its login first: `ssh debian@<address>` and run `claude auth login` once.
+For a terminal session, run Claude Code in a repository there, inside `tmux`
+so it outlives the connection:
 
 ```bash
 cd ~/projects/github/openplanhq/openplan && claude
