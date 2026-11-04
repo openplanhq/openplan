@@ -11,11 +11,10 @@
 # A pod with that hostname under a headless Service of the same name as its
 # subdomain gets exactly that DNS name, so the name resolves to Floci.
 #
-# State is in
-# memory: a restart empties it, and the next step's setup applies every
-# install again. No Docker socket, so it can't run instances; the template
-# has none. The -compat image carries the AWS CLI that step.sh uses to make
-# the state bucket.
+# State is in memory: a restart empties it, and the next step's setup
+# applies every install again. No Docker socket, so it can't run instances;
+# the template has none. The -compat image carries the AWS CLI that step.sh
+# uses to make the state bucket.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -23,6 +22,8 @@ metadata:
   labels: {app: floci}
 spec:
   replicas: 1
+  # Two pods at once would split requests between two in-memory emulators.
+  strategy: {type: Recreate}
   selector:
     matchLabels: {app: floci}
   template:
@@ -38,6 +39,10 @@ spec:
             - {name: FLOCI_STORAGE_MODE, value: memory}
           ports:
             - {name: aws, containerPort: 4566}
+          # Its DNS record is published once Ready, so not before it listens.
+          readinessProbe:
+            tcpSocket: {port: aws}
+            periodSeconds: 2
           # Its own budget, so a busy emulator shows as its own CPU, not as
           # a slower executor.
           resources:

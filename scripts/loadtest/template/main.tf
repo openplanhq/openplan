@@ -2,9 +2,10 @@
 # mid-size AWS module holds, applied once and then planned over and over, so
 # each measured plan loads the AWS provider and refreshes real state.
 #
-# Every call goes to Floci, an AWS emulator, never to AWS: the endpoints come
-# from AWS_ENDPOINT_URL (provider) and AWS_ENDPOINT_URL_S3 (backend), set as
-# the stack's Environment entries. No instances and no autoscaling group:
+# Every call goes to Floci, an AWS emulator, never to AWS: AWS_ENDPOINT_URL
+# sends every call there (the backend's STS check included), and
+# AWS_ENDPOINT_URL_S3 the backend's state, both set as the stack's
+# Environment entries. No instances and no autoscaling group:
 # Floci runs instances as Docker containers. The S3 bucket needs Floci to
 # answer as <account id>.<its host> too (see floci.yaml).
 
@@ -22,6 +23,9 @@ terraform {
     region                 = "us-east-1"
     use_path_style         = true
     skip_region_validation = true
+    # The sandbox can reach 169.254.169.254: a stack missing its keys must
+    # fail, not pick up the node's role.
+    skip_metadata_api_check = true
   }
 }
 
