@@ -17,26 +17,30 @@ repository never costs the VM or the work on it.
 ## Order
 
 1. Install `vm/`. Its setup takes a few minutes after the apply ends.
-2. On the VM (`ssh debian@<address>`), run `claude auth login`: the full
-   claude.ai login Remote Control needs. It stays a step by hand, because
-   Claude Code can't sign in unattended. The login prints a URL that you open
-   in a browser elsewhere, and you paste the code it shows back into the VM.
-   The token `vm/` logs in with can only make model requests, not Remote
-   Control sessions. Copying a login from another machine isn't documented,
-   and one machine's refresh can revoke the other's copy.
-3. Install `sessions/` with `vm_workspace` set to the workspace in `vm/`'s run
-   log. It clones each repository and starts its service.
-4. Trust each clone by running `claude` in it once; a parent folder's trust
-   doesn't count. Until then its service retries every 15 seconds, and it
-   connects on the next try after.
+2. Install `sessions/` with `vm_workspace` set to the workspace in `vm/`'s run
+   log. It clones each repository, marks it trusted for Claude Code and starts
+   its service.
+3. On the VM (`ssh debian@<address>`), run `claude auth login`: the full
+   claude.ai login Remote Control needs. Until then each service exits ("You
+   must be logged in") and retries every 15 seconds, so it connects on the
+   next try after. Steps 2 and 3 can go in either order.
+
+   It stays a step by hand, because Claude Code can't sign in unattended. The
+   login prints a URL that you open in a browser elsewhere, and you paste the
+   code it shows back into the VM. A `claude setup-token` token can only make
+   model requests, not Remote Control sessions. Copying a login from another
+   machine isn't documented, and one machine's refresh can revoke the other's
+   copy. `claude auth status` shows when the login expires (`loginExpiresAt`,
+   a month out on first sign-in); if it lapses, the sessions stop until you
+   run this again.
 
 Destroy in reverse: `sessions/`, then `vm/`. A rebuilt VM has a new key, so
-the next apply of `sessions/` puts its unit and services back; it needs steps
-2 and 4 again.
+the next apply of `sessions/` puts its unit, trust and services back; it needs
+step 3 again.
 
 ## Credentials
 
 Both keep their state in one bucket, and `sessions/` reads `vm/`'s from it, so
 both take the state credentials in [`vm/`'s list](vm/README.md#credentials),
 with the same values: `TF_CLI_ARGS_init` and the three `AWS_*`. `vm/` takes
-the Proxmox and token credentials besides.
+the Proxmox credentials and the GitHub token besides.
