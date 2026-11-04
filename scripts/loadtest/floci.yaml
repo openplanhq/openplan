@@ -1,0 +1,56 @@
+# Floci, the AWS emulator the load test's template runs against (#586). Apply
+# it into the openplan release's namespace:
+#
+#   kubectl apply -n <namespace> -f scripts/loadtest/floci.yaml
+#
+# The sandboxes reach it at http://floci.<namespace>.svc.cluster.local:4566.
+#
+# The AWS provider reads S3 bucket tags through S3 Control, which puts the
+# account id in front of the endpoint's host:
+# 000000000000.floci.<namespace>.svc.cluster.local, Floci's default account.
+# A pod with that hostname under a headless Service of the same name as its
+# subdomain gets exactly that DNS name, so the name resolves to Floci.
+#
+# State is in
+# memory: a restart empties it, and the next step's setup applies every
+# install again. No Docker socket, so it can't run instances; the template
+# has none. The -compat image carries the AWS CLI that step.sh uses to make
+# the state bucket.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: floci
+  labels: {app: floci}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: floci}
+  template:
+    metadata:
+      labels: {app: floci}
+    spec:
+      hostname: "000000000000"
+      subdomain: floci
+      containers:
+        - name: floci
+          image: floci/floci:2.4.0-compat
+          env:
+            - {name: FLOCI_STORAGE_MODE, value: memory}
+          ports:
+            - {name: aws, containerPort: 4566}
+          # Its own budget, so a busy emulator shows as its own CPU, not as
+          # a slower executor.
+          resources:
+            requests: {cpu: "1", memory: 1Gi}
+            limits: {cpu: "1", memory: 1Gi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: floci
+  labels: {app: floci}
+spec:
+  clusterIP: None
+  selector: {app: floci}
+  ports:
+    - {name: aws, port: 4566, targetPort: aws}
