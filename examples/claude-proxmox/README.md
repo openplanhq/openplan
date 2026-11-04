@@ -16,27 +16,30 @@ repository never costs the VM or the work on it.
 
 ## Order
 
-1. Install `vm/`. Its setup takes a few minutes after the apply ends.
+1. Install `vm/`. Its setup takes a few minutes after the apply ends, and
+   `sessions/` waits for it.
 2. Install `sessions/` with `vm_workspace` set to the workspace in `vm/`'s run
-   log. It clones each repository, marks it trusted for Claude Code and starts
-   its service.
+   log and `state_bucket` to the state bucket. It clones each repository,
+   marks it trusted for Claude Code and starts its service.
 3. On the VM (`ssh debian@<address>`), run `claude auth login`: the full
    claude.ai login Remote Control needs. Until then each service exits ("You
    must be logged in") and retries every 15 seconds, so it connects on the
    next try after. Steps 2 and 3 can go in either order.
+
+   The login expires: `claude auth status` shows when (`loginExpiresAt`, a
+   month out on first sign-in). When it lapses, the sessions stop until you
+   run `claude auth login` again.
 
    It stays a step by hand, because Claude Code can't sign in unattended. The
    login prints a URL that you open in a browser elsewhere, and you paste the
    code it shows back into the VM. A `claude setup-token` token can only make
    model requests, not Remote Control sessions. Copying a login from another
    machine isn't documented, and one machine's refresh can revoke the other's
-   copy. `claude auth status` shows when the login expires (`loginExpiresAt`,
-   a month out on first sign-in); if it lapses, the sessions stop until you
-   run this again.
+   copy.
 
 Destroy in reverse: `sessions/`, then `vm/`. A rebuilt VM has a new key, so
-the next apply of `sessions/` puts its unit, trust and services back; it needs
-step 3 again.
+the next apply of `sessions/` puts its unit, clones, trust and services back;
+it needs step 3 again.
 
 ## Credentials
 
