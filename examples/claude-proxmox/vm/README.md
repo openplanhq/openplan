@@ -1,23 +1,21 @@
-# claude-proxmox
+# claude-proxmox/vm
 
-A VM on Proxmox where Claude Code runs a maintainer's own setup, so agents
-keep working on openplan while the laptop sleeps. A homelab example, not a
-supported topology. It's an openplan template like the Proxmox cluster's
-(#548), applied by the same manager (#560): register it with
-`examples/claude-proxmox` as its root path.
+The VM of [claude-proxmox](../README.md): register it with
+`examples/claude-proxmox/vm` as its root path, and install it before
+[`sessions/`](../sessions/README.md).
 
 One Debian 13 VM from the cloud image. Cloud-init sets it up at first boot:
-git, `gh`, Docker and `make` for openplan's `make check`, Claude Code, a clone
-of the setup repository (`openplanhq/ai-os` by default) with its
-`bootstrap.sh` run, and clones of the repositories the agents work on, each
-given the `CLAUDE.local.md` that points it at its entry in the setup
-repository. Everything lands where the setup expects it:
-`~/projects/github/<owner>/<repo>`.
+git, `gh`, Docker and `make` for openplan's `make check`, Claude Code, and a
+clone of the setup repository (`openplanhq/ai-os` by default) with its
+`bootstrap.sh` run, where the setup expects it:
+`~/projects/github/<owner>/<repo>`. The repositories the agents work on are
+`sessions/`'.
 
 Cloud-init runs once. A rotated token, a new key or a changed setup reaches a
-new VM only, never the running one, so rebuilding is a destroy and an apply.
-That loses only what wasn't pushed: the setup's vault sync pushes its notes,
-and Claude Code and the setup repository update themselves.
+new VM only, never the running one, so rebuilding is a destroy and an apply,
+with `sessions/` destroyed first and installed again after. That loses only
+what wasn't pushed: the setup's vault sync pushes its notes, and Claude Code
+and the setup repository update themselves.
 
 ## On the Proxmox host first
 
@@ -62,9 +60,9 @@ Set these on the stack. Each value is a single line.
 The GitHub token is what agents push with, unattended, so it reaches only
 what they work on. On GitHub, Settings → Developer settings → Fine-grained
 tokens: the resource owner that holds the repositories (its settings must
-allow fine-grained tokens), only `setup_repository` and `repositories`, and
-read and write on Contents, Pull requests and Issues. Give it an expiry; a new
-one means a rebuild.
+allow fine-grained tokens), only `setup_repository` and the repositories
+`sessions/` clones, and read and write on Contents, Pull requests and Issues.
+Give it an expiry; a new one means a rebuild.
 
 Both tokens end up in the cloud-init file on the host's snippets storage
 (mode 0600) and in this module's state in the bucket, so keep the bucket's
@@ -84,7 +82,6 @@ is the containment, not where it's stored.
 | `git_user_email` | | the email on them |
 | `name` | `claude` | the VM's name and hostname, and part of every file left on the host |
 | `setup_repository` | `openplanhq/ai-os` | the repository whose `bootstrap.sh` sets up Claude Code |
-| `repositories` | `["openplanhq/openplan"]` | the others to clone |
 | `cores` | `4` | |
 | `cpu_units` | `50` | CPU weight against the host's other VMs; below the cluster's, so agents never slow it |
 | `memory_mib` | `8192` | fixed: ballooning is off |
@@ -98,11 +95,25 @@ is the containment, not where it's stored.
 | `snippets_datastore` | `local` | needs `snippets` |
 | `image_url` | Debian 13 `genericcloud-amd64`, latest | downloaded once; a newer upstream image doesn't replace the VM |
 
+## Outputs
+
+| Output | |
+|---|---|
+| `address` | the VM's address |
+| `ssh` | `ssh debian@<address>` |
+| `user` | `debian` |
+| `setup_repository` | as set |
+| `automation_private_key` | sensitive: the key `sessions/` connects with |
+
+The automation key is an ed25519 key made in this stack's state and
+authorized beside `ssh_authorized_key`. `sessions/` reads it and the rest from
+that state, so the key never shows in a log.
+
 ## Using it
 
-The `ssh` output is how a session reaches the VM, `ssh debian@<address>`.
-Run Claude Code in a repository there, inside `tmux` so it outlives the
-connection:
+The Remote Control sessions are `sessions/`'. For a terminal session,
+`ssh debian@<address>` and run Claude Code in a repository there, inside
+`tmux` so it outlives the connection:
 
 ```bash
 cd ~/projects/github/openplanhq/openplan && claude
