@@ -20,6 +20,7 @@ import RequestIdNote from "../../shared/RequestIdNote";
 import UnderlineTabs from "../../shared/UnderlineTabs";
 import { TemplateContext } from "./templateContext";
 import { githubLinks, rootPathOf } from "./templateLinks";
+import { TemplateRefStep, useTemplateRefChange } from "./TemplateRefStep";
 import { templatePath, templateTabOf } from "./templateRoutes";
 import type { TemplatesLocationState } from "./templatesPageOutlet";
 import TemplateSync from "./TemplateSync";
@@ -27,8 +28,8 @@ import { shortCommitSHA, templateDisplayName } from "./templateWorkflow";
 import { cn } from "@/lib/utils";
 
 // The right side of /templates: one template, and its latest revision for
-// the commit and the variables. People who can publish get Sync and Delete
-// on the name's line. Its name, where it lives on GitHub (the
+// the commit and the variables. People who can publish get Delete, Change
+// ref and Sync on the name's line. Its name, where it lives on GitHub (the
 // source line), what it is for, then
 // its Variables and Revisions tabs. The route below draws the tab into <Outlet />, except on
 // /templates itself, which passes the first template's Variables tab as
@@ -65,6 +66,7 @@ export default function TemplatePanel({ templateId, children }: { templateId?: s
   const latest = revisions.find((revision) => revision.id === template?.latest_template_revision_id) ?? revisions[0];
   const tab = templateTabOf(useLocation().pathname);
   const remove = useTemplateDelete(id);
+  const refChange = useTemplateRefChange(id);
 
   if (template !== null && revisionsQuery.isPending) {
     return (
@@ -100,14 +102,17 @@ export default function TemplatePanel({ templateId, children }: { templateId?: s
   // revision to show, so the panel is its header alone, and TemplateSync says
   // why, from the template's latest_sync.
   const description = template.description.trim();
-  const links = githubLinks(latest ?? { ...template, resolved_commit_sha: "" });
+  // The ref and the folder are the template's, which may have moved on from
+  // its latest revision's; only the commit is the revision's.
+  const links = githubLinks({ ...template, resolved_commit_sha: latest?.resolved_commit_sha ?? "" });
   const rootPath = rootPathOf(template.root_path);
 
   const name = templateDisplayName(template);
   const heading = <h2 className="min-w-0 font-heading text-title wrap-anywhere">{name}</h2>;
-  // Delete sits on the name's line just before Sync, a Small Subtle button
-  // like it, as one pair. Both are for people who can publish, so they come
-  // and go together.
+  // Delete and Change ref sit on the name's line just before Sync, Small
+  // Subtle buttons like it. All three are for people who can publish, so they
+  // come and go together. Each opens its step under the source line, one at
+  // a time.
   const actions = (
     <RequireCapability capability="can_manage_templates">
       <button
@@ -115,14 +120,40 @@ export default function TemplatePanel({ templateId, children }: { templateId?: s
         type="button"
         className={cn(buttonClass("subtle", "sm"), "pointer-coarse:h-11")}
         aria-expanded={remove.confirming}
-        onClick={remove.ask}
+        onClick={() => {
+          refChange.dismiss();
+          remove.ask();
+        }}
         data-testid="template-delete"
       >
         <Trash2 data-icon="inline-start" aria-hidden="true" strokeWidth={2.42} className="size-3.25" />
         Delete
       </button>
+      <button
+        ref={refChange.triggerRef}
+        type="button"
+        className={cn(buttonClass("subtle", "sm"), "pointer-coarse:h-11")}
+        aria-expanded={refChange.open}
+        onClick={() => {
+          remove.dismiss();
+          refChange.ask();
+        }}
+        data-testid="template-change-ref"
+      >
+        <GitBranch data-icon="inline-start" aria-hidden="true" strokeWidth={2.42} className="size-3.25" />
+        Change ref
+      </button>
     </RequireCapability>
   );
+  const refStep = refChange.open ? (
+    <TemplateRefStep
+      currentRef={template.source_ref}
+      busy={refChange.busy}
+      refusal={refChange.refusal}
+      onChange={(sourceRef) => void refChange.change(sourceRef)}
+      onCancel={refChange.cancel}
+    />
+  ) : null;
   // The question, or why the server refused, under the source line: close
   // to Delete, and above the description it would otherwise push away.
   const deleteStep = remove.confirming ? (
@@ -163,12 +194,19 @@ export default function TemplatePanel({ templateId, children }: { templateId?: s
     </ul>
   );
   // Before a revision there is no template.yaml read yet, so no
-  // description to miss.
-  const about = !latest ? (
-    deleteStep
-  ) : (
+  // description to miss. A first sync that failed on a mistyped ref is
+  // mended with Change ref, so its step comes either way.
+  const steps = (
     <>
       {deleteStep}
+      {refStep}
+    </>
+  );
+  const about = !latest ? (
+    steps
+  ) : (
+    <>
+      {steps}
       {description !== "" ? (
         <p className="max-w-170 text-meta text-foreground" data-testid="template-description">
           {description}
@@ -257,6 +295,11 @@ function useTemplateDelete(id: string) {
     ask() {
       setRefusal(null);
       setAskedFor(id);
+    },
+    // Another step opening in its place: close, and leave focus where it is.
+    dismiss() {
+      setAskedFor(null);
+      setRefusal(null);
     },
     cancel() {
       setAskedFor(null);

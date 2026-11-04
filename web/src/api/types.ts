@@ -63,6 +63,7 @@ export const problemTypes = {
   stackTemplateRevisionNotChangeable: `${problemBase}stack-template-revision-not-changeable`,
   revisionNotInstallable: `${problemBase}revision-not-installable`,
   templateInUse: `${problemBase}template-in-use`,
+  duplicateTemplateSource: `${problemBase}duplicate-template-source`,
   duplicateSlug: `${problemBase}duplicate-slug`,
   duplicateStackTemplateKey: `${problemBase}duplicate-stack-template-key`,
   duplicateCredentialName: `${problemBase}duplicate-credential-name`,
