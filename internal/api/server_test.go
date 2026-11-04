@@ -679,7 +679,7 @@ func TestCreateTemplateAnswersTheTemplate(t *testing.T) {
 	if response.Code != http.StatusAccepted {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusAccepted, response.Body.String())
 	}
-	wantID := string(domain.TemplateIDFor("tenant_123", "acme", "infra-templates", "modules/vpc", "v0.0.1"))
+	wantID := string(deps.templateID)
 	if got, want := response.Header().Get("Location"), "/v1/tenants/tenant_123/templates/"+wantID; got != want {
 		t.Fatalf("Location = %q, want %q", got, want)
 	}
@@ -3494,6 +3494,7 @@ type apiTestDependencies struct {
 	// stack.
 	createdStackID  domain.StackID
 	stackTemplateID domain.StackTemplateID
+	templateID      domain.TemplateID
 	runID           domain.TemplateRunID
 	syncID          domain.TemplateSyncID
 	now             time.Time
@@ -3535,6 +3536,7 @@ func newBareAPITestDependencies(t *testing.T) *apiTestDependencies {
 		stackID:         domain.StackID("stack_123"),
 		createdStackID:  domain.StackID("stack_new"),
 		stackTemplateID: domain.StackTemplateID("stack_template_123"),
+		templateID:      domain.TemplateID("template_minted"),
 		runID:           domain.TemplateRunID("run_123"),
 		syncID:          domain.TemplateSyncID("template_sync_123"),
 		now:             time.Date(2026, 7, 3, 12, 0, 0, 0, time.UTC),
@@ -3665,6 +3667,7 @@ func (deps *apiTestDependencies) service() *app.Service {
 		StackTemplateIDs:         fixedStackTemplateIDGenerator{id: deps.stackTemplateID},
 		RunIDs:                   fixedTemplateRunIDGenerator{runID: deps.runID},
 		SyncIDs:                  fixedTemplateSyncIDGenerator{id: deps.syncID},
+		TemplateIDs:              fixedTemplateIDGenerator{id: deps.templateID},
 		Clock:                    fixedClock{now: deps.now},
 	})
 }
@@ -4234,6 +4237,14 @@ type fixedTemplateRunIDGenerator struct {
 
 func (generator fixedTemplateRunIDGenerator) NewTemplateRunID() domain.TemplateRunID {
 	return generator.runID
+}
+
+type fixedTemplateIDGenerator struct {
+	id domain.TemplateID
+}
+
+func (generator fixedTemplateIDGenerator) NewTemplateID() domain.TemplateID {
+	return generator.id
 }
 
 type fixedTemplateSyncIDGenerator struct {

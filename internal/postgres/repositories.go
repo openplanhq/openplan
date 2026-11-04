@@ -421,10 +421,10 @@ func (store *Store) CreateTemplate(ctx context.Context, template domain.Template
 }
 
 // createTemplate inserts, or finds, the template by its source rather
-// than its id: a row from before ids were sha256 has another id for the same
-// source, and the source is what makes two registrations one template. A
-// concurrent register of the same source waits on this insert's unique index
-// entry, then finds the row once it commits.
+// than its id: ids are minted, not derived from the source, so the source is
+// what makes two registrations one template. A concurrent register of the
+// same source waits on this insert's unique index entry, then finds the row
+// once it commits.
 func createTemplate(ctx context.Context, exec pgxExecutor, template domain.Template) (domain.Template, error) {
 	if template.ID == "" {
 		return domain.Template{}, errors.New("create template: id is required")

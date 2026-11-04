@@ -1572,6 +1572,7 @@ func TestRegisterTemplateCreatesPendingSyncAndDispatchesWorkflow(t *testing.T) {
 		Authorization: testPlatformAuthorizer(t),
 		Work:          work,
 		SyncIDs:       fixedTemplateSyncIDGenerator{id: domain.TemplateSyncID("template_sync_123")},
+		TemplateIDs:   fixedTemplateIDGenerator{id: "template_minted"},
 		Clock:         fixedClock{now: now},
 	})
 
@@ -1586,10 +1587,10 @@ func TestRegisterTemplateCreatesPendingSyncAndDispatchesWorkflow(t *testing.T) {
 		t.Fatalf("RegisterTemplate returned error: %v", err)
 	}
 
-	// The template is stored with the cleaned source, under the id that
-	// source derives, before any sync has run.
+	// The template is stored with the cleaned source, under the id the
+	// service minted, before any sync has run.
 	wantTemplate := domain.Template{
-		ID:        domain.TemplateIDFor("tenant_123", "acme", "infra-templates", "modules/vpc", "v0.0.1"),
+		ID:        "template_minted",
 		TenantID:  "tenant_123",
 		RepoOwner: "acme",
 		RepoName:  "infra-templates",
@@ -3306,6 +3307,14 @@ func (generator fixedStackTemplateIDGenerator) NewStackTemplateID() domain.Stack
 
 func (generator fixedTemplateRunIDGenerator) NewTemplateRunID() domain.TemplateRunID {
 	return generator.runID
+}
+
+type fixedTemplateIDGenerator struct {
+	id domain.TemplateID
+}
+
+func (generator fixedTemplateIDGenerator) NewTemplateID() domain.TemplateID {
+	return generator.id
 }
 
 type fixedTemplateSyncIDGenerator struct {

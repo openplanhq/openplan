@@ -4271,7 +4271,7 @@ func TestMigrationClosesOutRunsBeingCanceled(t *testing.T) {
 
 func vpcTemplate(tenantID domain.TenantID) domain.Template {
 	return domain.Template{
-		ID:        domain.TemplateIDFor(tenantID, "acme", "infra", "modules/vpc", "main"),
+		ID:        "template_vpc_main",
 		TenantID:  tenantID,
 		RepoOwner: "acme",
 		RepoName:  "infra",
