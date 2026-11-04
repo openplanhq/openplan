@@ -19,8 +19,11 @@ gh auth setup-git
 # The other repos are sessions/', which clones them on the running VM.
 [ -d "$HOME/projects/github/${setup_repository}" ] || gh repo clone "${setup_repository}" "$HOME/projects/github/${setup_repository}"
 
-# Into ~/.local/bin; it updates itself from then on.
+# Into ~/.local/bin; it updates itself from then on. cloud-init's PATH lacks
+# that folder, and bootstrap.sh below needs claude on it to install the
+# plugins and the MCP server.
 curl -fsSL https://claude.ai/install.sh | bash
+export PATH="$HOME/.local/bin:$PATH"
 
 # The token logs Claude Code in, but a session would still open on the
 # first-run screens, which nobody is there to click through. mktemp keeps the
