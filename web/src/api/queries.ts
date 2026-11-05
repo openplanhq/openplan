@@ -288,6 +288,21 @@ export function useSyncTemplateMutation(tenantID: string) {
   });
 }
 
+// A template on its new ref replaces itself in its own read and in the list
+// at once, so the panel shows the new ref and follows the sync it queued.
+export function useChangeTemplateRefMutation(tenantID: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ templateID, sourceRef }: { templateID: string; sourceRef: string }) => client.changeTemplateRef(tenantID, templateID, sourceRef),
+    onSuccess: (template) => {
+      queryClient.setQueryData(queryKeys.template(tenantID, template.id), template);
+      queryClient.setQueryData<Template[]>(queryKeys.templates(tenantID), (templates) =>
+        templates?.map((candidate) => (candidate.id === template.id ? template : candidate))
+      );
+    }
+  });
+}
+
 // A deleted template leaves the list; its own reads are dropped rather than
 // refetched into a 404.
 export function useDeleteTemplateMutation(tenantID: string) {

@@ -264,8 +264,10 @@ describe("TemplateSync", () => {
     renderPanel(seed());
 
     const remove = screen.getByTestId("template-delete");
+    const changeRef = screen.getByTestId("template-change-ref");
     expect(remove.parentElement).toBe(syncButton().parentElement);
-    expect(remove.nextElementSibling).toBe(syncButton());
+    expect(remove.nextElementSibling).toBe(changeRef);
+    expect(changeRef.nextElementSibling).toBe(syncButton());
   });
 
   it("is not offered to people who cannot publish templates", () => {

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../../auth/AuthContext";
@@ -237,6 +237,217 @@ describe("TemplatePanel before a first revision", () => {
   });
 });
 
+describe("TemplatePanel ref change", () => {
+  function problem(status: number, type: string, detail: string): Response {
+    return new Response(JSON.stringify({ type, title: "Refused", status, detail }), {
+      status,
+      headers: { "content-type": "application/problem+json" }
+    });
+  }
+
+  // Answers the PATCH with this response and records its body; reads stay
+  // pending, as everything is seeded.
+  function answerChange(response: () => Response) {
+    const bodies: unknown[] = [];
+    vi.mocked(globalThis.fetch).mockImplementation(async (input, init) => {
+      if (init?.method === "PATCH") {
+        bodies.push({ url: String(input), body: JSON.parse(String(init.body)) });
+        return response();
+      }
+      return new Promise<Response>(() => {});
+    });
+    return bodies;
+  }
+
+  function refInput(): HTMLInputElement {
+    return within(screen.getByTestId("template-ref-step")).getByLabelText("Ref") as HTMLInputElement;
+  }
+
+  function submitButton(): HTMLElement {
+    return within(screen.getByTestId("template-ref-step")).getByRole("button", { name: "Change ref" });
+  }
+
+  // Holds the PATCH until answered; sent() waits for it to go out, since the
+  // mutation sends it a tick after the submit.
+  function holdChange() {
+    let answer: ((response: Response) => void) | null = null;
+    vi.mocked(globalThis.fetch).mockImplementation((_input, init) =>
+      init?.method === "PATCH" ? new Promise<Response>((resolve) => (answer = resolve)) : new Promise<Response>(() => {})
+    );
+    return {
+      sent: () => waitFor(() => expect(answer).not.toBeNull()),
+      answer: (response: Response) => act(async () => answer?.(response))
+    };
+  }
+
+  it("is not offered to people who cannot publish templates", () => {
+    renderPanel(seed(), "/templates/tpl_1/variables", false);
+    expect(screen.queryByTestId("template-change-ref")).toBeNull();
+  });
+
+  it("sits between Delete and Sync on the name's line", () => {
+    renderPanel(seed(), "/templates/tpl_1/variables");
+    const change = screen.getByTestId("template-change-ref");
+    expect(screen.getByTestId("template-delete").compareDocumentPosition(change) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(change.compareDocumentPosition(screen.getByRole("button", { name: "Sync" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("opens a step under the source line with the current ref selected, and says stacks stay where they are", () => {
+    const calls = answerChange(() => jsonResponse(template({ source_ref: "develop" })));
+    renderPanel(seed(), "/templates/tpl_1/variables");
+
+    const trigger = screen.getByTestId("template-change-ref");
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(trigger);
+
+    const step = screen.getByTestId("template-ref-step");
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByTestId("template-source").compareDocumentPosition(step) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(refInput().value).toBe("main");
+    expect(document.activeElement).toBe(refInput());
+    expect(step.textContent).toContain("Stacks stay on their revision until someone changes it.");
+    // Nothing to change until the ref differs.
+    expect(submitButton().getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(submitButton());
+    expect(calls).toHaveLength(0);
+  });
+
+  it("changes the ref and follows the sync it started", async () => {
+    const calls = answerChange(() => jsonResponse(template({ source_ref: "develop", latest_sync: latestSync({ status: "syncing", resolved_commit_sha: "", requested_at: "2026-11-04T14:02:00Z" }) })));
+    renderPanel(seed(), "/templates/tpl_1/variables");
+
+    fireEvent.click(screen.getByTestId("template-change-ref"));
+    fireEvent.change(refInput(), { target: { value: " develop " } });
+    expect(submitButton().getAttribute("aria-disabled")).toBeNull();
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(screen.queryByTestId("template-ref-step")).toBeNull());
+    expect(calls).toEqual([{ url: `/v1/tenants/${TENANT}/templates/tpl_1`, body: { source_ref: "develop" } }]);
+    const source = within(screen.getByTestId("template-source"));
+    expect(source.getByRole("link", { name: /^Ref: ?develop,/ }).getAttribute("href")).toBe("https://github.com/acme/infra-modules/tree/develop");
+    expect(screen.getByTestId("template-sync-result").textContent).toContain("syncing");
+    expect(document.activeElement).toBe(screen.getByTestId("template-change-ref"));
+  });
+
+  it("changes on Enter, and closes on Cancel or Escape with focus back on Change ref", async () => {
+    const calls = answerChange(() => jsonResponse(template({ source_ref: "develop" })));
+    renderPanel(seed(), "/templates/tpl_1/variables");
+    const trigger = screen.getByTestId("template-change-ref");
+
+    fireEvent.click(trigger);
+    fireEvent.click(within(screen.getByTestId("template-ref-step")).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByTestId("template-ref-step")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+
+    fireEvent.click(trigger);
+    fireEvent.keyDown(refInput(), { key: "Escape" });
+    expect(screen.queryByTestId("template-ref-step")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+
+    fireEvent.click(trigger);
+    fireEvent.change(refInput(), { target: { value: "develop" } });
+    // Enter in the field submits its form.
+    fireEvent.submit(screen.getByTestId("template-ref-step"));
+    await waitFor(() => expect(calls).toHaveLength(1));
+  });
+
+  it("says another template follows the ref when the server refuses with duplicate-template-source, and keeps the step open", async () => {
+    answerChange(() => problem(409, problemTypes.duplicateTemplateSource, "Another template already follows this ref of the same repository and path."));
+    renderPanel(seed(), "/templates/tpl_1/variables");
+
+    fireEvent.click(screen.getByTestId("template-change-ref"));
+    fireEvent.change(refInput(), { target: { value: "develop" } });
+    fireEvent.click(submitButton());
+
+    const error = await within(screen.getByTestId("template-ref-step")).findByRole("alert");
+    expect(error.textContent).toBe("Another template already follows develop.");
+    expect(refInput().getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getByTestId("template-ref-step").textContent).not.toContain("Stacks stay");
+    expect(within(screen.getByTestId("template-source")).getByRole("link", { name: /^Ref: ?main,/ })).toBeTruthy();
+  });
+
+  it("shows any other refusal in the server's words", async () => {
+    answerChange(() => problem(403, "about:blank", "You may not manage templates."));
+    renderPanel(seed(), "/templates/tpl_1/variables");
+
+    fireEvent.click(screen.getByTestId("template-change-ref"));
+    fireEvent.change(refInput(), { target: { value: "develop" } });
+    fireEvent.click(submitButton());
+
+    const error = await within(screen.getByTestId("template-ref-step")).findByRole("alert");
+    expect(error.textContent).toBe("You may not manage templates.");
+  });
+
+  it("closes Delete's question when it opens, and Delete closes it", () => {
+    renderPanel(seed(), "/templates/tpl_1/variables");
+
+    fireEvent.click(screen.getByTestId("template-delete"));
+    fireEvent.click(screen.getByTestId("template-change-ref"));
+    expect(screen.queryByTestId("template-delete-confirm")).toBeNull();
+    expect(screen.getByTestId("template-ref-step")).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("template-delete"));
+    expect(screen.queryByTestId("template-ref-step")).toBeNull();
+    expect(screen.getByTestId("template-delete-confirm")).toBeTruthy();
+  });
+
+  it("leaves focus alone when the person moves to another template before the change lands", async () => {
+    const patch = holdChange();
+    const router = renderPanel(seed(), "/templates/tpl_1/variables");
+
+    fireEvent.click(screen.getByTestId("template-change-ref"));
+    fireEvent.change(refInput(), { target: { value: "develop" } });
+    fireEvent.click(submitButton());
+    await patch.sent();
+    await act(() => router.navigate("/templates/tpl_rds/variables"));
+    screen.getByRole("heading", { level: 2, name: "rds" });
+    (document.activeElement as HTMLElement | null)?.blur();
+
+    await patch.answer(jsonResponse(template({ source_ref: "develop" })));
+    expect(document.activeElement).not.toBe(screen.getByTestId("template-change-ref"));
+  });
+
+  it("leaves focus on Delete's question when Delete is pressed before the change lands", async () => {
+    const patch = holdChange();
+    renderPanel(seed(), "/templates/tpl_1/variables");
+
+    fireEvent.click(screen.getByTestId("template-change-ref"));
+    fireEvent.change(refInput(), { target: { value: "develop" } });
+    fireEvent.click(submitButton());
+    await patch.sent();
+    fireEvent.click(screen.getByTestId("template-delete"));
+    const cancel = within(screen.getByTestId("template-delete-confirm")).getByRole("button", { name: "Cancel" });
+    expect(document.activeElement).toBe(cancel);
+
+    await patch.answer(jsonResponse(template({ source_ref: "develop" })));
+    // The change landed: the panel shows the new ref.
+    await waitFor(() => within(screen.getByTestId("template-source")).getByRole("link", { name: /^Ref: ?develop,/ }));
+    expect(document.activeElement).toBe(cancel);
+  });
+
+  it("drops an open step when the person moves to another template", async () => {
+    const router = renderPanel(seed(), "/templates/tpl_1/variables");
+
+    fireEvent.click(screen.getByTestId("template-change-ref"));
+    await act(() => router.navigate("/templates/tpl_rds/variables"));
+    await act(() => router.navigate("/templates/tpl_1/variables"));
+
+    expect(screen.queryByTestId("template-ref-step")).toBeNull();
+    expect(screen.getByTestId("template-change-ref").getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("links the ref the template follows, not its latest revision's", () => {
+    const queryClient = seed();
+    queryClient.setQueryData(queryKeys.templates(TENANT), [template({ id: "tpl_1", source_ref: "develop", latest_template_revision_id: "rev_2" })]);
+    renderPanel(queryClient, "/templates/tpl_1/variables");
+
+    const source = within(screen.getByTestId("template-source"));
+    expect(source.getByRole("link", { name: /^Ref: ?develop,/ }).getAttribute("href")).toBe("https://github.com/acme/infra-modules/tree/develop");
+    expect(source.getByRole("link", { name: /^Root path: ?aws\/eks,/ }).getAttribute("href")).toBe("https://github.com/acme/infra-modules/tree/develop/aws/eks");
+    expect(source.getByRole("link", { name: /^Latest commit: ?9e7d3b2,/ }).getAttribute("href")).toBe("https://github.com/acme/infra-modules/commit/9e7d3b2aaaabbbbccccddddeeeeffff000011112");
+  });
+});
+
 describe("TemplatePanel delete", () => {
   function problem(status: number, type: string, detail: string): Response {
     return new Response(JSON.stringify({ type, title: "Refused", status, detail }), {
@@ -319,6 +530,16 @@ describe("TemplatePanel delete", () => {
     const confirm = screen.getByTestId("template-delete-confirm");
     expect(within(confirm).getByText("Delete eks-typo?")).toBeTruthy();
     expect(confirm.textContent).not.toContain("revisions");
+  });
+
+  it("drops its question when the person moves to another template", async () => {
+    const router = renderPanel(seed(), "/templates/tpl_1/variables");
+
+    fireEvent.click(screen.getByTestId("template-delete"));
+    await act(() => router.navigate("/templates/tpl_rds/variables"));
+    await act(() => router.navigate("/templates/tpl_1/variables"));
+
+    expect(screen.queryByTestId("template-delete-confirm")).toBeNull();
   });
 
   it("says a stack has installed it when the server refuses with template-in-use", async () => {
