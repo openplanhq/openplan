@@ -170,7 +170,7 @@ export default function TemplatePanel({ templateId, children }: { templateId?: s
     </InlineConfirm>
   ) : remove.refusal === "in-use" ? (
     <ErrorPanel testId="template-delete-error" title="Can't delete this template">
-      A stack has installed it, so it stays registered, even after that stack destroys it.
+      A stack still has it installed. Destroy it on that stack, then delete the template.
     </ErrorPanel>
   ) : remove.refusal !== null ? (
     <ErrorPanel testId="template-delete-error" title="Could not delete this template" details={remove.refusal.message} />

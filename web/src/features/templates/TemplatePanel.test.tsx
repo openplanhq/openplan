@@ -542,8 +542,8 @@ describe("TemplatePanel delete", () => {
     expect(screen.queryByTestId("template-delete-confirm")).toBeNull();
   });
 
-  it("says a stack has installed it when the server refuses with template-in-use", async () => {
-    answerDelete(() => problem(409, problemTypes.templateInUse, "A stack has installed this template, so it can't be deleted."));
+  it("says how to free it when the server refuses with template-in-use", async () => {
+    answerDelete(() => problem(409, problemTypes.templateInUse, "A stack still has this template installed. Destroy it there, then delete the template."));
     renderPanel(seed(), "/templates/tpl_1/variables");
 
     fireEvent.click(screen.getByTestId("template-delete"));
@@ -551,7 +551,7 @@ describe("TemplatePanel delete", () => {
 
     const error = await screen.findByTestId("template-delete-error");
     expect(within(error).getByText("Can't delete this template")).toBeTruthy();
-    expect(error.textContent).toContain("A stack has installed it");
+    expect(error.textContent).toContain("A stack still has it installed. Destroy it on that stack, then delete the template.");
     expect(screen.queryByTestId("template-delete-confirm")).toBeNull();
     expect(document.activeElement).toBe(screen.getByTestId("template-delete"));
     expect(screen.queryByTestId("templates-index")).toBeNull();
