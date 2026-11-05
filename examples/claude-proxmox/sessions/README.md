@@ -3,7 +3,10 @@
 The repositories on the [`vm/`](../vm/README.md) VM: for each, a clone at
 `~/projects/github/<owner>/<repo>`, its `CLAUDE.local.md`, and a Remote
 Control session as a systemd user service, `claude-rc@<owner>/<repo>`
-escaped. Register it with `examples/claude-proxmox/sessions` as its root path,
+escaped. Once per VM, it also installs the CLIs a session draws diagrams
+with: `drawio`, the draw.io app the drawio skill converts Mermaid and exports
+with, and `mmdc`, Mermaid's own. Register it with
+`examples/claude-proxmox/sessions` as its root path,
 and install it in the [top-level README](../README.md)'s order: after `vm/`.
 Its sessions connect once `claude auth login` has been run on the VM, before
 or after the install.
@@ -44,20 +47,29 @@ logged it in with, or the login that replaced it.
   can edit its clone's `.env`. Claude's Edit tool reads a file first, so the
   deny blocked edits as well. Other machines keep the rule, and re-running
   `bootstrap.sh` on the VM puts it back until the next session is replaced.
+  It also installs the diagram CLIs, with `sudo`, which `vm/`'s user has
+  without a password: Debian's `xvfb`, `chromium` and Node, draw.io's
+  package (pinned, its SHA-256 checked) and mermaid-cli, behind
+  `/usr/local/bin/drawio` and `/usr/local/bin/mmdc`.
 - **Adding a repository** does that for the new one only. The others keep
   running.
 - **Removing one** disables and stops its service. Its clone stays: it may
   hold unpushed work.
 - **A change to the unit or to the start script** restarts every session, so
   a running one picks it up. A session in progress is cut off.
-- **A rebuilt VM,** with its new key, gets the unit, clones and services back.
-- **Destroy** disables every service and removes the unit. The clones stay.
-  It's best effort: with the VM gone or unreachable, it finishes anyway.
+- **A change to `scripts/tools.sh`**, a version bump say, reinstalls the
+  diagram CLIs. The sessions keep running.
+- **A rebuilt VM,** with its new key, gets the unit, clones, services and
+  diagram CLIs back.
+- **Destroy** disables every service and removes the unit. The clones and
+  the diagram CLIs stay. It's best effort: with the VM gone or unreachable,
+  it finishes anyway.
 
 A session shows in Claude's Remote Control list under its repository's name.
 It runs in auto mode: Claude's own classifier approves each tool call, since
 nobody is at the other end to. A `claude` you start over SSH keeps the default
 mode.
+
 On the VM, `systemctl --user status 'claude-rc@*'` and
 `journalctl --user -u 'claude-rc@*'` show how each is doing.
 

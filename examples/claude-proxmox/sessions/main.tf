@@ -80,6 +80,8 @@ locals {
       entry = "projects/github/${local.vm.setup_repository}/claude/repos/${split("/", repo)[1]}.md"
     })
   }
+
+  tools = file("${path.module}/scripts/tools.sh")
 }
 
 resource "terraform_data" "unit" {
@@ -107,6 +109,32 @@ resource "terraform_data" "unit" {
     when       = destroy
     on_failure = continue
     inline     = ["rm -f ~/.config/systemd/user/claude-rc@.service", "systemctl --user daemon-reload"]
+  }
+}
+
+# The diagram CLIs, once per VM. Here rather than in vm/, whose changes reach
+# only a new VM. Replaced when the script or the VM changes, so a version bump
+# reinstalls without restarting a session.
+resource "terraform_data" "tools" {
+  triggers_replace = merge(local.connection, { script = sha256(local.tools) })
+  input            = { script = local.tools }
+
+  connection {
+    type        = "ssh"
+    host        = self.triggers_replace.host
+    user        = self.triggers_replace.user
+    private_key = self.triggers_replace.private_key
+  }
+
+  # Run from a file, not fed to `sudo sh -s`: apt and dpkg can read stdin and
+  # would swallow the rest of the script. No destroy step: the tools stay, as
+  # the clones do.
+  provisioner "remote-exec" {
+    inline = [
+      "f=\"$(mktemp)\"",
+      "cat > \"$f\" <<'TOOLS'\n${self.input.script}TOOLS",
+      "sudo sh \"$f\"",
+    ]
   }
 }
 

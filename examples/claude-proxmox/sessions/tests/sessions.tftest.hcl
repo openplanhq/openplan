@@ -169,12 +169,59 @@ run "unit_is_the_proven_one" {
 
 # The connection is in the triggers: a rebuilt VM, with a new key, gets its
 # unit and sessions back on the next apply.
+# One install per VM, apart from the sessions: a version bump reinstalls
+# without restarting them, and adding a repo doesn't reinstall.
+run "tools_once_per_vm" {
+  command = plan
+
+  assert {
+    condition = (
+      keys(terraform_data.tools.triggers_replace) == ["host", "private_key", "script", "user"] &&
+      terraform_data.tools.triggers_replace.script == sha256(terraform_data.tools.input.script)
+    )
+    error_message = "the tools are replaced only when their script or the VM changes"
+  }
+}
+
+run "tools_script" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for want in [
+        "https://github.com/jgraph/drawio-desktop/releases/download/v32.6.1/drawio-amd64-32.6.1.deb",
+        "515a975fbdb982e0d736b6f99248dbbb856a8b07bb72d6d3648a54b850fa33db",
+        "@mermaid-js/mermaid-cli@11.17.1",
+        "PUPPETEER_SKIP_DOWNLOAD=1",
+        # Electron needs a display; -a gives parallel sessions one each.
+        "exec xvfb-run -a /opt/drawio/drawio --disable-gpu \"$@\"",
+        "PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium exec /opt/mermaid-cli/bin/mmdc \"$@\"",
+      ] : strcontains(terraform_data.tools.input.script, want)
+    ])
+    error_message = "the script must install the pinned draw.io and mermaid-cli and put both CLIs on PATH, headless"
+  }
+
+  # sessions/ can be installed straight after vm/, while cloud-init still
+  # holds apt's lock.
+  assert {
+    condition     = can(regex("(?s)cloud-init status --wait.*apt-get", terraform_data.tools.input.script))
+    error_message = "the script must wait for vm/'s first-boot setup before it uses apt"
+  }
+
+  # Under set -e, a download that doesn't match fails the apply before
+  # anything from it is installed.
+  assert {
+    condition     = can(regex("(?s)^set -eu\n.*sha256sum -c.*apt-get install[^\n]*\\$deb", terraform_data.tools.input.script))
+    error_message = "the draw.io package must be checked against its pinned SHA-256 before it is installed"
+  }
+}
+
 run "connects_with_vm_outputs" {
   command = plan
 
   assert {
     condition = alltrue([
-      for s in concat(values(terraform_data.session), [terraform_data.unit]) :
+      for s in concat(values(terraform_data.session), [terraform_data.unit, terraform_data.tools]) :
       s.triggers_replace.host == "10.10.10.20" && s.triggers_replace.user == "debian" && nonsensitive(s.triggers_replace.private_key) == "KEY"
     ])
     error_message = "sessions/ reaches the VM at vm/'s address, as vm/'s user, with vm/'s key"
@@ -188,7 +235,7 @@ run "key_not_in_input" {
 
   assert {
     condition = alltrue([
-      for s in concat(values(terraform_data.session), [terraform_data.unit]) : !can(s.input.private_key)
+      for s in concat(values(terraform_data.session), [terraform_data.unit, terraform_data.tools]) : !can(s.input.private_key)
     ])
     error_message = "the automation key must stay out of input, or a plan prints it"
   }
