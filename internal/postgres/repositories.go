@@ -508,9 +508,9 @@ func (store *Store) GetTemplate(ctx context.Context, tenantID domain.TenantID, i
 // DeleteTemplate deletes the tenant's template; its revisions, their
 // variables and its syncs cascade with it. The stack templates' key refuses
 // the delete while any install that isn't destroyed names the template (a
-// destroyed install releases it, see recordStackTemplateLifecycle), and because the key's check locks and sees concurrent commits,
-// an install racing this delete either lands first and refuses it, or finds
-// the template gone.
+// destroyed install releases it, see recordStackTemplateLifecycle). Because
+// the key's check locks and sees concurrent commits, an install racing this
+// delete either lands first and refuses it, or finds the template gone.
 func (store *Store) DeleteTemplate(ctx context.Context, tenantID domain.TenantID, id domain.TemplateID) error {
 	result, err := store.pool.Exec(ctx, `delete from templates where tenant_id = $1 and id = $2`, tenantID, id)
 	if foreignKeyViolation(err, "stack_templates_template_id_fkey") {

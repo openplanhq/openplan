@@ -5035,7 +5035,8 @@ func TestDeleteTemplateRefusesAnInstallThatIsNotDestroyed(t *testing.T) {
 	}
 }
 
-// Installs destroyed before 0048 release their templates too.
+// Installs destroyed before 0048 release their templates too; installs that
+// aren't destroyed keep theirs.
 func TestDestroyedInstallsMigrationReleasesTheirTemplates(t *testing.T) {
 	t.Parallel()
 
@@ -5059,8 +5060,20 @@ func TestDestroyedInstallsMigrationReleasesTheirTemplates(t *testing.T) {
 		t.Fatalf("rerun migration: %v", err)
 	}
 
+	var legacyTemplateID *string
+	if err := pool.QueryRow(ctx, `select template_id from stack_templates where id = 'stack_template_legacy'`).Scan(&legacyTemplateID); err != nil {
+		t.Fatalf("read the destroyed install: %v", err)
+	}
+	if legacyTemplateID != nil {
+		t.Fatalf("destroyed install template_id = %q, want null", *legacyTemplateID)
+	}
 	if err := store.DeleteTemplate(ctx, "tenant_123", "source_template_legacy"); err != nil {
 		t.Fatalf("delete a template whose install was destroyed before 0048 returned error: %v", err)
+	}
+
+	// seedStackWithTemplate's active install of source_template_vpc.
+	if err := store.DeleteTemplate(ctx, "tenant_123", "source_template_vpc"); !errors.Is(err, app.ErrTemplateInUse) {
+		t.Fatalf("delete a template with an active install after the migration error = %v, want app.ErrTemplateInUse", err)
 	}
 }
 
