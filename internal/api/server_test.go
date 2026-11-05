@@ -1052,6 +1052,9 @@ func TestDeleteTemplate(t *testing.T) {
 				if problem.Type != problemTypeURI(test.slug) {
 					t.Fatalf("problem type = %q, want %q", problem.Type, problemTypeURI(test.slug))
 				}
+				if want := "A stack still has this template installed. Destroy it there, then delete the template."; problem.Detail != want {
+					t.Fatalf("problem detail = %q, want %q", problem.Detail, want)
+				}
 			}
 			_, err := deps.templates.GetTemplate(context.Background(), "tenant_123", domain.TemplateID(test.path))
 			if remained := err == nil; remained != test.remained {
