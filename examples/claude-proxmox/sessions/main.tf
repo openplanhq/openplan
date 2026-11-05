@@ -68,6 +68,16 @@ locals {
     [Install]
     WantedBy=default.target
   EOT
+
+  # Each repo's start script, rendered once so its hash can replace the
+  # session: a provisioner runs only on create, so a fix to the script reaches
+  # a running session only that way.
+  start = {
+    for repo in var.repositories : repo => templatefile("${path.module}/scripts/session.sh.tftpl", {
+      repo  = repo
+      entry = "projects/github/${local.vm.setup_repository}/claude/repos/${split("/", repo)[1]}.md"
+    })
+  }
 }
 
 resource "terraform_data" "unit" {
@@ -98,17 +108,18 @@ resource "terraform_data" "unit" {
   }
 }
 
-# Keyed by repo, and replaced only when its repo, the unit or the VM changes,
-# so adding or removing one leaves the others' services running.
+# Keyed by repo, and replaced only when its repo, its start script, the unit or
+# the VM changes, so adding or removing one leaves the others' services running.
 resource "terraform_data" "session" {
   for_each = toset(var.repositories)
 
-  triggers_replace = merge(local.connection, { repo = each.key, unit = terraform_data.unit.triggers_replace.unit })
+  triggers_replace = merge(local.connection, {
+    repo  = each.key
+    start = sha256(local.start[each.key])
+    unit  = terraform_data.unit.triggers_replace.unit
+  })
   input = {
-    start = templatefile("${path.module}/scripts/session.sh.tftpl", {
-      repo  = each.key
-      entry = "projects/github/${local.vm.setup_repository}/claude/repos/${split("/", each.key)[1]}.md"
-    })
+    start = local.start[each.key]
     # The clone stays: it may hold unpushed work.
     stop = "systemctl --user disable --now \"claude-rc@$(systemd-escape \"${each.key}\").service\" || true"
   }

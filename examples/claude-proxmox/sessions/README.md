@@ -34,15 +34,17 @@ logged it in with, or the login that replaced it.
   `~/.config/systemd/user/claude-rc@.service`. Then for each repository it
   clones it if it's missing, writes the `CLAUDE.local.md` that points it at
   its entry in the setup repository's `claude/repos/` (no entry, no file),
-  marks the clone trusted in `~/.claude.json`, and enables and starts its
-  service. A service has no terminal for Remote Control's questions, so the
-  apply also answers "Enable Remote Control?" in that file, once per VM.
+  marks the clone trusted and its imports from outside the repository
+  approved in `~/.claude.json`, and enables and starts its service. A
+  service has no terminal for Claude's questions, so the apply also answers
+  "Enable Remote Control?" in that file, once per VM. Without the approval, a
+  session would silently drop the entry `CLAUDE.local.md` imports.
 - **Adding a repository** does that for the new one only. The others keep
   running.
 - **Removing one** disables and stops its service. Its clone stays: it may
   hold unpushed work.
-- **A change to the unit** restarts every session, so a running one picks it
-  up. A session in progress is cut off.
+- **A change to the unit or to the start script** restarts every session, so
+  a running one picks it up. A session in progress is cut off.
 - **A rebuilt VM,** with its new key, gets the unit, clones and services back.
 - **Destroy** disables every service and removes the unit. The clones stay.
   It's best effort: with the VM gone or unreachable, it finishes anyway.

@@ -28,10 +28,19 @@ run "one_session_per_repo" {
   assert {
     condition = alltrue([
       for repo, s in terraform_data.session :
-      keys(s.triggers_replace) == ["host", "private_key", "repo", "unit", "user"] &&
+      keys(s.triggers_replace) == ["host", "private_key", "repo", "start", "unit", "user"] &&
       s.triggers_replace.repo == repo && s.triggers_replace.unit == terraform_data.unit.triggers_replace.unit
     ])
-    error_message = "a session is replaced only when its repo, the unit or the VM changes"
+    error_message = "a session is replaced only when its repo, its start script, the unit or the VM changes"
+  }
+
+  # A provisioner runs only on create, so a fix to the start script reaches a
+  # running session only by replacing it.
+  assert {
+    condition = alltrue([
+      for s in values(terraform_data.session) : s.triggers_replace.start == sha256(s.input.start)
+    ])
+    error_message = "a changed start script must replace its session, or the fix never reaches the VM"
   }
 }
 
@@ -85,18 +94,22 @@ run "start_trusts_the_clone" {
         "--arg p \"$HOME/projects/github/openplanhq/ai-os\"",
         ".remoteDialogSeen = true",
         ".projects[$p].hasTrustDialogAccepted = true",
+        # Imports from outside the repo, like CLAUDE.local.md's entry in the
+        # setup repo, wait on a question nobody is there to answer.
+        ".projects[$p].hasClaudeMdExternalIncludesApproved = true",
+        ".projects[$p].hasClaudeMdExternalIncludesWarningShown = true",
         # Separate lines, so a jq failure stops the script under set -e.
         "> \"$tmp\"\nmv \"$tmp\" \"$claude_json\"",
       ] : strcontains(terraform_data.session["openplanhq/ai-os"].input.start, want)
     ])
-    error_message = "start must mark the clone trusted and Remote Control's question answered in ~/.claude.json, creating the file if Claude Code has never run"
+    error_message = "start must mark the clone trusted, its outside imports approved and Remote Control's question answered in ~/.claude.json, creating the file if Claude Code has never run"
   }
 
   # A Claude save, or another repo's script, can rename over our write and
   # drop the entry; nothing re-runs this script, so it must fail instead.
   assert {
-    condition     = can(regex("(?s)hasTrustDialogAccepted = true.*\nmv .*jq -e [^\n]*\\.remoteDialogSeen and \\.projects\\[\\$p\\]\\.hasTrustDialogAccepted.*systemctl --user restart", terraform_data.session["openplanhq/ai-os"].input.start))
-    error_message = "start must check the entry survived, after the write and before its service starts, or a lost write leaves the clone untrusted for good"
+    condition     = can(regex("(?s)hasTrustDialogAccepted = true.*\nmv .*jq -e [^\n]*\\.remoteDialogSeen and \\.projects\\[\\$p\\]\\.hasTrustDialogAccepted and \\.projects\\[\\$p\\]\\.hasClaudeMdExternalIncludesApproved.*systemctl --user restart", terraform_data.session["openplanhq/ai-os"].input.start))
+    error_message = "start must check the entry survived, after the write and before its service starts, or a lost write leaves the clone untrusted or its imports dropped for good"
   }
 }
 
