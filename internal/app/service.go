@@ -41,8 +41,8 @@ var (
 	ErrCredentialNameInvalid              = errors.New("credential name is invalid")
 	ErrDuplicateCredentialName            = errors.New("duplicate credential name")
 	ErrCredentialEncryptionUnavailable    = errors.New("credential encryption is unavailable")
-	// ErrTemplateInUse refuses deleting a template that a stack has
-	// installed, in any lifecycle, destroyed included.
+	// ErrTemplateInUse refuses deleting a template while a stack has an
+	// install of it that isn't destroyed.
 	ErrTemplateInUse = errors.New("template is installed in a stack")
 	// ErrDuplicateTemplateSource refuses pointing a template at a ref that
 	// another template of the same repository and path already follows.
@@ -189,7 +189,7 @@ type TemplateRevisionRepository interface {
 type TemplateRepository interface {
 	GetTemplate(ctx context.Context, tenantID domain.TenantID, id domain.TemplateID) (domain.Template, error)
 	// DeleteTemplate deletes the template with its revisions and syncs.
-	// It is ErrTemplateInUse while any stack template names the template,
+	// It is ErrTemplateInUse while an install that isn't destroyed names it,
 	// and ErrNotFound when the tenant has no such template.
 	DeleteTemplate(ctx context.Context, tenantID domain.TenantID, id domain.TemplateID) error
 	// ListTemplatesPage returns up to limit templates after the cursor,
