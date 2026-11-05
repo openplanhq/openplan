@@ -364,6 +364,33 @@ func TestSyncTemplateWritesIntoTheTemplateItWasGiven(t *testing.T) {
 	}
 }
 
+// Two templates on one repository and path can follow refs that point at the
+// same commit (main and develop after a fast-forward). Each gets its own
+// revision, so the second sync can't collide with the first's primary key.
+func TestSyncTemplateGivesEachTemplateItsOwnRevisionOfACommit(t *testing.T) {
+	t.Parallel()
+
+	revisionIDs := map[domain.TemplateID]domain.TemplateRevisionID{}
+	for templateID, ref := range map[domain.TemplateID]string{"template_main": "main", "template_develop": "develop"} {
+		store := &recordingTemplateSyncStore{}
+		activities := newTestTemplateSyncActivities(t, store, vpcTemplateGit(t))
+		if _, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
+			TenantID:   domain.TenantID("tenant_123"),
+			TemplateID: templateID,
+			RepoOwner:  "acme",
+			RepoName:   "infra-templates",
+			SourceRef:  ref,
+			RootPath:   "modules/vpc",
+		}); err != nil {
+			t.Fatalf("SyncTemplate %s returned error: %v", templateID, err)
+		}
+		revisionIDs[templateID] = store.template.ID
+	}
+	if revisionIDs["template_main"] == revisionIDs["template_develop"] {
+		t.Fatalf("both templates got revision %q for one commit", revisionIDs["template_main"])
+	}
+}
+
 // A sync started before the API named the template has nothing to write
 // into; it is refused before it clones anything.
 func TestSyncTemplateWithoutATemplateIsInvalid(t *testing.T) {

@@ -158,7 +158,7 @@ func (activities *TemplateSyncActivities) SyncTemplate(ctx context.Context, inpu
 		return invalidTemplateSyncOutput("read template metadata: %v", err), nil
 	}
 
-	templateRevisionID := deterministicTemplateRevisionID(input, rootPath, resolvedSHA)
+	templateRevisionID := deterministicTemplateRevisionID(input, resolvedSHA)
 	variables, err := inferTemplateVariables(templateRoot, templateRevisionID)
 	if err != nil {
 		return invalidTemplateSyncOutput("infer template variables: %v", err), nil
@@ -546,13 +546,12 @@ func hclBoolValue(attr *hcl.Attribute) (bool, error) {
 	return value.True(), nil
 }
 
-// template_4b93175b6dcb1641073fcd42475912a3
-func deterministicTemplateRevisionID(input domain.TemplateSyncActivityInput, rootPath string, resolvedSHA string) domain.TemplateRevisionID {
+// A revision is one template at one commit, so its id hashes exactly that:
+// two templates whose refs share a commit get a revision each.
+func deterministicTemplateRevisionID(input domain.TemplateSyncActivityInput, resolvedSHA string) domain.TemplateRevisionID {
 	sum := sha256.Sum256([]byte(strings.Join([]string{
 		string(input.TenantID),
-		input.RepoOwner,
-		input.RepoName,
-		rootPath,
+		string(input.TemplateID),
 		resolvedSHA,
 	}, "\x00")))
 	return domain.TemplateRevisionID("template_" + hex.EncodeToString(sum[:16]))
