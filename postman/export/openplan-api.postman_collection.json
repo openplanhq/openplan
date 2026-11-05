@@ -289,7 +289,7 @@
                 "{{delete_template_id}}"
               ]
             },
-            "description": "Deletes the template with its revisions and syncs. Refused while any\nstack has installed it, including an install since destroyed: its run\nhistory still points at the template's revisions.\n\nA sync still running ends without recording anything.\n\nSkipped unless you set delete_template_id. `409` when a stack has installed it."
+            "description": "Deletes the template with its revisions and syncs. Refused while any\nstack has an install of it that isn't destroyed. A destroyed install\nlets go of its template and keeps its run history.\n\nA sync still running ends without recording anything.\n\nSkipped unless you set delete_template_id. `409` while a stack has an install of it that isn't destroyed."
           }
         },
         {
