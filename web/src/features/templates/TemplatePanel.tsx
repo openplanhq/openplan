@@ -170,7 +170,7 @@ export default function TemplatePanel({ templateId, children }: { templateId?: s
     </InlineConfirm>
   ) : remove.refusal === "in-use" ? (
     <ErrorPanel testId="template-delete-error" title="Can't delete this template">
-      A stack has installed it, so it stays registered, even after that stack destroys it.
+      A stack still has it installed. Destroy it on that stack, then delete the template.
     </ErrorPanel>
   ) : remove.refusal !== null ? (
     <ErrorPanel testId="template-delete-error" title="Could not delete this template" details={remove.refusal.message} />
@@ -264,8 +264,8 @@ type DeleteRefusal = "in-use" | { message: string };
 
 // Deleting a template: Delete asks first, in place, then calls the server.
 // Gone, it sends the person to /templates, which says what was deleted and
-// shows the first template left. Refused because a stack has installed it
-// (409 template-in-use), it says so; nothing on screen could have told, since
+// shows the first template left. Refused because a stack still has it
+// installed (409 template-in-use), it says so; nothing on screen could have told, since
 // the API doesn't say whether a stack uses a template. A template someone
 // else deleted first (404) ends where a delete does.
 //

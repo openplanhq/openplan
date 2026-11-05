@@ -507,10 +507,10 @@ func (store *Store) GetTemplate(ctx context.Context, tenantID domain.TenantID, i
 
 // DeleteTemplate deletes the tenant's template; its revisions, their
 // variables and its syncs cascade with it. The stack templates' key refuses
-// the delete while any stack template names the template, whatever its
-// lifecycle, and because the key's check locks and sees concurrent commits,
-// an install racing this delete either lands first and refuses it, or finds
-// the template gone.
+// the delete while any install that isn't destroyed names the template (a
+// destroyed install releases it, see recordStackTemplateLifecycle). Because
+// the key's check locks and sees concurrent commits, an install racing this
+// delete either lands first and refuses it, or finds the template gone.
 func (store *Store) DeleteTemplate(ctx context.Context, tenantID domain.TenantID, id domain.TemplateID) error {
 	result, err := store.pool.Exec(ctx, `delete from templates where tenant_id = $1 and id = $2`, tenantID, id)
 	if foreignKeyViolation(err, "stack_templates_template_id_fkey") {
@@ -1883,13 +1883,16 @@ func recordStackTemplateLastApplied(ctx context.Context, writer stackTemplateLas
 	return nil
 }
 
+// recordStackTemplateLifecycle moves an install to lifecycle. A destroyed
+// install lets go of its template, so the template can be deleted.
 func recordStackTemplateLifecycle(ctx context.Context, writer stackTemplateLastAppliedWriter, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID, lifecycle domain.StackTemplateLifecycle) error {
 	commandTag, err := writer.Exec(ctx, `
 		update stack_templates
-		set lifecycle = $1
+		set lifecycle = $1,
+			template_id = case when $1 = $4 then null else template_id end
 		where tenant_id = $2
 			and id = $3
-	`, lifecycle, tenantID, stackTemplateID)
+	`, lifecycle, tenantID, stackTemplateID, domain.StackTemplateDestroyed)
 	if err != nil {
 		return fmt.Errorf("record stack template lifecycle: %w", err)
 	}
@@ -1926,7 +1929,7 @@ const stackTemplateColumns = `
 	tenant_id,
 	stack_id,
 	key,
-	template_id,
+	coalesce(template_id, '') as template_id,
 	desired_template_revision_id,
 	last_applied_template_revision_id,
 	workspace_name,

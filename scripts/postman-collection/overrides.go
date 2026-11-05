@@ -109,7 +109,7 @@ var overrides = map[string]override{
 		pathVars:   map[string]string{"template_id": deleteTemplateIDVariable},
 		preRequest: skipUnlessDeleteTemplateID,
 		expect:     []int{204, 409},
-		note:       "Skipped unless you set delete_template_id. `409` when a stack has installed it.",
+		note:       "Skipped unless you set delete_template_id. `409` while a stack has an install of it that isn't destroyed.",
 	},
 	// The run installs the revision the template's first sync records, so
 	// reading the template waits that sync out.

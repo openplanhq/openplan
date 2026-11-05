@@ -135,7 +135,7 @@ var problemTypes = []problemType{
 	{
 		sentinel: app.ErrTemplateInUse, status: http.StatusConflict, slug: "template-in-use",
 		title:  "The template is in use",
-		detail: "A stack has installed this template, so it can't be deleted.",
+		detail: "A stack still has this template installed. Destroy it there, then delete the template.",
 	},
 	{
 		sentinel: app.ErrDuplicateStackSlug, status: http.StatusConflict, slug: "duplicate-slug",

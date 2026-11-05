@@ -479,8 +479,8 @@ paths:
       summary: Delete a template
       description: |
         Deletes the template with its revisions and syncs. Refused while any
-        stack has installed it, including an install since destroyed: its run
-        history still points at the template's revisions.
+        stack has an install of it that isn't destroyed. A destroyed install
+        lets go of its template and keeps its run history.
 
         A sync still running ends without recording anything.
       operationId: deleteTemplate
@@ -491,7 +491,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: A stack has installed the template (`template-in-use`).
+          description: A stack has an install of the template that isn't destroyed (`template-in-use`).
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }

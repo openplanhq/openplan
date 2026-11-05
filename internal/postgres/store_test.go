@@ -4914,14 +4914,6 @@ func TestDeleteTemplate(t *testing.T) {
 	store := NewStore(pool)
 	seedStackWithTemplate(t, ctx, store)
 	seedTemplate(t, ctx, store, "tenant_123", "source_template_unused")
-	seedTemplate(t, ctx, store, "tenant_123", "source_template_destroyed")
-	if err := store.CreateStackTemplate(ctx, domain.StackTemplate{
-		ID: "stack_template_destroyed", TenantID: "tenant_123", StackID: "stack_123",
-		TemplateID: "source_template_destroyed", WorkspaceName: "mtp_acme_prod_destroyed",
-		CreatedBy: "installer_123", Lifecycle: domain.StackTemplateDestroyed,
-	}); err != nil {
-		t.Fatalf("CreateStackTemplate returned error: %v", err)
-	}
 
 	if err := store.DeleteTemplate(ctx, "tenant_other", "source_template_unused"); !errors.Is(err, app.ErrNotFound) {
 		t.Fatalf("delete another tenant's template error = %v, want app.ErrNotFound", err)
@@ -4936,13 +4928,152 @@ func TestDeleteTemplate(t *testing.T) {
 		t.Fatalf("second delete error = %v, want app.ErrNotFound", err)
 	}
 
-	for _, installed := range []domain.TemplateID{"source_template_vpc", "source_template_destroyed"} {
-		if err := store.DeleteTemplate(ctx, "tenant_123", installed); !errors.Is(err, app.ErrTemplateInUse) {
-			t.Fatalf("delete %s error = %v, want app.ErrTemplateInUse", installed, err)
+	if err := store.DeleteTemplate(ctx, "tenant_123", "source_template_vpc"); !errors.Is(err, app.ErrTemplateInUse) {
+		t.Fatalf("delete an installed template error = %v, want app.ErrTemplateInUse", err)
+	}
+	if _, err := store.GetTemplate(ctx, "tenant_123", "source_template_vpc"); err != nil {
+		t.Fatalf("refused delete still removed the template: %v", err)
+	}
+}
+
+// An install that is destroyed lets go of its template, so the template
+// deletes; the install and its runs stay readable as history.
+func TestDeleteTemplateAfterItsInstallIsDestroyed(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := NewStore(pool)
+	seedStackWithTemplate(t, ctx, store)
+	seedTemplate(t, ctx, store, "tenant_123", "source_template_gone")
+	if err := store.CreateStackTemplate(ctx, domain.StackTemplate{
+		ID: "stack_template_gone", TenantID: "tenant_123", StackID: "stack_123", Key: "gone",
+		TemplateID: "source_template_gone", WorkspaceName: "mtp_gone",
+		CreatedBy: "installer_123", Lifecycle: domain.StackTemplateActive,
+	}); err != nil {
+		t.Fatalf("CreateStackTemplate returned error: %v", err)
+	}
+	seedTemplateRun(t, ctx, pool, domain.TemplateRun{
+		ID: "run_gone", TenantID: "tenant_123", StackTemplateID: "stack_template_gone",
+		Operation: domain.OperationDestroy, SourceRef: "main", WorkspaceName: "mtp_gone",
+		Status: domain.TemplateRunRunning, TriggerActor: "user_123",
+	})
+	destroy := func(event domain.TemplateRunEvent) {
+		t.Helper()
+		if err := store.RecordTemplateRunEvent(ctx, domain.TemplateRunEventActivityInput{
+			TenantID: "tenant_123", RunID: "run_gone", StackTemplateID: "stack_template_gone",
+			Operation: domain.OperationDestroy, Event: event,
+		}); err != nil {
+			t.Fatalf("RecordTemplateRunEvent(%q) returned error: %v", event, err)
 		}
-		if _, err := store.GetTemplate(ctx, "tenant_123", installed); err != nil {
-			t.Fatalf("refused delete of %s still removed it: %v", installed, err)
+	}
+	destroy(domain.TemplateRunDestroying)
+	destroy(domain.TemplateRunDestroyed)
+
+	if err := store.DeleteTemplate(ctx, "tenant_123", "source_template_gone"); err != nil {
+		t.Fatalf("delete a template whose install is destroyed returned error: %v", err)
+	}
+	if _, err := store.GetTemplate(ctx, "tenant_123", "source_template_gone"); !errors.Is(err, app.ErrNotFound) {
+		t.Fatalf("read after delete error = %v, want app.ErrNotFound", err)
+	}
+	install, err := store.GetStackTemplate(ctx, "tenant_123", "stack_template_gone")
+	if err != nil {
+		t.Fatalf("the destroyed install is gone: %v", err)
+	}
+	if install.Lifecycle != domain.StackTemplateDestroyed || install.TemplateID != "" {
+		t.Fatalf("destroyed install = %s with template %q, want destroyed with none", install.Lifecycle, install.TemplateID)
+	}
+	if _, err := store.GetTemplateRun(ctx, "tenant_123", "run_gone"); err != nil {
+		t.Fatalf("the destroy run is gone: %v", err)
+	}
+
+	// Temporal redelivers an event whose acknowledgement was lost.
+	destroy(domain.TemplateRunDestroyed)
+}
+
+// Every install that isn't destroyed still holds its template: its
+// infrastructure may still exist, or its destroy may still run.
+func TestDeleteTemplateRefusesAnInstallThatIsNotDestroyed(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := NewStore(pool)
+	seedStackWithTemplate(t, ctx, store)
+
+	for _, lifecycle := range []domain.StackTemplateLifecycle{
+		domain.StackTemplateActive, domain.StackTemplateDestroying, domain.StackTemplateFailed, domain.StackTemplateOrphaned,
+	} {
+		templateID := domain.TemplateID("source_template_" + string(lifecycle))
+		seedTemplate(t, ctx, store, "tenant_123", templateID)
+		if err := store.CreateStackTemplate(ctx, domain.StackTemplate{
+			ID: domain.StackTemplateID("stack_template_" + string(lifecycle)), TenantID: "tenant_123", StackID: "stack_123",
+			Key: string(lifecycle), TemplateID: templateID, WorkspaceName: "mtp_" + string(lifecycle),
+			CreatedBy: "installer_123", Lifecycle: lifecycle,
+		}); err != nil {
+			t.Fatalf("CreateStackTemplate(%s) returned error: %v", lifecycle, err)
 		}
+		if err := store.DeleteTemplate(ctx, "tenant_123", templateID); !errors.Is(err, app.ErrTemplateInUse) {
+			t.Fatalf("delete with a %s install error = %v, want app.ErrTemplateInUse", lifecycle, err)
+		}
+	}
+
+	// A destroy that is interrupted leaves the install failed, still holding
+	// its template.
+	if err := recordInterruptedDestroyLifecycle(ctx, pool, "tenant_123", "stack_template_destroying"); err != nil {
+		t.Fatalf("recordInterruptedDestroyLifecycle returned error: %v", err)
+	}
+	install, err := store.GetStackTemplate(ctx, "tenant_123", "stack_template_destroying")
+	if err != nil {
+		t.Fatalf("GetStackTemplate returned error: %v", err)
+	}
+	if install.Lifecycle != domain.StackTemplateFailed || install.TemplateID != "source_template_destroying" {
+		t.Fatalf("interrupted destroy = %s with template %q, want failed with source_template_destroying", install.Lifecycle, install.TemplateID)
+	}
+	if err := store.DeleteTemplate(ctx, "tenant_123", "source_template_destroying"); !errors.Is(err, app.ErrTemplateInUse) {
+		t.Fatalf("delete after an interrupted destroy error = %v, want app.ErrTemplateInUse", err)
+	}
+}
+
+// Installs destroyed before 0048 release their templates too; installs that
+// aren't destroyed keep theirs.
+func TestDestroyedInstallsMigrationReleasesTheirTemplates(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := NewStore(pool)
+	seedStackWithTemplate(t, ctx, store)
+	seedTemplate(t, ctx, store, "tenant_123", "source_template_legacy")
+	if _, err := pool.Exec(ctx, `
+		insert into stack_templates (id, tenant_id, stack_id, key, template_id, workspace_name, created_by, lifecycle)
+		values ('stack_template_legacy', 'tenant_123', 'stack_123', 'legacy', 'source_template_legacy', 'mtp_legacy', 'installer_123', 'destroyed')
+	`); err != nil {
+		t.Fatalf("insert a destroyed install from before 0048: %v", err)
+	}
+
+	migration, err := migrationFiles.ReadFile("migrations/0048_destroyed_installs_release_template.sql")
+	if err != nil {
+		t.Fatalf("read migration: %v", err)
+	}
+	if _, err := pool.Exec(ctx, string(migration)); err != nil {
+		t.Fatalf("rerun migration: %v", err)
+	}
+
+	var legacyTemplateID *string
+	if err := pool.QueryRow(ctx, `select template_id from stack_templates where id = 'stack_template_legacy'`).Scan(&legacyTemplateID); err != nil {
+		t.Fatalf("read the destroyed install: %v", err)
+	}
+	if legacyTemplateID != nil {
+		t.Fatalf("destroyed install template_id = %q, want null", *legacyTemplateID)
+	}
+	if err := store.DeleteTemplate(ctx, "tenant_123", "source_template_legacy"); err != nil {
+		t.Fatalf("delete a template whose install was destroyed before 0048 returned error: %v", err)
+	}
+
+	// seedStackWithTemplate's active install of source_template_vpc.
+	if err := store.DeleteTemplate(ctx, "tenant_123", "source_template_vpc"); !errors.Is(err, app.ErrTemplateInUse) {
+		t.Fatalf("delete a template with an active install after the migration error = %v, want app.ErrTemplateInUse", err)
 	}
 }
 
