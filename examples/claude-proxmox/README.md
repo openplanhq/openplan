@@ -9,7 +9,7 @@ templates like the Proxmox cluster's (#548), applied by the same manager
 | Root path | What it owns | Changes |
 |---|---|---|
 | [`examples/claude-proxmox/vm`](vm/README.md) | the VM, its first-boot setup and the key `sessions/` connects with | rarely: any change is a rebuild |
-| [`examples/claude-proxmox/sessions`](sessions/README.md) | each repository's clone and its Remote Control service, on the running VM | whenever a repository is added or removed |
+| [`examples/claude-proxmox/sessions`](sessions/README.md) | each repository's clone and its Remote Control service, and the diagram CLIs they use, on the running VM | whenever a repository is added or removed |
 
 `sessions/` never replaces or edits anything `vm/` owns, so adding a
 repository never costs the VM or the work on it.

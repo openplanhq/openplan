@@ -61,13 +61,27 @@ locals {
     [Service]
     WorkingDirectory=%h/projects/github/%I
     Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
-    ExecStart=%h/.local/bin/claude remote-control --name %I
+    # For the sessions it spawns: nobody is at the claude.ai end to approve
+    # each tool call, so Claude's own classifier decides instead.
+    ExecStart=%h/.local/bin/claude remote-control --name %I --permission-mode auto
     Restart=always
     RestartSec=15
 
     [Install]
     WantedBy=default.target
   EOT
+
+  # Each repo's start script, rendered once so its hash can replace the
+  # session: a provisioner runs only on create, so a fix to the script reaches
+  # a running session only that way.
+  start = {
+    for repo in var.repositories : repo => templatefile("${path.module}/scripts/session.sh.tftpl", {
+      repo  = repo
+      entry = "projects/github/${local.vm.setup_repository}/claude/repos/${split("/", repo)[1]}.md"
+    })
+  }
+
+  tools = file("${path.module}/scripts/tools.sh")
 }
 
 resource "terraform_data" "unit" {
@@ -98,17 +112,44 @@ resource "terraform_data" "unit" {
   }
 }
 
-# Keyed by repo, and replaced only when its repo, the unit or the VM changes,
-# so adding or removing one leaves the others' services running.
+# The diagram CLIs, once per VM. Here rather than in vm/, whose changes reach
+# only a new VM. Replaced when the script or the VM changes, so a version bump
+# reinstalls without restarting a session.
+resource "terraform_data" "tools" {
+  triggers_replace = merge(local.connection, { script = sha256(local.tools) })
+  input            = { script = local.tools }
+
+  connection {
+    type        = "ssh"
+    host        = self.triggers_replace.host
+    user        = self.triggers_replace.user
+    private_key = self.triggers_replace.private_key
+  }
+
+  # Run from a file, not fed to `sudo sh -s`: apt and dpkg can read stdin and
+  # would swallow the rest of the script. No destroy step: the tools stay, as
+  # the clones do.
+  provisioner "remote-exec" {
+    inline = [
+      "f=\"$(mktemp)\"",
+      "cat > \"$f\" <<'TOOLS'\n${self.input.script}TOOLS",
+      "sudo sh \"$f\"",
+    ]
+  }
+}
+
+# Keyed by repo, and replaced only when its repo, its start script, the unit or
+# the VM changes, so adding or removing one leaves the others' services running.
 resource "terraform_data" "session" {
   for_each = toset(var.repositories)
 
-  triggers_replace = merge(local.connection, { repo = each.key, unit = terraform_data.unit.triggers_replace.unit })
+  triggers_replace = merge(local.connection, {
+    repo  = each.key
+    start = sha256(local.start[each.key])
+    unit  = terraform_data.unit.triggers_replace.unit
+  })
   input = {
-    start = templatefile("${path.module}/scripts/session.sh.tftpl", {
-      repo  = each.key
-      entry = "projects/github/${local.vm.setup_repository}/claude/repos/${split("/", each.key)[1]}.md"
-    })
+    start = local.start[each.key]
     # The clone stays: it may hold unpushed work.
     stop = "systemctl --user disable --now \"claude-rc@$(systemd-escape \"${each.key}\").service\" || true"
   }

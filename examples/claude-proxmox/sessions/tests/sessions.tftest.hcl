@@ -28,10 +28,19 @@ run "one_session_per_repo" {
   assert {
     condition = alltrue([
       for repo, s in terraform_data.session :
-      keys(s.triggers_replace) == ["host", "private_key", "repo", "unit", "user"] &&
+      keys(s.triggers_replace) == ["host", "private_key", "repo", "start", "unit", "user"] &&
       s.triggers_replace.repo == repo && s.triggers_replace.unit == terraform_data.unit.triggers_replace.unit
     ])
-    error_message = "a session is replaced only when its repo, the unit or the VM changes"
+    error_message = "a session is replaced only when its repo, its start script, the unit or the VM changes"
+  }
+
+  # A provisioner runs only on create, so a fix to the start script reaches a
+  # running session only by replacing it.
+  assert {
+    condition = alltrue([
+      for s in values(terraform_data.session) : s.triggers_replace.start == sha256(s.input.start)
+    ])
+    error_message = "a changed start script must replace its session, or the fix never reaches the VM"
   }
 }
 
@@ -85,18 +94,45 @@ run "start_trusts_the_clone" {
         "--arg p \"$HOME/projects/github/openplanhq/ai-os\"",
         ".remoteDialogSeen = true",
         ".projects[$p].hasTrustDialogAccepted = true",
+        # Imports from outside the repo, like CLAUDE.local.md's entry in the
+        # setup repo, wait on a question nobody is there to answer.
+        ".projects[$p].hasClaudeMdExternalIncludesApproved = true",
+        ".projects[$p].hasClaudeMdExternalIncludesWarningShown = true",
         # Separate lines, so a jq failure stops the script under set -e.
         "> \"$tmp\"\nmv \"$tmp\" \"$claude_json\"",
       ] : strcontains(terraform_data.session["openplanhq/ai-os"].input.start, want)
     ])
-    error_message = "start must mark the clone trusted and Remote Control's question answered in ~/.claude.json, creating the file if Claude Code has never run"
+    error_message = "start must mark the clone trusted, its outside imports approved and Remote Control's question answered in ~/.claude.json, creating the file if Claude Code has never run"
   }
 
   # A Claude save, or another repo's script, can rename over our write and
   # drop the entry; nothing re-runs this script, so it must fail instead.
   assert {
-    condition     = can(regex("(?s)hasTrustDialogAccepted = true.*\nmv .*jq -e [^\n]*\\.remoteDialogSeen and \\.projects\\[\\$p\\]\\.hasTrustDialogAccepted.*systemctl --user restart", terraform_data.session["openplanhq/ai-os"].input.start))
-    error_message = "start must check the entry survived, after the write and before its service starts, or a lost write leaves the clone untrusted for good"
+    condition     = can(regex("(?s)hasTrustDialogAccepted = true.*\nmv .*jq -e [^\n]*\\.remoteDialogSeen and \\.projects\\[\\$p\\]\\.hasTrustDialogAccepted and \\.projects\\[\\$p\\]\\.hasClaudeMdExternalIncludesApproved.*systemctl --user restart", terraform_data.session["openplanhq/ai-os"].input.start))
+    error_message = "start must check the entry survived, after the write and before its service starts, or a lost write leaves the clone untrusted or its imports dropped for good"
+  }
+}
+
+# ai-os's shared settings deny reading .env, and Claude's Edit tool reads a
+# file before it changes it, so the deny blocks edits too. The VM drops it.
+run "start_lets_claude_edit_env" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for want in [
+        "settings=\"$HOME/.claude/settings.json\"",
+        # No settings (bootstrap failed) is no reason to fail the session.
+        "[ -f \"$settings\" ]",
+        "del(.permissions.deny[]? | select(. == \"Read(**/.env)\"))",
+      ] : strcontains(terraform_data.session["openplanhq/ai-os"].input.start, want)
+    ])
+    error_message = "start must drop the shared Read(**/.env) deny from the VM's Claude settings, and only when the file exists"
+  }
+
+  assert {
+    condition     = can(regex("(?s)Read\\(\\*\\*/\\.env\\).*systemctl --user restart", terraform_data.session["openplanhq/ai-os"].input.start))
+    error_message = "the deny must be gone before the service starts, or its sessions start with it"
   }
 }
 
@@ -119,7 +155,8 @@ run "unit_is_the_proven_one" {
       for line in [
         "WorkingDirectory=%h/projects/github/%I",
         "Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin",
-        "ExecStart=%h/.local/bin/claude remote-control --name %I",
+        # Nobody is at the claude.ai end to approve each tool call.
+        "ExecStart=%h/.local/bin/claude remote-control --name %I --permission-mode auto",
         "Restart=always",
         "RestartSec=15",
         "StartLimitIntervalSec=0",
@@ -130,14 +167,75 @@ run "unit_is_the_proven_one" {
   }
 }
 
+# One install per VM, apart from the sessions: a version bump reinstalls
+# without restarting them, and adding a repo doesn't reinstall.
+run "tools_once_per_vm" {
+  command = plan
+
+  assert {
+    condition = (
+      keys(terraform_data.tools.triggers_replace) == ["host", "private_key", "script", "user"] &&
+      terraform_data.tools.triggers_replace.script == sha256(terraform_data.tools.input.script)
+    )
+    error_message = "the tools are replaced only when their script or the VM changes"
+  }
+}
+
+run "tools_script" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for want in [
+        "https://github.com/jgraph/drawio-desktop/releases/download/v32.6.1/drawio-amd64-32.6.1.deb",
+        "515a975fbdb982e0d736b6f99248dbbb856a8b07bb72d6d3648a54b850fa33db",
+        "@mermaid-js/mermaid-cli@11.17.1",
+        "PUPPETEER_SKIP_DOWNLOAD=1",
+        # Electron needs a display; -a gives parallel sessions one each.
+        "exec xvfb-run -a /opt/drawio/drawio --disable-gpu \"$@\"",
+        "PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium exec /opt/mermaid-cli/bin/mmdc \"$@\"",
+      ] : strcontains(terraform_data.tools.input.script, want)
+    ])
+    error_message = "the script must install the pinned draw.io and mermaid-cli and put both CLIs on PATH, headless"
+  }
+
+  # sessions/ can be installed straight after vm/, while cloud-init still
+  # holds apt's lock.
+  assert {
+    condition     = can(regex("(?s)cloud-init status --wait.*apt-get", terraform_data.tools.input.script))
+    error_message = "the script must wait for vm/'s first-boot setup before it uses apt"
+  }
+
+  # The image's apt-daily and unattended-upgrades can hold apt's locks at any
+  # time, and apt fails at once on a held lock unless told to wait.
+  assert {
+    condition = (
+      strcontains(terraform_data.tools.input.script, "until apt-get update") &&
+      alltrue([
+        for line in split("\n", terraform_data.tools.input.script) :
+        !strcontains(line, "apt-get install") || strcontains(line, "DPkg::Lock::Timeout=")
+      ]) &&
+      length(regexall("(?m)^apt_get install", terraform_data.tools.input.script)) == 2
+    )
+    error_message = "the script must wait for dpkg's lock on every install and retry the update, or a background apt run fails the apply"
+  }
+
+  # Under set -e, a download that doesn't match fails the apply before
+  # anything from it is installed.
+  assert {
+    condition     = can(regex("(?s)^set -eu\n.*sha256sum -c.*apt_get install[^\n]*\\$deb", terraform_data.tools.input.script))
+    error_message = "the draw.io package must be checked against its pinned SHA-256 before it is installed"
+  }
+}
+
 # The connection is in the triggers: a rebuilt VM, with a new key, gets its
-# unit and sessions back on the next apply.
+# unit, sessions and tools back on the next apply.
 run "connects_with_vm_outputs" {
   command = plan
 
   assert {
     condition = alltrue([
-      for s in concat(values(terraform_data.session), [terraform_data.unit]) :
+      for s in concat(values(terraform_data.session), [terraform_data.unit, terraform_data.tools]) :
       s.triggers_replace.host == "10.10.10.20" && s.triggers_replace.user == "debian" && nonsensitive(s.triggers_replace.private_key) == "KEY"
     ])
     error_message = "sessions/ reaches the VM at vm/'s address, as vm/'s user, with vm/'s key"
@@ -151,7 +249,7 @@ run "key_not_in_input" {
 
   assert {
     condition = alltrue([
-      for s in concat(values(terraform_data.session), [terraform_data.unit]) : !can(s.input.private_key)
+      for s in concat(values(terraform_data.session), [terraform_data.unit, terraform_data.tools]) : !can(s.input.private_key)
     ])
     error_message = "the automation key must stay out of input, or a plan prints it"
   }
