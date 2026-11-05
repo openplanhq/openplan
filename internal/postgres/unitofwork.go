@@ -24,6 +24,10 @@ func (repo *txRepo) CreateTemplate(ctx context.Context, template domain.Template
 	return createTemplate(ctx, repo.tx, template)
 }
 
+func (repo *txRepo) ChangeTemplateRef(ctx context.Context, tenantID domain.TenantID, id domain.TemplateID, sourceRef string) (domain.Template, error) {
+	return changeTemplateRef(ctx, repo.tx, tenantID, id, sourceRef)
+}
+
 func (repo *txRepo) AppendAuditEvent(ctx context.Context, event domain.SecurityAuditEvent) error {
 	return appendAuditEvent(ctx, repo.tx, event)
 }

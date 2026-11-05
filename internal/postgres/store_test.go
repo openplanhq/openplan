@@ -1009,7 +1009,7 @@ func TestUpsertTemplateRevisionWithVariablesReusingIntoADeletedTemplate(t *testi
 		Name:              "vpc",
 		Status:            domain.TemplateRevisionActive,
 	}
-	err := recordLatestTemplateRevision(ctx, mustBegin(t, ctx, pool), revision)
+	err := recordLatestTemplateRevision(ctx, mustBegin(t, ctx, pool), revision, revision.SourceRef)
 	if !errors.Is(err, os.ErrNotExist) || !errors.Is(err, app.ErrNotFound) {
 		t.Fatalf("error = %v, want os.ErrNotExist and app.ErrNotFound", err)
 	}
@@ -4271,7 +4271,7 @@ func TestMigrationClosesOutRunsBeingCanceled(t *testing.T) {
 
 func vpcTemplate(tenantID domain.TenantID) domain.Template {
 	return domain.Template{
-		ID:        domain.TemplateIDFor(tenantID, "acme", "infra", "modules/vpc", "main"),
+		ID:        "template_vpc_main",
 		TenantID:  tenantID,
 		RepoOwner: "acme",
 		RepoName:  "infra",
@@ -4314,6 +4314,180 @@ func TestCreateTemplateBeforeAnyRevision(t *testing.T) {
 	if _, err := store.GetTemplate(ctx, "tenant_456", want.ID); !errors.Is(err, app.ErrNotFound) {
 		t.Fatalf("GetTemplate from another tenant error = %v, want ErrNotFound", err)
 	}
+}
+
+// Changing a template's ref keeps the template: its id, name and creation
+// time stay, only the ref it follows moves.
+func TestChangeTemplateRef(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store := NewStore(openMigratedTestPool(t, ctx))
+	original := vpcTemplate("tenant_123")
+	if _, err := store.CreateTemplate(ctx, original); err != nil {
+		t.Fatalf("CreateTemplate returned error: %v", err)
+	}
+
+	changed, err := store.ChangeTemplateRef(ctx, "tenant_123", original.ID, "develop")
+	if err != nil {
+		t.Fatalf("ChangeTemplateRef returned error: %v", err)
+	}
+	read, err := store.GetTemplate(ctx, "tenant_123", original.ID)
+	if err != nil {
+		t.Fatalf("GetTemplate returned error: %v", err)
+	}
+	for _, template := range []domain.Template{changed, read} {
+		if template.ID != original.ID || template.SourceRef != "develop" || template.Name != "vpc" || !template.CreatedAt.Equal(original.CreatedAt) {
+			t.Fatalf("template = %#v, want %q on develop, still named vpc, created %v", template, original.ID, original.CreatedAt)
+		}
+	}
+
+	if _, err := store.ChangeTemplateRef(ctx, "tenant_123", "template_unknown", "develop"); !errors.Is(err, app.ErrNotFound) {
+		t.Fatalf("change of an unknown template error = %v, want ErrNotFound", err)
+	}
+	if _, err := store.ChangeTemplateRef(ctx, "tenant_456", original.ID, "main"); !errors.Is(err, app.ErrNotFound) {
+		t.Fatalf("change from another tenant error = %v, want ErrNotFound", err)
+	}
+}
+
+// Two templates can't follow one ref of the same repository and path.
+func TestChangeTemplateRefRefusesATakenSource(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store := NewStore(openMigratedTestPool(t, ctx))
+	mainline := vpcTemplate("tenant_123")
+	develop := vpcTemplate("tenant_123")
+	develop.ID = "template_vpc_develop"
+	develop.SourceRef = "develop"
+	for _, template := range []domain.Template{mainline, develop} {
+		if _, err := store.CreateTemplate(ctx, template); err != nil {
+			t.Fatalf("CreateTemplate(%s) returned error: %v", template.SourceRef, err)
+		}
+	}
+
+	if _, err := store.ChangeTemplateRef(ctx, "tenant_123", mainline.ID, "develop"); !errors.Is(err, app.ErrDuplicateTemplateSource) {
+		t.Fatalf("error = %v, want ErrDuplicateTemplateSource", err)
+	}
+	read, err := store.GetTemplate(ctx, "tenant_123", mainline.ID)
+	if err != nil {
+		t.Fatalf("GetTemplate returned error: %v", err)
+	}
+	if read.SourceRef != "main" {
+		t.Fatalf("refused template follows %q, want main", read.SourceRef)
+	}
+}
+
+// After a change, the old ref is free: registering it makes a new template.
+func TestRegisteringTheOldRefAfterAChangeMakesANewTemplate(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store := NewStore(openMigratedTestPool(t, ctx))
+	original := vpcTemplate("tenant_123")
+	if _, err := store.CreateTemplate(ctx, original); err != nil {
+		t.Fatalf("CreateTemplate returned error: %v", err)
+	}
+	if _, err := store.ChangeTemplateRef(ctx, "tenant_123", original.ID, "develop"); err != nil {
+		t.Fatalf("ChangeTemplateRef returned error: %v", err)
+	}
+
+	again := vpcTemplate("tenant_123")
+	again.ID = "template_vpc_main_again"
+	created, err := store.CreateTemplate(ctx, again)
+	if err != nil {
+		t.Fatalf("CreateTemplate of the old ref returned error: %v", err)
+	}
+	if created.ID != again.ID || created.SourceRef != "main" {
+		t.Fatalf("template = %s on %q, want a new template %s on main", created.ID, created.SourceRef, again.ID)
+	}
+}
+
+// A sync that started on the old ref and finishes after the change records
+// its revision, but the template's latest stays where the current ref put it.
+func TestALateSyncOfTheOldRefLeavesLatestAlone(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store := NewStore(openMigratedTestPool(t, ctx))
+	template := vpcTemplate("tenant_123")
+	if _, err := store.CreateTemplate(ctx, template); err != nil {
+		t.Fatalf("CreateTemplate returned error: %v", err)
+	}
+	first := syncRevision(t, ctx, store, template.ID, "main", "aaa111")
+	if _, err := store.ChangeTemplateRef(ctx, "tenant_123", template.ID, "develop"); err != nil {
+		t.Fatalf("ChangeTemplateRef returned error: %v", err)
+	}
+
+	late := syncRevision(t, ctx, store, template.ID, "main", "bbb222")
+	if got := latestRevisionOf(t, ctx, store, template.ID); got != first.ID {
+		t.Fatalf("latest after a late old-ref sync = %q, want %q", got, first.ID)
+	}
+	if _, err := store.GetTemplateRevision(ctx, "tenant_123", late.ID); err != nil {
+		t.Fatalf("the late sync's revision isn't kept: %v", err)
+	}
+
+	current := syncRevision(t, ctx, store, template.ID, "develop", "ccc333")
+	if got := latestRevisionOf(t, ctx, store, template.ID); got != current.ID {
+		t.Fatalf("latest after a develop sync = %q, want %q", got, current.ID)
+	}
+}
+
+// A new ref that fast-forwarded onto a commit the template already has reuses
+// that revision, whose stored ref is the old one, and it becomes latest.
+func TestAFastForwardedRefReusesItsRevisionAsLatest(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store := NewStore(openMigratedTestPool(t, ctx))
+	template := vpcTemplate("tenant_123")
+	if _, err := store.CreateTemplate(ctx, template); err != nil {
+		t.Fatalf("CreateTemplate returned error: %v", err)
+	}
+	shared := syncRevision(t, ctx, store, template.ID, "main", "aaa111")
+	syncRevision(t, ctx, store, template.ID, "main", "bbb222")
+	if _, err := store.ChangeTemplateRef(ctx, "tenant_123", template.ID, "develop"); err != nil {
+		t.Fatalf("ChangeTemplateRef returned error: %v", err)
+	}
+
+	reused := syncRevision(t, ctx, store, template.ID, "develop", "aaa111")
+	if reused.ID != shared.ID || reused.SourceRef != "main" {
+		t.Fatalf("revision = %s from %q, want the existing %s from main", reused.ID, reused.SourceRef, shared.ID)
+	}
+	if got := latestRevisionOf(t, ctx, store, template.ID); got != shared.ID {
+		t.Fatalf("latest = %q, want the reused %q", got, shared.ID)
+	}
+}
+
+// syncRevision records what a sync of the template at ref finds at commit
+// sha, as the sync activity does.
+func syncRevision(t *testing.T, ctx context.Context, store *Store, templateID domain.TemplateID, ref, sha string) domain.TemplateRevision {
+	t.Helper()
+	revision, err := store.UpsertTemplateRevisionWithVariables(ctx, domain.TemplateRevision{
+		ID:                domain.TemplateRevisionID("revision_" + ref + "_" + sha),
+		TenantID:          "tenant_123",
+		TemplateID:        templateID,
+		RepoOwner:         "acme",
+		RepoName:          "infra",
+		SourceRef:         ref,
+		ResolvedCommitSHA: sha,
+		RootPath:          "modules/vpc",
+		Name:              "vpc",
+		Status:            domain.TemplateRevisionActive,
+	}, nil)
+	if err != nil {
+		t.Fatalf("sync %s at %s: %v", ref, sha, err)
+	}
+	return revision
+}
+
+func latestRevisionOf(t *testing.T, ctx context.Context, store *Store, templateID domain.TemplateID) domain.TemplateRevisionID {
+	t.Helper()
+	template, err := store.GetTemplate(ctx, "tenant_123", templateID)
+	if err != nil {
+		t.Fatalf("GetTemplate returned error: %v", err)
+	}
+	return template.LatestTemplateRevisionID
 }
 
 // Registering a source that already has a template returns that template,

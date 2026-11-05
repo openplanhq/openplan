@@ -115,6 +115,17 @@ export function syncTemplate(tenantID: string, templateID: string): Promise<Temp
   });
 }
 
+// Points the template at another ref of its repository. Answers with the
+// template on its new ref, whose latest_sync is the sync of that ref just
+// queued. Refused with duplicate-template-source when another template
+// already follows the ref.
+export function changeTemplateRef(tenantID: string, templateID: string, sourceRef: string): Promise<Template> {
+  return requestJSON(templatePath(tenantID, templateID), {
+    method: "PATCH",
+    body: JSON.stringify({ source_ref: sourceRef })
+  });
+}
+
 // Refused with template-in-use while any stack uses the template.
 export function deleteTemplate(tenantID: string, templateID: string): Promise<void> {
   return requestNoContent(templatePath(tenantID, templateID), { method: "DELETE" });

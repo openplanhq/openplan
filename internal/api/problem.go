@@ -148,6 +148,11 @@ var problemTypes = []problemType{
 		detail: "This stack already has a template with this key.", field: "key",
 	},
 	{
+		sentinel: app.ErrDuplicateTemplateSource, status: http.StatusConflict, slug: "duplicate-template-source",
+		title:  "The ref is taken",
+		detail: "Another template already follows this ref of the same repository and path.", field: "source_ref",
+	},
+	{
 		sentinel: app.ErrDuplicateCredentialName, status: http.StatusConflict, slug: "duplicate-credential-name",
 		title:  "The credential name is taken",
 		detail: "A credential with this name already exists here.", field: "name",

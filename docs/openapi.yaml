@@ -426,6 +426,54 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
+    patch:
+      tags: [Templates]
+      summary: Change a template's ref
+      description: |
+        Points the template at another ref of its repository: the branch a
+        feature merged into, or a newer tag. Only `source_ref` changes. The
+        template keeps its id, its revisions and every stack that installed
+        it, and a sync from the new ref starts at once; the answer's
+        `latest_sync` is that sync.
+
+        Stacks don't move on their own: each moves to a commit on the new
+        ref with change-revision, then a plan and an apply. A sync still
+        running on the old ref records its revision but never becomes the
+        template's latest. Sending the template's current ref only syncs it
+        again.
+      operationId: updateTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateTemplateRequest" }
+            example:
+              source_ref: main
+      responses:
+        "202":
+          description: The template on its new ref, with a sync of it queued.
+          headers:
+            Location:
+              description: The template's own URL, `/v1/tenants/{tenant_id}/templates/{template_id}`.
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Template" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: |
+            Another template of the same repository and root path already
+            follows that ref (`duplicate-template-source`), reported on
+            `source_ref`.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "500": { $ref: "#/components/responses/InternalError" }
     delete:
       tags: [Templates]
       summary: Delete a template
@@ -2242,6 +2290,18 @@ components:
             the repository root.
       required: [repo_owner, repo_name, source_ref]
 
+    UpdateTemplateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        source_ref:
+          type: string
+          description: |
+            The branch, tag or commit SHA the template follows from now on.
+            Another ref of the same repository; the repository and root path
+            don't change.
+      required: [source_ref]
+
     Template:
       type: object
       description: |
@@ -2255,7 +2315,10 @@ components:
         repo_name: { type: string }
         source_ref:
           type: string
-          description: The ref every sync resolves to a commit.
+          description: |
+            The ref every sync resolves to a commit. It can change
+            (`PATCH` the template); each revision keeps the ref it was synced
+            from.
         root_path: { type: string }
         name:
           type: string

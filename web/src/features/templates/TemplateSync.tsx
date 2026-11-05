@@ -68,6 +68,15 @@ export default function TemplateSync({
   // Once Sync is pressed, the outcome shown is that sync's alone.
   const [pressed, setPressed] = useState(false);
   const [requestError, setRequestError] = useState("");
+  // Changing the template's ref (Change ref) queues a sync of the new ref:
+  // follow it as a pressed Sync is followed.
+  const [followedRef, setFollowedRef] = useState(template.source_ref);
+  if (followedRef !== template.source_ref) {
+    setFollowedRef(template.source_ref);
+    setRequestError("");
+    setPressed(true);
+    setFollowing(true);
+  }
   const templateQuery = useTemplateQuery(tenantID, following ? template.id : "");
 
   // Until the first read answers, the list's copy of the template says where

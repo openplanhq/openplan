@@ -169,6 +169,8 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	server.handleTenantRoute("GET", "/templates", server.handleListTemplates)
 	// Reads one template.
 	server.handleTenantRoute("GET", "/templates/{template_id}", server.handleGetTemplate)
+	// Points a template at another ref of its repository and syncs it from there.
+	server.handleTenantRoute("PATCH", "/templates/{template_id}", server.handleUpdateTemplate)
 	// Deletes a template no stack has installed.
 	server.handleTenantRoute("DELETE", "/templates/{template_id}", server.handleDeleteTemplate)
 	// Syncs a template again, to pick up a new commit or retry a failed sync.
@@ -525,6 +527,29 @@ func (server *Server) handleGetTemplate(response http.ResponseWriter, request *h
 	}
 
 	writeJSON(response, http.StatusOK, newTemplateResponse(template, server.service.Clock.Now()))
+}
+
+// handleUpdateTemplate answers 202 with the template on its new ref, whose
+// latest_sync is the sync of that ref just queued. The ref is the only field
+// that changes; the decoder refuses any other.
+func (server *Server) handleUpdateTemplate(response http.ResponseWriter, request *http.Request) {
+	var body updateTemplateRequest
+	if !decodeRequestBody(response, request, &body) {
+		return
+	}
+
+	started, err := server.service.ChangeTemplateRef(request.Context(), app.ChangeTemplateRefCommand{
+		TenantID:   domain.TenantID(request.PathValue("tenant_id")),
+		TemplateID: domain.TemplateID(request.PathValue("template_id")),
+		SourceRef:  body.SourceRef,
+	})
+	if err != nil {
+		writeAppError(response, err)
+		return
+	}
+
+	setLocation(response, request, "templates", string(started.Template.ID))
+	writeJSON(response, http.StatusAccepted, newTemplateResponse(started.Template, server.service.Clock.Now()))
 }
 
 func (server *Server) handleDeleteTemplate(response http.ResponseWriter, request *http.Request) {
@@ -1117,6 +1142,10 @@ type credentialRequest struct {
 type approveRunRequest struct{}
 
 type startTemplateSyncRequest struct{}
+
+type updateTemplateRequest struct {
+	SourceRef string `json:"source_ref"`
+}
 
 type discardRunRequest struct {
 	Reason string `json:"reason"`

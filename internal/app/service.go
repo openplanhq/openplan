@@ -44,6 +44,9 @@ var (
 	// ErrTemplateInUse refuses deleting a template that a stack has
 	// installed, in any lifecycle, destroyed included.
 	ErrTemplateInUse = errors.New("template is installed in a stack")
+	// ErrDuplicateTemplateSource refuses pointing a template at a ref that
+	// another template of the same repository and path already follows.
+	ErrDuplicateTemplateSource = errors.New("another template follows this source")
 	// ErrTemplateRunLogLive and ErrTemplateRunLogLost refuse a log body that
 	// is not in the object store: one still being written, or one that
 	// never will be.
@@ -102,6 +105,11 @@ type TxRepo interface {
 	// already exists, and returns whichever is stored, so registering a
 	// source twice lands on one template.
 	CreateTemplate(ctx context.Context, template domain.Template) (domain.Template, error)
+	// ChangeTemplateRef points the template at another ref of its
+	// repository and returns it as stored. It is ErrNotFound when the tenant
+	// has no such template, and ErrDuplicateTemplateSource when another
+	// template already follows that ref.
+	ChangeTemplateRef(ctx context.Context, tenantID domain.TenantID, id domain.TemplateID, sourceRef string) (domain.Template, error)
 	AppendAuditEvent(ctx context.Context, event domain.SecurityAuditEvent) error
 	CreateTemplateRun(ctx context.Context, run domain.TemplateRun) (int, error)
 	CreateTemplateSync(ctx context.Context, templateSync domain.TemplateSync) error
@@ -228,6 +236,11 @@ type TemplateRunIDGenerator interface {
 	NewTemplateRunID() domain.TemplateRunID
 }
 
+// TemplateIDGenerator creates Template identifiers.
+type TemplateIDGenerator interface {
+	NewTemplateID() domain.TemplateID
+}
+
 // TemplateSyncIDGenerator creates TemplateSync identifiers.
 type TemplateSyncIDGenerator interface {
 	NewTemplateSyncID() domain.TemplateSyncID
@@ -339,6 +352,7 @@ type Service struct {
 	CredentialIDs            CredentialIDGenerator
 	RunIDs                   TemplateRunIDGenerator
 	SyncIDs                  TemplateSyncIDGenerator
+	TemplateIDs              TemplateIDGenerator
 	Clock                    Clock
 	Audit                    AuditRepository
 	Users                    UserRepository
@@ -364,6 +378,9 @@ func NewService(service Service) *Service {
 	}
 	if service.SyncIDs == nil {
 		service.SyncIDs = randomTemplateSyncIDGenerator{}
+	}
+	if service.TemplateIDs == nil {
+		service.TemplateIDs = randomTemplateIDGenerator{}
 	}
 	if service.StackIDs == nil {
 		service.StackIDs = randomStackIDGenerator{}
@@ -418,6 +435,14 @@ type RegisterTemplateCommand struct {
 type StartTemplateSyncCommand struct {
 	TenantID   domain.TenantID
 	TemplateID domain.TemplateID
+}
+
+// ChangeTemplateRefCommand points a template at another ref of its
+// repository.
+type ChangeTemplateRefCommand struct {
+	TenantID   domain.TenantID
+	TemplateID domain.TemplateID
+	SourceRef  string
 }
 
 // StartedTemplateSync is a template and the sync that registering it, or
@@ -654,7 +679,9 @@ type GetTemplateRevisionVariablesCommand struct {
 }
 
 // RegisterTemplate stores the template a source names, or finds the one
-// already stored for it, and queues a sync of it. Every register syncs, so
+// already stored for it, and queues a sync of it. A new template gets a
+// minted id, not one derived from its source: a template's ref can change,
+// so the source is what the store matches on. Every register syncs, so
 // registering a source again retries a sync that failed (owner decision,
 // 2026-10-21). The template, its sync and the sync's intent commit together:
 // a sync never runs for a template that was not stored.
@@ -678,7 +705,7 @@ func (service *Service) RegisterTemplate(ctx context.Context, command RegisterTe
 		RootPath:  filepath.Clean(strings.TrimSpace(command.RootPath)),
 		CreatedAt: service.Clock.Now(),
 	}
-	source.ID = domain.TemplateIDFor(source.TenantID, source.RepoOwner, source.RepoName, source.RootPath, source.SourceRef)
+	source.ID = service.TemplateIDs.NewTemplateID()
 
 	var started StartedTemplateSync
 	if err := service.Work.InTx(ctx, func(ctx context.Context, repository TxRepo, enqueuer queue.Enqueuer) error {
@@ -718,6 +745,43 @@ func (service *Service) StartTemplateSync(ctx context.Context, command StartTemp
 		return err
 	}); err != nil {
 		return StartedTemplateSync{}, fmt.Errorf("start template sync: %w", err)
+	}
+	return started, nil
+}
+
+// ChangeTemplateRef points a template at another ref of its repository, a
+// branch a feature merged into or a newer tag, and queues a sync from there.
+// The template keeps its id, its revisions and every stack that installed
+// it; a stack moves to a commit on the new ref with ChangeStackTemplateRevision.
+// A sync still running on the old ref records its revision as history but
+// never becomes the template's latest. The change and its sync commit
+// together.
+func (service *Service) ChangeTemplateRef(ctx context.Context, command ChangeTemplateRefCommand) (StartedTemplateSync, error) {
+	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanManageTemplates); err != nil {
+		return StartedTemplateSync{}, err
+	}
+	actor, err := authenticatedActor(ctx)
+	if err != nil {
+		return StartedTemplateSync{}, err
+	}
+	if err := validateTemplateCommand(command.TenantID, command.TemplateID); err != nil {
+		return StartedTemplateSync{}, err
+	}
+	sourceRef := strings.TrimSpace(command.SourceRef)
+	if sourceRef == "" {
+		return StartedTemplateSync{}, fieldError(ErrInvalidCommand, IssueRequired, "source_ref is required", "source_ref")
+	}
+
+	var started StartedTemplateSync
+	if err := service.Work.InTx(ctx, func(ctx context.Context, repository TxRepo, enqueuer queue.Enqueuer) error {
+		template, err := repository.ChangeTemplateRef(ctx, command.TenantID, command.TemplateID, sourceRef)
+		if err != nil {
+			return err
+		}
+		started, err = service.queueTemplateSync(ctx, repository, enqueuer, template, actor)
+		return err
+	}); err != nil {
+		return StartedTemplateSync{}, fmt.Errorf("change template ref: %w", err)
 	}
 	return started, nil
 }
@@ -3090,6 +3154,12 @@ type randomTemplateRunIDGenerator struct{}
 
 func (randomTemplateRunIDGenerator) NewTemplateRunID() domain.TemplateRunID {
 	return randomID[domain.TemplateRunID]("run")
+}
+
+type randomTemplateIDGenerator struct{}
+
+func (randomTemplateIDGenerator) NewTemplateID() domain.TemplateID {
+	return randomID[domain.TemplateID]("template")
 }
 
 type randomTemplateSyncIDGenerator struct{}

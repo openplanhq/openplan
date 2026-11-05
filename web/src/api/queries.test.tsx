@@ -12,6 +12,7 @@ import {
   useApproveRunMutation,
   useDiscardRunMutation,
   useCreateStackMutation,
+  useChangeTemplateRefMutation,
   useDeleteTemplateMutation,
   useRegisterTemplateMutation,
   useStacksQuery,
@@ -375,6 +376,23 @@ describe("mutation hooks", () => {
 
     expect(fetchMock).toHaveBeenCalledWith("/v1/tenants/tenant_123/templates/tpl_1/syncs", expect.objectContaining({ method: "POST" }));
     expect(queryClient.getQueryData(queryKeys.template("tenant_123", "tpl_1"))).toEqual(synced);
+  });
+
+  it("changes a template's ref and puts the template on its new ref in its own query and in the list", async () => {
+    const moved = { ...syncingTemplate("syncing"), source_ref: "develop" };
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(moved));
+    const queryClient = testQueryClient();
+    const other = { ...syncingTemplate("synced"), id: "tpl_2" };
+    queryClient.setQueryData(queryKeys.templates("tenant_123"), [syncingTemplate("synced"), other]);
+    const { result } = renderHook(() => useChangeTemplateRefMutation("tenant_123"), { wrapper: wrapper(queryClient) });
+
+    await act(async () => {
+      await result.current.mutateAsync({ templateID: "tpl_1", sourceRef: "develop" });
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/v1/tenants/tenant_123/templates/tpl_1", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ source_ref: "develop" }) }));
+    expect(queryClient.getQueryData(queryKeys.template("tenant_123", "tpl_1"))).toEqual(moved);
+    expect(queryClient.getQueryData(queryKeys.templates("tenant_123"))).toEqual([moved, other]);
   });
 
   it("deletes a template, drops its reads and refetches the list", async () => {
