@@ -113,6 +113,29 @@ run "start_trusts_the_clone" {
   }
 }
 
+# ai-os's shared settings deny reading .env, and Claude's Edit tool reads a
+# file before it changes it, so the deny blocks edits too. The VM drops it.
+run "start_lets_claude_edit_env" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for want in [
+        "settings=\"$HOME/.claude/settings.json\"",
+        # No settings (bootstrap failed) is no reason to fail the session.
+        "[ -f \"$settings\" ]",
+        "del(.permissions.deny[]? | select(. == \"Read(**/.env)\"))",
+      ] : strcontains(terraform_data.session["openplanhq/ai-os"].input.start, want)
+    ])
+    error_message = "start must drop the shared Read(**/.env) deny from the VM's Claude settings, and only when the file exists"
+  }
+
+  assert {
+    condition     = can(regex("(?s)Read\\(\\*\\*/\\.env\\).*systemctl --user restart", terraform_data.session["openplanhq/ai-os"].input.start))
+    error_message = "the deny must be gone before the service starts, or its sessions start with it"
+  }
+}
+
 run "unit_change_reaches_sessions" {
   command = plan
 

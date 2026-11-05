@@ -39,6 +39,11 @@ logged it in with, or the login that replaced it.
   service has no terminal for Claude's questions, so the apply also answers
   "Enable Remote Control?" in that file, once per VM. Without the approval, a
   session would silently drop the entry `CLAUDE.local.md` imports.
+- **Every session start** also drops the setup repository's
+  `Read(**/.env)` deny from the VM's `~/.claude/settings.json`, so a session
+  can edit its clone's `.env`. Claude's Edit tool reads a file first, so the
+  deny blocked edits as well. Other machines keep the rule, and re-running
+  `bootstrap.sh` on the VM puts it back until the next session is replaced.
 - **Adding a repository** does that for the new one only. The others keep
   running.
 - **Removing one** disables and stops its service. Its clone stays: it may

@@ -38,6 +38,18 @@ mv "$tmp" "$claude_json"
 sleep 1
 jq -e --arg p "$HOME/projects/github/${repo}" '.remoteDialogSeen and .projects[$p].hasTrustDialogAccepted and .projects[$p].hasClaudeMdExternalIncludesApproved' "$claude_json" > /dev/null
 
+# The setup repo's shared settings deny reading .env, and Claude's Edit tool
+# reads a file before it changes it, so the deny blocks edits too. Sessions
+# here set up a clone's local .env, so this VM drops that one rule; other
+# machines keep it. Re-running bootstrap.sh here puts it back until the next
+# session replacement. No settings means bootstrap never ran: nothing to drop.
+settings="$HOME/.claude/settings.json"
+if [ -f "$settings" ]; then
+  tmp="$(mktemp "$settings.XXXXXX")"
+  jq 'del(.permissions.deny[]? | select(. == "Read(**/.env)"))' "$settings" > "$tmp"
+  mv "$tmp" "$settings"
+fi
+
 # restart, not start: a changed unit reaches a service that's already running.
 unit="claude-rc@$(systemd-escape "${repo}").service"
 systemctl --user enable "$unit"
