@@ -167,8 +167,6 @@ run "unit_is_the_proven_one" {
   }
 }
 
-# The connection is in the triggers: a rebuilt VM, with a new key, gets its
-# unit and sessions back on the next apply.
 # One install per VM, apart from the sessions: a version bump reinstalls
 # without restarting them, and adding a repo doesn't reinstall.
 run "tools_once_per_vm" {
@@ -208,14 +206,30 @@ run "tools_script" {
     error_message = "the script must wait for vm/'s first-boot setup before it uses apt"
   }
 
+  # The image's apt-daily and unattended-upgrades can hold apt's locks at any
+  # time, and apt fails at once on a held lock unless told to wait.
+  assert {
+    condition = (
+      strcontains(terraform_data.tools.input.script, "until apt-get update") &&
+      alltrue([
+        for line in split("\n", terraform_data.tools.input.script) :
+        !strcontains(line, "apt-get install") || strcontains(line, "DPkg::Lock::Timeout=")
+      ]) &&
+      length(regexall("(?m)^apt_get install", terraform_data.tools.input.script)) == 2
+    )
+    error_message = "the script must wait for dpkg's lock on every install and retry the update, or a background apt run fails the apply"
+  }
+
   # Under set -e, a download that doesn't match fails the apply before
   # anything from it is installed.
   assert {
-    condition     = can(regex("(?s)^set -eu\n.*sha256sum -c.*apt-get install[^\n]*\\$deb", terraform_data.tools.input.script))
+    condition     = can(regex("(?s)^set -eu\n.*sha256sum -c.*apt_get install[^\n]*\\$deb", terraform_data.tools.input.script))
     error_message = "the draw.io package must be checked against its pinned SHA-256 before it is installed"
   }
 }
 
+# The connection is in the triggers: a rebuilt VM, with a new key, gets its
+# unit, sessions and tools back on the next apply.
 run "connects_with_vm_outputs" {
   command = plan
 

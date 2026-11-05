@@ -8,17 +8,26 @@ set -eu
 cloud-init status --wait > /dev/null || true
 
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -q
+# The image's apt-daily and unattended-upgrades can hold apt's locks at any
+# time, and apt fails at once on a held lock. Installs wait for dpkg's; the
+# update retries, as that option doesn't cover the lists lock it takes.
+apt_get() { apt-get -o DPkg::Lock::Timeout=600 "$@"; }
+tries=0
+until apt-get update -q; do
+  tries=$((tries + 1))
+  [ "$tries" -lt 20 ] || exit 1
+  sleep 15
+done
 # xvfb and xauth for xvfb-run. Debian's Chromium brings the libraries a
 # headless browser needs; Puppeteer's own download would leave them to us.
-apt-get install -y -q --no-install-recommends xvfb xauth chromium nodejs npm
+apt_get install -y -q --no-install-recommends xvfb xauth chromium nodejs npm
 
 # draw.io's CLI is its desktop app, which Debian doesn't package: pinned, and
 # checked before it's installed.
 deb="$(mktemp --suffix=.deb)"
 curl -fsSL --retry 3 -o "$deb" https://github.com/jgraph/drawio-desktop/releases/download/v32.6.1/drawio-amd64-32.6.1.deb
 echo "515a975fbdb982e0d736b6f99248dbbb856a8b07bb72d6d3648a54b850fa33db  $deb" | sha256sum -c -
-apt-get install -y -q --no-install-recommends "$deb"
+apt_get install -y -q --no-install-recommends "$deb"
 rm -f "$deb"
 
 # 11, not 12: 12 needs Node 22, and Debian 13 ships 20.

@@ -42,15 +42,19 @@ logged it in with, or the login that replaced it.
   service has no terminal for Claude's questions, so the apply also answers
   "Enable Remote Control?" in that file, once per VM. Without the approval, a
   session would silently drop the entry `CLAUDE.local.md` imports.
-- **Every session start** also drops the setup repository's
+
+  Before it starts each service, it drops the setup repository's
   `Read(**/.env)` deny from the VM's `~/.claude/settings.json`, so a session
-  can edit its clone's `.env`. Claude's Edit tool reads a file first, so the
-  deny blocked edits as well. Other machines keep the rule, and re-running
-  `bootstrap.sh` on the VM puts it back until the next session is replaced.
-  It also installs the diagram CLIs, with `sudo`, which `vm/`'s user has
-  without a password: Debian's `xvfb`, `chromium` and Node, draw.io's
+  can edit its clone's `.env`: Claude's Edit tool reads a file first, so the
+  deny blocked edits as well. Other machines keep the rule. Re-running
+  `bootstrap.sh` on the VM puts it back, and only a session's replacement
+  (below) drops it again, not a service restart or a reboot.
+
+  Once per VM, it installs the diagram CLIs with `sudo`, which `vm/`'s user
+  has without a password: Debian's `xvfb`, `chromium` and Node, draw.io's
   package (pinned, its SHA-256 checked) and mermaid-cli, behind
-  `/usr/local/bin/drawio` and `/usr/local/bin/mmdc`.
+  `/usr/local/bin/drawio` and `/usr/local/bin/mmdc`. It waits out apt runs
+  of the VM's own, such as unattended upgrades.
 - **Adding a repository** does that for the new one only. The others keep
   running.
 - **Removing one** disables and stops its service. Its clone stays: it may
