@@ -491,7 +491,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: A stack has installed the template (`template-in-use`).
+          description: A stack has an install of the template that isn't destroyed (`template-in-use`).
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
