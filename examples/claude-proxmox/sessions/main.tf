@@ -61,7 +61,9 @@ locals {
     [Service]
     WorkingDirectory=%h/projects/github/%I
     Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
-    ExecStart=%h/.local/bin/claude remote-control --name %I
+    # For the sessions it spawns: nobody is at the claude.ai end to approve
+    # each tool call, so Claude's own classifier decides instead.
+    ExecStart=%h/.local/bin/claude remote-control --name %I --permission-mode auto
     Restart=always
     RestartSec=15
 

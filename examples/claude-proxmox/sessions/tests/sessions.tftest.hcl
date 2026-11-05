@@ -155,7 +155,8 @@ run "unit_is_the_proven_one" {
       for line in [
         "WorkingDirectory=%h/projects/github/%I",
         "Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin",
-        "ExecStart=%h/.local/bin/claude remote-control --name %I",
+        # Nobody is at the claude.ai end to approve each tool call.
+        "ExecStart=%h/.local/bin/claude remote-control --name %I --permission-mode auto",
         "Restart=always",
         "RestartSec=15",
         "StartLimitIntervalSec=0",

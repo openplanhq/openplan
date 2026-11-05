@@ -55,6 +55,9 @@ logged it in with, or the login that replaced it.
   It's best effort: with the VM gone or unreachable, it finishes anyway.
 
 A session shows in Claude's Remote Control list under its repository's name.
+It runs in auto mode: Claude's own classifier approves each tool call, since
+nobody is at the other end to. A `claude` you start over SSH keeps the default
+mode.
 On the VM, `systemctl --user status 'claude-rc@*'` and
 `journalctl --user -u 'claude-rc@*'` show how each is doing.
 
