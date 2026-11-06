@@ -231,7 +231,9 @@ func TestGuardsWriteNothingWhenUnauthenticated(t *testing.T) {
 }
 
 // A path ID reaches the app decoded, and Postgres text rejects NUL and invalid
-// UTF-8. Uncleaned, %00 in a URL would fail the insert and leave no event.
+// UTF-8. Uncleaned, %00 in a URL would fail the insert and leave no event. These
+// are refused by ObjectFromID, before OpenFGA: the in-memory store here wouldn't
+// show the error its Postgres datastore gives for invalid UTF-8.
 func TestRefusalEventIsCleanedForPostgres(t *testing.T) {
 	t.Parallel()
 

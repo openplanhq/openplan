@@ -231,3 +231,17 @@ func TestObjectFromIDRejectsAnIDTooLongForOpenFGA(t *testing.T) {
 		t.Fatalf("ObjectFromID over the limit error = %v, want ErrInvalidInput", err)
 	}
 }
+
+// Invalid UTF-8 can't be stored, so OpenFGA's Postgres datastore answers with an
+// error, which reads as an outage. The in-memory store used in tests just finds
+// nothing, so only this check keeps the two the same.
+func TestIdentifiersRejectInvalidUTF8(t *testing.T) {
+	t.Parallel()
+
+	if _, err := ObjectFromID(TypeStack, "a\xffb"); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("ObjectFromID error = %v, want ErrInvalidInput", err)
+	}
+	if _, err := SubjectFromOIDCSub("a\xffb"); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("SubjectFromOIDCSub error = %v, want ErrInvalidInput", err)
+	}
+}

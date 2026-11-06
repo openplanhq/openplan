@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -5000,6 +5001,48 @@ func newFailingAPIAuthorization(t *testing.T) *authorization.Authorization {
 	t.Cleanup(auth.Close)
 	datastore.failing = true
 	return auth
+}
+
+// countingAudit counts the events a write records.
+type countingAudit struct{ events atomic.Int32 }
+
+func (audit *countingAudit) AppendAuditEvent(context.Context, domain.SecurityAuditEvent) error {
+	audit.events.Add(1)
+	return nil
+}
+
+// An outage isn't a decision about the caller, so a write that can't reach OpenFGA
+// must not read as a refused attempt: that would accuse someone who did nothing
+// wrong.
+func TestOpenFGAOutageOnAWriteRecordsNoRefusal(t *testing.T) {
+	t.Parallel()
+
+	for _, route := range []struct{ method, path, body string }{
+		{http.MethodPost, "/v1/tenants/tenant_123/stacks", `{"name":"Prod"}`},
+		{http.MethodPost, "/v1/tenants/tenant_123/stacks/stack_123/templates", `{"template_revision_id":"template_123","key":"vpc","config":{}}`},
+		{http.MethodPost, "/v1/tenants/tenant_123/template-runs/run_123/approve", `{}`},
+	} {
+		t.Run(route.path, func(t *testing.T) {
+			t.Parallel()
+
+			deps := newAPITestDependencies(t)
+			deps.authorizer = newFailingAPIAuthorization(t)
+			audit := &countingAudit{}
+			service := deps.service()
+			service.Audit = audit
+			response := httptest.NewRecorder()
+			request := ordinaryAuthenticatedRequest(route.method, route.path, strings.NewReader(route.body))
+
+			NewServer(service, configuredTenantID).ServeHTTP(response, request)
+
+			if response.Code != http.StatusInternalServerError {
+				t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusInternalServerError, response.Body.String())
+			}
+			if got := audit.events.Load(); got != 0 {
+				t.Fatalf("audit events = %d, want none", got)
+			}
+		})
+	}
 }
 
 // decodeProblem fails unless response is an RFC 9457 problem document with

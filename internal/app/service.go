@@ -1124,6 +1124,9 @@ func (service *Service) CreateCredential(ctx context.Context, command CreateCred
 		// The template's stack authorizes the write but doesn't own the row:
 		// the store allows exactly one owner, so stackID stays empty here.
 		templateID = command.StackTemplateID
+		// A create has no target of its own, but where the template is missing
+		// this is the only thing the refusal can name.
+		attempt.TargetID = string(templateID)
 		if _, _, err := service.guardStackTemplateWrite(ctx, attempt, templateID, authorization.RelationCanManageCredentials); err != nil {
 			return CredentialMetadata{}, err
 		}

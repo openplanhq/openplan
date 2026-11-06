@@ -222,6 +222,11 @@ func safeTupleToken(token string) bool {
 	if token == "" || strings.ContainsAny(token, ":#*") {
 		return false
 	}
+	// Invalid UTF-8 can't be stored, so OpenFGA would answer with an error rather
+	// than a decision, and a refusal would read as an outage.
+	if !utf8.ValidString(token) {
+		return false
+	}
 	if strings.IndexFunc(token, unicode.IsSpace) >= 0 || strings.IndexFunc(token, unicode.IsControl) >= 0 {
 		return false
 	}

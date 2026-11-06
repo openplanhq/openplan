@@ -92,7 +92,7 @@ var writePaths = []writePath{
 		})
 		return err
 	}},
-	{"CreateCredential/stack template", viaStackTemplate, domain.AuditOperationCreateCredential, "", func(service *Service, ctx context.Context, _ domain.StackID) error {
+	{"CreateCredential/stack template", viaStackTemplate, domain.AuditOperationCreateCredential, "stack_template_123", func(service *Service, ctx context.Context, _ domain.StackID) error {
 		_, err := service.CreateCredential(ctx, CreateCredentialCommand{
 			TenantID: "tenant_123", Scope: domain.CredentialScopeStackTemplate, StackTemplateID: "stack_template_123", Name: "AWS_REGION", Value: "us-east-1",
 		})
