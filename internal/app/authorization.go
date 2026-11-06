@@ -344,20 +344,21 @@ func (service *Service) guardStackTemplateWrite(ctx context.Context, attempt wri
 	return principal, stackTemplate, nil
 }
 
-func (service *Service) guardRunWrite(ctx context.Context, attempt writeAttempt, runID domain.TemplateRunID, relation authorization.Relation) (authentication.Principal, domain.TemplateRun, error) {
+func (service *Service) guardRunWrite(ctx context.Context, attempt writeAttempt, runID domain.TemplateRunID, relation authorization.Relation) (authentication.Principal, domain.TemplateRun, domain.StackTemplate, error) {
 	principal, err := requirePrincipalAndAuthorizer(ctx, service.Authorization)
 	if err != nil {
-		return authentication.Principal{}, domain.TemplateRun{}, err
+		return authentication.Principal{}, domain.TemplateRun{}, domain.StackTemplate{}, err
 	}
 	run, err := service.TemplateRuns.GetTemplateRun(ctx, attempt.TenantID, runID)
 	if err != nil {
 		service.auditRefusal(ctx, principal, attempt, "", err)
-		return authentication.Principal{}, domain.TemplateRun{}, err
+		return authentication.Principal{}, domain.TemplateRun{}, domain.StackTemplate{}, err
 	}
-	if _, err := service.guardLoadedStackTemplate(ctx, principal, attempt, run.StackTemplateID, relation); err != nil {
-		return authentication.Principal{}, domain.TemplateRun{}, err
+	stackTemplate, err := service.guardLoadedStackTemplate(ctx, principal, attempt, run.StackTemplateID, relation)
+	if err != nil {
+		return authentication.Principal{}, domain.TemplateRun{}, domain.StackTemplate{}, err
 	}
-	return principal, run, nil
+	return principal, run, stackTemplate, nil
 }
 
 // guardLoadedStackTemplate loads the row first so a refusal can name its stack.

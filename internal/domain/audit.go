@@ -14,6 +14,7 @@ const (
 	AuditActionRevoke              AuditAction = "revoke"
 	AuditActionFailedAccessAttempt AuditAction = "failed_access_attempt"
 	AuditActionApprovalGranted     AuditAction = "approval_granted"
+	AuditActionApprovalRejected    AuditAction = "approval_rejected"
 )
 
 // AuditOutcome reports whether the audited operation succeeded or failed.
