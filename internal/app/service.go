@@ -720,13 +720,11 @@ type GetTemplateRevisionVariablesCommand struct {
 // 2026-10-21). The template, its sync and the sync's intent commit together:
 // a sync never runs for a template that was not stored.
 func (service *Service) RegisterTemplate(ctx context.Context, command RegisterTemplateCommand) (StartedTemplateSync, error) {
-	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanManageTemplates); err != nil {
-		return StartedTemplateSync{}, err
-	}
-	actor, err := authenticatedActor(ctx)
+	principal, err := service.guardPlatformWrite(ctx, writeAttempt{Operation: domain.AuditOperationRegisterTemplate, TenantID: command.TenantID}, authorization.RelationCanManageTemplates)
 	if err != nil {
 		return StartedTemplateSync{}, err
 	}
+	actor := domain.UserID(principal.Subject)
 	if err := validateRegisterTemplateCommand(command); err != nil {
 		return StartedTemplateSync{}, err
 	}
@@ -758,13 +756,11 @@ func (service *Service) RegisterTemplate(ctx context.Context, command RegisterTe
 // StartTemplateSync queues a sync of a registered template, to pick up a new
 // commit on its ref or retry a sync that failed.
 func (service *Service) StartTemplateSync(ctx context.Context, command StartTemplateSyncCommand) (StartedTemplateSync, error) {
-	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanManageTemplates); err != nil {
-		return StartedTemplateSync{}, err
-	}
-	actor, err := authenticatedActor(ctx)
+	principal, err := service.guardPlatformWrite(ctx, writeAttempt{Operation: domain.AuditOperationStartTemplateSync, TenantID: command.TenantID, TargetID: string(command.TemplateID)}, authorization.RelationCanManageTemplates)
 	if err != nil {
 		return StartedTemplateSync{}, err
 	}
+	actor := domain.UserID(principal.Subject)
 	if err := validateTemplateCommand(command.TenantID, command.TemplateID); err != nil {
 		return StartedTemplateSync{}, err
 	}
@@ -791,13 +787,11 @@ func (service *Service) StartTemplateSync(ctx context.Context, command StartTemp
 // never becomes the template's latest. The change and its sync commit
 // together.
 func (service *Service) ChangeTemplateRef(ctx context.Context, command ChangeTemplateRefCommand) (StartedTemplateSync, error) {
-	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanManageTemplates); err != nil {
-		return StartedTemplateSync{}, err
-	}
-	actor, err := authenticatedActor(ctx)
+	principal, err := service.guardPlatformWrite(ctx, writeAttempt{Operation: domain.AuditOperationChangeTemplateRef, TenantID: command.TenantID, TargetID: string(command.TemplateID)}, authorization.RelationCanManageTemplates)
 	if err != nil {
 		return StartedTemplateSync{}, err
 	}
+	actor := domain.UserID(principal.Subject)
 	if err := validateTemplateCommand(command.TenantID, command.TemplateID); err != nil {
 		return StartedTemplateSync{}, err
 	}
@@ -868,19 +862,13 @@ func (service *Service) queueTemplateSync(ctx context.Context, repository TxRepo
 
 // CreateStack creates a tenant-owned infrastructure stack.
 func (service *Service) CreateStack(ctx context.Context, command CreateStackCommand) (domain.Stack, error) {
-	principal, ok := authentication.PrincipalFromContext(ctx)
-	if !ok || principal.Subject == "" {
-		return domain.Stack{}, ErrUnauthenticated
-	}
-	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanCreateStack); err != nil {
+	principal, err := service.guardPlatformWrite(ctx, writeAttempt{Operation: domain.AuditOperationCreateStack, TenantID: command.TenantID}, authorization.RelationCanCreateStack)
+	if err != nil {
 		return domain.Stack{}, err
 	}
 	actor := domain.UserID(principal.Subject)
 	if err := validateCreateStackCommand(command); err != nil {
 		return domain.Stack{}, err
-	}
-	if service.Authorization == nil {
-		return domain.Stack{}, fmt.Errorf("authorization not configured")
 	}
 	if service.Work == nil {
 		return domain.Stack{}, fmt.Errorf("unit of work not configured")
@@ -1573,10 +1561,10 @@ func (service *Service) GetTemplate(ctx context.Context, command GetTemplateComm
 // can't slip between a check and the delete. A sync running across the
 // delete finds its template gone and ends.
 func (service *Service) DeleteTemplate(ctx context.Context, command DeleteTemplateCommand) error {
-	if err := validateTemplateCommand(command.TenantID, command.TemplateID); err != nil {
+	if _, err := service.guardPlatformWrite(ctx, writeAttempt{Operation: domain.AuditOperationDeleteTemplate, TenantID: command.TenantID, TargetID: string(command.TemplateID)}, authorization.RelationCanManageTemplates); err != nil {
 		return err
 	}
-	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanManageTemplates); err != nil {
+	if err := validateTemplateCommand(command.TenantID, command.TemplateID); err != nil {
 		return err
 	}
 
@@ -2075,11 +2063,8 @@ func (service *Service) ListPlatformGrants(ctx context.Context, command ListPlat
 // for a stack, with no last-admin guard: root can't be revoked through the
 // API, so the platform stays administrable whoever gives up admin.
 func (service *Service) AssignPlatformRole(ctx context.Context, command AssignPlatformRoleCommand) (AssignPlatformRoleResult, error) {
-	principal, err := requirePrincipal(ctx)
+	principal, err := service.guardPlatformWrite(ctx, writeAttempt{Operation: domain.AuditOperationAssignPlatformRole, TenantID: command.TenantID, TargetID: command.UserSub}, authorization.RelationCanManagePlatformAccess)
 	if err != nil {
-		return AssignPlatformRoleResult{}, err
-	}
-	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanManagePlatformAccess); err != nil {
 		return AssignPlatformRoleResult{}, err
 	}
 
@@ -2150,11 +2135,8 @@ func (service *Service) AssignPlatformRole(ctx context.Context, command AssignPl
 // what isn't held is not an error: they already have no platform role, which
 // is what the caller asked for.
 func (service *Service) RevokePlatformRole(ctx context.Context, command RevokePlatformRoleCommand) error {
-	principal, err := requirePrincipal(ctx)
+	principal, err := service.guardPlatformWrite(ctx, writeAttempt{Operation: domain.AuditOperationRevokePlatformRole, TenantID: command.TenantID, TargetID: command.UserSub}, authorization.RelationCanManagePlatformAccess)
 	if err != nil {
-		return err
-	}
-	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanManagePlatformAccess); err != nil {
 		return err
 	}
 	if service.Work == nil {

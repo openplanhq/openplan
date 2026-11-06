@@ -275,3 +275,95 @@ func (refusingCredentialCipher) Encrypt(string) (string, error) {
 func (refusingCredentialCipher) Decrypt(string) (string, error) {
 	return "", errCredentialCalled
 }
+
+// platformWrite is a write gated on the platform rather than on one stack, so it
+// has no stack to name and nothing to hide: a viewer can see the platform exists.
+type platformWrite struct {
+	name      string
+	operation domain.AuditOperation
+	targetID  string
+	call      func(service *Service, ctx context.Context) error
+}
+
+var platformWrites = []platformWrite{
+	{"RegisterTemplate", domain.AuditOperationRegisterTemplate, "", func(service *Service, ctx context.Context) error {
+		_, err := service.RegisterTemplate(ctx, RegisterTemplateCommand{TenantID: "tenant_123", RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc"})
+		return err
+	}},
+	{"StartTemplateSync", domain.AuditOperationStartTemplateSync, "template_123", func(service *Service, ctx context.Context) error {
+		_, err := service.StartTemplateSync(ctx, StartTemplateSyncCommand{TenantID: "tenant_123", TemplateID: "template_123"})
+		return err
+	}},
+	{"ChangeTemplateRef", domain.AuditOperationChangeTemplateRef, "template_123", func(service *Service, ctx context.Context) error {
+		_, err := service.ChangeTemplateRef(ctx, ChangeTemplateRefCommand{TenantID: "tenant_123", TemplateID: "template_123", SourceRef: "develop"})
+		return err
+	}},
+	{"DeleteTemplate", domain.AuditOperationDeleteTemplate, "template_123", func(service *Service, ctx context.Context) error {
+		return service.DeleteTemplate(ctx, DeleteTemplateCommand{TenantID: "tenant_123", TemplateID: "template_123"})
+	}},
+	{"CreateStack", domain.AuditOperationCreateStack, "", func(service *Service, ctx context.Context) error {
+		_, err := service.CreateStack(ctx, CreateStackCommand{TenantID: "tenant_123", Name: "Prod"})
+		return err
+	}},
+	{"AssignPlatformRole", domain.AuditOperationAssignPlatformRole, "them", func(service *Service, ctx context.Context) error {
+		_, err := service.AssignPlatformRole(ctx, AssignPlatformRoleCommand{TenantID: "tenant_123", UserSub: "them", Role: "admin"})
+		return err
+	}},
+	{"RevokePlatformRole", domain.AuditOperationRevokePlatformRole, "them", func(service *Service, ctx context.Context) error {
+		return service.RevokePlatformRole(ctx, RevokePlatformRoleCommand{TenantID: "tenant_123", UserSub: "them"})
+	}},
+}
+
+func TestRefusedPlatformWritesAreAudited(t *testing.T) {
+	t.Parallel()
+
+	for _, write := range platformWrites {
+		t.Run(write.name, func(t *testing.T) {
+			t.Parallel()
+
+			fixture, audit := withRecordedAudit(newWriteFixture(newPlatformAuthorizer(t, platformViewer(oidcSubject))))
+			if err := write.call(fixture.service, authenticatedContext()); !errors.Is(err, ErrForbidden) {
+				t.Fatalf("error = %v, want ErrForbidden", err)
+			}
+			if len(audit.events) != 1 {
+				t.Fatalf("audit events = %+v, want one", audit.events)
+			}
+			event := audit.events[0]
+			if event.Operation != write.operation || event.TargetID != write.targetID {
+				t.Fatalf("operation, target = %q, %q, want %q, %q", event.Operation, event.TargetID, write.operation, write.targetID)
+			}
+			if event.Reason != domain.AuditReasonForbidden || event.StackID != "" {
+				t.Fatalf("reason, stack = %q, %q", event.Reason, event.StackID)
+			}
+		})
+	}
+}
+
+// A body is validated after the guard, so a caller with no access can't avoid
+// the record by sending a bad one, and learns nothing about what would pass.
+func TestABadBodyFromACallerWithNoAccessIsRefused(t *testing.T) {
+	t.Parallel()
+
+	for name, call := range map[string]func(*Service, context.Context) error{
+		"RegisterTemplate": func(service *Service, ctx context.Context) error {
+			_, err := service.RegisterTemplate(ctx, RegisterTemplateCommand{TenantID: "tenant_123"})
+			return err
+		},
+		"CreateStack": func(service *Service, ctx context.Context) error {
+			_, err := service.CreateStack(ctx, CreateStackCommand{TenantID: "tenant_123"})
+			return err
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			fixture, audit := withRecordedAudit(newWriteFixture(newPlatformAuthorizer(t, platformViewer(oidcSubject))))
+			if err := call(fixture.service, authenticatedContext()); !errors.Is(err, ErrForbidden) {
+				t.Fatalf("error = %v, want ErrForbidden", err)
+			}
+			if len(audit.events) != 1 {
+				t.Fatalf("audit events = %+v, want one", audit.events)
+			}
+		})
+	}
+}
