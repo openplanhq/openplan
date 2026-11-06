@@ -2,6 +2,7 @@ package authorization
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -212,3 +213,21 @@ func TestNewGrantRequiresAGrantableRelation(t *testing.T) {
 
 // Pins that checking admits relations writing refuses — the write/check
 // asymmetry the two constructors exist for.
+
+// OpenFGA refuses an object over 256 characters with an error, which reads as an
+// outage. An over-long ID names nothing, so it must fail like any other malformed
+// one: otherwise padding an ID turns a refusal into a 500 with no audit event.
+func TestObjectFromIDRejectsAnIDTooLongForOpenFGA(t *testing.T) {
+	t.Parallel()
+
+	longest := strings.Repeat("a", 256-len("stack:"))
+	if _, err := ObjectFromID(TypeStack, longest); err != nil {
+		t.Fatalf("ObjectFromID at the limit returned error: %v", err)
+	}
+	if _, err := ObjectFromID(TypeStack, strings.Repeat("é", 256-len("stack:"))); err != nil {
+		t.Fatalf("ObjectFromID at the limit in multi-byte runes returned error: %v", err)
+	}
+	if _, err := ObjectFromID(TypeStack, longest+"a"); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("ObjectFromID over the limit error = %v, want ErrInvalidInput", err)
+	}
+}

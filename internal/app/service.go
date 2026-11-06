@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/vishu42/openplan/internal/authentication"
 	"github.com/vishu42/openplan/internal/authorization"
@@ -395,14 +396,47 @@ func NewService(service Service) *Service {
 	return &service
 }
 
+// auditWriteTimeout bounds an audit write now that it no longer ends with the
+// request.
+const auditWriteTimeout = 5 * time.Second
+
+// auditFieldMaxBytes caps a field the caller controls: an ID comes from the URL,
+// and nothing else limits how long it is.
+const auditFieldMaxBytes = 256
+
+// auditError records a failure outside any transaction, so a rollback can't
+// erase it. It's best-effort: a failed write is logged and the caller still gets
+// their normal error. It doesn't end with the request's context, or a caller
+// could erase the record of a refused attempt by hanging up.
 func (service *Service) auditError(ctx context.Context, event domain.SecurityAuditEvent) {
 	if service.Audit == nil {
 		return
 	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), auditWriteTimeout)
+	defer cancel()
+
+	event.StackID = domain.StackID(auditField(string(event.StackID)))
+	event.TargetID = auditField(event.TargetID)
+	event.TargetUser = auditField(event.TargetUser)
 	if err := service.Audit.AppendAuditEvent(ctx, event); err != nil {
 		log.Printf("security audit write failed: action=%s actor=%s outcome=%s err=%v",
 			event.Action, event.ActorSubject, event.Outcome, err)
 	}
+}
+
+// auditField makes a caller-controlled value storable. A path ID reaches the app
+// decoded and Postgres text rejects NUL and invalid UTF-8, so without this %00 in
+// a URL would fail the insert and leave no record of the attempt.
+func auditField(value string) string {
+	value = strings.ToValidUTF8(strings.ReplaceAll(value, "\x00", ""), "�")
+	if len(value) <= auditFieldMaxBytes {
+		return value
+	}
+	cut := auditFieldMaxBytes
+	for !utf8.RuneStart(value[cut]) {
+		cut--
+	}
+	return value[:cut]
 }
 
 // auditFailedAccess records one refused access attempt. stackID is empty where

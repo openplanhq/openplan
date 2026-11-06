@@ -280,15 +280,127 @@ func (service *Service) authorizedStackTemplate(ctx context.Context, tenantID do
 	if err != nil {
 		return domain.StackTemplate{}, err
 	}
-	if _, err := authorization.ObjectFromID(authorization.TypeStack, string(stackTemplate.StackID)); errors.Is(err, authorization.ErrInvalidInput) {
-		return domain.StackTemplate{}, fmt.Errorf("stack template has invalid owning stack ID")
-	} else if err != nil {
-		return domain.StackTemplate{}, err
-	}
-	if err := authorizeStack(ctx, service.Authorization, stackTemplate.StackID, relation); err != nil {
+	if err := authorizeOwningStack(ctx, service.Authorization, stackTemplate, relation); err != nil {
 		return domain.StackTemplate{}, err
 	}
 	return stackTemplate, nil
+}
+
+// authorizeOwningStack authorizes relation on the stack a loaded stack template
+// belongs to. A stored stack ID that isn't valid is corrupt data rather than a
+// refusal, so it doesn't get authorizeStack's ErrNotFound.
+func authorizeOwningStack(ctx context.Context, auth *authorization.Authorization, stackTemplate domain.StackTemplate, relation authorization.Relation) error {
+	if _, err := authorization.ObjectFromID(authorization.TypeStack, string(stackTemplate.StackID)); errors.Is(err, authorization.ErrInvalidInput) {
+		return fmt.Errorf("stack template has invalid owning stack ID")
+	} else if err != nil {
+		return err
+	}
+	return authorizeStack(ctx, auth, stackTemplate.StackID, relation)
+}
+
+// writeAttempt names a write for the event its refusal records.
+type writeAttempt struct {
+	Operation domain.AuditOperation
+	TenantID  domain.TenantID
+	TargetID  string // empty for a create, which has no target yet
+}
+
+// The guard*Write functions are how every write starts: who's asking, and may
+// they, with a refusal recorded whatever the client is told. Each returns what
+// it had to load so the write doesn't read it again. Reads don't use them,
+// because reads write no audit event. A body is validated after the guard, so a
+// caller with no access can't avoid the record by sending a bad one.
+
+func (service *Service) guardPlatformWrite(ctx context.Context, attempt writeAttempt, relation authorization.Relation) (authentication.Principal, error) {
+	principal, err := requirePrincipalAndAuthorizer(ctx, service.Authorization)
+	if err != nil {
+		return authentication.Principal{}, err
+	}
+	if err := authorizePlatform(ctx, service.Authorization, relation); err != nil {
+		service.auditRefusal(ctx, principal, attempt, "", err)
+		return authentication.Principal{}, err
+	}
+	return principal, nil
+}
+
+func (service *Service) guardStackWrite(ctx context.Context, attempt writeAttempt, stackID domain.StackID, relation authorization.Relation) (authentication.Principal, error) {
+	principal, err := requirePrincipalAndAuthorizer(ctx, service.Authorization)
+	if err != nil {
+		return authentication.Principal{}, err
+	}
+	if err := authorizeStack(ctx, service.Authorization, stackID, relation); err != nil {
+		service.auditRefusal(ctx, principal, attempt, stackID, err)
+		return authentication.Principal{}, err
+	}
+	return principal, nil
+}
+
+func (service *Service) guardStackTemplateWrite(ctx context.Context, attempt writeAttempt, stackTemplateID domain.StackTemplateID, relation authorization.Relation) (authentication.Principal, domain.StackTemplate, error) {
+	principal, err := requirePrincipalAndAuthorizer(ctx, service.Authorization)
+	if err != nil {
+		return authentication.Principal{}, domain.StackTemplate{}, err
+	}
+	stackTemplate, err := service.guardLoadedStackTemplate(ctx, principal, attempt, stackTemplateID, relation)
+	if err != nil {
+		return authentication.Principal{}, domain.StackTemplate{}, err
+	}
+	return principal, stackTemplate, nil
+}
+
+func (service *Service) guardRunWrite(ctx context.Context, attempt writeAttempt, runID domain.TemplateRunID, relation authorization.Relation) (authentication.Principal, domain.TemplateRun, error) {
+	principal, err := requirePrincipalAndAuthorizer(ctx, service.Authorization)
+	if err != nil {
+		return authentication.Principal{}, domain.TemplateRun{}, err
+	}
+	run, err := service.TemplateRuns.GetTemplateRun(ctx, attempt.TenantID, runID)
+	if err != nil {
+		service.auditRefusal(ctx, principal, attempt, "", err)
+		return authentication.Principal{}, domain.TemplateRun{}, err
+	}
+	if _, err := service.guardLoadedStackTemplate(ctx, principal, attempt, run.StackTemplateID, relation); err != nil {
+		return authentication.Principal{}, domain.TemplateRun{}, err
+	}
+	return principal, run, nil
+}
+
+// guardLoadedStackTemplate loads the row first so a refusal can name its stack.
+// The event isn't shown to the caller, so naming a stack they can't see is safe.
+func (service *Service) guardLoadedStackTemplate(ctx context.Context, principal authentication.Principal, attempt writeAttempt, stackTemplateID domain.StackTemplateID, relation authorization.Relation) (domain.StackTemplate, error) {
+	stackTemplate, err := service.StackTemplates.GetStackTemplate(ctx, attempt.TenantID, stackTemplateID)
+	if err != nil {
+		service.auditRefusal(ctx, principal, attempt, "", err)
+		return domain.StackTemplate{}, err
+	}
+	if err := authorizeOwningStack(ctx, service.Authorization, stackTemplate, relation); err != nil {
+		service.auditRefusal(ctx, principal, attempt, stackTemplate.StackID, err)
+		return domain.StackTemplate{}, err
+	}
+	return stackTemplate, nil
+}
+
+// auditRefusal records err if it's a permission decision. Any other error is an
+// outage or corrupt data, which says nothing about the caller, so recording it
+// as a failed attempt would accuse someone who did nothing wrong.
+func (service *Service) auditRefusal(ctx context.Context, principal authentication.Principal, attempt writeAttempt, stackID domain.StackID, err error) {
+	var reason domain.AuditReason
+	switch {
+	case errors.Is(err, ErrForbidden):
+		reason = domain.AuditReasonForbidden
+	case errors.Is(err, ErrNotFound):
+		reason = domain.AuditReasonNotFound
+	default:
+		return
+	}
+	service.auditError(ctx, domain.SecurityAuditEvent{
+		ActorSubject: principal.Subject,
+		Action:       domain.AuditActionFailedAccessAttempt,
+		TenantID:     attempt.TenantID,
+		StackID:      stackID,
+		Outcome:      domain.AuditOutcomeFailure,
+		Operation:    attempt.Operation,
+		Reason:       reason,
+		TargetID:     attempt.TargetID,
+	})
 }
 
 // operableStackTemplate is authorizedStackTemplate for the mutating commands:
