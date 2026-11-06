@@ -5,7 +5,12 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
+
+// maxObjectLength is OpenFGA's limit on an object, in characters, type prefix
+// included. Past it OpenFGA answers with an error rather than a decision.
+const maxObjectLength = 256
 
 // ErrInvalidInput reports input that could not name a subject, object or
 // relation at all -- a malformed identifier, not a refused request.
@@ -191,6 +196,9 @@ func ObjectFromID(objectType ObjectType, id string) (Object, error) {
 	if err != nil {
 		return Object{}, err
 	}
+	if utf8.RuneCountInString(ident.String()) > maxObjectLength {
+		return Object{}, fmt.Errorf("%w: %s identifier is too long", ErrInvalidInput, objectType)
+	}
 	return Object{identifier: ident}, nil
 }
 
@@ -212,6 +220,11 @@ func (object Object) Valid() bool {
 //	safeTupleToken("")          → false
 func safeTupleToken(token string) bool {
 	if token == "" || strings.ContainsAny(token, ":#*") {
+		return false
+	}
+	// Invalid UTF-8 can't be stored, so OpenFGA would answer with an error rather
+	// than a decision, and a refusal would read as an outage.
+	if !utf8.ValidString(token) {
 		return false
 	}
 	if strings.IndexFunc(token, unicode.IsSpace) >= 0 || strings.IndexFunc(token, unicode.IsControl) >= 0 {

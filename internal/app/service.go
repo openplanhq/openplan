@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/vishu42/openplan/internal/authentication"
 	"github.com/vishu42/openplan/internal/authorization"
@@ -53,14 +54,6 @@ var (
 	ErrTemplateRunLogLive = errors.New("template run log is still live")
 	ErrTemplateRunLogLost = errors.New("template run log was lost")
 )
-
-func authenticatedActor(ctx context.Context) (domain.UserID, error) {
-	principal, ok := authentication.PrincipalFromContext(ctx)
-	if !ok || principal.Subject == "" {
-		return "", ErrUnauthenticated
-	}
-	return domain.UserID(principal.Subject), nil
-}
 
 // ErrForbidden indicates an authenticated actor lacks permission for an operation.
 var ErrForbidden = errors.New("forbidden")
@@ -395,31 +388,47 @@ func NewService(service Service) *Service {
 	return &service
 }
 
+// auditWriteTimeout bounds an audit write now that it no longer ends with the
+// request.
+const auditWriteTimeout = 5 * time.Second
+
+// auditFieldMaxBytes caps a field the caller controls: an ID comes from the URL,
+// and nothing else limits how long it is.
+const auditFieldMaxBytes = 256
+
+// auditError records a failure outside any transaction, so a rollback can't
+// erase it. It's best-effort: a failed write is logged and the caller still gets
+// their normal error. It doesn't end with the request's context, or a caller
+// could erase the record of a refused attempt by hanging up.
 func (service *Service) auditError(ctx context.Context, event domain.SecurityAuditEvent) {
 	if service.Audit == nil {
 		return
 	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), auditWriteTimeout)
+	defer cancel()
+
+	event.StackID = domain.StackID(auditField(string(event.StackID)))
+	event.TargetID = auditField(event.TargetID)
+	event.TargetUser = auditField(event.TargetUser)
 	if err := service.Audit.AppendAuditEvent(ctx, event); err != nil {
 		log.Printf("security audit write failed: action=%s actor=%s outcome=%s err=%v",
 			event.Action, event.ActorSubject, event.Outcome, err)
 	}
 }
 
-// auditFailedAccess records one refused access attempt. stackID is empty where
-// the refusal happened before any stack was resolved, which is every refusal
-// reached through a stack template.
-//
-// This exists because the event was previously built at each call site, and the
-// copies had already begun to differ in whether they named the StackID field at
-// all.
-func (service *Service) auditFailedAccess(ctx context.Context, actor domain.UserID, tenantID domain.TenantID, stackID domain.StackID) {
-	service.auditError(ctx, domain.SecurityAuditEvent{
-		ActorSubject: string(actor),
-		Action:       domain.AuditActionFailedAccessAttempt,
-		TenantID:     tenantID,
-		StackID:      stackID,
-		Outcome:      domain.AuditOutcomeFailure,
-	})
+// auditField makes a caller-controlled value storable. A path ID reaches the app
+// decoded and Postgres text rejects NUL and invalid UTF-8, so without this %00 in
+// a URL would fail the insert and leave no record of the attempt.
+func auditField(value string) string {
+	value = strings.ToValidUTF8(strings.ReplaceAll(value, "\x00", ""), "�")
+	if len(value) <= auditFieldMaxBytes {
+		return value
+	}
+	cut := auditFieldMaxBytes
+	for !utf8.RuneStart(value[cut]) {
+		cut--
+	}
+	return value[:cut]
 }
 
 // RegisterTemplateCommand asks the app to register a Terraform template source.
@@ -686,13 +695,11 @@ type GetTemplateRevisionVariablesCommand struct {
 // 2026-10-21). The template, its sync and the sync's intent commit together:
 // a sync never runs for a template that was not stored.
 func (service *Service) RegisterTemplate(ctx context.Context, command RegisterTemplateCommand) (StartedTemplateSync, error) {
-	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanManageTemplates); err != nil {
-		return StartedTemplateSync{}, err
-	}
-	actor, err := authenticatedActor(ctx)
+	principal, err := service.guardPlatformWrite(ctx, writeAttempt{Operation: domain.AuditOperationRegisterTemplate, TenantID: command.TenantID}, authorization.RelationCanManageTemplates)
 	if err != nil {
 		return StartedTemplateSync{}, err
 	}
+	actor := domain.UserID(principal.Subject)
 	if err := validateRegisterTemplateCommand(command); err != nil {
 		return StartedTemplateSync{}, err
 	}
@@ -724,13 +731,11 @@ func (service *Service) RegisterTemplate(ctx context.Context, command RegisterTe
 // StartTemplateSync queues a sync of a registered template, to pick up a new
 // commit on its ref or retry a sync that failed.
 func (service *Service) StartTemplateSync(ctx context.Context, command StartTemplateSyncCommand) (StartedTemplateSync, error) {
-	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanManageTemplates); err != nil {
-		return StartedTemplateSync{}, err
-	}
-	actor, err := authenticatedActor(ctx)
+	principal, err := service.guardPlatformWrite(ctx, writeAttempt{Operation: domain.AuditOperationStartTemplateSync, TenantID: command.TenantID, TargetID: string(command.TemplateID)}, authorization.RelationCanManageTemplates)
 	if err != nil {
 		return StartedTemplateSync{}, err
 	}
+	actor := domain.UserID(principal.Subject)
 	if err := validateTemplateCommand(command.TenantID, command.TemplateID); err != nil {
 		return StartedTemplateSync{}, err
 	}
@@ -757,13 +762,11 @@ func (service *Service) StartTemplateSync(ctx context.Context, command StartTemp
 // never becomes the template's latest. The change and its sync commit
 // together.
 func (service *Service) ChangeTemplateRef(ctx context.Context, command ChangeTemplateRefCommand) (StartedTemplateSync, error) {
-	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanManageTemplates); err != nil {
-		return StartedTemplateSync{}, err
-	}
-	actor, err := authenticatedActor(ctx)
+	principal, err := service.guardPlatformWrite(ctx, writeAttempt{Operation: domain.AuditOperationChangeTemplateRef, TenantID: command.TenantID, TargetID: string(command.TemplateID)}, authorization.RelationCanManageTemplates)
 	if err != nil {
 		return StartedTemplateSync{}, err
 	}
+	actor := domain.UserID(principal.Subject)
 	if err := validateTemplateCommand(command.TenantID, command.TemplateID); err != nil {
 		return StartedTemplateSync{}, err
 	}
@@ -834,19 +837,13 @@ func (service *Service) queueTemplateSync(ctx context.Context, repository TxRepo
 
 // CreateStack creates a tenant-owned infrastructure stack.
 func (service *Service) CreateStack(ctx context.Context, command CreateStackCommand) (domain.Stack, error) {
-	principal, ok := authentication.PrincipalFromContext(ctx)
-	if !ok || principal.Subject == "" {
-		return domain.Stack{}, ErrUnauthenticated
-	}
-	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanCreateStack); err != nil {
+	principal, err := service.guardPlatformWrite(ctx, writeAttempt{Operation: domain.AuditOperationCreateStack, TenantID: command.TenantID}, authorization.RelationCanCreateStack)
+	if err != nil {
 		return domain.Stack{}, err
 	}
 	actor := domain.UserID(principal.Subject)
 	if err := validateCreateStackCommand(command); err != nil {
 		return domain.Stack{}, err
-	}
-	if service.Authorization == nil {
-		return domain.Stack{}, fmt.Errorf("authorization not configured")
 	}
 	if service.Work == nil {
 		return domain.Stack{}, fmt.Errorf("unit of work not configured")
@@ -940,18 +937,15 @@ func (service *Service) CreateStack(ctx context.Context, command CreateStackComm
 
 // AddTemplateToStack validates one template install and persists the tenant-owned stack template.
 func (service *Service) AddTemplateToStack(ctx context.Context, command AddTemplateToStackCommand) (StackTemplateView, error) {
-	actor, err := authenticatedActor(ctx)
+	principal, err := service.guardStackWrite(ctx, writeAttempt{Operation: domain.AuditOperationAddTemplateToStack, TenantID: command.TenantID}, command.StackID, authorization.RelationCanOperate)
 	if err != nil {
 		return StackTemplateView{}, err
 	}
+	actor := domain.UserID(principal.Subject)
 	if err := validateAddTemplateToStackCommand(command); err != nil {
 		return StackTemplateView{}, err
 	}
 
-	if err := authorizeStack(ctx, service.Authorization, command.StackID, authorization.RelationCanOperate); err != nil {
-		service.auditFailedAccess(ctx, actor, command.TenantID, command.StackID)
-		return StackTemplateView{}, err
-	}
 	stack, err := service.Stacks.GetStack(ctx, command.TenantID, command.StackID)
 	if err != nil {
 		return StackTemplateView{}, fmt.Errorf("get stack: %w", err)
@@ -1002,18 +996,23 @@ func (service *Service) AddTemplateToStack(ctx context.Context, command AddTempl
 // has no plan and starts in the apply workflow. Its approval is given here, so
 // its audit record is written here too.
 func (service *Service) StartTemplateRun(ctx context.Context, command StartTemplateRunCommand) (domain.TemplateRun, error) {
-	actor, err := authenticatedActor(ctx)
+	attempt := writeAttempt{Operation: domain.AuditOperationStartTemplateRun, TenantID: command.TenantID, TargetID: string(command.StackTemplateID)}
+	principal, stackTemplate, err := service.guardStackTemplateWrite(ctx, attempt, command.StackTemplateID, authorization.RelationCanOperate)
 	if err != nil {
 		return domain.TemplateRun{}, err
+	}
+	actor := domain.UserID(principal.Subject)
+	// Auto-approve is an approval given in advance, so it takes the same
+	// access as approving a plan: operate alone is not enough.
+	if command.AutoApprove {
+		if _, err := service.guardStackWrite(ctx, attempt, stackTemplate.StackID, authorization.RelationCanApprove); err != nil {
+			return domain.TemplateRun{}, fmt.Errorf("auto-approve: %w", err)
+		}
 	}
 	if err := validateStartTemplateRunCommand(command); err != nil {
 		return domain.TemplateRun{}, err
 	}
 
-	stackTemplate, err := service.operableStackTemplate(ctx, actor, command.TenantID, command.StackTemplateID)
-	if err != nil {
-		return domain.TemplateRun{}, err
-	}
 	if stackTemplate.Lifecycle != domain.StackTemplateActive {
 		return domain.TemplateRun{}, fmt.Errorf("%w: lifecycle is %q", ErrStackTemplateNotRunnable, stackTemplate.Lifecycle)
 	}
@@ -1024,15 +1023,6 @@ func (service *Service) StartTemplateRun(ctx context.Context, command StartTempl
 		return domain.TemplateRun{}, fmt.Errorf("%w: desired template revision is required", ErrStackTemplateNotRunnable)
 	}
 	desiredConfigJSON := stackTemplate.DesiredConfig()
-
-	// Auto-approve is an approval given in advance, so it takes the same
-	// access as approving a plan: operate alone is not enough.
-	if command.AutoApprove {
-		if err := authorizeStack(ctx, service.Authorization, stackTemplate.StackID, authorization.RelationCanApprove); err != nil {
-			service.auditFailedAccess(ctx, actor, command.TenantID, stackTemplate.StackID)
-			return domain.TemplateRun{}, fmt.Errorf("auto-approve: %w", err)
-		}
-	}
 
 	templateRevision, err := service.TemplateRevisionMetadata.GetTemplateRevision(ctx, command.TenantID, desiredTemplateRevisionID)
 	if err != nil {
@@ -1118,37 +1108,36 @@ func (service *Service) StartTemplateRun(ctx context.Context, command StartTempl
 
 // CreateCredential creates one encrypted environment variable in a Stack or StackTemplate scope.
 func (service *Service) CreateCredential(ctx context.Context, command CreateCredentialCommand) (CredentialMetadata, error) {
-	_, err := authenticatedActor(ctx)
-	if err != nil {
+	if _, err := requirePrincipal(ctx); err != nil {
 		return CredentialMetadata{}, err
 	}
-	if service.Credentials == nil || service.CredentialCipher == nil {
-		return CredentialMetadata{}, ErrCredentialEncryptionUnavailable
-	}
-	if err := validateCreateCredentialCommand(command); err != nil {
-		return CredentialMetadata{}, err
-	}
+	attempt := writeAttempt{Operation: domain.AuditOperationCreateCredential, TenantID: command.TenantID}
 	var stackID domain.StackID
 	var templateID domain.StackTemplateID
 	switch command.Scope {
 	case domain.CredentialScopeStack:
 		stackID = command.StackID
-		if err := authorizeStack(ctx, service.Authorization, stackID, authorization.RelationCanManageCredentials); err != nil {
+		if _, err := service.guardStackWrite(ctx, attempt, stackID, authorization.RelationCanManageCredentials); err != nil {
 			return CredentialMetadata{}, err
 		}
 	case domain.CredentialScopeStackTemplate:
 		// The template's stack authorizes the write but doesn't own the row:
 		// the store allows exactly one owner, so stackID stays empty here.
 		templateID = command.StackTemplateID
-		stackTemplate, err := service.StackTemplates.GetStackTemplate(ctx, command.TenantID, templateID)
-		if err != nil {
-			return CredentialMetadata{}, err
-		}
-		if err := authorizeStack(ctx, service.Authorization, stackTemplate.StackID, authorization.RelationCanManageCredentials); err != nil {
+		// A create has no target of its own, but where the template is missing
+		// this is the only thing the refusal can name.
+		attempt.TargetID = string(templateID)
+		if _, _, err := service.guardStackTemplateWrite(ctx, attempt, templateID, authorization.RelationCanManageCredentials); err != nil {
 			return CredentialMetadata{}, err
 		}
 	default:
 		return CredentialMetadata{}, fmt.Errorf("%w: credential scope is invalid", ErrInvalidCommand)
+	}
+	if service.Credentials == nil || service.CredentialCipher == nil {
+		return CredentialMetadata{}, ErrCredentialEncryptionUnavailable
+	}
+	if err := validateCreateCredentialCommand(command); err != nil {
+		return CredentialMetadata{}, err
 	}
 	ciphertext, err := service.CredentialCipher.Encrypt(command.Value)
 	if err != nil {
@@ -1175,7 +1164,7 @@ func (service *Service) CreateCredential(ctx context.Context, command CreateCred
 // ListCredentials returns a scope's credential metadata, with the value of
 // each one that is not sensitive.
 func (service *Service) ListCredentials(ctx context.Context, command ListCredentialsCommand) ([]CredentialMetadata, error) {
-	if _, err := authenticatedActor(ctx); err != nil {
+	if _, err := requirePrincipal(ctx); err != nil {
 		return nil, err
 	}
 	if service.Credentials == nil {
@@ -1214,30 +1203,27 @@ func (service *Service) ListCredentials(ctx context.Context, command ListCredent
 
 // DeleteCredential deletes a scoped credential. Rotation is delete-and-recreate.
 func (service *Service) DeleteCredential(ctx context.Context, command DeleteCredentialCommand) error {
-	if _, err := authenticatedActor(ctx); err != nil {
+	if _, err := requirePrincipal(ctx); err != nil {
 		return err
+	}
+	attempt := writeAttempt{Operation: domain.AuditOperationDeleteCredential, TenantID: command.TenantID, TargetID: string(command.CredentialID)}
+	switch {
+	case command.StackID != "":
+		if _, err := service.guardStackWrite(ctx, attempt, command.StackID, authorization.RelationCanManageCredentials); err != nil {
+			return err
+		}
+	case command.StackTemplateID != "":
+		if _, _, err := service.guardStackTemplateWrite(ctx, attempt, command.StackTemplateID, authorization.RelationCanManageCredentials); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("%w: credential scope is required", ErrInvalidCommand)
 	}
 	if service.Credentials == nil {
 		return ErrCredentialEncryptionUnavailable
 	}
-	if command.TenantID == "" || command.CredentialID == "" {
-		return fmt.Errorf("%w: tenant and credential IDs are required", ErrInvalidCommand)
-	}
-	var stackID domain.StackID
-	switch {
-	case command.StackID != "":
-		stackID = command.StackID
-	case service.StackTemplates != nil && command.StackTemplateID != "":
-		stackTemplate, err := service.StackTemplates.GetStackTemplate(ctx, command.TenantID, command.StackTemplateID)
-		if err != nil {
-			return err
-		}
-		stackID = stackTemplate.StackID
-	default:
-		return fmt.Errorf("%w: credential scope is required", ErrInvalidCommand)
-	}
-	if err := authorizeStack(ctx, service.Authorization, stackID, authorization.RelationCanManageCredentials); err != nil {
-		return err
+	if command.CredentialID == "" {
+		return fmt.Errorf("%w: credential id is required", ErrInvalidCommand)
 	}
 	scope := domain.CredentialScopeStack
 	ownerID := string(command.StackID)
@@ -1300,7 +1286,7 @@ func credentialScope(credential domain.Credential) domain.CredentialScope {
 
 // UpdateStackTemplateConfig validates and saves desired config for an installed template.
 func (service *Service) UpdateStackTemplateConfig(ctx context.Context, command UpdateStackTemplateConfigCommand) (StackTemplateView, error) {
-	actor, err := authenticatedActor(ctx)
+	_, stackTemplate, err := service.guardStackTemplateWrite(ctx, writeAttempt{Operation: domain.AuditOperationUpdateStackTemplateConfig, TenantID: command.TenantID, TargetID: string(command.StackTemplateID)}, command.StackTemplateID, authorization.RelationCanOperate)
 	if err != nil {
 		return StackTemplateView{}, err
 	}
@@ -1308,10 +1294,6 @@ func (service *Service) UpdateStackTemplateConfig(ctx context.Context, command U
 		return StackTemplateView{}, err
 	}
 
-	stackTemplate, err := service.operableStackTemplate(ctx, actor, command.TenantID, command.StackTemplateID)
-	if err != nil {
-		return StackTemplateView{}, err
-	}
 	if stackTemplate.Lifecycle != domain.StackTemplateActive {
 		return StackTemplateView{}, fmt.Errorf("%w: lifecycle is %q", ErrStackTemplateNotEditable, stackTemplate.Lifecycle)
 	}
@@ -1349,7 +1331,7 @@ func (service *Service) UpdateStackTemplateConfig(ctx context.Context, command U
 
 // ChangeStackTemplateRevision changes desired revision for an existing installed template.
 func (service *Service) ChangeStackTemplateRevision(ctx context.Context, command ChangeStackTemplateRevisionCommand) (StackTemplateView, error) {
-	actor, err := authenticatedActor(ctx)
+	_, stackTemplate, err := service.guardStackTemplateWrite(ctx, writeAttempt{Operation: domain.AuditOperationChangeStackTemplateRevision, TenantID: command.TenantID, TargetID: string(command.StackTemplateID)}, command.StackTemplateID, authorization.RelationCanOperate)
 	if err != nil {
 		return StackTemplateView{}, err
 	}
@@ -1357,10 +1339,6 @@ func (service *Service) ChangeStackTemplateRevision(ctx context.Context, command
 		return StackTemplateView{}, err
 	}
 
-	stackTemplate, err := service.operableStackTemplate(ctx, actor, command.TenantID, command.StackTemplateID)
-	if err != nil {
-		return StackTemplateView{}, err
-	}
 	if stackTemplate.Lifecycle != domain.StackTemplateActive {
 		return StackTemplateView{}, fmt.Errorf("%w: lifecycle is %q", ErrStackTemplateRevisionNotChangeable, stackTemplate.Lifecycle)
 	}
@@ -1539,10 +1517,10 @@ func (service *Service) GetTemplate(ctx context.Context, command GetTemplateComm
 // can't slip between a check and the delete. A sync running across the
 // delete finds its template gone and ends.
 func (service *Service) DeleteTemplate(ctx context.Context, command DeleteTemplateCommand) error {
-	if err := validateTemplateCommand(command.TenantID, command.TemplateID); err != nil {
+	if _, err := service.guardPlatformWrite(ctx, writeAttempt{Operation: domain.AuditOperationDeleteTemplate, TenantID: command.TenantID, TargetID: string(command.TemplateID)}, authorization.RelationCanManageTemplates); err != nil {
 		return err
 	}
-	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanManageTemplates); err != nil {
+	if err := validateTemplateCommand(command.TenantID, command.TemplateID); err != nil {
 		return err
 	}
 
@@ -1827,11 +1805,8 @@ func (service *Service) convergeGrant(ctx context.Context, object authorization.
 
 //nolint:gocognit // Authorization logic; split it only as a reviewed refactor.
 func (service *Service) AssignStackRole(ctx context.Context, command AssignStackRoleCommand) (AssignStackRoleResult, error) {
-	principal, err := requirePrincipal(ctx)
+	principal, err := service.guardStackWrite(ctx, writeAttempt{Operation: domain.AuditOperationAssignStackRole, TenantID: command.TenantID, TargetID: command.UserSub}, command.StackID, authorization.RelationCanManageAccess)
 	if err != nil {
-		return AssignStackRoleResult{}, err
-	}
-	if err := authorizeStack(ctx, service.Authorization, command.StackID, authorization.RelationCanManageAccess); err != nil {
 		return AssignStackRoleResult{}, err
 	}
 
@@ -1934,11 +1909,8 @@ func (service *Service) AssignStackRole(ctx context.Context, command AssignStack
 }
 
 func (service *Service) RevokeStackRole(ctx context.Context, command RevokeStackRoleCommand) error {
-	principal, err := requirePrincipal(ctx)
+	principal, err := service.guardStackWrite(ctx, writeAttempt{Operation: domain.AuditOperationRevokeStackRole, TenantID: command.TenantID, TargetID: command.UserSub}, command.StackID, authorization.RelationCanManageAccess)
 	if err != nil {
-		return err
-	}
-	if err := authorizeStack(ctx, service.Authorization, command.StackID, authorization.RelationCanManageAccess); err != nil {
 		return err
 	}
 
@@ -2041,11 +2013,8 @@ func (service *Service) ListPlatformGrants(ctx context.Context, command ListPlat
 // for a stack, with no last-admin guard: root can't be revoked through the
 // API, so the platform stays administrable whoever gives up admin.
 func (service *Service) AssignPlatformRole(ctx context.Context, command AssignPlatformRoleCommand) (AssignPlatformRoleResult, error) {
-	principal, err := requirePrincipal(ctx)
+	principal, err := service.guardPlatformWrite(ctx, writeAttempt{Operation: domain.AuditOperationAssignPlatformRole, TenantID: command.TenantID, TargetID: command.UserSub}, authorization.RelationCanManagePlatformAccess)
 	if err != nil {
-		return AssignPlatformRoleResult{}, err
-	}
-	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanManagePlatformAccess); err != nil {
 		return AssignPlatformRoleResult{}, err
 	}
 
@@ -2116,11 +2085,8 @@ func (service *Service) AssignPlatformRole(ctx context.Context, command AssignPl
 // what isn't held is not an error: they already have no platform role, which
 // is what the caller asked for.
 func (service *Service) RevokePlatformRole(ctx context.Context, command RevokePlatformRoleCommand) error {
-	principal, err := requirePrincipal(ctx)
+	principal, err := service.guardPlatformWrite(ctx, writeAttempt{Operation: domain.AuditOperationRevokePlatformRole, TenantID: command.TenantID, TargetID: command.UserSub}, authorization.RelationCanManagePlatformAccess)
 	if err != nil {
-		return err
-	}
-	if err := authorizePlatform(ctx, service.Authorization, authorization.RelationCanManagePlatformAccess); err != nil {
 		return err
 	}
 	if service.Work == nil {
@@ -2172,18 +2138,15 @@ func (service *Service) RevokePlatformRole(ctx context.Context, command RevokePl
 // change while a run is in flight, so this only refuses when something got
 // past that rule; it is the backstop, not the gate.
 func (service *Service) ApproveRun(ctx context.Context, command ApproveRunCommand) (domain.TemplateRun, error) {
-	actor, err := authenticatedActor(ctx)
+	principal, run, err := service.guardRunWrite(ctx, writeAttempt{Operation: domain.AuditOperationApproveRun, TenantID: command.TenantID, TargetID: string(command.RunID)}, command.RunID, authorization.RelationCanApprove)
 	if err != nil {
 		return domain.TemplateRun{}, err
 	}
+	actor := domain.UserID(principal.Subject)
 	if err := validateApproveRunCommand(command); err != nil {
 		return domain.TemplateRun{}, err
 	}
 
-	run, err := service.authorizedTemplateRun(ctx, command.TenantID, command.RunID, authorization.RelationCanApprove)
-	if err != nil {
-		return domain.TemplateRun{}, err
-	}
 	if run.Status != domain.TemplateRunWaitingApproval {
 		return domain.TemplateRun{}, fmt.Errorf("approve template run: %w", ErrRunNotApprovable)
 	}
@@ -2292,17 +2255,15 @@ func templateRunWorkflowInput(run domain.TemplateRun, templateRevision domain.Te
 // write, which also drops the saved plan's key; a run past that point has
 // nothing left to discard and is refused.
 func (service *Service) DiscardRun(ctx context.Context, command DiscardRunCommand) error {
-	actor, err := authenticatedActor(ctx)
+	principal, _, err := service.guardRunWrite(ctx, writeAttempt{Operation: domain.AuditOperationDiscardRun, TenantID: command.TenantID, TargetID: string(command.RunID)}, command.RunID, authorization.RelationCanOperate)
 	if err != nil {
 		return err
 	}
+	actor := domain.UserID(principal.Subject)
 	if err := validateDiscardRunCommand(command); err != nil {
 		return err
 	}
 
-	if _, err := service.authorizedTemplateRun(ctx, command.TenantID, command.RunID, authorization.RelationCanOperate); err != nil {
-		return err
-	}
 	discard := domain.TemplateRunDiscard{
 		RunID:       command.RunID,
 		TenantID:    command.TenantID,
@@ -2368,7 +2329,7 @@ func (service *Service) ListTemplateRuns(ctx context.Context, command ListTempla
 		return Page[domain.TemplateRun]{}, err
 	}
 
-	if _, err := service.authorizedStackTemplate(ctx, command.TenantID, command.StackTemplateID, authorization.RelationCanView); err != nil {
+	if err := service.authorizeStackTemplate(ctx, command.TenantID, command.StackTemplateID, authorization.RelationCanView); err != nil {
 		return Page[domain.TemplateRun]{}, fmt.Errorf("list template runs: %w", err)
 	}
 
@@ -2410,7 +2371,7 @@ func (service *Service) GetTemplateRunByNumber(ctx context.Context, command GetT
 		// Run numbers start at 1, so this one names no run.
 		return domain.TemplateRun{}, ErrNotFound
 	}
-	if _, err := service.authorizedStackTemplate(ctx, command.TenantID, command.StackTemplateID, authorization.RelationCanView); err != nil {
+	if err := service.authorizeStackTemplate(ctx, command.TenantID, command.StackTemplateID, authorization.RelationCanView); err != nil {
 		return domain.TemplateRun{}, fmt.Errorf("get template run by number: %w", err)
 	}
 	run, err := service.TemplateRuns.GetTemplateRunByNumber(ctx, command.TenantID, command.StackTemplateID, command.RunNumber)
@@ -2568,9 +2529,6 @@ func (service *Service) ListTemplateRunLogs(ctx context.Context, command ListTem
 // can't fix those from a form. Body fields are then checked together and
 // joined, so one response reports everything wrong with the body.
 func validateCreateStackCommand(command CreateStackCommand) error {
-	if command.TenantID == "" {
-		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
-	}
 	var problems []error
 	nameBlank := strings.TrimSpace(command.Name) == ""
 	if nameBlank {
@@ -2598,8 +2556,6 @@ func validateCreateStackCommand(command CreateStackCommand) error {
 // validateCreateCredentialCommand checks required IDs, scope, variable name, and value before encryption.
 func validateCreateCredentialCommand(command CreateCredentialCommand) error {
 	switch {
-	case command.TenantID == "":
-		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
 	case command.Scope == domain.CredentialScopeStack && command.StackID == "":
 		return fmt.Errorf("%w: stack id is required", ErrInvalidCommand)
 	case command.Scope == domain.CredentialScopeStackTemplate && command.StackTemplateID == "":
@@ -2663,8 +2619,6 @@ func validateListStacksCommand(command ListStacksCommand) error {
 
 func validateAddTemplateToStackCommand(command AddTemplateToStackCommand) error {
 	switch {
-	case command.TenantID == "":
-		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
 	case command.StackID == "":
 		return fmt.Errorf("%w: stack id is required", ErrInvalidCommand)
 	case command.TemplateRevisionID == "":
@@ -2676,8 +2630,6 @@ func validateAddTemplateToStackCommand(command AddTemplateToStackCommand) error 
 
 func validateStartTemplateRunCommand(command StartTemplateRunCommand) error {
 	switch {
-	case command.TenantID == "":
-		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
 	case command.StackTemplateID == "":
 		return fmt.Errorf("%w: stack template id is required", ErrInvalidCommand)
 	// Whether auto_approve fits depends on the operation, so an unsupported
@@ -2693,8 +2645,6 @@ func validateStartTemplateRunCommand(command StartTemplateRunCommand) error {
 
 func validateUpdateStackTemplateConfigCommand(command UpdateStackTemplateConfigCommand) error {
 	switch {
-	case command.TenantID == "":
-		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
 	case command.StackTemplateID == "":
 		return fmt.Errorf("%w: stack template id is required", ErrInvalidCommand)
 	case len(command.ConfigJSON) == 0:
@@ -2706,8 +2656,6 @@ func validateUpdateStackTemplateConfigCommand(command UpdateStackTemplateConfigC
 
 func validateChangeStackTemplateRevisionCommand(command ChangeStackTemplateRevisionCommand) error {
 	switch {
-	case command.TenantID == "":
-		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
 	case command.StackTemplateID == "":
 		return fmt.Errorf("%w: stack template id is required", ErrInvalidCommand)
 	case command.TargetTemplateRevisionID == "":
@@ -2718,9 +2666,6 @@ func validateChangeStackTemplateRevisionCommand(command ChangeStackTemplateRevis
 }
 
 func validateRegisterTemplateCommand(command RegisterTemplateCommand) error {
-	if command.TenantID == "" {
-		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
-	}
 	var problems []error
 	for _, component := range []struct{ field, value string }{
 		{"repo_owner", command.RepoOwner},
@@ -2745,25 +2690,17 @@ func validateRegisterTemplateCommand(command RegisterTemplateCommand) error {
 }
 
 func validateApproveRunCommand(command ApproveRunCommand) error {
-	switch {
-	case command.TenantID == "":
-		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
-	case command.RunID == "":
+	if command.RunID == "" {
 		return fmt.Errorf("%w: run id is required", ErrInvalidCommand)
-	default:
-		return nil
 	}
+	return nil
 }
 
 func validateDiscardRunCommand(command DiscardRunCommand) error {
-	switch {
-	case command.TenantID == "":
-		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
-	case command.RunID == "":
+	if command.RunID == "" {
 		return fmt.Errorf("%w: run id is required", ErrInvalidCommand)
-	default:
-		return nil
 	}
+	return nil
 }
 
 // validateTemplateCommand checks the ids every command on one template names.
