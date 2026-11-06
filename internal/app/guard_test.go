@@ -34,7 +34,7 @@ var stackGuards = []guardCall{
 		return principal, err
 	}},
 	{"guardRunWrite", func(service *Service, ctx context.Context) (authentication.Principal, error) {
-		principal, _, err := service.guardRunWrite(ctx, guardAttempt, "run_123", authorization.RelationCanOperate)
+		principal, _, _, err := service.guardRunWrite(ctx, guardAttempt, "run_123", authorization.RelationCanOperate)
 		return principal, err
 	}},
 }
@@ -123,7 +123,7 @@ func TestGuardsLeaveStackIDEmptyWhenTheRowIsMissing(t *testing.T) {
 
 			var err error
 			if name == "run" {
-				_, _, err = fixture.service.guardRunWrite(authenticatedContext(), guardAttempt, "run_123", authorization.RelationCanOperate)
+				_, _, _, err = fixture.service.guardRunWrite(authenticatedContext(), guardAttempt, "run_123", authorization.RelationCanOperate)
 			} else {
 				_, _, err = fixture.service.guardStackTemplateWrite(authenticatedContext(), guardAttempt, "stack_template_123", authorization.RelationCanOperate)
 			}
@@ -155,9 +155,9 @@ func TestGuardsPassAnAllowedCaller(t *testing.T) {
 	if err != nil || stackTemplate.ID != "stack_template_123" {
 		t.Fatalf("stack template = %q, err = %v", stackTemplate.ID, err)
 	}
-	_, run, err := fixture.service.guardRunWrite(authenticatedContext(), guardAttempt, "run_123", authorization.RelationCanOperate)
-	if err != nil || run.ID != "run_123" {
-		t.Fatalf("run = %q, err = %v", run.ID, err)
+	_, run, runStackTemplate, err := fixture.service.guardRunWrite(authenticatedContext(), guardAttempt, "run_123", authorization.RelationCanOperate)
+	if err != nil || run.ID != "run_123" || runStackTemplate.ID != "stack_template_123" {
+		t.Fatalf("run = %q, stack template = %q, err = %v", run.ID, runStackTemplate.ID, err)
 	}
 	if len(audit.events) != 0 {
 		t.Fatalf("audit events = %+v, want none", audit.events)
@@ -181,7 +181,7 @@ func TestGuardsWriteNothingForAnOutage(t *testing.T) {
 			breakRow(fixture)
 			var err error
 			if name == "run" {
-				_, _, err = fixture.service.guardRunWrite(authenticatedContext(), guardAttempt, "run_123", authorization.RelationCanOperate)
+				_, _, _, err = fixture.service.guardRunWrite(authenticatedContext(), guardAttempt, "run_123", authorization.RelationCanOperate)
 			} else {
 				_, _, err = fixture.service.guardStackTemplateWrite(authenticatedContext(), guardAttempt, "stack_template_123", authorization.RelationCanOperate)
 			}

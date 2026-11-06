@@ -330,16 +330,24 @@ target user subject, when applicable
 configured tenant
 stack and resource identifiers, when applicable
 old role and new role, when applicable
+operation and target, when applicable
 outcome and stable reason code
 request/correlation ID
 idempotency key, when applicable
 ```
 
-Grant, role replacement, revocation, failed access-management attempts,
-last-owner rejection, relationship-reconciliation failure, and successful and
-rejected approvals are audited. Audit records never contain access tokens,
-passwords, client secrets, authorization headers, or raw Keycloak
-administrative responses.
+Grant, role replacement, revocation, relationship-reconciliation failure and
+successful approvals are audited. So are:
+
+- Refusals, where a permission decision says no. Every refused write is audited,
+  including a refused approval or role change. Reads are not.
+- Two rejections, where someone with permission is stopped by the state of things:
+  a last-owner rejection, and an approval of a run that isn't waiting or whose plan
+  is stale.
+
+An outage says nothing about the caller, so it writes neither. Audit records never
+contain access tokens, passwords, client secrets, authorization headers, or raw
+Keycloak administrative responses.
 
 ## Threat Model
 

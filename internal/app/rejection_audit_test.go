@@ -106,3 +106,111 @@ func TestAnAllowedRoleChangeWritesNoRejection(t *testing.T) {
 	}
 }
 
+// approvalFixture is a run waiting for approval, by a caller allowed to approve
+// it. Each case changes one thing so that the state says no.
+func approvalFixture(t *testing.T) (*Service, *recordingTemplateRunRepository, *recordingStackTemplateRepository, *recordingUnitOfWork, *recordingAuditRepository) {
+	t.Helper()
+	runs := &recordingTemplateRunRepository{run: domain.TemplateRun{
+		ID:              "run_123",
+		TenantID:        "tenant_123",
+		StackTemplateID: "stack_template_123",
+		Status:          domain.TemplateRunWaitingApproval,
+	}}
+	templates := approvableStackTemplates()
+	work := &recordingUnitOfWork{templateRuns: runs}
+	audit := &recordingAuditRepository{}
+	service := NewService(Service{
+		Users:                    &fakeUserRepository{},
+		Authorization:            testPlatformAuthorizer(t),
+		Work:                     work,
+		TemplateRuns:             runs,
+		StackTemplates:           templates,
+		TemplateRevisionMetadata: &recordingTemplateRevisionRepository{},
+		Audit:                    audit,
+	})
+	return service, runs, templates, work, audit
+}
+
+func TestApproveRunAuditsARejection(t *testing.T) {
+	t.Parallel()
+
+	var stale *PlanStaleError
+	for _, test := range []struct {
+		name   string
+		reject func(*recordingTemplateRunRepository, *recordingStackTemplateRepository)
+		is     func(error) bool
+		reason domain.AuditReason
+	}{
+		{
+			"run isn't waiting",
+			func(runs *recordingTemplateRunRepository, _ *recordingStackTemplateRepository) {
+				runs.run.Status = domain.TemplateRunCompleted
+			},
+			func(err error) bool { return errors.Is(err, ErrRunNotApprovable) },
+			domain.AuditReasonRunNotApprovable,
+		},
+		{
+			"plan is stale",
+			func(_ *recordingTemplateRunRepository, templates *recordingStackTemplateRepository) {
+				templates.stackTemplate.PendingPlanRunID = "run_other"
+			},
+			func(err error) bool { return errors.As(err, &stale) },
+			domain.AuditReasonPlanStale,
+		},
+		{
+			// Two approvers both saw it waiting; the store lets one through and
+			// fails the other inside the transaction, which rolls back.
+			"approval raced another",
+			func(runs *recordingTemplateRunRepository, _ *recordingStackTemplateRepository) {
+				runs.approvalErr = ErrRunNotApprovable
+			},
+			func(err error) bool { return errors.Is(err, ErrRunNotApprovable) },
+			domain.AuditReasonRunNotApprovable,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			service, runs, templates, work, audit := approvalFixture(t)
+			test.reject(runs, templates)
+
+			_, err := service.ApproveRun(authenticatedContext(), ApproveRunCommand{TenantID: "tenant_123", RunID: "run_123"})
+			if !test.is(err) {
+				t.Fatalf("error = %v", err)
+			}
+			if len(work.audits) != 0 {
+				t.Fatalf("transaction audit events = %+v, want none", work.audits)
+			}
+			if len(audit.events) != 1 {
+				t.Fatalf("audit events = %+v, want one", audit.events)
+			}
+			want := domain.SecurityAuditEvent{
+				ActorSubject: oidcSubject,
+				Action:       domain.AuditActionApprovalRejected,
+				TenantID:     "tenant_123",
+				StackID:      "stack_123",
+				Outcome:      domain.AuditOutcomeFailure,
+				Operation:    domain.AuditOperationApproveRun,
+				Reason:       test.reason,
+				TargetID:     "run_123",
+			}
+			if got := audit.events[0]; got != want {
+				t.Fatalf("audit event =\n%+v, want\n%+v", got, want)
+			}
+		})
+	}
+}
+
+// A failure that isn't about the run's state, like the store being down, says
+// nothing about the approval, so it isn't recorded as rejected.
+func TestApproveRunRecordsNoRejectionForAnOutage(t *testing.T) {
+	t.Parallel()
+
+	service, runs, _, _, audit := approvalFixture(t)
+	runs.approvalErr = errors.New("database down")
+
+	if _, err := service.ApproveRun(authenticatedContext(), ApproveRunCommand{TenantID: "tenant_123", RunID: "run_123"}); err == nil {
+		t.Fatal("ApproveRun returned no error")
+	}
+	if len(audit.events) != 0 {
+		t.Fatalf("audit events = %+v, want none", audit.events)
+	}
+}

@@ -2168,7 +2168,7 @@ func (service *Service) RevokePlatformRole(ctx context.Context, command RevokePl
 // change while a run is in flight, so this only refuses when something got
 // past that rule; it is the backstop, not the gate.
 func (service *Service) ApproveRun(ctx context.Context, command ApproveRunCommand) (domain.TemplateRun, error) {
-	principal, run, err := service.guardRunWrite(ctx, writeAttempt{Operation: domain.AuditOperationApproveRun, TenantID: command.TenantID, TargetID: string(command.RunID)}, command.RunID, authorization.RelationCanApprove)
+	principal, run, stackTemplate, err := service.guardRunWrite(ctx, writeAttempt{Operation: domain.AuditOperationApproveRun, TenantID: command.TenantID, TargetID: string(command.RunID)}, command.RunID, authorization.RelationCanApprove)
 	if err != nil {
 		return domain.TemplateRun{}, err
 	}
@@ -2178,13 +2178,11 @@ func (service *Service) ApproveRun(ctx context.Context, command ApproveRunComman
 	}
 
 	if run.Status != domain.TemplateRunWaitingApproval {
+		service.auditApprovalRejection(ctx, principal, command, stackTemplate.StackID, domain.AuditReasonRunNotApprovable)
 		return domain.TemplateRun{}, fmt.Errorf("approve template run: %w", ErrRunNotApprovable)
 	}
-	stackTemplate, err := service.StackTemplates.GetStackTemplate(ctx, command.TenantID, run.StackTemplateID)
-	if err != nil {
-		return domain.TemplateRun{}, fmt.Errorf("get stack template: %w", err)
-	}
 	if stackTemplate.PendingPlanRunID != run.ID || stackTemplate.PlanState() != domain.PlanMatches {
+		service.auditApprovalRejection(ctx, principal, command, stackTemplate.StackID, domain.AuditReasonPlanStale)
 		return domain.TemplateRun{}, &PlanStaleError{RunNumber: run.RunNumber, PlanState: stackTemplate.PlanState()}
 	}
 	templateRevision, err := service.TemplateRevisionMetadata.GetTemplateRevision(ctx, command.TenantID, run.TemplateRevisionID)
@@ -2230,6 +2228,10 @@ func (service *Service) ApproveRun(ctx context.Context, command ApproveRunComman
 			TenantID:     string(command.TenantID),
 		})
 	}); err != nil {
+		// The store lets one of two racing approvals through and fails the other.
+		if errors.Is(err, ErrRunNotApprovable) {
+			service.auditApprovalRejection(ctx, principal, command, stackTemplate.StackID, domain.AuditReasonRunNotApprovable)
+		}
 		return domain.TemplateRun{}, fmt.Errorf("approve template run: %w", err)
 	}
 
@@ -2238,6 +2240,20 @@ func (service *Service) ApproveRun(ctx context.Context, command ApproveRunComman
 	// started yet.
 	run.Status = domain.TemplateRunApproved
 	return run, nil
+}
+
+// auditApprovalRejection records an approval the run's state stopped, from someone
+// allowed to approve it. A double-clicked approve writes one too, which is accurate:
+// the second click was stopped.
+func (service *Service) auditApprovalRejection(ctx context.Context, principal authentication.Principal, command ApproveRunCommand, stackID domain.StackID, reason domain.AuditReason) {
+	service.auditRejection(ctx, principal, domain.SecurityAuditEvent{
+		Action:    domain.AuditActionApprovalRejected,
+		TenantID:  command.TenantID,
+		StackID:   stackID,
+		Operation: domain.AuditOperationApproveRun,
+		Reason:    reason,
+		TargetID:  string(command.RunID),
+	})
 }
 
 // requireNoRunInFlight refuses to change a stack template's desired state while
@@ -2285,7 +2301,7 @@ func templateRunWorkflowInput(run domain.TemplateRun, templateRevision domain.Te
 // write, which also drops the saved plan's key; a run past that point has
 // nothing left to discard and is refused.
 func (service *Service) DiscardRun(ctx context.Context, command DiscardRunCommand) error {
-	principal, _, err := service.guardRunWrite(ctx, writeAttempt{Operation: domain.AuditOperationDiscardRun, TenantID: command.TenantID, TargetID: string(command.RunID)}, command.RunID, authorization.RelationCanOperate)
+	principal, _, _, err := service.guardRunWrite(ctx, writeAttempt{Operation: domain.AuditOperationDiscardRun, TenantID: command.TenantID, TargetID: string(command.RunID)}, command.RunID, authorization.RelationCanOperate)
 	if err != nil {
 		return err
 	}
