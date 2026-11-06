@@ -61,7 +61,8 @@ func TestAppendAuditEventStoresWhatWasAttempted(t *testing.T) {
 
 // A last-owner rejection fails its transaction, which rolls back everything in it,
 // so only an event written outside it survives. A fake unit of work can't show
-// that: this runs the real rollback.
+// that, so the event goes through the real one. OpenFGA here is in memory and
+// joins no transaction: the grants check only shows the rejection came first.
 func TestLastOwnerRejectionSurvivesTheRollback(t *testing.T) {
 	t.Parallel()
 

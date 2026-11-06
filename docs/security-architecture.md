@@ -330,17 +330,16 @@ target user subject, when applicable
 configured tenant
 stack and resource identifiers, when applicable
 old role and new role, when applicable
-operation and target, when applicable
-outcome and stable reason code
+outcome
+operation, target and stable reason code, on failure events
 request/correlation ID
 idempotency key, when applicable
 ```
 
-Grant, role replacement, revocation, relationship-reconciliation failure and
-successful approvals are audited. So are:
+Grant, role replacement, revocation and successful approvals are audited. So are:
 
-- Refusals, where a permission decision says no. Every refused write is audited,
-  including a refused approval or role change. Reads are not.
+- Refusals, where a permission decision says no. Every write the permission check
+  refuses is audited, including a refused approval or role change. Reads are not.
 - Two rejections, where someone with permission is stopped by the state of things:
   a last-owner rejection, and an approval of a run that isn't waiting or whose plan
   is stale.

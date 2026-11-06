@@ -417,8 +417,7 @@ func (service *Service) auditError(ctx context.Context, event domain.SecurityAud
 }
 
 // auditRejection records someone with permission being stopped by the state of
-// things. It's called after the transaction has failed, so the rollback can't
-// erase it.
+// things. It's never called inside a transaction, so a rollback can't erase it.
 func (service *Service) auditRejection(ctx context.Context, principal authentication.Principal, event domain.SecurityAuditEvent) {
 	event.ActorSubject = principal.Subject
 	event.Outcome = domain.AuditOutcomeFailure
