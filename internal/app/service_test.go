@@ -82,11 +82,11 @@ func TestActorMutationsRejectMissingPrincipal(t *testing.T) {
 	}
 }
 
-func TestAuthenticatedActorRejectsEmptySubject(t *testing.T) {
+func TestRequirePrincipalRejectsEmptySubject(t *testing.T) {
 	t.Parallel()
 
 	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{})
-	if _, err := authenticatedActor(ctx); !errors.Is(err, ErrUnauthenticated) {
+	if _, err := requirePrincipal(ctx); !errors.Is(err, ErrUnauthenticated) {
 		t.Fatalf("error = %v, want ErrUnauthenticated", err)
 	}
 }

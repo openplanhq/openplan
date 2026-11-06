@@ -55,14 +55,6 @@ var (
 	ErrTemplateRunLogLost = errors.New("template run log was lost")
 )
 
-func authenticatedActor(ctx context.Context) (domain.UserID, error) {
-	principal, ok := authentication.PrincipalFromContext(ctx)
-	if !ok || principal.Subject == "" {
-		return "", ErrUnauthenticated
-	}
-	return domain.UserID(principal.Subject), nil
-}
-
 // ErrForbidden indicates an authenticated actor lacks permission for an operation.
 var ErrForbidden = errors.New("forbidden")
 
@@ -1169,7 +1161,7 @@ func (service *Service) CreateCredential(ctx context.Context, command CreateCred
 // ListCredentials returns a scope's credential metadata, with the value of
 // each one that is not sensitive.
 func (service *Service) ListCredentials(ctx context.Context, command ListCredentialsCommand) ([]CredentialMetadata, error) {
-	if _, err := authenticatedActor(ctx); err != nil {
+	if _, err := requirePrincipal(ctx); err != nil {
 		return nil, err
 	}
 	if service.Credentials == nil {
@@ -2334,7 +2326,7 @@ func (service *Service) ListTemplateRuns(ctx context.Context, command ListTempla
 		return Page[domain.TemplateRun]{}, err
 	}
 
-	if _, err := service.authorizedStackTemplate(ctx, command.TenantID, command.StackTemplateID, authorization.RelationCanView); err != nil {
+	if err := service.authorizeStackTemplate(ctx, command.TenantID, command.StackTemplateID, authorization.RelationCanView); err != nil {
 		return Page[domain.TemplateRun]{}, fmt.Errorf("list template runs: %w", err)
 	}
 
@@ -2376,7 +2368,7 @@ func (service *Service) GetTemplateRunByNumber(ctx context.Context, command GetT
 		// Run numbers start at 1, so this one names no run.
 		return domain.TemplateRun{}, ErrNotFound
 	}
-	if _, err := service.authorizedStackTemplate(ctx, command.TenantID, command.StackTemplateID, authorization.RelationCanView); err != nil {
+	if err := service.authorizeStackTemplate(ctx, command.TenantID, command.StackTemplateID, authorization.RelationCanView); err != nil {
 		return domain.TemplateRun{}, fmt.Errorf("get template run by number: %w", err)
 	}
 	run, err := service.TemplateRuns.GetTemplateRunByNumber(ctx, command.TenantID, command.StackTemplateID, command.RunNumber)
@@ -2695,21 +2687,17 @@ func validateRegisterTemplateCommand(command RegisterTemplateCommand) error {
 }
 
 func validateApproveRunCommand(command ApproveRunCommand) error {
-	switch {
-	case command.RunID == "":
+	if command.RunID == "" {
 		return fmt.Errorf("%w: run id is required", ErrInvalidCommand)
-	default:
-		return nil
 	}
+	return nil
 }
 
 func validateDiscardRunCommand(command DiscardRunCommand) error {
-	switch {
-	case command.RunID == "":
+	if command.RunID == "" {
 		return fmt.Errorf("%w: run id is required", ErrInvalidCommand)
-	default:
-		return nil
 	}
+	return nil
 }
 
 // validateTemplateCommand checks the ids every command on one template names.

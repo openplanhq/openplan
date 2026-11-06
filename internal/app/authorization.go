@@ -267,23 +267,20 @@ func stackPageOrderBefore(left, right domain.Stack) bool {
 	return left.ID > right.ID
 }
 
-// authorizedStackTemplate loads a stack template and authorizes relation on the
+// authorizeStackTemplate loads a stack template and authorizes relation on the
 // stack that owns it. A template that doesn't exist is ErrNotFound, the same
 // answer as one the caller can't view, so the two can't be told apart.
-func (service *Service) authorizedStackTemplate(ctx context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID, relation authorization.Relation) (domain.StackTemplate, error) {
+func (service *Service) authorizeStackTemplate(ctx context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID, relation authorization.Relation) error {
 	// Fails an unauthenticated or unconfigured request before the repository
 	// read; authorizeStack below re-derives the principal for the Check.
 	if _, err := requirePrincipalAndAuthorizer(ctx, service.Authorization); err != nil {
-		return domain.StackTemplate{}, err
+		return err
 	}
 	stackTemplate, err := service.StackTemplates.GetStackTemplate(ctx, tenantID, stackTemplateID)
 	if err != nil {
-		return domain.StackTemplate{}, err
+		return err
 	}
-	if err := authorizeOwningStack(ctx, service.Authorization, stackTemplate, relation); err != nil {
-		return domain.StackTemplate{}, err
-	}
-	return stackTemplate, nil
+	return authorizeOwningStack(ctx, service.Authorization, stackTemplate, relation)
 }
 
 // authorizeOwningStack authorizes relation on the stack a loaded stack template
@@ -567,7 +564,7 @@ func ResolveStacksCapabilities(ctx context.Context, auth *authorization.Authoriz
 	return caps, nil
 }
 
-// authorizedTemplateRun is authorizedStackTemplate for a run: a missing run is
+// authorizedTemplateRun is authorizeStackTemplate for a run: a missing run is
 // ErrNotFound, and the run's stack template decides the rest.
 func (service *Service) authorizedTemplateRun(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, relation authorization.Relation) (domain.TemplateRun, error) {
 	if _, err := requirePrincipalAndAuthorizer(ctx, service.Authorization); err != nil {
@@ -577,7 +574,7 @@ func (service *Service) authorizedTemplateRun(ctx context.Context, tenantID doma
 	if err != nil {
 		return domain.TemplateRun{}, err
 	}
-	if _, err := service.authorizedStackTemplate(ctx, tenantID, run.StackTemplateID, relation); err != nil {
+	if err := service.authorizeStackTemplate(ctx, tenantID, run.StackTemplateID, relation); err != nil {
 		return domain.TemplateRun{}, err
 	}
 	return run, nil

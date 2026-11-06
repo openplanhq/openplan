@@ -40,8 +40,8 @@ const (
 	AuditOperationAddTemplateToStack          AuditOperation = "add_template_to_stack"
 	AuditOperationAssignStackRole             AuditOperation = "assign_stack_role"
 	AuditOperationRevokeStackRole             AuditOperation = "revoke_stack_role"
-	AuditOperationCreateCredential            AuditOperation = "create_credential"
-	AuditOperationDeleteCredential            AuditOperation = "delete_credential"
+	AuditOperationCreateCredential            AuditOperation = "create_credential" //nolint:gosec // names an operation, holds no secret
+	AuditOperationDeleteCredential            AuditOperation = "delete_credential" //nolint:gosec // names an operation, holds no secret
 	AuditOperationStartTemplateRun            AuditOperation = "start_template_run"
 	AuditOperationUpdateStackTemplateConfig   AuditOperation = "update_stack_template_config"
 	AuditOperationChangeStackTemplateRevision AuditOperation = "change_stack_template_revision"
