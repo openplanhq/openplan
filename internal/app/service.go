@@ -416,6 +416,15 @@ func (service *Service) auditError(ctx context.Context, event domain.SecurityAud
 	}
 }
 
+// auditRejection records someone with permission being stopped by the state of
+// things. It's called after the transaction has failed, so the rollback can't
+// erase it.
+func (service *Service) auditRejection(ctx context.Context, principal authentication.Principal, event domain.SecurityAuditEvent) {
+	event.ActorSubject = principal.Subject
+	event.Outcome = domain.AuditOutcomeFailure
+	service.auditError(ctx, event)
+}
+
 // auditField makes a caller-controlled value storable. A path ID reaches the app
 // decoded and Postgres text rejects NUL and invalid UTF-8, so without this %00 in
 // a URL would fail the insert and leave no record of the attempt.
@@ -1888,6 +1897,17 @@ func (service *Service) AssignStackRole(ctx context.Context, command AssignStack
 		})
 	}); err != nil {
 		if errors.Is(err, ErrLastOwner) {
+			service.auditRejection(ctx, principal, domain.SecurityAuditEvent{
+				Action:     domain.AuditActionGrant,
+				TargetUser: command.UserSub,
+				TenantID:   command.TenantID,
+				StackID:    command.StackID,
+				OldRole:    authorization.RelationOwner.String(),
+				NewRole:    command.Role,
+				Operation:  domain.AuditOperationAssignStackRole,
+				Reason:     domain.AuditReasonLastOwner,
+				TargetID:   command.UserSub,
+			})
 			return AssignStackRoleResult{}, err
 		}
 		return AssignStackRoleResult{}, fmt.Errorf("assign stack role: %w", err)
@@ -1971,6 +1991,16 @@ func (service *Service) RevokeStackRole(ctx context.Context, command RevokeStack
 		})
 	}); err != nil {
 		if errors.Is(err, ErrLastOwner) {
+			service.auditRejection(ctx, principal, domain.SecurityAuditEvent{
+				Action:     domain.AuditActionRevoke,
+				TargetUser: command.UserSub,
+				TenantID:   command.TenantID,
+				StackID:    command.StackID,
+				OldRole:    authorization.RelationOwner.String(),
+				Operation:  domain.AuditOperationRevokeStackRole,
+				Reason:     domain.AuditReasonLastOwner,
+				TargetID:   command.UserSub,
+			})
 			return err
 		}
 		return fmt.Errorf("revoke stack role: %w", err)
