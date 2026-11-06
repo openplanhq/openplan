@@ -1692,11 +1692,12 @@ func (store *Store) AppendAuditEvent(ctx context.Context, event domain.SecurityA
 func appendAuditEvent(ctx context.Context, exec pgxExecutor, event domain.SecurityAuditEvent) error {
 	_, err := exec.Exec(ctx,
 		`INSERT INTO security_audit_log
-			(actor_subject, action, target_user, tenant_id, stack_id, old_role, new_role, outcome, correlation_id)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+			(actor_subject, action, target_user, tenant_id, stack_id, old_role, new_role, outcome, correlation_id, operation, reason, target_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
 		event.ActorSubject, event.Action, event.TargetUser,
 		event.TenantID, event.StackID, event.OldRole, event.NewRole,
 		event.Outcome, event.CorrelationID,
+		event.Operation, event.Reason, event.TargetID,
 	)
 	return err
 }
