@@ -940,7 +940,8 @@ func TestStartTemplateRunRejectsInvalidOperation(t *testing.T) {
 	t.Parallel()
 
 	service := NewService(Service{
-		StackTemplates: &recordingStackTemplateRepository{},
+		Authorization:  testPlatformAuthorizer(t),
+		StackTemplates: &recordingStackTemplateRepository{stackTemplate: domain.StackTemplate{ID: "stack_template_123", StackID: "stack_123"}},
 		TemplateRuns:   &recordingTemplateRunRepository{},
 		RunIDs:         fixedTemplateRunIDGenerator{runID: domain.TemplateRunID("run_123")},
 		Clock:          fixedClock{now: time.Now()},
@@ -1145,7 +1146,10 @@ func TestStartTemplateRunAutoApproveRequiresApproveAccess(t *testing.T) {
 func TestStartTemplateRunRejectsAutoApproveOutsideApply(t *testing.T) {
 	t.Parallel()
 
-	service := NewService(Service{Authorization: testPlatformAuthorizer(t)})
+	service := NewService(Service{
+		Authorization:  testPlatformAuthorizer(t),
+		StackTemplates: &recordingStackTemplateRepository{stackTemplate: domain.StackTemplate{ID: "stack_template_123", StackID: "stack_123"}},
+	})
 	for _, operation := range []domain.OperationType{domain.OperationPlan, domain.OperationDestroy} {
 		_, err := service.StartTemplateRun(authenticatedContext(), StartTemplateRunCommand{
 			TenantID: "tenant_123", StackTemplateID: "stack_template_123", Operation: operation, AutoApprove: true,
@@ -2910,70 +2914,6 @@ func TestCreateStackWithNilAuditRepositoryDoesNotPanic(t *testing.T) {
 	}
 }
 
-// Both refusals are audited: the caller is told 404 when they can't view the
-// stack, but it is still a refused write.
-func TestAddTemplateToStackAuditsAuthorizationDenial(t *testing.T) {
-	t.Parallel()
-
-	for _, refusal := range writeRefusals {
-		t.Run(refusal.name, func(t *testing.T) {
-			t.Parallel()
-			testAddTemplateToStackAuditsRefusal(t, refusal)
-		})
-	}
-}
-
-func testAddTemplateToStackAuditsRefusal(t *testing.T, refusal writeRefusal) {
-	t.Helper()
-
-	auth := newTestAuthorization(t)
-	refusal.grant(t, auth, oidcSubject, "stack_123")
-	audit := &recordingAuditRepository{}
-	service := NewService(Service{
-		Authorization: auth,
-		Stacks: &recordingStackRepository{
-			stack: domain.Stack{ID: "stack_123", TenantID: "tenant_123", Slug: "acme-prod"},
-		},
-		TemplateRevisionMetadata: &recordingTemplateRevisionRepository{
-			template: domain.TemplateRevision{ID: "template_123", TenantID: "tenant_123", Status: domain.TemplateRevisionActive},
-		},
-		TemplateRevisions: &recordingTemplateRevisionRepository{
-			variables: []domain.TemplateVariable{{Name: "region", Required: true, HasDefault: true}},
-		},
-		StackTemplateInstaller: &recordingStackTemplateInstaller{},
-		StackTemplateIDs:       fixedStackTemplateIDGenerator{id: domain.StackTemplateID("stack_template_a1b2c3d4")},
-		Audit:                  audit,
-	})
-
-	ctx := authentication.ContextWithPrincipal(context.Background(), authentication.Principal{
-		Subject: oidcSubject,
-	})
-
-	_, err := service.AddTemplateToStack(ctx, AddTemplateToStackCommand{
-		TenantID:           domain.TenantID("tenant_123"),
-		StackID:            domain.StackID("stack_123"),
-		TemplateRevisionID: domain.TemplateRevisionID("template_123"),
-		ConfigJSON:         json.RawMessage(`{"region":"us-east-1"}`),
-	})
-	if !errors.Is(err, refusal.want) {
-		t.Fatalf("error = %v, want %v", err, refusal.want)
-	}
-
-	if len(audit.events) != 1 {
-		t.Fatalf("audit events = %d, want 1", len(audit.events))
-	}
-	event := audit.events[0]
-	if event.Action != domain.AuditActionFailedAccessAttempt {
-		t.Fatalf("action = %q, want %q", event.Action, domain.AuditActionFailedAccessAttempt)
-	}
-	if event.Outcome != domain.AuditOutcomeFailure {
-		t.Fatalf("outcome = %q, want %q", event.Outcome, domain.AuditOutcomeFailure)
-	}
-	if event.ActorSubject != oidcSubject {
-		t.Fatalf("actor_subject = %q, want %q", event.ActorSubject, oidcSubject)
-	}
-}
-
 type recordingStackTemplateRepository struct {
 	stackTemplate                domain.StackTemplate
 	getErr                       error
@@ -4109,95 +4049,5 @@ func TestDefaultIDGeneratorsMintPrefixedRandomIDs(t *testing.T) {
 				t.Fatalf("two %s ids are both %q, want distinct values", prefix, id)
 			}
 		})
-	}
-}
-
-// Every mutating command that reaches a stack template through
-// operableStackTemplate must record the refusal, not just refuse. Only
-// AddTemplateToStack had such a test, so three of the four copies of the audit
-// block this replaced were unguarded — dropping the audit call from any of them
-// would have left the suite green.
-func TestOperableStackTemplateCommandsAuditRefusals(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-		call func(*Service, context.Context) error
-	}{
-		{"StartTemplateRun", func(service *Service, ctx context.Context) error {
-			_, err := service.StartTemplateRun(ctx, StartTemplateRunCommand{
-				TenantID:        domain.TenantID("tenant_123"),
-				StackTemplateID: domain.StackTemplateID("stack_template_123"),
-				Operation:       domain.OperationPlan,
-			})
-			return err
-		}},
-		{"UpdateStackTemplateConfig", func(service *Service, ctx context.Context) error {
-			_, err := service.UpdateStackTemplateConfig(ctx, UpdateStackTemplateConfigCommand{
-				TenantID:        domain.TenantID("tenant_123"),
-				StackTemplateID: domain.StackTemplateID("stack_template_123"),
-				ConfigJSON:      json.RawMessage(`{"region":"us-east-1"}`),
-			})
-			return err
-		}},
-		{"ChangeStackTemplateRevision", func(service *Service, ctx context.Context) error {
-			_, err := service.ChangeStackTemplateRevision(ctx, ChangeStackTemplateRevisionCommand{
-				TenantID:                 domain.TenantID("tenant_123"),
-				StackTemplateID:          domain.StackTemplateID("stack_template_123"),
-				TargetTemplateRevisionID: domain.TemplateRevisionID("template_456"),
-			})
-			return err
-		}},
-	}
-
-	for _, test := range tests {
-		for _, refusal := range writeRefusals {
-			t.Run(test.name+"/"+refusal.name, func(t *testing.T) {
-				t.Parallel()
-				testOperableCommandAuditsRefusal(t, test.call, refusal)
-			})
-		}
-	}
-}
-
-func testOperableCommandAuditsRefusal(t *testing.T, call func(*Service, context.Context) error, refusal writeRefusal) {
-	t.Helper()
-
-	auth := newTestAuthorization(t)
-	refusal.grant(t, auth, oidcSubject, "stack_123")
-	audit := &recordingAuditRepository{}
-	service := NewService(Service{
-		TemplateRuns:  &recordingTemplateRunRepository{},
-		Authorization: auth,
-		StackTemplates: &recordingStackTemplateRepository{
-			stackTemplate: domain.StackTemplate{
-				ID:        domain.StackTemplateID("stack_template_123"),
-				Lifecycle: domain.StackTemplateActive,
-			},
-		},
-		Audit: audit,
-		Clock: fixedClock{now: time.Now()},
-	})
-
-	err := call(service, authenticatedContext())
-	if !errors.Is(err, refusal.want) {
-		t.Fatalf("error = %v, want %v", err, refusal.want)
-	}
-
-	if len(audit.events) != 1 {
-		t.Fatalf("audit events = %d, want 1", len(audit.events))
-	}
-	event := audit.events[0]
-	if event.Action != domain.AuditActionFailedAccessAttempt {
-		t.Fatalf("action = %q, want %q", event.Action, domain.AuditActionFailedAccessAttempt)
-	}
-	if event.Outcome != domain.AuditOutcomeFailure {
-		t.Fatalf("outcome = %q, want %q", event.Outcome, domain.AuditOutcomeFailure)
-	}
-	if event.ActorSubject != oidcSubject {
-		t.Fatalf("actor_subject = %q, want %q", event.ActorSubject, oidcSubject)
-	}
-	if event.TenantID != domain.TenantID("tenant_123") {
-		t.Fatalf("tenant_id = %q, want %q", event.TenantID, "tenant_123")
 	}
 }

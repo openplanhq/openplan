@@ -51,89 +51,93 @@ const (
 type writePath struct {
 	name   string
 	target writeTarget
-	call   func(service *Service, ctx context.Context, stackID domain.StackID) error
+	// operation and targetID are what a refusal records. A read has no
+	// operation: it's refused too, but writes no event.
+	operation domain.AuditOperation
+	targetID  string
+	call      func(service *Service, ctx context.Context, stackID domain.StackID) error
 }
 
 // writePaths is every stack-scoped write, plus the credential and grant reads
 // that need more than can_view: those refuse a viewer with 403 too.
 var writePaths = []writePath{
-	{"AddTemplateToStack", viaStack, func(service *Service, ctx context.Context, stackID domain.StackID) error {
+	{"AddTemplateToStack", viaStack, domain.AuditOperationAddTemplateToStack, "", func(service *Service, ctx context.Context, stackID domain.StackID) error {
 		_, err := service.AddTemplateToStack(ctx, AddTemplateToStackCommand{
 			TenantID: "tenant_123", StackID: stackID, TemplateRevisionID: "template_123",
 			ConfigJSON: json.RawMessage(`{}`),
 		})
 		return err
 	}},
-	{"StartTemplateRun", viaStackTemplate, func(service *Service, ctx context.Context, _ domain.StackID) error {
+	{"StartTemplateRun", viaStackTemplate, domain.AuditOperationStartTemplateRun, "stack_template_123", func(service *Service, ctx context.Context, _ domain.StackID) error {
 		_, err := service.StartTemplateRun(ctx, StartTemplateRunCommand{
 			TenantID: "tenant_123", StackTemplateID: "stack_template_123", Operation: domain.OperationPlan,
 		})
 		return err
 	}},
-	{"UpdateStackTemplateConfig", viaStackTemplate, func(service *Service, ctx context.Context, _ domain.StackID) error {
+	{"UpdateStackTemplateConfig", viaStackTemplate, domain.AuditOperationUpdateStackTemplateConfig, "stack_template_123", func(service *Service, ctx context.Context, _ domain.StackID) error {
 		_, err := service.UpdateStackTemplateConfig(ctx, UpdateStackTemplateConfigCommand{
 			TenantID: "tenant_123", StackTemplateID: "stack_template_123", ConfigJSON: json.RawMessage(`{}`),
 		})
 		return err
 	}},
-	{"ChangeStackTemplateRevision", viaStackTemplate, func(service *Service, ctx context.Context, _ domain.StackID) error {
+	{"ChangeStackTemplateRevision", viaStackTemplate, domain.AuditOperationChangeStackTemplateRevision, "stack_template_123", func(service *Service, ctx context.Context, _ domain.StackID) error {
 		_, err := service.ChangeStackTemplateRevision(ctx, ChangeStackTemplateRevisionCommand{
 			TenantID: "tenant_123", StackTemplateID: "stack_template_123", TargetTemplateRevisionID: "template_456",
 		})
 		return err
 	}},
-	{"CreateCredential/stack", viaStack, func(service *Service, ctx context.Context, stackID domain.StackID) error {
+	{"CreateCredential/stack", viaStack, domain.AuditOperationCreateCredential, "", func(service *Service, ctx context.Context, stackID domain.StackID) error {
 		_, err := service.CreateCredential(ctx, CreateCredentialCommand{
 			TenantID: "tenant_123", Scope: domain.CredentialScopeStack, StackID: stackID, Name: "AWS_REGION", Value: "us-east-1",
 		})
 		return err
 	}},
-	{"CreateCredential/stack template", viaStackTemplate, func(service *Service, ctx context.Context, _ domain.StackID) error {
+	{"CreateCredential/stack template", viaStackTemplate, domain.AuditOperationCreateCredential, "", func(service *Service, ctx context.Context, _ domain.StackID) error {
 		_, err := service.CreateCredential(ctx, CreateCredentialCommand{
 			TenantID: "tenant_123", Scope: domain.CredentialScopeStackTemplate, StackTemplateID: "stack_template_123", Name: "AWS_REGION", Value: "us-east-1",
 		})
 		return err
 	}},
-	{"ListCredentials/stack", viaStack, func(service *Service, ctx context.Context, stackID domain.StackID) error {
+	{"ListCredentials/stack", viaStack, "", "", func(service *Service, ctx context.Context, stackID domain.StackID) error {
 		_, err := service.ListCredentials(ctx, ListCredentialsCommand{
 			TenantID: "tenant_123", Scope: domain.CredentialScopeStack, StackID: stackID,
 		})
 		return err
 	}},
-	{"ListCredentials/stack template", viaStackTemplate, func(service *Service, ctx context.Context, _ domain.StackID) error {
+	{"ListCredentials/stack template", viaStackTemplate, "", "", func(service *Service, ctx context.Context, _ domain.StackID) error {
 		_, err := service.ListCredentials(ctx, ListCredentialsCommand{
 			TenantID: "tenant_123", Scope: domain.CredentialScopeStackTemplate, StackTemplateID: "stack_template_123",
 		})
 		return err
 	}},
-	{"DeleteCredential/stack", viaStack, func(service *Service, ctx context.Context, stackID domain.StackID) error {
+	{"DeleteCredential/stack", viaStack, domain.AuditOperationDeleteCredential, "credential_123", func(service *Service, ctx context.Context, stackID domain.StackID) error {
 		return service.DeleteCredential(ctx, DeleteCredentialCommand{
 			TenantID: "tenant_123", StackID: stackID, CredentialID: "credential_123",
 		})
 	}},
-	{"DeleteCredential/stack template", viaStackTemplate, func(service *Service, ctx context.Context, _ domain.StackID) error {
+	{"DeleteCredential/stack template", viaStackTemplate, domain.AuditOperationDeleteCredential, "credential_123", func(service *Service, ctx context.Context, _ domain.StackID) error {
 		return service.DeleteCredential(ctx, DeleteCredentialCommand{
 			TenantID: "tenant_123", StackTemplateID: "stack_template_123", CredentialID: "credential_123",
 		})
 	}},
-	{"ListStackGrants", viaStack, func(service *Service, ctx context.Context, stackID domain.StackID) error {
+	{"ListStackGrants", viaStack, "", "", func(service *Service, ctx context.Context, stackID domain.StackID) error {
 		_, err := service.ListStackGrants(ctx, ListStackGrantsCommand{TenantID: "tenant_123", StackID: stackID})
 		return err
 	}},
-	{"AssignStackRole", viaStack, func(service *Service, ctx context.Context, stackID domain.StackID) error {
+	{"AssignStackRole", viaStack, domain.AuditOperationAssignStackRole, "user_456", func(service *Service, ctx context.Context, stackID domain.StackID) error {
 		_, err := service.AssignStackRole(ctx, AssignStackRoleCommand{
 			TenantID: "tenant_123", StackID: stackID, UserSub: "user_456", Role: "viewer",
 		})
 		return err
 	}},
-	{"RevokeStackRole", viaStack, func(service *Service, ctx context.Context, stackID domain.StackID) error {
+	{"RevokeStackRole", viaStack, domain.AuditOperationRevokeStackRole, "user_456", func(service *Service, ctx context.Context, stackID domain.StackID) error {
 		return service.RevokeStackRole(ctx, RevokeStackRoleCommand{TenantID: "tenant_123", StackID: stackID, UserSub: "user_456"})
 	}},
-	{"ApproveRun", viaRun, func(service *Service, ctx context.Context, _ domain.StackID) error {
+	{"ApproveRun", viaRun, domain.AuditOperationApproveRun, "run_123", func(service *Service, ctx context.Context, _ domain.StackID) error {
 		_, err := service.ApproveRun(ctx, ApproveRunCommand{TenantID: "tenant_123", RunID: "run_123"})
 		return err
 	}},
-	{"DiscardRun", viaRun, func(service *Service, ctx context.Context, _ domain.StackID) error {
+	{"DiscardRun", viaRun, domain.AuditOperationDiscardRun, "run_123", func(service *Service, ctx context.Context, _ domain.StackID) error {
 		return service.DiscardRun(ctx, DiscardRunCommand{TenantID: "tenant_123", RunID: "run_123"})
 	}},
 }
@@ -217,6 +221,69 @@ func TestWritesHideUnseenObjects(t *testing.T) {
 	}
 }
 
+func TestRefusedWritesAreAudited(t *testing.T) {
+	t.Parallel()
+
+	reasons := map[error]domain.AuditReason{ErrNotFound: domain.AuditReasonNotFound, ErrForbidden: domain.AuditReasonForbidden}
+	for _, path := range writePaths {
+		for _, refusal := range writeRefusals {
+			t.Run(path.name+"/"+refusal.name, func(t *testing.T) {
+				t.Parallel()
+
+				auth := newTestAuthorization(t)
+				refusal.grant(t, auth, oidcSubject, "stack_123")
+				fixture, audit := withRecordedAudit(newWriteFixture(auth))
+
+				if err := path.call(fixture.service, authenticatedContext(), "stack_123"); !errors.Is(err, refusal.want) {
+					t.Fatalf("error = %v, want %v", err, refusal.want)
+				}
+				assertWriteAudit(t, path, audit, reasons[refusal.want], "stack_123")
+			})
+		}
+
+		t.Run(path.name+"/missing", func(t *testing.T) {
+			t.Parallel()
+
+			fixture, audit := withRecordedAudit(newWriteFixture(newPlatformAuthorizer(t, platformAdmin(oidcSubject))))
+			stackID := domain.StackID("stack_123")
+			wantStack := domain.StackID("")
+			switch path.target {
+			case viaStack:
+				stackID = "stack_missing"
+				wantStack = stackID
+			case viaStackTemplate:
+				fixture.templates.getErr = ErrNotFound
+			case viaRun:
+				fixture.runs.getErr = ErrNotFound
+			}
+			if err := path.call(fixture.service, authenticatedContext(), stackID); !errors.Is(err, ErrNotFound) {
+				t.Fatalf("error = %v, want ErrNotFound", err)
+			}
+			assertWriteAudit(t, path, audit, domain.AuditReasonNotFound, wantStack)
+		})
+	}
+}
+
+func assertWriteAudit(t *testing.T, path writePath, audit *recordingAuditRepository, reason domain.AuditReason, stackID domain.StackID) {
+	t.Helper()
+	if path.operation == "" {
+		if len(audit.events) != 0 {
+			t.Fatalf("a read wrote audit events: %+v", audit.events)
+		}
+		return
+	}
+	if len(audit.events) != 1 {
+		t.Fatalf("audit events = %+v, want one", audit.events)
+	}
+	event := audit.events[0]
+	if event.Action != domain.AuditActionFailedAccessAttempt || event.ActorSubject != oidcSubject || event.TenantID != "tenant_123" {
+		t.Fatalf("action, actor, tenant = %q, %q, %q", event.Action, event.ActorSubject, event.TenantID)
+	}
+	if event.Operation != path.operation || event.TargetID != path.targetID || event.Reason != reason || event.StackID != stackID {
+		t.Fatalf("operation, target, reason, stack = %q, %q, %q, %q", event.Operation, event.TargetID, event.Reason, event.StackID)
+	}
+}
+
 // Auto-approve asks for can_approve after operate has already passed, so the
 // caller can see the stack and the refusal stays ErrForbidden. It is audited
 // like every other refused operable write.
@@ -240,6 +307,27 @@ func TestStartTemplateRunAutoApproveWithoutApproveIsForbidden(t *testing.T) {
 	}
 	if len(audit.events) != 1 || audit.events[0].Action != domain.AuditActionFailedAccessAttempt {
 		t.Fatalf("audit events = %+v, want one failed access attempt", audit.events)
+	}
+}
+
+// The approve check comes before the template's state, so a caller who may not
+// approve is refused whatever state the template is in.
+func TestStartTemplateRunAutoApproveIsRefusedOnAnInactiveTemplate(t *testing.T) {
+	t.Parallel()
+
+	auth := newTestAuthorization(t)
+	grantStack(t, auth, oidcSubject, "stack_123", authorization.RelationOperator)
+	fixture := newWriteFixture(auth)
+	fixture.templates.stackTemplate.Lifecycle = domain.StackTemplateDestroyed
+
+	_, err := fixture.service.StartTemplateRun(authenticatedContext(), StartTemplateRunCommand{
+		TenantID:        "tenant_123",
+		StackTemplateID: "stack_template_123",
+		Operation:       domain.OperationApply,
+		AutoApprove:     true,
+	})
+	if !errors.Is(err, ErrForbidden) {
+		t.Fatalf("error = %v, want ErrForbidden", err)
 	}
 }
 
@@ -344,22 +432,38 @@ func TestRefusedPlatformWritesAreAudited(t *testing.T) {
 func TestABadBodyFromACallerWithNoAccessIsRefused(t *testing.T) {
 	t.Parallel()
 
-	for name, call := range map[string]func(*Service, context.Context) error{
-		"RegisterTemplate": func(service *Service, ctx context.Context) error {
+	for _, test := range []struct {
+		name string
+		want error
+		call func(*Service, context.Context) error
+	}{
+		{"RegisterTemplate", ErrForbidden, func(service *Service, ctx context.Context) error {
 			_, err := service.RegisterTemplate(ctx, RegisterTemplateCommand{TenantID: "tenant_123"})
 			return err
-		},
-		"CreateStack": func(service *Service, ctx context.Context) error {
+		}},
+		{"CreateStack", ErrForbidden, func(service *Service, ctx context.Context) error {
 			_, err := service.CreateStack(ctx, CreateStackCommand{TenantID: "tenant_123"})
 			return err
-		},
+		}},
+		{"AddTemplateToStack", ErrNotFound, func(service *Service, ctx context.Context) error {
+			_, err := service.AddTemplateToStack(ctx, AddTemplateToStackCommand{TenantID: "tenant_123", StackID: "stack_123"})
+			return err
+		}},
+		{"CreateCredential", ErrNotFound, func(service *Service, ctx context.Context) error {
+			_, err := service.CreateCredential(ctx, CreateCredentialCommand{TenantID: "tenant_123", Scope: domain.CredentialScopeStack, StackID: "stack_123"})
+			return err
+		}},
+		{"UpdateStackTemplateConfig", ErrNotFound, func(service *Service, ctx context.Context) error {
+			_, err := service.UpdateStackTemplateConfig(ctx, UpdateStackTemplateConfigCommand{TenantID: "tenant_123", StackTemplateID: "stack_template_123"})
+			return err
+		}},
 	} {
-		t.Run(name, func(t *testing.T) {
+		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			fixture, audit := withRecordedAudit(newWriteFixture(newPlatformAuthorizer(t, platformViewer(oidcSubject))))
-			if err := call(fixture.service, authenticatedContext()); !errors.Is(err, ErrForbidden) {
-				t.Fatalf("error = %v, want ErrForbidden", err)
+			fixture, audit := withRecordedAudit(newWriteFixture(newTestAuthorization(t)))
+			if err := test.call(fixture.service, authenticatedContext()); !errors.Is(err, test.want) {
+				t.Fatalf("error = %v, want %v", err, test.want)
 			}
 			if len(audit.events) != 1 {
 				t.Fatalf("audit events = %+v, want one", audit.events)

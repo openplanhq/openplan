@@ -403,27 +403,6 @@ func (service *Service) auditRefusal(ctx context.Context, principal authenticati
 	})
 }
 
-// operableStackTemplate is authorizedStackTemplate for the mutating commands:
-// the same lookup, with the refusal recorded and wrapped the one way all of
-// them want it. The read-only callers deliberately do not use it -- they write
-// no audit event. An unseen or missing template is still audited: it is a
-// refused write, whatever the client is told.
-func (service *Service) operableStackTemplate(
-	ctx context.Context,
-	actor domain.UserID,
-	tenantID domain.TenantID,
-	stackTemplateID domain.StackTemplateID,
-) (domain.StackTemplate, error) {
-	stackTemplate, err := service.authorizedStackTemplate(ctx, tenantID, stackTemplateID, authorization.RelationCanOperate)
-	if err != nil {
-		// No StackID: the refusal can precede resolving which stack owns the
-		// template, so naming one here would sometimes be a guess.
-		service.auditFailedAccess(ctx, actor, tenantID, "")
-		return domain.StackTemplate{}, fmt.Errorf("get stack template: %w", err)
-	}
-	return stackTemplate, nil
-}
-
 // PlatformCapabilities is the global half of what GET /v1/me projects. The
 // field names keep the wire contract the web client already reads; what
 // changed is where the answers come from.

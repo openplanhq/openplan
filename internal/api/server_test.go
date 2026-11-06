@@ -3217,6 +3217,23 @@ func TestDeniedStackMutationReturnsForbiddenWithoutSideEffects(t *testing.T) {
 	}
 }
 
+// A body is validated after the guard, so a caller with no access gets the same
+// 404 whatever they send, and learns nothing from what would pass.
+func TestBadBodyFromACallerWithNoAccessReturnsNotFound(t *testing.T) {
+	t.Parallel()
+
+	deps := newBareAPITestDependencies(t)
+	server := NewServer(deps.service(), configuredTenantID)
+	response := httptest.NewRecorder()
+	request := ordinaryAuthenticatedRequest(http.MethodPost, "/v1/tenants/tenant_123/stacks/stack_123/templates", strings.NewReader(`{}`))
+
+	server.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusNotFound, response.Body.String())
+	}
+}
+
 func TestAuthorizationDependencyFailureReturnsServiceUnavailable(t *testing.T) {
 	t.Parallel()
 
