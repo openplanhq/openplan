@@ -139,16 +139,6 @@ func TestCreateStackBlankNameIsNotAlsoABadSlug(t *testing.T) {
 	assertFieldIssues(t, err, "name required")
 }
 
-func TestCreateStackPathIDIsNotAFieldError(t *testing.T) {
-	t.Parallel()
-
-	err := validateCreateStackCommand(CreateStackCommand{Name: ""})
-	if !errors.Is(err, ErrInvalidCommand) {
-		t.Fatalf("error = %v, want ErrInvalidCommand", err)
-	}
-	assertFieldIssues(t, err)
-}
-
 func TestCreateCredentialReportsNameAndValue(t *testing.T) {
 	t.Parallel()
 

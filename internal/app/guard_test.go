@@ -236,9 +236,9 @@ func TestRefusalEventIsCleanedForPostgres(t *testing.T) {
 	t.Parallel()
 
 	for name, value := range map[string]string{
-		"nul":                  "a\x00b",
-		"invalid utf-8":        "a\xffb",
-		"long":                 strings.Repeat("a", 1<<20),
+		"nul":                   "a\x00b",
+		"invalid utf-8":         "a\xffb",
+		"long":                  strings.Repeat("a", 1<<20),
 		"long multi-byte runes": strings.Repeat("é", 1<<10),
 	} {
 		t.Run(name, func(t *testing.T) {

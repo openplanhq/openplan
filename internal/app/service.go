@@ -1227,8 +1227,8 @@ func (service *Service) DeleteCredential(ctx context.Context, command DeleteCred
 	if service.Credentials == nil {
 		return ErrCredentialEncryptionUnavailable
 	}
-	if command.TenantID == "" || command.CredentialID == "" {
-		return fmt.Errorf("%w: tenant and credential IDs are required", ErrInvalidCommand)
+	if command.CredentialID == "" {
+		return fmt.Errorf("%w: credential id is required", ErrInvalidCommand)
 	}
 	scope := domain.CredentialScopeStack
 	ownerID := string(command.StackID)
@@ -2534,9 +2534,6 @@ func (service *Service) ListTemplateRunLogs(ctx context.Context, command ListTem
 // can't fix those from a form. Body fields are then checked together and
 // joined, so one response reports everything wrong with the body.
 func validateCreateStackCommand(command CreateStackCommand) error {
-	if command.TenantID == "" {
-		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
-	}
 	var problems []error
 	nameBlank := strings.TrimSpace(command.Name) == ""
 	if nameBlank {
@@ -2564,8 +2561,6 @@ func validateCreateStackCommand(command CreateStackCommand) error {
 // validateCreateCredentialCommand checks required IDs, scope, variable name, and value before encryption.
 func validateCreateCredentialCommand(command CreateCredentialCommand) error {
 	switch {
-	case command.TenantID == "":
-		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
 	case command.Scope == domain.CredentialScopeStack && command.StackID == "":
 		return fmt.Errorf("%w: stack id is required", ErrInvalidCommand)
 	case command.Scope == domain.CredentialScopeStackTemplate && command.StackTemplateID == "":
@@ -2629,8 +2624,6 @@ func validateListStacksCommand(command ListStacksCommand) error {
 
 func validateAddTemplateToStackCommand(command AddTemplateToStackCommand) error {
 	switch {
-	case command.TenantID == "":
-		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
 	case command.StackID == "":
 		return fmt.Errorf("%w: stack id is required", ErrInvalidCommand)
 	case command.TemplateRevisionID == "":
@@ -2642,8 +2635,6 @@ func validateAddTemplateToStackCommand(command AddTemplateToStackCommand) error 
 
 func validateStartTemplateRunCommand(command StartTemplateRunCommand) error {
 	switch {
-	case command.TenantID == "":
-		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
 	case command.StackTemplateID == "":
 		return fmt.Errorf("%w: stack template id is required", ErrInvalidCommand)
 	// Whether auto_approve fits depends on the operation, so an unsupported
@@ -2659,8 +2650,6 @@ func validateStartTemplateRunCommand(command StartTemplateRunCommand) error {
 
 func validateUpdateStackTemplateConfigCommand(command UpdateStackTemplateConfigCommand) error {
 	switch {
-	case command.TenantID == "":
-		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
 	case command.StackTemplateID == "":
 		return fmt.Errorf("%w: stack template id is required", ErrInvalidCommand)
 	case len(command.ConfigJSON) == 0:
@@ -2672,8 +2661,6 @@ func validateUpdateStackTemplateConfigCommand(command UpdateStackTemplateConfigC
 
 func validateChangeStackTemplateRevisionCommand(command ChangeStackTemplateRevisionCommand) error {
 	switch {
-	case command.TenantID == "":
-		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
 	case command.StackTemplateID == "":
 		return fmt.Errorf("%w: stack template id is required", ErrInvalidCommand)
 	case command.TargetTemplateRevisionID == "":
@@ -2684,9 +2671,6 @@ func validateChangeStackTemplateRevisionCommand(command ChangeStackTemplateRevis
 }
 
 func validateRegisterTemplateCommand(command RegisterTemplateCommand) error {
-	if command.TenantID == "" {
-		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
-	}
 	var problems []error
 	for _, component := range []struct{ field, value string }{
 		{"repo_owner", command.RepoOwner},
@@ -2712,8 +2696,6 @@ func validateRegisterTemplateCommand(command RegisterTemplateCommand) error {
 
 func validateApproveRunCommand(command ApproveRunCommand) error {
 	switch {
-	case command.TenantID == "":
-		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
 	case command.RunID == "":
 		return fmt.Errorf("%w: run id is required", ErrInvalidCommand)
 	default:
@@ -2723,8 +2705,6 @@ func validateApproveRunCommand(command ApproveRunCommand) error {
 
 func validateDiscardRunCommand(command DiscardRunCommand) error {
 	switch {
-	case command.TenantID == "":
-		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
 	case command.RunID == "":
 		return fmt.Errorf("%w: run id is required", ErrInvalidCommand)
 	default:
