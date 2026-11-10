@@ -134,7 +134,11 @@ cd ~/projects/github/openplanhq/openplan && claude
 ```
 
 The setup repository syncs once the laptop accepts the VM: its Syncthing asks
-to add a device named after the VM; add it, share the setup repository's
+to add a device named after the VM. Check its ID first, as any device can take
+a name, and one accepted writes into the setup repository, which the laptop
+commits and every machine's hooks run: it must match `ssh debian@<address>
+syncthing --device-id` (or the `Device ID:` line in
+`/var/log/cloud-init-output.log`). Then add it, share the setup repository's
 folder with it (the folder ID is the repository's name, `ai-os`), and remove
 the device of any VM it replaced. Where the laptop has a route to the VM, give
 the address `tcp://<address>:22000`. The VM's own Syncthing listens on

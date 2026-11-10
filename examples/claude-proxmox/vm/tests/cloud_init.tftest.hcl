@@ -142,12 +142,13 @@ run "setup_script" {
 
   # Unpacked beside its folder and moved in whole, so a re-run after a failed
   # download never keeps half a repo. Syncthing starts after bootstrap.sh, so
-  # its first scan sees the finished folder.
+  # its first scan sees the finished folder, its .stignore and its config: a
+  # Syncthing started before generate makes ~/Sync and shares it.
   assert {
     condition = alltrue([
       for f in yamldecode(proxmox_virtual_environment_file.user_data.source_raw[0].data).write_files :
       can(regex("(?s)mktemp -d.*tar -xz.*mv \"\\$tmp\" \"\\$repo\"", f.content)) &&
-      can(regex("(?s)/tarball.*ai-os/bootstrap\\.sh\".*syncthing generate", f.content))
+      can(regex("(?s)/tarball.*#include \\.stignore-shared.*ai-os/bootstrap\\.sh\".*syncthing generate --no-default-folder.*systemctl --user enable --now syncthing\\.service.*syncthing cli config folders add", f.content))
       if f.path == "/usr/local/lib/claude-proxmox/setup.sh"
     ])
     error_message = "the setup script must unpack the tarball into a temporary folder and move it into place, then run bootstrap.sh, and only then start Syncthing"
