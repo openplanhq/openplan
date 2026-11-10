@@ -4019,7 +4019,7 @@ func TestAssignStackRoleWithoutUnitOfWorkFails(t *testing.T) {
 
 // TestDefaultIDGeneratorsMintPrefixedRandomIDs locks the identifier shape the
 // five default generators share. They now differ only in the prefix handed to
-// randomID, so a wrong prefix is the one mistake the collapse made possible and
+// domain.RandomID, so a wrong prefix is the one mistake the collapse made possible and
 // the one this test is here to catch.
 func TestDefaultIDGeneratorsMintPrefixedRandomIDs(t *testing.T) {
 	t.Parallel()
