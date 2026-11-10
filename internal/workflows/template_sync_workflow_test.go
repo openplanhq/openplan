@@ -14,7 +14,9 @@ import (
 	"go.temporal.io/sdk/testsuite"
 )
 
-func TestTemplateSyncWorkflowRecordsCompletedSync(t *testing.T) {
+// The sync activity's store call completes the sync in the transaction that
+// records its revision, so the workflow writes only that it is running.
+func TestTemplateSyncWorkflowLeavesACompletedSyncToTheStore(t *testing.T) {
 	t.Parallel()
 
 	env := newTemplateSyncWorkflowTestEnvironment(t)
@@ -46,10 +48,7 @@ func TestTemplateSyncWorkflowRecordsCompletedSync(t *testing.T) {
 	env.ExecuteWorkflow(TemplateSyncWorkflow, input)
 
 	assertWorkflowCompleted(t, env)
-	want := []domain.TemplateSyncState{
-		domain.TemplateSyncStateRunning,
-		domain.TemplateSyncStateCompleted,
-	}
+	want := []domain.TemplateSyncState{domain.TemplateSyncStateRunning}
 	if !reflect.DeepEqual(statuses, want) {
 		t.Fatalf("statuses = %#v, want %#v", statuses, want)
 	}
@@ -72,8 +71,8 @@ func TestTemplateSyncWorkflowRunsOnControlQueue(t *testing.T) {
 	env.ExecuteWorkflow(TemplateSyncWorkflow, templateSyncWorkflowInput())
 
 	assertWorkflowCompleted(t, env)
-	if len(queues) != 4 {
-		t.Fatalf("activity queues = %#v, want 4 activities", queues)
+	if len(queues) != 3 {
+		t.Fatalf("activity queues = %#v, want 3 activities", queues)
 	}
 	for _, queue := range queues {
 		if queue != domain.ControlTaskQueue {
@@ -112,7 +111,7 @@ func TestTemplateSyncWorkflowRecordsItsStepBeforeSyncing(t *testing.T) {
 	env.ExecuteWorkflow(TemplateSyncWorkflow, input)
 
 	assertWorkflowCompleted(t, env)
-	want := []string{"status:running", "step:syncing", "sync", "status:completed"}
+	want := []string{"status:running", "step:syncing", "sync"}
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("calls = %#v, want %#v", calls, want)
 	}

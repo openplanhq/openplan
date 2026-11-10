@@ -82,10 +82,10 @@ func (r *templateSync) Record(step domain.TemplateSyncStep) error {
 	).Get(r.ctx, nil)
 }
 
-// lifecycle carries a sync through its status, and is the only code
-// that writes it. It marks the sync running, runs work, and records
-// what work found: the revision it produced, or why the template is invalid. A
-// sync that reports no status of its own completed.
+// lifecycle carries a sync through its status. It marks the sync
+// running, runs work, and records why the template is invalid when work
+// says so; a completed sync work's activity recorded itself. A sync that
+// reports no status of its own completed.
 //
 // Any error, including one writing that outcome, marks the sync failed
 // before lifecycle returns it. If recording the failure also fails, both
@@ -125,6 +125,14 @@ func (r *templateSync) lifecycle(work func() (domain.TemplateSyncActivityOutput,
 	status := synced.Status
 	if status == "" {
 		status = domain.TemplateSyncStateCompleted
+	}
+	// A completed sync was recorded by the sync activity's own store call,
+	// in the transaction that recorded its revision. A run started before
+	// that took the old branch, which writes it again: harmless, since it
+	// repeats what the store recorded, and kept so its history replays.
+	if status == domain.TemplateSyncStateCompleted &&
+		workflow.GetVersion(r.ctx, "store-records-completed-sync", workflow.DefaultVersion, 1) == 1 {
+		return nil
 	}
 	return setStatus(domain.TemplateSyncStatusActivityInput{
 		Status:             status,
