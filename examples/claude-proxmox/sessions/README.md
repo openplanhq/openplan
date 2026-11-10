@@ -35,7 +35,8 @@ logged it in with, or the login that replaced it.
 
 - **The first apply** writes the shared unit,
   `~/.config/systemd/user/claude-rc@.service`. Then for each repository it
-  clones it if it's missing, writes the `CLAUDE.local.md` that points it at
+  clones it if it's missing (never the setup repository: `vm/` seeds that
+  one, with no `.git`, and Syncthing keeps it in step with the laptop), writes the `CLAUDE.local.md` that points it at
   its entry in the setup repository's `claude/repos/` (no entry, no file),
   marks the clone trusted and its imports from outside the repository
   approved in `~/.claude.json`, and enables and starts its service. A

@@ -1,13 +1,18 @@
 set -eu
 
 # This can run straight after vm/'s apply, while its first-boot setup still
-# logs gh in and clones the setup repo that the loader below points at. Wait
+# logs gh in and seeds the setup repo that the loader below points at. Wait
 # for it; how it ended doesn't matter here, as a failed setup fails the clone.
 cloud-init status --wait > /dev/null || true
 
+%{ if repo != setup_repository ~}
 # Kept on a re-run, and on a destroy: the clone may hold unpushed work. A
 # folder made by hand is still cloned into.
 [ -d "$HOME/projects/github/${repo}/.git" ] || gh repo clone "${repo}" "$HOME/projects/github/${repo}"
+%{ else ~}
+# Never cloned: vm/ seeds the setup repo with no .git, as the laptop keeps its
+# git, and a clone into that folder would fail.
+%{ endif ~}
 
 # CLAUDE.local.md is gitignored, so a clone doesn't bring the loader that
 # points a repo at its entry in the setup repo; write it as project-init does.
