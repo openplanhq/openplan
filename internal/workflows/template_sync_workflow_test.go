@@ -12,6 +12,7 @@ import (
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/converter"
 	"go.temporal.io/sdk/testsuite"
+	"go.temporal.io/sdk/workflow"
 )
 
 // The sync activity's store call completes the sync in the transaction that
@@ -114,6 +115,60 @@ func TestTemplateSyncWorkflowRecordsItsStepBeforeSyncing(t *testing.T) {
 	want := []string{"status:running", "step:syncing", "sync"}
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("calls = %#v, want %#v", calls, want)
+	}
+}
+
+// The version is decided before SyncTemplate is scheduled. A run whose
+// activity ran on the release before, which wrote no completion, replays that
+// decision as the old version and still records the sync completed; decided
+// after the activity returned, the new worker would take the new version and
+// nothing would ever complete the sync.
+func TestTemplateSyncWorkflowDecidesWhoCompletesTheSyncBeforeSyncing(t *testing.T) {
+	t.Parallel()
+
+	env := newTemplateSyncWorkflowTestEnvironment(t)
+	var calls []string
+	env.OnGetVersion(storeRecordsCompletedSync, workflow.DefaultVersion, 1).
+		Run(func(mock.Arguments) { calls = append(calls, "version") }).
+		Return(workflow.Version(1))
+	env.OnActivity(domain.RecordTemplateSyncStatusActivityName, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity(domain.RecordTemplateSyncStepActivityName, mock.Anything, mock.Anything).Return(nil)
+	env.OnActivity(domain.SyncTemplateActivityName, mock.Anything, mock.Anything).
+		Return(func(context.Context, domain.TemplateSyncActivityInput) (domain.TemplateSyncActivityOutput, error) {
+			calls = append(calls, "sync")
+			return domain.TemplateSyncActivityOutput{Status: domain.TemplateSyncStateCompleted}, nil
+		})
+
+	env.ExecuteWorkflow(TemplateSyncWorkflow, templateSyncWorkflowInput())
+
+	assertWorkflowCompleted(t, env)
+	if want := []string{"version", "sync"}; !reflect.DeepEqual(calls, want) {
+		t.Fatalf("calls = %#v, want %#v", calls, want)
+	}
+}
+
+// A run that started on the release before keeps writing its completion: its
+// activity may have run on that release, which wrote none.
+func TestTemplateSyncWorkflowStartedBeforeTheChangeRecordsItsCompletion(t *testing.T) {
+	t.Parallel()
+
+	env := newTemplateSyncWorkflowTestEnvironment(t)
+	var statuses []domain.TemplateSyncState
+	env.OnGetVersion(storeRecordsCompletedSync, workflow.DefaultVersion, 1).Return(workflow.DefaultVersion)
+	env.OnActivity(domain.RecordTemplateSyncStatusActivityName, mock.Anything, mock.Anything).
+		Return(func(_ context.Context, activityInput domain.TemplateSyncStatusActivityInput) error {
+			statuses = append(statuses, activityInput.Status)
+			return nil
+		})
+	env.OnActivity(domain.SyncTemplateActivityName, mock.Anything, mock.Anything).
+		Return(domain.TemplateSyncActivityOutput{TemplateRevisionID: "template_123", ResolvedCommitSHA: "abc123"}, nil)
+
+	env.ExecuteWorkflow(TemplateSyncWorkflow, templateSyncWorkflowInput())
+
+	assertWorkflowCompleted(t, env)
+	want := []domain.TemplateSyncState{domain.TemplateSyncStateRunning, domain.TemplateSyncStateCompleted}
+	if !reflect.DeepEqual(statuses, want) {
+		t.Fatalf("statuses = %#v, want %#v", statuses, want)
 	}
 }
 
