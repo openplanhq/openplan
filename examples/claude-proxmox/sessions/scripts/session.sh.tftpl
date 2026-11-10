@@ -2,7 +2,8 @@ set -eu
 
 # This can run straight after vm/'s apply, while its first-boot setup still
 # logs gh in and seeds the setup repo that the loader below points at. Wait
-# for it; how it ended doesn't matter here, as a failed setup fails the clone.
+# for it; how it ended doesn't matter here, as a failed setup fails the clone,
+# or, for the setup repo, the check that it was seeded.
 cloud-init status --wait > /dev/null || true
 
 %{ if repo != setup_repository ~}
@@ -11,7 +12,9 @@ cloud-init status --wait > /dev/null || true
 [ -d "$HOME/projects/github/${repo}/.git" ] || gh repo clone "${repo}" "$HOME/projects/github/${repo}"
 %{ else ~}
 # Never cloned: vm/ seeds the setup repo with no .git, as the laptop keeps its
-# git, and a clone into that folder would fail.
+# git, and a clone into that folder would fail. A seed that never came fails
+# the apply here, not as a service restarting in a folder that isn't there.
+[ -d "$HOME/projects/github/${repo}" ] || { echo "vm/ never seeded ${repo}: see /var/log/cloud-init-output.log on the VM" >&2; exit 1; }
 %{ endif ~}
 
 # CLAUDE.local.md is gitignored, so a clone doesn't bring the loader that

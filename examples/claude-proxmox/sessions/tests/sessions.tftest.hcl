@@ -94,6 +94,13 @@ run "setup_repository_not_cloned" {
     condition     = strcontains(terraform_data.session["openplanhq/ai-os"].input.start, "systemctl --user restart")
     error_message = "the setup repo still gets its session"
   }
+
+  # With no clone left, a seed that never came would pass unnoticed: a green
+  # apply, and a service restarting forever in a folder that isn't there.
+  assert {
+    condition     = can(regex("(?s)\\[ -d \"\\$HOME/projects/github/openplanhq/ai-os\" \\] \\|\\| \\{[^\n]*exit 1.*systemctl --user restart", terraform_data.session["openplanhq/ai-os"].input.start))
+    error_message = "start must fail when vm/ never seeded the setup repo, before its service starts"
+  }
 }
 
 # A service has no terminal. In an untrusted clone Remote Control exits
