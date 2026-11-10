@@ -5,18 +5,20 @@ The VM of [claude-proxmox](../README.md): register it with
 [`sessions/`](../sessions/README.md).
 
 One Debian 13 VM from the cloud image. Cloud-init sets it up at first boot:
-git, `gh`, Docker and `make` for openplan's `make check`, Claude Code, and a
-clone of the setup repository (`openplanhq/ai-os` by default) with its
-`bootstrap.sh` run, where the setup expects it:
-`~/projects/github/<owner>/<repo>`. The repositories the agents work on are
-`sessions/`'.
+git, `gh`, Docker and `make` for openplan's `make check`, Claude Code,
+Syncthing, and a copy of the setup repository (`openplanhq/ai-os` by default)
+with its `bootstrap.sh` run, where the setup expects it:
+`~/projects/github/<owner>/<repo>`. The copy is seeded from GitHub with no
+`.git`: the laptop (`syncthing_peer`) keeps the setup repository's git and
+makes all its commits, and Syncthing keeps the two in step. The repositories
+the agents work on are `sessions/`'.
 
 Cloud-init runs once. A rotated token, a new key or a changed setup reaches a
 new VM only, never the running one, so rebuilding is a destroy and an apply,
-then an apply of `sessions/` and `claude auth login` on the VM to bring the
-sessions back. That loses only what wasn't pushed, and the login: the
-setup's vault sync pushes its notes, and Claude Code and the setup
-repository update themselves.
+then an apply of `sessions/`, `claude auth login` on the VM and accepting it
+in the laptop's Syncthing to bring everything back. That loses only what
+wasn't pushed, what Syncthing hadn't yet carried to the laptop, and the
+login. Claude Code updates itself.
 
 ## On the Proxmox host first
 
@@ -89,6 +91,7 @@ containment, not where it's stored.
 | `ssh_authorized_key` | | a public key that can SSH in as `debian` |
 | `git_user_name` | | the name on commits made from the VM |
 | `git_user_email` | | the email on them |
+| `syncthing_peer` | | the laptop's Syncthing device ID (Actions → Show ID): the one device the setup repository syncs with |
 | `name` | `claude` | the VM's name and hostname, and part of every file left on the host |
 | `setup_repository` | `openplanhq/ai-os` | the repository whose `bootstrap.sh` sets up Claude Code |
 | `cores` | `4` | |
@@ -129,6 +132,13 @@ so it outlives the connection:
 ```bash
 cd ~/projects/github/openplanhq/openplan && claude
 ```
+
+The setup repository syncs once the laptop accepts the VM: its Syncthing asks
+to add a device named after the VM; add it, share the setup repository's
+folder with it (the folder ID is the repository's name, `ai-os`), and remove
+the device of any VM it replaced. Where the laptop has a route to the VM, give
+the address `tcp://<address>:22000`. The VM's own Syncthing listens on
+`127.0.0.1:8384`: `ssh -L 8384:127.0.0.1:8384 debian@<address>` to see it.
 
 The setup takes a few minutes after the apply ends. When something is
 missing, `cloud-init status --long` says whether it finished, and

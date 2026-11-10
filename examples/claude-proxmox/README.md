@@ -36,10 +36,14 @@ repository never costs the VM or the work on it.
    model requests, not Remote Control sessions. Copying a login from another
    machine isn't documented, and one machine's refresh can revoke the other's
    copy.
+4. On the laptop, accept the VM in Syncthing and share the setup repository
+   with it ([`vm/`'s README](vm/README.md#using-it) says how). Until then the
+   VM's copy is the one `vm/` seeded from GitHub, and edits stay on the
+   machine that made them.
 
 Destroy in reverse: `sessions/`, then `vm/`. A rebuilt VM has a new key, so
 the next apply of `sessions/` puts its unit, clones, trust and services back;
-it needs step 3 again.
+it needs steps 3 and 4 again.
 
 ## Credentials
 

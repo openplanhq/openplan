@@ -17,15 +17,28 @@ variables {
   git_user_name                = "Test Owner"
   git_user_email               = "owner@example.invalid"
   github_token                 = "github_pat_11TEST_abc"
+  syncthing_peer               = "AAAAAAA-BBBBBBB-CCCCCCC-DDDDDDD-EEEEEEE-FFFFFFF-GGGGGGG-HHHHHHH"
 }
 
 run "packages" {
   assert {
     condition = toset(yamldecode(proxmox_virtual_environment_file.user_data.source_raw[0].data).packages) == toset([
-      "qemu-guest-agent", "git", "gh", "jq", "curl", "tmux", "make", "docker.io", "docker-cli", "docker-buildx",
+      "qemu-guest-agent", "git", "gh", "jq", "curl", "tmux", "make", "docker.io", "docker-cli", "docker-buildx", "syncthing",
     ])
-    error_message = "the VM needs git, gh, jq, curl, tmux, make and Docker with its CLI and buildx (only Recommends of docker.io) for the setup and for make check"
+    error_message = "the VM needs git, gh, jq, curl, tmux, make and Docker with its CLI and buildx (only Recommends of docker.io) for the setup and for make check, and Syncthing to mirror the setup repo"
   }
+}
+
+# A device ID is eight groups of seven base32 characters; anything else would
+# leave the VM paired with nothing.
+run "syncthing_peer_malformed" {
+  command = plan
+
+  variables {
+    syncthing_peer = "not-a-device-id"
+  }
+
+  expect_failures = [var.syncthing_peer]
 }
 
 # A token pasted with its line ending would reach the VM as a broken login.
@@ -72,7 +85,7 @@ run "root_runcmd_order" {
         if strcontains(c, "/usr/local/lib/claude-proxmox/setup.sh")
       ]...)
     ])
-    error_message = "debian must be in the docker group, lingering, with its systemd manager up before the setup runs, or make check and the vault-sync timer fail"
+    error_message = "debian must be in the docker group, lingering, with its systemd manager up before the setup runs, or make check, Syncthing and the Remote Control services fail"
   }
 
   assert {
@@ -94,7 +107,9 @@ run "setup_script" {
           "gh auth status >/dev/null 2>&1 || gh auth login --with-token < \"$HOME/.github-token\"",
           "rm -f \"$HOME/.github-token\"",
           "gh auth setup-git",
-          "gh repo clone \"openplanhq/ai-os\" \"$HOME/projects/github/openplanhq/ai-os\"",
+          # A copy with no .git: the laptop is the only machine that commits.
+          "gh api \"repos/openplanhq/ai-os/tarball\" | tar -xz",
+          "#include .stignore-shared",
           "https://claude.ai/install.sh",
           # A session would otherwise open on the first-run screens.
           ".hasCompletedOnboarding = true",
@@ -103,11 +118,39 @@ run "setup_script" {
           "line='export PATH=\"$HOME/.local/bin:$PATH\"'",
           "printf '%s\\n' \"$line\" | cat - ~/.bashrc",
           "\"$HOME/projects/github/openplanhq/ai-os/bootstrap.sh\"",
+          # No ~/Sync folder: the setup repo is the only thing shared.
+          "syncthing generate --no-default-folder",
+          "systemctl --user enable --now syncthing.service",
+          "syncthing cli config devices add --device-id AAAAAAA-BBBBBBB-CCCCCCC-DDDDDDD-EEEEEEE-FFFFFFF-GGGGGGG-HHHHHHH",
+          "syncthing cli config folders add --id ai-os",
+          "syncthing cli config folders ai-os devices add --device-id AAAAAAA-BBBBBBB-CCCCCCC-DDDDDDD-EEEEEEE-FFFFFFF-GGGGGGG-HHHHHHH",
         ] : strcontains(f.content, want)
       ])
       if f.path == "/usr/local/lib/claude-proxmox/setup.sh"
     ])
-    error_message = "the setup script must log in to gh, drop the token file, clone the setup repo, install Claude Code, put ~/.local/bin on PATH at the top of .bashrc and run bootstrap.sh"
+    error_message = "the setup script must log in to gh, drop the token file, seed the setup repo from its tarball with its .stignore, install Claude Code, put ~/.local/bin on PATH at the top of .bashrc, run bootstrap.sh, and share the setup repo with the laptop over Syncthing"
+  }
+
+  assert {
+    condition = alltrue([
+      for f in yamldecode(proxmox_virtual_environment_file.user_data.source_raw[0].data).write_files :
+      !strcontains(f.content, "gh repo clone")
+      if f.path == "/usr/local/lib/claude-proxmox/setup.sh"
+    ])
+    error_message = "the setup repo is never cloned on the VM: its .git lives on the laptop"
+  }
+
+  # Unpacked beside its folder and moved in whole, so a re-run after a failed
+  # download never keeps half a repo. Syncthing starts after bootstrap.sh, so
+  # its first scan sees the finished folder.
+  assert {
+    condition = alltrue([
+      for f in yamldecode(proxmox_virtual_environment_file.user_data.source_raw[0].data).write_files :
+      can(regex("(?s)mktemp -d.*tar -xz.*mv \"\\$tmp\" \"\\$repo\"", f.content)) &&
+      can(regex("(?s)/tarball.*ai-os/bootstrap\\.sh\".*syncthing generate", f.content))
+      if f.path == "/usr/local/lib/claude-proxmox/setup.sh"
+    ])
+    error_message = "the setup script must unpack the tarball into a temporary folder and move it into place, then run bootstrap.sh, and only then start Syncthing"
   }
 
   # The installer puts claude in ~/.local/bin, which cloud-init's PATH lacks,
@@ -128,7 +171,7 @@ run "setup_script" {
       !strcontains(f.content, "CLAUDE.local.md") && !strcontains(f.content, "openplanhq/openplan")
       if f.path == "/usr/local/lib/claude-proxmox/setup.sh"
     ])
-    error_message = "the setup script clones only the setup repo and writes no loader"
+    error_message = "the setup script seeds only the setup repo and writes no loader"
   }
 
   assert {
