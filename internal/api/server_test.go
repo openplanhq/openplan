@@ -787,7 +787,7 @@ func TestTemplateReadsCarryTheLatestSync(t *testing.T) {
 		{
 			name: "up to date",
 			sync: &domain.LatestTemplateSync{
-				Status: domain.TemplateSyncStateCompleted, ResolvedCommitSHA: "abc123", RevisionPredatesRequest: true,
+				Status: domain.TemplateSyncStateCompleted, ResolvedCommitSHA: "abc123", UpToDate: true,
 				RequestedAt: now.Add(-2 * time.Hour), CompletedAt: now.Add(-2*time.Hour + time.Minute),
 			},
 			want: `{"status":"up_to_date","error_summary":"","resolved_commit_sha":"abc123","requested_at":"2026-10-21T10:00:00Z","completed_at":"2026-10-21T10:01:00Z"}`,

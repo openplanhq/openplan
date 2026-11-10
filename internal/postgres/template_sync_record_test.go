@@ -326,9 +326,11 @@ func TestTemplateSyncsUpToDateMigrationBackfillsFromTimestamps(t *testing.T) {
 	pool := openTestPool(t, ctx)
 	migrateThrough(t, ctx, pool, "0049_security_audit_operation")
 	store := NewStore(pool)
-	if _, err := store.CreateTemplate(ctx, domain.Template{
-		ID: "template_vpc", TenantID: recordTenant, RepoOwner: "acme", RepoName: "infra", SourceRef: "main", RootPath: "modules/vpc",
-	}); err != nil {
+	// Plain SQL: the store's template reads already name the new column.
+	if _, err := pool.Exec(ctx, `
+		insert into templates (id, tenant_id, repo_owner, repo_name, source_ref, root_path)
+		values ('template_vpc', $1, 'acme', 'infra', 'main', 'modules/vpc')
+	`, recordTenant); err != nil {
 		t.Fatalf("seed template: %v", err)
 	}
 	for id, createdAt := range map[domain.TemplateRevisionID]time.Time{
@@ -376,5 +378,38 @@ func TestTemplateSyncsUpToDateMigrationBackfillsFromTimestamps(t *testing.T) {
 		if got := readRecordedSync(t, ctx, pool, syncID).upToDate; got != want {
 			t.Fatalf("sync %s up_to_date = %v, want %v", syncID, got, want)
 		}
+	}
+}
+
+// "Up to date" is what the sync recorded, whatever the clocks say: here
+// both syncs were requested before their revision's created_at, which the
+// old read-time rule took to mean the second sync found something new.
+func TestGetTemplateShowsAnUpToDateSyncFromItsRecord(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openMigratedTestPool(t, ctx)
+	store := NewStore(pool)
+	seedSyncableTemplate(t, ctx, store, "template_vpc", "main", "template_sync_1")
+	seedRunningSync(t, ctx, store, "template_vpc", "main", "template_sync_2")
+	if _, err := store.RecordSyncedTemplateRevision(ctx, "template_sync_1", syncedRevision("template_vpc", "main", "abc123"), nil); err != nil {
+		t.Fatalf("first sync: %v", err)
+	}
+	if _, err := store.RecordSyncedTemplateRevision(ctx, "template_sync_2", syncedRevision("template_vpc", "main", "abc123"), nil); err != nil {
+		t.Fatalf("second sync: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `update template_revisions set created_at = '2026-11-10 12:00:00+00'`); err != nil {
+		t.Fatalf("move the revision's clock past both requests: %v", err)
+	}
+
+	template, err := store.GetTemplate(ctx, recordTenant, "template_vpc")
+	if err != nil {
+		t.Fatalf("GetTemplate: %v", err)
+	}
+	if template.LatestSync == nil {
+		t.Fatal("LatestSync = nil, want the second sync")
+	}
+	if got := template.LatestSync.StatusAt(time.Date(2026, 11, 10, 11, 5, 0, 0, time.UTC)); got != domain.TemplateSyncUpToDate {
+		t.Fatalf("status = %q, want up_to_date", got)
 	}
 }

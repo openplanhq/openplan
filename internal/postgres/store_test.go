@@ -4625,15 +4625,17 @@ func TestTemplateReadsItsLatestSync(t *testing.T) {
 			t.Fatalf("RecordTemplateSyncStatus(%s) returned error: %v", input.SyncID, err)
 		}
 	}
-	syncRevision := func(id domain.TemplateRevisionID, createdAt time.Time) domain.TemplateRevision {
+	// recordSync ends a sync the way the sync activity does: it records
+	// the revision at sha_1 and completes the sync in one step.
+	recordSync := func(id domain.TemplateSyncID) domain.TemplateRevision {
 		t.Helper()
-		revision, err := seedTemplateRevision(ctx, store, domain.TemplateRevision{
-			ID: id, TenantID: "tenant_123", TemplateID: template.ID,
+		revision, err := store.RecordSyncedTemplateRevision(ctx, id, domain.TemplateRevision{
+			TenantID: "tenant_123", TemplateID: template.ID,
 			RepoOwner: "acme", RepoName: "infra", SourceRef: "main", ResolvedCommitSHA: "sha_1",
-			RootPath: "modules/vpc", Name: "Network", Status: domain.TemplateRevisionActive, CreatedAt: createdAt,
+			RootPath: "modules/vpc", Name: "Network", Status: domain.TemplateRevisionActive,
 		}, nil)
 		if err != nil {
-			t.Fatalf("seedTemplateRevision(%s) returned error: %v", id, err)
+			t.Fatalf("RecordSyncedTemplateRevision(%s) returned error: %v", id, err)
 		}
 		return revision
 	}
@@ -4659,30 +4661,21 @@ func TestTemplateReadsItsLatestSync(t *testing.T) {
 		t.Fatalf("latest sync while the second runs = %#v, want it pending with no completed_at", got)
 	}
 
-	revision := syncRevision("template_rev_1", base.Add(2*time.Minute))
-	endSync(domain.TemplateSyncStatusActivityInput{
-		SyncID: "template_sync_2", Status: domain.TemplateSyncStateCompleted,
-		TemplateRevisionID: revision.ID, ResolvedCommitSHA: "sha_1",
-	})
+	revision := recordSync("template_sync_2")
 	got := latestSync()
 	if got.Status != domain.TemplateSyncStateCompleted || got.ErrorSummary != "" ||
 		got.ResolvedCommitSHA != "sha_1" || !got.RequestedAt.Equal(base.Add(time.Minute)) ||
-		got.CompletedAt.IsZero() || got.RevisionPredatesRequest {
+		got.CompletedAt.IsZero() || got.UpToDate {
 		t.Fatalf("latest sync after a success = %#v, want the second sync, completed on a new revision", got)
 	}
 
-	// The same commit again: the upsert hands back the revision the second
+	// The same commit again: the store hands back the revision the second
 	// sync created, so this sync found nothing new.
 	requestSync("template_sync_3", base.Add(3*time.Minute))
-	reused := syncRevision("template_rev_again", base.Add(4*time.Minute))
-	if reused.ID != revision.ID {
-		t.Fatalf("upsert of a known commit returned %s, want the existing %s", reused.ID, revision.ID)
+	if reused := recordSync("template_sync_3"); reused.ID != revision.ID {
+		t.Fatalf("a sync of a known commit recorded %s, want the existing %s", reused.ID, revision.ID)
 	}
-	endSync(domain.TemplateSyncStatusActivityInput{
-		SyncID: "template_sync_3", Status: domain.TemplateSyncStateCompleted,
-		TemplateRevisionID: reused.ID, ResolvedCommitSHA: "sha_1",
-	})
-	if got := latestSync(); !got.RequestedAt.Equal(base.Add(3*time.Minute)) || !got.RevisionPredatesRequest ||
+	if got := latestSync(); !got.RequestedAt.Equal(base.Add(3*time.Minute)) || !got.UpToDate ||
 		got.StatusAt(base.Add(5*time.Minute)) != domain.TemplateSyncUpToDate {
 		t.Fatalf("latest sync of a known commit = %#v, want the third sync, up to date", got)
 	}

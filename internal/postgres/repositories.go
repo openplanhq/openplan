@@ -622,7 +622,7 @@ const selectTemplatesSQL = `
 		ls.resolved_commit_sha,
 		ls.requested_at,
 		ls.completed_at,
-		ls.revision_predates_request
+		ls.up_to_date
 	from templates st
 	left join template_revisions tr
 		on tr.tenant_id = st.tenant_id
@@ -634,11 +634,8 @@ const selectTemplatesSQL = `
 			r.resolved_commit_sha,
 			r.requested_at,
 			r.completed_at,
-			coalesce(rr.created_at < r.requested_at, false) as revision_predates_request
+			r.up_to_date
 		from template_syncs r
-		left join template_revisions rr
-			on rr.tenant_id = r.tenant_id
-			and rr.id = r.template_revision_id
 		where r.template_id = st.id
 			and r.tenant_id = st.tenant_id
 		order by r.requested_at desc, r.id desc
@@ -669,7 +666,7 @@ func scanTemplate(scanner templateScanner) (domain.Template, error) {
 		&sync.resolvedCommitSHA,
 		&sync.requestedAt,
 		&sync.completedAt,
-		&sync.revisionPredatesRequest,
+		&sync.upToDate,
 	); err != nil {
 		return domain.Template{}, err
 	}
@@ -689,12 +686,12 @@ func scanTemplate(scanner templateScanner) (domain.Template, error) {
 // latestTemplateSyncColumns holds a template's newest-sync columns, every one
 // null when no sync has been requested for it.
 type latestTemplateSyncColumns struct {
-	status                  sql.NullString
-	errorSummary            sql.NullString
-	resolvedCommitSHA       sql.NullString
-	requestedAt             sql.NullTime
-	completedAt             sql.NullTime
-	revisionPredatesRequest sql.NullBool
+	status            sql.NullString
+	errorSummary      sql.NullString
+	resolvedCommitSHA sql.NullString
+	requestedAt       sql.NullTime
+	completedAt       sql.NullTime
+	upToDate          sql.NullBool
 }
 
 func (columns latestTemplateSyncColumns) latestSync() *domain.LatestTemplateSync {
@@ -702,12 +699,12 @@ func (columns latestTemplateSyncColumns) latestSync() *domain.LatestTemplateSync
 		return nil
 	}
 	return &domain.LatestTemplateSync{
-		Status:                  domain.TemplateSyncState(columns.status.String),
-		ErrorSummary:            columns.errorSummary.String,
-		ResolvedCommitSHA:       columns.resolvedCommitSHA.String,
-		RequestedAt:             columns.requestedAt.Time,
-		CompletedAt:             columns.completedAt.Time,
-		RevisionPredatesRequest: columns.revisionPredatesRequest.Bool,
+		Status:            domain.TemplateSyncState(columns.status.String),
+		ErrorSummary:      columns.errorSummary.String,
+		ResolvedCommitSHA: columns.resolvedCommitSHA.String,
+		RequestedAt:       columns.requestedAt.Time,
+		CompletedAt:       columns.completedAt.Time,
+		UpToDate:          columns.upToDate.Bool,
 	}
 }
 
