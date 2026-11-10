@@ -82,14 +82,11 @@ func (r *templateSync) Record(step domain.TemplateSyncStep) error {
 	).Get(r.ctx, nil)
 }
 
-// storeRecordsCompletedSync marks runs whose sync activity completes the
-// sync in the store, so the workflow doesn't write that status itself.
-const storeRecordsCompletedSync = "store-records-completed-sync"
-
 // lifecycle carries a sync through its status. It marks the sync
-// running, runs work, and records why the template is invalid when work
-// says so; a completed sync work's activity recorded itself. A sync that
-// reports no status of its own completed.
+// running, runs work, and records what work found unless work's activity
+// recorded it already: why the template is invalid, or the revision a
+// completed sync produced. A sync that reports no status of its own
+// completed.
 //
 // Any error, including one writing that outcome, marks the sync failed
 // before lifecycle returns it. If recording the failure also fails, both
@@ -117,12 +114,6 @@ func (r *templateSync) lifecycle(work func() (domain.TemplateSyncActivityOutput,
 		}
 	}()
 
-	// Decided before work is scheduled, so a run already past this point when
-	// the release before stopped replays it as the old version: its sync
-	// activity may have run on that release, which completed no sync. Asked
-	// once work returned, a new worker would answer the new version for it.
-	storeCompletes := workflow.GetVersion(r.ctx, storeRecordsCompletedSync, workflow.DefaultVersion, 1) == 1
-
 	if err := setStatus(domain.TemplateSyncStatusActivityInput{
 		Status: domain.TemplateSyncStateRunning,
 	}); err != nil {
@@ -136,11 +127,11 @@ func (r *templateSync) lifecycle(work func() (domain.TemplateSyncActivityOutput,
 	if status == "" {
 		status = domain.TemplateSyncStateCompleted
 	}
-	// The sync activity's own store call completed the sync, in the
-	// transaction that recorded its revision. A run on the old version writes
-	// it here; when its activity ran on this release that write repeats what
-	// the store recorded, which is harmless.
-	if status == domain.TemplateSyncStateCompleted && storeCompletes {
+	// The sync activity's store call completed the sync in the transaction
+	// that recorded its revision. The decision rides on the activity's result,
+	// which is in the history, so it replays, and it holds whichever release
+	// ran the activity: one from before records no sync and says so.
+	if synced.Recorded {
 		return nil
 	}
 	return setStatus(domain.TemplateSyncStatusActivityInput{

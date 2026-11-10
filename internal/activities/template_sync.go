@@ -186,6 +186,7 @@ func (activities *TemplateSyncActivities) SyncTemplate(ctx context.Context, inpu
 
 	return domain.TemplateSyncActivityOutput{
 		Status:             domain.TemplateSyncStateCompleted,
+		Recorded:           true,
 		TemplateRevisionID: persisted.ID,
 		ResolvedCommitSHA:  persisted.ResolvedCommitSHA,
 	}, nil

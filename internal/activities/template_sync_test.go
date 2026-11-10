@@ -115,6 +115,9 @@ variable "cidr" {
 	if store.template.ID != "" {
 		t.Fatalf("handed the store revision ID %q, want none: the store assigns it", store.template.ID)
 	}
+	if !output.Recorded {
+		t.Fatal("output.Recorded = false, want true: the store completed the sync")
+	}
 	if output.TemplateRevisionID != "template_revision_stored" {
 		t.Fatalf("output revision = %q, want the store's template_revision_stored", output.TemplateRevisionID)
 	}

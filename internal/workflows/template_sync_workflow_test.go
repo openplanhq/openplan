@@ -12,7 +12,6 @@ import (
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/converter"
 	"go.temporal.io/sdk/testsuite"
-	"go.temporal.io/sdk/workflow"
 )
 
 // The sync activity's store call completes the sync in the transaction that
@@ -41,6 +40,7 @@ func TestTemplateSyncWorkflowLeavesACompletedSyncToTheStore(t *testing.T) {
 			}
 			return domain.TemplateSyncActivityOutput{
 				Status:             domain.TemplateSyncStateCompleted,
+				Recorded:           true,
 				TemplateRevisionID: domain.TemplateRevisionID("template_123"),
 				ResolvedCommitSHA:  "abc123",
 			}, nil
@@ -67,7 +67,7 @@ func TestTemplateSyncWorkflowRunsOnControlQueue(t *testing.T) {
 	})
 	env.OnActivity(domain.RecordTemplateSyncStatusActivityName, mock.Anything, mock.Anything).Return(nil)
 	env.OnActivity(domain.SyncTemplateActivityName, mock.Anything, mock.Anything).
-		Return(domain.TemplateSyncActivityOutput{Status: domain.TemplateSyncStateCompleted}, nil)
+		Return(domain.TemplateSyncActivityOutput{Status: domain.TemplateSyncStateCompleted, Recorded: true}, nil)
 
 	env.ExecuteWorkflow(TemplateSyncWorkflow, templateSyncWorkflowInput())
 
@@ -106,7 +106,7 @@ func TestTemplateSyncWorkflowRecordsItsStepBeforeSyncing(t *testing.T) {
 	env.OnActivity(domain.SyncTemplateActivityName, mock.Anything, mock.Anything).
 		Return(func(context.Context, domain.TemplateSyncActivityInput) (domain.TemplateSyncActivityOutput, error) {
 			calls = append(calls, "sync")
-			return domain.TemplateSyncActivityOutput{Status: domain.TemplateSyncStateCompleted}, nil
+			return domain.TemplateSyncActivityOutput{Status: domain.TemplateSyncStateCompleted, Recorded: true}, nil
 		})
 
 	env.ExecuteWorkflow(TemplateSyncWorkflow, input)
@@ -118,46 +118,18 @@ func TestTemplateSyncWorkflowRecordsItsStepBeforeSyncing(t *testing.T) {
 	}
 }
 
-// The version is decided before SyncTemplate is scheduled. A run whose
-// activity ran on the release before, which wrote no completion, replays that
-// decision as the old version and still records the sync completed; decided
-// after the activity returned, the new worker would take the new version and
-// nothing would ever complete the sync.
-func TestTemplateSyncWorkflowDecidesWhoCompletesTheSyncBeforeSyncing(t *testing.T) {
+// A sync activity from the release before records the revision but not the
+// sync, and its result says nothing of a record: the workflow completes the
+// sync itself. That is the path a run mid-flight across the upgrade takes,
+// whichever worker handles the activity's result.
+func TestTemplateSyncWorkflowCompletesASyncItsActivityDidNotRecord(t *testing.T) {
 	t.Parallel()
 
 	env := newTemplateSyncWorkflowTestEnvironment(t)
-	var calls []string
-	env.OnGetVersion(storeRecordsCompletedSync, workflow.DefaultVersion, 1).
-		Run(func(mock.Arguments) { calls = append(calls, "version") }).
-		Return(workflow.Version(1))
-	env.OnActivity(domain.RecordTemplateSyncStatusActivityName, mock.Anything, mock.Anything).Return(nil)
-	env.OnActivity(domain.RecordTemplateSyncStepActivityName, mock.Anything, mock.Anything).Return(nil)
-	env.OnActivity(domain.SyncTemplateActivityName, mock.Anything, mock.Anything).
-		Return(func(context.Context, domain.TemplateSyncActivityInput) (domain.TemplateSyncActivityOutput, error) {
-			calls = append(calls, "sync")
-			return domain.TemplateSyncActivityOutput{Status: domain.TemplateSyncStateCompleted}, nil
-		})
-
-	env.ExecuteWorkflow(TemplateSyncWorkflow, templateSyncWorkflowInput())
-
-	assertWorkflowCompleted(t, env)
-	if want := []string{"version", "sync"}; !reflect.DeepEqual(calls, want) {
-		t.Fatalf("calls = %#v, want %#v", calls, want)
-	}
-}
-
-// A run that started on the release before keeps writing its completion: its
-// activity may have run on that release, which wrote none.
-func TestTemplateSyncWorkflowStartedBeforeTheChangeRecordsItsCompletion(t *testing.T) {
-	t.Parallel()
-
-	env := newTemplateSyncWorkflowTestEnvironment(t)
-	var statuses []domain.TemplateSyncState
-	env.OnGetVersion(storeRecordsCompletedSync, workflow.DefaultVersion, 1).Return(workflow.DefaultVersion)
+	var statuses []domain.TemplateSyncStatusActivityInput
 	env.OnActivity(domain.RecordTemplateSyncStatusActivityName, mock.Anything, mock.Anything).
 		Return(func(_ context.Context, activityInput domain.TemplateSyncStatusActivityInput) error {
-			statuses = append(statuses, activityInput.Status)
+			statuses = append(statuses, activityInput)
 			return nil
 		})
 	env.OnActivity(domain.SyncTemplateActivityName, mock.Anything, mock.Anything).
@@ -166,9 +138,9 @@ func TestTemplateSyncWorkflowStartedBeforeTheChangeRecordsItsCompletion(t *testi
 	env.ExecuteWorkflow(TemplateSyncWorkflow, templateSyncWorkflowInput())
 
 	assertWorkflowCompleted(t, env)
-	want := []domain.TemplateSyncState{domain.TemplateSyncStateRunning, domain.TemplateSyncStateCompleted}
-	if !reflect.DeepEqual(statuses, want) {
-		t.Fatalf("statuses = %#v, want %#v", statuses, want)
+	if len(statuses) != 2 || statuses[1].Status != domain.TemplateSyncStateCompleted ||
+		statuses[1].TemplateRevisionID != "template_123" || statuses[1].ResolvedCommitSHA != "abc123" {
+		t.Fatalf("statuses = %+v, want running then completed on template_123 at abc123", statuses)
 	}
 }
 
