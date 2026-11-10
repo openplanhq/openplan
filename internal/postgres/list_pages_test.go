@@ -143,7 +143,7 @@ func TestListTemplateRevisionsBySourcePageKeyset(t *testing.T) {
 	seedTemplate(t, ctx, store, "tenant_123", "source_2")
 	at := time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC)
 	for i := range 5 {
-		_, err := store.UpsertTemplateRevisionWithVariables(ctx, domain.TemplateRevision{
+		_, err := seedTemplateRevision(ctx, store, domain.TemplateRevision{
 			ID: domain.TemplateRevisionID(fmt.Sprintf("rev_%d", i)), TenantID: "tenant_123", RepoOwner: "acme",
 			RepoName: "infra", SourceRef: "main", ResolvedCommitSHA: fmt.Sprintf("sha_%d", i), RootPath: ".",
 			TemplateID: "source_1", Name: "n", Status: domain.TemplateRevisionActive,
@@ -151,7 +151,7 @@ func TestListTemplateRevisionsBySourcePageKeyset(t *testing.T) {
 		}, nil)
 		require.NoError(t, err)
 	}
-	_, err := store.UpsertTemplateRevisionWithVariables(ctx, domain.TemplateRevision{
+	_, err := seedTemplateRevision(ctx, store, domain.TemplateRevision{
 		ID: "rev_other_template", TenantID: "tenant_123", RepoOwner: "acme", RepoName: "infra",
 		SourceRef: "main", ResolvedCommitSHA: "sha_other", RootPath: "modules/db",
 		TemplateID: "source_2", Name: "db", Status: domain.TemplateRevisionActive, CreatedAt: at,

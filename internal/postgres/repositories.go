@@ -365,53 +365,6 @@ func (store *Store) recordedSyncRevision(ctx context.Context, revision domain.Te
 	return store.GetTemplateRevision(ctx, revision.TenantID, revisionID)
 }
 
-// UpsertTemplateRevisionWithVariables records a template revision into its existing source
-// template, deduplicating against an existing revision with the same identity. It never
-// creates the template: a sync that outlives its template's delete would bring it back.
-// Variables are only written when this call actually inserts a new revision, since a reused
-// revision already has its variables recorded.
-func (store *Store) UpsertTemplateRevisionWithVariables(ctx context.Context, templateRevision domain.TemplateRevision, variables []domain.TemplateVariable) (domain.TemplateRevision, error) {
-	tx, err := store.pool.Begin(ctx)
-	if err != nil {
-		return domain.TemplateRevision{}, fmt.Errorf("begin upsert template revision: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
-	tagsJSON, err := encodeTemplateRevisionTags(templateRevision.Tags)
-	if err != nil {
-		return domain.TemplateRevision{}, fmt.Errorf("marshal template revision tags: %w", err)
-	}
-
-	if templateRevision.TemplateID == "" {
-		return domain.TemplateRevision{}, errors.New("upsert template revision: template ID is required")
-	}
-
-	inserted, insertedNew, err := insertTemplateRevision(ctx, tx, templateRevision, tagsJSON)
-	if err != nil {
-		return domain.TemplateRevision{}, err
-	}
-	if err := recordLatestTemplateRevision(ctx, tx, inserted, templateRevision.SourceRef); err != nil {
-		return domain.TemplateRevision{}, err
-	}
-	if !insertedNew {
-		// Revision already existed under this identity, so its variables were already
-		// recorded on the original insert — skip re-inserting them.
-		if err := tx.Commit(ctx); err != nil {
-			return domain.TemplateRevision{}, fmt.Errorf("commit reused template revision: %w", err)
-		}
-		return inserted, nil
-	}
-
-	if err := insertTemplateVariables(ctx, tx, inserted.ID, variables); err != nil {
-		return domain.TemplateRevision{}, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return domain.TemplateRevision{}, fmt.Errorf("commit upsert template revision: %w", err)
-	}
-	return inserted, nil
-}
-
 func (store *Store) GetTemplateRevisionVariables(ctx context.Context, tenantID domain.TenantID, templateRevisionID domain.TemplateRevisionID) ([]domain.TemplateVariable, error) {
 	var exists bool
 	if err := store.pool.QueryRow(ctx, `

@@ -170,7 +170,6 @@ type TemplateRunRepository interface {
 
 // TemplateRevisionRepository persists immutable template metadata and inferred variables.
 type TemplateRevisionRepository interface {
-	UpsertTemplateRevisionWithVariables(ctx context.Context, templateRevision domain.TemplateRevision, variables []domain.TemplateVariable) (domain.TemplateRevision, error)
 	ListTemplateRevisions(ctx context.Context, tenantID domain.TenantID) ([]domain.TemplateRevision, error)
 	GetTemplateRevisionVariables(ctx context.Context, tenantID domain.TenantID, templateRevisionID domain.TemplateRevisionID) ([]domain.TemplateVariable, error)
 }
