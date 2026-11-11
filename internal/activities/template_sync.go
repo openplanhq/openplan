@@ -2,15 +2,12 @@ package activities
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 	"unicode"
 
 	"github.com/hashicorp/hcl/v2"
@@ -35,10 +32,10 @@ type GitHubTokenSource interface {
 type TemplateSyncStore interface {
 	RecordTemplateSyncStatus(context.Context, domain.TemplateSyncStatusActivityInput) error
 	RecordTemplateSyncStep(context.Context, domain.TemplateSyncStepActivityInput) error
-	// UpsertTemplateRevisionWithVariables writes the revision into its
-	// existing template, and fails wrapping os.ErrNotExist when that
-	// template no longer exists.
-	UpsertTemplateRevisionWithVariables(context.Context, domain.TemplateRevision, []domain.TemplateVariable) (domain.TemplateRevision, error)
+	// RecordSyncedTemplateRevision records what the sync read: the revision,
+	// whose ID the store assigns, and the sync, completed. It fails wrapping
+	// os.ErrNotExist when the template no longer exists.
+	RecordSyncedTemplateRevision(context.Context, domain.TemplateSyncID, domain.TemplateRevision, []domain.TemplateVariable) (domain.TemplateRevision, error)
 }
 
 type TemplateSyncActivities struct {
@@ -158,14 +155,12 @@ func (activities *TemplateSyncActivities) SyncTemplate(ctx context.Context, inpu
 		return invalidTemplateSyncOutput("read template metadata: %v", err), nil
 	}
 
-	templateRevisionID := deterministicTemplateRevisionID(input, resolvedSHA)
-	variables, err := inferTemplateVariables(templateRoot, templateRevisionID)
+	variables, err := inferTemplateVariables(templateRoot)
 	if err != nil {
 		return invalidTemplateSyncOutput("infer template variables: %v", err), nil
 	}
 
 	templateRevision := domain.TemplateRevision{
-		ID:                templateRevisionID,
 		TenantID:          input.TenantID,
 		TemplateID:        input.TemplateID,
 		RepoOwner:         input.RepoOwner,
@@ -178,9 +173,8 @@ func (activities *TemplateSyncActivities) SyncTemplate(ctx context.Context, inpu
 		Description:       metadata.Description,
 		Tags:              metadata.Tags,
 		Status:            domain.TemplateRevisionActive,
-		CreatedAt:         time.Now().UTC(),
 	}
-	persisted, err := activities.store.UpsertTemplateRevisionWithVariables(ctx, templateRevision, variables)
+	persisted, err := activities.store.RecordSyncedTemplateRevision(ctx, input.SyncID, templateRevision, variables)
 	// Deleted while this sync ran. Retrying can only fail the same way, so it
 	// is an outcome, not an error.
 	if errors.Is(err, os.ErrNotExist) {
@@ -192,6 +186,7 @@ func (activities *TemplateSyncActivities) SyncTemplate(ctx context.Context, inpu
 
 	return domain.TemplateSyncActivityOutput{
 		Status:             domain.TemplateSyncStateCompleted,
+		Recorded:           true,
 		TemplateRevisionID: persisted.ID,
 		ResolvedCommitSHA:  persisted.ResolvedCommitSHA,
 	}, nil
@@ -412,7 +407,7 @@ func cleanTags(tags []string) []string {
 	return cleaned
 }
 
-func inferTemplateVariables(root string, templateRevisionID domain.TemplateRevisionID) ([]domain.TemplateVariable, error) {
+func inferTemplateVariables(root string) ([]domain.TemplateVariable, error) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return nil, err
@@ -439,7 +434,7 @@ func inferTemplateVariables(root string, templateRevisionID domain.TemplateRevis
 			return nil, fmt.Errorf("%s: %s", entry.Name(), diags.Error())
 		}
 		for _, block := range content.Blocks {
-			variable, err := parseVariableBlock(block, source, templateRevisionID)
+			variable, err := parseVariableBlock(block, source)
 			if err != nil {
 				return nil, fmt.Errorf("%s variable %q: %w", entry.Name(), block.Labels[0], err)
 			}
@@ -482,7 +477,7 @@ func variableBlockSchema() *hcl.BodySchema {
 	}
 }
 
-func parseVariableBlock(block *hcl.Block, source []byte, templateRevisionID domain.TemplateRevisionID) (domain.TemplateVariable, error) {
+func parseVariableBlock(block *hcl.Block, source []byte) (domain.TemplateVariable, error) {
 	name := block.Labels[0]
 	content, _, diags := block.Body.PartialContent(variableBlockSchema())
 	if diags.HasErrors() {
@@ -490,9 +485,8 @@ func parseVariableBlock(block *hcl.Block, source []byte, templateRevisionID doma
 	}
 
 	variable := domain.TemplateVariable{
-		TemplateRevisionID: templateRevisionID,
-		Name:               name,
-		Required:           true,
+		Name:     name,
+		Required: true,
 	}
 	if attr, ok := content.Attributes["type"]; ok {
 		variable.TypeExpression = strings.TrimSpace(string(attr.Expr.Range().SliceBytes(source)))
@@ -544,15 +538,4 @@ func hclBoolValue(attr *hcl.Attribute) (bool, error) {
 		return false, fmt.Errorf("must be a bool, got %s", value.Type().FriendlyName())
 	}
 	return value.True(), nil
-}
-
-// A revision is one template at one commit, so its id hashes exactly that:
-// two templates whose refs share a commit get a revision each.
-func deterministicTemplateRevisionID(input domain.TemplateSyncActivityInput, resolvedSHA string) domain.TemplateRevisionID {
-	sum := sha256.Sum256([]byte(strings.Join([]string{
-		string(input.TenantID),
-		string(input.TemplateID),
-		resolvedSHA,
-	}, "\x00")))
-	return domain.TemplateRevisionID("template_" + hex.EncodeToString(sum[:16]))
 }

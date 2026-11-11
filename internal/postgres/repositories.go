@@ -259,73 +259,110 @@ func (store *Store) RecordTemplateSyncStatus(ctx context.Context, input domain.T
 	return nil
 }
 
-// UpsertTemplateRevisionWithVariables records a template revision into its existing source
-// template, deduplicating against an existing revision with the same identity. It never
-// creates the template: a sync that outlives its template's delete would bring it back.
-// Variables are only written when this call actually inserts a new revision, since a reused
-// revision already has its variables recorded.
-func (store *Store) UpsertTemplateRevisionWithVariables(ctx context.Context, templateRevision domain.TemplateRevision, variables []domain.TemplateVariable) (domain.TemplateRevision, error) {
-	tx, err := store.pool.Begin(ctx)
-	if err != nil {
-		return domain.TemplateRevision{}, fmt.Errorf("begin upsert template revision: %w", err)
+// RecordSyncedTemplateRevision records what a sync found, in one
+// transaction: the revision at the commit it read (a new one with an ID
+// assigned here, or the one already recorded for that template and commit),
+// the template's latest revision when the sync's ref is still the template's,
+// and the sync itself, completed and marked up to date when its revision was
+// already recorded.
+//
+// revision.ID must be empty: a revision's ID is the store's to assign. A sync
+// is recorded once. A retried call for a sync already completed writes nothing
+// and returns the revision the sync recorded, so a retry can neither re-read
+// a new revision as up to date nor record a commit the ref moved to since.
+// The call fails wrapping os.ErrNotExist when the template no longer exists.
+func (store *Store) RecordSyncedTemplateRevision(ctx context.Context, syncID domain.TemplateSyncID, revision domain.TemplateRevision, variables []domain.TemplateVariable) (domain.TemplateRevision, error) {
+	if revision.ID != "" {
+		return domain.TemplateRevision{}, fmt.Errorf("record synced template revision: revision ID %q is the store's to assign", revision.ID)
 	}
-	defer tx.Rollback(ctx)
-
-	tagsJSON, err := encodeTemplateRevisionTags(templateRevision.Tags)
+	if revision.TemplateID == "" {
+		return domain.TemplateRevision{}, errors.New("record synced template revision: template ID is required")
+	}
+	tagsJSON, err := encodeTemplateRevisionTags(revision.Tags)
 	if err != nil {
 		return domain.TemplateRevision{}, fmt.Errorf("marshal template revision tags: %w", err)
 	}
+	revision.ID = domain.RandomID[domain.TemplateRevisionID]("template_revision")
 
-	if templateRevision.TemplateID == "" {
-		return domain.TemplateRevision{}, errors.New("upsert template revision: template ID is required")
+	tx, err := store.pool.Begin(ctx)
+	if err != nil {
+		return domain.TemplateRevision{}, fmt.Errorf("begin record synced template revision: %w", err)
 	}
+	defer tx.Rollback(ctx)
 
-	inserted, insertedNew, err := insertTemplateRevision(ctx, tx, templateRevision, tagsJSON)
+	stored, insertedNew, err := insertTemplateRevision(ctx, tx, revision, tagsJSON)
 	if err != nil {
 		return domain.TemplateRevision{}, err
 	}
-	if err := recordLatestTemplateRevision(ctx, tx, inserted, templateRevision.SourceRef); err != nil {
+	if err := recordLatestTemplateRevision(ctx, tx, stored, revision.SourceRef); err != nil {
 		return domain.TemplateRevision{}, err
 	}
-	if !insertedNew {
-		// Revision already existed under this identity, so its variables were already
-		// recorded on the original insert — skip re-inserting them.
-		if err := tx.Commit(ctx); err != nil {
-			return domain.TemplateRevision{}, fmt.Errorf("commit reused template revision: %w", err)
-		}
-		return inserted, nil
-	}
-
-	for _, variable := range variables {
-		if _, err := tx.Exec(ctx, `
-			insert into template_variables (
-				template_revision_id,
-				name,
-				type_expression,
-				description,
-				required,
-				has_default,
-				sensitive,
-				has_validation
-			) values ($1, $2, $3, $4, $5, $6, $7, $8)
-		`,
-			inserted.ID,
-			variable.Name,
-			variable.TypeExpression,
-			variable.Description,
-			variable.Required,
-			variable.HasDefault,
-			variable.Sensitive,
-			variable.HasValidation,
-		); err != nil {
-			return domain.TemplateRevision{}, fmt.Errorf("insert template revision variable %q: %w", variable.Name, err)
+	if insertedNew {
+		if err := insertTemplateVariables(ctx, tx, stored.ID, variables); err != nil {
+			return domain.TemplateRevision{}, err
 		}
 	}
-
+	// The sync is written last, and only while it is unfinished. A second
+	// attempt of the same sync running alongside the first waits on the
+	// revision's unique index until the first commits, then finds the sync
+	// completed here and rolls back, so the first attempt's record stands.
+	completed, err := tx.Exec(ctx, `
+		update template_syncs
+		set
+			status = $1,
+			template_revision_id = $2,
+			resolved_commit_sha = $3,
+			error_summary = '',
+			up_to_date = $4,
+			completed_at = coalesce(completed_at, now())
+		where tenant_id = $5
+			and id = $6
+			and status in ('pending', 'running')
+	`,
+		domain.TemplateSyncStateCompleted,
+		stored.ID,
+		stored.ResolvedCommitSHA,
+		!insertedNew,
+		revision.TenantID,
+		syncID,
+	)
+	if err != nil {
+		return domain.TemplateRevision{}, fmt.Errorf("record template sync %s: %w", syncID, err)
+	}
+	if completed.RowsAffected() == 0 {
+		if err := tx.Rollback(ctx); err != nil {
+			return domain.TemplateRevision{}, fmt.Errorf("roll back a sync already recorded: %w", err)
+		}
+		return store.recordedSyncRevision(ctx, revision, syncID)
+	}
 	if err := tx.Commit(ctx); err != nil {
-		return domain.TemplateRevision{}, fmt.Errorf("commit upsert template revision: %w", err)
+		return domain.TemplateRevision{}, fmt.Errorf("commit record synced template revision: %w", err)
 	}
-	return inserted, nil
+	return stored, nil
+}
+
+// recordedSyncRevision is what a sync that can no longer be recorded already
+// holds: the revision a completed sync recorded. A sync that is gone went
+// with its template.
+func (store *Store) recordedSyncRevision(ctx context.Context, revision domain.TemplateRevision, syncID domain.TemplateSyncID) (domain.TemplateRevision, error) {
+	var status domain.TemplateSyncState
+	var revisionID domain.TemplateRevisionID
+	err := store.pool.QueryRow(ctx, `
+		select status, template_revision_id
+		from template_syncs
+		where tenant_id = $1
+			and id = $2
+	`, revision.TenantID, syncID).Scan(&status, &revisionID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.TemplateRevision{}, templateGone(revision.TemplateID)
+	}
+	if err != nil {
+		return domain.TemplateRevision{}, fmt.Errorf("read template sync %s: %w", syncID, err)
+	}
+	if status != domain.TemplateSyncStateCompleted {
+		return domain.TemplateRevision{}, fmt.Errorf("record template sync %s: it is already %s", syncID, status)
+	}
+	return store.GetTemplateRevision(ctx, revision.TenantID, revisionID)
 }
 
 func (store *Store) GetTemplateRevisionVariables(ctx context.Context, tenantID domain.TenantID, templateRevisionID domain.TemplateRevisionID) ([]domain.TemplateVariable, error) {
@@ -585,7 +622,7 @@ const selectTemplatesSQL = `
 		ls.resolved_commit_sha,
 		ls.requested_at,
 		ls.completed_at,
-		ls.revision_predates_request
+		ls.up_to_date
 	from templates st
 	left join template_revisions tr
 		on tr.tenant_id = st.tenant_id
@@ -597,11 +634,8 @@ const selectTemplatesSQL = `
 			r.resolved_commit_sha,
 			r.requested_at,
 			r.completed_at,
-			coalesce(rr.created_at < r.requested_at, false) as revision_predates_request
+			r.up_to_date
 		from template_syncs r
-		left join template_revisions rr
-			on rr.tenant_id = r.tenant_id
-			and rr.id = r.template_revision_id
 		where r.template_id = st.id
 			and r.tenant_id = st.tenant_id
 		order by r.requested_at desc, r.id desc
@@ -632,7 +666,7 @@ func scanTemplate(scanner templateScanner) (domain.Template, error) {
 		&sync.resolvedCommitSHA,
 		&sync.requestedAt,
 		&sync.completedAt,
-		&sync.revisionPredatesRequest,
+		&sync.upToDate,
 	); err != nil {
 		return domain.Template{}, err
 	}
@@ -652,12 +686,12 @@ func scanTemplate(scanner templateScanner) (domain.Template, error) {
 // latestTemplateSyncColumns holds a template's newest-sync columns, every one
 // null when no sync has been requested for it.
 type latestTemplateSyncColumns struct {
-	status                  sql.NullString
-	errorSummary            sql.NullString
-	resolvedCommitSHA       sql.NullString
-	requestedAt             sql.NullTime
-	completedAt             sql.NullTime
-	revisionPredatesRequest sql.NullBool
+	status            sql.NullString
+	errorSummary      sql.NullString
+	resolvedCommitSHA sql.NullString
+	requestedAt       sql.NullTime
+	completedAt       sql.NullTime
+	upToDate          sql.NullBool
 }
 
 func (columns latestTemplateSyncColumns) latestSync() *domain.LatestTemplateSync {
@@ -665,12 +699,12 @@ func (columns latestTemplateSyncColumns) latestSync() *domain.LatestTemplateSync
 		return nil
 	}
 	return &domain.LatestTemplateSync{
-		Status:                  domain.TemplateSyncState(columns.status.String),
-		ErrorSummary:            columns.errorSummary.String,
-		ResolvedCommitSHA:       columns.resolvedCommitSHA.String,
-		RequestedAt:             columns.requestedAt.Time,
-		CompletedAt:             columns.completedAt.Time,
-		RevisionPredatesRequest: columns.revisionPredatesRequest.Bool,
+		Status:            domain.TemplateSyncState(columns.status.String),
+		ErrorSummary:      columns.errorSummary.String,
+		ResolvedCommitSHA: columns.resolvedCommitSHA.String,
+		RequestedAt:       columns.requestedAt.Time,
+		CompletedAt:       columns.completedAt.Time,
+		UpToDate:          columns.upToDate.Bool,
 	}
 }
 
@@ -2251,6 +2285,38 @@ func nullJSON(input json.RawMessage) any {
 		return nil
 	}
 	return input
+}
+
+// insertTemplateVariables records a new revision's variables. A reused
+// revision already has them, so callers write them only on insert.
+func insertTemplateVariables(ctx context.Context, tx pgx.Tx, revisionID domain.TemplateRevisionID, variables []domain.TemplateVariable) error {
+	for _, variable := range variables {
+		if _, err := tx.Exec(ctx, `
+			insert into template_variables (
+				template_revision_id,
+				name,
+				type_expression,
+				description,
+				required,
+				has_default,
+				sensitive,
+				has_validation
+			) values ($1, $2, $3, $4, $5, $6, $7, $8)
+		`,
+			revisionID,
+			variable.Name,
+			variable.TypeExpression,
+			variable.Description,
+			variable.Required,
+			variable.HasDefault,
+			variable.Sensitive,
+			variable.HasValidation,
+		); err != nil {
+			return fmt.Errorf("insert template revision variable %q: %w", variable.Name, err)
+		}
+	}
+
+	return nil
 }
 
 func insertTemplateRevision(ctx context.Context, tx pgx.Tx, templateRevision domain.TemplateRevision, tagsJSON []byte) (domain.TemplateRevision, bool, error) {

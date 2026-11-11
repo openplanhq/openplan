@@ -803,85 +803,6 @@ func seedTemplateSync(t *testing.T, ctx context.Context, store *Store, tenantID 
 	}
 }
 
-func TestUpsertTemplateRevisionWithVariablesCreatesAndReusesImmutableRevision(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	pool := openMigratedTestPool(t, ctx)
-	store := NewStore(pool)
-	seedTemplate(t, ctx, store, "tenant_123", "source_template_vpc")
-	createdAt := time.Date(2026, 7, 6, 12, 0, 0, 123456000, time.UTC)
-	template := domain.TemplateRevision{
-		ID:                domain.TemplateRevisionID("template_123"),
-		TenantID:          domain.TenantID("tenant_123"),
-		RepoOwner:         "acme",
-		RepoName:          "infra-templates",
-		SourceRef:         "v0.0.1",
-		ResolvedCommitSHA: "abc123",
-		RootPath:          "modules/vpc",
-		TemplateID:        domain.TemplateID("source_template_vpc"),
-		Name:              "vpc",
-		Description:       "Creates a VPC",
-		Tags:              []string{"network", "aws"},
-		Status:            domain.TemplateRevisionActive,
-		CreatedAt:         createdAt,
-	}
-	variables := []domain.TemplateVariable{
-		{
-			TemplateRevisionID: domain.TemplateRevisionID("template_123"),
-			Name:               "region",
-			TypeExpression:     "string",
-			Description:        "AWS region",
-			Required:           true,
-		},
-		{
-			TemplateRevisionID: domain.TemplateRevisionID("template_123"),
-			Name:               "cidr",
-			TypeExpression:     "string",
-			HasDefault:         true,
-			HasValidation:      true,
-		},
-	}
-
-	created, err := store.UpsertTemplateRevisionWithVariables(ctx, template, variables)
-	if err != nil {
-		t.Fatalf("UpsertTemplateRevisionWithVariables returned error: %v", err)
-	}
-	if created.ID != domain.TemplateRevisionID("template_123") {
-		t.Fatalf("created template revision ID = %q, want template_123", created.ID)
-	}
-
-	reused, err := store.UpsertTemplateRevisionWithVariables(ctx, domain.TemplateRevision{
-		ID:                domain.TemplateRevisionID("template_456"),
-		TenantID:          domain.TenantID("tenant_123"),
-		RepoOwner:         "acme",
-		RepoName:          "infra-templates",
-		SourceRef:         "v0.0.1",
-		ResolvedCommitSHA: "abc123",
-		RootPath:          "modules/vpc",
-		TemplateID:        domain.TemplateID("source_template_vpc"),
-		Name:              "vpc moved tag",
-		Status:            domain.TemplateRevisionActive,
-	}, nil)
-	if err != nil {
-		t.Fatalf("second UpsertTemplateRevisionWithVariables returned error: %v", err)
-	}
-	if reused.ID != domain.TemplateRevisionID("template_123") {
-		t.Fatalf("reused template revision ID = %q, want template_123", reused.ID)
-	}
-
-	gotVariables, err := store.GetTemplateRevisionVariables(ctx, domain.TenantID("tenant_123"), domain.TemplateRevisionID("template_123"))
-	if err != nil {
-		t.Fatalf("GetTemplateRevisionVariables returned error: %v", err)
-	}
-	if len(gotVariables) != 2 {
-		t.Fatalf("len(gotVariables) = %d, want 2", len(gotVariables))
-	}
-	if gotVariables[0].Name != "cidr" || gotVariables[1].Name != "region" {
-		t.Fatalf("variables ordered by name = %#v", gotVariables)
-	}
-}
-
 // A revision's subject is written with the row and never changes: a later
 // sync of the same commit gets back the subject first stored.
 func TestTemplateRevisionCommitSubjectIsWrittenOnceAndReadEverywhere(t *testing.T) {
@@ -906,9 +827,9 @@ func TestTemplateRevisionCommitSubjectIsWrittenOnceAndReadEverywhere(t *testing.
 	}
 
 	const want = "Bump the EKS module"
-	created, err := store.UpsertTemplateRevisionWithVariables(ctx, revision, nil)
+	created, err := seedTemplateRevision(ctx, store, revision, nil)
 	if err != nil {
-		t.Fatalf("UpsertTemplateRevisionWithVariables returned error: %v", err)
+		t.Fatalf("seedTemplateRevision returned error: %v", err)
 	}
 	if created.CommitSubject != want {
 		t.Fatalf("created subject = %q, want %q", created.CommitSubject, want)
@@ -941,58 +862,16 @@ func TestTemplateRevisionCommitSubjectIsWrittenOnceAndReadEverywhere(t *testing.
 	resynced := revision
 	resynced.ID = domain.TemplateRevisionID("template_456")
 	resynced.CommitSubject = "changed"
-	reused, err := store.UpsertTemplateRevisionWithVariables(ctx, resynced, nil)
+	reused, err := seedTemplateRevision(ctx, store, resynced, nil)
 	if err != nil {
-		t.Fatalf("second UpsertTemplateRevisionWithVariables returned error: %v", err)
+		t.Fatalf("second seedTemplateRevision returned error: %v", err)
 	}
 	if reused.ID != revision.ID || reused.CommitSubject != want {
 		t.Fatalf("reused = %q with subject %q, want %q with %q", reused.ID, reused.CommitSubject, revision.ID, want)
 	}
 }
 
-// A sync writes into the template the API registered and never creates one:
-// a template deleted while its sync ran stays deleted, and the sync is told
-// it is gone.
-func TestUpsertTemplateRevisionWithVariablesNeedsItsTemplate(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	pool := openMigratedTestPool(t, ctx)
-	store := NewStore(pool)
-	revision := domain.TemplateRevision{
-		ID:                "template_123",
-		TenantID:          "tenant_123",
-		TemplateID:        "source_template_deleted",
-		RepoOwner:         "acme",
-		RepoName:          "infra",
-		SourceRef:         "main",
-		ResolvedCommitSHA: "abc123",
-		RootPath:          "source_template_deleted",
-		Name:              "vpc",
-		Status:            domain.TemplateRevisionActive,
-	}
-
-	_, err := store.UpsertTemplateRevisionWithVariables(ctx, revision, []domain.TemplateVariable{
-		{TemplateRevisionID: "template_123", Name: "region", TypeExpression: "string", Required: true},
-	})
-	if !errors.Is(err, os.ErrNotExist) || !errors.Is(err, app.ErrNotFound) {
-		t.Fatalf("error = %v, want os.ErrNotExist and app.ErrNotFound", err)
-	}
-	var templates, revisions int
-	if err := pool.QueryRow(ctx, `select count(*) from templates`).Scan(&templates); err != nil {
-		t.Fatal(err)
-	}
-	if err := pool.QueryRow(ctx, `select count(*) from template_revisions`).Scan(&revisions); err != nil {
-		t.Fatal(err)
-	}
-	if templates != 0 || revisions != 0 {
-		t.Fatalf("templates = %d, revisions = %d after a sync into a deleted template, want 0 and 0", templates, revisions)
-	}
-}
-
-// A template deleted between a reused revision's lookup and the template's
-// latest-revision update is gone too, not a retried error.
-func TestUpsertTemplateRevisionWithVariablesReusingIntoADeletedTemplate(t *testing.T) {
+func TestRecordLatestTemplateRevisionIntoADeletedTemplate(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -1032,7 +911,7 @@ func TestGetTemplateRevisionVariablesReturnsNotFoundForOtherTenant(t *testing.T)
 	pool := openMigratedTestPool(t, ctx)
 	store := NewStore(pool)
 	seedTemplate(t, ctx, store, "tenant_123", "source_template_vpc")
-	_, err := store.UpsertTemplateRevisionWithVariables(ctx, domain.TemplateRevision{
+	_, err := seedTemplateRevision(ctx, store, domain.TemplateRevision{
 		ID:                domain.TemplateRevisionID("template_123"),
 		TenantID:          domain.TenantID("tenant_123"),
 		RepoOwner:         "acme",
@@ -1045,7 +924,7 @@ func TestGetTemplateRevisionVariablesReturnsNotFoundForOtherTenant(t *testing.T)
 		Status:            domain.TemplateRevisionActive,
 	}, nil)
 	if err != nil {
-		t.Fatalf("UpsertTemplateRevisionWithVariables returned error: %v", err)
+		t.Fatalf("seedTemplateRevision returned error: %v", err)
 	}
 
 	_, err = store.GetTemplateRevisionVariables(ctx, domain.TenantID("tenant_456"), domain.TemplateRevisionID("template_123"))
@@ -1498,8 +1377,8 @@ func TestGetTemplateRevisionReturnsTenantScopedRevision(t *testing.T) {
 		Status:            domain.TemplateRevisionActive,
 		CreatedAt:         createdAt,
 	}
-	if _, err := store.UpsertTemplateRevisionWithVariables(ctx, template, nil); err != nil {
-		t.Fatalf("UpsertTemplateRevisionWithVariables returned error: %v", err)
+	if _, err := seedTemplateRevision(ctx, store, template, nil); err != nil {
+		t.Fatalf("seedTemplateRevision returned error: %v", err)
 	}
 
 	got, err := store.GetTemplateRevision(ctx, domain.TenantID("tenant_123"), domain.TemplateRevisionID("template_123"))
@@ -1565,8 +1444,8 @@ func TestListTemplateRevisionsReturnsTenantScopedRevisionsNewestFirst(t *testing
 		CreatedAt:         time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC),
 	}
 	for _, template := range []domain.TemplateRevision{older, newer, otherTenant} {
-		if _, err := store.UpsertTemplateRevisionWithVariables(ctx, template, nil); err != nil {
-			t.Fatalf("UpsertTemplateRevisionWithVariables(%s) returned error: %v", template.ID, err)
+		if _, err := seedTemplateRevision(ctx, store, template, nil); err != nil {
+			t.Fatalf("seedTemplateRevision(%s) returned error: %v", template.ID, err)
 		}
 	}
 
@@ -1606,9 +1485,9 @@ func TestTemplateRevisionWithoutTagsIsStoredAndReadAsNoTags(t *testing.T) {
 		Status:            domain.TemplateRevisionActive,
 	}
 
-	created, err := store.UpsertTemplateRevisionWithVariables(ctx, revision, nil)
+	created, err := seedTemplateRevision(ctx, store, revision, nil)
 	if err != nil {
-		t.Fatalf("UpsertTemplateRevisionWithVariables returned error: %v", err)
+		t.Fatalf("seedTemplateRevision returned error: %v", err)
 	}
 	if created.Tags == nil || len(created.Tags) != 0 {
 		t.Fatalf("created tags = %#v, want an empty non-nil slice", created.Tags)
@@ -1641,9 +1520,9 @@ func TestTemplateRevisionWithoutTagsIsStoredAndReadAsNoTags(t *testing.T) {
 	}
 	// Registering the same identity again reads the existing row back.
 	revision.ID = domain.TemplateRevisionID("template_untagged_again")
-	reused, err := store.UpsertTemplateRevisionWithVariables(ctx, revision, nil)
+	reused, err := seedTemplateRevision(ctx, store, revision, nil)
 	if err != nil {
-		t.Fatalf("second UpsertTemplateRevisionWithVariables returned error: %v", err)
+		t.Fatalf("second seedTemplateRevision returned error: %v", err)
 	}
 	if reused.ID != created.ID || reused.Tags == nil || len(reused.Tags) != 0 {
 		t.Fatalf("reused = %#v, want %s with an empty non-nil tags slice", reused, created.ID)
@@ -1658,7 +1537,7 @@ func TestGetTemplateRevisionVariablesReturnsAnEmptySliceForNoVariables(t *testin
 	pool := openMigratedTestPool(t, ctx)
 	store := NewStore(pool)
 	seedTemplate(t, ctx, store, "tenant_123", "source_template_123")
-	created, err := store.UpsertTemplateRevisionWithVariables(ctx, domain.TemplateRevision{
+	created, err := seedTemplateRevision(ctx, store, domain.TemplateRevision{
 		ID:                domain.TemplateRevisionID("template_123"),
 		TenantID:          domain.TenantID("tenant_123"),
 		RepoOwner:         "acme",
@@ -1671,7 +1550,7 @@ func TestGetTemplateRevisionVariablesReturnsAnEmptySliceForNoVariables(t *testin
 		Status:            domain.TemplateRevisionActive,
 	}, nil)
 	if err != nil {
-		t.Fatalf("UpsertTemplateRevisionWithVariables returned error: %v", err)
+		t.Fatalf("seedTemplateRevision returned error: %v", err)
 	}
 
 	variables, err := store.GetTemplateRevisionVariables(ctx, domain.TenantID("tenant_123"), created.ID)
@@ -1774,8 +1653,8 @@ func TestCreateStackTemplateAllowsRepeatedSourceWithDistinctKeys(t *testing.T) {
 		Status:            domain.TemplateRevisionActive,
 		CreatedAt:         time.Now().UTC(),
 	}
-	if _, err := store.UpsertTemplateRevisionWithVariables(ctx, template, nil); err != nil {
-		t.Fatalf("UpsertTemplateRevisionWithVariables returned error: %v", err)
+	if _, err := seedTemplateRevision(ctx, store, template, nil); err != nil {
+		t.Fatalf("seedTemplateRevision returned error: %v", err)
 	}
 
 	first := domain.StackTemplate{
@@ -1850,8 +1729,8 @@ func TestCreateStackTemplateRejectsDuplicateActiveKey(t *testing.T) {
 		Status:            domain.TemplateRevisionActive,
 		CreatedAt:         time.Now().UTC(),
 	}
-	if _, err := store.UpsertTemplateRevisionWithVariables(ctx, template, nil); err != nil {
-		t.Fatalf("UpsertTemplateRevisionWithVariables returned error: %v", err)
+	if _, err := seedTemplateRevision(ctx, store, template, nil); err != nil {
+		t.Fatalf("seedTemplateRevision returned error: %v", err)
 	}
 
 	stackTemplate := domain.StackTemplate{
@@ -3597,6 +3476,36 @@ func (store *Store) GetTemplateSync(ctx context.Context, tenantID domain.TenantI
 	return templateSync, nil
 }
 
+// seedTemplateRevision stores a revision the way a sync records one (the
+// insert, or the revision already there for its template and commit, the
+// template's latest, and a new revision's variables) under the ID the test
+// gives it, so fixtures can name it. RecordSyncedTemplateRevision's own tests
+// cover how a sync assigns IDs and records itself.
+func seedTemplateRevision(ctx context.Context, store *Store, revision domain.TemplateRevision, variables []domain.TemplateVariable) (domain.TemplateRevision, error) {
+	tagsJSON, err := encodeTemplateRevisionTags(revision.Tags)
+	if err != nil {
+		return domain.TemplateRevision{}, err
+	}
+	tx, err := store.pool.Begin(ctx)
+	if err != nil {
+		return domain.TemplateRevision{}, err
+	}
+	defer tx.Rollback(ctx)
+	stored, insertedNew, err := insertTemplateRevision(ctx, tx, revision, tagsJSON)
+	if err != nil {
+		return domain.TemplateRevision{}, err
+	}
+	if err := recordLatestTemplateRevision(ctx, tx, stored, revision.SourceRef); err != nil {
+		return domain.TemplateRevision{}, err
+	}
+	if insertedNew {
+		if err := insertTemplateVariables(ctx, tx, stored.ID, variables); err != nil {
+			return domain.TemplateRevision{}, err
+		}
+	}
+	return stored, tx.Commit(ctx)
+}
+
 // seedTemplate stores a template with id, which revisions and stack
 // templates must name. The source is the id itself, so each id is its own
 // source.
@@ -4463,7 +4372,7 @@ func TestAFastForwardedRefReusesItsRevisionAsLatest(t *testing.T) {
 // sha, as the sync activity does.
 func syncRevision(t *testing.T, ctx context.Context, store *Store, templateID domain.TemplateID, ref, sha string) domain.TemplateRevision {
 	t.Helper()
-	revision, err := store.UpsertTemplateRevisionWithVariables(ctx, domain.TemplateRevision{
+	revision, err := seedTemplateRevision(ctx, store, domain.TemplateRevision{
 		ID:                domain.TemplateRevisionID("revision_" + ref + "_" + sha),
 		TenantID:          "tenant_123",
 		TemplateID:        templateID,
@@ -4617,14 +4526,14 @@ func TestTemplateReadsItsLatestRevision(t *testing.T) {
 	if _, err := store.CreateTemplate(ctx, template); err != nil {
 		t.Fatalf("CreateTemplate returned error: %v", err)
 	}
-	revision, err := store.UpsertTemplateRevisionWithVariables(ctx, domain.TemplateRevision{
+	revision, err := seedTemplateRevision(ctx, store, domain.TemplateRevision{
 		ID: "template_rev_1", TenantID: "tenant_123", TemplateID: template.ID,
 		RepoOwner: "acme", RepoName: "infra", SourceRef: "main", ResolvedCommitSHA: "sha_1",
 		RootPath: "modules/vpc", Name: "Network", Description: "A VPC", Tags: []string{"network"},
 		Status: domain.TemplateRevisionActive,
 	}, nil)
 	if err != nil {
-		t.Fatalf("UpsertTemplateRevisionWithVariables returned error: %v", err)
+		t.Fatalf("seedTemplateRevision returned error: %v", err)
 	}
 
 	got, err := store.GetTemplate(ctx, "tenant_123", template.ID)
@@ -4716,15 +4625,17 @@ func TestTemplateReadsItsLatestSync(t *testing.T) {
 			t.Fatalf("RecordTemplateSyncStatus(%s) returned error: %v", input.SyncID, err)
 		}
 	}
-	syncRevision := func(id domain.TemplateRevisionID, createdAt time.Time) domain.TemplateRevision {
+	// recordSync ends a sync the way the sync activity does: it records
+	// the revision at sha_1 and completes the sync in one step.
+	recordSync := func(id domain.TemplateSyncID) domain.TemplateRevision {
 		t.Helper()
-		revision, err := store.UpsertTemplateRevisionWithVariables(ctx, domain.TemplateRevision{
-			ID: id, TenantID: "tenant_123", TemplateID: template.ID,
+		revision, err := store.RecordSyncedTemplateRevision(ctx, id, domain.TemplateRevision{
+			TenantID: "tenant_123", TemplateID: template.ID,
 			RepoOwner: "acme", RepoName: "infra", SourceRef: "main", ResolvedCommitSHA: "sha_1",
-			RootPath: "modules/vpc", Name: "Network", Status: domain.TemplateRevisionActive, CreatedAt: createdAt,
+			RootPath: "modules/vpc", Name: "Network", Status: domain.TemplateRevisionActive,
 		}, nil)
 		if err != nil {
-			t.Fatalf("UpsertTemplateRevisionWithVariables(%s) returned error: %v", id, err)
+			t.Fatalf("RecordSyncedTemplateRevision(%s) returned error: %v", id, err)
 		}
 		return revision
 	}
@@ -4750,30 +4661,21 @@ func TestTemplateReadsItsLatestSync(t *testing.T) {
 		t.Fatalf("latest sync while the second runs = %#v, want it pending with no completed_at", got)
 	}
 
-	revision := syncRevision("template_rev_1", base.Add(2*time.Minute))
-	endSync(domain.TemplateSyncStatusActivityInput{
-		SyncID: "template_sync_2", Status: domain.TemplateSyncStateCompleted,
-		TemplateRevisionID: revision.ID, ResolvedCommitSHA: "sha_1",
-	})
+	revision := recordSync("template_sync_2")
 	got := latestSync()
 	if got.Status != domain.TemplateSyncStateCompleted || got.ErrorSummary != "" ||
 		got.ResolvedCommitSHA != "sha_1" || !got.RequestedAt.Equal(base.Add(time.Minute)) ||
-		got.CompletedAt.IsZero() || got.RevisionPredatesRequest {
+		got.CompletedAt.IsZero() || got.UpToDate {
 		t.Fatalf("latest sync after a success = %#v, want the second sync, completed on a new revision", got)
 	}
 
-	// The same commit again: the upsert hands back the revision the second
+	// The same commit again: the store hands back the revision the second
 	// sync created, so this sync found nothing new.
 	requestSync("template_sync_3", base.Add(3*time.Minute))
-	reused := syncRevision("template_rev_again", base.Add(4*time.Minute))
-	if reused.ID != revision.ID {
-		t.Fatalf("upsert of a known commit returned %s, want the existing %s", reused.ID, revision.ID)
+	if reused := recordSync("template_sync_3"); reused.ID != revision.ID {
+		t.Fatalf("a sync of a known commit recorded %s, want the existing %s", reused.ID, revision.ID)
 	}
-	endSync(domain.TemplateSyncStatusActivityInput{
-		SyncID: "template_sync_3", Status: domain.TemplateSyncStateCompleted,
-		TemplateRevisionID: reused.ID, ResolvedCommitSHA: "sha_1",
-	})
-	if got := latestSync(); !got.RequestedAt.Equal(base.Add(3*time.Minute)) || !got.RevisionPredatesRequest ||
+	if got := latestSync(); !got.RequestedAt.Equal(base.Add(3*time.Minute)) || !got.UpToDate ||
 		got.StatusAt(base.Add(5*time.Minute)) != domain.TemplateSyncUpToDate {
 		t.Fatalf("latest sync of a known commit = %#v, want the third sync, up to date", got)
 	}
@@ -4865,12 +4767,12 @@ func TestTemplateKeys(t *testing.T) {
 	store := NewStore(pool)
 	seedStackWithTemplate(t, ctx, store)
 	seedTemplate(t, ctx, store, "tenant_123", "source_template_junk")
-	if _, err := store.UpsertTemplateRevisionWithVariables(ctx, domain.TemplateRevision{
+	if _, err := seedTemplateRevision(ctx, store, domain.TemplateRevision{
 		ID: "template_rev_junk", TenantID: "tenant_123", TemplateID: "source_template_junk",
 		RepoOwner: "acme", RepoName: "infra", SourceRef: "main", ResolvedCommitSHA: "sha_junk",
 		RootPath: "source_template_junk", Name: "junk", Status: domain.TemplateRevisionActive,
 	}, []domain.TemplateVariable{{Name: "region", Required: true}}); err != nil {
-		t.Fatalf("UpsertTemplateRevisionWithVariables returned error: %v", err)
+		t.Fatalf("seedTemplateRevision returned error: %v", err)
 	}
 	if err := store.CreateTemplateSync(ctx, domain.TemplateSync{
 		ID: "template_sync_junk", TenantID: "tenant_123", TemplateID: "source_template_junk",

@@ -423,7 +423,12 @@ type TemplateSyncActivityInput struct {
 
 // TemplateSyncActivityOutput reports the sync result for one template source.
 type TemplateSyncActivityOutput struct {
-	Status             TemplateSyncState
+	Status TemplateSyncState
+	// Recorded is true when the activity's store call already completed the
+	// sync with what it found, so the workflow writes no status for it. A
+	// result from a release before this field reads false, and the workflow
+	// completes that sync itself.
+	Recorded           bool
 	TemplateRevisionID TemplateRevisionID
 	ResolvedCommitSHA  string
 	ErrorSummary       string
