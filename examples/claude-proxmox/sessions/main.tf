@@ -76,8 +76,9 @@ locals {
   # a running session only that way.
   start = {
     for repo in var.repositories : repo => templatefile("${path.module}/scripts/session.sh.tftpl", {
-      repo  = repo
-      entry = "projects/github/${local.vm.setup_repository}/claude/repos/${split("/", repo)[1]}.md"
+      repo             = repo
+      setup_repository = local.vm.setup_repository
+      entry            = "projects/github/${local.vm.setup_repository}/claude/repos/${split("/", repo)[1]}.md"
     })
   }
 
