@@ -23,7 +23,8 @@ locals {
     # make and Docker for openplan's `make check`, which runs everything else
     # in containers; the rest for the setup. docker.io only recommends its CLI
     # and buildx, and the executor's Dockerfile needs buildx for TARGETARCH.
-    packages = ["qemu-guest-agent", "git", "gh", "jq", "curl", "tmux", "make", "docker.io", "docker-cli", "docker-buildx"]
+    # Syncthing keeps the setup repo in step with the laptop.
+    packages = ["qemu-guest-agent", "git", "gh", "jq", "curl", "tmux", "make", "docker.io", "docker-cli", "docker-buildx", "syncthing"]
 
     # The token is written after debian exists (defer), straight into its
     # home: a new parent directory would be root's.
@@ -36,6 +37,8 @@ locals {
           git_user_name    = var.git_user_name
           git_user_email   = var.git_user_email
           setup_repository = var.setup_repository
+          syncthing_peer   = var.syncthing_peer
+          folder           = split("/", var.setup_repository)[1]
         })
       },
       {
@@ -48,8 +51,8 @@ locals {
     ]
 
     # The setup runs as debian once it can use Docker and has a systemd
-    # manager of its own, which bootstrap.sh's vault-sync timer needs; lingering
-    # keeps that manager up with nobody logged in.
+    # manager of its own, which Syncthing and the Remote Control services need;
+    # lingering keeps that manager up with nobody logged in.
     runcmd = [
       "systemctl enable --now qemu-guest-agent",
       "usermod -aG docker ${local.user}",

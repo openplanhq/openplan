@@ -9,7 +9,7 @@ templates like the Proxmox cluster's (#548), applied by the same manager
 | Root path | What it owns | Changes |
 |---|---|---|
 | [`examples/claude-proxmox/vm`](vm/README.md) | the VM, its first-boot setup and the key `sessions/` connects with | rarely: any change is a rebuild |
-| [`examples/claude-proxmox/sessions`](sessions/README.md) | each repository's clone and its Remote Control service, and the diagram CLIs they use, on the running VM | whenever a repository is added or removed |
+| [`examples/claude-proxmox/sessions`](sessions/README.md) | each repository's clone and its Remote Control service, the `general` session that belongs to no repository, and the diagram CLIs they use, on the running VM | whenever a repository is added or removed |
 
 `sessions/` never replaces or edits anything `vm/` owns, so adding a
 repository never costs the VM or the work on it.
@@ -20,7 +20,8 @@ repository never costs the VM or the work on it.
    `sessions/` waits for it.
 2. Install `sessions/` with `vm_workspace` set to the workspace in `vm/`'s run
    log and `state_bucket` to the state bucket. It clones each repository,
-   marks it trusted for Claude Code and starts its service.
+   marks it trusted for Claude Code and starts its service, and starts the
+   `general` session in `~/projects/github` beside them.
 3. On the VM (`ssh debian@<address>`), run `claude auth login`: the full
    claude.ai login Remote Control needs. Until then each service exits ("You
    must be logged in") and retries every 15 seconds, so it connects on the
@@ -36,10 +37,14 @@ repository never costs the VM or the work on it.
    model requests, not Remote Control sessions. Copying a login from another
    machine isn't documented, and one machine's refresh can revoke the other's
    copy.
+4. On the laptop, accept the VM in Syncthing and share the setup repository
+   with it ([`vm/`'s README](vm/README.md#using-it) says how). Until then the
+   VM's copy is the one `vm/` seeded from GitHub, and edits stay on the
+   machine that made them.
 
 Destroy in reverse: `sessions/`, then `vm/`. A rebuilt VM has a new key, so
 the next apply of `sessions/` puts its unit, clones, trust and services back;
-it needs step 3 again.
+it needs steps 3 and 4 again.
 
 ## Credentials
 
