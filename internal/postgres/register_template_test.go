@@ -53,7 +53,7 @@ func TestRegisteredTemplateTakesItsSyncsRevision(t *testing.T) {
 	assert.Equal(t, registered.Template.ID, stored.TemplateID)
 
 	// What the sync activity stores on success, into the template it was handed.
-	_, err = store.UpsertTemplateRevisionWithVariables(ctx, domain.TemplateRevision{
+	_, err = seedTemplateRevision(ctx, store, domain.TemplateRevision{
 		ID: "revision_1", TenantID: input.TenantID, TemplateID: input.TemplateID,
 		RepoOwner: input.RepoOwner, RepoName: input.RepoName, SourceRef: input.SourceRef, RootPath: input.RootPath,
 		ResolvedCommitSHA: "abc123", Name: "vpc", Status: domain.TemplateRevisionActive, CreatedAt: time.Now().UTC(),

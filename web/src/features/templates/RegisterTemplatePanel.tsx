@@ -52,9 +52,9 @@ export default function RegisterTemplatePanel() {
   // revision yet, so it cannot open: still registering, as far as anyone can
   // tell.
   //
-  // One refetch is enough to end it. The sync writes the revision before it
-  // records itself done, so a list fetched after this poll reads synced holds
-  // it. A refetch that fails puts the list query in error, and TemplatesPage
+  // One refetch is enough to end it. The sync records its revision and
+  // itself done in one transaction, so a list fetched after this poll reads
+  // synced holds it. A refetch that fails puts the list query in error, and TemplatesPage
   // draws its error and Retry in place of this panel.
   const opening = succeeded && !opened;
 

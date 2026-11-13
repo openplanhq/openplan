@@ -109,6 +109,18 @@ variable "cidr" {
 	if git.ref != "v0.0.1" {
 		t.Fatalf("ref = %q, want v0.0.1", git.ref)
 	}
+	if store.syncID != "template_sync_123" {
+		t.Fatalf("recorded sync = %q, want template_sync_123", store.syncID)
+	}
+	if store.template.ID != "" {
+		t.Fatalf("handed the store revision ID %q, want none: the store assigns it", store.template.ID)
+	}
+	if !output.Recorded {
+		t.Fatal("output.Recorded = false, want true: the store completed the sync")
+	}
+	if output.TemplateRevisionID != "template_revision_stored" {
+		t.Fatalf("output revision = %q, want the store's template_revision_stored", output.TemplateRevisionID)
+	}
 	if store.template.Name != "vpc" {
 		t.Fatalf("template name = %q, want vpc", store.template.Name)
 	}
@@ -298,45 +310,6 @@ variable "password" {
 	}
 }
 
-func TestSyncTemplateReturnsExistingImmutableTemplate(t *testing.T) {
-	t.Parallel()
-
-	store := &recordingTemplateSyncStore{
-		upsertTemplate: domain.TemplateRevision{
-			ID:                domain.TemplateRevisionID("template_existing"),
-			TenantID:          domain.TenantID("tenant_123"),
-			ResolvedCommitSHA: "abc123",
-		},
-	}
-	git := &fakeGit{
-		head: "abc123",
-		populate: func(repoPath string) error {
-			root := filepath.Join(repoPath, "modules", "vpc")
-			if err := os.MkdirAll(root, 0o700); err != nil {
-				return err
-			}
-			writeFile(t, filepath.Join(root, "variables.tf"), `variable "region" { type = string }`)
-			return nil
-		},
-	}
-	activities := newTestTemplateSyncActivities(t, store, git)
-
-	output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-		TenantID:   domain.TenantID("tenant_123"),
-		TemplateID: domain.TemplateID("source_template_123"),
-		RepoOwner:  "acme",
-		RepoName:   "infra-templates",
-		SourceRef:  "v0.0.1",
-		RootPath:   "modules/vpc",
-	})
-	if err != nil {
-		t.Fatalf("SyncTemplate returned error: %v", err)
-	}
-	if output.TemplateRevisionID != domain.TemplateRevisionID("template_existing") {
-		t.Fatalf("template revision ID = %q, want template_existing", output.TemplateRevisionID)
-	}
-}
-
 // The revision goes into the template the API registered, not one the sync
 // derives from the source.
 func TestSyncTemplateWritesIntoTheTemplateItWasGiven(t *testing.T) {
@@ -361,33 +334,6 @@ func TestSyncTemplateWritesIntoTheTemplateItWasGiven(t *testing.T) {
 	}
 	if store.template.TemplateID != "source_template_given" {
 		t.Fatalf("revision template ID = %q, want source_template_given", store.template.TemplateID)
-	}
-}
-
-// Two templates on one repository and path can follow refs that point at the
-// same commit (main and develop after a fast-forward). Each gets its own
-// revision, so the second sync can't collide with the first's primary key.
-func TestSyncTemplateGivesEachTemplateItsOwnRevisionOfACommit(t *testing.T) {
-	t.Parallel()
-
-	revisionIDs := map[domain.TemplateID]domain.TemplateRevisionID{}
-	for templateID, ref := range map[domain.TemplateID]string{"template_main": "main", "template_develop": "develop"} {
-		store := &recordingTemplateSyncStore{}
-		activities := newTestTemplateSyncActivities(t, store, vpcTemplateGit(t))
-		if _, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
-			TenantID:   domain.TenantID("tenant_123"),
-			TemplateID: templateID,
-			RepoOwner:  "acme",
-			RepoName:   "infra-templates",
-			SourceRef:  ref,
-			RootPath:   "modules/vpc",
-		}); err != nil {
-			t.Fatalf("SyncTemplate %s returned error: %v", templateID, err)
-		}
-		revisionIDs[templateID] = store.template.ID
-	}
-	if revisionIDs["template_main"] == revisionIDs["template_develop"] {
-		t.Fatalf("both templates got revision %q for one commit", revisionIDs["template_main"])
 	}
 }
 
@@ -416,8 +362,8 @@ func TestSyncTemplateWithoutATemplateIsInvalid(t *testing.T) {
 	if git.calls != 0 {
 		t.Fatalf("ran git %d times for a sync with no template", git.calls)
 	}
-	if store.template.ID != "" {
-		t.Fatalf("persisted revision %q for a sync with no template", store.template.ID)
+	if store.recorded {
+		t.Fatalf("recorded a revision for a sync with no template")
 	}
 }
 
@@ -427,7 +373,7 @@ func TestSyncTemplateIntoADeletedTemplateIsInvalid(t *testing.T) {
 	t.Parallel()
 
 	store := &recordingTemplateSyncStore{
-		upsertErr: fmt.Errorf("template source_template_123: %w", os.ErrNotExist),
+		recordErr: fmt.Errorf("template source_template_123: %w", os.ErrNotExist),
 	}
 	activities := newTestTemplateSyncActivities(t, store, vpcTemplateGit(t))
 
@@ -456,7 +402,7 @@ func TestSyncTemplateReturnsOtherStoreFailures(t *testing.T) {
 	t.Parallel()
 
 	storeErr := errors.New("connection reset")
-	store := &recordingTemplateSyncStore{upsertErr: storeErr}
+	store := &recordingTemplateSyncStore{recordErr: storeErr}
 	activities := newTestTemplateSyncActivities(t, store, vpcTemplateGit(t))
 
 	_, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
@@ -489,13 +435,14 @@ func vpcTemplateGit(t *testing.T) *fakeGit {
 }
 
 type recordingTemplateSyncStore struct {
-	statusInput    domain.TemplateSyncStatusActivityInput
-	statusErr      error
-	stepInput      domain.TemplateSyncStepActivityInput
-	template       domain.TemplateRevision
-	variables      []domain.TemplateVariable
-	upsertTemplate domain.TemplateRevision
-	upsertErr      error
+	statusInput domain.TemplateSyncStatusActivityInput
+	statusErr   error
+	stepInput   domain.TemplateSyncStepActivityInput
+	recorded    bool
+	syncID      domain.TemplateSyncID
+	template    domain.TemplateRevision
+	variables   []domain.TemplateVariable
+	recordErr   error
 }
 
 func (store *recordingTemplateSyncStore) RecordTemplateSyncStatus(_ context.Context, input domain.TemplateSyncStatusActivityInput) error {
@@ -511,16 +458,18 @@ func (store *recordingTemplateSyncStore) RecordTemplateSyncStep(_ context.Contex
 	return nil
 }
 
-func (store *recordingTemplateSyncStore) UpsertTemplateRevisionWithVariables(_ context.Context, template domain.TemplateRevision, variables []domain.TemplateVariable) (domain.TemplateRevision, error) {
-	store.template = template
+// RecordSyncedTemplateRevision keeps what the activity handed over and
+// assigns the revision an ID, as the store does.
+func (store *recordingTemplateSyncStore) RecordSyncedTemplateRevision(_ context.Context, syncID domain.TemplateSyncID, revision domain.TemplateRevision, variables []domain.TemplateVariable) (domain.TemplateRevision, error) {
+	store.recorded = true
+	store.syncID = syncID
+	store.template = revision
 	store.variables = variables
-	if store.upsertErr != nil {
-		return domain.TemplateRevision{}, store.upsertErr
+	if store.recordErr != nil {
+		return domain.TemplateRevision{}, store.recordErr
 	}
-	if store.upsertTemplate.ID != "" {
-		return store.upsertTemplate, nil
-	}
-	return template, nil
+	revision.ID = "template_revision_stored"
+	return revision, nil
 }
 
 // newTestTemplateSyncActivities returns sync activities that clone with git,

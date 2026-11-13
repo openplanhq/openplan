@@ -98,7 +98,9 @@ func historyRunScenarios() []runScenario {
 
 func historySyncScenarios() []syncScenario {
 	return []syncScenario{
+		// A sync activity from before Recorded existed: the workflow completes the sync.
 		{name: "sync-completed", output: domain.TemplateSyncActivityOutput{TemplateRevisionID: "revision-history", ResolvedCommitSHA: "0123456789abcdef0123456789abcdef01234567"}},
+		{name: "sync-recorded", output: domain.TemplateSyncActivityOutput{Status: domain.TemplateSyncStateCompleted, Recorded: true, TemplateRevisionID: "revision-history", ResolvedCommitSHA: "0123456789abcdef0123456789abcdef01234567"}},
 		{name: "sync-invalid", output: domain.TemplateSyncActivityOutput{Status: domain.TemplateSyncStateInvalid, ErrorSummary: "no Terraform files"}},
 		// RepositoryNotFound is one of syncRetryPolicy's non-retryable types,
 		// so the recording does not wait out four attempts.

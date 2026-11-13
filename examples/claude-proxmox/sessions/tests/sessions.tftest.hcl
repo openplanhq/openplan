@@ -51,22 +51,22 @@ run "start_script" {
     condition = alltrue([
       for want in [
         # A folder made by hand is still cloned into.
-        "[ -d \"$HOME/projects/github/openplanhq/ai-os/.git\" ] || gh repo clone \"openplanhq/ai-os\" \"$HOME/projects/github/openplanhq/ai-os\"",
+        "[ -d \"$HOME/projects/github/openplanhq/openplan/.git\" ] || gh repo clone \"openplanhq/openplan\" \"$HOME/projects/github/openplanhq/openplan\"",
         # A repo with no entry in the setup repo gets no loader, and that's no error.
-        "[ -f \"$HOME/projects/github/openplanhq/ai-os/claude/repos/ai-os.md\" ]",
-        "systemd-escape \"openplanhq/ai-os\"",
+        "[ -f \"$HOME/projects/github/openplanhq/ai-os/claude/repos/openplan.md\" ]",
+        "systemd-escape \"openplanhq/openplan\"",
         "systemctl --user enable",
         # restart, not just enable: a changed unit must reach a running service.
         "systemctl --user restart",
-      ] : strcontains(terraform_data.session["openplanhq/ai-os"].input.start, want)
+      ] : strcontains(terraform_data.session["openplanhq/openplan"].input.start, want)
     ])
     error_message = "start must clone the repo if it's missing, write its loader when the setup repo has an entry, and enable and restart its instance"
   }
 
   # sessions/ can be installed straight after vm/, while its first-boot setup
-  # still logs gh in and clones the setup repo this script reads.
+  # still logs gh in and seeds the setup repo this script reads.
   assert {
-    condition     = can(regex("(?s)cloud-init status --wait[^\n]*\n.*gh repo clone", terraform_data.session["openplanhq/ai-os"].input.start))
+    condition     = can(regex("(?s)cloud-init status --wait[^\n]*\n.*gh repo clone", terraform_data.session["openplanhq/openplan"].input.start))
     error_message = "start must wait for vm/'s first-boot setup before it clones"
   }
 
@@ -77,6 +77,29 @@ run "start_script" {
       strcontains(terraform_data.session["openplanhq/ai-os"].input.stop, "systemd-escape \"openplanhq/ai-os\"")
     )
     error_message = "stop must disable the instance start enabled"
+  }
+}
+
+# vm/ seeds the setup repo with no .git, as the laptop keeps its git: a clone
+# into that folder would fail, and the apply with it. Its session still runs.
+run "setup_repository_not_cloned" {
+  command = plan
+
+  assert {
+    condition     = !strcontains(terraform_data.session["openplanhq/ai-os"].input.start, "gh repo clone")
+    error_message = "start must never clone the setup repo: vm/ seeds it"
+  }
+
+  assert {
+    condition     = strcontains(terraform_data.session["openplanhq/ai-os"].input.start, "systemctl --user restart")
+    error_message = "the setup repo still gets its session"
+  }
+
+  # With no clone left, a seed that never came would pass unnoticed: a green
+  # apply, and a service restarting forever in a folder that isn't there.
+  assert {
+    condition     = can(regex("(?s)\\[ -d \"\\$HOME/projects/github/openplanhq/ai-os\" \\] \\|\\| \\{[^\n]*exit 1.*systemctl --user restart", terraform_data.session["openplanhq/ai-os"].input.start))
+    error_message = "start must fail when vm/ never seeded the setup repo, before its service starts"
   }
 }
 

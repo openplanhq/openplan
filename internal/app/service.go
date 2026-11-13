@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -172,7 +170,6 @@ type TemplateRunRepository interface {
 
 // TemplateRevisionRepository persists immutable template metadata and inferred variables.
 type TemplateRevisionRepository interface {
-	UpsertTemplateRevisionWithVariables(ctx context.Context, templateRevision domain.TemplateRevision, variables []domain.TemplateVariable) (domain.TemplateRevision, error)
 	ListTemplateRevisions(ctx context.Context, tenantID domain.TenantID) ([]domain.TemplateRevision, error)
 	GetTemplateRevisionVariables(ctx context.Context, tenantID domain.TenantID, templateRevisionID domain.TemplateRevisionID) ([]domain.TemplateVariable, error)
 }
@@ -3114,57 +3111,43 @@ func (systemClock) Now() time.Time {
 	return time.Now().UTC()
 }
 
-// randomID mints one identifier: the kind's prefix followed by 16 bytes of
-// CSPRNG output in hex. Every generator below is this function plus a prefix,
-// so the shape of a openplan identifier is defined in exactly one place.
-//
-// A failed read falls back to a timestamp rather than failing the call: the
-// generator interfaces return no error, and the callers minting these IDs are
-// mid-command with nowhere to report one.
-func randomID[ID ~string](prefix string) ID {
-	var bytes [16]byte
-	if _, err := rand.Read(bytes[:]); err != nil {
-		return ID(fmt.Sprintf("%s_%d", prefix, time.Now().UTC().UnixNano()))
-	}
-	return ID(prefix + "_" + hex.EncodeToString(bytes[:]))
-}
-
 // The generators are distinct types only because each satisfies a different
-// single-method interface on Service; they carry no logic of their own.
+// single-method interface on Service; they carry no logic of their own:
+// each is domain.RandomID with its kind's prefix.
 
 type randomTemplateRunIDGenerator struct{}
 
 func (randomTemplateRunIDGenerator) NewTemplateRunID() domain.TemplateRunID {
-	return randomID[domain.TemplateRunID]("run")
+	return domain.RandomID[domain.TemplateRunID]("run")
 }
 
 type randomTemplateIDGenerator struct{}
 
 func (randomTemplateIDGenerator) NewTemplateID() domain.TemplateID {
-	return randomID[domain.TemplateID]("template")
+	return domain.RandomID[domain.TemplateID]("template")
 }
 
 type randomTemplateSyncIDGenerator struct{}
 
 func (randomTemplateSyncIDGenerator) NewTemplateSyncID() domain.TemplateSyncID {
-	return randomID[domain.TemplateSyncID]("template_sync")
+	return domain.RandomID[domain.TemplateSyncID]("template_sync")
 }
 
 type randomStackIDGenerator struct{}
 
 func (randomStackIDGenerator) NewStackID() domain.StackID {
-	return randomID[domain.StackID]("stack")
+	return domain.RandomID[domain.StackID]("stack")
 }
 
 type randomStackTemplateIDGenerator struct{}
 
 func (randomStackTemplateIDGenerator) NewStackTemplateID() domain.StackTemplateID {
-	return randomID[domain.StackTemplateID]("stack_template")
+	return domain.RandomID[domain.StackTemplateID]("stack_template")
 }
 
 type randomCredentialIDGenerator struct{}
 
 // NewCredentialID creates a random identifier for a persisted credential record.
 func (randomCredentialIDGenerator) NewCredentialID() domain.CredentialID {
-	return randomID[domain.CredentialID]("credential")
+	return domain.RandomID[domain.CredentialID]("credential")
 }

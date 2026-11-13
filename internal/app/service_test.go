@@ -3285,8 +3285,6 @@ type recordingTemplateRevisionRepository struct {
 	template                       domain.TemplateRevision
 	templates                      []domain.TemplateRevision
 	variables                      []domain.TemplateVariable
-	gotTemplate                    domain.TemplateRevision
-	gotVariables                   []domain.TemplateVariable
 	gotListTenantID                domain.TenantID
 	gotGetTemplateTenantID         domain.TenantID
 	gotGetTemplateRevisionID       domain.TemplateRevisionID
@@ -3294,20 +3292,7 @@ type recordingTemplateRevisionRepository struct {
 	gotVariablesTemplateRevisionID domain.TemplateRevisionID
 	getTemplateErr                 error
 	listErr                        error
-	upsertErr                      error
 	variablesErr                   error
-}
-
-func (repository *recordingTemplateRevisionRepository) UpsertTemplateRevisionWithVariables(_ context.Context, template domain.TemplateRevision, variables []domain.TemplateVariable) (domain.TemplateRevision, error) {
-	repository.gotTemplate = template
-	repository.gotVariables = variables
-	if repository.upsertErr != nil {
-		return domain.TemplateRevision{}, repository.upsertErr
-	}
-	if repository.template.ID != "" {
-		return repository.template, nil
-	}
-	return template, nil
 }
 
 func (repository *recordingTemplateRevisionRepository) GetTemplateRevision(_ context.Context, tenantID domain.TenantID, templateRevisionID domain.TemplateRevisionID) (domain.TemplateRevision, error) {
@@ -4019,7 +4004,7 @@ func TestAssignStackRoleWithoutUnitOfWorkFails(t *testing.T) {
 
 // TestDefaultIDGeneratorsMintPrefixedRandomIDs locks the identifier shape the
 // five default generators share. They now differ only in the prefix handed to
-// randomID, so a wrong prefix is the one mistake the collapse made possible and
+// domain.RandomID, so a wrong prefix is the one mistake the collapse made possible and
 // the one this test is here to catch.
 func TestDefaultIDGeneratorsMintPrefixedRandomIDs(t *testing.T) {
 	t.Parallel()
