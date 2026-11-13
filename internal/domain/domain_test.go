@@ -464,18 +464,18 @@ func TestLatestTemplateSyncStatusAt(t *testing.T) {
 	atStall := requestedAt.Add(TemplateSyncStallsAfter)
 
 	for _, test := range []struct {
-		name                    string
-		status                  TemplateSyncState
-		revisionPredatesRequest bool
-		now                     time.Time
-		want                    TemplateSyncStatus
+		name     string
+		status   TemplateSyncState
+		upToDate bool
+		now      time.Time
+		want     TemplateSyncStatus
 	}{
 		{name: "pending, fresh", status: TemplateSyncStatePending, now: justUnderStall, want: TemplateSyncSyncing},
 		{name: "running, fresh", status: TemplateSyncStateRunning, now: justUnderStall, want: TemplateSyncSyncing},
 		{name: "pending, at the threshold", status: TemplateSyncStatePending, now: atStall, want: TemplateSyncStalled},
 		{name: "running, past the threshold", status: TemplateSyncStateRunning, now: atStall.Add(time.Hour), want: TemplateSyncStalled},
 		{name: "completed on a new revision", status: TemplateSyncStateCompleted, now: atStall, want: TemplateSyncSynced},
-		{name: "completed on a revision it already had", status: TemplateSyncStateCompleted, revisionPredatesRequest: true, now: justUnderStall, want: TemplateSyncUpToDate},
+		{name: "completed on a revision it already had", status: TemplateSyncStateCompleted, upToDate: true, now: justUnderStall, want: TemplateSyncUpToDate},
 		{name: "invalid", status: TemplateSyncStateInvalid, now: atStall, want: TemplateSyncInvalid},
 		{name: "failed", status: TemplateSyncStateFailed, now: justUnderStall, want: TemplateSyncFailed},
 	} {
@@ -483,9 +483,9 @@ func TestLatestTemplateSyncStatusAt(t *testing.T) {
 			t.Parallel()
 
 			sync := LatestTemplateSync{
-				Status:                  test.status,
-				RequestedAt:             requestedAt,
-				RevisionPredatesRequest: test.revisionPredatesRequest,
+				Status:      test.status,
+				RequestedAt: requestedAt,
+				UpToDate:    test.upToDate,
 			}
 			if got := sync.StatusAt(test.now); got != test.want {
 				t.Fatalf("StatusAt() = %q, want %q", got, test.want)

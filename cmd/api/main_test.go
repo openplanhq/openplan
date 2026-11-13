@@ -1001,7 +1001,7 @@ func (recordingStore) RecordTemplateRunEvent(context.Context, domain.TemplateRun
 	return nil
 }
 
-func (recordingStore) UpsertTemplateRevisionWithVariables(context.Context, domain.TemplateRevision, []domain.TemplateVariable) (domain.TemplateRevision, error) {
+func (recordingStore) RecordSyncedTemplateRevision(context.Context, domain.TemplateSyncID, domain.TemplateRevision, []domain.TemplateVariable) (domain.TemplateRevision, error) {
 	return domain.TemplateRevision{}, nil
 }
 

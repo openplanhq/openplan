@@ -133,12 +133,9 @@ type LatestTemplateSync struct {
 	RequestedAt       time.Time
 	// CompletedAt is zero until the sync ends.
 	CompletedAt time.Time
-	// RevisionPredatesRequest is true when the revision the sync resolved to
-	// was created before the sync was requested: the commit was already
-	// registered, so the sync found nothing new. The two times come from the
-	// api's and the executor's clocks, so skew between them larger than a
-	// sync's duration would misread it.
-	RevisionPredatesRequest bool
+	// UpToDate is true when the sync completed on a revision already
+	// recorded: the commit was registered before, so it found nothing new.
+	UpToDate bool
 }
 
 // StatusAt is the sync's status as shown at now. Stalled is derived here,
@@ -151,7 +148,7 @@ func (sync LatestTemplateSync) StatusAt(now time.Time) TemplateSyncStatus {
 		}
 		return TemplateSyncSyncing
 	case TemplateSyncStateCompleted:
-		if sync.RevisionPredatesRequest {
+		if sync.UpToDate {
 			return TemplateSyncUpToDate
 		}
 		return TemplateSyncSynced
