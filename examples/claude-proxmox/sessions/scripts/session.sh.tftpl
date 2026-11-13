@@ -26,26 +26,7 @@ if [ -f "$HOME/${entry}" ]; then
   } > "$HOME/projects/github/${repo}/CLAUDE.local.md"
 fi
 
-# The service has no terminal for Claude's questions. In an untrusted clone
-# Remote Control exits "Workspace not trusted", with "Enable Remote Control?"
-# unanswered it hangs without connecting, and a session it spawns drops
-# CLAUDE.md imports from outside the repo, the loader's entry above included,
-# because loading them waits on a question too. So answer all three the way
-# the prompts would: trust and imports per git root, Remote Control once per
-# machine. A broken ~/.claude.json fails the apply here, before a service
-# waits on it.
-claude_json="$HOME/.claude.json"
-[ -s "$claude_json" ] || echo '{}' > "$claude_json"
-tmp="$(mktemp "$claude_json.XXXXXX")"
-jq --arg p "$HOME/projects/github/${repo}" '.remoteDialogSeen = true | .projects[$p].hasTrustDialogAccepted = true | .projects[$p].hasClaudeMdExternalIncludesApproved = true | .projects[$p].hasClaudeMdExternalIncludesWarningShown = true' "$claude_json" > "$tmp"
-mv "$tmp" "$claude_json"
-# A Claude save that read the file before the mv, or another repo's script
-# running alongside, can rename over it and drop the entry. Nothing re-runs
-# this script, so fail the apply rather than leave the clone untrusted; the
-# next apply replaces the session and writes it again.
-sleep 1
-jq -e --arg p "$HOME/projects/github/${repo}" '.remoteDialogSeen and .projects[$p].hasTrustDialogAccepted and .projects[$p].hasClaudeMdExternalIncludesApproved' "$claude_json" > /dev/null
-
+${trust}
 # The setup repo's shared settings deny reading .env, and Claude's Edit tool
 # reads a file before it changes it, so the deny blocks edits too. Sessions
 # here set up a clone's local .env, so this VM drops that one rule; other

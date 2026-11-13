@@ -138,6 +138,21 @@ run "start_trusts_the_clone" {
 
 # ai-os's shared settings deny reading .env, and Claude's Edit tool reads a
 # file before it changes it, so the deny blocks edits too. The VM drops it.
+run "trust_is_shared_by_both_sessions" {
+  command = plan
+
+  # One snippet, rendered per folder: the race-then-verify below is subtle
+  # enough that it must have one home.
+  assert {
+    condition = alltrue([
+      for repo, s in terraform_data.session :
+      strcontains(s.input.start, "--arg p \"$HOME/projects/github/${repo}\"") &&
+      strcontains(s.input.start, "jq -e --arg p")
+    ]) && strcontains(terraform_data.general.input.start, "jq -e --arg p")
+    error_message = "both kinds of session answer Claude's questions with the same snippet"
+  }
+}
+
 run "start_lets_claude_edit_env" {
   command = plan
 
@@ -187,6 +202,88 @@ run "unit_is_the_proven_one" {
       ] : contains(split("\n", terraform_data.unit.input.unit), line)
     ])
     error_message = "the unit must be the one proven on the VM"
+  }
+}
+
+# The session that belongs to no repo: one per VM, so adding or removing a
+# repository never touches it, and it never gets a clone of its own.
+run "general_session_once_per_vm" {
+  command = plan
+
+  assert {
+    condition = (
+      keys(terraform_data.general.triggers_replace) == ["host", "private_key", "start", "unit", "user"] &&
+      terraform_data.general.triggers_replace.start == sha256(terraform_data.general.input.start) &&
+      terraform_data.general.triggers_replace.unit == terraform_data.unit.triggers_replace.general
+    )
+    error_message = "the general session is replaced only when its script, its unit or the VM changes"
+  }
+
+  # Its unit is the one thing that must not drag the repo sessions with it.
+  assert {
+    condition = alltrue([
+      for s in values(terraform_data.session) :
+      s.triggers_replace.unit == sha256(terraform_data.unit.input.unit)
+    ])
+    error_message = "a change to the general unit must not replace, and so restart, every repo session"
+  }
+}
+
+run "general_unit" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for line in [
+        "Description=Claude Remote Control in projects/github",
+        # The parent of every clone: this session belongs to no repo.
+        "WorkingDirectory=%h/projects/github",
+        "Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin",
+        "ExecStart=%h/.local/bin/claude remote-control --name general --permission-mode auto",
+        "Restart=always",
+        "RestartSec=15",
+        "StartLimitIntervalSec=0",
+        "WantedBy=default.target",
+      ] : contains(split("\n", terraform_data.unit.input.general), line)
+    ])
+    error_message = "the general session's unit must start Remote Control in projects/github"
+  }
+
+  # A static unit, not an instance of claude-rc@.service.
+  assert {
+    condition     = !strcontains(terraform_data.unit.input.general, "%I")
+    error_message = "the general unit takes no instance name"
+  }
+}
+
+run "general_start_trusts_the_folder_and_clones_nothing" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for want in [
+        "mkdir -p \"$HOME/projects/github\"",
+        "--arg p \"$HOME/projects/github\"",
+        "hasTrustDialogAccepted",
+        "hasClaudeMdExternalIncludesApproved",
+        "systemctl --user enable claude-rc-general.service",
+        "systemctl --user restart claude-rc-general.service",
+      ] : strcontains(terraform_data.general.input.start, want)
+    ])
+    error_message = "the general session must trust its folder and start, as a service has no terminal for Claude's questions"
+  }
+
+  assert {
+    condition = (
+      !strcontains(terraform_data.general.input.start, "gh repo clone") &&
+      !strcontains(terraform_data.general.input.start, "CLAUDE.local.md")
+    )
+    error_message = "the general session belongs to no repo: nothing to clone, no loader to write"
+  }
+
+  assert {
+    condition     = strcontains(terraform_data.general.input.stop, "disable --now claude-rc-general.service")
+    error_message = "a destroy stops the general session, as it does a repo's"
   }
 }
 

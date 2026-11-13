@@ -71,6 +71,26 @@ locals {
     WantedBy=default.target
   EOT
 
+  # The general session's unit. Not an instance of the one above: it belongs to
+  # no repo, so it starts in projects/github, the parent of every clone, where
+  # work that isn't a repo's goes and where a new clone lands.
+  general_unit = <<-EOT
+    [Unit]
+    Description=Claude Remote Control in projects/github
+    # Retry forever: at boot the network may not be up yet.
+    StartLimitIntervalSec=0
+
+    [Service]
+    WorkingDirectory=%h/projects/github
+    Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+    ExecStart=%h/.local/bin/claude remote-control --name general --permission-mode auto
+    Restart=always
+    RestartSec=15
+
+    [Install]
+    WantedBy=default.target
+  EOT
+
   # Each repo's start script, rendered once so its hash can replace the
   # session: a provisioner runs only on create, so a fix to the script reaches
   # a running session only that way.
@@ -79,15 +99,26 @@ locals {
       repo             = repo
       setup_repository = local.vm.setup_repository
       entry            = "projects/github/${local.vm.setup_repository}/claude/repos/${split("/", repo)[1]}.md"
+      trust            = templatefile("${path.module}/scripts/trust.sh.tftpl", { dir = "$HOME/projects/github/${repo}" })
     })
   }
+
+  general_start = templatefile("${path.module}/scripts/general.sh.tftpl", {
+    trust = templatefile("${path.module}/scripts/trust.sh.tftpl", { dir = "$HOME/projects/github" })
+  })
 
   tools = file("${path.module}/scripts/tools.sh")
 }
 
 resource "terraform_data" "unit" {
-  triggers_replace = merge(local.connection, { unit = sha256(local.unit) })
-  input            = { unit = local.unit }
+  # The two hashes are separate keys: the sessions key off `unit` alone, so a
+  # change to the general session's unit rewrites both files without replacing,
+  # and so restarting, every repo session.
+  triggers_replace = merge(local.connection, {
+    unit    = sha256(local.unit)
+    general = sha256(local.general_unit)
+  })
+  input = { unit = local.unit, general = local.general_unit }
 
   connection {
     type        = "ssh"
@@ -100,6 +131,7 @@ resource "terraform_data" "unit" {
     inline = [
       "mkdir -p ~/.config/systemd/user",
       "cat > ~/.config/systemd/user/claude-rc@.service <<'UNIT'\n${self.input.unit}UNIT",
+      "cat > ~/.config/systemd/user/claude-rc-general.service <<'UNIT'\n${self.input.general}UNIT",
       "systemctl --user daemon-reload",
     ]
   }
@@ -109,7 +141,10 @@ resource "terraform_data" "unit" {
   provisioner "remote-exec" {
     when       = destroy
     on_failure = continue
-    inline     = ["rm -f ~/.config/systemd/user/claude-rc@.service", "systemctl --user daemon-reload"]
+    inline = [
+      "rm -f ~/.config/systemd/user/claude-rc@.service ~/.config/systemd/user/claude-rc-general.service",
+      "systemctl --user daemon-reload",
+    ]
   }
 }
 
@@ -153,6 +188,39 @@ resource "terraform_data" "session" {
     start = local.start[each.key]
     # The clone stays: it may hold unpushed work.
     stop = "systemctl --user disable --now \"claude-rc@$(systemd-escape \"${each.key}\").service\" || true"
+  }
+
+  connection {
+    type        = "ssh"
+    host        = self.triggers_replace.host
+    user        = self.triggers_replace.user
+    private_key = self.triggers_replace.private_key
+  }
+
+  provisioner "remote-exec" {
+    inline = [self.input.start]
+  }
+
+  provisioner "remote-exec" {
+    when       = destroy
+    on_failure = continue
+    inline     = [self.input.stop]
+  }
+}
+
+
+# The session that belongs to no repo, one per VM. Replaced when its script,
+# its unit or the VM changes, never when a repo is added or removed. On a
+# destroy its service stops; whatever it left in projects/github stays, as a
+# repo session's clone does.
+resource "terraform_data" "general" {
+  triggers_replace = merge(local.connection, {
+    start = sha256(local.general_start)
+    unit  = terraform_data.unit.triggers_replace.general
+  })
+  input = {
+    start = local.general_start
+    stop  = "systemctl --user disable --now claude-rc-general.service || true"
   }
 
   connection {

@@ -3,7 +3,9 @@
 The repositories on the [`vm/`](../vm/README.md) VM: for each, a clone at
 `~/projects/github/<owner>/<repo>`, its `CLAUDE.local.md`, and a Remote
 Control session as a systemd user service, `claude-rc@<owner>/<repo>`
-escaped. Once per VM, it also installs the CLIs a session draws diagrams
+escaped. Plus one session that belongs to no repository, `general`, in
+`~/projects/github` itself, for work none of them owns: a question, a repo
+not in `repositories` yet, anything a clone would be the wrong home for. Once per VM, it also installs the CLIs a session draws diagrams
 with: `drawio`, the draw.io app the drawio skill converts Mermaid and exports
 with, and `mmdc`, Mermaid's own. Register it with
 `examples/claude-proxmox/sessions` as its root path,
@@ -60,6 +62,12 @@ logged it in with, or the login that replaced it.
   running.
 - **Removing one** disables and stops its service. Its clone stays: it may
   hold unpushed work.
+- **The `general` session** is written once per VM, beside the repositories
+  and keyed to nothing in `repositories`, so adding or removing a repository
+  leaves it running. Its folder, `~/projects/github`, is made if it is
+  missing and marked trusted the same way a clone is; nothing is cloned into
+  it. A clone it makes later lands where the instructions expect, one level
+  down.
 - **A change to the unit or to the start script** restarts every session, so
   a running one picks it up. A session in progress is cut off.
 - **A change to `scripts/tools.sh`**, a version bump say, reinstalls the
@@ -70,13 +78,15 @@ logged it in with, or the login that replaced it.
   the diagram CLIs stay. It's best effort: with the VM gone or unreachable,
   it finishes anyway.
 
-A session shows in Claude's Remote Control list under its repository's name.
+A session shows in Claude's Remote Control list under its repository's name,
+and the general one as `general`.
 It runs in auto mode: Claude's own classifier approves each tool call, since
 nobody is at the other end to. A `claude` you start over SSH keeps the default
 mode.
 
-On the VM, `systemctl --user status 'claude-rc@*'` and
-`journalctl --user -u 'claude-rc@*'` show how each is doing.
+On the VM, `systemctl --user status 'claude-rc*'` and
+`journalctl --user -u 'claude-rc*'` show how each is doing, the general
+session (`claude-rc-general.service`) included.
 
 ## Tests
 
