@@ -16,8 +16,23 @@ gh auth status >/dev/null 2>&1 || gh auth login --with-token < "$HOME/.github-to
 gh auth setup-git
 
 # The path the setup repo's instructions use: ~/projects/github/<owner>/<repo>.
-# The other repos are sessions/', which clones them on the running VM.
-[ -d "$HOME/projects/github/${setup_repository}" ] || gh repo clone "${setup_repository}" "$HOME/projects/github/${setup_repository}"
+# A copy with no .git: the laptop keeps the setup repo's git and makes all its
+# commits, and Syncthing keeps this copy in step with it. GitHub's tarball
+# gives every file its last commit's time, so where the laptop has a newer
+# edit, the first sync keeps the laptop's. Unpacked beside the folder and moved
+# in whole, so a re-run after a failed download starts clean. The other repos
+# are sessions/', which clones them on the running VM.
+repo="$HOME/projects/github/${setup_repository}"
+if [ ! -d "$repo" ]; then
+  mkdir -p "$(dirname "$repo")"
+  tmp="$(mktemp -d "$repo.XXXXXX")"
+  gh api "repos/${setup_repository}/tarball" | tar -xz -C "$tmp" --strip-components=1
+  chmod 0755 "$tmp"
+  mv "$tmp" "$repo"
+fi
+# The setup repo's own list keeps .git, the beads databases and secrets on the
+# machine that has them.
+[ -f "$repo/.stignore" ] || printf '#include .stignore-shared\n' > "$repo/.stignore"
 
 # Into ~/.local/bin; it updates itself from then on. cloud-init's PATH lacks
 # that folder, and bootstrap.sh below needs claude on it to install the
@@ -38,3 +53,20 @@ line='export PATH="$HOME/.local/bin:$PATH"'
 grep -qxF "$line" ~/.bashrc || { printf '%s\n' "$line" | cat - ~/.bashrc > ~/.bashrc.new && mv ~/.bashrc.new ~/.bashrc; }
 
 "$HOME/projects/github/${setup_repository}/bootstrap.sh"
+
+# Syncthing last, so its first scan sees the finished folder. The one device is
+# the laptop, the one folder the setup repo, by its name; each step holds on a
+# re-run (adding the folder again fails, so it's checked first). The laptop
+# accepts this VM by hand; the generate line logs the VM's device ID.
+syncthing generate --no-default-folder
+systemctl --user enable --now syncthing.service
+tries=0
+until syncthing cli show system >/dev/null 2>&1; do
+  tries=$((tries + 1))
+  [ "$tries" -lt 60 ] || { echo 'Syncthing did not start: journalctl --user -u syncthing' >&2; exit 1; }
+  sleep 1
+done
+syncthing cli config devices add --device-id ${syncthing_peer} --name laptop
+syncthing cli config folders list | grep -qx '${folder}' \
+  || syncthing cli config folders add --id ${folder} --label ${folder} --path "$repo"
+syncthing cli config folders ${folder} devices add --device-id ${syncthing_peer}

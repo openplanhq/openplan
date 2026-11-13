@@ -19,6 +19,7 @@ variables {
   git_user_name                = "Test Owner"
   git_user_email               = "owner@example.invalid"
   github_token                 = "github_pat_11TEST_abc"
+  syncthing_peer               = "AAAAAAA-BBBBBBB-CCCCCCC-DDDDDDD-EEEEEEE-FFFFFFF-GGGGGGG-HHHHHHH"
 }
 
 run "vm_shape" {
