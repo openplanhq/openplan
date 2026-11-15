@@ -1,0 +1,14 @@
+set -eu
+
+# As a repo session's: this can run while vm/'s first-boot setup is still
+# going, and the folder below is made there.
+cloud-init status --wait > /dev/null || true
+
+# The parent of every clone, so what this session starts, a new clone say,
+# lands where the instructions expect it.
+mkdir -p "$HOME/projects/github"
+
+${trust}
+# restart, not start: a changed unit reaches a service that's already running.
+systemctl --user enable claude-rc-general.service
+systemctl --user restart claude-rc-general.service

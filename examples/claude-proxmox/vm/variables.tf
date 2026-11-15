@@ -132,6 +132,18 @@ variable "setup_repository" {
   }
 }
 
+# Stack config, not a credential: a device ID isn't secret. The VM shares the
+# setup repo with this one device and no other.
+variable "syncthing_peer" {
+  description = "The laptop's Syncthing device ID (in its Syncthing: Actions, Show ID). It keeps the setup repository's git, and the VM's copy syncs with it."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[A-Z2-7]{7}(-[A-Z2-7]{7}){7}$", var.syncthing_peer))
+    error_message = "syncthing_peer must be a Syncthing device ID: eight groups of seven letters A-Z and digits 2-7, joined by hyphens."
+  }
+}
+
 # A credential, never stack config: TF_VAR_github_token. It's held to its own
 # characters, so one pasted with a line ending is refused here rather than
 # failing on the VM. Claude Code takes no token: Remote Control needs the full

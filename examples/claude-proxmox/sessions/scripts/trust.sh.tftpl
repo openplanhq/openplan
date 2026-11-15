@@ -1,0 +1,19 @@
+# The service has no terminal for Claude's questions. In an untrusted folder
+# Remote Control exits "Workspace not trusted", with "Enable Remote Control?"
+# unanswered it hangs without connecting, and a session it spawns drops
+# CLAUDE.md imports from outside the folder, a loader's entry included,
+# because loading them waits on a question too. So answer all three the way
+# the prompts would: trust and imports per folder, Remote Control once per
+# machine. A broken ~/.claude.json fails the apply here, before a service
+# waits on it.
+claude_json="$HOME/.claude.json"
+[ -s "$claude_json" ] || echo '{}' > "$claude_json"
+tmp="$(mktemp "$claude_json.XXXXXX")"
+jq --arg p "${dir}" '.remoteDialogSeen = true | .projects[$p].hasTrustDialogAccepted = true | .projects[$p].hasClaudeMdExternalIncludesApproved = true | .projects[$p].hasClaudeMdExternalIncludesWarningShown = true' "$claude_json" > "$tmp"
+mv "$tmp" "$claude_json"
+# A Claude save that read the file before the mv, or another session's script
+# running alongside, can rename over it and drop the entry. Nothing re-runs
+# this script, so fail the apply rather than leave the folder untrusted; the
+# next apply replaces the session and writes it again.
+sleep 1
+jq -e --arg p "${dir}" '.remoteDialogSeen and .projects[$p].hasTrustDialogAccepted and .projects[$p].hasClaudeMdExternalIncludesApproved' "$claude_json" > /dev/null
