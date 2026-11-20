@@ -364,22 +364,22 @@ func NewService(service Service) *Service {
 	}
 	service.Clock = clock
 	if service.RunIDs == nil {
-		service.RunIDs = randomTemplateRunIDGenerator{}
+		service.RunIDs = randomIDs{}
 	}
 	if service.SyncIDs == nil {
-		service.SyncIDs = randomTemplateSyncIDGenerator{}
+		service.SyncIDs = randomIDs{}
 	}
 	if service.TemplateIDs == nil {
-		service.TemplateIDs = randomTemplateIDGenerator{}
+		service.TemplateIDs = randomIDs{}
 	}
 	if service.StackIDs == nil {
-		service.StackIDs = randomStackIDGenerator{}
+		service.StackIDs = randomIDs{}
 	}
 	if service.StackTemplateIDs == nil {
-		service.StackTemplateIDs = randomStackTemplateIDGenerator{}
+		service.StackTemplateIDs = randomIDs{}
 	}
 	if service.CredentialIDs == nil {
-		service.CredentialIDs = randomCredentialIDGenerator{}
+		service.CredentialIDs = randomIDs{}
 	}
 
 	return &service
@@ -3093,43 +3093,30 @@ func (systemClock) Now() time.Time {
 	return time.Now().UTC()
 }
 
-// The generators are distinct types only because each satisfies a different
-// single-method interface on Service; they carry no logic of their own:
-// each is domain.RandomID with its kind's prefix.
+// randomIDs mints every kind of id Service needs: each method is
+// domain.RandomID with its kind's prefix, one per single-method interface.
+type randomIDs struct{}
 
-type randomTemplateRunIDGenerator struct{}
-
-func (randomTemplateRunIDGenerator) NewTemplateRunID() domain.TemplateRunID {
+func (randomIDs) NewTemplateRunID() domain.TemplateRunID {
 	return domain.RandomID[domain.TemplateRunID]("run")
 }
 
-type randomTemplateIDGenerator struct{}
-
-func (randomTemplateIDGenerator) NewTemplateID() domain.TemplateID {
+func (randomIDs) NewTemplateID() domain.TemplateID {
 	return domain.RandomID[domain.TemplateID]("template")
 }
 
-type randomTemplateSyncIDGenerator struct{}
-
-func (randomTemplateSyncIDGenerator) NewTemplateSyncID() domain.TemplateSyncID {
+func (randomIDs) NewTemplateSyncID() domain.TemplateSyncID {
 	return domain.RandomID[domain.TemplateSyncID]("template_sync")
 }
 
-type randomStackIDGenerator struct{}
-
-func (randomStackIDGenerator) NewStackID() domain.StackID {
+func (randomIDs) NewStackID() domain.StackID {
 	return domain.RandomID[domain.StackID]("stack")
 }
 
-type randomStackTemplateIDGenerator struct{}
-
-func (randomStackTemplateIDGenerator) NewStackTemplateID() domain.StackTemplateID {
+func (randomIDs) NewStackTemplateID() domain.StackTemplateID {
 	return domain.RandomID[domain.StackTemplateID]("stack_template")
 }
 
-type randomCredentialIDGenerator struct{}
-
-// NewCredentialID creates a random identifier for a persisted credential record.
-func (randomCredentialIDGenerator) NewCredentialID() domain.CredentialID {
+func (randomIDs) NewCredentialID() domain.CredentialID {
 	return domain.RandomID[domain.CredentialID]("credential")
 }
