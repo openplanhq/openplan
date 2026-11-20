@@ -2893,7 +2893,7 @@ func stackTemplateKey(value string, stackTemplateID domain.StackTemplateID) stri
 }
 
 func workspaceName(stackSlug string, stackTemplateID domain.StackTemplateID) string {
-	normalizedSlug := normalizeWorkspacePart(stackSlug)
+	normalizedSlug := slugify(stackSlug, '_')
 	if normalizedSlug == "" {
 		normalizedSlug = "stack"
 	}
@@ -2917,24 +2917,6 @@ func workspaceName(stackSlug string, stackTemplateID domain.StackTemplateID) str
 	return prefix + normalizedSlug + separator + shortID
 }
 
-func normalizeWorkspacePart(value string) string {
-	var builder strings.Builder
-	lastUnderscore := false
-	for _, r := range strings.ToLower(strings.TrimSpace(value)) {
-		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
-			builder.WriteRune(r)
-			lastUnderscore = false
-		default:
-			if !lastUnderscore && builder.Len() > 0 {
-				builder.WriteByte('_')
-				lastUnderscore = true
-			}
-		}
-	}
-	return strings.Trim(builder.String(), "_")
-}
-
 // SlugIsDerived reports whether a stack's slug is the one its name gives,
 // which is what a stack created without a slug carries. A slug typed to the
 // same value counts as derived too: it adds nothing the name doesn't say, so
@@ -2943,22 +2925,27 @@ func SlugIsDerived(name, slug string) bool {
 	return slug == slugFromName(name)
 }
 
-func slugFromName(name string) string {
+func slugFromName(name string) string { return slugify(name, '-') }
+
+// slugify lowercases value to [a-z0-9] runs joined by separator, collapsing
+// every run of other characters into one separator and trimming it from the
+// ends.
+func slugify(value string, separator byte) string {
 	var builder strings.Builder
-	lastHyphen := false
-	for _, r := range strings.ToLower(strings.TrimSpace(name)) {
+	lastSeparator := false
+	for _, r := range strings.ToLower(strings.TrimSpace(value)) {
 		switch {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
 			builder.WriteRune(r)
-			lastHyphen = false
+			lastSeparator = false
 		default:
-			if !lastHyphen && builder.Len() > 0 {
-				builder.WriteByte('-')
-				lastHyphen = true
+			if !lastSeparator && builder.Len() > 0 {
+				builder.WriteByte(separator)
+				lastSeparator = true
 			}
 		}
 	}
-	return strings.Trim(builder.String(), "-")
+	return strings.Trim(builder.String(), string(separator))
 }
 
 func validStackSlug(slug string) bool {
