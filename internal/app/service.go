@@ -1481,7 +1481,7 @@ func (service *Service) ListTemplates(ctx context.Context, command ListTemplates
 	if command.TenantID == "" {
 		return Page[domain.Template]{}, fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
 	}
-	if err := validatePageRequest(command.Page); err != nil {
+	if err := command.Page.Validate(); err != nil {
 		return Page[domain.Template]{}, err
 	}
 	after, err := DecodeCursor[TemplateCursor](templatesList, command.Page.Cursor)
@@ -1542,7 +1542,7 @@ func (service *Service) ListTemplateRevisionsForTemplate(ctx context.Context, co
 	if err := validateTemplateCommand(command.TenantID, command.TemplateID); err != nil {
 		return Page[domain.TemplateRevision]{}, err
 	}
-	if err := validatePageRequest(command.Page); err != nil {
+	if err := command.Page.Validate(); err != nil {
 		return Page[domain.TemplateRevision]{}, err
 	}
 	after, err := DecodeCursor[TemplateRevisionCursor](templateRevisionsOfTemplateList, command.Page.Cursor)
@@ -1650,7 +1650,7 @@ func validateSearchUsersCommand(command SearchUsersCommand) error {
 		problems = append(problems, parameterError(ErrInvalidCommand, IssueTooLong,
 			fmt.Sprintf("q must be at most %d characters", maxSearchQueryLength), "q"))
 	}
-	if err := validatePageRequest(command.Page); err != nil {
+	if err := command.Page.Validate(); err != nil {
 		problems = append(problems, err)
 	}
 	return errors.Join(problems...)
@@ -2649,7 +2649,7 @@ func validateListStacksCommand(command ListStacksCommand) error {
 		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
 	}
 	var problems []error
-	if err := validatePageRequest(command.Page); err != nil {
+	if err := command.Page.Validate(); err != nil {
 		problems = append(problems, err)
 	}
 	if len(command.Query) > maxSearchQueryLength {
@@ -2786,7 +2786,7 @@ func validateListTemplateRunsCommand(command ListTemplateRunsCommand) error {
 	case command.StackTemplateID == "":
 		return fmt.Errorf("%w: stack template id is required", ErrInvalidCommand)
 	default:
-		return validatePageRequest(command.Page)
+		return command.Page.Validate()
 	}
 }
 

@@ -43,19 +43,15 @@ type Page[T any] struct {
 	NextCursor string
 }
 
-// validatePageRequest checks the limit; the cursor is checked where it is
-// decoded, against the list it must belong to.
-func validatePageRequest(page PageRequest) error {
+// Validate checks the limit; the cursor is checked where it is decoded,
+// against the list it must belong to.
+func (page PageRequest) Validate() error {
 	if page.Limit < 1 || page.Limit > MaxPageLimit {
 		return parameterError(ErrInvalidCommand, IssueOutOfRange,
 			fmt.Sprintf("limit must be between 1 and %d", MaxPageLimit), "limit")
 	}
 	return nil
 }
-
-// Validate is validatePageRequest for a list the API reads without a
-// service, such as the queue.
-func (page PageRequest) Validate() error { return validatePageRequest(page) }
 
 // cursorKey is a list's position: the sort key of the last item on a page.
 // Valid rejects a key that decodes but names no row, such as a zero time.
