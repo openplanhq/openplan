@@ -219,36 +219,22 @@ func cleanCommitSubject(raw string) string {
 
 // gitHubRepoURL builds the clone URL for owner/repo.
 //
-// The identifiers are validated rather than trusted: they arrive from an API
-// request, and a value carrying a slash, a query, a fragment, or whitespace
-// would produce a URL that is not the repository the caller named. The
-// authority is fixed before the first path separator, so no value can redirect
-// the request to another host -- but a malformed one still deserves a clear
-// rejection at the boundary instead of an obscure git failure.
+// The identifiers are checked again rather than trusted: registration already
+// refused anything else, but a value carrying a slash, a query, a fragment or
+// a dot segment would produce a URL that is not the repository the caller
+// named. The authority is fixed before the first path separator, so no value
+// can redirect the request to another host -- but a malformed one still
+// deserves a clear rejection instead of an obscure git failure.
 func gitHubRepoURL(owner string, repo string) (string, error) {
-	if err := validateRepoIdentifier("repository owner", owner); err != nil {
-		return "", err
-	}
-	if err := validateRepoIdentifier("repository name", repo); err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("https://github.com/%s/%s.git", owner, repo), nil
-}
-
-func validateRepoIdentifier(field string, value string) error {
-	if strings.TrimSpace(value) == "" {
-		return fmt.Errorf("%s is required", field)
-	}
-	if value != strings.TrimSpace(value) {
-		return fmt.Errorf("%s %q must not have leading or trailing whitespace", field, value)
-	}
-	for _, character := range value {
-		if character <= ' ' || character == '/' || character == '?' || character == '#' ||
-			character == '@' || character == ':' || character == '\\' || character == 0x7f {
-			return fmt.Errorf("%s %q contains an unsupported character", field, value)
+	for _, identifier := range []struct{ field, value string }{
+		{"repository owner", owner},
+		{"repository name", repo},
+	} {
+		if !domain.ValidGitHubName(identifier.value) {
+			return "", fmt.Errorf("%s %q is not a valid GitHub name", identifier.field, identifier.value)
 		}
 	}
-	return nil
+	return fmt.Sprintf("https://github.com/%s/%s.git", owner, repo), nil
 }
 
 // repoCredential resolves the credential for one repository.

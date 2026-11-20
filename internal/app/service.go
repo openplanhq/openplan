@@ -2716,9 +2716,9 @@ func validateRegisterTemplateCommand(command RegisterTemplateCommand) error {
 		switch {
 		case strings.TrimSpace(component.value) == "":
 			problems = append(problems, fieldError(ErrInvalidCommand, IssueRequired, component.field+" is required", component.field))
-		case !validGitHubPathComponent(component.value):
+		case !domain.ValidGitHubName(strings.TrimSpace(component.value)):
 			problems = append(problems, fieldError(ErrInvalidCommand, IssueInvalidFormat,
-				component.field+" may contain only letters, digits, hyphens, underscores and dots", component.field))
+				component.field+" may contain only letters, digits, hyphens, underscores and dots, and can't be . or ..", component.field))
 		}
 	}
 	if strings.TrimSpace(command.SourceRef) == "" {
@@ -3074,24 +3074,6 @@ func validCredentialName(name string) bool {
 			continue
 		}
 		return false
-	}
-	return true
-}
-
-func validGitHubPathComponent(component string) bool {
-	component = strings.TrimSpace(component)
-	if component == "" {
-		return false
-	}
-	for _, r := range component {
-		switch {
-		case r >= 'a' && r <= 'z':
-		case r >= 'A' && r <= 'Z':
-		case r >= '0' && r <= '9':
-		case r == '-', r == '_', r == '.':
-		default:
-			return false
-		}
 	}
 	return true
 }
