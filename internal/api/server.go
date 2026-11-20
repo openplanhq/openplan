@@ -183,6 +183,8 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	server.handleTenantRoute("GET", "/template-revisions/{template_revision_id}/variables", server.handleGetTemplateRevisionVariables)
 
 	// Stack routes.
+	stackCredentials := credentialRoutes{server: server, scope: domain.CredentialScopeStack}
+	stackTemplateCredentials := credentialRoutes{server: server, scope: domain.CredentialScopeStackTemplate}
 	// Creates a logical infrastructure stack.
 	server.handleTenantRoute("POST", "/stacks", server.handleCreateStack)
 	// Lists tenant-owned stacks.
@@ -192,9 +194,9 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	server.handleTenantRoute("GET", "/attention", server.handleListAttention)
 	// Reads one stack with installed templates.
 	server.handleTenantRoute("GET", "/stacks/{stack_id}", server.handleGetStack)
-	server.handleTenantRoute("POST", "/stacks/{stack_id}/credentials", server.handleCreateStackCredential)
-	server.handleTenantRoute("GET", "/stacks/{stack_id}/credentials", server.handleListStackCredentials)
-	server.handleTenantRoute("DELETE", "/stacks/{stack_id}/credentials/{credential_id}", server.handleDeleteStackCredential)
+	server.handleTenantRoute("POST", "/stacks/{stack_id}/credentials", stackCredentials.create)
+	server.handleTenantRoute("GET", "/stacks/{stack_id}/credentials", stackCredentials.list)
+	server.handleTenantRoute("DELETE", "/stacks/{stack_id}/credentials/{credential_id}", stackCredentials.delete)
 	// Installs a registered template into a stack.
 	server.handleTenantRoute("POST", "/stacks/{stack_id}/templates", server.handleAddTemplateToStack)
 	// Replaces the whole desired config for an installed stack template.
@@ -205,9 +207,9 @@ func NewServer(service *app.Service, tenantID domain.TenantID, options ...Server
 	// Template run routes.
 	// Starts a Terraform operation for an installed stack template.
 	server.handleTenantRoute("POST", "/stack-templates/{stack_template_id}/runs", server.handleStartTemplateRun)
-	server.handleTenantRoute("POST", "/stack-templates/{stack_template_id}/credentials", server.handleCreateStackTemplateCredential)
-	server.handleTenantRoute("GET", "/stack-templates/{stack_template_id}/credentials", server.handleListStackTemplateCredentials)
-	server.handleTenantRoute("DELETE", "/stack-templates/{stack_template_id}/credentials/{credential_id}", server.handleDeleteStackTemplateCredential)
+	server.handleTenantRoute("POST", "/stack-templates/{stack_template_id}/credentials", stackTemplateCredentials.create)
+	server.handleTenantRoute("GET", "/stack-templates/{stack_template_id}/credentials", stackTemplateCredentials.list)
+	server.handleTenantRoute("DELETE", "/stack-templates/{stack_template_id}/credentials/{credential_id}", stackTemplateCredentials.delete)
 	// Lists runs for an installed stack template, most recent first, a page at a time.
 	server.handleTenantRoute("GET", "/stack-templates/{stack_template_id}/runs", server.handleListTemplateRuns)
 	// Reads one run by its number within the stack template, which is how a
@@ -714,115 +716,91 @@ func (server *Server) handleGetStack(response http.ResponseWriter, request *http
 	writeJSON(response, http.StatusOK, newStackViewResponse(view))
 }
 
-// handleCreateStackCredential stores a Stack-scoped credential value; only a
-// value marked not sensitive comes back.
-func (server *Server) handleCreateStackCredential(response http.ResponseWriter, request *http.Request) {
+// credentialRoutes serves one scope's credentials: a stack's, or a stack
+// template's. The two scopes differ only in which path parameter names the
+// owner, so one set of handlers serves both.
+type credentialRoutes struct {
+	server *Server
+	scope  domain.CredentialScope
+}
+
+// ownerParam is the path parameter naming the credential's owner: stack_id or
+// stack_template_id.
+func (routes credentialRoutes) ownerParam() string {
+	return string(routes.scope) + "_id"
+}
+
+// owner reads the owning stack or stack template's id from the path; the
+// other stays empty, which is how the service tells the scopes apart.
+func (routes credentialRoutes) owner(request *http.Request) (domain.StackID, domain.StackTemplateID) {
+	id := request.PathValue(routes.ownerParam())
+	if routes.scope == domain.CredentialScopeStack {
+		return domain.StackID(id), ""
+	}
+	return "", domain.StackTemplateID(id)
+}
+
+// debugf logs one credential request event, prefixed with the scope and the
+// owner so every line names what it acted on.
+func (routes credentialRoutes) debugf(request *http.Request, event string, format string, args ...any) {
+	routes.server.debugf("credential %s scope=%s tenant_id=%s %s=%s"+format,
+		append([]any{event, routes.scope, request.PathValue("tenant_id"), routes.ownerParam(), request.PathValue(routes.ownerParam())}, args...)...)
+}
+
+// create stores a credential value; only a value marked not sensitive comes back.
+func (routes credentialRoutes) create(response http.ResponseWriter, request *http.Request) {
 	var body credentialRequest
 	if !decodeRequestBody(response, request, &body) {
 		return
 	}
-	server.debugf("credential create request scope=stack tenant_id=%s stack_id=%s name=%s value_present=%t", request.PathValue("tenant_id"), request.PathValue("stack_id"), body.Name, body.Value != "")
-	credential, err := server.service.CreateCredential(request.Context(), app.CreateCredentialCommand{
-		TenantID: domain.TenantID(request.PathValue("tenant_id")), Scope: domain.CredentialScopeStack,
-		StackID: domain.StackID(request.PathValue("stack_id")), Name: body.Name, Value: body.Value, Sensitive: body.Sensitive,
+	routes.debugf(request, "create request", " name=%s value_present=%t", body.Name, body.Value != "")
+	stackID, stackTemplateID := routes.owner(request)
+	credential, err := routes.server.service.CreateCredential(request.Context(), app.CreateCredentialCommand{
+		TenantID: domain.TenantID(request.PathValue("tenant_id")), Scope: routes.scope,
+		StackID: stackID, StackTemplateID: stackTemplateID, Name: body.Name, Value: body.Value, Sensitive: body.Sensitive,
 	})
 	if err != nil {
-		server.debugf("credential create failed scope=stack tenant_id=%s stack_id=%s name=%s error=%v", request.PathValue("tenant_id"), request.PathValue("stack_id"), body.Name, err)
+		routes.debugf(request, "create failed", " name=%s error=%v", body.Name, err)
 		writeAppError(response, err)
 		return
 	}
-	server.debugf("credential create succeeded scope=stack tenant_id=%s stack_id=%s credential_id=%s name=%s", request.PathValue("tenant_id"), request.PathValue("stack_id"), credential.ID, credential.Name)
+	routes.debugf(request, "create succeeded", " credential_id=%s name=%s", credential.ID, credential.Name)
 	writeJSON(response, http.StatusCreated, credential)
 }
 
-// handleListStackCredentials returns Stack credential metadata, with values
-// only for credentials that are not sensitive.
-func (server *Server) handleListStackCredentials(response http.ResponseWriter, request *http.Request) {
-	server.debugf("credential list request scope=stack tenant_id=%s stack_id=%s", request.PathValue("tenant_id"), request.PathValue("stack_id"))
-	credentials, err := server.service.ListCredentials(request.Context(), app.ListCredentialsCommand{
-		TenantID: domain.TenantID(request.PathValue("tenant_id")), Scope: domain.CredentialScopeStack,
-		StackID: domain.StackID(request.PathValue("stack_id")),
+// list returns credential metadata, with values only for credentials that are
+// not sensitive.
+func (routes credentialRoutes) list(response http.ResponseWriter, request *http.Request) {
+	routes.debugf(request, "list request", "")
+	stackID, stackTemplateID := routes.owner(request)
+	credentials, err := routes.server.service.ListCredentials(request.Context(), app.ListCredentialsCommand{
+		TenantID: domain.TenantID(request.PathValue("tenant_id")), Scope: routes.scope,
+		StackID: stackID, StackTemplateID: stackTemplateID,
 	})
 	if err != nil {
-		server.debugf("credential list failed scope=stack tenant_id=%s stack_id=%s error=%v", request.PathValue("tenant_id"), request.PathValue("stack_id"), err)
+		routes.debugf(request, "list failed", " error=%v", err)
 		writeAppError(response, err)
 		return
 	}
-	server.debugf("credential list succeeded scope=stack tenant_id=%s stack_id=%s count=%d", request.PathValue("tenant_id"), request.PathValue("stack_id"), len(credentials))
+	routes.debugf(request, "list succeeded", " count=%d", len(credentials))
 	writeJSON(response, http.StatusOK, newListResponse(credentials, ""))
 }
 
-// handleDeleteStackCredential deletes one Stack-scoped credential after authorization.
-//
-//nolint:dupl // Stack and stack-template scopes stay separate handlers, like their routes.
-func (server *Server) handleDeleteStackCredential(response http.ResponseWriter, request *http.Request) {
-	server.debugf("credential delete request scope=stack tenant_id=%s stack_id=%s credential_id=%s", request.PathValue("tenant_id"), request.PathValue("stack_id"), request.PathValue("credential_id"))
-	err := server.service.DeleteCredential(request.Context(), app.DeleteCredentialCommand{
-		TenantID: domain.TenantID(request.PathValue("tenant_id")), StackID: domain.StackID(request.PathValue("stack_id")),
-		CredentialID: domain.CredentialID(request.PathValue("credential_id")),
+// delete deletes one credential after authorization.
+func (routes credentialRoutes) delete(response http.ResponseWriter, request *http.Request) {
+	credentialID := request.PathValue("credential_id")
+	routes.debugf(request, "delete request", " credential_id=%s", credentialID)
+	stackID, stackTemplateID := routes.owner(request)
+	err := routes.server.service.DeleteCredential(request.Context(), app.DeleteCredentialCommand{
+		TenantID: domain.TenantID(request.PathValue("tenant_id")), StackID: stackID, StackTemplateID: stackTemplateID,
+		CredentialID: domain.CredentialID(credentialID),
 	})
 	if err != nil {
-		server.debugf("credential delete failed scope=stack tenant_id=%s stack_id=%s credential_id=%s error=%v", request.PathValue("tenant_id"), request.PathValue("stack_id"), request.PathValue("credential_id"), err)
+		routes.debugf(request, "delete failed", " credential_id=%s error=%v", credentialID, err)
 		writeAppError(response, err)
 		return
 	}
-	server.debugf("credential delete succeeded scope=stack tenant_id=%s stack_id=%s credential_id=%s", request.PathValue("tenant_id"), request.PathValue("stack_id"), request.PathValue("credential_id"))
-	response.WriteHeader(http.StatusNoContent)
-}
-
-// handleCreateStackTemplateCredential stores a StackTemplate-scoped credential
-// value; only a value marked not sensitive comes back.
-func (server *Server) handleCreateStackTemplateCredential(response http.ResponseWriter, request *http.Request) {
-	var body credentialRequest
-	if !decodeRequestBody(response, request, &body) {
-		return
-	}
-	server.debugf("credential create request scope=stack_template tenant_id=%s stack_template_id=%s name=%s value_present=%t", request.PathValue("tenant_id"), request.PathValue("stack_template_id"), body.Name, body.Value != "")
-	credential, err := server.service.CreateCredential(request.Context(), app.CreateCredentialCommand{
-		TenantID: domain.TenantID(request.PathValue("tenant_id")), Scope: domain.CredentialScopeStackTemplate,
-		StackTemplateID: domain.StackTemplateID(request.PathValue("stack_template_id")), Name: body.Name, Value: body.Value, Sensitive: body.Sensitive,
-	})
-	if err != nil {
-		server.debugf("credential create failed scope=stack_template tenant_id=%s stack_template_id=%s name=%s error=%v", request.PathValue("tenant_id"), request.PathValue("stack_template_id"), body.Name, err)
-		writeAppError(response, err)
-		return
-	}
-	server.debugf("credential create succeeded scope=stack_template tenant_id=%s stack_template_id=%s credential_id=%s name=%s", request.PathValue("tenant_id"), request.PathValue("stack_template_id"), credential.ID, credential.Name)
-	writeJSON(response, http.StatusCreated, credential)
-}
-
-// handleListStackTemplateCredentials returns StackTemplate credential metadata,
-// with values only for credentials that are not sensitive.
-func (server *Server) handleListStackTemplateCredentials(response http.ResponseWriter, request *http.Request) {
-	server.debugf("credential list request scope=stack_template tenant_id=%s stack_template_id=%s", request.PathValue("tenant_id"), request.PathValue("stack_template_id"))
-	credentials, err := server.service.ListCredentials(request.Context(), app.ListCredentialsCommand{
-		TenantID: domain.TenantID(request.PathValue("tenant_id")), Scope: domain.CredentialScopeStackTemplate,
-		StackTemplateID: domain.StackTemplateID(request.PathValue("stack_template_id")),
-	})
-	if err != nil {
-		server.debugf("credential list failed scope=stack_template tenant_id=%s stack_template_id=%s error=%v", request.PathValue("tenant_id"), request.PathValue("stack_template_id"), err)
-		writeAppError(response, err)
-		return
-	}
-	server.debugf("credential list succeeded scope=stack_template tenant_id=%s stack_template_id=%s count=%d", request.PathValue("tenant_id"), request.PathValue("stack_template_id"), len(credentials))
-	writeJSON(response, http.StatusOK, newListResponse(credentials, ""))
-}
-
-// handleDeleteStackTemplateCredential deletes one StackTemplate-scoped credential after authorization.
-//
-//nolint:dupl // Stack and stack-template scopes stay separate handlers, like their routes.
-func (server *Server) handleDeleteStackTemplateCredential(response http.ResponseWriter, request *http.Request) {
-	server.debugf("credential delete request scope=stack_template tenant_id=%s stack_template_id=%s credential_id=%s", request.PathValue("tenant_id"), request.PathValue("stack_template_id"), request.PathValue("credential_id"))
-	err := server.service.DeleteCredential(request.Context(), app.DeleteCredentialCommand{
-		TenantID: domain.TenantID(request.PathValue("tenant_id")), StackTemplateID: domain.StackTemplateID(request.PathValue("stack_template_id")),
-		CredentialID: domain.CredentialID(request.PathValue("credential_id")),
-	})
-	if err != nil {
-		server.debugf("credential delete failed scope=stack_template tenant_id=%s stack_template_id=%s credential_id=%s error=%v", request.PathValue("tenant_id"), request.PathValue("stack_template_id"), request.PathValue("credential_id"), err)
-		writeAppError(response, err)
-		return
-	}
-	server.debugf("credential delete succeeded scope=stack_template tenant_id=%s stack_template_id=%s credential_id=%s", request.PathValue("tenant_id"), request.PathValue("stack_template_id"), request.PathValue("credential_id"))
+	routes.debugf(request, "delete succeeded", " credential_id=%s", credentialID)
 	response.WriteHeader(http.StatusNoContent)
 }
 
