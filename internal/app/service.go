@@ -2158,9 +2158,6 @@ func (service *Service) ApproveRun(ctx context.Context, command ApproveRunComman
 		return domain.TemplateRun{}, err
 	}
 	actor := domain.UserID(principal.Subject)
-	if err := validateApproveRunCommand(command); err != nil {
-		return domain.TemplateRun{}, err
-	}
 
 	if run.Status != domain.TemplateRunWaitingApproval {
 		service.auditApprovalRejection(ctx, principal, command, stackTemplate.StackID, domain.AuditReasonRunNotApprovable)
@@ -2291,9 +2288,6 @@ func (service *Service) DiscardRun(ctx context.Context, command DiscardRunComman
 		return err
 	}
 	actor := domain.UserID(principal.Subject)
-	if err := validateDiscardRunCommand(command); err != nil {
-		return err
-	}
 
 	discard := domain.TemplateRunDiscard{
 		RunID:       command.RunID,
@@ -2586,13 +2580,8 @@ func validateCreateStackCommand(command CreateStackCommand) error {
 
 // validateCreateCredentialCommand checks required IDs, scope, variable name, and value before encryption.
 func validateCreateCredentialCommand(command CreateCredentialCommand) error {
-	switch {
-	case command.Scope == domain.CredentialScopeStack && command.StackID == "":
-		return fmt.Errorf("%w: stack id is required", ErrInvalidCommand)
-	case command.Scope == domain.CredentialScopeStackTemplate && command.StackTemplateID == "":
-		return fmt.Errorf("%w: stack template id is required", ErrInvalidCommand)
-	case command.Scope != domain.CredentialScopeStack && command.Scope != domain.CredentialScopeStackTemplate:
-		return fmt.Errorf("%w: credential scope is invalid", ErrInvalidCommand)
+	if err := validateCredentialOwner(command.Scope, command.StackID, command.StackTemplateID); err != nil {
+		return err
 	}
 	var problems []error
 	if !validCredentialName(command.Name) {
@@ -2610,13 +2599,18 @@ func validateListCredentialsCommand(command ListCredentialsCommand) error {
 	if command.TenantID == "" {
 		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
 	}
-	if command.Scope == domain.CredentialScopeStack && command.StackID == "" {
+	return validateCredentialOwner(command.Scope, command.StackID, command.StackTemplateID)
+}
+
+// validateCredentialOwner checks a credential command names a known scope and
+// the id of that scope's owner.
+func validateCredentialOwner(scope domain.CredentialScope, stackID domain.StackID, stackTemplateID domain.StackTemplateID) error {
+	switch {
+	case scope == domain.CredentialScopeStack && stackID == "":
 		return fmt.Errorf("%w: stack id is required", ErrInvalidCommand)
-	}
-	if command.Scope == domain.CredentialScopeStackTemplate && command.StackTemplateID == "" {
+	case scope == domain.CredentialScopeStackTemplate && stackTemplateID == "":
 		return fmt.Errorf("%w: stack template id is required", ErrInvalidCommand)
-	}
-	if command.Scope != domain.CredentialScopeStack && command.Scope != domain.CredentialScopeStackTemplate {
+	case scope != domain.CredentialScopeStack && scope != domain.CredentialScopeStackTemplate:
 		return fmt.Errorf("%w: credential scope is invalid", ErrInvalidCommand)
 	}
 	return nil
@@ -2718,20 +2712,6 @@ func validateRegisterTemplateCommand(command RegisterTemplateCommand) error {
 			"root_path must be a relative path inside the repository", "root_path"))
 	}
 	return errors.Join(problems...)
-}
-
-func validateApproveRunCommand(command ApproveRunCommand) error {
-	if command.RunID == "" {
-		return fmt.Errorf("%w: run id is required", ErrInvalidCommand)
-	}
-	return nil
-}
-
-func validateDiscardRunCommand(command DiscardRunCommand) error {
-	if command.RunID == "" {
-		return fmt.Errorf("%w: run id is required", ErrInvalidCommand)
-	}
-	return nil
 }
 
 // validateTemplateCommand checks the ids every command on one template names.
