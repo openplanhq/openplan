@@ -1026,7 +1026,7 @@ func (recordingStore) UsersBySubs(context.Context, []string) (map[string]app.Use
 	return nil, nil
 }
 
-// authentication.SessionStore, wired so sessionStore's type assertion in main.go
+// authentication.SessionStore, wired so requiredPort's type assertion in main.go
 // succeeds against this fake the way it does against *postgres.Store.
 func (recordingStore) CreateSession(context.Context, authentication.Session) error {
 	return nil

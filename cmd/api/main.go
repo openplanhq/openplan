@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"reflect"
 	"strings"
 	"syscall"
 	"time"
@@ -116,42 +117,23 @@ type apiDependencies struct {
 	registerControl func(temporalWorker, controlStore, activities.GitHubTokenSource, logsink.Stream, activities.PlanChangesReader)
 }
 
-func credentialRepository(store appRepositories) app.CredentialRepository {
-	repository, _ := store.(app.CredentialRepository)
-	return repository
+// optionalPort narrows the wired store to a port it may not implement, nil
+// when it doesn't: the service checks for a nil port before it uses one.
+func optionalPort[Port any](store appRepositories) Port {
+	port, _ := store.(Port)
+	return port
 }
 
-func planChangeRepository(store appRepositories) app.PlanChangeRepository {
-	repository, _ := store.(app.PlanChangeRepository)
-	return repository
-}
-
-func storeCredentialCipher(store appRepositories) app.CredentialCipher {
-	cipher, _ := store.(app.CredentialCipher)
-	return cipher
-}
-
-// controlPlaneStore mirrors sessionStore: the queue loop and control activities
-// reach the store through an assertion that fails at startup, rather than at
-// the first run the control worker picks up.
-func controlPlaneStore(store appRepositories) (controlStore, error) {
-	control, ok := store.(controlStore)
+// requiredPort narrows the wired store to a port the API can't run without.
+// A swallowed assertion failure would boot the API clean and surface only at
+// first use (a login callback, the first control-queue run) as a nil-pointer
+// panic, instead of a startup error naming the actual defect.
+func requiredPort[Port any](store appRepositories) (Port, error) {
+	port, ok := store.(Port)
 	if !ok {
-		return nil, fmt.Errorf("store %T does not implement the control plane store", store)
+		return port, fmt.Errorf("store %T does not implement %s", store, reflect.TypeFor[Port]())
 	}
-	return control, nil
-}
-
-// sessionStore requires the wired store to also satisfy authentication.SessionStore.
-// A silently swallowed assertion failure here would boot the API clean and
-// only surface at the first login callback, as a nil-pointer panic instead of
-// a startup error naming the actual defect.
-func sessionStore(store appRepositories) (authentication.SessionStore, error) {
-	sessions, ok := store.(authentication.SessionStore)
-	if !ok {
-		return nil, fmt.Errorf("store %T does not implement authentication.SessionStore", store)
-	}
-	return sessions, nil
+	return port, nil
 }
 
 func main() {
@@ -410,8 +392,8 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 		Stacks:                   store,
 		StackOverview:            store,
 		StackTemplates:           store,
-		Credentials:              credentialRepository(store),
-		CredentialCipher:         storeCredentialCipher(store),
+		Credentials:              optionalPort[app.CredentialRepository](store),
+		CredentialCipher:         optionalPort[app.CredentialCipher](store),
 		StackTemplateInstaller:   store,
 		TemplateRuns:             store,
 		TemplateRevisionMetadata: store,
@@ -419,7 +401,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 		Templates:                store,
 		TemplateRunLogs:          logReader,
 		TemplateRunLogMetadata:   store,
-		PlanChanges:              planChangeRepository(store),
+		PlanChanges:              optionalPort[app.PlanChangeRepository](store),
 		Audit:                    store,
 		Users:                    store,
 	})
@@ -427,7 +409,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 		return fmt.Errorf("wire service: %w", err)
 	}
 
-	sessions, err := sessionStore(store)
+	sessions, err := requiredPort[authentication.SessionStore](store)
 	if err != nil {
 		return fmt.Errorf("wire session store: %w", err)
 	}
@@ -495,7 +477,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 // returned function stops the queue loop, then the worker, then closes the
 // Temporal client.
 func startControlPlane(ctx context.Context, cfg config.APIConfig, deps apiDependencies, store appRepositories, live logsink.Stream, planChanges activities.PlanChangesReader) (func(), error) {
-	control, err := controlPlaneStore(store)
+	control, err := requiredPort[controlStore](store)
 	if err != nil {
 		return nil, fmt.Errorf("wire control plane store: %w", err)
 	}
