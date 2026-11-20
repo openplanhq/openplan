@@ -2780,9 +2780,7 @@ func validateGetTemplateRunLogCommand(command GetTemplateRunLogCommand) error {
 // sent value's problem (unknown, sensitive, null, invalid) by name, then
 // missing required ones in declared order.
 func validateTemplateConfig(raw json.RawMessage, variables []domain.TemplateVariable) (json.RawMessage, error) {
-	if len(raw) == 0 {
-		raw = json.RawMessage(`{}`)
-	}
+	raw = domain.ConfigOrEmpty(raw)
 
 	var config map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &config); err != nil || config == nil {
@@ -2848,10 +2846,7 @@ func validateTemplateConfig(raw json.RawMessage, variables []domain.TemplateVari
 // that branch was unreachable and only made it look as though install-time
 // config were a second source of desired state.
 func carryForwardConfig(desiredConfigJSON json.RawMessage, variables []domain.TemplateVariable) (json.RawMessage, error) {
-	raw := desiredConfigJSON
-	if len(raw) == 0 {
-		raw = json.RawMessage(`{}`)
-	}
+	raw := domain.ConfigOrEmpty(desiredConfigJSON)
 
 	// The stored config was validated on its way in, so one that won't parse
 	// is a corrupt row: a server fault, not something the caller sent.

@@ -115,7 +115,7 @@ const (
 // persisted row always has a desired config, and an empty one means the config
 // really is empty rather than absent.
 func (stackTemplate StackTemplate) DesiredConfig() json.RawMessage {
-	return defaultConfigJSON(stackTemplate.DesiredConfigJSON)
+	return ConfigOrEmpty(stackTemplate.DesiredConfigJSON)
 }
 
 // PlanState reports whether the latest completed plan still describes desired
@@ -198,19 +198,19 @@ func (stackTemplate StackTemplate) matchesDesired(recorded snapshot) bool {
 // false so callers fail closed.
 func sameJSONConfig(left json.RawMessage, right json.RawMessage) bool {
 	var leftValue, rightValue any
-	if err := json.Unmarshal(defaultConfigJSON(left), &leftValue); err != nil {
+	if err := json.Unmarshal(ConfigOrEmpty(left), &leftValue); err != nil {
 		return false
 	}
-	if err := json.Unmarshal(defaultConfigJSON(right), &rightValue); err != nil {
+	if err := json.Unmarshal(ConfigOrEmpty(right), &rightValue); err != nil {
 		return false
 	}
 	return reflect.DeepEqual(leftValue, rightValue)
 }
 
-// defaultConfigJSON treats an empty desired config as the empty object it is
-// persisted as, so a template installed with no config compares equal to a run
-// that snapshotted '{}'.
-func defaultConfigJSON(configJSON json.RawMessage) json.RawMessage {
+// ConfigOrEmpty treats an empty config as the empty object it is persisted
+// as, so a template installed with no config compares equal to a run that
+// snapshotted '{}', and is stored and validated as one.
+func ConfigOrEmpty(configJSON json.RawMessage) json.RawMessage {
 	if len(configJSON) == 0 {
 		return json.RawMessage(`{}`)
 	}

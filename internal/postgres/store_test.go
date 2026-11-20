@@ -3600,7 +3600,7 @@ func seedTemplateRun(t *testing.T, ctx context.Context, pool *pgxpool.Pool, run 
 		run.SourceRef,
 		run.ResolvedCommitSHA,
 		run.WorkspaceName,
-		defaultJSON(run.ConfigJSON),
+		domain.ConfigOrEmpty(run.ConfigJSON),
 		run.BackendType,
 		run.BackendConfigHash,
 		run.Status,

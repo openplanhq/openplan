@@ -1025,10 +1025,7 @@ func (store *Store) ListLatestTemplateRuns(ctx context.Context, tenantID domain.
 }
 
 func (store *Store) CreateStackTemplate(ctx context.Context, stackTemplate domain.StackTemplate) error {
-	configJSON := stackTemplate.InstalledConfigJSON
-	if len(configJSON) == 0 {
-		configJSON = json.RawMessage(`{}`)
-	}
+	configJSON := domain.ConfigOrEmpty(stackTemplate.InstalledConfigJSON)
 	desiredConfigJSON := stackTemplate.DesiredConfigJSON
 	if len(desiredConfigJSON) == 0 {
 		desiredConfigJSON = configJSON
@@ -1146,7 +1143,7 @@ func (store *Store) UpdateStackTemplateConfig(ctx context.Context, tenantID doma
 		set desired_config_json = $1::jsonb
 		where tenant_id = $2
 			and id = $3
-		returning`+stackTemplateColumns, defaultJSON(configJSON), tenantID, id)
+		returning`+stackTemplateColumns, domain.ConfigOrEmpty(configJSON), tenantID, id)
 	stackTemplate, err := scanStackTemplate(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.StackTemplate{}, app.ErrNotFound
@@ -1165,7 +1162,7 @@ func (store *Store) UpdateStackTemplateDesiredRevision(ctx context.Context, tena
 			desired_config_json = $2::jsonb
 		where tenant_id = $3
 			and id = $4
-		returning`+stackTemplateColumns, templateRevisionID, defaultJSON(configJSON), tenantID, id)
+		returning`+stackTemplateColumns, templateRevisionID, domain.ConfigOrEmpty(configJSON), tenantID, id)
 	stackTemplate, err := scanStackTemplate(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.StackTemplate{}, app.ErrNotFound
@@ -1241,7 +1238,7 @@ func createTemplateRun(ctx context.Context, exec pgxExecutor, run domain.Templat
 		run.SourceRef,
 		run.ResolvedCommitSHA,
 		run.WorkspaceName,
-		defaultJSON(run.ConfigJSON),
+		domain.ConfigOrEmpty(run.ConfigJSON),
 		run.BackendType,
 		run.BackendConfigHash,
 		run.Status,
@@ -2247,17 +2244,10 @@ func templateGone(id domain.TemplateID) error {
 	return fmt.Errorf("template %s: %w (%w)", id, app.ErrNotFound, os.ErrNotExist)
 }
 
-func defaultJSON(input json.RawMessage) json.RawMessage {
-	if len(input) == 0 {
-		return json.RawMessage(`{}`)
-	}
-	return input
-}
-
 // nullJSON keeps an absent config absent. The snapshot config columns are
 // nullable precisely so "never recorded" stays distinguishable from "recorded
 // as the empty object", which is what an all-optional template's config is, so
-// empty must not be coerced to '{}' the way defaultJSON does.
+// empty must not be coerced to '{}' the way domain.ConfigOrEmpty does.
 func nullJSON(input json.RawMessage) any {
 	if len(input) == 0 {
 		return nil
