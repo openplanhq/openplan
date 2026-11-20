@@ -56,36 +56,25 @@ var (
 // ErrForbidden indicates an authenticated actor lacks permission for an operation.
 var ErrForbidden = errors.New("forbidden")
 
-// StackPageCursor is a position in the stacks list, newest first: the
-// created_at and id of the last stack a page held.
-type StackPageCursor struct {
-	CreatedAt time.Time      `json:"created_at"`
-	ID        domain.StackID `json:"id"`
+// NewestFirstCursor is a position in a list ordered newest first: the
+// created_at and id of the last item a page held.
+type NewestFirstCursor[ID ~string] struct {
+	CreatedAt time.Time `json:"created_at"`
+	ID        ID        `json:"id"`
 }
 
-func (cursor StackPageCursor) Valid() bool { return !cursor.CreatedAt.IsZero() && cursor.ID != "" }
-
-// TemplateRevisionCursor is a position in a template's revisions list,
-// newest first.
-type TemplateRevisionCursor struct {
-	CreatedAt time.Time                 `json:"created_at"`
-	ID        domain.TemplateRevisionID `json:"id"`
-}
-
-func (cursor TemplateRevisionCursor) Valid() bool {
+func (cursor NewestFirstCursor[ID]) Valid() bool {
 	return !cursor.CreatedAt.IsZero() && cursor.ID != ""
 }
 
-// TemplateCursor is a position in the templates list, newest first:
-// the created_at and id of the last template a page held.
-type TemplateCursor struct {
-	CreatedAt time.Time         `json:"created_at"`
-	ID        domain.TemplateID `json:"id"`
-}
-
-func (cursor TemplateCursor) Valid() bool {
-	return !cursor.CreatedAt.IsZero() && cursor.ID != ""
-}
+type (
+	// StackPageCursor is a position in the stacks list.
+	StackPageCursor = NewestFirstCursor[domain.StackID]
+	// TemplateRevisionCursor is a position in a template's revisions list.
+	TemplateRevisionCursor = NewestFirstCursor[domain.TemplateRevisionID]
+	// TemplateCursor is a position in the templates list.
+	TemplateCursor = NewestFirstCursor[domain.TemplateID]
+)
 
 // TxRepo is the transaction-scoped repository surface handed to a unit of
 // work. It is deliberately tiny and grows only when a new dual-write point
