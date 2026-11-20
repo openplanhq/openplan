@@ -1,13 +1,12 @@
 package authentication
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"net/http"
 	"net/url"
 	"time"
-
-	"github.com/vishu42/openplan/internal/strval"
 )
 
 var (
@@ -54,7 +53,7 @@ type VerifiedToken struct {
 // subject last means the answer is never blank — a raw sub is a poor label, but
 // it identifies the right person, which an empty string does not.
 func (token VerifiedToken) DisplayName() string {
-	return strval.FirstNonEmpty(token.Name, token.PreferredUsername, token.Email, token.Subject)
+	return cmp.Or(token.Name, token.PreferredUsername, token.Email, token.Subject)
 }
 
 type Verifier interface {

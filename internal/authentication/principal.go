@@ -1,10 +1,9 @@
 package authentication
 
 import (
+	"cmp"
 	"context"
 	"time"
-
-	"github.com/vishu42/openplan/internal/strval"
 )
 
 // Principal is the normalized identity made available to handlers. It is built
@@ -27,7 +26,7 @@ type Principal struct {
 // from the projection — and a provider that omits `name` should not make one of
 // them blank while the other reads correctly.
 func (principal Principal) DisplayName() string {
-	return strval.FirstNonEmpty(principal.Name, principal.PreferredUsername, principal.Email, principal.Subject)
+	return cmp.Or(principal.Name, principal.PreferredUsername, principal.Email, principal.Subject)
 }
 
 type principalContextKey struct{}

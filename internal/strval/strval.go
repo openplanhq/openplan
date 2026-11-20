@@ -5,22 +5,6 @@ import (
 	"unicode"
 )
 
-// FirstNonEmpty returns the first value that is not the empty string, or "" if
-// there is none. It is how a display label is chosen from optional identity
-// claims: fall back until something is present.
-//
-//	("", "alice", "a@b.c") → "alice"
-//	("", "")               → ""
-//	()                     → ""
-func FirstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if value != "" {
-			return value
-		}
-	}
-	return ""
-}
-
 // SafeOpaque reports whether value is usable as an opaque identifier or
 // credential in a URL path, a header, or a request body: non-empty and free of
 // whitespace and control characters, so it cannot terminate a header or split a

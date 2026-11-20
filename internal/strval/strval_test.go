@@ -2,32 +2,6 @@ package strval
 
 import "testing"
 
-func TestFirstNonEmpty(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name   string
-		values []string
-		want   string
-	}{
-		{"first wins", []string{"alice", "bob"}, "alice"},
-		{"skips leading empties", []string{"", "", "alice"}, "alice"},
-		{"all empty", []string{"", ""}, ""},
-		{"no values", nil, ""},
-		{"whitespace is not empty", []string{"", " "}, " "},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := FirstNonEmpty(test.values...); got != test.want {
-				t.Fatalf("FirstNonEmpty(%q) = %q, want %q", test.values, got, test.want)
-			}
-		})
-	}
-}
-
 func TestSafeOpaque(t *testing.T) {
 	t.Parallel()
 

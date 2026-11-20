@@ -311,3 +311,30 @@ func TestFilesystemStoreSharesObjectsThroughTheGroup(t *testing.T) {
 		t.Fatalf("leftover temporary files: %v", entries)
 	}
 }
+
+// SigV4 canonicalizes an empty path as "/", so a request to the bare endpoint
+// must sign exactly as one to "/" does, or the server rejects the signature.
+func TestS3StoreSignsAnEmptyPathAsSlash(t *testing.T) {
+	t.Parallel()
+
+	store, err := NewS3Store(config.S3Config{
+		Bucket: "openplan-artifacts", Region: "us-east-1", Endpoint: "https://s3.test.local",
+		AccessKeyID: "access-key", SecretAccessKey: "secret-key", ForcePathStyle: true,
+	})
+	if err != nil {
+		t.Fatalf("NewS3Store returned error: %v", err)
+	}
+	store.now = func() time.Time { return time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC) }
+
+	signed := func(url string) string {
+		request, err := http.NewRequest(http.MethodGet, url, nil)
+		if err != nil {
+			t.Fatalf("NewRequest(%q): %v", url, err)
+		}
+		store.sign(request, nil)
+		return request.Header.Get("Authorization")
+	}
+	if empty, slash := signed("https://s3.test.local"), signed("https://s3.test.local/"); empty != slash {
+		t.Fatalf("empty path signed as %q, want the %q a / path gets", empty, slash)
+	}
+}

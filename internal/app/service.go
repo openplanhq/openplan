@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -18,7 +19,6 @@ import (
 	"github.com/vishu42/openplan/internal/authorization"
 	"github.com/vishu42/openplan/internal/domain"
 	"github.com/vishu42/openplan/internal/queue"
-	"github.com/vishu42/openplan/internal/strval"
 )
 
 var (
@@ -1904,7 +1904,7 @@ func (service *Service) AssignStackRole(ctx context.Context, command AssignStack
 		Grant: GrantView{
 			UserSub:     command.UserSub,
 			Role:        command.Role,
-			DisplayName: strval.FirstNonEmpty(target.DisplayName, command.UserSub),
+			DisplayName: cmp.Or(target.DisplayName, command.UserSub),
 			Email:       target.Email,
 		},
 		// From the same in-transaction read the last-owner guard uses, not a
@@ -2089,7 +2089,7 @@ func (service *Service) AssignPlatformRole(ctx context.Context, command AssignPl
 		Grant: GrantView{
 			UserSub:     command.UserSub,
 			Role:        command.Role,
-			DisplayName: strval.FirstNonEmpty(target.DisplayName, command.UserSub),
+			DisplayName: cmp.Or(target.DisplayName, command.UserSub),
 			Email:       target.Email,
 		},
 		Created: currentRole == "",
@@ -2429,7 +2429,7 @@ func (service *Service) labelTriggerActors(ctx context.Context, runs ...*domain.
 		return fmt.Errorf("look up trigger actors: %w", err)
 	}
 	label := func(sub domain.UserID) string {
-		return strval.FirstNonEmpty(profiles[string(sub)].DisplayName, string(sub))
+		return cmp.Or(profiles[string(sub)].DisplayName, string(sub))
 	}
 	for _, run := range runs {
 		run.TriggerActorDisplayName = label(run.TriggerActor)
@@ -2885,18 +2885,11 @@ func carryForwardConfig(desiredConfigJSON json.RawMessage, variables []domain.Te
 }
 
 func stackTemplateKey(value string, stackTemplateID domain.StackTemplateID) string {
-	value = strings.TrimSpace(value)
-	if value != "" {
-		return value
-	}
-	return string(stackTemplateID)
+	return cmp.Or(strings.TrimSpace(value), string(stackTemplateID))
 }
 
 func workspaceName(stackSlug string, stackTemplateID domain.StackTemplateID) string {
-	normalizedSlug := slugify(stackSlug, '_')
-	if normalizedSlug == "" {
-		normalizedSlug = "stack"
-	}
+	normalizedSlug := cmp.Or(slugify(stackSlug, '_'), "stack")
 
 	id := string(stackTemplateID)
 	shortID := id
@@ -2909,10 +2902,7 @@ func workspaceName(stackSlug string, stackTemplateID domain.StackTemplateID) str
 	const maxLength = 90
 	maxSlugLength := max(maxLength-len(prefix)-len(separator)-len(shortID), 1)
 	if len(normalizedSlug) > maxSlugLength {
-		normalizedSlug = strings.Trim(normalizedSlug[:maxSlugLength], "_")
-	}
-	if normalizedSlug == "" {
-		normalizedSlug = "stack"
+		normalizedSlug = cmp.Or(strings.Trim(normalizedSlug[:maxSlugLength], "_"), "stack")
 	}
 	return prefix + normalizedSlug + separator + shortID
 }
