@@ -2707,7 +2707,7 @@ func validateRegisterTemplateCommand(command RegisterTemplateCommand) error {
 	if strings.TrimSpace(command.SourceRef) == "" {
 		problems = append(problems, fieldError(ErrInvalidCommand, IssueRequired, "source_ref is required", "source_ref"))
 	}
-	if !validTemplateRootPath(command.RootPath) {
+	if _, err := domain.CleanTemplateRootPath(command.RootPath); err != nil {
 		problems = append(problems, fieldError(ErrInvalidCommand, IssueInvalidFormat,
 			"root_path must be a relative path inside the repository", "root_path"))
 	}
@@ -3022,15 +3022,6 @@ func validCredentialName(name string) bool {
 		return false
 	}
 	return true
-}
-
-func validTemplateRootPath(rootPath string) bool {
-	rootPath = strings.TrimSpace(rootPath)
-	if rootPath == "" || filepath.IsAbs(rootPath) {
-		return false
-	}
-	cleaned := filepath.Clean(rootPath)
-	return cleaned != ".." && !strings.HasPrefix(cleaned, ".."+string(filepath.Separator))
 }
 
 type systemClock struct{}

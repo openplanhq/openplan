@@ -94,7 +94,7 @@ func (activities *TemplateSyncActivities) SyncTemplate(ctx context.Context, inpu
 	if input.TemplateID == "" {
 		return invalidTemplateSyncOutput("sync names no template to write into"), nil
 	}
-	rootPath, err := safeTemplateRootPath(input.RootPath)
+	rootPath, err := domain.CleanTemplateRootPath(input.RootPath)
 	if err != nil {
 		return invalidTemplateSyncOutput("%v", err), nil
 	}
@@ -316,18 +316,6 @@ type repoRelativeError struct {
 
 func (e *repoRelativeError) Error() string { return e.message }
 func (e *repoRelativeError) Unwrap() error { return e.err }
-
-func safeTemplateRootPath(rootPath string) (string, error) {
-	rootPath = strings.TrimSpace(rootPath)
-	if rootPath == "" {
-		return "", errors.New("root path is required")
-	}
-	rootPath = filepath.Clean(rootPath)
-	if filepath.IsAbs(rootPath) || rootPath == ".." || strings.HasPrefix(rootPath, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("root path %q must stay within the repository", rootPath)
-	}
-	return rootPath, nil
-}
 
 func ensureTemplateRoot(templateRoot string) error {
 	info, err := os.Stat(templateRoot)
