@@ -3482,7 +3482,7 @@ func (store *Store) GetTemplateSync(ctx context.Context, tenantID domain.TenantI
 // gives it, so fixtures can name it. RecordSyncedTemplateRevision's own tests
 // cover how a sync assigns IDs and records itself.
 func seedTemplateRevision(ctx context.Context, store *Store, revision domain.TemplateRevision, variables []domain.TemplateVariable) (domain.TemplateRevision, error) {
-	tagsJSON, err := encodeTemplateRevisionTags(revision.Tags)
+	tagsJSON, err := encodeJSONArray(revision.Tags)
 	if err != nil {
 		return domain.TemplateRevision{}, err
 	}
