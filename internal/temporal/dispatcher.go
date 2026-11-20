@@ -44,28 +44,9 @@ func newDispatcher(temporalClient workflowClient, options ...DispatcherOptions) 
 // the same logical run. Workflows run on the control queue; the workflow itself
 // routes execution activities to the executor.
 func (dispatcher *Dispatcher) StartTemplatePlan(ctx context.Context, input domain.TemplateRunWorkflowInput) error {
-	// The timeout is stamped here rather than carried from the request: it is
-	// deployment configuration, not something a caller chose, and stamping it
-	// at dispatch means a run that sat in the queue across a reconfiguration
-	// starts with the timeout in force now. Once started, the run keeps this
-	// value for its whole life, because it is in the workflow's input.
-	if input.TerraformTimeout <= 0 {
-		input.TerraformTimeout = dispatcher.options.TerraformTimeout
-	}
-	_, err := dispatcher.client.ExecuteWorkflow(
-		ctx,
-		client.StartWorkflowOptions{
-			ID:                       templateRunWorkflowID(input.TenantID, input.RunID),
-			TaskQueue:                domain.ControlTaskQueue,
-			WorkflowIDReusePolicy:    enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE,
-			WorkflowIDConflictPolicy: enumspb.WORKFLOW_ID_CONFLICT_POLICY_USE_EXISTING,
-		},
-		domain.TemplatePlanWorkflowName,
-		input)
-	if err != nil {
+	if err := dispatcher.startRunWorkflow(ctx, templateRunWorkflowID(input.TenantID, input.RunID), domain.TemplatePlanWorkflowName, input); err != nil {
 		return fmt.Errorf("start template run workflow: %w", err)
 	}
-
 	return nil
 }
 
@@ -90,24 +71,34 @@ func (dispatcher *Dispatcher) StartTemplateSync(ctx context.Context, input domai
 // plan. Its ID extends the run's, so a redelivered start intent finds the
 // workflow already running instead of starting a second apply.
 func (dispatcher *Dispatcher) StartTemplateApply(ctx context.Context, input domain.TemplateRunWorkflowInput) error {
+	if err := dispatcher.startRunWorkflow(ctx, templateApplyWorkflowID(input.TenantID, input.RunID), domain.TemplateApplyWorkflowName, input); err != nil {
+		return fmt.Errorf("start template apply workflow: %w", err)
+	}
+	return nil
+}
+
+// startRunWorkflow starts one of a run's workflows under workflowID, or finds
+// it already started.
+func (dispatcher *Dispatcher) startRunWorkflow(ctx context.Context, workflowID string, workflowName string, input domain.TemplateRunWorkflowInput) error {
+	// The timeout is stamped here rather than carried from the request: it is
+	// deployment configuration, not something a caller chose, and stamping it
+	// at dispatch means a run that sat in the queue across a reconfiguration
+	// starts with the timeout in force now. Once started, the run keeps this
+	// value for its whole life, because it is in the workflow's input.
 	if input.TerraformTimeout <= 0 {
 		input.TerraformTimeout = dispatcher.options.TerraformTimeout
 	}
 	_, err := dispatcher.client.ExecuteWorkflow(
 		ctx,
 		client.StartWorkflowOptions{
-			ID:                       templateApplyWorkflowID(input.TenantID, input.RunID),
+			ID:                       workflowID,
 			TaskQueue:                domain.ControlTaskQueue,
 			WorkflowIDReusePolicy:    enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE,
 			WorkflowIDConflictPolicy: enumspb.WORKFLOW_ID_CONFLICT_POLICY_USE_EXISTING,
 		},
-		domain.TemplateApplyWorkflowName,
+		workflowName,
 		input)
-	if err != nil {
-		return fmt.Errorf("start template apply workflow: %w", err)
-	}
-
-	return nil
+	return err
 }
 
 func templateRunWorkflowID(tenantID domain.TenantID, runID domain.TemplateRunID) string {
