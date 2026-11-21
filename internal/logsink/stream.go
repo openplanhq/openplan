@@ -146,12 +146,20 @@ var (
 // expiry to EndTTL: once ended, the stream only has to last until its readers
 // have seen the end.
 func AppendEnd(ctx context.Context, s Stream, key string, state domain.TemplateRunLogState) error {
-	end := Entry{Kind: KindEnd, State: state}
-	if err := s.XAdd(ctx, &redis.XAddArgs{Stream: key, Values: end.Values()}).Err(); err != nil {
-		return fmt.Errorf("append end to %s: %w", key, err)
+	if err := appendEntry(ctx, s, key, Entry{Kind: KindEnd, State: state}); err != nil {
+		return err
 	}
 	if err := s.Expire(ctx, key, EndTTL).Err(); err != nil {
 		return fmt.Errorf("expire %s: %w", key, err)
+	}
+	return nil
+}
+
+// appendEntry adds one entry to the stream at key: the one place the
+// stream's write format lives.
+func appendEntry(ctx context.Context, s Stream, key string, entry Entry) error {
+	if err := s.XAdd(ctx, &redis.XAddArgs{Stream: key, Values: entry.Values()}).Err(); err != nil {
+		return fmt.Errorf("append %s to %s: %w", entry.Kind, key, err)
 	}
 	return nil
 }

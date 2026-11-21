@@ -11,8 +11,6 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
-
-	"github.com/redis/go-redis/v9"
 )
 
 // Flusher publishes a command's spool file to its stream as the file grows.
@@ -172,10 +170,7 @@ func incompleteTail(b []byte) int {
 }
 
 func (f *Flusher) add(ctx context.Context, entry Entry) error {
-	if err := f.stream.XAdd(ctx, &redis.XAddArgs{Stream: f.key, Values: entry.Values()}).Err(); err != nil {
-		return fmt.Errorf("append %s to %s: %w", entry.Kind, f.key, err)
-	}
-	return nil
+	return appendEntry(ctx, f.stream, f.key, entry)
 }
 
 // Start runs Flush every Interval until stop is called, then flushes once
