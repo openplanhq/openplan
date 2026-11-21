@@ -301,7 +301,7 @@ func optionalPositiveDuration(getenv func(string) string, name string, fallback 
 	}
 	value, err := time.ParseDuration(raw)
 	if err != nil || value <= 0 {
-		return 0, authConfigError("%s must be a positive duration", name)
+		return 0, authConfigError("%s must be a positive duration such as 45m or 2h", name)
 	}
 	return value, nil
 }
