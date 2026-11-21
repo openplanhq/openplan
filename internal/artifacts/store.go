@@ -2,6 +2,7 @@ package artifacts
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -482,7 +483,7 @@ func (store *S3Store) sign(request *http.Request, content []byte) {
 	canonicalHeaders, signedHeaders := canonicalHeaders(request)
 	canonicalRequest := strings.Join([]string{
 		request.Method,
-		canonicalURI(request.URL.EscapedPath()),
+		cmp.Or(request.URL.EscapedPath(), "/"),
 		canonicalQueryString(request.URL.Query()),
 		canonicalHeaders,
 		signedHeaders,
@@ -528,13 +529,6 @@ func canonicalHeaders(request *http.Request) (string, string) {
 		builder.WriteByte('\n')
 	}
 	return builder.String(), strings.Join(keys, ";")
-}
-
-func canonicalURI(escapedPath string) string {
-	if escapedPath == "" {
-		return "/"
-	}
-	return escapedPath
 }
 
 func canonicalQueryString(values url.Values) string {

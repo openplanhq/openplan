@@ -517,3 +517,31 @@ func TestValidGitHubName(t *testing.T) {
 		}
 	}
 }
+
+func TestCleanTemplateRootPath(t *testing.T) {
+	t.Parallel()
+
+	for rootPath, want := range map[string]string{
+		"modules/vpc":     "modules/vpc",
+		" modules/vpc/ ":  "modules/vpc",
+		".":               ".",
+		"a/../b":          "b",
+		"modules/../../x": "",
+		"..":              "",
+		"../x":            "",
+		"/etc":            "",
+		"":                "",
+		"   ":             "",
+	} {
+		got, err := CleanTemplateRootPath(rootPath)
+		if want == "" {
+			if err == nil {
+				t.Errorf("CleanTemplateRootPath(%q) = %q, want an error", rootPath, got)
+			}
+			continue
+		}
+		if err != nil || got != want {
+			t.Errorf("CleanTemplateRootPath(%q) = %q, %v; want %q", rootPath, got, err, want)
+		}
+	}
+}

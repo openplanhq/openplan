@@ -62,10 +62,10 @@ func TestValidatePageRequest(t *testing.T) {
 	t.Parallel()
 
 	for _, limit := range []int{1, DefaultPageLimit, MaxPageLimit} {
-		assert.NoError(t, validatePageRequest(PageRequest{Limit: limit}), "limit %d", limit)
+		assert.NoError(t, PageRequest{Limit: limit}.Validate(), "limit %d", limit)
 	}
 	for _, limit := range []int{-1, 0, MaxPageLimit + 1} {
-		err := validatePageRequest(PageRequest{Limit: limit})
+		err := PageRequest{Limit: limit}.Validate()
 		require.ErrorIs(t, err, ErrInvalidCommand, "limit %d", limit)
 		fieldErrs := FieldErrors(err)
 		require.Len(t, fieldErrs, 1)

@@ -42,7 +42,7 @@ func (service *Service) ListTemplateRunResourceChanges(ctx context.Context, comm
 	if err := validateGetTemplateRunCommand(GetTemplateRunCommand{TenantID: command.TenantID, RunID: command.RunID}); err != nil {
 		return Page[domain.PlanResourceChange]{}, err
 	}
-	if err := validatePageRequest(command.Page); err != nil {
+	if err := command.Page.Validate(); err != nil {
 		return Page[domain.PlanResourceChange]{}, err
 	}
 	after, err := DecodeCursor[planChangeCursor](planChangesList, command.Page.Cursor)

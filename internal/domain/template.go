@@ -3,8 +3,11 @@ package domain
 // The template catalogue: sources, revisions, syncs, variables.
 
 import (
+	"errors"
+	"fmt"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -26,6 +29,22 @@ func ValidGitHubName(name string) bool {
 		}
 	}
 	return true
+}
+
+// CleanTemplateRootPath returns a template's root path trimmed and cleaned,
+// or an error when it is blank or leaves the repository. Registration checks
+// it before storing a template, and every sync and run again before reading
+// the checkout, since the path is joined onto a directory on disk.
+func CleanTemplateRootPath(rootPath string) (string, error) {
+	rootPath = strings.TrimSpace(rootPath)
+	if rootPath == "" {
+		return "", errors.New("root path is required")
+	}
+	rootPath = filepath.Clean(rootPath)
+	if filepath.IsAbs(rootPath) || rootPath == ".." || strings.HasPrefix(rootPath, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("root path %q must stay within the repository", rootPath)
+	}
+	return rootPath, nil
 }
 
 // TemplateRevisionStatus identifies template revision validation state.

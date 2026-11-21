@@ -13,16 +13,6 @@ import (
 // bootstrapPageSize is how many stores or models one reconcile page asks for.
 const bootstrapPageSize = 100
 
-// safeOpaqueIdentifier reports whether a server-minted id is usable: non-empty
-// and free of whitespace and control characters, so it cannot corrupt a later
-// request that carries it.
-//
-// Bootstrap checks every id it adopts because an id it cannot trust is one it
-// must not pin the process to.
-func safeOpaqueIdentifier(value string) bool {
-	return strval.SafeOpaque(value)
-}
-
 // bootstrap resolves the store and authorization model this process will use,
 // creating either only when it is absent.
 //
@@ -35,7 +25,10 @@ func safeOpaqueIdentifier(value string) bool {
 //   - two stored models matching the repository's is ambiguous the same way;
 //
 //   - a matching model is adopted rather than rewritten, so a restart does not
-//     mint a new model id that existing tuples were never written against.
+//     mint a new model id that existing tuples were never written against;
+//
+//   - an id the server returns that isn't strval.SafeOpaque is refused: an id
+//     it cannot trust is one it must not pin the process to.
 //
 //     no store        → create one, write the model
 //     store, no match → adopt the store, write a new model version
@@ -77,7 +70,7 @@ func (auth *Authorization) resolveStore(ctx context.Context, storeName string) (
 		}
 		for _, store := range response.GetStores() {
 			if store.GetName() == storeName {
-				if !safeOpaqueIdentifier(store.GetId()) {
+				if !strval.SafeOpaque(store.GetId()) {
 					return "", fmt.Errorf("authorization: store %q has an unsafe id", storeName)
 				}
 				matches = append(matches, store.GetId())
@@ -107,7 +100,7 @@ func (auth *Authorization) resolveStore(ctx context.Context, storeName string) (
 	if err != nil {
 		return "", fmt.Errorf("authorization: create store %q: %w", storeName, err)
 	}
-	if !safeOpaqueIdentifier(created.GetId()) {
+	if !strval.SafeOpaque(created.GetId()) {
 		return "", fmt.Errorf("authorization: created store %q has an unsafe id", storeName)
 	}
 	return created.GetId(), nil
@@ -154,7 +147,7 @@ func (auth *Authorization) resolveModel(ctx context.Context, storeID string, des
 	if err != nil {
 		return "", fmt.Errorf("authorization: write model in store %q: %w", storeID, err)
 	}
-	if !safeOpaqueIdentifier(written.GetAuthorizationModelId()) {
+	if !strval.SafeOpaque(written.GetAuthorizationModelId()) {
 		return "", fmt.Errorf("authorization: written model has an unsafe id")
 	}
 	return written.GetAuthorizationModelId(), nil

@@ -147,7 +147,7 @@ func (activities *TemplateRunActivities) CleanupWorkspace(ctx context.Context, i
 // FetchSource checks the template source out into the run's workspace, in a
 // sandbox with the repository's read-only token.
 func (activities *TemplateRunActivities) FetchSource(ctx context.Context, input domain.FetchSourceActivityInput) (domain.FetchSourceActivityOutput, error) {
-	rootPath, err := safeTemplateRootPath(input.RootPath)
+	rootPath, err := domain.CleanTemplateRootPath(input.RootPath)
 	if err != nil {
 		return domain.FetchSourceActivityOutput{}, fmt.Errorf("source root path: %w", err)
 	}

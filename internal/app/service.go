@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -18,7 +19,6 @@ import (
 	"github.com/vishu42/openplan/internal/authorization"
 	"github.com/vishu42/openplan/internal/domain"
 	"github.com/vishu42/openplan/internal/queue"
-	"github.com/vishu42/openplan/internal/strval"
 )
 
 var (
@@ -56,36 +56,25 @@ var (
 // ErrForbidden indicates an authenticated actor lacks permission for an operation.
 var ErrForbidden = errors.New("forbidden")
 
-// StackPageCursor is a position in the stacks list, newest first: the
-// created_at and id of the last stack a page held.
-type StackPageCursor struct {
-	CreatedAt time.Time      `json:"created_at"`
-	ID        domain.StackID `json:"id"`
+// NewestFirstCursor is a position in a list ordered newest first: the
+// created_at and id of the last item a page held.
+type NewestFirstCursor[ID ~string] struct {
+	CreatedAt time.Time `json:"created_at"`
+	ID        ID        `json:"id"`
 }
 
-func (cursor StackPageCursor) Valid() bool { return !cursor.CreatedAt.IsZero() && cursor.ID != "" }
-
-// TemplateRevisionCursor is a position in a template's revisions list,
-// newest first.
-type TemplateRevisionCursor struct {
-	CreatedAt time.Time                 `json:"created_at"`
-	ID        domain.TemplateRevisionID `json:"id"`
-}
-
-func (cursor TemplateRevisionCursor) Valid() bool {
+func (cursor NewestFirstCursor[ID]) Valid() bool {
 	return !cursor.CreatedAt.IsZero() && cursor.ID != ""
 }
 
-// TemplateCursor is a position in the templates list, newest first:
-// the created_at and id of the last template a page held.
-type TemplateCursor struct {
-	CreatedAt time.Time         `json:"created_at"`
-	ID        domain.TemplateID `json:"id"`
-}
-
-func (cursor TemplateCursor) Valid() bool {
-	return !cursor.CreatedAt.IsZero() && cursor.ID != ""
-}
+type (
+	// StackPageCursor is a position in the stacks list.
+	StackPageCursor = NewestFirstCursor[domain.StackID]
+	// TemplateRevisionCursor is a position in a template's revisions list.
+	TemplateRevisionCursor = NewestFirstCursor[domain.TemplateRevisionID]
+	// TemplateCursor is a position in the templates list.
+	TemplateCursor = NewestFirstCursor[domain.TemplateID]
+)
 
 // TxRepo is the transaction-scoped repository surface handed to a unit of
 // work. It is deliberately tiny and grows only when a new dual-write point
@@ -1481,7 +1470,7 @@ func (service *Service) ListTemplates(ctx context.Context, command ListTemplates
 	if command.TenantID == "" {
 		return Page[domain.Template]{}, fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
 	}
-	if err := validatePageRequest(command.Page); err != nil {
+	if err := command.Page.Validate(); err != nil {
 		return Page[domain.Template]{}, err
 	}
 	after, err := DecodeCursor[TemplateCursor](templatesList, command.Page.Cursor)
@@ -1542,7 +1531,7 @@ func (service *Service) ListTemplateRevisionsForTemplate(ctx context.Context, co
 	if err := validateTemplateCommand(command.TenantID, command.TemplateID); err != nil {
 		return Page[domain.TemplateRevision]{}, err
 	}
-	if err := validatePageRequest(command.Page); err != nil {
+	if err := command.Page.Validate(); err != nil {
 		return Page[domain.TemplateRevision]{}, err
 	}
 	after, err := DecodeCursor[TemplateRevisionCursor](templateRevisionsOfTemplateList, command.Page.Cursor)
@@ -1650,7 +1639,7 @@ func validateSearchUsersCommand(command SearchUsersCommand) error {
 		problems = append(problems, parameterError(ErrInvalidCommand, IssueTooLong,
 			fmt.Sprintf("q must be at most %d characters", maxSearchQueryLength), "q"))
 	}
-	if err := validatePageRequest(command.Page); err != nil {
+	if err := command.Page.Validate(); err != nil {
 		problems = append(problems, err)
 	}
 	return errors.Join(problems...)
@@ -1915,7 +1904,7 @@ func (service *Service) AssignStackRole(ctx context.Context, command AssignStack
 		Grant: GrantView{
 			UserSub:     command.UserSub,
 			Role:        command.Role,
-			DisplayName: strval.FirstNonEmpty(target.DisplayName, command.UserSub),
+			DisplayName: cmp.Or(target.DisplayName, command.UserSub),
 			Email:       target.Email,
 		},
 		// From the same in-transaction read the last-owner guard uses, not a
@@ -2100,7 +2089,7 @@ func (service *Service) AssignPlatformRole(ctx context.Context, command AssignPl
 		Grant: GrantView{
 			UserSub:     command.UserSub,
 			Role:        command.Role,
-			DisplayName: strval.FirstNonEmpty(target.DisplayName, command.UserSub),
+			DisplayName: cmp.Or(target.DisplayName, command.UserSub),
 			Email:       target.Email,
 		},
 		Created: currentRole == "",
@@ -2169,9 +2158,6 @@ func (service *Service) ApproveRun(ctx context.Context, command ApproveRunComman
 		return domain.TemplateRun{}, err
 	}
 	actor := domain.UserID(principal.Subject)
-	if err := validateApproveRunCommand(command); err != nil {
-		return domain.TemplateRun{}, err
-	}
 
 	if run.Status != domain.TemplateRunWaitingApproval {
 		service.auditApprovalRejection(ctx, principal, command, stackTemplate.StackID, domain.AuditReasonRunNotApprovable)
@@ -2302,9 +2288,6 @@ func (service *Service) DiscardRun(ctx context.Context, command DiscardRunComman
 		return err
 	}
 	actor := domain.UserID(principal.Subject)
-	if err := validateDiscardRunCommand(command); err != nil {
-		return err
-	}
 
 	discard := domain.TemplateRunDiscard{
 		RunID:       command.RunID,
@@ -2446,7 +2429,7 @@ func (service *Service) labelTriggerActors(ctx context.Context, runs ...*domain.
 		return fmt.Errorf("look up trigger actors: %w", err)
 	}
 	label := func(sub domain.UserID) string {
-		return strval.FirstNonEmpty(profiles[string(sub)].DisplayName, string(sub))
+		return cmp.Or(profiles[string(sub)].DisplayName, string(sub))
 	}
 	for _, run := range runs {
 		run.TriggerActorDisplayName = label(run.TriggerActor)
@@ -2597,13 +2580,8 @@ func validateCreateStackCommand(command CreateStackCommand) error {
 
 // validateCreateCredentialCommand checks required IDs, scope, variable name, and value before encryption.
 func validateCreateCredentialCommand(command CreateCredentialCommand) error {
-	switch {
-	case command.Scope == domain.CredentialScopeStack && command.StackID == "":
-		return fmt.Errorf("%w: stack id is required", ErrInvalidCommand)
-	case command.Scope == domain.CredentialScopeStackTemplate && command.StackTemplateID == "":
-		return fmt.Errorf("%w: stack template id is required", ErrInvalidCommand)
-	case command.Scope != domain.CredentialScopeStack && command.Scope != domain.CredentialScopeStackTemplate:
-		return fmt.Errorf("%w: credential scope is invalid", ErrInvalidCommand)
+	if err := validateCredentialOwner(command.Scope, command.StackID, command.StackTemplateID); err != nil {
+		return err
 	}
 	var problems []error
 	if !validCredentialName(command.Name) {
@@ -2621,13 +2599,18 @@ func validateListCredentialsCommand(command ListCredentialsCommand) error {
 	if command.TenantID == "" {
 		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
 	}
-	if command.Scope == domain.CredentialScopeStack && command.StackID == "" {
+	return validateCredentialOwner(command.Scope, command.StackID, command.StackTemplateID)
+}
+
+// validateCredentialOwner checks a credential command names a known scope and
+// the id of that scope's owner.
+func validateCredentialOwner(scope domain.CredentialScope, stackID domain.StackID, stackTemplateID domain.StackTemplateID) error {
+	switch {
+	case scope == domain.CredentialScopeStack && stackID == "":
 		return fmt.Errorf("%w: stack id is required", ErrInvalidCommand)
-	}
-	if command.Scope == domain.CredentialScopeStackTemplate && command.StackTemplateID == "" {
+	case scope == domain.CredentialScopeStackTemplate && stackTemplateID == "":
 		return fmt.Errorf("%w: stack template id is required", ErrInvalidCommand)
-	}
-	if command.Scope != domain.CredentialScopeStack && command.Scope != domain.CredentialScopeStackTemplate {
+	case scope != domain.CredentialScopeStack && scope != domain.CredentialScopeStackTemplate:
 		return fmt.Errorf("%w: credential scope is invalid", ErrInvalidCommand)
 	}
 	return nil
@@ -2649,7 +2632,7 @@ func validateListStacksCommand(command ListStacksCommand) error {
 		return fmt.Errorf("%w: tenant id is required", ErrInvalidCommand)
 	}
 	var problems []error
-	if err := validatePageRequest(command.Page); err != nil {
+	if err := command.Page.Validate(); err != nil {
 		problems = append(problems, err)
 	}
 	if len(command.Query) > maxSearchQueryLength {
@@ -2724,25 +2707,11 @@ func validateRegisterTemplateCommand(command RegisterTemplateCommand) error {
 	if strings.TrimSpace(command.SourceRef) == "" {
 		problems = append(problems, fieldError(ErrInvalidCommand, IssueRequired, "source_ref is required", "source_ref"))
 	}
-	if !validTemplateRootPath(command.RootPath) {
+	if _, err := domain.CleanTemplateRootPath(command.RootPath); err != nil {
 		problems = append(problems, fieldError(ErrInvalidCommand, IssueInvalidFormat,
 			"root_path must be a relative path inside the repository", "root_path"))
 	}
 	return errors.Join(problems...)
-}
-
-func validateApproveRunCommand(command ApproveRunCommand) error {
-	if command.RunID == "" {
-		return fmt.Errorf("%w: run id is required", ErrInvalidCommand)
-	}
-	return nil
-}
-
-func validateDiscardRunCommand(command DiscardRunCommand) error {
-	if command.RunID == "" {
-		return fmt.Errorf("%w: run id is required", ErrInvalidCommand)
-	}
-	return nil
 }
 
 // validateTemplateCommand checks the ids every command on one template names.
@@ -2786,7 +2755,7 @@ func validateListTemplateRunsCommand(command ListTemplateRunsCommand) error {
 	case command.StackTemplateID == "":
 		return fmt.Errorf("%w: stack template id is required", ErrInvalidCommand)
 	default:
-		return validatePageRequest(command.Page)
+		return command.Page.Validate()
 	}
 }
 
@@ -2811,9 +2780,7 @@ func validateGetTemplateRunLogCommand(command GetTemplateRunLogCommand) error {
 // sent value's problem (unknown, sensitive, null, invalid) by name, then
 // missing required ones in declared order.
 func validateTemplateConfig(raw json.RawMessage, variables []domain.TemplateVariable) (json.RawMessage, error) {
-	if len(raw) == 0 {
-		raw = json.RawMessage(`{}`)
-	}
+	raw = domain.ConfigOrEmpty(raw)
 
 	var config map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &config); err != nil || config == nil {
@@ -2879,10 +2846,7 @@ func validateTemplateConfig(raw json.RawMessage, variables []domain.TemplateVari
 // that branch was unreachable and only made it look as though install-time
 // config were a second source of desired state.
 func carryForwardConfig(desiredConfigJSON json.RawMessage, variables []domain.TemplateVariable) (json.RawMessage, error) {
-	raw := desiredConfigJSON
-	if len(raw) == 0 {
-		raw = json.RawMessage(`{}`)
-	}
+	raw := domain.ConfigOrEmpty(desiredConfigJSON)
 
 	// The stored config was validated on its way in, so one that won't parse
 	// is a corrupt row: a server fault, not something the caller sent.
@@ -2916,18 +2880,11 @@ func carryForwardConfig(desiredConfigJSON json.RawMessage, variables []domain.Te
 }
 
 func stackTemplateKey(value string, stackTemplateID domain.StackTemplateID) string {
-	value = strings.TrimSpace(value)
-	if value != "" {
-		return value
-	}
-	return string(stackTemplateID)
+	return cmp.Or(strings.TrimSpace(value), string(stackTemplateID))
 }
 
 func workspaceName(stackSlug string, stackTemplateID domain.StackTemplateID) string {
-	normalizedSlug := normalizeWorkspacePart(stackSlug)
-	if normalizedSlug == "" {
-		normalizedSlug = "stack"
-	}
+	normalizedSlug := cmp.Or(slugify(stackSlug, '_'), "stack")
 
 	id := string(stackTemplateID)
 	shortID := id
@@ -2940,30 +2897,9 @@ func workspaceName(stackSlug string, stackTemplateID domain.StackTemplateID) str
 	const maxLength = 90
 	maxSlugLength := max(maxLength-len(prefix)-len(separator)-len(shortID), 1)
 	if len(normalizedSlug) > maxSlugLength {
-		normalizedSlug = strings.Trim(normalizedSlug[:maxSlugLength], "_")
-	}
-	if normalizedSlug == "" {
-		normalizedSlug = "stack"
+		normalizedSlug = cmp.Or(strings.Trim(normalizedSlug[:maxSlugLength], "_"), "stack")
 	}
 	return prefix + normalizedSlug + separator + shortID
-}
-
-func normalizeWorkspacePart(value string) string {
-	var builder strings.Builder
-	lastUnderscore := false
-	for _, r := range strings.ToLower(strings.TrimSpace(value)) {
-		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
-			builder.WriteRune(r)
-			lastUnderscore = false
-		default:
-			if !lastUnderscore && builder.Len() > 0 {
-				builder.WriteByte('_')
-				lastUnderscore = true
-			}
-		}
-	}
-	return strings.Trim(builder.String(), "_")
 }
 
 // SlugIsDerived reports whether a stack's slug is the one its name gives,
@@ -2974,22 +2910,27 @@ func SlugIsDerived(name, slug string) bool {
 	return slug == slugFromName(name)
 }
 
-func slugFromName(name string) string {
+func slugFromName(name string) string { return slugify(name, '-') }
+
+// slugify lowercases value to [a-z0-9] runs joined by separator, collapsing
+// every run of other characters into one separator and trimming it from the
+// ends.
+func slugify(value string, separator byte) string {
 	var builder strings.Builder
-	lastHyphen := false
-	for _, r := range strings.ToLower(strings.TrimSpace(name)) {
+	lastSeparator := false
+	for _, r := range strings.ToLower(strings.TrimSpace(value)) {
 		switch {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
 			builder.WriteRune(r)
-			lastHyphen = false
+			lastSeparator = false
 		default:
-			if !lastHyphen && builder.Len() > 0 {
-				builder.WriteByte('-')
-				lastHyphen = true
+			if !lastSeparator && builder.Len() > 0 {
+				builder.WriteByte(separator)
+				lastSeparator = true
 			}
 		}
 	}
-	return strings.Trim(builder.String(), "-")
+	return strings.Trim(builder.String(), string(separator))
 }
 
 func validStackSlug(slug string) bool {
@@ -3076,15 +3017,6 @@ func validCredentialName(name string) bool {
 		return false
 	}
 	return true
-}
-
-func validTemplateRootPath(rootPath string) bool {
-	rootPath = strings.TrimSpace(rootPath)
-	if rootPath == "" || filepath.IsAbs(rootPath) {
-		return false
-	}
-	cleaned := filepath.Clean(rootPath)
-	return cleaned != ".." && !strings.HasPrefix(cleaned, ".."+string(filepath.Separator))
 }
 
 type systemClock struct{}
