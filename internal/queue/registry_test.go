@@ -78,7 +78,7 @@ func TestResolveDerivesKeyAndMode(t *testing.T) {
 		t.Fatalf("NewRegistry returned error: %v", err)
 	}
 
-	resolved, err := registry.Resolve(Request{
+	resolved, err := registry.Specs().Resolve(Request{
 		Kind:         "grant",
 		Payload:      json.RawMessage(`{"role":"owner"}`),
 		ActorSubject: "user:x",
@@ -105,7 +105,7 @@ func TestResolveUnknownKind(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRegistry returned error: %v", err)
 	}
-	if _, err := registry.Resolve(Request{Kind: "nope"}); !errors.Is(err, ErrUnknownKind) {
+	if _, err := registry.Specs().Resolve(Request{Kind: "nope"}); !errors.Is(err, ErrUnknownKind) {
 		t.Fatalf("Resolve error = %v, want ErrUnknownKind", err)
 	}
 }
@@ -117,7 +117,7 @@ func TestResolveRejectsEmptyKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRegistry returned error: %v", err)
 	}
-	if _, err := registry.Resolve(Request{Kind: "grant"}); err == nil {
+	if _, err := registry.Specs().Resolve(Request{Kind: "grant"}); err == nil {
 		t.Fatal("Resolve accepted an empty derived key")
 	}
 }

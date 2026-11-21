@@ -185,7 +185,14 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	}
 	cfg.GitHubApp = gitHubApp
 
-	terraformTimeout, err := loadTerraformTimeout(getenv)
+	// OPENPLAN_TERRAFORM_TIMEOUT is the ceiling on a single Terraform command.
+	// It is a Go duration ("90m", "1h30m") rather than a bare number, because
+	// a bare number here is the kind of setting where minutes and seconds are
+	// confused once and the mistake is found by an apply that dies. Anything
+	// unparseable or non-positive fails at startup: a deployment that meant to
+	// raise the ceiling should not silently fall back to the default it was
+	// trying to replace.
+	terraformTimeout, err := optionalPositiveDuration(getenv, "OPENPLAN_TERRAFORM_TIMEOUT", domain.DefaultTerraformTimeout)
 	if err != nil {
 		return APIConfig{}, err
 	}
@@ -286,30 +293,6 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 // address pool hands them out. The subnet is IPv4 and /29 or larger.
 func sandboxAddresses(subnet netip.Prefix) int {
 	return 1<<(32-subnet.Bits()) - 3
-}
-
-// loadTerraformTimeout reads OPENPLAN_TERRAFORM_TIMEOUT, the ceiling on a single
-// Terraform command.
-//
-// The value is a Go duration ("90m", "1h30m") rather than a bare number,
-// because a bare number here is the kind of setting where minutes and seconds
-// are confused once and the mistake is found by an apply that dies. Anything
-// unparseable or non-positive fails at startup: a deployment that meant to
-// raise the ceiling should not silently fall back to the default it was trying
-// to replace.
-func loadTerraformTimeout(getenv func(string) string) (time.Duration, error) {
-	value := strings.TrimSpace(getenv("OPENPLAN_TERRAFORM_TIMEOUT"))
-	if value == "" {
-		return domain.DefaultTerraformTimeout, nil
-	}
-	timeout, err := time.ParseDuration(value)
-	if err != nil {
-		return 0, fmt.Errorf("%w: OPENPLAN_TERRAFORM_TIMEOUT must be a duration such as 45m or 2h", ErrInvalidConfig)
-	}
-	if timeout <= 0 {
-		return 0, fmt.Errorf("%w: OPENPLAN_TERRAFORM_TIMEOUT must be greater than zero", ErrInvalidConfig)
-	}
-	return timeout, nil
 }
 
 // loadCredentialEncryptionKey validates CREDENTIAL_ENCRYPTION_KEY the same

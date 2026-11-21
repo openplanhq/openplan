@@ -20,7 +20,7 @@ func TestStartTemplateRunExecutesWorkflow(t *testing.T) {
 	t.Parallel()
 
 	workflowClient := &recordingWorkflowClient{}
-	dispatcher := newDispatcher(workflowClient)
+	dispatcher := NewDispatcher(workflowClient, DispatcherOptions{})
 	input := domain.TemplateRunWorkflowInput{
 		RunID:           domain.TemplateRunID("run_123"),
 		TenantID:        domain.TenantID("tenant_123"),
@@ -66,7 +66,7 @@ func TestStartTemplateRunStampsTheConfiguredTerraformTimeout(t *testing.T) {
 	t.Parallel()
 
 	workflowClient := &recordingWorkflowClient{}
-	dispatcher := newDispatcher(workflowClient, DispatcherOptions{TerraformTimeout: 90 * time.Minute})
+	dispatcher := NewDispatcher(workflowClient, DispatcherOptions{TerraformTimeout: 90 * time.Minute})
 
 	if err := dispatcher.StartTemplatePlan(context.Background(), domain.TemplateRunWorkflowInput{
 		RunID:    domain.TemplateRunID("run_123"),
@@ -91,7 +91,7 @@ func TestStartTemplateRunWithoutAConfiguredTimeoutLeavesItToTheWorkflow(t *testi
 	t.Parallel()
 
 	workflowClient := &recordingWorkflowClient{}
-	dispatcher := newDispatcher(workflowClient)
+	dispatcher := NewDispatcher(workflowClient, DispatcherOptions{})
 
 	if err := dispatcher.StartTemplatePlan(context.Background(), domain.TemplateRunWorkflowInput{
 		RunID:    domain.TemplateRunID("run_123"),
@@ -110,7 +110,7 @@ func TestStartTemplateSyncExecutesWorkflow(t *testing.T) {
 	t.Parallel()
 
 	workflowClient := &recordingWorkflowClient{}
-	dispatcher := newDispatcher(workflowClient)
+	dispatcher := NewDispatcher(workflowClient, DispatcherOptions{})
 	input := domain.TemplateSyncWorkflowInput{
 		SyncID:    domain.TemplateSyncID("template_sync_123"),
 		TenantID:  domain.TenantID("tenant_123"),
@@ -147,7 +147,7 @@ func TestStartTemplateApplyStartsTheApplyWorkflow(t *testing.T) {
 	t.Parallel()
 
 	workflowClient := &recordingWorkflowClient{}
-	dispatcher := newDispatcher(workflowClient, DispatcherOptions{TerraformTimeout: 20 * time.Minute})
+	dispatcher := NewDispatcher(workflowClient, DispatcherOptions{TerraformTimeout: 20 * time.Minute})
 	input := domain.TemplateRunWorkflowInput{
 		RunID:     domain.TemplateRunID("run_123"),
 		TenantID:  domain.TenantID("tenant_123"),
@@ -180,7 +180,7 @@ func TestStartTemplateRunWrapsClientError(t *testing.T) {
 	t.Parallel()
 
 	clientErr := errors.New("temporal unavailable")
-	dispatcher := newDispatcher(&recordingWorkflowClient{executeErr: clientErr})
+	dispatcher := NewDispatcher(&recordingWorkflowClient{executeErr: clientErr}, DispatcherOptions{})
 
 	err := dispatcher.StartTemplatePlan(context.Background(), domain.TemplateRunWorkflowInput{
 		RunID:    domain.TemplateRunID("run_123"),
@@ -198,7 +198,7 @@ func TestStartTemplateSyncWrapsClientError(t *testing.T) {
 	t.Parallel()
 
 	clientErr := errors.New("temporal unavailable")
-	dispatcher := newDispatcher(&recordingWorkflowClient{executeErr: clientErr})
+	dispatcher := NewDispatcher(&recordingWorkflowClient{executeErr: clientErr}, DispatcherOptions{})
 
 	err := dispatcher.StartTemplateSync(context.Background(), domain.TemplateSyncWorkflowInput{
 		SyncID:   domain.TemplateSyncID("template_sync_123"),

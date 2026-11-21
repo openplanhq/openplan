@@ -490,13 +490,7 @@ func (server *Server) handleCreateTemplate(response http.ResponseWriter, request
 		SourceRef: body.SourceRef,
 		RootPath:  body.RootPath,
 	})
-	if err != nil {
-		writeAppError(response, err)
-		return
-	}
-
-	setLocation(response, request, "templates", string(started.Template.ID))
-	writeJSON(response, http.StatusAccepted, newTemplateResponse(started.Template, server.service.Clock.Now()))
+	server.writeSyncStarted(response, request, started, err)
 }
 
 func (server *Server) handleListTemplates(response http.ResponseWriter, request *http.Request) {
@@ -545,13 +539,7 @@ func (server *Server) handleUpdateTemplate(response http.ResponseWriter, request
 		TemplateID: domain.TemplateID(request.PathValue("template_id")),
 		SourceRef:  body.SourceRef,
 	})
-	if err != nil {
-		writeAppError(response, err)
-		return
-	}
-
-	setLocation(response, request, "templates", string(started.Template.ID))
-	writeJSON(response, http.StatusAccepted, newTemplateResponse(started.Template, server.service.Clock.Now()))
+	server.writeSyncStarted(response, request, started, err)
 }
 
 func (server *Server) handleDeleteTemplate(response http.ResponseWriter, request *http.Request) {
@@ -580,13 +568,7 @@ func (server *Server) handleStartTemplateSync(response http.ResponseWriter, requ
 		TenantID:   domain.TenantID(request.PathValue("tenant_id")),
 		TemplateID: domain.TemplateID(request.PathValue("template_id")),
 	})
-	if err != nil {
-		writeAppError(response, err)
-		return
-	}
-
-	setLocation(response, request, "templates", string(started.Template.ID))
-	writeJSON(response, http.StatusAccepted, newTemplateResponse(started.Template, server.service.Clock.Now()))
+	server.writeSyncStarted(response, request, started, err)
 }
 
 func (server *Server) handleListTemplateRevisionsForTemplate(response http.ResponseWriter, request *http.Request) {
@@ -838,13 +820,9 @@ func (server *Server) handleUpdateStackTemplateConfig(response http.ResponseWrit
 	// The edit replaces the whole config, so a missing one would wipe every
 	// value rather than leave them alone; it is sent on as empty, and the
 	// app refuses it. Send {} to clear the config on purpose.
-	var configJSON json.RawMessage
-	if body.Config != nil {
-		var ok bool
-		configJSON, ok = stackTemplateConfigJSON(response, body.Config)
-		if !ok {
-			return
-		}
+	configJSON, ok := stackTemplateConfigJSON(response, body.Config)
+	if !ok {
+		return
 	}
 
 	stackTemplate, err := server.service.UpdateStackTemplateConfig(request.Context(), app.UpdateStackTemplateConfigCommand{
@@ -866,13 +844,9 @@ func (server *Server) handleChangeStackTemplateRevision(response http.ResponseWr
 		return
 	}
 
-	var configJSON json.RawMessage
-	if body.Config != nil {
-		var ok bool
-		configJSON, ok = stackTemplateConfigJSON(response, body.Config)
-		if !ok {
-			return
-		}
+	configJSON, ok := stackTemplateConfigJSON(response, body.Config)
+	if !ok {
+		return
 	}
 
 	stackTemplate, err := server.service.ChangeStackTemplateRevision(request.Context(), app.ChangeStackTemplateRevisionCommand{
@@ -901,13 +875,7 @@ func (server *Server) handleStartTemplateRun(response http.ResponseWriter, reque
 		Operation:       domain.OperationType(body.Operation),
 		AutoApprove:     body.AutoApprove,
 	})
-	if err != nil {
-		writeAppError(response, err)
-		return
-	}
-
-	setLocation(response, request, "template-runs", string(run.ID))
-	writeJSON(response, http.StatusAccepted, newTemplateRunResponse(run))
+	writeRunQueued(response, request, run, err)
 }
 
 func (server *Server) handleGetTemplateRun(response http.ResponseWriter, request *http.Request) {
@@ -1021,14 +989,7 @@ func (server *Server) handleApproveRun(response http.ResponseWriter, request *ht
 		TenantID: domain.TenantID(request.PathValue("tenant_id")),
 		RunID:    domain.TemplateRunID(request.PathValue("run_id")),
 	})
-	if err != nil {
-		writeAppError(response, err)
-		return
-	}
-
-	// The apply is queued, not done: the client follows it at the run.
-	setLocation(response, request, "template-runs", string(run.ID))
-	writeJSON(response, http.StatusAccepted, newTemplateRunResponse(run))
+	writeRunQueued(response, request, run, err)
 }
 
 func (server *Server) handleDiscardRun(response http.ResponseWriter, request *http.Request) {
@@ -1057,9 +1018,35 @@ func setLocation(response http.ResponseWriter, request *http.Request, collection
 	response.Header().Set("Location", "/v1/tenants/"+url.PathEscape(request.PathValue("tenant_id"))+"/"+collection+"/"+url.PathEscape(id))
 }
 
+// writeSyncStarted answers a request that queued a template sync: 202 with
+// the template, its Location the template the client follows the sync at.
+func (server *Server) writeSyncStarted(response http.ResponseWriter, request *http.Request, started app.StartedTemplateSync, err error) {
+	if err != nil {
+		writeAppError(response, err)
+		return
+	}
+	setLocation(response, request, "templates", string(started.Template.ID))
+	writeJSON(response, http.StatusAccepted, newTemplateResponse(started.Template, server.service.Clock.Now()))
+}
+
+// writeRunQueued answers a request that queued a run's plan or apply: 202
+// with the run, which is queued, not done, so the client follows it at its
+// Location.
+func writeRunQueued(response http.ResponseWriter, request *http.Request, run domain.TemplateRun, err error) {
+	if err != nil {
+		writeAppError(response, err)
+		return
+	}
+	setLocation(response, request, "template-runs", string(run.ID))
+	writeJSON(response, http.StatusAccepted, newTemplateRunResponse(run))
+}
+
+// stackTemplateConfigJSON encodes a request's config for the app. A config the
+// request left out stays nil: an install reads that as {}, while an edit or a
+// revision change decides for itself what a missing config means.
 func stackTemplateConfigJSON(response http.ResponseWriter, config map[string]any) (json.RawMessage, bool) {
 	if config == nil {
-		config = map[string]any{}
+		return nil, true
 	}
 	// config was decoded from JSON into a map, so encoding it again can't
 	// fail on anything the caller sent: a failure is the server's.
@@ -1357,12 +1344,17 @@ func (server *Server) handleAssignStackRole(response http.ResponseWriter, reques
 		UserSub:  request.PathValue("user_sub"),
 		Role:     body.Role,
 	})
+	writeAssignedRole(response, result, err)
+}
+
+// writeAssignedRole answers an assign on a stack or the platform: 201 when
+// the person held no role there before, 200 when an existing grant changed.
+// No Location: the grant's URL is the one just requested.
+func writeAssignedRole(response http.ResponseWriter, result app.AssignRoleResult, err error) {
 	if err != nil {
 		writeAppError(response, err)
 		return
 	}
-
-	// No Location: the grant's URL is the one just requested.
 	status := http.StatusOK
 	if result.Created {
 		status = http.StatusCreated
@@ -1414,17 +1406,7 @@ func (server *Server) handleAssignPlatformRole(response http.ResponseWriter, req
 		UserSub:  request.PathValue("user_sub"),
 		Role:     body.Role,
 	})
-	if err != nil {
-		writeAppError(response, err)
-		return
-	}
-
-	// No Location: the grant's URL is the one just requested.
-	status := http.StatusOK
-	if result.Created {
-		status = http.StatusCreated
-	}
-	writeJSON(response, status, result.Grant)
+	writeAssignedRole(response, result, err)
 }
 
 func (server *Server) handleRevokePlatformRole(response http.ResponseWriter, request *http.Request) {
