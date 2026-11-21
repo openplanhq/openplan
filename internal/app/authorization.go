@@ -12,7 +12,7 @@ import (
 
 func requirePrincipal(ctx context.Context) (authentication.Principal, error) {
 	principal, ok := authentication.PrincipalFromContext(ctx)
-	if !ok || principal.Subject == "" {
+	if !ok {
 		return authentication.Principal{}, ErrUnauthenticated
 	}
 	return principal, nil

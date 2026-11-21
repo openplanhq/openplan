@@ -46,7 +46,13 @@ func ContextWithPrincipal(ctx context.Context, principal Principal) context.Cont
 	return context.WithValue(ctx, principalContextKey{}, principal)
 }
 
+// PrincipalFromContext returns the request's principal. One with an empty
+// subject names nobody and reads as absent, so no caller has to refuse it
+// itself.
 func PrincipalFromContext(ctx context.Context) (Principal, bool) {
 	principal, ok := ctx.Value(principalContextKey{}).(Principal)
-	return principal, ok
+	if !ok || principal.Subject == "" {
+		return Principal{}, false
+	}
+	return principal, true
 }

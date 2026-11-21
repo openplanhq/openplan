@@ -1573,9 +1573,8 @@ func (service *Service) RecordSignIn(ctx context.Context, profile UserProfile) e
 
 // SearchUsers matches projected users against the given criteria.
 func (service *Service) SearchUsers(ctx context.Context, command SearchUsersCommand) (Page[UserProfile], error) {
-	principal, ok := authentication.PrincipalFromContext(ctx)
-	if !ok || principal.Subject == "" {
-		return Page[UserProfile]{}, ErrUnauthenticated
+	if _, err := requirePrincipal(ctx); err != nil {
+		return Page[UserProfile]{}, err
 	}
 	command.Query = strings.TrimSpace(command.Query)
 	// Checked before authorization, as the other commands are: the query
