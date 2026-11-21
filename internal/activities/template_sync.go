@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -145,17 +147,25 @@ func (activities *TemplateSyncActivities) SyncTemplate(ctx context.Context, inpu
 		return invalidTemplateSyncOutput("resolve repository head: empty commit sha"), nil
 	}
 
-	templateRoot := filepath.Join(repoPath, rootPath)
-	if err := ensureTemplateRoot(templateRoot); err != nil {
+	// The template is untrusted and git checks symlinks out as symlinks, so
+	// every read goes through an os.Root: a link that leaves the clone fails
+	// instead of reading a file on the api host.
+	repo, err := os.OpenRoot(repoPath)
+	if err != nil {
+		return domain.TemplateSyncActivityOutput{}, fmt.Errorf("open cloned repository: %w", err)
+	}
+	defer repo.Close()
+	if err := checkTemplateRoot(repo, rootPath); err != nil {
 		return invalidTemplateSyncOutput("root path %q: %v", rootPath, err), nil
 	}
+	clone := repo.FS()
 
-	metadata, err := readTemplateMetadata(templateRoot, input.RepoName, rootPath)
+	metadata, err := readTemplateMetadata(clone, rootPath, input.RepoName)
 	if err != nil {
 		return invalidTemplateSyncOutput("read template metadata: %v", err), nil
 	}
 
-	variables, err := inferTemplateVariables(templateRoot)
+	variables, err := inferTemplateVariables(clone, rootPath)
 	if err != nil {
 		return invalidTemplateSyncOutput("infer template variables: %v", err), nil
 	}
@@ -317,15 +327,19 @@ type repoRelativeError struct {
 func (e *repoRelativeError) Error() string { return e.message }
 func (e *repoRelativeError) Unwrap() error { return e.err }
 
-func ensureTemplateRoot(templateRoot string) error {
-	info, err := os.Stat(templateRoot)
-	if errors.Is(err, os.ErrNotExist) {
+// checkTemplateRoot refuses a root that is not a real directory. Lstat, so a
+// root committed as a symlink is refused rather than followed, even to a
+// directory inside the clone.
+func checkTemplateRoot(repo *os.Root, rootPath string) error {
+	info, err := repo.Lstat(rootPath)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
 		return errors.New("directory does not exist")
-	}
-	if err != nil {
+	case err != nil:
 		return err
-	}
-	if !info.IsDir() {
+	case info.Mode()&fs.ModeSymlink != 0:
+		return errors.New("is a symbolic link")
+	case !info.IsDir():
 		return errors.New("is not a directory")
 	}
 	return nil
@@ -337,11 +351,10 @@ type parsedTemplateMetadata struct {
 	Tags        []string
 }
 
-func readTemplateMetadata(root string, repoName string, rootPath string) (parsedTemplateMetadata, error) {
+func readTemplateMetadata(clone fs.FS, rootPath string, repoName string) (parsedTemplateMetadata, error) {
 	metadata := parsedTemplateMetadata{Name: domain.FallbackTemplateName(repoName, rootPath)}
-	path := filepath.Join(root, "template.yaml")
-	body, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
+	body, err := fs.ReadFile(clone, path.Join(rootPath, "template.yaml"))
+	if errors.Is(err, fs.ErrNotExist) {
 		return metadata, nil
 	}
 	if err != nil {
@@ -381,8 +394,8 @@ func cleanTags(tags []string) []string {
 	return cleaned
 }
 
-func inferTemplateVariables(root string) ([]domain.TemplateVariable, error) {
-	entries, err := os.ReadDir(root)
+func inferTemplateVariables(clone fs.FS, rootPath string) ([]domain.TemplateVariable, error) {
+	entries, err := fs.ReadDir(clone, rootPath)
 	if err != nil {
 		return nil, err
 	}
@@ -393,12 +406,12 @@ func inferTemplateVariables(root string) ([]domain.TemplateVariable, error) {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".tf" {
 			continue
 		}
-		path := filepath.Join(root, entry.Name())
-		source, err := os.ReadFile(path)
+		name := path.Join(rootPath, entry.Name())
+		source, err := fs.ReadFile(clone, name)
 		if err != nil {
 			return nil, err
 		}
-		file, diags := parser.ParseHCL(source, path)
+		file, diags := parser.ParseHCL(source, name)
 		if diags.HasErrors() {
 			return nil, fmt.Errorf("%s: %s", entry.Name(), diags.Error())
 		}

@@ -264,6 +264,89 @@ func TestSyncTemplateSupportsRepositoryRootPath(t *testing.T) {
 	}
 }
 
+// Git checks symlinks out as symlinks, and the sync reads on the api host, so
+// a template could link its root, its metadata or a .tf file to any path
+// there. Each such link fails the sync, and the summary names the file in the
+// template, never where the link points.
+func TestSyncTemplateRefusesSymlinksLeavingTheClone(t *testing.T) {
+	t.Parallel()
+
+	// outside stands in for the host: a valid template the sync must not read.
+	outside := t.TempDir()
+	writeFile(t, filepath.Join(outside, "template.yaml"), "name: host\n")
+	writeFile(t, filepath.Join(outside, "variables.tf"), `variable "host" { type = string }`)
+
+	tests := []struct {
+		name string
+		link func(root string) error
+		want string
+	}{
+		{
+			name: "root",
+			link: func(root string) error {
+				if err := os.Remove(root); err != nil {
+					return err
+				}
+				return os.Symlink(outside, root)
+			},
+			want: `root path "modules/vpc": is a symbolic link`,
+		},
+		{
+			name: "template.yaml",
+			link: func(root string) error {
+				return os.Symlink(filepath.Join(outside, "template.yaml"), filepath.Join(root, "template.yaml"))
+			},
+			want: "modules/vpc/template.yaml",
+		},
+		{
+			name: ".tf file",
+			link: func(root string) error {
+				return os.Symlink(filepath.Join(outside, "variables.tf"), filepath.Join(root, "host.tf"))
+			},
+			want: "modules/vpc/host.tf",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			store := &recordingTemplateSyncStore{}
+			git := &fakeGit{head: "abc123", populate: func(repoPath string) error {
+				root := filepath.Join(repoPath, "modules", "vpc")
+				if err := os.MkdirAll(root, 0o700); err != nil {
+					return err
+				}
+				return test.link(root)
+			}}
+			activities := newTestTemplateSyncActivities(t, store, git)
+
+			output, err := activities.SyncTemplate(context.Background(), domain.TemplateSyncActivityInput{
+				TenantID:   domain.TenantID("tenant_123"),
+				TemplateID: domain.TemplateID("source_template_123"),
+				RepoOwner:  "acme",
+				RepoName:   "infra-templates",
+				SourceRef:  "v0.0.1",
+				RootPath:   "modules/vpc",
+			})
+			if err != nil {
+				t.Fatalf("SyncTemplate returned error: %v", err)
+			}
+			if output.Status != domain.TemplateSyncStateInvalid {
+				t.Fatalf("status = %q, want invalid", output.Status)
+			}
+			if store.recorded {
+				t.Fatal("sync recorded a revision read through a symlink")
+			}
+			if !strings.Contains(output.ErrorSummary, test.want) {
+				t.Fatalf("summary = %q, want it to contain %q", output.ErrorSummary, test.want)
+			}
+			if strings.Contains(output.ErrorSummary, outside) {
+				t.Fatalf("summary = %q, must not name the link's target", output.ErrorSummary)
+			}
+		})
+	}
+}
+
 // A real module marks its passwords and keys sensitive; it registers as it is,
 // and the flag travels with the variable so config can refuse a value for it.
 func TestSyncTemplateKeepsSensitiveVariables(t *testing.T) {
