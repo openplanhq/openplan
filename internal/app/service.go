@@ -1554,11 +1554,6 @@ func (service *Service) ListTemplateRevisionsForTemplate(ctx context.Context, co
 	}), nil
 }
 
-// PlatformCapabilities answers the global half of GET /v1/me from OpenFGA.
-func (service *Service) PlatformCapabilities(ctx context.Context) (PlatformCapabilities, error) {
-	return ResolvePlatformCapabilities(ctx, service.Authorization)
-}
-
 // RecordSignIn projects the identity a just-verified token asserted.
 //
 // It runs no authorization check, by design: the caller is the OIDC callback,
@@ -1723,18 +1718,6 @@ func (service *Service) grantViews(ctx context.Context, grants []authorization.G
 		views = append(views, gv)
 	}
 	return views, nil
-}
-
-// listGrantsForStack reads every direct role assignment on one stack. The
-// adapter rejects the entire read response — rather than filtering out the
-// offending tuple — if it contains a structural tuple such as a parent edge,
-// since those are not grants.
-//
-//	stack:abc with alice=owner, bob=viewer
-//	  → [{user:alice, owner}, {user:bob, viewer}], nil
-//	stack:abc with no grants  → nil, nil
-func (service *Service) listGrantsForStack(ctx context.Context, object authorization.Object) ([]authorization.Grant, error) {
-	return service.Authorization.ListGrants(ctx, object)
 }
 
 // convergeGrant leaves subject holding exactly desired on object, and runs
@@ -1935,7 +1918,7 @@ func (service *Service) RevokeStackRole(ctx context.Context, command RevokeStack
 	// transaction. Outside it, two concurrent revokes could each see two owners,
 	// each pass the guard, and leave the stack with none.
 	if err := service.Work.InTx(ctx, func(ctx context.Context, repository TxRepo, _ queue.Enqueuer) error {
-		currentGrants, err := service.listGrantsForStack(ctx, object)
+		currentGrants, err := service.Authorization.ListGrants(ctx, object)
 		if err != nil {
 			return err
 		}

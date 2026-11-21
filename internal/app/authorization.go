@@ -428,9 +428,10 @@ func platformCapabilitiesFrom(results []bool) PlatformCapabilities {
 	}
 }
 
-// ResolvePlatformCapabilities answers every global question in one BatchCheck.
-// An unauthenticated or unconfigured caller is not an error here: /v1/me is
-// reachable before any tuple exists, and a principal that holds nothing is a
+// ResolvePlatformCapabilities answers every global question in one BatchCheck:
+// the global half of GET /v1/me. An unauthenticated caller or a missing
+// authorizer is an error, as for every check. A principal that holds nothing
+// is not: /v1/me is reachable before any tuple exists, so all-false is a
 // legitimate answer rather than a failure.
 func ResolvePlatformCapabilities(ctx context.Context, auth *authorization.Authorization) (PlatformCapabilities, error) {
 	results, err := batchCheckObject(ctx, auth, authorization.Platform, platformCapabilityRelations)

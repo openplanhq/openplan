@@ -325,7 +325,7 @@ func (server *Server) handleMe(response http.ResponseWriter, request *http.Reque
 		writeAppError(response, app.ErrUnauthenticated)
 		return
 	}
-	capabilities, err := server.service.PlatformCapabilities(request.Context())
+	capabilities, err := app.ResolvePlatformCapabilities(request.Context(), server.service.Authorization)
 	if err != nil {
 		writeAppError(response, err)
 		return

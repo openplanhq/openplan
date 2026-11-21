@@ -33,7 +33,6 @@ var unguardedMethods = []string{
 	"ListTemplateRunResourceChanges",
 	"ListTemplateRuns",
 	"ListTemplates",
-	"PlatformCapabilities",
 	// Writes only the caller's own sign-in, so there's nothing to refuse.
 	"RecordSignIn",
 	"SearchUsers",
