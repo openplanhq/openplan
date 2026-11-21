@@ -321,11 +321,11 @@ func NewAuthenticatedServer(service *app.Service, tenantID domain.TenantID, debu
 // and the configured tenant ID.
 func (server *Server) handleMe(response http.ResponseWriter, request *http.Request) {
 	principal, ok := authentication.PrincipalFromContext(request.Context())
-	if !ok || principal.Subject == "" {
+	if !ok {
 		writeAppError(response, app.ErrUnauthenticated)
 		return
 	}
-	capabilities, err := server.service.PlatformCapabilities(request.Context())
+	capabilities, err := app.ResolvePlatformCapabilities(request.Context(), server.service.Authorization)
 	if err != nil {
 		writeAppError(response, err)
 		return
@@ -1462,7 +1462,7 @@ type queueItemResponse struct {
 // their own items.
 func (server *Server) handleListQueue(response http.ResponseWriter, request *http.Request) {
 	principal, ok := authentication.PrincipalFromContext(request.Context())
-	if !ok || principal.Subject == "" {
+	if !ok {
 		writeAppError(response, app.ErrUnauthenticated)
 		return
 	}

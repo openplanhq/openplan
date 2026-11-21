@@ -242,3 +242,16 @@ func TestExpiresAtReportsTheTouchOnlyWhenItLands(t *testing.T) {
 		})
 	}
 }
+
+// A principal with no subject names nobody, so it reads as no principal at all:
+// every caller would otherwise have to refuse it itself, and one that forgot
+// would act for an empty subject.
+func TestPrincipalFromContextRefusesAnEmptySubject(t *testing.T) {
+	ctx := ContextWithPrincipal(context.Background(), Principal{Name: "Ada"})
+	if principal, ok := PrincipalFromContext(ctx); ok {
+		t.Fatalf("PrincipalFromContext = %#v, true; want no principal", principal)
+	}
+	if _, ok := PrincipalFromContext(context.Background()); ok {
+		t.Fatal("PrincipalFromContext found a principal in an empty context")
+	}
+}

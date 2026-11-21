@@ -1,7 +1,6 @@
 package authentication
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"net/http"
@@ -45,15 +44,9 @@ type VerifiedToken struct {
 }
 
 // DisplayName reduces the token's display claims to the one string a UI can
-// show, falling back until something is non-empty.
-//
-// Every claim but sub is optional: a provider is not required to send name,
-// preferred_username, or email, and optionalStringClaim deliberately reports an
-// absent claim as empty rather than rejecting the token. Falling back to the
-// subject last means the answer is never blank — a raw sub is a poor label, but
-// it identifies the right person, which an empty string does not.
+// show.
 func (token VerifiedToken) DisplayName() string {
-	return cmp.Or(token.Name, token.PreferredUsername, token.Email, token.Subject)
+	return displayName(token.Name, token.PreferredUsername, token.Email, token.Subject)
 }
 
 type Verifier interface {

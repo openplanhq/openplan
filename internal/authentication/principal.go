@@ -20,13 +20,24 @@ type Principal struct {
 	ExpiresAt         time.Time
 }
 
-// DisplayName applies the same fallback as VerifiedToken.DisplayName, over the
-// claims copied onto the session row at sign-in. Both exist because the same
-// person is labelled in two places — the app header from this, a grants list
-// from the projection — and a provider that omits `name` should not make one of
-// them blank while the other reads correctly.
+// DisplayName labels the person from the claims copied onto the session row
+// at sign-in.
 func (principal Principal) DisplayName() string {
-	return cmp.Or(principal.Name, principal.PreferredUsername, principal.Email, principal.Subject)
+	return displayName(principal.Name, principal.PreferredUsername, principal.Email, principal.Subject)
+}
+
+// displayName is the one fallback order for a person's label, shared by the
+// verified token and the principal: the same person is labelled in two places
+// (the app header from the principal, a grants list from the projection the
+// token fills), and the two must agree.
+//
+// Every claim but sub is optional: a provider is not required to send name,
+// preferred_username, or email, and optionalStringClaim deliberately reports an
+// absent claim as empty rather than rejecting the token. Falling back to the
+// subject last means the answer is never blank — a raw sub is a poor label, but
+// it identifies the right person, which an empty string does not.
+func displayName(name, preferredUsername, email, subject string) string {
+	return cmp.Or(name, preferredUsername, email, subject)
 }
 
 type principalContextKey struct{}
@@ -35,7 +46,13 @@ func ContextWithPrincipal(ctx context.Context, principal Principal) context.Cont
 	return context.WithValue(ctx, principalContextKey{}, principal)
 }
 
+// PrincipalFromContext returns the request's principal. One with an empty
+// subject names nobody and reads as absent, so no caller has to refuse it
+// itself.
 func PrincipalFromContext(ctx context.Context) (Principal, bool) {
 	principal, ok := ctx.Value(principalContextKey{}).(Principal)
-	return principal, ok
+	if !ok || principal.Subject == "" {
+		return Principal{}, false
+	}
+	return principal, true
 }

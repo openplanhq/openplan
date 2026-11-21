@@ -13,10 +13,36 @@ import (
 var ErrNotFound = errors.New("postgres: not found")
 
 type Store struct {
-	pool             *pgxpool.Pool
-	credentialCipher *encryption.Cipher
-	sessionCipher    *encryption.Cipher
+	pool *pgxpool.Pool
+	// The two ciphers stay separate: SESSION_ENCRYPTION_KEY is required
+	// configuration, while CREDENTIAL_ENCRYPTION_KEY is optional, and a session
+	// row must not fail to write because no one configured customer credential
+	// encryption.
+	credentialCipher storeCipher
+	sessionCipher    storeCipher
 	queueSpecs       *queue.SpecRegistry
+}
+
+// storeCipher is one of the store's ciphers. Until one is configured it
+// refuses with its own unavailable error, so the failure names which key is
+// missing.
+type storeCipher struct {
+	cipher      *encryption.Cipher
+	unavailable error
+}
+
+func (cipher storeCipher) Encrypt(value string) (string, error) {
+	if cipher.cipher == nil {
+		return "", cipher.unavailable
+	}
+	return cipher.cipher.Encrypt(value)
+}
+
+func (cipher storeCipher) Decrypt(value string) (string, error) {
+	if cipher.cipher == nil {
+		return "", cipher.unavailable
+	}
+	return cipher.cipher.Decrypt(value)
 }
 
 // Option configures a Store at construction.
@@ -33,7 +59,11 @@ func WithQueueSpecs(specs *queue.SpecRegistry) Option {
 // NewStore creates a repository store. The credential cipher is injected by the
 // caller from internal/config; the store reads no environment of its own.
 func NewStore(pool *pgxpool.Pool, options ...Option) *Store {
-	store := &Store{pool: pool}
+	store := &Store{
+		pool:             pool,
+		credentialCipher: storeCipher{unavailable: app.ErrCredentialEncryptionUnavailable},
+		sessionCipher:    storeCipher{unavailable: authentication.ErrSessionEncryptionUnavailable},
+	}
 	for _, option := range options {
 		option(store)
 	}
@@ -43,49 +73,23 @@ func NewStore(pool *pgxpool.Pool, options ...Option) *Store {
 // WithCredentialCipher supplies the process-wide credential encryption cipher.
 // Without it, Encrypt and Decrypt return app.ErrCredentialEncryptionUnavailable.
 func WithCredentialCipher(cipher *encryption.Cipher) Option {
-	return func(store *Store) { store.credentialCipher = cipher }
+	return func(store *Store) { store.credentialCipher.cipher = cipher }
 }
 
 // WithSessionCipher supplies the process-wide session encryption cipher, used
-// only for session rows. Without it, encryptSession and decryptSession return
+// only for session rows. Without it, writing or reading a session returns
 // authentication.ErrSessionEncryptionUnavailable.
 func WithSessionCipher(cipher *encryption.Cipher) Option {
-	return func(store *Store) { store.sessionCipher = cipher }
+	return func(store *Store) { store.sessionCipher.cipher = cipher }
 }
 
 // Encrypt protects a credential value with the configured application cipher before persistence.
 func (store *Store) Encrypt(value string) (string, error) {
-	if store.credentialCipher == nil {
-		return "", app.ErrCredentialEncryptionUnavailable
-	}
 	return store.credentialCipher.Encrypt(value)
 }
 
 // Decrypt opens stored credential ciphertext so the control plane can seal it
 // to a run's executor key.
 func (store *Store) Decrypt(value string) (string, error) {
-	if store.credentialCipher == nil {
-		return "", app.ErrCredentialEncryptionUnavailable
-	}
 	return store.credentialCipher.Decrypt(value)
-}
-
-// encryptSession protects a session's ID token with the configured session
-// cipher before persistence. This cipher is separate from credentialCipher:
-// SESSION_ENCRYPTION_KEY is required configuration, while
-// CREDENTIAL_ENCRYPTION_KEY is optional, and a session row must not fail to
-// write because no one configured customer credential encryption.
-func (store *Store) encryptSession(value string) (string, error) {
-	if store.sessionCipher == nil {
-		return "", authentication.ErrSessionEncryptionUnavailable
-	}
-	return store.sessionCipher.Encrypt(value)
-}
-
-// decryptSession opens a stored session's ID token ciphertext.
-func (store *Store) decryptSession(value string) (string, error) {
-	if store.sessionCipher == nil {
-		return "", authentication.ErrSessionEncryptionUnavailable
-	}
-	return store.sessionCipher.Decrypt(value)
 }

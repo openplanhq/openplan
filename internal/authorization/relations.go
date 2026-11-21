@@ -62,7 +62,7 @@ type Relation struct {
 //	NewRelation("can view")  → Relation{}, ErrInvalidInput
 //	NewRelation("")          → Relation{}, ErrInvalidInput
 func NewRelation(name string) (Relation, error) {
-	if !safeRelationName(name) {
+	if !safeTupleToken(name) {
 		return Relation{}, fmt.Errorf("%w: invalid relation name", ErrInvalidInput)
 	}
 	return Relation{value: name}, nil
@@ -103,7 +103,7 @@ func (relation Relation) String() string {
 //	RelationCanView.Valid()  → true
 //	Relation{}.Valid()       → false
 func (relation Relation) Valid() bool {
-	return safeRelationName(relation.value)
+	return safeTupleToken(relation.value)
 }
 
 // Grantable reports whether the grant API may write this relation.
@@ -129,16 +129,6 @@ func (relation Relation) Grantable() bool {
 //	Relation{}.Structural()                    → false
 func (relation Relation) Structural() bool {
 	return structuralRelations[relation.value]
-}
-
-// safeRelationName rejects names that would corrupt a tuple's encoding, using
-// the same character rules as canonicalIdentifier.
-//
-//	safeRelationName("can_view")  → true
-//	safeRelationName("can#view")  → false
-//	safeRelationName("")          → false
-func safeRelationName(name string) bool {
-	return safeTupleToken(name)
 }
 
 // Named relations. must* panics at package init, which can only be a

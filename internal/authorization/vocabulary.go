@@ -4,8 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"unicode"
 	"unicode/utf8"
+
+	"github.com/vishu42/openplan/internal/strval"
 )
 
 // maxObjectLength is OpenFGA's limit on an object, in characters, type prefix
@@ -219,18 +220,9 @@ func (object Object) Valid() bool {
 //	safeTupleToken("a#b")       → false
 //	safeTupleToken("")          → false
 func safeTupleToken(token string) bool {
-	if token == "" || strings.ContainsAny(token, ":#*") {
-		return false
-	}
 	// Invalid UTF-8 can't be stored, so OpenFGA would answer with an error rather
 	// than a decision, and a refusal would read as an outage.
-	if !utf8.ValidString(token) {
-		return false
-	}
-	if strings.IndexFunc(token, unicode.IsSpace) >= 0 || strings.IndexFunc(token, unicode.IsControl) >= 0 {
-		return false
-	}
-	return true
+	return strval.SafeOpaque(token) && utf8.ValidString(token) && !strings.ContainsAny(token, ":#*")
 }
 
 // Grant is a direct, grantable role assignment for a subject on an object.
