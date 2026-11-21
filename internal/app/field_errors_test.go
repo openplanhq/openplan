@@ -105,6 +105,20 @@ func TestValidateTemplateConfigDoesNotRequireASensitiveVariable(t *testing.T) {
 	}
 }
 
+// An install that sends no config at all stores {}: the API passes a missing
+// config on as nil and relies on this to default it.
+func TestValidateTemplateConfigReadsAMissingConfigAsEmpty(t *testing.T) {
+	t.Parallel()
+
+	normalized, err := validateTemplateConfig(nil, nil)
+	if err != nil {
+		t.Fatalf("validateTemplateConfig returned error: %v", err)
+	}
+	if string(normalized) != `{}` {
+		t.Fatalf("normalized = %s, want {}", normalized)
+	}
+}
+
 func TestValidateTemplateConfigRejectsANonObject(t *testing.T) {
 	t.Parallel()
 
