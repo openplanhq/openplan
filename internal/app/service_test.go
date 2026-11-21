@@ -4010,11 +4010,11 @@ func TestDefaultIDGeneratorsMintPrefixedRandomIDs(t *testing.T) {
 	t.Parallel()
 
 	generators := map[string]func() string{
-		"run":            func() string { return string(randomTemplateRunIDGenerator{}.NewTemplateRunID()) },
-		"template_sync":  func() string { return string(randomTemplateSyncIDGenerator{}.NewTemplateSyncID()) },
-		"stack":          func() string { return string(randomStackIDGenerator{}.NewStackID()) },
-		"stack_template": func() string { return string(randomStackTemplateIDGenerator{}.NewStackTemplateID()) },
-		"credential":     func() string { return string(randomCredentialIDGenerator{}.NewCredentialID()) },
+		"run":            func() string { return string(randomIDs{}.NewTemplateRunID()) },
+		"template_sync":  func() string { return string(randomIDs{}.NewTemplateSyncID()) },
+		"stack":          func() string { return string(randomIDs{}.NewStackID()) },
+		"stack_template": func() string { return string(randomIDs{}.NewStackTemplateID()) },
+		"credential":     func() string { return string(randomIDs{}.NewCredentialID()) },
 	}
 
 	for prefix, generate := range generators {

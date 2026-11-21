@@ -8,6 +8,26 @@ import (
 	"time"
 )
 
+// ValidGitHubName reports whether name can be a GitHub owner or repository
+// name: letters, digits, hyphens, underscores and dots. Registration checks it
+// before storing a template, and the sync again before building
+// https://github.com/<owner>/<repo>.git, so both layers hold one rule. "." and
+// ".." are refused: as a path segment they would change which URL is fetched.
+func ValidGitHubName(name string) bool {
+	if name == "" || name == "." || name == ".." {
+		return false
+	}
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case r == '-', r == '_', r == '.':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 // TemplateRevisionStatus identifies template revision validation state.
 type TemplateRevisionStatus string
 

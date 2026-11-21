@@ -278,7 +278,7 @@ func (store *Store) RecordSyncedTemplateRevision(ctx context.Context, syncID dom
 	if revision.TemplateID == "" {
 		return domain.TemplateRevision{}, errors.New("record synced template revision: template ID is required")
 	}
-	tagsJSON, err := encodeTemplateRevisionTags(revision.Tags)
+	tagsJSON, err := encodeJSONArray(revision.Tags)
 	if err != nil {
 		return domain.TemplateRevision{}, fmt.Errorf("marshal template revision tags: %w", err)
 	}
@@ -675,7 +675,7 @@ func scanTemplate(scanner templateScanner) (domain.Template, error) {
 	if !name.Valid {
 		template.Name = domain.FallbackTemplateName(template.RepoName, template.RootPath)
 	}
-	tags, err := decodeTemplateRevisionTags(tagsJSON)
+	tags, err := decodeJSONArray[string](tagsJSON)
 	if err != nil {
 		return domain.Template{}, fmt.Errorf("unmarshal template tags: %w", err)
 	}
@@ -764,12 +764,12 @@ func (store *Store) CreateStack(ctx context.Context, stack domain.Stack) error {
 }
 
 func insertStack(ctx context.Context, tx pgx.Tx, stack domain.Stack) error {
-	tagsJSON, err := encodeStackTags(stack.Tags)
+	tagsJSON, err := encodeJSONObject(stack.Tags)
 	if err != nil {
 		return fmt.Errorf("marshal stack tags: %w", err)
 	}
 
-	credentialIDsJSON, err := encodeStackCredentialIDs(stack.DefaultCredentialIDs)
+	credentialIDsJSON, err := encodeJSONArray(stack.DefaultCredentialIDs)
 	if err != nil {
 		return fmt.Errorf("marshal default credential IDs: %w", err)
 	}
@@ -2085,7 +2085,7 @@ func scanTemplateRevision(scanner templateScanner) (domain.TemplateRevision, err
 	); err != nil {
 		return domain.TemplateRevision{}, err
 	}
-	tags, err := decodeTemplateRevisionTags(tagsJSON)
+	tags, err := decodeJSONArray[string](tagsJSON)
 	if err != nil {
 		return domain.TemplateRevision{}, fmt.Errorf("unmarshal template revision tags: %w", err)
 	}
@@ -2097,66 +2097,44 @@ func scanTemplateRevision(scanner templateScanner) (domain.TemplateRevision, err
 // columns as it reads them, so no tags are stored as an empty array or
 // object. Rows stored as null before that are read as empty.
 
-// encodeTemplateRevisionTags is a revision's tags as stored: [] for none.
-func encodeTemplateRevisionTags(tags []string) ([]byte, error) {
-	if tags == nil {
-		tags = []string{}
+// encodeJSONArray is a list as stored: [] for none.
+func encodeJSONArray[Item any](items []Item) ([]byte, error) {
+	if items == nil {
+		items = []Item{}
 	}
-	return json.Marshal(tags)
+	return json.Marshal(items)
 }
 
-// decodeTemplateRevisionTags reads stored tags, an empty slice for none.
-func decodeTemplateRevisionTags(tagsJSON []byte) ([]string, error) {
-	var tags []string
-	if err := json.Unmarshal(tagsJSON, &tags); err != nil {
+// decodeJSONArray reads a stored list, an empty slice for none.
+func decodeJSONArray[Item any](stored []byte) ([]Item, error) {
+	var items []Item
+	if err := json.Unmarshal(stored, &items); err != nil {
 		return nil, err
 	}
-	if tags == nil {
-		tags = []string{}
+	if items == nil {
+		items = []Item{}
 	}
-	return tags, nil
+	return items, nil
 }
 
-// encodeStackTags is a stack's tags as stored: {} for none.
-func encodeStackTags(tags map[string]string) ([]byte, error) {
-	if tags == nil {
-		tags = map[string]string{}
+// encodeJSONObject is a map as stored: {} for none.
+func encodeJSONObject[Value any](values map[string]Value) ([]byte, error) {
+	if values == nil {
+		values = map[string]Value{}
 	}
-	return json.Marshal(tags)
+	return json.Marshal(values)
 }
 
-// decodeStackTags reads stored stack tags, an empty map for none.
-func decodeStackTags(tagsJSON []byte) (map[string]string, error) {
-	var tags map[string]string
-	if err := json.Unmarshal(tagsJSON, &tags); err != nil {
+// decodeJSONObject reads a stored map, an empty map for none.
+func decodeJSONObject[Value any](stored []byte) (map[string]Value, error) {
+	var values map[string]Value
+	if err := json.Unmarshal(stored, &values); err != nil {
 		return nil, err
 	}
-	if tags == nil {
-		tags = map[string]string{}
+	if values == nil {
+		values = map[string]Value{}
 	}
-	return tags, nil
-}
-
-// encodeStackCredentialIDs is a stack's default credentials as stored: [] for
-// none.
-func encodeStackCredentialIDs(ids []domain.CredentialID) ([]byte, error) {
-	if ids == nil {
-		ids = []domain.CredentialID{}
-	}
-	return json.Marshal(ids)
-}
-
-// decodeStackCredentialIDs reads stored default credentials, an empty slice
-// for none.
-func decodeStackCredentialIDs(idsJSON []byte) ([]domain.CredentialID, error) {
-	var ids []domain.CredentialID
-	if err := json.Unmarshal(idsJSON, &ids); err != nil {
-		return nil, err
-	}
-	if ids == nil {
-		ids = []domain.CredentialID{}
-	}
-	return ids, nil
+	return values, nil
 }
 
 func scanStack(scanner stackScanner) (domain.Stack, error) {
@@ -2180,12 +2158,12 @@ func scanStack(scanner stackScanner) (domain.Stack, error) {
 		return domain.Stack{}, err
 	}
 	stack.Status = domain.StackStatus(status)
-	tags, err := decodeStackTags(tagsJSON)
+	tags, err := decodeJSONObject[string](tagsJSON)
 	if err != nil {
 		return domain.Stack{}, fmt.Errorf("unmarshal stack tags: %w", err)
 	}
 	stack.Tags = tags
-	credentialIDs, err := decodeStackCredentialIDs(credentialIDsJSON)
+	credentialIDs, err := decodeJSONArray[domain.CredentialID](credentialIDsJSON)
 	if err != nil {
 		return domain.Stack{}, fmt.Errorf("unmarshal stack credential IDs: %w", err)
 	}

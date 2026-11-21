@@ -493,3 +493,27 @@ func TestLatestTemplateSyncStatusAt(t *testing.T) {
 		})
 	}
 }
+
+func TestValidGitHubName(t *testing.T) {
+	t.Parallel()
+
+	for name, want := range map[string]bool{
+		"acme":            true,
+		"infra-templates": true,
+		"my_repo.v2":      true,
+		"":                false,
+		".":               false, // would make https://github.com/./<repo>.git
+		"..":              false, // would make https://github.com/../<repo>.git
+		"\tacme":          false, // whitespace; registration trims before it checks
+		"a/b":             false,
+		"a%2fb":           false,
+		"a?b":             false,
+		"a#b":             false,
+		"a@b":             false,
+		"café":            false,
+	} {
+		if got := ValidGitHubName(name); got != want {
+			t.Errorf("ValidGitHubName(%q) = %v, want %v", name, got, want)
+		}
+	}
+}
