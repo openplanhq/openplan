@@ -1357,12 +1357,17 @@ func (server *Server) handleAssignStackRole(response http.ResponseWriter, reques
 		UserSub:  request.PathValue("user_sub"),
 		Role:     body.Role,
 	})
+	writeAssignedRole(response, result, err)
+}
+
+// writeAssignedRole answers an assign on a stack or the platform: 201 when
+// the person held no role there before, 200 when an existing grant changed.
+// No Location: the grant's URL is the one just requested.
+func writeAssignedRole(response http.ResponseWriter, result app.AssignRoleResult, err error) {
 	if err != nil {
 		writeAppError(response, err)
 		return
 	}
-
-	// No Location: the grant's URL is the one just requested.
 	status := http.StatusOK
 	if result.Created {
 		status = http.StatusCreated
@@ -1414,17 +1419,7 @@ func (server *Server) handleAssignPlatformRole(response http.ResponseWriter, req
 		UserSub:  request.PathValue("user_sub"),
 		Role:     body.Role,
 	})
-	if err != nil {
-		writeAppError(response, err)
-		return
-	}
-
-	// No Location: the grant's URL is the one just requested.
-	status := http.StatusOK
-	if result.Created {
-		status = http.StatusCreated
-	}
-	writeJSON(response, status, result.Grant)
+	writeAssignedRole(response, result, err)
 }
 
 func (server *Server) handleRevokePlatformRole(response http.ResponseWriter, request *http.Request) {

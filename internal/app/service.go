@@ -268,10 +268,10 @@ type AssignStackRoleCommand struct {
 	Role     string
 }
 
-// AssignStackRoleResult is the grant as it stands after the call. Created
-// says whether the person held no role on the stack before, which is what
-// separates making a grant from changing one.
-type AssignStackRoleResult struct {
+// AssignRoleResult is a grant as it stands after an assign, on a stack or
+// the platform. Created says whether the person held no role there before,
+// which is what separates making a grant from changing one.
+type AssignRoleResult struct {
 	Grant   GrantView
 	Created bool
 }
@@ -294,13 +294,6 @@ type AssignPlatformRoleCommand struct {
 	TenantID domain.TenantID
 	UserSub  string
 	Role     string
-}
-
-// AssignPlatformRoleResult is AssignStackRoleResult for the platform: Created
-// says the person held no platform role before.
-type AssignPlatformRoleResult struct {
-	Grant   GrantView
-	Created bool
 }
 
 type RevokePlatformRoleCommand struct {
@@ -1780,10 +1773,10 @@ func (service *Service) convergeGrant(ctx context.Context, object authorization.
 }
 
 //nolint:gocognit // Authorization logic; split it only as a reviewed refactor.
-func (service *Service) AssignStackRole(ctx context.Context, command AssignStackRoleCommand) (AssignStackRoleResult, error) {
+func (service *Service) AssignStackRole(ctx context.Context, command AssignStackRoleCommand) (AssignRoleResult, error) {
 	principal, err := service.guardStackWrite(ctx, writeAttempt{Operation: domain.AuditOperationAssignStackRole, TenantID: command.TenantID, TargetID: command.UserSub}, command.StackID, authorization.RelationCanManageAccess)
 	if err != nil {
-		return AssignStackRoleResult{}, err
+		return AssignRoleResult{}, err
 	}
 
 	// Reject an unknown role here rather than letting the handler retry it
@@ -1799,14 +1792,14 @@ func (service *Service) AssignStackRole(ctx context.Context, command AssignStack
 		problems = append(problems, fieldError(ErrInvalidCommand, IssueInvalidFormat, "user_sub is not a valid subject", "user_sub"))
 	}
 	if len(problems) > 0 {
-		return AssignStackRoleResult{}, errors.Join(problems...)
+		return AssignRoleResult{}, errors.Join(problems...)
 	}
 
 	if service.Work == nil {
-		return AssignStackRoleResult{}, fmt.Errorf("unit of work not configured")
+		return AssignRoleResult{}, fmt.Errorf("unit of work not configured")
 	}
 	if err := service.requireUserRepository(); err != nil {
-		return AssignStackRoleResult{}, err
+		return AssignRoleResult{}, err
 	}
 
 	// The projection is the only place openplan knows a person exists, so this
@@ -1816,17 +1809,17 @@ func (service *Service) AssignStackRole(ctx context.Context, command AssignStack
 	// made "can this user be granted?" depend on deployment wiring.
 	profiles, err := service.Users.UsersBySubs(ctx, []string{command.UserSub})
 	if err != nil {
-		return AssignStackRoleResult{}, err
+		return AssignRoleResult{}, err
 	}
 	target, known := profiles[command.UserSub]
 	if !known {
-		return AssignStackRoleResult{}, fieldError(ErrUserNotProvisioned, IssueNotSignedIn,
+		return AssignRoleResult{}, fieldError(ErrUserNotProvisioned, IssueNotSignedIn,
 			"that person hasn't signed in to openplan yet; they need to sign in once before a role can be granted", "user_sub")
 	}
 
 	object, err := authorization.ObjectFromID(authorization.TypeStack, string(command.StackID))
 	if err != nil {
-		return AssignStackRoleResult{}, fmt.Errorf("assign role stack: %w", err)
+		return AssignRoleResult{}, fmt.Errorf("assign role stack: %w", err)
 	}
 
 	// Everything below runs inside the transaction, including the read the
@@ -1875,14 +1868,14 @@ func (service *Service) AssignStackRole(ctx context.Context, command AssignStack
 				Reason:     domain.AuditReasonLastOwner,
 				TargetID:   command.UserSub,
 			})
-			return AssignStackRoleResult{}, err
+			return AssignRoleResult{}, err
 		}
-		return AssignStackRoleResult{}, fmt.Errorf("assign stack role: %w", err)
+		return AssignRoleResult{}, fmt.Errorf("assign stack role: %w", err)
 	}
 
 	// The display fields come from the lookup already done above, so the
 	// caller can render the new row without re-reading the grants list.
-	return AssignStackRoleResult{
+	return AssignRoleResult{
 		Grant: GrantView{
 			UserSub:     command.UserSub,
 			Role:        command.Role,
@@ -2009,10 +2002,10 @@ func (service *Service) ListPlatformGrants(ctx context.Context, command ListPlat
 // AssignPlatformRole sets one person's platform role, as AssignStackRole does
 // for a stack, with no last-admin guard: root can't be revoked through the
 // API, so the platform stays administrable whoever gives up admin.
-func (service *Service) AssignPlatformRole(ctx context.Context, command AssignPlatformRoleCommand) (AssignPlatformRoleResult, error) {
+func (service *Service) AssignPlatformRole(ctx context.Context, command AssignPlatformRoleCommand) (AssignRoleResult, error) {
 	principal, err := service.guardPlatformWrite(ctx, writeAttempt{Operation: domain.AuditOperationAssignPlatformRole, TenantID: command.TenantID, TargetID: command.UserSub}, authorization.RelationCanManagePlatformAccess)
 	if err != nil {
-		return AssignPlatformRoleResult{}, err
+		return AssignRoleResult{}, err
 	}
 
 	// Role and sub are checked together, so one response reports both.
@@ -2026,24 +2019,24 @@ func (service *Service) AssignPlatformRole(ctx context.Context, command AssignPl
 		problems = append(problems, fieldError(ErrInvalidCommand, IssueInvalidFormat, "user_sub is not a valid subject", "user_sub"))
 	}
 	if len(problems) > 0 {
-		return AssignPlatformRoleResult{}, errors.Join(problems...)
+		return AssignRoleResult{}, errors.Join(problems...)
 	}
 
 	if service.Work == nil {
-		return AssignPlatformRoleResult{}, fmt.Errorf("unit of work not configured")
+		return AssignRoleResult{}, fmt.Errorf("unit of work not configured")
 	}
 	if err := service.requireUserRepository(); err != nil {
-		return AssignPlatformRoleResult{}, err
+		return AssignRoleResult{}, err
 	}
 	// Someone who has never signed in has no projected row, and can't be
 	// granted anything, here as on a stack.
 	profiles, err := service.Users.UsersBySubs(ctx, []string{command.UserSub})
 	if err != nil {
-		return AssignPlatformRoleResult{}, err
+		return AssignRoleResult{}, err
 	}
 	target, known := profiles[command.UserSub]
 	if !known {
-		return AssignPlatformRoleResult{}, fieldError(ErrUserNotProvisioned, IssueNotSignedIn,
+		return AssignRoleResult{}, fieldError(ErrUserNotProvisioned, IssueNotSignedIn,
 			"that person hasn't signed in to openplan yet; they need to sign in once before a role can be granted", "user_sub")
 	}
 
@@ -2064,10 +2057,10 @@ func (service *Service) AssignPlatformRole(ctx context.Context, command AssignPl
 			Outcome:      domain.AuditOutcomeSuccess,
 		})
 	}); err != nil {
-		return AssignPlatformRoleResult{}, fmt.Errorf("assign platform role: %w", err)
+		return AssignRoleResult{}, fmt.Errorf("assign platform role: %w", err)
 	}
 
-	return AssignPlatformRoleResult{
+	return AssignRoleResult{
 		Grant: GrantView{
 			UserSub:     command.UserSub,
 			Role:        command.Role,
