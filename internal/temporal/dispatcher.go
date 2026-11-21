@@ -10,12 +10,14 @@ import (
 	"go.temporal.io/sdk/client"
 )
 
-type workflowClient interface {
+// WorkflowClient is the part of a Temporal client the dispatcher uses;
+// client.Client satisfies it, and tests pass a recording fake.
+type WorkflowClient interface {
 	ExecuteWorkflow(context.Context, client.StartWorkflowOptions, any, ...any) (client.WorkflowRun, error)
 }
 
 type Dispatcher struct {
-	client  workflowClient
+	client  WorkflowClient
 	options DispatcherOptions
 }
 
@@ -27,16 +29,8 @@ type DispatcherOptions struct {
 	TerraformTimeout time.Duration
 }
 
-func NewDispatcher(temporalClient client.Client, options DispatcherOptions) *Dispatcher {
-	return newDispatcher(temporalClient, options)
-}
-
-func newDispatcher(temporalClient workflowClient, options ...DispatcherOptions) *Dispatcher {
-	dispatcher := &Dispatcher{client: temporalClient}
-	if len(options) > 0 {
-		dispatcher.options = options[0]
-	}
-	return dispatcher
+func NewDispatcher(temporalClient WorkflowClient, options DispatcherOptions) *Dispatcher {
+	return &Dispatcher{client: temporalClient, options: options}
 }
 
 // StartTemplatePlan dispatches one TemplatePlanWorkflow execution to Temporal.
