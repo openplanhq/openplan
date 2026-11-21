@@ -39,6 +39,11 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
+// The API's log reader is an artifacts.LogStore, and runWithDependencies
+// reads plan changes through it by type assertion; this keeps the assertion
+// from silently failing if LogStore stops serving them.
+var _ activities.PlanChangesReader = artifacts.LogStore{}
+
 type postgresPool interface {
 	Ping(context.Context) error
 	Close()
@@ -446,7 +451,8 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 	go authentication.ReapSessions(reaperCtx, sessions, authentication.DefaultSessionReapInterval, nil)
 
 	// The log reader is the artifact store's, which also holds what each
-	// plan's executor uploaded of its resource changes.
+	// plan's executor uploaded of its resource changes; the var _ assertion
+	// under the imports keeps that true at compile time.
 	planChanges, _ := logReader.(activities.PlanChangesReader)
 	stopControlPlane, err := startControlPlane(ctx, cfg, deps, store, liveLogs, planChanges)
 	if err != nil {
