@@ -33,13 +33,18 @@ type ObjectStore interface {
 	DeleteObject(ctx context.Context, key string) error
 }
 
+// LogStore reads and writes run logs. It also serves the plan changes each
+// executor uploaded, from the same object store: the API holds one artifact
+// store for everything it reads, and wires it as the control activities'
+// plan changes reader.
 type LogStore struct {
+	PlanChangesStore
 	store ObjectStore
 	now   func() time.Time
 }
 
 func NewLogStore(store ObjectStore) LogStore {
-	return LogStore{store: store, now: time.Now}
+	return LogStore{PlanChangesStore: NewPlanChangesStore(store), store: store, now: time.Now}
 }
 
 // PutTemplateRunLog uploads one command's log and returns the metadata describing
@@ -80,18 +85,6 @@ func (store LogStore) ReadTemplateRunLog(ctx context.Context, log domain.Templat
 		return nil, fmt.Errorf("get template run log: %w", err)
 	}
 	return content, nil
-}
-
-// GetPlanChanges reads a run's uploaded plan changes through the log
-// store's object store: the API holds one store for everything it reads.
-func (store LogStore) GetPlanChanges(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) ([]byte, error) {
-	return NewPlanChangesStore(store.store).GetPlanChanges(ctx, tenantID, runID)
-}
-
-// DeletePlanChanges deletes a run's uploaded plan changes through the log
-// store's object store.
-func (store LogStore) DeletePlanChanges(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) error {
-	return NewPlanChangesStore(store.store).DeletePlanChanges(ctx, tenantID, runID)
 }
 
 // PlanStore keeps a run's saved plan: the encrypted bundle the plan phase
