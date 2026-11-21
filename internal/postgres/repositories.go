@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/vishu42/openplan/internal/app"
 	"github.com/vishu42/openplan/internal/domain"
+	"github.com/vishu42/openplan/internal/queue"
 )
 
 func createTemplateSync(ctx context.Context, exec pgxExecutor, templateSync domain.TemplateSync) error {
@@ -748,19 +749,14 @@ func (store *Store) ListTemplateRevisionsBySourcePage(ctx context.Context, tenan
 	return templateRevisions, nil
 }
 
+// CreateStack, CreateTemplateRun and ApproveTemplateRun each make their write
+// in a unit of work of its own. The service makes these writes through
+// InTx's repository, alongside the writes they commit with; these serve the
+// repository ports' other callers.
 func (store *Store) CreateStack(ctx context.Context, stack domain.Stack) error {
-	tx, err := store.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin create stack: %w", err)
-	}
-	defer tx.Rollback(ctx)
-	if err := insertStack(ctx, tx, stack); err != nil {
-		return err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit create stack: %w", err)
-	}
-	return nil
+	return store.InTx(ctx, func(ctx context.Context, repo app.TxRepo, _ queue.Enqueuer) error {
+		return repo.CreateStack(ctx, stack)
+	})
 }
 
 func insertStack(ctx context.Context, tx pgx.Tx, stack domain.Stack) error {
@@ -1192,22 +1188,13 @@ func (store *Store) UpdateStackTemplateDesiredRevision(ctx context.Context, tena
 }
 
 func (store *Store) CreateTemplateRun(ctx context.Context, run domain.TemplateRun) (int, error) {
-	tx, err := store.pool.Begin(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("begin create template run: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	runNumber, err := createTemplateRun(ctx, tx, run)
-	if err != nil {
-		return 0, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return 0, fmt.Errorf("commit template run: %w", err)
-	}
-
-	return runNumber, nil
+	var runNumber int
+	err := store.InTx(ctx, func(ctx context.Context, repo app.TxRepo, _ queue.Enqueuer) error {
+		var err error
+		runNumber, err = repo.CreateTemplateRun(ctx, run)
+		return err
+	})
+	return runNumber, err
 }
 
 // createTemplateRun inserts run and returns the run number it was assigned. The
@@ -1676,21 +1663,9 @@ func scanTemplateRunLog(row pgx.Row) (domain.TemplateRunLog, error) {
 }
 
 func (store *Store) ApproveTemplateRun(ctx context.Context, approval domain.TemplateRunApproval) error {
-	tx, err := store.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin approve template run: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
-	if err := approveTemplateRun(ctx, tx, approval); err != nil {
-		return err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit approve template run: %w", err)
-	}
-
-	return nil
+	return store.InTx(ctx, func(ctx context.Context, repo app.TxRepo, _ queue.Enqueuer) error {
+		return repo.ApproveTemplateRun(ctx, approval)
+	})
 }
 
 func approveTemplateRun(ctx context.Context, exec pgxExecutor, approval domain.TemplateRunApproval) error {
