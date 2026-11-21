@@ -138,10 +138,7 @@ func (store PlanStore) DeletePlan(ctx context.Context, tenantID domain.TenantID,
 // filesystem store every executor must share the root: a run's apply can land
 // on a different executor from its plan.
 func PlanKey(tenantID domain.TenantID, runID domain.TemplateRunID) (string, error) {
-	if !safePathComponent(string(tenantID)) || !safePathComponent(string(runID)) {
-		return "", fmt.Errorf("tenant ID and run ID must be safe path components")
-	}
-	return path.Join("tenants", string(tenantID), "runs", string(runID), "plan", "tfplan.bundle.enc"), nil
+	return runKey(tenantID, runID, "plan", "tfplan.bundle.enc")
 }
 
 // PlanChangesStore keeps a plan's resource changes, already masked on the
@@ -198,17 +195,27 @@ func (store PlanChangesStore) DeletePlanChanges(ctx context.Context, tenantID do
 // PlanChangesKey is where a run's plan's resource changes live, beside its
 // saved plan. A run has one plan, so the key needs nothing but the run.
 func PlanChangesKey(tenantID domain.TenantID, runID domain.TemplateRunID) (string, error) {
-	if !safePathComponent(string(tenantID)) || !safePathComponent(string(runID)) {
-		return "", fmt.Errorf("tenant ID and run ID must be safe path components")
-	}
-	return path.Join("tenants", string(tenantID), "runs", string(runID), "plan", "changes.json"), nil
+	return runKey(tenantID, runID, "plan", "changes.json")
 }
 
 func LogKey(tenantID domain.TenantID, runID domain.TemplateRunID, name string) (string, error) {
-	if !safePathComponent(string(tenantID)) || !safePathComponent(string(runID)) || !safePathComponent(name) {
-		return "", fmt.Errorf("tenant ID, run ID, and log name must be safe path components")
+	// The name is checked before ".log" is added: checked after, an empty or
+	// blank name would pass as ".log" or " .log".
+	if !safePathComponent(name) {
+		return "", fmt.Errorf("log name must be a safe path component")
 	}
-	return path.Join("tenants", string(tenantID), "runs", string(runID), "logs", name+".log"), nil
+	return runKey(tenantID, runID, "logs", name+".log")
+}
+
+// runKey is where one of a run's objects lives:
+// tenants/<tenant>/runs/<run>/<parts...>. The tenant and run come from
+// requests, so both are checked before they become path segments; parts are
+// the caller's own constants or already checked.
+func runKey(tenantID domain.TenantID, runID domain.TemplateRunID, parts ...string) (string, error) {
+	if !safePathComponent(string(tenantID)) || !safePathComponent(string(runID)) {
+		return "", fmt.Errorf("tenant ID and run ID must be safe path components")
+	}
+	return path.Join(append([]string{"tenants", string(tenantID), "runs", string(runID)}, parts...)...), nil
 }
 
 type FilesystemStore struct {

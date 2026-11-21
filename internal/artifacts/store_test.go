@@ -35,12 +35,25 @@ func TestLogKeyScopesByTenantRunAndPhase(t *testing.T) {
 func TestLogKeyRejectsUnsafeComponents(t *testing.T) {
 	t.Parallel()
 
-	_, err := LogKey(domain.TenantID("tenant_123"), domain.TemplateRunID("run_123"), "../plan")
-	if err == nil {
-		t.Fatal("LogKey returned nil error for unsafe phase")
-	}
-	if !strings.Contains(err.Error(), "safe path") {
-		t.Fatalf("error = %q, want safe path context", err.Error())
+	for _, tc := range []struct {
+		tenantID domain.TenantID
+		runID    domain.TemplateRunID
+		name     string
+	}{
+		{"tenant_123", "run_123", "../plan"},
+		// Checked before ".log" is added, or these would pass as ".log".
+		{"tenant_123", "run_123", ""},
+		{"tenant_123", "run_123", " "},
+		{"tenant_123", "../run", "plan"},
+		{"..", "run_123", "plan"},
+	} {
+		_, err := LogKey(tc.tenantID, tc.runID, tc.name)
+		if err == nil {
+			t.Fatalf("LogKey(%q, %q, %q) returned nil error", tc.tenantID, tc.runID, tc.name)
+		}
+		if !strings.Contains(err.Error(), "safe path") {
+			t.Fatalf("error = %q, want safe path context", err.Error())
+		}
 	}
 }
 
