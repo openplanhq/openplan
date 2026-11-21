@@ -40,7 +40,7 @@ func recordPlanChanges(ctx context.Context, tx pgx.Tx, tenantID domain.TenantID,
 			change.Address, change.PreviousAddress, change.ModuleAddress,
 			change.Mode, change.Type, change.Name, change.ProviderName, change.Deposed,
 			string(change.Action), change.CreateBeforeDestroy, change.ActionReason, change.ImportingID,
-			jsonbValue(change.ReplacePaths), jsonbValue(change.Before), jsonbValue(change.After),
+			nullJSON(change.ReplacePaths), nullJSON(change.Before), nullJSON(change.After),
 		}
 	}
 	if _, err := tx.CopyFrom(ctx, pgx.Identifier{"template_run_resource_changes"}, []string{
@@ -64,15 +64,6 @@ func recordPlanChanges(ctx context.Context, tx pgx.Tx, tenantID domain.TenantID,
 		return fmt.Errorf("record plan changes state: %w", err)
 	}
 	return nil
-}
-
-// jsonbValue is a value for a jsonb column: SQL null when there is none,
-// otherwise the JSON text as it is.
-func jsonbValue(raw json.RawMessage) any {
-	if len(raw) == 0 {
-		return nil
-	}
-	return string(raw)
 }
 
 // ListTemplateRunResourceChangesPage returns up to limit of a run's resource

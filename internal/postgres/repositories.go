@@ -813,9 +813,27 @@ func insertStack(ctx context.Context, tx pgx.Tx, stack domain.Stack) error {
 }
 
 func (store *Store) GetStack(ctx context.Context, tenantID domain.TenantID, stackID domain.StackID) (domain.Stack, error) {
-	stack, err := store.getStack(ctx, tenantID, stackID)
+	row := store.pool.QueryRow(ctx, `
+		select
+			id,
+			tenant_id,
+			name,
+			slug,
+			status,
+			tags_json,
+			default_credential_ids_json,
+			created_by,
+			created_at
+		from stacks
+		where tenant_id = $1
+			and id = $2
+	`, tenantID, stackID)
+	stack, err := scanStack(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Stack{}, app.ErrNotFound
+	}
 	if err != nil {
-		return domain.Stack{}, err
+		return domain.Stack{}, fmt.Errorf("get stack: %w", err)
 	}
 	return stack, nil
 }
@@ -903,7 +921,7 @@ func (store *Store) ListStacksPage(ctx context.Context, tenantID domain.TenantID
 }
 
 func (store *Store) GetStackWithTemplates(ctx context.Context, tenantID domain.TenantID, stackID domain.StackID) (app.StackView, error) {
-	stack, err := store.getStack(ctx, tenantID, stackID)
+	stack, err := store.GetStack(ctx, tenantID, stackID)
 	if err != nil {
 		return app.StackView{}, err
 	}
@@ -2165,32 +2183,6 @@ func scanStack(scanner stackScanner) (domain.Stack, error) {
 		return domain.Stack{}, fmt.Errorf("unmarshal stack credential IDs: %w", err)
 	}
 	stack.DefaultCredentialIDs = credentialIDs
-	return stack, nil
-}
-
-func (store *Store) getStack(ctx context.Context, tenantID domain.TenantID, stackID domain.StackID) (domain.Stack, error) {
-	row := store.pool.QueryRow(ctx, `
-		select
-			id,
-			tenant_id,
-			name,
-			slug,
-			status,
-			tags_json,
-			default_credential_ids_json,
-			created_by,
-			created_at
-		from stacks
-		where tenant_id = $1
-			and id = $2
-	`, tenantID, stackID)
-	stack, err := scanStack(row)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.Stack{}, app.ErrNotFound
-	}
-	if err != nil {
-		return domain.Stack{}, fmt.Errorf("get stack: %w", err)
-	}
 	return stack, nil
 }
 
