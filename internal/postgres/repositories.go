@@ -470,10 +470,7 @@ func changeTemplateRef(ctx context.Context, exec pgxExecutor, tenantID domain.Te
 	if result.RowsAffected() == 0 {
 		return domain.Template{}, app.ErrNotFound
 	}
-	changed, err := scanTemplate(exec.QueryRow(ctx, selectTemplatesSQL+`
-		where st.tenant_id = $1
-			and st.id = $2
-	`, tenantID, id))
+	changed, err := selectTemplate(ctx, exec, tenantID, id)
 	if err != nil {
 		return domain.Template{}, fmt.Errorf("read changed template: %w", err)
 	}
@@ -481,10 +478,7 @@ func changeTemplateRef(ctx context.Context, exec pgxExecutor, tenantID domain.Te
 }
 
 func (store *Store) GetTemplate(ctx context.Context, tenantID domain.TenantID, id domain.TemplateID) (domain.Template, error) {
-	template, err := scanTemplate(store.pool.QueryRow(ctx, selectTemplatesSQL+`
-		where st.tenant_id = $1
-			and st.id = $2
-	`, tenantID, id))
+	template, err := selectTemplate(ctx, store.pool, tenantID, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Template{}, app.ErrNotFound
 	}
@@ -492,6 +486,13 @@ func (store *Store) GetTemplate(ctx context.Context, tenantID domain.TenantID, i
 		return domain.Template{}, fmt.Errorf("get template: %w", err)
 	}
 	return template, nil
+}
+
+func selectTemplate(ctx context.Context, exec pgxExecutor, tenantID domain.TenantID, id domain.TemplateID) (domain.Template, error) {
+	return scanTemplate(exec.QueryRow(ctx, selectTemplatesSQL+`
+		where st.tenant_id = $1
+			and st.id = $2
+	`, tenantID, id))
 }
 
 // DeleteTemplate deletes the tenant's template; its revisions, their
