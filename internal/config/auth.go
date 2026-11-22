@@ -215,8 +215,8 @@ func loadRootConfig(getenv func(string) string) (RootConfig, error) {
 	if subject == "" {
 		return RootConfig{}, configError("OPENPLAN_ROOT_SUBJECT is required: it names the identity-provider user a fresh install is administered from")
 	}
-	if !strval.SafeOpaque(subject) {
-		return RootConfig{}, configError("OPENPLAN_ROOT_SUBJECT must not contain whitespace or control characters")
+	if err := safeOpaque("OPENPLAN_ROOT_SUBJECT", subject); err != nil {
+		return RootConfig{}, err
 	}
 	return RootConfig{Subject: subject}, nil
 }
@@ -236,14 +236,14 @@ func loadOIDCConfig(getenv func(string) string) (OIDCConfig, error) {
 	if err != nil {
 		return OIDCConfig{}, err
 	}
-	if clientID == "" {
-		return OIDCConfig{}, configError("OIDC_CLIENT_ID is required")
+	if err := requireAll(setting{"OIDC_CLIENT_ID", clientID}); err != nil {
+		return OIDCConfig{}, err
 	}
-	if !strval.SafeOpaque(clientID) {
-		return OIDCConfig{}, configError("OIDC_CLIENT_ID must not contain whitespace or control characters")
+	if err := safeOpaque("OIDC_CLIENT_ID", clientID); err != nil {
+		return OIDCConfig{}, err
 	}
-	if clientSecret.Empty() {
-		return OIDCConfig{}, configError("OIDC_CLIENT_SECRET is required")
+	if err := requireAll(setting{"OIDC_CLIENT_SECRET", clientSecret.Value()}); err != nil {
+		return OIDCConfig{}, err
 	}
 	return OIDCConfig{IssuerURL: issuerURL, ClientID: clientID, ClientSecret: clientSecret}, nil
 }
@@ -260,8 +260,8 @@ func loadOIDCConfig(getenv func(string) string) (OIDCConfig, error) {
 //	"  acme " → StoreName "acme"
 func loadOpenFGAConfig(getenv func(string) string) (OpenFGAConfig, error) {
 	storeName := optionalString(getenv, "OPENFGA_STORE_NAME", DefaultOpenFGAStoreName)
-	if !strval.SafeOpaque(storeName) {
-		return OpenFGAConfig{}, configError("OPENFGA_STORE_NAME must not contain whitespace or control characters")
+	if err := safeOpaque("OPENFGA_STORE_NAME", storeName); err != nil {
+		return OpenFGAConfig{}, err
 	}
 	return OpenFGAConfig{StoreName: storeName}, nil
 }
@@ -289,6 +289,28 @@ func parseAbsoluteURL(name, raw string) (*url.URL, error) {
 		return nil, configError("%s must not include a fragment", name)
 	}
 	return parsed, nil
+}
+
+// setting is a configured value under the name an operator set it by.
+type setting struct{ name, value string }
+
+// requireAll refuses the first setting, in order, that is empty.
+func requireAll(settings ...setting) error {
+	for _, s := range settings {
+		if s.value == "" {
+			return configError("%s is required", s.name)
+		}
+	}
+	return nil
+}
+
+// safeOpaque refuses an identifier strval.SafeOpaque would not transmit
+// uninterpreted.
+func safeOpaque(name, value string) error {
+	if !strval.SafeOpaque(value) {
+		return configError("%s must not contain whitespace or control characters", name)
+	}
+	return nil
 }
 
 func optionalString(getenv func(string) string, name, fallback string) string {

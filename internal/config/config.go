@@ -201,14 +201,8 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	}
 	cfg.TerraformTimeout = terraformTimeout
 
-	if cfg.PostgresURL == "" {
-		return APIConfig{}, configError("POSTGRES_URL is required")
-	}
-	if cfg.TemporalAddress == "" {
-		return APIConfig{}, configError("TEMPORAL_ADDRESS is required")
-	}
-	if cfg.ValkeyURL == "" {
-		return APIConfig{}, configError("VALKEY_URL is required")
+	if err := requireAll(setting{"POSTGRES_URL", cfg.PostgresURL}, setting{"TEMPORAL_ADDRESS", cfg.TemporalAddress}, setting{"VALKEY_URL", cfg.ValkeyURL}); err != nil {
+		return APIConfig{}, err
 	}
 
 	return cfg, nil
@@ -264,11 +258,8 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 	if hosts := sandboxAddresses(cfg.Sandbox.Subnet); hosts < cfg.MaxSessions {
 		return ExecutorConfig{}, configError("EXECUTOR_SANDBOX_SUBNET %s holds %d sandbox addresses, fewer than EXECUTOR_MAX_SESSIONS (%d)", cfg.Sandbox.Subnet, hosts, cfg.MaxSessions)
 	}
-	if cfg.TemporalAddress == "" {
-		return ExecutorConfig{}, configError("TEMPORAL_ADDRESS is required")
-	}
-	if cfg.ValkeyURL == "" {
-		return ExecutorConfig{}, configError("VALKEY_URL is required")
+	if err := requireAll(setting{"TEMPORAL_ADDRESS", cfg.TemporalAddress}, setting{"VALKEY_URL", cfg.ValkeyURL}); err != nil {
+		return ExecutorConfig{}, err
 	}
 
 	return cfg, nil
@@ -360,17 +351,13 @@ func loadArtifactStoreConfig(getenv func(string) string) (ArtifactStoreConfig, e
 	case ArtifactStoreFilesystem:
 		return cfg, nil
 	case ArtifactStoreS3:
-		if cfg.S3.Bucket == "" {
-			return ArtifactStoreConfig{}, configError("S3_BUCKET is required")
-		}
-		if cfg.S3.Region == "" {
-			return ArtifactStoreConfig{}, configError("S3_REGION is required")
-		}
-		if cfg.S3.AccessKeyID == "" {
-			return ArtifactStoreConfig{}, configError("S3_ACCESS_KEY_ID is required")
-		}
-		if cfg.S3.SecretAccessKey == "" {
-			return ArtifactStoreConfig{}, configError("S3_SECRET_ACCESS_KEY is required")
+		if err := requireAll(
+			setting{"S3_BUCKET", cfg.S3.Bucket},
+			setting{"S3_REGION", cfg.S3.Region},
+			setting{"S3_ACCESS_KEY_ID", cfg.S3.AccessKeyID},
+			setting{"S3_SECRET_ACCESS_KEY", cfg.S3.SecretAccessKey},
+		); err != nil {
+			return ArtifactStoreConfig{}, err
 		}
 		return cfg, nil
 	default:
