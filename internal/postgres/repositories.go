@@ -644,12 +644,12 @@ const selectTemplatesSQL = `
 	) ls on true
 `
 
-func scanTemplate(scanner templateScanner) (domain.Template, error) {
+func scanTemplate(row pgx.Row) (domain.Template, error) {
 	var template domain.Template
 	var name sql.NullString
 	var tagsJSON []byte
 	var sync latestTemplateSyncColumns
-	if err := scanner.Scan(
+	if err := row.Scan(
 		&template.ID,
 		&template.TenantID,
 		&template.RepoOwner,
@@ -1990,19 +1990,7 @@ const templateRevisionColumns = `
 	created_at
 `
 
-type stackTemplateScanner interface {
-	Scan(dest ...any) error
-}
-
-type stackScanner interface {
-	Scan(dest ...any) error
-}
-
-type templateScanner interface {
-	Scan(dest ...any) error
-}
-
-func scanStackTemplate(scanner stackTemplateScanner) (domain.StackTemplate, error) {
+func scanStackTemplate(row pgx.Row) (domain.StackTemplate, error) {
 	var stackTemplate domain.StackTemplate
 	var configJSON []byte
 	var desiredConfigJSON []byte
@@ -2011,7 +1999,7 @@ func scanStackTemplate(scanner stackTemplateScanner) (domain.StackTemplate, erro
 	var lastAppliedAt sql.NullTime
 	var lastPlannedAt sql.NullTime
 
-	if err := scanner.Scan(
+	if err := row.Scan(
 		&stackTemplate.ID,
 		&stackTemplate.TenantID,
 		&stackTemplate.StackID,
@@ -2053,11 +2041,11 @@ func scanStackTemplate(scanner stackTemplateScanner) (domain.StackTemplate, erro
 	return stackTemplate, nil
 }
 
-func scanTemplateRevision(scanner templateScanner) (domain.TemplateRevision, error) {
+func scanTemplateRevision(row pgx.Row) (domain.TemplateRevision, error) {
 	var templateRevision domain.TemplateRevision
 	var tagsJSON []byte
 
-	if err := scanner.Scan(
+	if err := row.Scan(
 		&templateRevision.ID,
 		&templateRevision.TenantID,
 		&templateRevision.TemplateID,
@@ -2127,14 +2115,14 @@ func decodeJSONObject[Value any](stored []byte) (map[string]Value, error) {
 	return values, nil
 }
 
-func scanStack(scanner stackScanner) (domain.Stack, error) {
+func scanStack(row pgx.Row) (domain.Stack, error) {
 	var stack domain.Stack
 	var tagsJSON []byte
 	var credentialIDsJSON []byte
 
 	var status string
 
-	if err := scanner.Scan(
+	if err := row.Scan(
 		&stack.ID,
 		&stack.TenantID,
 		&stack.Name,
