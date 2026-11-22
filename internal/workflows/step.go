@@ -15,7 +15,7 @@ type Recorder[S ~string] interface {
 // ExecuteStep records step, then schedules activity on ctx: it is
 // workflow.ExecuteActivity for the activity that is the step. Work that only
 // prepares a step, such as sealing a secret on the control plane for the
-// executor, runs before it with workflow.ExecuteActivity. Only a step with no
+// executor, runs before it with execute. Only a step with no
 // activity calls Record itself.
 //
 // The record completes before the activity is scheduled, so a slow step shows
@@ -28,4 +28,11 @@ func ExecuteStep[S ~string](ctx workflow.Context, r Recorder[S], step S, activit
 		return future
 	}
 	return workflow.ExecuteActivity(ctx, activity, args...)
+}
+
+// execute schedules activity on ctx and waits for its result in out, which is
+// nil for an activity that returns only an error: every activity the
+// workflows schedule outside ExecuteStep is waited for before they go on.
+func execute(ctx workflow.Context, activity string, input, out any) error {
+	return workflow.ExecuteActivity(ctx, activity, input).Get(ctx, out)
 }

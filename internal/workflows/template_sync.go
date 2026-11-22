@@ -71,15 +71,11 @@ func (r *templateSync) sync() (domain.TemplateSyncActivityOutput, error) {
 
 // Record records the step the sync is starting.
 func (r *templateSync) Record(step domain.TemplateSyncStep) error {
-	return workflow.ExecuteActivity(
-		r.ctx,
-		domain.RecordTemplateSyncStepActivityName,
-		domain.TemplateSyncStepActivityInput{
-			SyncID:   r.input.SyncID,
-			TenantID: r.input.TenantID,
-			Step:     step,
-		},
-	).Get(r.ctx, nil)
+	return execute(r.ctx, domain.RecordTemplateSyncStepActivityName, domain.TemplateSyncStepActivityInput{
+		SyncID:   r.input.SyncID,
+		TenantID: r.input.TenantID,
+		Step:     step,
+	}, nil)
 }
 
 // lifecycle carries a sync through its status. It marks the sync
@@ -96,11 +92,7 @@ func (r *templateSync) lifecycle(work func() (domain.TemplateSyncActivityOutput,
 	setStatus := func(status domain.TemplateSyncStatusActivityInput) error {
 		status.SyncID = r.input.SyncID
 		status.TenantID = r.input.TenantID
-		return workflow.ExecuteActivity(
-			r.ctx,
-			domain.RecordTemplateSyncStatusActivityName,
-			status,
-		).Get(r.ctx, nil)
+		return execute(r.ctx, domain.RecordTemplateSyncStatusActivityName, status, nil)
 	}
 	defer func() {
 		if err == nil {

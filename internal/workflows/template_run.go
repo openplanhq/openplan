@@ -155,14 +155,14 @@ func (w *planWorkflow) lifecycle() (err error) {
 	}
 
 	var outcome domain.PlanOutcome
-	if err := workflow.ExecuteActivity(w.ctx, domain.FinishPlanActivityName, domain.FinishPlanActivityInput{
+	if err := execute(w.ctx, domain.FinishPlanActivityName, domain.FinishPlanActivityInput{
 		TenantID:        w.input.TenantID,
 		RunID:           w.input.RunID,
 		StackTemplateID: w.input.StackTemplateID,
 		Operation:       w.input.Operation,
 		HasChanges:      planned.HasChanges,
 		Summary:         planned.Summary,
-	}).Get(w.ctx, &outcome); err != nil {
+	}, &outcome); err != nil {
 		return err
 	}
 	switch outcome {
@@ -199,12 +199,12 @@ func (w *applyWorkflow) lifecycle() (err error) {
 		return err
 	}
 	var claim domain.BeginApplyActivityOutput
-	if err := workflow.ExecuteActivity(w.ctx, domain.BeginApplyActivityName, domain.BeginApplyActivityInput{
+	if err := execute(w.ctx, domain.BeginApplyActivityName, domain.BeginApplyActivityInput{
 		TenantID:    w.input.TenantID,
 		RunID:       w.input.RunID,
 		AutoApprove: w.input.AutoApprove,
 		WorkflowID:  w.workflowID,
-	}).Get(w.ctx, &claim); err != nil {
+	}, &claim); err != nil {
 		return err
 	}
 	if !claim.Claimed {
@@ -250,21 +250,17 @@ func newRun(ctx workflow.Context, input domain.TemplateRunWorkflowInput, phase d
 // setStatus records the run's status. Only the two lifecycles call it, and
 // failOnError for them.
 func (r *run) setStatus(status domain.TemplateRunStatus, errorSummary, commandError string) error {
-	return workflow.ExecuteActivity(
-		r.ctx,
-		domain.RecordTemplateRunStatusActivityName,
-		domain.TemplateRunStatusActivityInput{
-			RunID:           r.input.RunID,
-			TenantID:        r.input.TenantID,
-			StackTemplateID: r.input.StackTemplateID,
-			Operation:       r.input.Operation,
-			Status:          status,
-			ErrorSummary:    errorSummary,
-			CommandError:    commandError,
-			Phase:           r.phase,
-			WorkflowID:      r.workflowID,
-		},
-	).Get(r.ctx, nil)
+	return execute(r.ctx, domain.RecordTemplateRunStatusActivityName, domain.TemplateRunStatusActivityInput{
+		RunID:           r.input.RunID,
+		TenantID:        r.input.TenantID,
+		StackTemplateID: r.input.StackTemplateID,
+		Operation:       r.input.Operation,
+		Status:          status,
+		ErrorSummary:    errorSummary,
+		CommandError:    commandError,
+		Phase:           r.phase,
+		WorkflowID:      r.workflowID,
+	}, nil)
 }
 
 // failOnError marks the run failed if err is set, and returns it; each
@@ -475,23 +471,16 @@ func (s *session) ready(restorePlan bool) error {
 // file. The key ring evicts abandoned keys on its own.
 func (s *session) close() {
 	if s.ws.publicKey != nil {
-		_ = workflow.ExecuteActivity(
-			s.ctx,
-			domain.ReleaseRunKeyActivityName,
-			domain.ReleaseRunKeyActivityInput{TenantID: s.run.input.TenantID, RunID: s.run.input.RunID},
-		).Get(s.ctx, nil)
+		_ = execute(s.ctx, domain.ReleaseRunKeyActivityName,
+			domain.ReleaseRunKeyActivityInput{TenantID: s.run.input.TenantID, RunID: s.run.input.RunID}, nil)
 	}
 	if s.ws.path != "" {
-		_ = workflow.ExecuteActivity(
-			s.ctx,
-			domain.CleanupWorkspaceActivityName,
-			domain.CleanupWorkspaceActivityInput{
-				TenantID:      s.run.input.TenantID,
-				RunID:         s.run.input.RunID,
-				WorkspacePath: s.ws.path,
-				DeletePlan:    s.ws.phase == domain.RunPhaseApply,
-			},
-		).Get(s.ctx, nil)
+		_ = execute(s.ctx, domain.CleanupWorkspaceActivityName, domain.CleanupWorkspaceActivityInput{
+			TenantID:      s.run.input.TenantID,
+			RunID:         s.run.input.RunID,
+			WorkspacePath: s.ws.path,
+			DeletePlan:    s.ws.phase == domain.RunPhaseApply,
+		}, nil)
 	}
 }
 
@@ -642,11 +631,11 @@ func (s *session) saveLog(name string, seq int, command domain.TerraformCommandT
 	ctx := workflow.WithStartToCloseTimeout(s.ctx, 5*time.Minute)
 	ctx = workflow.WithRetryPolicy(ctx, *uploadLogRetryPolicy)
 	var uploaded domain.TemplateRunLog
-	if err := workflow.ExecuteActivity(ctx, domain.UploadLogActivityName, domain.UploadLogActivityInput{
+	if err := execute(ctx, domain.UploadLogActivityName, domain.UploadLogActivityInput{
 		TenantID: s.run.input.TenantID,
 		RunID:    s.run.input.RunID,
 		LogName:  name,
-	}).Get(ctx, &uploaded); err != nil {
+	}, &uploaded); err != nil {
 		logger.Warn("upload run log", "log", name, "error", err)
 		log.State = domain.TemplateRunLogLost
 		log.LostReason = domain.LogLostUploadFailed
@@ -695,11 +684,11 @@ func (s *session) executorGone(runErr error) bool {
 // plane, sealed to publicKey.
 func (r *run) sealSourceToken(publicKey []byte) (domain.SealSourceTokenActivityOutput, error) {
 	var token domain.SealSourceTokenActivityOutput
-	err := workflow.ExecuteActivity(r.ctx, domain.SealSourceTokenActivityName, domain.SealSourceTokenActivityInput{
+	err := execute(r.ctx, domain.SealSourceTokenActivityName, domain.SealSourceTokenActivityInput{
 		RepoOwner: r.input.RepoOwner,
 		RepoName:  r.input.RepoName,
 		PublicKey: publicKey,
-	}).Get(r.ctx, &token)
+	}, &token)
 	return token, err
 }
 
@@ -707,12 +696,12 @@ func (r *run) sealSourceToken(publicKey []byte) (domain.SealSourceTokenActivityO
 // create.
 func (r *run) sealPlanKey(publicKey []byte, create bool) (domain.SealPlanKeyActivityOutput, error) {
 	var planKey domain.SealPlanKeyActivityOutput
-	err := workflow.ExecuteActivity(r.ctx, domain.SealPlanKeyActivityName, domain.SealPlanKeyActivityInput{
+	err := execute(r.ctx, domain.SealPlanKeyActivityName, domain.SealPlanKeyActivityInput{
 		TenantID:  r.input.TenantID,
 		RunID:     r.input.RunID,
 		PublicKey: publicKey,
 		Create:    create,
-	}).Get(r.ctx, &planKey)
+	}, &planKey)
 	return planKey, err
 }
 
@@ -720,11 +709,11 @@ func (r *run) sealPlanKey(publicKey []byte, create bool) (domain.SealPlanKeyActi
 // publicKey.
 func (r *run) sealCredentials(publicKey []byte) (domain.SealRunCredentialsActivityOutput, error) {
 	var credentials domain.SealRunCredentialsActivityOutput
-	err := workflow.ExecuteActivity(r.ctx, domain.SealRunCredentialsActivityName, domain.SealRunCredentialsActivityInput{
+	err := execute(r.ctx, domain.SealRunCredentialsActivityName, domain.SealRunCredentialsActivityInput{
 		TenantID:        r.input.TenantID,
 		StackTemplateID: r.input.StackTemplateID,
 		PublicKey:       publicKey,
-	}).Get(r.ctx, &credentials)
+	}, &credentials)
 	return credentials, err
 }
 
@@ -755,15 +744,11 @@ var terraformCommandSteps = map[domain.TerraformCommandType]domain.TemplateRunSt
 
 // Record records the step the run is starting, for the people watching it.
 func (r *run) Record(step domain.TemplateRunStep) error {
-	return workflow.ExecuteActivity(
-		r.ctx,
-		domain.RecordTemplateRunStepActivityName,
-		domain.TemplateRunStepActivityInput{
-			RunID:    r.input.RunID,
-			TenantID: r.input.TenantID,
-			Step:     step,
-		},
-	).Get(r.ctx, nil)
+	return execute(r.ctx, domain.RecordTemplateRunStepActivityName, domain.TemplateRunStepActivityInput{
+		RunID:    r.input.RunID,
+		TenantID: r.input.TenantID,
+		Step:     step,
+	}, nil)
 }
 
 // inSession runs fn in an executor session, with the phase's workspace open
@@ -795,18 +780,14 @@ func (r *run) inSession(creationTimeout time.Duration, phase domain.RunPhase, fn
 // event records something the run did to its stack template, with the counts
 // it carries, if any.
 func (r *run) event(event domain.TemplateRunEvent, summary *domain.PlanSummary) error {
-	return workflow.ExecuteActivity(
-		r.ctx,
-		domain.RecordTemplateRunEventActivityName,
-		domain.TemplateRunEventActivityInput{
-			RunID:           r.input.RunID,
-			TenantID:        r.input.TenantID,
-			StackTemplateID: r.input.StackTemplateID,
-			Operation:       r.input.Operation,
-			Event:           event,
-			Summary:         summary,
-		},
-	).Get(r.ctx, nil)
+	return execute(r.ctx, domain.RecordTemplateRunEventActivityName, domain.TemplateRunEventActivityInput{
+		RunID:           r.input.RunID,
+		TenantID:        r.input.TenantID,
+		StackTemplateID: r.input.StackTemplateID,
+		Operation:       r.input.Operation,
+		Event:           event,
+		Summary:         summary,
+	}, nil)
 }
 
 // log hands a log's row, in whatever state it is in, to the control plane,
@@ -831,9 +812,5 @@ func (r *run) log(name string, log domain.TemplateRunLog) error {
 	log.Name = name
 	ctx := workflow.WithStartToCloseTimeout(r.ctx, 30*time.Second)
 	ctx = workflow.WithRetryPolicy(ctx, *recordLogRetryPolicy)
-	return workflow.ExecuteActivity(
-		ctx,
-		domain.RecordTemplateRunLogActivityName,
-		log,
-	).Get(ctx, nil)
+	return execute(ctx, domain.RecordTemplateRunLogActivityName, log, nil)
 }
