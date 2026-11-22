@@ -171,23 +171,33 @@ func writeStartupError(writer io.Writer, err error) {
 	log.New(writer, "", log.LstdFlags).Printf("openplan API failed: %v", err)
 }
 
+// concretePool unwraps the pool the defaults were built with: migrations, the
+// store and the embedded OpenFGA server each need pgx's own type.
+func concretePool(pool postgresPool) (*pgxpool.Pool, error) {
+	concrete, ok := pool.(*pgxpool.Pool)
+	if !ok {
+		return nil, fmt.Errorf("unexpected postgres pool type %T", pool)
+	}
+	return concrete, nil
+}
+
 func defaultAPIDependencies() apiDependencies {
 	return apiDependencies{
 		newPostgresPool: func(ctx context.Context, databaseURL string) (postgresPool, error) {
 			return pgxpool.New(ctx, databaseURL)
 		},
 		migratePostgres: func(ctx context.Context, pool postgresPool) error {
-			pgxPool, ok := pool.(*pgxpool.Pool)
-			if !ok {
-				return fmt.Errorf("unexpected postgres pool type %T", pool)
+			pgxPool, err := concretePool(pool)
+			if err != nil {
+				return err
 			}
 			return postgres.Migrate(ctx, pgxPool)
 		},
 		migrateAuthorization: authorization.Migrate,
 		newStore: func(pool postgresPool, specs *queue.SpecRegistry, credentialCipher *encryption.Cipher, sessionCipher *encryption.Cipher) (appRepositories, error) {
-			pgxPool, ok := pool.(*pgxpool.Pool)
-			if !ok {
-				return nil, fmt.Errorf("unexpected postgres pool type %T", pool)
+			pgxPool, err := concretePool(pool)
+			if err != nil {
+				return nil, err
 			}
 			return postgres.NewStore(pgxPool,
 				postgres.WithQueueSpecs(specs),
@@ -212,9 +222,9 @@ func defaultAPIDependencies() apiDependencies {
 			// The embedded server needs the concrete pool: its writes join the
 			// transactions the repositories open on that same pool, which is
 			// the whole reason it is embedded rather than dialled.
-			concrete, ok := pool.(*pgxpool.Pool)
-			if !ok {
-				return nil, fmt.Errorf("authorization requires a *pgxpool.Pool, got %T", pool)
+			concrete, err := concretePool(pool)
+			if err != nil {
+				return nil, err
 			}
 			return authorization.New(ctx, concrete, storeName)
 		},
