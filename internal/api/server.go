@@ -3,6 +3,7 @@ package api
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -89,8 +90,6 @@ type AuthConfig struct {
 	// LogoutTokenVerifier authenticates back-channel logout notifications.
 	// *authentication.OIDCVerifier satisfies it in production.
 	LogoutTokenVerifier LogoutTokenVerifier
-	// Clock is time.Now when nil. Tests set it.
-	Clock func() time.Time
 }
 
 // WithAuth enables the browser login routes.
@@ -310,7 +309,8 @@ func NewAuthenticatedServer(service *app.Service, tenantID domain.TenantID, debu
 	server.handler = authentication.RequireAuthentication(
 		server.auth.Sessions,
 		server.auth.SessionIdleTTL,
-		server.auth.Clock,
+		// One clock for the whole server: sessions age by the time handlers stamp.
+		server.service.Clock.Now,
 		// Sign-in has to be reachable before there is a session.
 		"/healthz", "/v1/auth/login", "/v1/auth/callback", "/v1/auth/logout", "/v1/auth/backchannel-logout",
 	)(server.handler)
@@ -330,11 +330,7 @@ func (server *Server) handleMe(response http.ResponseWriter, request *http.Reque
 		writeAppError(response, err)
 		return
 	}
-	writeJSON(response, http.StatusOK, meFromPrincipal(principal, server.tenantID, globalCapabilities{
-		CanCreateStack:          capabilities.CanCreateStack,
-		CanManageTemplates:      capabilities.CanManageTemplates,
-		CanManagePlatformAccess: capabilities.CanManagePlatformAccess,
-	}))
+	writeJSON(response, http.StatusOK, meFromPrincipal(principal, server.tenantID, globalCapabilities(capabilities)))
 }
 
 // tenantPrefix roots every tenant route. handleTenantRoute adds it, so no
@@ -358,13 +354,6 @@ func (server *Server) requireConfiguredTenant(next http.Handler) http.Handler {
 func (server *Server) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	server.debugf("%s %s", request.Method, request.URL.Path)
 	withRequestID(server.handler).ServeHTTP(response, request)
-}
-
-func (server *Server) now() time.Time {
-	if server.auth.Clock != nil {
-		return server.auth.Clock()
-	}
-	return time.Now().UTC()
 }
 
 func (server *Server) debugf(format string, args ...any) {
@@ -547,12 +536,7 @@ func (server *Server) handleDeleteTemplate(response http.ResponseWriter, request
 		TenantID:   domain.TenantID(request.PathValue("tenant_id")),
 		TemplateID: domain.TemplateID(request.PathValue("template_id")),
 	})
-	if err != nil {
-		writeAppError(response, err)
-		return
-	}
-
-	response.WriteHeader(http.StatusNoContent)
+	writeNoContent(response, err)
 }
 
 // handleStartTemplateSync answers 202 with the template, not the sync: a sync
@@ -1003,12 +987,7 @@ func (server *Server) handleDiscardRun(response http.ResponseWriter, request *ht
 		RunID:    domain.TemplateRunID(request.PathValue("run_id")),
 		Reason:   body.Reason,
 	})
-	if err != nil {
-		writeAppError(response, err)
-		return
-	}
-
-	response.WriteHeader(http.StatusNoContent)
+	writeNoContent(response, err)
 }
 
 // setLocation points a 201 or 202 at the URL that reads back the resource it
@@ -1259,22 +1238,17 @@ func newStackResponse(stack domain.Stack, capabilities app.StackCapabilities) st
 	}
 
 	return stackResponse{
-		ID:                   string(stack.ID),
-		TenantID:             string(stack.TenantID),
-		Name:                 stack.Name,
-		Slug:                 stack.Slug,
-		SlugIsDerived:        app.SlugIsDerived(stack.Name, stack.Slug),
-		Status:               status,
-		Tags:                 tags,
-		DefaultCredentialIDs: credentialIDs,
-		CreatedBy:            string(stack.CreatedBy),
-		CreatedAt:            stack.CreatedAt.Format(time.RFC3339Nano),
-		EffectiveCapabilities: stackCapabilitiesResponse{
-			CanView:         capabilities.CanView,
-			CanOperate:      capabilities.CanOperate,
-			CanApprove:      capabilities.CanApprove,
-			CanManageAccess: capabilities.CanManageAccess,
-		},
+		ID:                    string(stack.ID),
+		TenantID:              string(stack.TenantID),
+		Name:                  stack.Name,
+		Slug:                  stack.Slug,
+		SlugIsDerived:         app.SlugIsDerived(stack.Name, stack.Slug),
+		Status:                status,
+		Tags:                  tags,
+		DefaultCredentialIDs:  credentialIDs,
+		CreatedBy:             string(stack.CreatedBy),
+		CreatedAt:             stack.CreatedAt.Format(time.RFC3339Nano),
+		EffectiveCapabilities: stackCapabilitiesResponse(capabilities),
 	}
 }
 
@@ -1375,12 +1349,7 @@ func (server *Server) handleRevokeStackRole(response http.ResponseWriter, reques
 		StackID:  domain.StackID(request.PathValue("stack_id")),
 		UserSub:  request.PathValue("user_sub"),
 	})
-	if err != nil {
-		writeAppError(response, err)
-		return
-	}
-
-	response.WriteHeader(http.StatusNoContent)
+	writeNoContent(response, err)
 }
 
 func (server *Server) handleListPlatformGrants(response http.ResponseWriter, request *http.Request) {
@@ -1414,11 +1383,16 @@ func (server *Server) handleRevokePlatformRole(response http.ResponseWriter, req
 		TenantID: domain.TenantID(request.PathValue("tenant_id")),
 		UserSub:  request.PathValue("user_sub"),
 	})
+	writeNoContent(response, err)
+}
+
+// writeNoContent ends a write that has nothing to return: 204, or err's
+// problem.
+func writeNoContent(response http.ResponseWriter, err error) {
 	if err != nil {
 		writeAppError(response, err)
 		return
 	}
-
 	response.WriteHeader(http.StatusNoContent)
 }
 
@@ -1470,36 +1444,26 @@ func (server *Server) handleListQueue(response http.ResponseWriter, request *htt
 		return
 	}
 
-	// One more than the page, which only proves a next page exists.
 	statuses, err := server.queue.ListByActor(request.Context(), request.PathValue("tenant_id"), principal.Subject, after, page.Limit+1)
 	if err != nil {
 		writeAppError(response, fmt.Errorf("list queue: %w", err))
 		return
 	}
-	nextCursor := ""
-	if len(statuses) > page.Limit {
-		statuses = statuses[:page.Limit]
-		last := statuses[len(statuses)-1]
-		nextCursor = app.EncodeCursor(queueList, queue.Cursor{CreatedAt: last.CreatedAt, ID: last.ID})
-	}
-
-	items := make([]queueItemResponse, 0, len(statuses))
-	for _, status := range statuses {
-		summary := status.Summary
-		if summary == "" {
-			summary = string(status.Kind)
-		}
-		items = append(items, queueItemResponse{
+	listed := app.PageFrom(statuses, page.Limit, queueList, func(status queue.Status) queue.Cursor {
+		return queue.Cursor{CreatedAt: status.CreatedAt, ID: status.ID}
+	})
+	items := mapItems(listed.Items, func(status queue.Status) queueItemResponse {
+		return queueItemResponse{
 			Kind:        string(status.Kind),
 			State:       string(status.State),
-			Summary:     summary,
+			Summary:     cmp.Or(status.Summary, string(status.Kind)),
 			Attempts:    status.Attempts,
 			LastError:   status.LastError,
 			CreatedAt:   status.CreatedAt,
 			DeliveredAt: status.DeliveredAt,
-		})
-	}
-	writeJSON(response, http.StatusOK, newListResponse(items, nextCursor))
+		}
+	})
+	writeJSON(response, http.StatusOK, newListResponse(items, listed.NextCursor))
 }
 
 // queueList names the queue list's cursors.

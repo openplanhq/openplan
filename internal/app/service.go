@@ -795,7 +795,7 @@ func (service *Service) queueTemplateSync(ctx context.Context, repository TxRepo
 		RequestedBy: actor,
 		RequestedAt: service.Clock.Now(),
 	}
-	payload, err := json.Marshal(StartTemplateSyncPayload(domain.TemplateSyncWorkflowInput{
+	request, err := startWorkflowRequest(KindStartTemplateSync, StartTemplateSyncPayload(domain.TemplateSyncWorkflowInput{
 		SyncID:     templateSync.ID,
 		TenantID:   templateSync.TenantID,
 		TemplateID: templateSync.TemplateID,
@@ -803,19 +803,14 @@ func (service *Service) queueTemplateSync(ctx context.Context, repository TxRepo
 		RepoName:   templateSync.RepoName,
 		SourceRef:  templateSync.SourceRef,
 		RootPath:   templateSync.RootPath,
-	}))
+	}), actor, templateSync.TenantID)
 	if err != nil {
-		return StartedTemplateSync{}, fmt.Errorf("encode start template sync payload: %w", err)
+		return StartedTemplateSync{}, err
 	}
 	if err := repository.CreateTemplateSync(ctx, templateSync); err != nil {
 		return StartedTemplateSync{}, err
 	}
-	if err := enqueuer.Enqueue(ctx, queue.Request{
-		Kind:         KindStartTemplateSync,
-		Payload:      payload,
-		ActorSubject: string(actor),
-		TenantID:     string(templateSync.TenantID),
-	}); err != nil {
+	if err := enqueuer.Enqueue(ctx, request); err != nil {
 		return StartedTemplateSync{}, err
 	}
 	template.LatestSync = &domain.LatestTemplateSync{Status: templateSync.Status, RequestedAt: templateSync.RequestedAt}
@@ -1047,14 +1042,12 @@ func (service *Service) StartTemplateRun(ctx context.Context, command StartTempl
 	}
 
 	input := templateRunWorkflowInput(run, templateRevision)
-	kind := KindStartTemplatePlan
-	payload, err := json.Marshal(StartTemplatePlanPayload(input))
+	request, err := startWorkflowRequest(KindStartTemplatePlan, StartTemplatePlanPayload(input), actor, run.TenantID)
 	if command.AutoApprove {
-		kind = KindStartTemplateApply
-		payload, err = json.Marshal(StartTemplateApplyPayload(input))
+		request, err = startWorkflowRequest(KindStartTemplateApply, StartTemplateApplyPayload(input), actor, run.TenantID)
 	}
 	if err != nil {
-		return domain.TemplateRun{}, fmt.Errorf("encode start template run payload: %w", err)
+		return domain.TemplateRun{}, err
 	}
 	if err := service.Work.InTx(ctx, func(ctx context.Context, repository TxRepo, enqueuer queue.Enqueuer) error {
 		runNumber, err := repository.CreateTemplateRun(ctx, run)
@@ -1063,21 +1056,11 @@ func (service *Service) StartTemplateRun(ctx context.Context, command StartTempl
 		}
 		run.RunNumber = runNumber
 		if command.AutoApprove {
-			if err := repository.AppendAuditEvent(ctx, domain.SecurityAuditEvent{
-				ActorSubject: string(actor),
-				Action:       domain.AuditActionApprovalGranted,
-				TenantID:     command.TenantID,
-				Outcome:      domain.AuditOutcomeSuccess,
-			}); err != nil {
+			if err := repository.AppendAuditEvent(ctx, approvalGranted(actor, command.TenantID)); err != nil {
 				return err
 			}
 		}
-		return enqueuer.Enqueue(ctx, queue.Request{
-			Kind:         kind,
-			Payload:      payload,
-			ActorSubject: string(actor),
-			TenantID:     string(run.TenantID),
-		})
+		return enqueuer.Enqueue(ctx, request)
 	}); err != nil {
 		// The store's index refuses the insert without saying which run won.
 		// Looking it up lets the caller be told which run to wait for; if it
@@ -1385,11 +1368,7 @@ func (service *Service) GetStack(ctx context.Context, command GetStackCommand) (
 		view.Templates = []StackTemplateView{}
 	}
 
-	views := make([]*StackTemplateView, len(view.Templates))
-	for i := range view.Templates {
-		views[i] = &view.Templates[i]
-	}
-	if err := service.labelStackTemplates(ctx, command.TenantID, views...); err != nil {
+	if err := service.labelStackTemplates(ctx, command.TenantID, pointers(view.Templates)...); err != nil {
 		return StackView{}, err
 	}
 
@@ -1424,6 +1403,16 @@ func (service *Service) labelStackTemplates(ctx context.Context, tenantID domain
 		*view = stackTemplateView(view.StackTemplate, rev)
 	}
 	return nil
+}
+
+// pointers points at each element of items in place, so the labellers, which
+// take pointers to serve single values too, write into the caller's slice.
+func pointers[T any](items []T) []*T {
+	pointed := make([]*T, len(items))
+	for i := range items {
+		pointed[i] = &items[i]
+	}
+	return pointed
 }
 
 // stackTemplateView labels a stack template from its desired revision. Writes
@@ -1478,7 +1467,7 @@ func (service *Service) ListTemplates(ctx context.Context, command ListTemplates
 	if err != nil {
 		return Page[domain.Template]{}, fmt.Errorf("list templates: %w", err)
 	}
-	return pageFrom(templates, command.Page.Limit, templatesList, func(template domain.Template) cursorKey {
+	return PageFrom(templates, command.Page.Limit, templatesList, func(template domain.Template) cursorKey {
 		return TemplateCursor{CreatedAt: template.CreatedAt, ID: template.ID}
 	}), nil
 }
@@ -1542,7 +1531,7 @@ func (service *Service) ListTemplateRevisionsForTemplate(ctx context.Context, co
 	if err != nil {
 		return Page[domain.TemplateRevision]{}, fmt.Errorf("list template revisions: %w", err)
 	}
-	return pageFrom(revisions, command.Page.Limit, templateRevisionsOfTemplateList, func(revision domain.TemplateRevision) cursorKey {
+	return PageFrom(revisions, command.Page.Limit, templateRevisionsOfTemplateList, func(revision domain.TemplateRevision) cursorKey {
 		return TemplateRevisionCursor{CreatedAt: revision.CreatedAt, ID: revision.ID}
 	}), nil
 }
@@ -1591,7 +1580,7 @@ func (service *Service) SearchUsers(ctx context.Context, command SearchUsersComm
 	if err != nil {
 		return Page[UserProfile]{}, err
 	}
-	return pageFrom(users, command.Page.Limit, usersList, func(user UserProfile) cursorKey {
+	return PageFrom(users, command.Page.Limit, usersList, func(user UserProfile) cursorKey {
 		return UserCursor{DisplayName: user.DisplayName, Sub: user.Sub}
 	}), nil
 }
@@ -1695,19 +1684,8 @@ func (service *Service) grantViews(ctx context.Context, grants []authorization.G
 	views := make([]GrantView, 0, len(grants))
 	for _, grant := range grants {
 		userSub := grant.Subject().ID()
-		gv := GrantView{UserSub: userSub, Role: grant.Relation().String()}
-
-		if profile, ok := profiles[userSub]; ok {
-			gv.DisplayName = profile.DisplayName
-			gv.Email = profile.Email
-		}
-		// A tuple can name a subject with no projected row — someone deleted
-		// from the IdP, or a tuple written out of band — and a grants list has
-		// to render either way. The sub is a poor label but an accurate one.
-		if gv.DisplayName == "" {
-			gv.DisplayName = userSub
-		}
-		views = append(views, gv)
+		profile := profiles[userSub]
+		views = append(views, GrantView{UserSub: userSub, Role: grant.Relation().String(), DisplayName: profile.nameOr(userSub), Email: profile.Email})
 	}
 	return views, nil
 }
@@ -2160,30 +2138,18 @@ func (service *Service) ApproveRun(ctx context.Context, command ApproveRunComman
 		ApprovedBy: actor,
 		ApprovedAt: service.Clock.Now(),
 	}
-	payload, err := json.Marshal(StartTemplateApplyPayload(templateRunWorkflowInput(run, templateRevision)))
+	request, err := startWorkflowRequest(KindStartTemplateApply, StartTemplateApplyPayload(templateRunWorkflowInput(run, templateRevision)), actor, command.TenantID)
 	if err != nil {
-		return domain.TemplateRun{}, fmt.Errorf("encode start template apply payload: %w", err)
-	}
-	auditEvent := domain.SecurityAuditEvent{
-		ActorSubject:  string(actor),
-		Action:        domain.AuditActionApprovalGranted,
-		TenantID:      command.TenantID,
-		Outcome:       domain.AuditOutcomeSuccess,
-		CorrelationID: "",
+		return domain.TemplateRun{}, err
 	}
 	if err := service.Work.InTx(ctx, func(ctx context.Context, repository TxRepo, enqueuer queue.Enqueuer) error {
 		if err := repository.ApproveTemplateRun(ctx, approval); err != nil {
 			return err
 		}
-		if err := repository.AppendAuditEvent(ctx, auditEvent); err != nil {
+		if err := repository.AppendAuditEvent(ctx, approvalGranted(actor, command.TenantID)); err != nil {
 			return err
 		}
-		return enqueuer.Enqueue(ctx, queue.Request{
-			Kind:         KindStartTemplateApply,
-			Payload:      payload,
-			ActorSubject: string(actor),
-			TenantID:     string(command.TenantID),
-		})
+		return enqueuer.Enqueue(ctx, request)
 	}); err != nil {
 		// The store lets one of two racing approvals through and fails the other.
 		if errors.Is(err, ErrRunNotApprovable) {
@@ -2197,6 +2163,17 @@ func (service *Service) ApproveRun(ctx context.Context, command ApproveRunComman
 	// started yet.
 	run.Status = domain.TemplateRunApproved
 	return run, nil
+}
+
+// approvalGranted is the audit event for an approval: an explicit one, or
+// the one a run started with auto-approve gives itself.
+func approvalGranted(actor domain.UserID, tenantID domain.TenantID) domain.SecurityAuditEvent {
+	return domain.SecurityAuditEvent{
+		ActorSubject: string(actor),
+		Action:       domain.AuditActionApprovalGranted,
+		TenantID:     tenantID,
+		Outcome:      domain.AuditOutcomeSuccess,
+	}
 }
 
 // auditApprovalRejection records an approval the run's state stopped, from someone
@@ -2341,17 +2318,13 @@ func (service *Service) ListTemplateRuns(ctx context.Context, command ListTempla
 	if err != nil {
 		return Page[domain.TemplateRun]{}, fmt.Errorf("list template runs: %w", err)
 	}
-	page := pageFrom(runs, command.Page.Limit, templateRunsList, func(run domain.TemplateRun) cursorKey {
+	page := PageFrom(runs, command.Page.Limit, templateRunsList, func(run domain.TemplateRun) cursorKey {
 		return templateRunCursor{RunNumber: run.RunNumber}
 	})
 	if len(page.Items) == 0 {
 		return page, nil
 	}
-	labelled := make([]*domain.TemplateRun, len(page.Items))
-	for i := range page.Items {
-		labelled[i] = &page.Items[i]
-	}
-	if err := service.labelTriggerActors(ctx, labelled...); err != nil {
+	if err := service.labelTriggerActors(ctx, pointers(page.Items)...); err != nil {
 		return Page[domain.TemplateRun]{}, fmt.Errorf("list template runs: %w", err)
 	}
 
@@ -2404,7 +2377,7 @@ func (service *Service) labelTriggerActors(ctx context.Context, runs ...*domain.
 		return fmt.Errorf("look up trigger actors: %w", err)
 	}
 	label := func(sub domain.UserID) string {
-		return cmp.Or(profiles[string(sub)].DisplayName, string(sub))
+		return profiles[string(sub)].nameOr(string(sub))
 	}
 	for _, run := range runs {
 		run.TriggerActorDisplayName = label(run.TriggerActor)
@@ -2458,8 +2431,6 @@ func (service *Service) GetTemplateRunLogMetadata(ctx context.Context, command G
 	if err != nil {
 		return domain.TemplateRunLog{}, fmt.Errorf("get template run log metadata: %w", err)
 	}
-	log.CommandLine = log.Command.CommandLine()
-
 	return deriveTemplateRunLogState(log, run.Status), nil
 }
 
@@ -2485,8 +2456,10 @@ func (service *Service) TemplateRunLogState(ctx context.Context, tenantID domain
 // whose final record never landed, leaves its row live forever; the run's
 // status is what says nobody will finish it, and which of the two it was: a
 // canceled run was cut off, while a completed or failed run ran its commands
-// to the end and reached the record, which then failed.
+// to the end and reached the record, which then failed. It also fills in the
+// command line, which the row stores only as the command.
 func deriveTemplateRunLogState(log domain.TemplateRunLog, status domain.TemplateRunStatus) domain.TemplateRunLog {
+	log.CommandLine = log.Command.CommandLine()
 	if log.State != domain.TemplateRunLogLive || !status.Terminal() {
 		return log
 	}
@@ -2518,7 +2491,6 @@ func (service *Service) ListTemplateRunLogs(ctx context.Context, command ListTem
 		return []domain.TemplateRunLog{}, nil
 	}
 	for i := range logs {
-		logs[i].CommandLine = logs[i].Command.CommandLine()
 		logs[i] = deriveTemplateRunLogState(logs[i], run.Status)
 	}
 

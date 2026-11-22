@@ -121,7 +121,6 @@ func Sentinels() []error {
 		ErrUnauthenticated,
 		ErrInvalidCommand,
 		ErrInvalidQuery,
-		ErrInvalidQuery,
 		ErrDuplicateStackSlug,
 		ErrDuplicateStackTemplateKey,
 		ErrNotFound,

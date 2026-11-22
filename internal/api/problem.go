@@ -88,7 +88,7 @@ type problemType struct {
 var problemTypes = []problemType{
 	{sentinel: app.ErrUnauthenticated, status: http.StatusUnauthorized, detail: "Sign in to continue."},
 	{sentinel: app.ErrForbidden, status: http.StatusForbidden, detail: "You don't have permission to do this."},
-	{sentinel: app.ErrNotFound, status: http.StatusNotFound, detail: "The resource doesn't exist, or you can't see it."},
+	{sentinel: app.ErrNotFound, status: http.StatusNotFound, detail: notFoundDetail},
 
 	{
 		sentinel: app.ErrTemplateRunInFlight, status: http.StatusConflict, slug: "run-in-flight",
@@ -191,7 +191,7 @@ var problemTypes = []problemType{
 	// the row covers one returned bare.
 	{
 		sentinel: app.ErrInvalidQuery, status: http.StatusBadRequest, slug: invalidQuerySlug,
-		title: invalidQueryTitle, detail: "A query parameter can't be read.",
+		title: invalidQueryTitle, detail: invalidQueryDetail,
 	},
 
 	// Last: the specific sentinels above may be joined with it. Left here, it
@@ -205,6 +205,7 @@ const (
 	validationFailedTitle = "The request has invalid fields"
 	invalidQuerySlug      = "invalid-query"
 	invalidQueryTitle     = "The query string can't be read"
+	invalidQueryDetail    = "A query parameter can't be read."
 )
 
 // writeAppError renders an error from the app layer. Field errors come first,
@@ -259,12 +260,7 @@ func fieldProblem(err error, fieldErrs []*app.FieldError) problemDocument {
 	}
 	for _, row := range problemTypes {
 		if row.field != "" && errors.Is(err, row.sentinel) {
-			problem := row.problem(err)
-			problem.Errors = problemFieldErrors(fieldErrs)
-			if len(fieldErrs) == 1 {
-				problem.Detail = fieldErrs[0].Message
-			}
-			return problem
+			return row.problem(err).withFieldErrors(problemFieldErrors(fieldErrs))
 		}
 	}
 	return validationProblem(fieldErrs)
@@ -349,30 +345,29 @@ func planStaleDetail(err error) (string, bool) {
 
 // invalidQueryProblem is the 400 for query parameters that can't be read.
 func invalidQueryProblem(entries []problemFieldError) problemDocument {
-	problem := problemDocument{
+	return problemDocument{
 		Type: problemTypeURI(invalidQuerySlug), Title: invalidQueryTitle,
-		Status: http.StatusBadRequest, Detail: "A query parameter can't be read.", Errors: entries,
-	}
-	if len(entries) == 1 {
-		problem.Detail = entries[0].Detail
-	}
-	return problem
+		Status: http.StatusBadRequest, Detail: invalidQueryDetail,
+	}.withFieldErrors(entries)
 }
 
 // validationProblem is the 422 for content that parses but breaks a rule.
 func validationProblem(fieldErrs []*app.FieldError) problemDocument {
-	problem := problemDocument{
+	return problemDocument{
 		Type:   problemTypeURI(validationFailedSlug),
 		Title:  validationFailedTitle,
 		Status: http.StatusUnprocessableEntity,
-		Errors: problemFieldErrors(fieldErrs),
-	}
-	// One problem is said as itself. Its message starts with the field's
-	// name, which is case-sensitive, so it isn't capitalized.
-	if len(fieldErrs) == 1 {
-		problem.Detail = fieldErrs[0].Message
-	} else {
-		problem.Detail = fmt.Sprintf("%d fields need attention.", len(fieldErrs))
+		Detail: fmt.Sprintf("%d fields need attention.", len(fieldErrs)),
+	}.withFieldErrors(problemFieldErrors(fieldErrs))
+}
+
+// withFieldErrors attaches entries to the problem. One problem is said as
+// itself, as the detail. Its message starts with the field's name, which is
+// case-sensitive, so it isn't capitalized.
+func (problem problemDocument) withFieldErrors(entries []problemFieldError) problemDocument {
+	problem.Errors = entries
+	if len(entries) == 1 {
+		problem.Detail = entries[0].Detail
 	}
 	return problem
 }

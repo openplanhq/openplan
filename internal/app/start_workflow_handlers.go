@@ -28,6 +28,17 @@ type (
 	StartTemplateSyncPayload domain.TemplateSyncWorkflowInput
 )
 
+// startWorkflowRequest is the queue request that starts kind's workflow for
+// actor. Callers build it before their transaction opens, so a payload that
+// fails to encode writes nothing.
+func startWorkflowRequest(kind queue.Kind, payload any, actor domain.UserID, tenantID domain.TenantID) (queue.Request, error) {
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return queue.Request{}, fmt.Errorf("encode %s payload: %w", kind, err)
+	}
+	return queue.Request{Kind: kind, Payload: encoded, ActorSubject: string(actor), TenantID: string(tenantID)}, nil
+}
+
 // The dedupe keys are frozen: queued items are stored under them.
 var (
 	StartTemplatePlanSpec = startWorkflowSpec(KindStartTemplatePlan, func(payload StartTemplatePlanPayload) (string, string, string) {

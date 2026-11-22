@@ -99,7 +99,7 @@ type apiDependencies struct {
 	migrateAuthorization func(context.Context, string) error
 	newStore             func(postgresPool, *queue.SpecRegistry, *encryption.Cipher, *encryption.Cipher) (appRepositories, error)
 	newLogReader         func(config.ArtifactStoreConfig) (app.TemplateRunLogReader, error)
-	newService           func(app.Service) (*app.Service, error)
+	newService           func(app.Service) *app.Service
 	newVerifier          func(context.Context, authentication.OIDCVerifierConfig) (tokenVerifier, error)
 	newAuthorization     func(context.Context, postgresPool, string) (*authorization.Authorization, error)
 	listenAndServe       func(context.Context, string, http.Handler) error
@@ -171,23 +171,33 @@ func writeStartupError(writer io.Writer, err error) {
 	log.New(writer, "", log.LstdFlags).Printf("openplan API failed: %v", err)
 }
 
+// concretePool unwraps the pool the defaults were built with: migrations, the
+// store and the embedded OpenFGA server each need pgx's own type.
+func concretePool(pool postgresPool) (*pgxpool.Pool, error) {
+	concrete, ok := pool.(*pgxpool.Pool)
+	if !ok {
+		return nil, fmt.Errorf("unexpected postgres pool type %T", pool)
+	}
+	return concrete, nil
+}
+
 func defaultAPIDependencies() apiDependencies {
 	return apiDependencies{
 		newPostgresPool: func(ctx context.Context, databaseURL string) (postgresPool, error) {
 			return pgxpool.New(ctx, databaseURL)
 		},
 		migratePostgres: func(ctx context.Context, pool postgresPool) error {
-			pgxPool, ok := pool.(*pgxpool.Pool)
-			if !ok {
-				return fmt.Errorf("unexpected postgres pool type %T", pool)
+			pgxPool, err := concretePool(pool)
+			if err != nil {
+				return err
 			}
 			return postgres.Migrate(ctx, pgxPool)
 		},
 		migrateAuthorization: authorization.Migrate,
 		newStore: func(pool postgresPool, specs *queue.SpecRegistry, credentialCipher *encryption.Cipher, sessionCipher *encryption.Cipher) (appRepositories, error) {
-			pgxPool, ok := pool.(*pgxpool.Pool)
-			if !ok {
-				return nil, fmt.Errorf("unexpected postgres pool type %T", pool)
+			pgxPool, err := concretePool(pool)
+			if err != nil {
+				return nil, err
 			}
 			return postgres.NewStore(pgxPool,
 				postgres.WithQueueSpecs(specs),
@@ -202,9 +212,7 @@ func defaultAPIDependencies() apiDependencies {
 			}
 			return artifacts.NewLogStore(store), nil
 		},
-		newService: func(service app.Service) (*app.Service, error) {
-			return app.NewService(service), nil
-		},
+		newService: app.NewService,
 		newVerifier: func(ctx context.Context, cfg authentication.OIDCVerifierConfig) (tokenVerifier, error) {
 			return authentication.NewOIDCVerifier(ctx, cfg)
 		},
@@ -212,9 +220,9 @@ func defaultAPIDependencies() apiDependencies {
 			// The embedded server needs the concrete pool: its writes join the
 			// transactions the repositories open on that same pool, which is
 			// the whole reason it is embedded rather than dialled.
-			concrete, ok := pool.(*pgxpool.Pool)
-			if !ok {
-				return nil, fmt.Errorf("authorization requires a *pgxpool.Pool, got %T", pool)
+			concrete, err := concretePool(pool)
+			if err != nil {
+				return nil, err
 			}
 			return authorization.New(ctx, concrete, storeName)
 		},
@@ -391,7 +399,7 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 		return fmt.Errorf("live log readers: %w", err)
 	}
 	defer liveLogReaders.Close()
-	service, err := deps.newService(app.Service{
+	service := deps.newService(app.Service{
 		Authorization:            auth,
 		Work:                     store,
 		Stacks:                   store,
@@ -410,9 +418,6 @@ func runWithDependencies(ctx context.Context, getenv func(string) string, deps a
 		Audit:                    store,
 		Users:                    store,
 	})
-	if err != nil {
-		return fmt.Errorf("wire service: %w", err)
-	}
 
 	sessions, err := requiredPort[authentication.SessionStore](store)
 	if err != nil {

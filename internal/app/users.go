@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -26,6 +27,14 @@ type UserProfile struct {
 	Sub         string `json:"sub"`
 	DisplayName string `json:"display_name"`
 	Email       string `json:"email"`
+}
+
+// nameOr is what to call the person on screen: their display name, or sub
+// when there is none. A subject can have no projected row -- someone deleted
+// from the IdP, or a tuple written out of band -- and a list has to render
+// either way. The sub is a poor label but an accurate one.
+func (profile UserProfile) nameOr(sub string) string {
+	return cmp.Or(profile.DisplayName, sub)
 }
 
 // UserRepository reads and writes the local identity projection.
