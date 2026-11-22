@@ -4,8 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"os"
+	"path/filepath"
 
 	"github.com/vishu42/openplan/internal/artifacts"
 	"github.com/vishu42/openplan/internal/config"
@@ -132,10 +136,29 @@ func (b *Bodies) fetchSource(ctx context.Context, request fetchSourceRequest, _ 
 	} else if err := b.git.Clone(ctx, request.RepoURL, request.Ref, request.SourcePath, credential); err != nil {
 		return struct{}{}, fmt.Errorf("clone source: %w", err)
 	}
-	if err := sandbox.CheckDir(request.TerraformPath); err != nil {
+	if err := checkSourceRoot(request.SourcePath, request.TerraformPath); err != nil {
 		return struct{}{}, fmt.Errorf("source root: %w", err)
 	}
 	return struct{}{}, nil
+}
+
+// checkSourceRoot holds the run's template root to the rule sync held it to,
+// inside the clone. A run checks out the commit sync validated, but the
+// template is untrusted, so the run checks again rather than trust that.
+func checkSourceRoot(sourcePath, terraformPath string) error {
+	rootPath, err := filepath.Rel(sourcePath, terraformPath)
+	if err != nil {
+		return err
+	}
+	repo, err := os.OpenRoot(sourcePath)
+	if errors.Is(err, fs.ErrNotExist) {
+		return errors.New("directory does not exist")
+	}
+	if err != nil {
+		return err
+	}
+	defer repo.Close()
+	return checkTemplateRoot(repo, rootPath)
 }
 
 func (b *Bodies) runTerraform(ctx context.Context, request runTerraformRequest, output io.Writer) (runTerraformResult, error) {

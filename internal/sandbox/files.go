@@ -95,21 +95,6 @@ func writeFile(root *os.Root, name string, content []byte) error {
 	return errors.Join(err, file.Close())
 }
 
-// CheckDir reports whether path is a directory.
-func CheckDir(path string) error {
-	info, err := os.Stat(path) //nolint:gosec // inside a sandbox, any path reaches only what the sandbox already can
-	if errors.Is(err, fs.ErrNotExist) {
-		return errors.New("directory does not exist")
-	}
-	if err != nil {
-		return err
-	}
-	if !info.IsDir() {
-		return errors.New("not a directory")
-	}
-	return nil
-}
-
 // checkName accepts only a single path component, so a name never reaches
 // outside the directory it is read from or written to.
 func checkName(name string) error {

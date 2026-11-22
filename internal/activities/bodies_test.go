@@ -94,6 +94,28 @@ func TestFetchSourceBodyFailsWhenTheRootIsMissing(t *testing.T) {
 	}
 }
 
+// A root committed as a symlink is refused, as sync refuses it, even when the
+// link points at a directory inside the clone.
+func TestFetchSourceBodyRefusesASymlinkedRoot(t *testing.T) {
+	t.Parallel()
+
+	source := filepath.Join(t.TempDir(), "source")
+	if err := os.MkdirAll(filepath.Join(source, "real"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("real", filepath.Join(source, "infra")); err != nil {
+		t.Fatal(err)
+	}
+	bodies := &Bodies{git: runner.NewLocalGitRunnerWithExecutor(&scriptedExecutor{})}
+	_, err := runBody(t, bodies, bodyFetchSource, fetchSourceRequest{
+		RepoURL: "https://github.com/acme/infra.git", CommitSHA: "abc123",
+		SourcePath: source, TerraformPath: filepath.Join(source, "infra"),
+	}, io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "symbolic link") {
+		t.Fatalf("error = %v, want the symlinked root refused", err)
+	}
+}
+
 func TestUploadLogBodyUploadsTheSpool(t *testing.T) {
 	t.Parallel()
 
