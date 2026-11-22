@@ -123,6 +123,9 @@ func (auth *Authorization) resolveModel(ctx context.Context, storeID string, des
 		}
 		for _, message := range response.GetAuthorizationModels() {
 			if modelsEqual(desired, message) {
+				if !strval.SafeOpaque(message.GetId()) {
+					return "", fmt.Errorf("authorization: matching model in store %q has an unsafe id", storeID)
+				}
 				matches = append(matches, message.GetId())
 			}
 		}
