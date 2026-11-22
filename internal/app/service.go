@@ -795,7 +795,7 @@ func (service *Service) queueTemplateSync(ctx context.Context, repository TxRepo
 		RequestedBy: actor,
 		RequestedAt: service.Clock.Now(),
 	}
-	payload, err := json.Marshal(StartTemplateSyncPayload(domain.TemplateSyncWorkflowInput{
+	request, err := startWorkflowRequest(KindStartTemplateSync, StartTemplateSyncPayload(domain.TemplateSyncWorkflowInput{
 		SyncID:     templateSync.ID,
 		TenantID:   templateSync.TenantID,
 		TemplateID: templateSync.TemplateID,
@@ -803,19 +803,14 @@ func (service *Service) queueTemplateSync(ctx context.Context, repository TxRepo
 		RepoName:   templateSync.RepoName,
 		SourceRef:  templateSync.SourceRef,
 		RootPath:   templateSync.RootPath,
-	}))
+	}), actor, templateSync.TenantID)
 	if err != nil {
-		return StartedTemplateSync{}, fmt.Errorf("encode start template sync payload: %w", err)
+		return StartedTemplateSync{}, err
 	}
 	if err := repository.CreateTemplateSync(ctx, templateSync); err != nil {
 		return StartedTemplateSync{}, err
 	}
-	if err := enqueuer.Enqueue(ctx, queue.Request{
-		Kind:         KindStartTemplateSync,
-		Payload:      payload,
-		ActorSubject: string(actor),
-		TenantID:     string(templateSync.TenantID),
-	}); err != nil {
+	if err := enqueuer.Enqueue(ctx, request); err != nil {
 		return StartedTemplateSync{}, err
 	}
 	template.LatestSync = &domain.LatestTemplateSync{Status: templateSync.Status, RequestedAt: templateSync.RequestedAt}
@@ -1047,14 +1042,12 @@ func (service *Service) StartTemplateRun(ctx context.Context, command StartTempl
 	}
 
 	input := templateRunWorkflowInput(run, templateRevision)
-	kind := KindStartTemplatePlan
-	payload, err := json.Marshal(StartTemplatePlanPayload(input))
+	request, err := startWorkflowRequest(KindStartTemplatePlan, StartTemplatePlanPayload(input), actor, run.TenantID)
 	if command.AutoApprove {
-		kind = KindStartTemplateApply
-		payload, err = json.Marshal(StartTemplateApplyPayload(input))
+		request, err = startWorkflowRequest(KindStartTemplateApply, StartTemplateApplyPayload(input), actor, run.TenantID)
 	}
 	if err != nil {
-		return domain.TemplateRun{}, fmt.Errorf("encode start template run payload: %w", err)
+		return domain.TemplateRun{}, err
 	}
 	if err := service.Work.InTx(ctx, func(ctx context.Context, repository TxRepo, enqueuer queue.Enqueuer) error {
 		runNumber, err := repository.CreateTemplateRun(ctx, run)
@@ -1063,21 +1056,11 @@ func (service *Service) StartTemplateRun(ctx context.Context, command StartTempl
 		}
 		run.RunNumber = runNumber
 		if command.AutoApprove {
-			if err := repository.AppendAuditEvent(ctx, domain.SecurityAuditEvent{
-				ActorSubject: string(actor),
-				Action:       domain.AuditActionApprovalGranted,
-				TenantID:     command.TenantID,
-				Outcome:      domain.AuditOutcomeSuccess,
-			}); err != nil {
+			if err := repository.AppendAuditEvent(ctx, approvalGranted(actor, command.TenantID)); err != nil {
 				return err
 			}
 		}
-		return enqueuer.Enqueue(ctx, queue.Request{
-			Kind:         kind,
-			Payload:      payload,
-			ActorSubject: string(actor),
-			TenantID:     string(run.TenantID),
-		})
+		return enqueuer.Enqueue(ctx, request)
 	}); err != nil {
 		// The store's index refuses the insert without saying which run won.
 		// Looking it up lets the caller be told which run to wait for; if it
@@ -2160,30 +2143,18 @@ func (service *Service) ApproveRun(ctx context.Context, command ApproveRunComman
 		ApprovedBy: actor,
 		ApprovedAt: service.Clock.Now(),
 	}
-	payload, err := json.Marshal(StartTemplateApplyPayload(templateRunWorkflowInput(run, templateRevision)))
+	request, err := startWorkflowRequest(KindStartTemplateApply, StartTemplateApplyPayload(templateRunWorkflowInput(run, templateRevision)), actor, command.TenantID)
 	if err != nil {
-		return domain.TemplateRun{}, fmt.Errorf("encode start template apply payload: %w", err)
-	}
-	auditEvent := domain.SecurityAuditEvent{
-		ActorSubject:  string(actor),
-		Action:        domain.AuditActionApprovalGranted,
-		TenantID:      command.TenantID,
-		Outcome:       domain.AuditOutcomeSuccess,
-		CorrelationID: "",
+		return domain.TemplateRun{}, err
 	}
 	if err := service.Work.InTx(ctx, func(ctx context.Context, repository TxRepo, enqueuer queue.Enqueuer) error {
 		if err := repository.ApproveTemplateRun(ctx, approval); err != nil {
 			return err
 		}
-		if err := repository.AppendAuditEvent(ctx, auditEvent); err != nil {
+		if err := repository.AppendAuditEvent(ctx, approvalGranted(actor, command.TenantID)); err != nil {
 			return err
 		}
-		return enqueuer.Enqueue(ctx, queue.Request{
-			Kind:         KindStartTemplateApply,
-			Payload:      payload,
-			ActorSubject: string(actor),
-			TenantID:     string(command.TenantID),
-		})
+		return enqueuer.Enqueue(ctx, request)
 	}); err != nil {
 		// The store lets one of two racing approvals through and fails the other.
 		if errors.Is(err, ErrRunNotApprovable) {
@@ -2197,6 +2168,17 @@ func (service *Service) ApproveRun(ctx context.Context, command ApproveRunComman
 	// started yet.
 	run.Status = domain.TemplateRunApproved
 	return run, nil
+}
+
+// approvalGranted is the audit event for an approval: an explicit one, or
+// the one a run started with auto-approve gives itself.
+func approvalGranted(actor domain.UserID, tenantID domain.TenantID) domain.SecurityAuditEvent {
+	return domain.SecurityAuditEvent{
+		ActorSubject: string(actor),
+		Action:       domain.AuditActionApprovalGranted,
+		TenantID:     tenantID,
+		Outcome:      domain.AuditOutcomeSuccess,
+	}
 }
 
 // auditApprovalRejection records an approval the run's state stopped, from someone
