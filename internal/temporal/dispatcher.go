@@ -94,8 +94,7 @@ func (dispatcher *Dispatcher) start(ctx context.Context, workflowID string, work
 		},
 		workflowName,
 		input)
-	var alreadyStarted *serviceerror.WorkflowExecutionAlreadyStarted
-	if errors.As(err, &alreadyStarted) {
+	if _, ok := errors.AsType[*serviceerror.WorkflowExecutionAlreadyStarted](err); ok {
 		return nil
 	}
 	return err
