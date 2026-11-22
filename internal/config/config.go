@@ -159,16 +159,13 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 
 	cfg := APIConfig{
 		PostgresURL:       strings.TrimSpace(getenv("POSTGRES_URL")),
-		HTTPAddress:       strings.TrimSpace(getenv("HTTP_ADDRESS")),
+		HTTPAddress:       optionalString(getenv, "HTTP_ADDRESS", DefaultHTTPAddress),
 		TemporalAddress:   strings.TrimSpace(getenv("TEMPORAL_ADDRESS")),
 		TemporalNamespace: strings.TrimSpace(getenv("TEMPORAL_NAMESPACE")),
 		ArtifactStore:     artifactStore,
 		ValkeyURL:         strings.TrimSpace(getenv("VALKEY_URL")),
 		Environment:       environment,
 		Security:          security,
-	}
-	if cfg.HTTPAddress == "" {
-		cfg.HTTPAddress = DefaultHTTPAddress
 	}
 	cfg.Debug = parseBool(getenv("OPENPLAN_DEBUG"))
 	credentialKey, err := optionalEncryptionKey(getenv, "CREDENTIAL_ENCRYPTION_KEY")
@@ -226,12 +223,9 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 	cfg := ExecutorConfig{
 		TemporalAddress:   strings.TrimSpace(getenv("TEMPORAL_ADDRESS")),
 		TemporalNamespace: strings.TrimSpace(getenv("TEMPORAL_NAMESPACE")),
-		RunRoot:           strings.TrimSpace(getenv("EXECUTOR_RUN_ROOT")),
+		RunRoot:           optionalString(getenv, "EXECUTOR_RUN_ROOT", DefaultExecutorRunRoot),
 		ArtifactStore:     artifactStore,
 		ValkeyURL:         strings.TrimSpace(getenv("VALKEY_URL")),
-	}
-	if cfg.RunRoot == "" {
-		cfg.RunRoot = DefaultExecutorRunRoot
 	}
 	maxSessions, err := optionalPositiveInt(getenv, "EXECUTOR_MAX_SESSIONS", DefaultExecutorMaxSessions)
 	if err != nil {
@@ -239,7 +233,8 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 	}
 	cfg.MaxSessions = int(maxSessions)
 	cfg.Sandbox = SandboxConfig{
-		Runsc: DefaultExecutorSandboxRunsc, Root: DefaultExecutorSandboxRoot,
+		Runsc:     optionalString(getenv, "EXECUTOR_SANDBOX_RUNSC", DefaultExecutorSandboxRunsc),
+		Root:      optionalString(getenv, "EXECUTOR_SANDBOX_ROOT", DefaultExecutorSandboxRoot),
 		MemoryMiB: DefaultExecutorSandboxMemoryMiB, CPUs: DefaultExecutorSandboxCPUs, Pids: DefaultExecutorSandboxPids,
 		Subnet: netip.MustParsePrefix(DefaultExecutorSandboxSubnet),
 	}
@@ -250,12 +245,6 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 			return ExecutorConfig{}, configError("EXECUTOR_SANDBOX_SUBNET must be an IPv4 subnet of /29 or larger, got %q", raw)
 		}
 		cfg.Sandbox.Subnet = subnet.Masked()
-	}
-	if v := strings.TrimSpace(getenv("EXECUTOR_SANDBOX_RUNSC")); v != "" {
-		cfg.Sandbox.Runsc = v
-	}
-	if v := strings.TrimSpace(getenv("EXECUTOR_SANDBOX_ROOT")); v != "" {
-		cfg.Sandbox.Root = v
 	}
 	for _, setting := range []struct {
 		name  string
@@ -355,14 +344,9 @@ func loadGitHubAppConfig(getenv func(string) string) (GitHubAppConfig, error) {
 }
 
 func loadArtifactStoreConfig(getenv func(string) string) (ArtifactStoreConfig, error) {
-	kind := ArtifactStoreKind(strings.TrimSpace(getenv("ARTIFACT_STORE_KIND")))
-	if kind == "" {
-		kind = ArtifactStoreFilesystem
-	}
-
 	cfg := ArtifactStoreConfig{
-		Kind:           kind,
-		FilesystemRoot: strings.TrimSpace(getenv("ARTIFACT_STORE_FILESYSTEM_ROOT")),
+		Kind:           ArtifactStoreKind(optionalString(getenv, "ARTIFACT_STORE_KIND", string(ArtifactStoreFilesystem))),
+		FilesystemRoot: optionalString(getenv, "ARTIFACT_STORE_FILESYSTEM_ROOT", DefaultArtifactStoreFilesystemRoot),
 		S3: S3Config{
 			Bucket:          strings.TrimSpace(getenv("S3_BUCKET")),
 			Region:          strings.TrimSpace(getenv("S3_REGION")),
@@ -372,10 +356,6 @@ func loadArtifactStoreConfig(getenv func(string) string) (ArtifactStoreConfig, e
 			ForcePathStyle:  parseBool(getenv("S3_FORCE_PATH_STYLE")),
 		},
 	}
-	if cfg.FilesystemRoot == "" {
-		cfg.FilesystemRoot = DefaultArtifactStoreFilesystemRoot
-	}
-
 	switch cfg.Kind {
 	case ArtifactStoreFilesystem:
 		return cfg, nil

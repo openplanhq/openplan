@@ -259,10 +259,7 @@ func loadOIDCConfig(getenv func(string) string) (OIDCConfig, error) {
 //	""        → StoreName "openplan"
 //	"  acme " → StoreName "acme"
 func loadOpenFGAConfig(getenv func(string) string) (OpenFGAConfig, error) {
-	storeName := strings.TrimSpace(getenv("OPENFGA_STORE_NAME"))
-	if storeName == "" {
-		storeName = DefaultOpenFGAStoreName
-	}
+	storeName := optionalString(getenv, "OPENFGA_STORE_NAME", DefaultOpenFGAStoreName)
 	if !strval.SafeOpaque(storeName) {
 		return OpenFGAConfig{}, configError("OPENFGA_STORE_NAME must not contain whitespace or control characters")
 	}
@@ -292,6 +289,13 @@ func parseAbsoluteURL(name, raw string) (*url.URL, error) {
 		return nil, configError("%s must not include a fragment", name)
 	}
 	return parsed, nil
+}
+
+func optionalString(getenv func(string) string, name, fallback string) string {
+	if value := strings.TrimSpace(getenv(name)); value != "" {
+		return value
+	}
+	return fallback
 }
 
 func optionalPositiveDuration(getenv func(string) string, name string, fallback time.Duration) (time.Duration, error) {
