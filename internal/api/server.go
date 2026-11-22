@@ -540,12 +540,7 @@ func (server *Server) handleDeleteTemplate(response http.ResponseWriter, request
 		TenantID:   domain.TenantID(request.PathValue("tenant_id")),
 		TemplateID: domain.TemplateID(request.PathValue("template_id")),
 	})
-	if err != nil {
-		writeAppError(response, err)
-		return
-	}
-
-	response.WriteHeader(http.StatusNoContent)
+	writeNoContent(response, err)
 }
 
 // handleStartTemplateSync answers 202 with the template, not the sync: a sync
@@ -996,12 +991,7 @@ func (server *Server) handleDiscardRun(response http.ResponseWriter, request *ht
 		RunID:    domain.TemplateRunID(request.PathValue("run_id")),
 		Reason:   body.Reason,
 	})
-	if err != nil {
-		writeAppError(response, err)
-		return
-	}
-
-	response.WriteHeader(http.StatusNoContent)
+	writeNoContent(response, err)
 }
 
 // setLocation points a 201 or 202 at the URL that reads back the resource it
@@ -1368,12 +1358,7 @@ func (server *Server) handleRevokeStackRole(response http.ResponseWriter, reques
 		StackID:  domain.StackID(request.PathValue("stack_id")),
 		UserSub:  request.PathValue("user_sub"),
 	})
-	if err != nil {
-		writeAppError(response, err)
-		return
-	}
-
-	response.WriteHeader(http.StatusNoContent)
+	writeNoContent(response, err)
 }
 
 func (server *Server) handleListPlatformGrants(response http.ResponseWriter, request *http.Request) {
@@ -1407,11 +1392,16 @@ func (server *Server) handleRevokePlatformRole(response http.ResponseWriter, req
 		TenantID: domain.TenantID(request.PathValue("tenant_id")),
 		UserSub:  request.PathValue("user_sub"),
 	})
+	writeNoContent(response, err)
+}
+
+// writeNoContent ends a write that has nothing to return: 204, or err's
+// problem.
+func writeNoContent(response http.ResponseWriter, err error) {
 	if err != nil {
 		writeAppError(response, err)
 		return
 	}
-
 	response.WriteHeader(http.StatusNoContent)
 }
 
