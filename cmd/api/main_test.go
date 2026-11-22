@@ -443,22 +443,6 @@ func TestRunConstructsAndClosesOIDCVerifier(t *testing.T) {
 	}
 }
 
-func TestRunWrapsWireServiceFailure(t *testing.T) {
-	t.Parallel()
-
-	wireErr := errors.New("wire failed")
-	deps := newRecordingAPIDependencies(t)
-	deps.serviceErr = wireErr
-
-	err := runWithDependencies(context.Background(), apiTestEnv, deps.apiDependencies)
-	if !errors.Is(err, wireErr) {
-		t.Fatalf("error = %v, want wireErr", err)
-	}
-	if !strings.Contains(err.Error(), "wire service") {
-		t.Fatalf("error = %q, want wire service", err)
-	}
-}
-
 // runWithDependencies serves until its context is cancelled, so this test has
 // to be the thing that stops it. Passing context.Background() meant success had
 // no exit: the only ways out were an early error, or the go test deadline ten
@@ -642,7 +626,6 @@ type recordingAPIDependencies struct {
 	serverHandler            http.Handler
 	migrated                 bool
 	authorizationMigratedDSN string
-	serviceErr               error
 	serverErr                error
 	openFGAStoreName         string
 	authorizer               *authorization.Authorization
@@ -718,12 +701,9 @@ func newRecordingAPIDependencies(t *testing.T) *recordingAPIDependencies {
 			deps.artifactStoreConfig = cfg
 			return deps.logReader, nil
 		},
-		newService: func(service app.Service) (*app.Service, error) {
+		newService: func(service app.Service) *app.Service {
 			deps.service = service
-			if deps.serviceErr != nil {
-				return nil, deps.serviceErr
-			}
-			return app.NewService(service), nil
+			return app.NewService(service)
 		},
 		newVerifier: func(context.Context, authentication.OIDCVerifierConfig) (tokenVerifier, error) {
 			return testTokenVerifier{}, nil
