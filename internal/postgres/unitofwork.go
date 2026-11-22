@@ -74,17 +74,26 @@ func (enqueuer *txEnqueuer) Enqueue(ctx context.Context, requests ...queue.Reque
 // over it would compile, pass, and silently leave the tuple committing
 // separately, which is the bug this signature exists to prevent.
 func (store *Store) InTx(ctx context.Context, fn func(context.Context, app.TxRepo, queue.Enqueuer) error) error {
+	return store.withTx(ctx, "unit of work", func(tx pgx.Tx) error {
+		return fn(authorization.WithTx(ctx, tx), &txRepo{tx: tx}, &txEnqueuer{tx: tx, specs: store.queueSpecs})
+	})
+}
+
+// withTx runs fn in one transaction, committing it when fn returns nil and
+// rolling it back otherwise; label names the write in begin and commit errors.
+// A path that returns nil having written nothing commits nothing.
+func (store *Store) withTx(ctx context.Context, label string, fn func(pgx.Tx) error) error {
 	tx, err := store.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("begin unit of work: %w", err)
+		return fmt.Errorf("begin %s: %w", label, err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := fn(authorization.WithTx(ctx, tx), &txRepo{tx: tx}, &txEnqueuer{tx: tx, specs: store.queueSpecs}); err != nil {
+	if err := fn(tx); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit unit of work: %w", err)
+		return fmt.Errorf("commit %s: %w", label, err)
 	}
 	return nil
 }

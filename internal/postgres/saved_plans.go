@@ -97,100 +97,97 @@ func (store *Store) PlanKey(ctx context.Context, tenantID domain.TenantID, runID
 // Either way a plan with changes stores its resource changes with its counts;
 // nil changes records them as unavailable.
 func (store *Store) FinishTemplatePlan(ctx context.Context, input domain.FinishPlanActivityInput, changes *domain.PlanChanges) (domain.PlanOutcome, error) {
-	tx, err := store.pool.Begin(ctx)
-	if err != nil {
-		return "", fmt.Errorf("begin finish plan: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	var status domain.TemplateRunStatus
-	err = tx.QueryRow(ctx, `
-		select status
-		from template_runs
-		where tenant_id = $1 and id = $2 and stack_template_id = $3 and operation = $4
-		for update
-	`, input.TenantID, input.RunID, input.StackTemplateID, input.Operation).Scan(&status)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", ErrNotFound
-	}
-	if err != nil {
-		return "", fmt.Errorf("read finished plan run: %w", err)
-	}
-
 	var outcome domain.PlanOutcome
-	switch {
-	case !input.HasChanges:
-		if input.Operation != domain.OperationDestroy {
+	err := store.withTx(ctx, "finish plan", func(tx pgx.Tx) error {
+		var status domain.TemplateRunStatus
+		err := tx.QueryRow(ctx, `
+			select status
+			from template_runs
+			where tenant_id = $1 and id = $2 and stack_template_id = $3 and operation = $4
+			for update
+		`, input.TenantID, input.RunID, input.StackTemplateID, input.Operation).Scan(&status)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("read finished plan run: %w", err)
+		}
+
+		switch {
+		case !input.HasChanges:
+			if input.Operation != domain.OperationDestroy {
+				if _, err := tx.Exec(ctx, `
+					update stack_templates
+					set
+						last_applied_run_id = template_runs.id,
+						last_applied_template_revision_id = template_runs.template_revision_id,
+						last_applied_config_json = template_runs.config_json,
+						last_applied_at = now()
+					from template_runs
+					where template_runs.tenant_id = $1
+						and template_runs.id = $2
+						and stack_templates.tenant_id = template_runs.tenant_id
+						and stack_templates.id = template_runs.stack_template_id
+				`, input.TenantID, input.RunID); err != nil {
+					return fmt.Errorf("record plan without changes as applied: %w", err)
+				}
+			}
+			outcome = domain.PlanOutcomeNoChanges
+		case input.Operation == domain.OperationPlan:
+			if err := recordPlanCounts(ctx, tx, input.TenantID, input.RunID, input.Summary); err != nil {
+				return err
+			}
+			if err := recordPlanChanges(ctx, tx, input.TenantID, input.RunID, changes); err != nil {
+				return err
+			}
+			outcome = domain.PlanOutcomePlanned
+		default:
+			outcome = domain.PlanOutcomeWaiting
+			if _, err := tx.Exec(ctx, `
+				update template_runs set status = $1 where tenant_id = $2 and id = $3
+			`, domain.TemplateRunWaitingApproval, input.TenantID, input.RunID); err != nil {
+				return fmt.Errorf("record plan with changes: %w", err)
+			}
 			if _, err := tx.Exec(ctx, `
 				update stack_templates
 				set
-					last_applied_run_id = template_runs.id,
-					last_applied_template_revision_id = template_runs.template_revision_id,
-					last_applied_config_json = template_runs.config_json,
-					last_applied_at = now()
+					pending_plan_run_id = template_runs.id,
+					pending_plan_template_revision_id = template_runs.template_revision_id,
+					pending_plan_config_json = template_runs.config_json,
+					pending_plan_at = now()
 				from template_runs
 				where template_runs.tenant_id = $1
 					and template_runs.id = $2
 					and stack_templates.tenant_id = template_runs.tenant_id
 					and stack_templates.id = template_runs.stack_template_id
 			`, input.TenantID, input.RunID); err != nil {
-				return "", fmt.Errorf("record plan without changes as applied: %w", err)
+				return fmt.Errorf("record pending plan: %w", err)
+			}
+			if err := recordPlanCounts(ctx, tx, input.TenantID, input.RunID, input.Summary); err != nil {
+				return err
+			}
+			if err := recordPlanChanges(ctx, tx, input.TenantID, input.RunID, changes); err != nil {
+				return err
+			}
+			// The plan is done, and nothing runs while the run waits for a
+			// person, so its execution ends here. A run already waiting is this
+			// write retried, and its plan already ended. A retry that finds the
+			// run approved, or claimed by its apply, fails and rolls back the
+			// writes above: the run is past waiting, and a running apply is not
+			// the plan's to end.
+			ended, err := finishRunningExecution(ctx, tx, input.TenantID, input.RunID, domain.RunPhasePlan, domain.TemplateRunExecutionSucceeded, "", "")
+			if err != nil {
+				return err
+			}
+			if !ended && status != domain.TemplateRunWaitingApproval {
+				return fmt.Errorf("finish plan: run %s has no running plan execution", input.RunID)
 			}
 		}
-		outcome = domain.PlanOutcomeNoChanges
-	case input.Operation == domain.OperationPlan:
-		if err := recordPlanCounts(ctx, tx, input.TenantID, input.RunID, input.Summary); err != nil {
-			return "", err
-		}
-		if err := recordPlanChanges(ctx, tx, input.TenantID, input.RunID, changes); err != nil {
-			return "", err
-		}
-		outcome = domain.PlanOutcomePlanned
-	default:
-		outcome = domain.PlanOutcomeWaiting
-		if _, err := tx.Exec(ctx, `
-			update template_runs set status = $1 where tenant_id = $2 and id = $3
-		`, domain.TemplateRunWaitingApproval, input.TenantID, input.RunID); err != nil {
-			return "", fmt.Errorf("record plan with changes: %w", err)
-		}
-		if _, err := tx.Exec(ctx, `
-			update stack_templates
-			set
-				pending_plan_run_id = template_runs.id,
-				pending_plan_template_revision_id = template_runs.template_revision_id,
-				pending_plan_config_json = template_runs.config_json,
-				pending_plan_at = now()
-			from template_runs
-			where template_runs.tenant_id = $1
-				and template_runs.id = $2
-				and stack_templates.tenant_id = template_runs.tenant_id
-				and stack_templates.id = template_runs.stack_template_id
-		`, input.TenantID, input.RunID); err != nil {
-			return "", fmt.Errorf("record pending plan: %w", err)
-		}
-		if err := recordPlanCounts(ctx, tx, input.TenantID, input.RunID, input.Summary); err != nil {
-			return "", err
-		}
-		if err := recordPlanChanges(ctx, tx, input.TenantID, input.RunID, changes); err != nil {
-			return "", err
-		}
-		// The plan is done, and nothing runs while the run waits for a
-		// person, so its execution ends here. A run already waiting is this
-		// write retried, and its plan already ended. A retry that finds the
-		// run approved, or claimed by its apply, fails and rolls back the
-		// writes above: the run is past waiting, and a running apply is not
-		// the plan's to end.
-		ended, err := finishRunningExecution(ctx, tx, input.TenantID, input.RunID, domain.RunPhasePlan, domain.TemplateRunExecutionSucceeded, "", "")
-		if err != nil {
-			return "", err
-		}
-		if !ended && status != domain.TemplateRunWaitingApproval {
-			return "", fmt.Errorf("finish plan: run %s has no running plan execution", input.RunID)
-		}
-	}
 
-	if err := tx.Commit(ctx); err != nil {
-		return "", fmt.Errorf("commit finish plan: %w", err)
+		return nil
+	})
+	if err != nil {
+		return "", err
 	}
 	return outcome, nil
 }
@@ -211,30 +208,24 @@ func (store *Store) BeginTemplateApply(ctx context.Context, tenantID domain.Tena
 	if autoApprove {
 		from = domain.TemplateRunQueued
 	}
-	tx, err := store.pool.Begin(ctx)
-	if err != nil {
-		return false, fmt.Errorf("begin claim run for apply: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	commandTag, err := tx.Exec(ctx, `
-		update template_runs
-		set status = $1
-		where tenant_id = $2 and id = $3 and status in ($4, $1) and auto_approve = $5
-	`, domain.TemplateRunRunning, tenantID, runID, from, autoApprove)
-	if err != nil {
-		return false, fmt.Errorf("claim run for apply: %w", err)
-	}
-	if commandTag.RowsAffected() != 1 {
-		return false, nil
-	}
-	if _, err := insertWorkflowExecution(ctx, tx, tenantID, runID, domain.RunPhaseApply, workflowID, domain.TemplateRunExecutionRunning, "", ""); err != nil {
-		return false, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return false, fmt.Errorf("commit claim run for apply: %w", err)
-	}
-	return true, nil
+	var claimed bool
+	err := store.withTx(ctx, "claim run for apply", func(tx pgx.Tx) error {
+		commandTag, err := tx.Exec(ctx, `
+			update template_runs
+			set status = $1
+			where tenant_id = $2 and id = $3 and status in ($4, $1) and auto_approve = $5
+		`, domain.TemplateRunRunning, tenantID, runID, from, autoApprove)
+		if err != nil {
+			return fmt.Errorf("claim run for apply: %w", err)
+		}
+		claimed = commandTag.RowsAffected() == 1
+		if !claimed {
+			return nil
+		}
+		_, err = insertWorkflowExecution(ctx, tx, tenantID, runID, domain.RunPhaseApply, workflowID, domain.TemplateRunExecutionRunning, "", "")
+		return err
+	})
+	return claimed && err == nil, err
 }
 
 // discardTemplateRun discards a run whose plan is waiting for approval, or

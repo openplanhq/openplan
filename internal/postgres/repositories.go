@@ -273,62 +273,66 @@ func (store *Store) RecordSyncedTemplateRevision(ctx context.Context, syncID dom
 	}
 	revision.ID = domain.RandomID[domain.TemplateRevisionID]("template_revision")
 
-	tx, err := store.pool.Begin(ctx)
-	if err != nil {
-		return domain.TemplateRevision{}, fmt.Errorf("begin record synced template revision: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
-	stored, insertedNew, err := insertTemplateRevision(ctx, tx, revision, tagsJSON)
-	if err != nil {
-		return domain.TemplateRevision{}, err
-	}
-	if err := recordLatestTemplateRevision(ctx, tx, stored, revision.SourceRef); err != nil {
-		return domain.TemplateRevision{}, err
-	}
-	if insertedNew {
-		if err := insertTemplateVariables(ctx, tx, stored.ID, variables); err != nil {
-			return domain.TemplateRevision{}, err
+	var stored domain.TemplateRevision
+	err = store.withTx(ctx, "record synced template revision", func(tx pgx.Tx) error {
+		var insertedNew bool
+		var err error
+		stored, insertedNew, err = insertTemplateRevision(ctx, tx, revision, tagsJSON)
+		if err != nil {
+			return err
 		}
-	}
-	// The sync is written last, and only while it is unfinished. A second
-	// attempt of the same sync running alongside the first waits on the
-	// revision's unique index until the first commits, then finds the sync
-	// completed here and rolls back, so the first attempt's record stands.
-	completed, err := tx.Exec(ctx, `
-		update template_syncs
-		set
-			status = $1,
-			template_revision_id = $2,
-			resolved_commit_sha = $3,
-			error_summary = '',
-			up_to_date = $4,
-			completed_at = coalesce(completed_at, now())
-		where tenant_id = $5
-			and id = $6
-			and status in ('pending', 'running')
-	`,
-		domain.TemplateSyncStateCompleted,
-		stored.ID,
-		stored.ResolvedCommitSHA,
-		!insertedNew,
-		revision.TenantID,
-		syncID,
-	)
-	if err != nil {
-		return domain.TemplateRevision{}, fmt.Errorf("record template sync %s: %w", syncID, err)
-	}
-	if completed.RowsAffected() == 0 {
-		if err := tx.Rollback(ctx); err != nil {
-			return domain.TemplateRevision{}, fmt.Errorf("roll back a sync already recorded: %w", err)
+		if err := recordLatestTemplateRevision(ctx, tx, stored, revision.SourceRef); err != nil {
+			return err
 		}
+		if insertedNew {
+			if err := insertTemplateVariables(ctx, tx, stored.ID, variables); err != nil {
+				return err
+			}
+		}
+		// The sync is written last, and only while it is unfinished. A second
+		// attempt of the same sync running alongside the first waits on the
+		// revision's unique index until the first commits, then finds the sync
+		// completed here and rolls back, so the first attempt's record stands.
+		completed, err := tx.Exec(ctx, `
+			update template_syncs
+			set
+				status = $1,
+				template_revision_id = $2,
+				resolved_commit_sha = $3,
+				error_summary = '',
+				up_to_date = $4,
+				completed_at = coalesce(completed_at, now())
+			where tenant_id = $5
+				and id = $6
+				and status in ('pending', 'running')
+		`,
+			domain.TemplateSyncStateCompleted,
+			stored.ID,
+			stored.ResolvedCommitSHA,
+			!insertedNew,
+			revision.TenantID,
+			syncID,
+		)
+		if err != nil {
+			return fmt.Errorf("record template sync %s: %w", syncID, err)
+		}
+		if completed.RowsAffected() == 0 {
+			return errSyncRecorded
+		}
+		return nil
+	})
+	if errors.Is(err, errSyncRecorded) {
 		return store.recordedSyncRevision(ctx, revision, syncID)
 	}
-	if err := tx.Commit(ctx); err != nil {
-		return domain.TemplateRevision{}, fmt.Errorf("commit record synced template revision: %w", err)
+	if err != nil {
+		return domain.TemplateRevision{}, err
 	}
 	return stored, nil
 }
+
+// errSyncRecorded rolls back a sync's writes when the sync was already
+// recorded, so the recorded revision is read after the rollback.
+var errSyncRecorded = errors.New("template sync already recorded")
 
 // recordedSyncRevision is what a sync that can no longer be recorded already
 // holds: the revision a completed sync recorded. A sync that is gone went
@@ -1479,83 +1483,67 @@ func (store *Store) RecordTemplateRunStatus(ctx context.Context, input domain.Te
 		return fmt.Errorf("record template run status: the workflow does not record %q", input.Status)
 	}
 
-	tx, err := store.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin record template run status: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	return store.withTx(ctx, "record template run status", func(tx pgx.Tx) error {
+		var current domain.TemplateRunStatus
+		err := tx.QueryRow(ctx, `
+			select status
+			from template_runs
+			where tenant_id = $1
+				and id = $2
+				and stack_template_id = $3
+				and operation = $4
+			for update
+		`, input.TenantID, input.RunID, input.StackTemplateID, input.Operation).Scan(&current)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("read template run status: %w", err)
+		}
+		if current == input.Status {
+			return nil
+		}
+		if !slices.Contains(sources, current) {
+			return fmt.Errorf("%w: %q cannot become %q", ErrTemplateRunTransition, current, input.Status)
+		}
+		if !input.Phase.Valid() {
+			return fmt.Errorf("record template run status: unknown phase %q", input.Phase)
+		}
 
-	var current domain.TemplateRunStatus
-	err = tx.QueryRow(ctx, `
-		select status
-		from template_runs
-		where tenant_id = $1
-			and id = $2
-			and stack_template_id = $3
-			and operation = $4
-		for update
-	`, input.TenantID, input.RunID, input.StackTemplateID, input.Operation).Scan(&current)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrNotFound
-	}
-	if err != nil {
-		return fmt.Errorf("read template run status: %w", err)
-	}
-	if current == input.Status {
-		return nil
-	}
-	if !slices.Contains(sources, current) {
-		return fmt.Errorf("%w: %q cannot become %q", ErrTemplateRunTransition, current, input.Status)
-	}
-	if !input.Phase.Valid() {
-		return fmt.Errorf("record template run status: unknown phase %q", input.Phase)
-	}
+		if !input.Status.Terminal() {
+			if _, err := tx.Exec(ctx, `
+				update template_runs set status = $1 where tenant_id = $2 and id = $3
+			`, input.Status, input.TenantID, input.RunID); err != nil {
+				return fmt.Errorf("record template run status: %w", err)
+			}
+			// Running is the only status recorded here, and only the plan
+			// workflow records it: an apply claims its run with
+			// BeginTemplateApply. The plan's execution starts with it.
+			_, err := insertWorkflowExecution(ctx, tx, input.TenantID, input.RunID, input.Phase, input.WorkflowID, domain.TemplateRunExecutionRunning, "", "")
+			return err
+		}
 
-	if !input.Status.Terminal() {
+		carried, err := endWorkflowExecution(ctx, tx, input)
+		if err != nil {
+			return err
+		}
+		if !carried {
+			return nil
+		}
 		if _, err := tx.Exec(ctx, `
-			update template_runs set status = $1 where tenant_id = $2 and id = $3
+			update template_runs
+			set status = $1, completed_at = coalesce(completed_at, now())
+			where tenant_id = $2 and id = $3
 		`, input.Status, input.TenantID, input.RunID); err != nil {
 			return fmt.Errorf("record template run status: %w", err)
 		}
-		// Running is the only status recorded here, and only the plan
-		// workflow records it: an apply claims its run with
-		// BeginTemplateApply. The plan's execution starts with it.
-		if _, err := insertWorkflowExecution(ctx, tx, input.TenantID, input.RunID, input.Phase, input.WorkflowID, domain.TemplateRunExecutionRunning, "", ""); err != nil {
-			return err
+		if input.Status == domain.TemplateRunFailed && input.Operation == domain.OperationDestroy {
+			if err := recordInterruptedDestroyLifecycle(ctx, tx, input.TenantID, input.StackTemplateID); err != nil {
+				return err
+			}
 		}
-		return commitTemplateRunStatus(ctx, tx)
-	}
-
-	carried, err := endWorkflowExecution(ctx, tx, input)
-	if err != nil {
-		return err
-	}
-	if !carried {
-		return nil
-	}
-	if _, err := tx.Exec(ctx, `
-		update template_runs
-		set status = $1, completed_at = coalesce(completed_at, now())
-		where tenant_id = $2 and id = $3
-	`, input.Status, input.TenantID, input.RunID); err != nil {
-		return fmt.Errorf("record template run status: %w", err)
-	}
-	if input.Status == domain.TemplateRunFailed && input.Operation == domain.OperationDestroy {
-		if err := recordInterruptedDestroyLifecycle(ctx, tx, input.TenantID, input.StackTemplateID); err != nil {
-			return err
-		}
-	}
-	if err := releaseRunPlan(ctx, tx, input.TenantID, input.RunID); err != nil {
-		return err
-	}
-	return commitTemplateRunStatus(ctx, tx)
-}
-
-func commitTemplateRunStatus(ctx context.Context, tx pgx.Tx) error {
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit record template run status: %w", err)
-	}
-	return nil
+		return releaseRunPlan(ctx, tx, input.TenantID, input.RunID)
+	})
 }
 
 // releaseRunPlan is what a run becoming terminal does to its saved plan. Its

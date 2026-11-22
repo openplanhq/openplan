@@ -184,32 +184,30 @@ const pruneLockKeyExpr = `('x' || substr(md5(current_schema() || '.work_queue.pr
 // that loses the race reports zero rows and no error — it did not fail, it
 // simply had nothing to do.
 func (store *Store) Prune(ctx context.Context, retention time.Duration) (int64, error) {
-	tx, err := store.pool.Begin(ctx)
+	var pruned int64
+	err := store.withTx(ctx, "prune", func(tx pgx.Tx) error {
+		var acquired bool
+		if err := tx.QueryRow(ctx, `select pg_try_advisory_xact_lock(`+pruneLockKeyExpr+`)`).Scan(&acquired); err != nil {
+			return fmt.Errorf("lock prune: %w", err)
+		}
+		if !acquired {
+			return nil
+		}
+		tag, err := tx.Exec(ctx, `
+			delete from work_queue
+			 where processed_at is not null
+			   and processed_at < now() - $1::interval
+		`, retention)
+		if err != nil {
+			return fmt.Errorf("prune work: %w", err)
+		}
+		pruned = tag.RowsAffected()
+		return nil
+	})
 	if err != nil {
-		return 0, fmt.Errorf("begin prune: %w", err)
+		return 0, err
 	}
-	defer tx.Rollback(ctx)
-
-	var acquired bool
-	if err := tx.QueryRow(ctx, `select pg_try_advisory_xact_lock(`+pruneLockKeyExpr+`)`).Scan(&acquired); err != nil {
-		return 0, fmt.Errorf("lock prune: %w", err)
-	}
-	if !acquired {
-		return 0, nil
-	}
-
-	tag, err := tx.Exec(ctx, `
-		delete from work_queue
-		 where processed_at is not null
-		   and processed_at < now() - $1::interval
-	`, retention)
-	if err != nil {
-		return 0, fmt.Errorf("prune work: %w", err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return 0, fmt.Errorf("commit prune: %w", err)
-	}
-	return tag.RowsAffected(), nil
+	return pruned, nil
 }
 
 // ListByActor returns the items a caller queued. There is no permission concept
