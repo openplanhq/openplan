@@ -330,11 +330,7 @@ func (server *Server) handleMe(response http.ResponseWriter, request *http.Reque
 		writeAppError(response, err)
 		return
 	}
-	writeJSON(response, http.StatusOK, meFromPrincipal(principal, server.tenantID, globalCapabilities{
-		CanCreateStack:          capabilities.CanCreateStack,
-		CanManageTemplates:      capabilities.CanManageTemplates,
-		CanManagePlatformAccess: capabilities.CanManagePlatformAccess,
-	}))
+	writeJSON(response, http.StatusOK, meFromPrincipal(principal, server.tenantID, globalCapabilities(capabilities)))
 }
 
 // tenantPrefix roots every tenant route. handleTenantRoute adds it, so no
@@ -1242,22 +1238,17 @@ func newStackResponse(stack domain.Stack, capabilities app.StackCapabilities) st
 	}
 
 	return stackResponse{
-		ID:                   string(stack.ID),
-		TenantID:             string(stack.TenantID),
-		Name:                 stack.Name,
-		Slug:                 stack.Slug,
-		SlugIsDerived:        app.SlugIsDerived(stack.Name, stack.Slug),
-		Status:               status,
-		Tags:                 tags,
-		DefaultCredentialIDs: credentialIDs,
-		CreatedBy:            string(stack.CreatedBy),
-		CreatedAt:            stack.CreatedAt.Format(time.RFC3339Nano),
-		EffectiveCapabilities: stackCapabilitiesResponse{
-			CanView:         capabilities.CanView,
-			CanOperate:      capabilities.CanOperate,
-			CanApprove:      capabilities.CanApprove,
-			CanManageAccess: capabilities.CanManageAccess,
-		},
+		ID:                    string(stack.ID),
+		TenantID:              string(stack.TenantID),
+		Name:                  stack.Name,
+		Slug:                  stack.Slug,
+		SlugIsDerived:         app.SlugIsDerived(stack.Name, stack.Slug),
+		Status:                status,
+		Tags:                  tags,
+		DefaultCredentialIDs:  credentialIDs,
+		CreatedBy:             string(stack.CreatedBy),
+		CreatedAt:             stack.CreatedAt.Format(time.RFC3339Nano),
+		EffectiveCapabilities: stackCapabilitiesResponse(capabilities),
 	}
 }
 
