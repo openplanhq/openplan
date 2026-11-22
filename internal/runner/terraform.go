@@ -92,14 +92,14 @@ func (runner *LocalTerraformRunner) Run(ctx context.Context, input TerraformComm
 
 	switch input.Command {
 	case domain.TerraformCommandInit:
-		return Result{}, runner.run(ctx, input, sortedEnvironment(input.Environment), "init", "-input=false", "-no-color")
+		return Result{}, runner.run(ctx, input, "init", "-input=false", "-no-color")
 	case domain.TerraformCommandSelectWorkspace:
 		return Result{}, runner.selectWorkspace(ctx, input)
 	case domain.TerraformCommandPlan, domain.TerraformCommandPlanDestroy:
 		return runner.plan(ctx, input)
 	case domain.TerraformCommandApply, domain.TerraformCommandDestroy:
 		return runner.apply(input, func(input TerraformCommand) error {
-			return runner.run(ctx, input, sortedEnvironment(input.Environment), "apply", "-input=false", "-auto-approve", "-no-color", PlanFileName)
+			return runner.run(ctx, input, "apply", "-input=false", "-auto-approve", "-no-color", PlanFileName)
 		})
 	case domain.TerraformCommandApplyAutoApprove:
 		return runner.apply(input, func(input TerraformCommand) error {
@@ -207,8 +207,7 @@ func (runner *LocalTerraformRunner) summarize(ctx context.Context, input Terrafo
 // leaves an expected "doesn't exist" error first in the log, which a failed
 // run would then lead with instead of the error that stopped it (issue 522).
 func (runner *LocalTerraformRunner) selectWorkspace(ctx context.Context, input TerraformCommand) error {
-	return runner.run(ctx, input, sortedEnvironment(input.Environment),
-		"workspace", "select", "-or-create=true", "-no-color", input.WorkspaceName)
+	return runner.run(ctx, input, "workspace", "select", "-or-create=true", "-no-color", input.WorkspaceName)
 }
 
 // run executes an OpenTofu command with shared error wrapping.
@@ -217,9 +216,9 @@ func (runner *LocalTerraformRunner) selectWorkspace(ctx context.Context, input T
 // identify which command failed via errors.As instead of parsing the error
 // text. args are the exact OpenTofu CLI arguments passed to the command
 // executor.
-func (runner *LocalTerraformRunner) run(ctx context.Context, input TerraformCommand, env []string, args ...string) error {
+func (runner *LocalTerraformRunner) run(ctx context.Context, input TerraformCommand, args ...string) error {
 	stdout, stderr := outputWriters(input)
-	err := runner.executor.Run(ctx, input.WorkspacePath, env, stdout, stderr, terraformExecutable, args...)
+	err := runner.executor.Run(ctx, input.WorkspacePath, sortedEnvironment(input.Environment), stdout, stderr, terraformExecutable, args...)
 	if err != nil {
 		return &CommandError{Command: input.Command, Err: err}
 	}
@@ -242,7 +241,7 @@ func (runner *LocalTerraformRunner) runWithTerraformVariables(ctx context.Contex
 		defer func() { _ = os.Remove(path) }()
 		args = append(args, "-var-file="+path)
 	}
-	return runner.run(ctx, input, sortedEnvironment(input.Environment), args...)
+	return runner.run(ctx, input, args...)
 }
 
 // writeVariableFile writes the run's config, byte for byte as stored, to a new
