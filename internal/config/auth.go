@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -302,6 +303,18 @@ func optionalPositiveDuration(getenv func(string) string, name string, fallback 
 	value, err := time.ParseDuration(raw)
 	if err != nil || value <= 0 {
 		return 0, configError("%s must be a positive duration such as 45m or 2h", name)
+	}
+	return value, nil
+}
+
+func optionalPositiveInt(getenv func(string) string, name string, fallback int64) (int64, error) {
+	raw := strings.TrimSpace(getenv(name))
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value < 1 {
+		return 0, configError("%s must be a positive integer, got %q", name, raw)
 	}
 	return value, nil
 }

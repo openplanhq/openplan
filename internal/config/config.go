@@ -233,14 +233,11 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 	if cfg.RunRoot == "" {
 		cfg.RunRoot = DefaultExecutorRunRoot
 	}
-	cfg.MaxSessions = DefaultExecutorMaxSessions
-	if raw := strings.TrimSpace(getenv("EXECUTOR_MAX_SESSIONS")); raw != "" {
-		maxSessions, err := strconv.Atoi(raw)
-		if err != nil || maxSessions < 1 {
-			return ExecutorConfig{}, configError("EXECUTOR_MAX_SESSIONS must be a positive integer, got %q", raw)
-		}
-		cfg.MaxSessions = maxSessions
+	maxSessions, err := optionalPositiveInt(getenv, "EXECUTOR_MAX_SESSIONS", DefaultExecutorMaxSessions)
+	if err != nil {
+		return ExecutorConfig{}, err
 	}
+	cfg.MaxSessions = int(maxSessions)
 	cfg.Sandbox = SandboxConfig{
 		Runsc: DefaultExecutorSandboxRunsc, Root: DefaultExecutorSandboxRoot,
 		MemoryMiB: DefaultExecutorSandboxMemoryMiB, CPUs: DefaultExecutorSandboxCPUs, Pids: DefaultExecutorSandboxPids,
@@ -268,15 +265,9 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 		{"EXECUTOR_SANDBOX_CPUS", &cfg.Sandbox.CPUs},
 		{"EXECUTOR_SANDBOX_PIDS", &cfg.Sandbox.Pids},
 	} {
-		raw := strings.TrimSpace(getenv(setting.name))
-		if raw == "" {
-			continue
+		if *setting.value, err = optionalPositiveInt(getenv, setting.name, *setting.value); err != nil {
+			return ExecutorConfig{}, err
 		}
-		parsed, err := strconv.ParseInt(raw, 10, 64)
-		if err != nil || parsed < 1 {
-			return ExecutorConfig{}, configError("%s must be a positive integer, got %q", setting.name, raw)
-		}
-		*setting.value = parsed
 	}
 	// Every running sandbox holds one of the subnet's addresses, and every
 	// session can be running one. Too few, and activities would fail to start
