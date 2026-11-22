@@ -568,11 +568,7 @@ func escapePath(value string) string {
 }
 
 func joinURLPath(parts ...string) string {
-	joined := path.Join(parts...)
-	if strings.HasPrefix(parts[0], "/") {
-		return "/" + strings.TrimPrefix(joined, "/")
-	}
-	return "/" + strings.TrimPrefix(joined, "/")
+	return "/" + strings.TrimPrefix(path.Join(parts...), "/")
 }
 
 func safePathComponent(component string) bool {
