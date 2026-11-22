@@ -8,22 +8,13 @@ import (
 	"time"
 )
 
-// processEnvironmentAllowlist names the only variables a subprocess takes from
-// this process's environment. On the api that environment holds the
-// database URL and keys; inside a sandbox it is the sandbox's own scratch
-// environment. What a command needs beyond these arrives through Run's env.
-//
-// Names, not prefixes: TF_* would forward a TF_VAR_* or TF_CLI_ARGS set on
-// the host into every tenant's run.
-var processEnvironmentAllowlist = []string{
-	// Finding executables, and where tofu and git keep config and scratch
-	// files.
-	"PATH",
-	"HOME",
-	"TMPDIR",
-	// Corporate egress: provider and module downloads and git fetches go
-	// through the proxy and trust its CA. Both cases, because Go reads either
-	// and curl reads only the lowercase http_proxy.
+// EgressVariables are the host's corporate-egress settings every command
+// needs: provider and module downloads and git fetches go through the proxy
+// and trust its CA. Both cases, because Go reads either and curl reads only
+// the lowercase http_proxy. The sandbox forwards these same names into its
+// environment, and processEnvironment then filters that through this list
+// again, so they are one list: a name in only one would be dropped silently.
+var EgressVariables = []string{
 	"HTTP_PROXY",
 	"HTTPS_PROXY",
 	"NO_PROXY",
@@ -33,6 +24,17 @@ var processEnvironmentAllowlist = []string{
 	"SSL_CERT_FILE",
 	"SSL_CERT_DIR",
 }
+
+// processEnvironmentAllowlist names the only variables a subprocess takes from
+// this process's environment. On the api that environment holds the
+// database URL and keys; inside a sandbox it is the sandbox's own scratch
+// environment. What a command needs beyond these arrives through Run's env.
+// PATH, HOME and TMPDIR find executables and where tofu and git keep config
+// and scratch files.
+//
+// Names, not prefixes: TF_* would forward a TF_VAR_* or TF_CLI_ARGS set on
+// the host into every tenant's run.
+var processEnvironmentAllowlist = append([]string{"PATH", "HOME", "TMPDIR"}, EgressVariables...)
 
 // processEnvironment returns a subprocess's whole environment: the
 // allowlisted variables that are set, TF_IN_AUTOMATION, then env. env comes
