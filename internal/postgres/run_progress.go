@@ -123,8 +123,9 @@ func (store *Store) RecordTemplateRunEvent(ctx context.Context, input domain.Tem
 			return recordStackTemplateLastApplied(ctx, tx, input.TenantID, input.StackTemplateID, input.RunID, domain.TemplateRunRunning)
 		case domain.TemplateRunDestroying:
 			return recordStackTemplateLifecycle(ctx, tx, input.TenantID, input.StackTemplateID, domain.StackTemplateDestroying)
-		default: // domain.TemplateRunDestroyed, the last of templateRunEventOperations
+		case domain.TemplateRunDestroyed:
 			return recordStackTemplateLifecycle(ctx, tx, input.TenantID, input.StackTemplateID, domain.StackTemplateDestroyed)
 		}
+		return nil
 	})
 }
