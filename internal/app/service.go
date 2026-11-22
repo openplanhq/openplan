@@ -1684,19 +1684,8 @@ func (service *Service) grantViews(ctx context.Context, grants []authorization.G
 	views := make([]GrantView, 0, len(grants))
 	for _, grant := range grants {
 		userSub := grant.Subject().ID()
-		gv := GrantView{UserSub: userSub, Role: grant.Relation().String()}
-
-		if profile, ok := profiles[userSub]; ok {
-			gv.DisplayName = profile.DisplayName
-			gv.Email = profile.Email
-		}
-		// A tuple can name a subject with no projected row — someone deleted
-		// from the IdP, or a tuple written out of band — and a grants list has
-		// to render either way. The sub is a poor label but an accurate one.
-		if gv.DisplayName == "" {
-			gv.DisplayName = userSub
-		}
-		views = append(views, gv)
+		profile := profiles[userSub]
+		views = append(views, GrantView{UserSub: userSub, Role: grant.Relation().String(), DisplayName: profile.nameOr(userSub), Email: profile.Email})
 	}
 	return views, nil
 }
@@ -2388,7 +2377,7 @@ func (service *Service) labelTriggerActors(ctx context.Context, runs ...*domain.
 		return fmt.Errorf("look up trigger actors: %w", err)
 	}
 	label := func(sub domain.UserID) string {
-		return cmp.Or(profiles[string(sub)].DisplayName, string(sub))
+		return profiles[string(sub)].nameOr(string(sub))
 	}
 	for _, run := range runs {
 		run.TriggerActorDisplayName = label(run.TriggerActor)
