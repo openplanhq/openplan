@@ -128,33 +128,28 @@ func endWorkflowExecution(ctx context.Context, exec pgxExecutor, input domain.Te
 // execution. It targets the phase, not the running execution, so a retried
 // FinishPlan still finds the row after the plan has finished.
 func recordPlanCounts(ctx context.Context, exec pgxExecutor, tenantID domain.TenantID, runID domain.TemplateRunID, summary domain.PlanSummary) error {
-	commandTag, err := exec.Exec(ctx, `
-		update template_run_workflow_executions
-		set resource_add = $3, resource_change = $4, resource_destroy = $5
-		where tenant_id = $1 and run_id = $2 and phase = 'plan'
-	`, tenantID, runID, summary.Add, summary.Change, summary.Destroy)
-	if err != nil {
-		return fmt.Errorf("record plan counts: %w", err)
-	}
-	if commandTag.RowsAffected() == 0 {
-		return fmt.Errorf("record plan counts: run %s has no plan execution", runID)
-	}
-	return nil
+	return recordCounts(ctx, exec, tenantID, runID, summary, "phase = 'plan'", "record plan counts", "plan execution")
 }
 
 // recordRunningCounts records counts on the run's running workflow execution:
 // what its apply did.
 func recordRunningCounts(ctx context.Context, exec pgxExecutor, tenantID domain.TenantID, runID domain.TemplateRunID, summary domain.PlanSummary) error {
+	return recordCounts(ctx, exec, tenantID, runID, summary, "status = 'running'", "record execution counts", "running workflow execution")
+}
+
+// recordCounts records counts on the run's execution that where picks, a
+// constant of the caller's; label and execution name it in errors.
+func recordCounts(ctx context.Context, exec pgxExecutor, tenantID domain.TenantID, runID domain.TemplateRunID, summary domain.PlanSummary, where, label, execution string) error {
 	commandTag, err := exec.Exec(ctx, `
 		update template_run_workflow_executions
 		set resource_add = $3, resource_change = $4, resource_destroy = $5
-		where tenant_id = $1 and run_id = $2 and status = 'running'
-	`, tenantID, runID, summary.Add, summary.Change, summary.Destroy)
+		where tenant_id = $1 and run_id = $2 and `+where,
+		tenantID, runID, summary.Add, summary.Change, summary.Destroy)
 	if err != nil {
-		return fmt.Errorf("record execution counts: %w", err)
+		return fmt.Errorf("%s: %w", label, err)
 	}
 	if commandTag.RowsAffected() == 0 {
-		return fmt.Errorf("record execution counts: run %s has no running workflow execution", runID)
+		return fmt.Errorf("%s: run %s has no %s", label, runID, execution)
 	}
 	return nil
 }
