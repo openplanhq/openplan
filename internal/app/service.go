@@ -1368,11 +1368,7 @@ func (service *Service) GetStack(ctx context.Context, command GetStackCommand) (
 		view.Templates = []StackTemplateView{}
 	}
 
-	views := make([]*StackTemplateView, len(view.Templates))
-	for i := range view.Templates {
-		views[i] = &view.Templates[i]
-	}
-	if err := service.labelStackTemplates(ctx, command.TenantID, views...); err != nil {
+	if err := service.labelStackTemplates(ctx, command.TenantID, pointers(view.Templates)...); err != nil {
 		return StackView{}, err
 	}
 
@@ -1407,6 +1403,16 @@ func (service *Service) labelStackTemplates(ctx context.Context, tenantID domain
 		*view = stackTemplateView(view.StackTemplate, rev)
 	}
 	return nil
+}
+
+// pointers points at each element of items in place, so the labellers, which
+// take pointers to serve single values too, write into the caller's slice.
+func pointers[T any](items []T) []*T {
+	pointed := make([]*T, len(items))
+	for i := range items {
+		pointed[i] = &items[i]
+	}
+	return pointed
 }
 
 // stackTemplateView labels a stack template from its desired revision. Writes
@@ -2329,11 +2335,7 @@ func (service *Service) ListTemplateRuns(ctx context.Context, command ListTempla
 	if len(page.Items) == 0 {
 		return page, nil
 	}
-	labelled := make([]*domain.TemplateRun, len(page.Items))
-	for i := range page.Items {
-		labelled[i] = &page.Items[i]
-	}
-	if err := service.labelTriggerActors(ctx, labelled...); err != nil {
+	if err := service.labelTriggerActors(ctx, pointers(page.Items)...); err != nil {
 		return Page[domain.TemplateRun]{}, fmt.Errorf("list template runs: %w", err)
 	}
 
