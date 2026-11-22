@@ -92,17 +92,12 @@ func (store *Store) ListCredentials(ctx context.Context, tenantID domain.TenantI
 	if scope != domain.CredentialScopeStack && scope != domain.CredentialScopeStackTemplate {
 		return nil, app.ErrInvalidCommand
 	}
-	rows, err := store.pool.Query(ctx, fmt.Sprintf(`
+	return queryRows(ctx, store.pool, "list credentials", scanCredential, fmt.Sprintf(`
 		select id, tenant_id, stack_id, stack_template_id, name, ciphertext, sensitive, created_at
 		from scoped_credentials
 		where tenant_id = $1 and %s = $2
 		order by created_at, id
 	`, column), tenantID, ownerID)
-	if err != nil {
-		return nil, fmt.Errorf("list credentials: %w", err)
-	}
-	defer rows.Close()
-	return scanCredentials(rows)
 }
 
 // DeleteCredential removes one tenant-owned credential record by ID.
@@ -119,48 +114,41 @@ func (store *Store) DeleteCredential(ctx context.Context, tenantID domain.Tenant
 
 // ListCredentialsForStackTemplate returns stack credentials plus template credentials for runtime inheritance.
 func (store *Store) ListCredentialsForStackTemplate(ctx context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID) ([]domain.Credential, error) {
-	rows, err := store.pool.Query(ctx, `
+	return queryRows(ctx, store.pool, "list runtime credentials", scanCredential, `
 		select c.id, c.tenant_id, c.stack_id, c.stack_template_id, c.name, c.ciphertext, c.sensitive, c.created_at
 		from scoped_credentials c
 		join stack_templates st on st.id = $2
 		where c.tenant_id = $1 and (c.stack_id = st.stack_id or c.stack_template_id = st.id)
 		order by c.stack_id is not null desc, c.name
 	`, tenantID, stackTemplateID)
+}
+
+// scanCredential converts nullable scope-owner columns into a credential.
+func scanCredential(row pgx.Row) (domain.Credential, error) {
+	var credential domain.Credential
+	var stackID sql.NullString
+	var stackTemplateID sql.NullString
+	if err := row.Scan(&credential.ID, &credential.TenantID, &stackID, &stackTemplateID, &credential.Name, &credential.Ciphertext, &credential.Sensitive, &credential.CreatedAt); err != nil {
+		return domain.Credential{}, fmt.Errorf("scan credential: %w", err)
+	}
+	credential.StackID = domain.StackID(stackID.String)
+	credential.StackTemplateID = domain.StackTemplateID(stackTemplateID.String)
+	return credential, nil
+}
+
+// queryRows runs a list query and scans every row it returns, wrapping any
+// failure in label. No rows is an empty slice rather than nil, which the API
+// would serve as null.
+func queryRows[T any](ctx context.Context, exec pgxExecutor, label string, scan func(pgx.Row) (T, error), sql string, args ...any) ([]T, error) {
+	rows, err := exec.Query(ctx, sql, args...)
 	if err != nil {
-		return nil, fmt.Errorf("list runtime credentials: %w", err)
+		return nil, fmt.Errorf("%s: %w", label, err)
 	}
-	defer rows.Close()
-	return scanCredentials(rows)
-}
-
-type credentialRows interface {
-	Next() bool
-	Scan(...any) error
-	Err() error
-}
-
-// scanCredentials converts nullable scope-owner columns into credential domain records.
-func scanCredentials(rows credentialRows) ([]domain.Credential, error) {
-	credentials := make([]domain.Credential, 0)
-	for rows.Next() {
-		var credential domain.Credential
-		var stackID sql.NullString
-		var stackTemplateID sql.NullString
-		if err := rows.Scan(&credential.ID, &credential.TenantID, &stackID, &stackTemplateID, &credential.Name, &credential.Ciphertext, &credential.Sensitive, &credential.CreatedAt); err != nil {
-			return nil, fmt.Errorf("scan credential: %w", err)
-		}
-		if stackID.Valid {
-			credential.StackID = domain.StackID(stackID.String)
-		}
-		if stackTemplateID.Valid {
-			credential.StackTemplateID = domain.StackTemplateID(stackTemplateID.String)
-		}
-		credentials = append(credentials, credential)
+	items, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (T, error) { return scan(row) })
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", label, err)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate credentials: %w", err)
-	}
-	return credentials, nil
+	return items, nil
 }
 
 // RecordTemplateSyncStep records the step a running sync has started.
@@ -382,7 +370,7 @@ func (store *Store) GetTemplateRevisionVariables(ctx context.Context, tenantID d
 		return nil, app.ErrNotFound
 	}
 
-	rows, err := store.pool.Query(ctx, `
+	return queryRows(ctx, store.pool, "get template revision variables", scanTemplateVariable, `
 		select
 			template_revision_id,
 			name,
@@ -396,60 +384,31 @@ func (store *Store) GetTemplateRevisionVariables(ctx context.Context, tenantID d
 		where template_revision_id = $1
 		order by name
 	`, templateRevisionID)
-	if err != nil {
-		return nil, fmt.Errorf("get template revision variables: %w", err)
-	}
-	defer rows.Close()
+}
 
-	// Empty rather than nil, which the API would serve as null.
-	variables := []domain.TemplateVariable{}
-	for rows.Next() {
-		var variable domain.TemplateVariable
-		if err := rows.Scan(
-			&variable.TemplateRevisionID,
-			&variable.Name,
-			&variable.TypeExpression,
-			&variable.Description,
-			&variable.Required,
-			&variable.HasDefault,
-			&variable.Sensitive,
-			&variable.HasValidation,
-		); err != nil {
-			return nil, fmt.Errorf("scan template revision variable: %w", err)
-		}
-		variables = append(variables, variable)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate template revision variables: %w", err)
-	}
-	return variables, nil
+func scanTemplateVariable(row pgx.Row) (domain.TemplateVariable, error) {
+	var variable domain.TemplateVariable
+	err := row.Scan(
+		&variable.TemplateRevisionID,
+		&variable.Name,
+		&variable.TypeExpression,
+		&variable.Description,
+		&variable.Required,
+		&variable.HasDefault,
+		&variable.Sensitive,
+		&variable.HasValidation,
+	)
+	return variable, err
 }
 
 // ListTemplateRevisions returns every revision of the tenant, newest first.
 func (store *Store) ListTemplateRevisions(ctx context.Context, tenantID domain.TenantID) ([]domain.TemplateRevision, error) {
-	rows, err := store.pool.Query(ctx, `
+	return queryRows(ctx, store.pool, "list template revisions", scanTemplateRevision, `
 		select`+templateRevisionColumns+`
 		from template_revisions
 		where tenant_id = $1
 		order by created_at desc, id desc
 	`, tenantID)
-	if err != nil {
-		return nil, fmt.Errorf("list template revisions: %w", err)
-	}
-	defer rows.Close()
-
-	var templateRevisions []domain.TemplateRevision
-	for rows.Next() {
-		templateRevision, err := scanTemplateRevision(rows)
-		if err != nil {
-			return nil, err
-		}
-		templateRevisions = append(templateRevisions, templateRevision)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate template revisions: %w", err)
-	}
-	return templateRevisions, nil
 }
 
 // CreateTemplate stores the template unless its source already has
@@ -575,29 +534,12 @@ func (store *Store) ListTemplatesPage(ctx context.Context, tenantID domain.Tenan
 		afterCreatedAt = after.CreatedAt
 		afterID = after.ID
 	}
-	rows, err := store.pool.Query(ctx, selectTemplatesSQL+`
+	return queryRows(ctx, store.pool, "list templates", scanTemplate, selectTemplatesSQL+`
 		where st.tenant_id = $1
 			and ($2::timestamptz is null or (st.created_at, st.id) < ($2, $3))
 		order by st.created_at desc, st.id desc
 		limit $4
 	`, tenantID, afterCreatedAt, afterID, limit)
-	if err != nil {
-		return nil, fmt.Errorf("list templates: %w", err)
-	}
-	defer rows.Close()
-
-	var templates []domain.Template
-	for rows.Next() {
-		template, err := scanTemplate(rows)
-		if err != nil {
-			return nil, fmt.Errorf("scan template: %w", err)
-		}
-		templates = append(templates, template)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate templates: %w", err)
-	}
-	return templates, nil
 }
 
 // selectTemplatesSQL reads templates with their latest revision's name,
@@ -721,7 +663,7 @@ func (store *Store) ListTemplateRevisionsBySourcePage(ctx context.Context, tenan
 		afterCreatedAt = after.CreatedAt
 		afterID = after.ID
 	}
-	rows, err := store.pool.Query(ctx, `
+	return queryRows(ctx, store.pool, "list template revisions by source", scanTemplateRevision, `
 		select`+templateRevisionColumns+`
 		from template_revisions
 		where tenant_id = $1
@@ -730,23 +672,6 @@ func (store *Store) ListTemplateRevisionsBySourcePage(ctx context.Context, tenan
 		order by created_at desc, id desc
 		limit $5
 	`, tenantID, templateID, afterCreatedAt, afterID, limit)
-	if err != nil {
-		return nil, fmt.Errorf("list template revisions by source: %w", err)
-	}
-	defer rows.Close()
-
-	var templateRevisions []domain.TemplateRevision
-	for rows.Next() {
-		templateRevision, err := scanTemplateRevision(rows)
-		if err != nil {
-			return nil, err
-		}
-		templateRevisions = append(templateRevisions, templateRevision)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate template revisions by source: %w", err)
-	}
-	return templateRevisions, nil
 }
 
 // CreateStack, CreateTemplateRun and ApproveTemplateRun each make their write
@@ -835,7 +760,7 @@ func (store *Store) GetStack(ctx context.Context, tenantID domain.TenantID, stac
 }
 
 func (store *Store) ListStacks(ctx context.Context, tenantID domain.TenantID) ([]domain.Stack, error) {
-	rows, err := store.pool.Query(ctx, `
+	return queryRows(ctx, store.pool, "list stacks", scanStack, `
 		select
 			id,
 			tenant_id,
@@ -850,23 +775,6 @@ func (store *Store) ListStacks(ctx context.Context, tenantID domain.TenantID) ([
 		where tenant_id = $1
 		order by created_at desc, id desc
 	`, tenantID)
-	if err != nil {
-		return nil, fmt.Errorf("list stacks: %w", err)
-	}
-	defer rows.Close()
-
-	var stacks []domain.Stack
-	for rows.Next() {
-		stack, err := scanStack(rows)
-		if err != nil {
-			return nil, err
-		}
-		stacks = append(stacks, stack)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate stacks: %w", err)
-	}
-	return stacks, nil
 }
 
 func (store *Store) ListStacksPage(ctx context.Context, tenantID domain.TenantID, after *app.StackPageCursor, limit int, query string) ([]domain.Stack, error) {
@@ -879,7 +787,7 @@ func (store *Store) ListStacksPage(ctx context.Context, tenantID domain.TenantID
 		afterCreatedAt = after.CreatedAt
 		afterID = after.ID
 	}
-	rows, err := store.pool.Query(ctx, `
+	return queryRows(ctx, store.pool, "list stack page", scanStack, `
 		select
 			id,
 			tenant_id,
@@ -897,23 +805,6 @@ func (store *Store) ListStacksPage(ctx context.Context, tenantID domain.TenantID
 		order by created_at desc, id desc
 		limit $4
 	`, tenantID, afterCreatedAt, afterID, limit, query, "%"+escapeLikePattern(query)+"%")
-	if err != nil {
-		return nil, fmt.Errorf("list stack page: %w", err)
-	}
-	defer rows.Close()
-
-	stacks := make([]domain.Stack, 0, limit)
-	for rows.Next() {
-		stack, err := scanStack(rows)
-		if err != nil {
-			return nil, err
-		}
-		stacks = append(stacks, stack)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate stack page: %w", err)
-	}
-	return stacks, nil
 }
 
 func (store *Store) GetStackWithTemplates(ctx context.Context, tenantID domain.TenantID, stackID domain.StackID) (app.StackView, error) {
@@ -922,7 +813,12 @@ func (store *Store) GetStackWithTemplates(ctx context.Context, tenantID domain.T
 		return app.StackView{}, err
 	}
 
-	rows, err := store.pool.Query(ctx, `
+	// The repository returns views with their label fields unset; resolving
+	// those needs revision metadata, which is the service's job, not storage's.
+	templates, err := queryRows(ctx, store.pool, "get stack templates", func(row pgx.Row) (app.StackTemplateView, error) {
+		stackTemplate, err := scanStackTemplate(row)
+		return app.StackTemplateView{StackTemplate: stackTemplate}, err
+	}, `
 		select`+stackTemplateColumns+`
 		from stack_templates
 		where tenant_id = $1
@@ -931,80 +827,30 @@ func (store *Store) GetStackWithTemplates(ctx context.Context, tenantID domain.T
 		order by id
 	`, tenantID, stackID, domain.StackTemplateDestroyed)
 	if err != nil {
-		return app.StackView{}, fmt.Errorf("get stack templates: %w", err)
+		return app.StackView{}, err
 	}
-	defer rows.Close()
-
-	// The repository returns views with their label fields unset; resolving
-	// those needs revision metadata, which is the service's job, not storage's.
-	var templates []app.StackTemplateView
-	for rows.Next() {
-		stackTemplate, err := scanStackTemplate(rows)
-		if err != nil {
-			return app.StackView{}, err
-		}
-		templates = append(templates, app.StackTemplateView{StackTemplate: stackTemplate})
-	}
-	if err := rows.Err(); err != nil {
-		return app.StackView{}, fmt.Errorf("iterate stack templates: %w", err)
-	}
-
 	return app.StackView{Stack: stack, Templates: templates}, nil
 }
 
 // ListTenantStackTemplates returns every installed template in the tenant that
 // is not destroyed, across all of its stacks.
 func (store *Store) ListTenantStackTemplates(ctx context.Context, tenantID domain.TenantID) ([]domain.StackTemplate, error) {
-	rows, err := store.pool.Query(ctx, `
+	return queryRows(ctx, store.pool, "list tenant stack templates", scanStackTemplate, `
 		select`+stackTemplateColumns+`
 		from stack_templates
 		where tenant_id = $1
 			and lifecycle != $2
 		order by stack_id, id
 	`, tenantID, domain.StackTemplateDestroyed)
-	if err != nil {
-		return nil, fmt.Errorf("list tenant stack templates: %w", err)
-	}
-	defer rows.Close()
-
-	templates := []domain.StackTemplate{}
-	for rows.Next() {
-		stackTemplate, err := scanStackTemplate(rows)
-		if err != nil {
-			return nil, err
-		}
-		templates = append(templates, stackTemplate)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate tenant stack templates: %w", err)
-	}
-	return templates, nil
 }
 
 // ListTemplateRunsByStatus returns the tenant's runs in one status, across all
 // of its stack templates, most recent first.
 func (store *Store) ListTemplateRunsByStatus(ctx context.Context, tenantID domain.TenantID, status domain.TemplateRunStatus) ([]domain.TemplateRun, error) {
-	rows, err := store.pool.Query(ctx, templateRunSelect+`
+	return queryRows(ctx, store.pool, "list template runs by status", scanTemplateRun, templateRunSelect+`
 		where r.tenant_id = $1 and r.status = $2
 		order by r.created_at desc nulls last, r.id desc
 	`, tenantID, status)
-	if err != nil {
-		return nil, fmt.Errorf("list template runs by status: %w", err)
-	}
-	defer rows.Close()
-
-	runs := []domain.TemplateRun{}
-	for rows.Next() {
-		run, err := scanTemplateRun(rows)
-		if err != nil {
-			return nil, fmt.Errorf("scan template run: %w", err)
-		}
-		runs = append(runs, run)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list template runs by status: %w", err)
-	}
-	return runs, nil
 }
 
 // ListLatestTemplateRuns returns each stack template's newest run in the
@@ -1018,24 +864,7 @@ func (store *Store) ListLatestTemplateRuns(ctx context.Context, tenantID domain.
 		where r.tenant_id = $1
 		order by r.stack_template_id, r.created_at desc nulls last, r.id desc
 	`
-	rows, err := store.pool.Query(ctx, query, tenantID)
-	if err != nil {
-		return nil, fmt.Errorf("list latest template runs: %w", err)
-	}
-	defer rows.Close()
-
-	runs := []domain.TemplateRun{}
-	for rows.Next() {
-		run, err := scanTemplateRun(rows)
-		if err != nil {
-			return nil, fmt.Errorf("scan template run: %w", err)
-		}
-		runs = append(runs, run)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list latest template runs: %w", err)
-	}
-	return runs, nil
+	return queryRows(ctx, store.pool, "list latest template runs", scanTemplateRun, query, tenantID)
 }
 
 func (store *Store) CreateStackTemplate(ctx context.Context, stackTemplate domain.StackTemplate) error {
@@ -1430,53 +1259,19 @@ func (store *Store) ListTemplateRunsPage(ctx context.Context, tenantID domain.Te
 	if limit <= 0 {
 		return nil, fmt.Errorf("template run page limit must be positive")
 	}
-	rows, err := store.pool.Query(ctx, templateRunSelect+`
+	return queryRows(ctx, store.pool, "list template run page", scanTemplateRun, templateRunSelect+`
 		where r.tenant_id = $1 and r.stack_template_id = $2
 			and ($3::integer = 0 or r.run_number < $3)
 		order by r.run_number desc
 		limit $4
 	`, tenantID, stackTemplateID, beforeRunNumber, limit)
-	if err != nil {
-		return nil, fmt.Errorf("list template run page: %w", err)
-	}
-	defer rows.Close()
-
-	runs := []domain.TemplateRun{}
-	for rows.Next() {
-		run, err := scanTemplateRun(rows)
-		if err != nil {
-			return nil, fmt.Errorf("scan template run: %w", err)
-		}
-		runs = append(runs, run)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list template run page: %w", err)
-	}
-	return runs, nil
 }
 
 func (store *Store) ListTemplateRuns(ctx context.Context, tenantID domain.TenantID, stackTemplateID domain.StackTemplateID) ([]domain.TemplateRun, error) {
-	rows, err := store.pool.Query(ctx, templateRunSelect+`
+	return queryRows(ctx, store.pool, "list template runs", scanTemplateRun, templateRunSelect+`
 		where r.tenant_id = $1 and r.stack_template_id = $2
 		order by r.created_at desc nulls last, r.id desc
 	`, tenantID, stackTemplateID)
-	if err != nil {
-		return nil, fmt.Errorf("list template runs: %w", err)
-	}
-	defer rows.Close()
-
-	runs := []domain.TemplateRun{}
-	for rows.Next() {
-		run, err := scanTemplateRun(rows)
-		if err != nil {
-			return nil, fmt.Errorf("scan template run: %w", err)
-		}
-		runs = append(runs, run)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list template runs: %w", err)
-	}
-	return runs, nil
 }
 
 // RecordTemplateRunLog upserts one log's metadata, keyed by its run phase and
@@ -1580,7 +1375,7 @@ func (store *Store) GetTemplateRunLog(ctx context.Context, tenantID domain.Tenan
 }
 
 func (store *Store) ListTemplateRunLogs(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) ([]domain.TemplateRunLog, error) {
-	rows, err := store.pool.Query(ctx, `
+	return queryRows(ctx, store.pool, "list template run logs", scanTemplateRunLog, `
 		select
 			tenant_id,
 			run_id,
@@ -1599,24 +1394,6 @@ func (store *Store) ListTemplateRunLogs(ctx context.Context, tenantID domain.Ten
 			and run_id = $2
 		order by case run_phase when 'plan' then 0 else 1 end, seq
 	`, tenantID, runID)
-	if err != nil {
-		return nil, fmt.Errorf("list template run logs: %w", err)
-	}
-	defer rows.Close()
-
-	var logs []domain.TemplateRunLog
-	for rows.Next() {
-		log, err := scanTemplateRunLog(rows)
-		if err != nil {
-			return nil, fmt.Errorf("scan template run log: %w", err)
-		}
-		logs = append(logs, log)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate template run logs: %w", err)
-	}
-
-	return logs, nil
 }
 
 // scanTemplateRunLog reads one row of the columns GetTemplateRunLog and

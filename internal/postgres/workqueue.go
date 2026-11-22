@@ -227,7 +227,7 @@ func (store *Store) ListByActor(ctx context.Context, tenantID, actorSubject stri
 	if after != nil {
 		afterCreatedAt, afterID = after.CreatedAt, after.ID
 	}
-	rows, err := store.pool.Query(ctx, `
+	return queryRows(ctx, store.pool, "list work by actor", scanWorkStatus, `
 		select id, kind, attempts, last_error, created_at, processed_at
 		  from work_queue
 		 where tenant_id = $1 and actor_subject = $2
@@ -235,29 +235,20 @@ func (store *Store) ListByActor(ctx context.Context, tenantID, actorSubject stri
 		 order by created_at desc, id desc
 		 limit $5
 	`, tenantID, actorSubject, afterCreatedAt, afterID, limit)
-	if err != nil {
-		return nil, fmt.Errorf("list work by actor: %w", err)
-	}
-	defer rows.Close()
+}
 
-	statuses := []queue.Status{}
-	for rows.Next() {
-		var status queue.Status
-		var kind string
-		var processedAt *time.Time
-		if err := rows.Scan(&status.ID, &kind, &status.Attempts, &status.LastError, &status.CreatedAt, &processedAt); err != nil {
-			return nil, fmt.Errorf("scan work status: %w", err)
-		}
-		status.Kind = queue.Kind(kind)
-		status.State = queue.StatePending
-		if processedAt != nil {
-			status.State = queue.StateDelivered
-			status.DeliveredAt = processedAt
-		}
-		statuses = append(statuses, status)
+func scanWorkStatus(row pgx.Row) (queue.Status, error) {
+	var status queue.Status
+	var kind string
+	var processedAt *time.Time
+	if err := row.Scan(&status.ID, &kind, &status.Attempts, &status.LastError, &status.CreatedAt, &processedAt); err != nil {
+		return queue.Status{}, fmt.Errorf("scan work status: %w", err)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate work statuses: %w", err)
+	status.Kind = queue.Kind(kind)
+	status.State = queue.StatePending
+	if processedAt != nil {
+		status.State = queue.StateDelivered
+		status.DeliveredAt = processedAt
 	}
-	return statuses, nil
+	return status, nil
 }

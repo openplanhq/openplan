@@ -70,7 +70,7 @@ func recordPlanChanges(ctx context.Context, tx pgx.Tx, tenantID domain.TenantID,
 // changes in reading order, starting after position afterPosition; -1 starts
 // at the first.
 func (store *Store) ListTemplateRunResourceChangesPage(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, afterPosition int, limit int) ([]domain.PlanResourceChange, error) {
-	rows, err := store.pool.Query(ctx, `
+	return queryRows(ctx, store.pool, "list plan changes", scanPlanResourceChange, `
 		select
 			position, address, previous_address, module_address,
 			mode, type, name, provider_name, deposed,
@@ -81,34 +81,25 @@ func (store *Store) ListTemplateRunResourceChangesPage(ctx context.Context, tena
 		order by position
 		limit $4
 	`, tenantID, runID, afterPosition, limit)
-	if err != nil {
-		return nil, fmt.Errorf("list plan changes: %w", err)
-	}
-	defer rows.Close()
+}
 
-	changes := []domain.PlanResourceChange{}
-	for rows.Next() {
-		var change domain.PlanResourceChange
-		var action string
-		var replacePaths, before, after []byte
-		if err := rows.Scan(
-			&change.Position, &change.Address, &change.PreviousAddress, &change.ModuleAddress,
-			&change.Mode, &change.Type, &change.Name, &change.ProviderName, &change.Deposed,
-			&action, &change.CreateBeforeDestroy, &change.ActionReason, &change.ImportingID,
-			&replacePaths, &before, &after,
-		); err != nil {
-			return nil, fmt.Errorf("scan plan change: %w", err)
-		}
-		change.Action = domain.PlanChangeAction(action)
-		change.ReplacePaths = rawOrNil(replacePaths)
-		change.Before = rawOrNil(before)
-		change.After = rawOrNil(after)
-		changes = append(changes, change)
+func scanPlanResourceChange(row pgx.Row) (domain.PlanResourceChange, error) {
+	var change domain.PlanResourceChange
+	var action string
+	var replacePaths, before, after []byte
+	if err := row.Scan(
+		&change.Position, &change.Address, &change.PreviousAddress, &change.ModuleAddress,
+		&change.Mode, &change.Type, &change.Name, &change.ProviderName, &change.Deposed,
+		&action, &change.CreateBeforeDestroy, &change.ActionReason, &change.ImportingID,
+		&replacePaths, &before, &after,
+	); err != nil {
+		return domain.PlanResourceChange{}, fmt.Errorf("scan plan change: %w", err)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list plan changes: %w", err)
-	}
-	return changes, nil
+	change.Action = domain.PlanChangeAction(action)
+	change.ReplacePaths = rawOrNil(replacePaths)
+	change.Before = rawOrNil(before)
+	change.After = rawOrNil(after)
+	return change, nil
 }
 
 func rawOrNil(value []byte) json.RawMessage {
