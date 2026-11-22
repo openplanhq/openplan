@@ -171,7 +171,7 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 		cfg.HTTPAddress = DefaultHTTPAddress
 	}
 	cfg.Debug = parseBool(getenv("OPENPLAN_DEBUG"))
-	credentialKey, err := loadCredentialEncryptionKey(getenv)
+	credentialKey, err := optionalEncryptionKey(getenv, "CREDENTIAL_ENCRYPTION_KEY")
 	if err != nil {
 		return APIConfig{}, err
 	}
@@ -292,18 +292,18 @@ func sandboxAddresses(subnet netip.Prefix) int {
 	return 1<<(32-subnet.Bits()) - 3
 }
 
-// loadCredentialEncryptionKey validates CREDENTIAL_ENCRYPTION_KEY the same
-// way SESSION_ENCRYPTION_KEY is validated: by constructing the cipher it
-// backs. Unlike SESSION_ENCRYPTION_KEY, it is optional — an empty value means
-// credential encryption is unavailable, not misconfigured — but a value that
-// is present and malformed must fail at startup rather than at first use.
-func loadCredentialEncryptionKey(getenv func(string) string) (Secret, error) {
-	key := newSecret(strings.TrimSpace(getenv("CREDENTIAL_ENCRYPTION_KEY")))
+// optionalEncryptionKey validates a key by constructing the cipher it backs,
+// so a value that is present and malformed fails at startup rather than at
+// first use. An empty value is returned as is: CREDENTIAL_ENCRYPTION_KEY may be
+// unset, which means credential encryption is unavailable, not misconfigured,
+// while SESSION_ENCRYPTION_KEY's caller refuses it.
+func optionalEncryptionKey(getenv func(string) string, name string) (Secret, error) {
+	key := newSecret(strings.TrimSpace(getenv(name)))
 	if key.Empty() {
 		return key, nil
 	}
 	if _, err := encryption.NewCipher(key.Value()); err != nil {
-		return Secret{}, configError("CREDENTIAL_ENCRYPTION_KEY must be a 32-byte raw, base64, or hex key")
+		return Secret{}, configError("%s must be a 32-byte raw, base64, or hex key", name)
 	}
 	return key, nil
 }
@@ -325,7 +325,7 @@ func (cfg GitHubAppConfig) Enabled() bool {
 }
 
 // loadGitHubAppConfig validates GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY the
-// same way loadCredentialEncryptionKey validates its key: by constructing the
+// same way optionalEncryptionKey validates its key: by constructing the
 // thing it backs, so a malformed value fails at startup rather than at the
 // first clone.
 //

@@ -9,7 +9,6 @@ import (
 
 	"github.com/vishu42/openplan/internal/authentication"
 	"github.com/vishu42/openplan/internal/domain"
-	"github.com/vishu42/openplan/internal/encryption"
 	"github.com/vishu42/openplan/internal/strval"
 )
 
@@ -130,12 +129,12 @@ func loadSecurityConfig(getenv func(string) string, environment Environment) (Se
 	}
 	publicURL.Path = strings.TrimRight(publicURL.Path, "/")
 
-	sessionKey := newSecret(strings.TrimSpace(getenv("SESSION_ENCRYPTION_KEY")))
+	sessionKey, err := optionalEncryptionKey(getenv, "SESSION_ENCRYPTION_KEY")
+	if err != nil {
+		return SecurityConfig{}, err
+	}
 	if sessionKey.Empty() {
 		return SecurityConfig{}, configError("SESSION_ENCRYPTION_KEY is required")
-	}
-	if _, err := encryption.NewCipher(sessionKey.Value()); err != nil {
-		return SecurityConfig{}, configError("SESSION_ENCRYPTION_KEY must be a 32-byte raw, base64, or hex key")
 	}
 
 	sessionAbsoluteTTL, err := optionalPositiveDuration(getenv, "OPENPLAN_SESSION_ABSOLUTE_TTL", authentication.DefaultSessionAbsoluteTTL)
