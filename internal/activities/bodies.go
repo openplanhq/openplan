@@ -124,10 +124,7 @@ func handle[Request any, Result any](body func(context.Context, Request, io.Writ
 }
 
 func (b *Bodies) fetchSource(ctx context.Context, request fetchSourceRequest, _ io.Writer) (struct{}, error) {
-	var credential runner.GitCredential
-	if request.Token != "" {
-		credential = runner.NewGitCredential(request.Token)
-	}
+	credential := runner.NewGitCredential(request.Token)
 	if request.CommitSHA != "" {
 		if err := b.git.CheckoutCommit(ctx, request.RepoURL, request.CommitSHA, request.SourcePath, credential); err != nil {
 			return struct{}{}, fmt.Errorf("checkout source commit %s: %w", request.CommitSHA, err)
