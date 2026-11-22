@@ -2431,8 +2431,6 @@ func (service *Service) GetTemplateRunLogMetadata(ctx context.Context, command G
 	if err != nil {
 		return domain.TemplateRunLog{}, fmt.Errorf("get template run log metadata: %w", err)
 	}
-	log.CommandLine = log.Command.CommandLine()
-
 	return deriveTemplateRunLogState(log, run.Status), nil
 }
 
@@ -2458,8 +2456,10 @@ func (service *Service) TemplateRunLogState(ctx context.Context, tenantID domain
 // whose final record never landed, leaves its row live forever; the run's
 // status is what says nobody will finish it, and which of the two it was: a
 // canceled run was cut off, while a completed or failed run ran its commands
-// to the end and reached the record, which then failed.
+// to the end and reached the record, which then failed. It also fills in the
+// command line, which the row stores only as the command.
 func deriveTemplateRunLogState(log domain.TemplateRunLog, status domain.TemplateRunStatus) domain.TemplateRunLog {
+	log.CommandLine = log.Command.CommandLine()
 	if log.State != domain.TemplateRunLogLive || !status.Terminal() {
 		return log
 	}
@@ -2491,7 +2491,6 @@ func (service *Service) ListTemplateRunLogs(ctx context.Context, command ListTem
 		return []domain.TemplateRunLog{}, nil
 	}
 	for i := range logs {
-		logs[i].CommandLine = logs[i].Command.CommandLine()
 		logs[i] = deriveTemplateRunLogState(logs[i], run.Status)
 	}
 
