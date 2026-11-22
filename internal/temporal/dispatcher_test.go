@@ -11,6 +11,7 @@ import (
 	"github.com/vishu42/openplan/internal/app"
 	"github.com/vishu42/openplan/internal/domain"
 	enumspb "go.temporal.io/api/enums/v1"
+	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
 )
 
@@ -138,6 +139,39 @@ func TestStartTemplateSyncExecutesWorkflow(t *testing.T) {
 	}
 	if !reflect.DeepEqual(workflowClient.executeArgs[0], input) {
 		t.Fatalf("workflow input = %#v, want %#v", workflowClient.executeArgs[0], input)
+	}
+	// The queue delivers at least once: a redelivered start must find the sync
+	// already running, not start a second one under the same ID once the first
+	// has finished.
+	if workflowClient.executeOptions.WorkflowIDReusePolicy != enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE {
+		t.Fatalf("workflow ID reuse policy = %v, want reject duplicate", workflowClient.executeOptions.WorkflowIDReusePolicy)
+	}
+	if workflowClient.executeOptions.WorkflowIDConflictPolicy != enumspb.WORKFLOW_ID_CONFLICT_POLICY_USE_EXISTING {
+		t.Fatalf("workflow ID conflict policy = %v, want use existing", workflowClient.executeOptions.WorkflowIDConflictPolicy)
+	}
+}
+
+// A start redelivered after its workflow closed is refused by the reuse
+// policy. The workflow it asked for did start, so the start succeeds: an error
+// would reschedule the queued intent forever.
+func TestStartingAWorkflowThatAlreadyRanSucceeds(t *testing.T) {
+	t.Parallel()
+
+	alreadyStarted := serviceerror.NewWorkflowExecutionAlreadyStarted("workflow execution already started", "", "")
+	dispatcher := NewDispatcher(&recordingWorkflowClient{executeErr: alreadyStarted}, DispatcherOptions{})
+	ctx := context.Background()
+	run := domain.TemplateRunWorkflowInput{RunID: "run_123", TenantID: "tenant_123"}
+
+	for name, start := range map[string]func() error{
+		"plan":  func() error { return dispatcher.StartTemplatePlan(ctx, run) },
+		"apply": func() error { return dispatcher.StartTemplateApply(ctx, run) },
+		"sync": func() error {
+			return dispatcher.StartTemplateSync(ctx, domain.TemplateSyncWorkflowInput{SyncID: "template_sync_123", TenantID: "tenant_123"})
+		},
+	} {
+		if err := start(); err != nil {
+			t.Errorf("%s: error = %v, want nil for a workflow already started", name, err)
+		}
 	}
 }
 
