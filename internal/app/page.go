@@ -15,7 +15,7 @@ import (
 // A cursor also keeps pages stable while rows arrive at the head, which runs
 // and the queue do while someone reads them.
 const (
-	// DefaultPageLimit matches the authorization batch listAccessibleStacks
+	// DefaultPageLimit matches the authorization batch accessibleStacks
 	// checks at once, so a default page of stacks is one round trip.
 	DefaultPageLimit = 50
 	// MaxPageLimit bounds the BatchCheck fan-out and the payload of one page.

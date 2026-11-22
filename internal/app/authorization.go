@@ -120,19 +120,13 @@ func authorizeStack(ctx context.Context, auth *authorization.Authorization, stac
 	return nil
 }
 
-// listAccessibleStacks is every stack the caller can view, newest first, for
-// callers that need the whole set, such as attention.
-func listAccessibleStacks(ctx context.Context, auth *authorization.Authorization, repository StackRepository, tenantID domain.TenantID) ([]domain.Stack, error) {
-	return accessibleStacks(ctx, auth, repository, tenantID, nil, "", 0)
-}
-
 // stacksList names the stacks list's cursors.
 const stacksList = "stacks"
 
 // listAccessibleStacksPage is one page of the stacks the caller can view.
-// Unlike listAccessibleStacks it stops walking the table once the page is
-// full, plus one stack to prove a next page exists, so a request costs the
-// BatchChecks its page needs rather than one per 50 stacks in the tenant.
+// It stops walking the table once the page is full, plus one stack to prove
+// a next page exists, so a request costs the BatchChecks its page needs
+// rather than one per 50 stacks in the tenant.
 func listAccessibleStacksPage(ctx context.Context, auth *authorization.Authorization, repository StackRepository, tenantID domain.TenantID, page PageRequest, query string) (Page[domain.Stack], error) {
 	after, err := DecodeCursor[StackPageCursor](stacksList, page.Cursor)
 	if err != nil {
@@ -527,7 +521,7 @@ func ResolveStacksCapabilities(ctx context.Context, auth *authorization.Authoriz
 	if err != nil {
 		return nil, err
 	}
-	// Kept for the same reason as listAccessibleStacks: stacks arrives from an
+	// Kept for the same reason as in accessibleStacks: stacks arrives from an
 	// unbounded ListStacks, so this collapses four checks per stack in the
 	// tenant into one.
 	if administrator {

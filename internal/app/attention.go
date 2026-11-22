@@ -265,7 +265,8 @@ func (service *Service) ListStackSummaries(ctx context.Context, command ListStac
 // visibleStackTemplates returns the stacks the caller can view, by ID, and
 // the installed templates on them, by ID.
 func (service *Service) visibleStackTemplates(ctx context.Context, tenantID domain.TenantID) (map[domain.StackID]domain.Stack, map[domain.StackTemplateID]domain.StackTemplate, error) {
-	stacks, err := listAccessibleStacks(ctx, service.Authorization, service.Stacks, tenantID)
+	// Every stack, not a page: attention reads the whole set.
+	stacks, err := accessibleStacks(ctx, service.Authorization, service.Stacks, tenantID, nil, "", 0)
 	if err != nil {
 		return nil, nil, fmt.Errorf("list stacks: %w", err)
 	}
