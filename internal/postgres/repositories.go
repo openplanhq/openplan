@@ -517,14 +517,9 @@ func (store *Store) DeleteTemplate(ctx context.Context, tenantID domain.TenantID
 // ListTemplatesPage returns up to limit templates after the cursor,
 // newest first.
 func (store *Store) ListTemplatesPage(ctx context.Context, tenantID domain.TenantID, after *app.TemplateCursor, limit int) ([]domain.Template, error) {
-	if limit <= 0 {
-		return nil, fmt.Errorf("template page limit must be positive")
-	}
-	var afterCreatedAt any
-	var afterID domain.TemplateID
-	if after != nil {
-		afterCreatedAt = after.CreatedAt
-		afterID = after.ID
+	afterCreatedAt, afterID, err := keysetAfter("template", after, limit)
+	if err != nil {
+		return nil, err
 	}
 	return queryRows(ctx, store.pool, "list templates", scanTemplate, selectTemplatesSQL+`
 		where st.tenant_id = $1
@@ -532,6 +527,19 @@ func (store *Store) ListTemplatesPage(ctx context.Context, tenantID domain.Tenan
 		order by st.created_at desc, st.id desc
 		limit $4
 	`, tenantID, afterCreatedAt, afterID, limit)
+}
+
+// keysetAfter unpacks a newest-first page's cursor into the (created_at, id)
+// its query reads below. No cursor is a null created_at, which the queries
+// read as starting from the newest.
+func keysetAfter[ID ~string](label string, after *app.NewestFirstCursor[ID], limit int) (any, ID, error) {
+	if limit <= 0 {
+		return nil, "", fmt.Errorf("%s page limit must be positive", label)
+	}
+	if after == nil {
+		return nil, "", nil
+	}
+	return after.CreatedAt, after.ID, nil
 }
 
 // selectTemplatesSQL reads templates with their latest revision's name,
@@ -646,14 +654,9 @@ func (columns latestTemplateSyncColumns) latestSync() *domain.LatestTemplateSync
 // ListTemplateRevisionsBySourcePage returns up to limit of one template's
 // revisions after the cursor, newest first.
 func (store *Store) ListTemplateRevisionsBySourcePage(ctx context.Context, tenantID domain.TenantID, templateID domain.TemplateID, after *app.TemplateRevisionCursor, limit int) ([]domain.TemplateRevision, error) {
-	if limit <= 0 {
-		return nil, fmt.Errorf("template revision page limit must be positive")
-	}
-	var afterCreatedAt any
-	var afterID domain.TemplateRevisionID
-	if after != nil {
-		afterCreatedAt = after.CreatedAt
-		afterID = after.ID
+	afterCreatedAt, afterID, err := keysetAfter("template revision", after, limit)
+	if err != nil {
+		return nil, err
 	}
 	return queryRows(ctx, store.pool, "list template revisions by source", scanTemplateRevision, `
 		select`+templateRevisionColumns+`
@@ -752,14 +755,9 @@ func (store *Store) ListStacks(ctx context.Context, tenantID domain.TenantID) ([
 }
 
 func (store *Store) ListStacksPage(ctx context.Context, tenantID domain.TenantID, after *app.StackPageCursor, limit int, query string) ([]domain.Stack, error) {
-	if limit <= 0 {
-		return nil, fmt.Errorf("stack page limit must be positive")
-	}
-	var afterCreatedAt any
-	var afterID domain.StackID
-	if after != nil {
-		afterCreatedAt = after.CreatedAt
-		afterID = after.ID
+	afterCreatedAt, afterID, err := keysetAfter("stack", after, limit)
+	if err != nil {
+		return nil, err
 	}
 	return queryRows(ctx, store.pool, "list stack page", scanStack, `
 		select`+stackColumns+`
