@@ -131,10 +131,10 @@ func loadSecurityConfig(getenv func(string) string, environment Environment) (Se
 
 	sessionKey := newSecret(strings.TrimSpace(getenv("SESSION_ENCRYPTION_KEY")))
 	if sessionKey.Empty() {
-		return SecurityConfig{}, authConfigError("SESSION_ENCRYPTION_KEY is required")
+		return SecurityConfig{}, configError("SESSION_ENCRYPTION_KEY is required")
 	}
 	if _, err := encryption.NewCipher(sessionKey.Value()); err != nil {
-		return SecurityConfig{}, authConfigError("SESSION_ENCRYPTION_KEY must be a 32-byte raw, base64, or hex key")
+		return SecurityConfig{}, configError("SESSION_ENCRYPTION_KEY must be a 32-byte raw, base64, or hex key")
 	}
 
 	sessionAbsoluteTTL, err := optionalPositiveDuration(getenv, "OPENPLAN_SESSION_ABSOLUTE_TTL", authentication.DefaultSessionAbsoluteTTL)
@@ -148,7 +148,7 @@ func loadSecurityConfig(getenv func(string) string, environment Environment) (Se
 	// An idle bound past the absolute cap can never be reached, so it is a
 	// configuration mistake rather than a permissive setting.
 	if sessionIdleTTL > sessionAbsoluteTTL {
-		return SecurityConfig{}, authConfigError("OPENPLAN_SESSION_IDLE_TTL must not exceed OPENPLAN_SESSION_ABSOLUTE_TTL")
+		return SecurityConfig{}, configError("OPENPLAN_SESSION_IDLE_TTL must not exceed OPENPLAN_SESSION_ABSOLUTE_TTL")
 	}
 	// The cookie path only writes LastSeenAt back once every
 	// authentication.SessionTouchInterval (authentication/middleware.go), and IsLive is
@@ -157,7 +157,7 @@ func loadSecurityConfig(getenv func(string) string, environment Environment) (Se
 	// touched, so it can never slide — a silent hard cap rather than the
 	// sliding window the setting promises.
 	if sessionIdleTTL <= authentication.SessionTouchInterval {
-		return SecurityConfig{}, authConfigError("OPENPLAN_SESSION_IDLE_TTL must exceed the %s session touch interval, or an idle session expires before it can ever slide", authentication.SessionTouchInterval)
+		return SecurityConfig{}, configError("OPENPLAN_SESSION_IDLE_TTL must exceed the %s session touch interval, or an idle session expires before it can ever slide", authentication.SessionTouchInterval)
 	}
 
 	openFGA, err := loadOpenFGAConfig(getenv)
@@ -166,10 +166,10 @@ func loadSecurityConfig(getenv func(string) string, environment Environment) (Se
 	}
 	if environment == EnvironmentProduction {
 		if oidc.IssuerURL.Scheme != "https" {
-			return SecurityConfig{}, authConfigError("OIDC_ISSUER_URL must use HTTPS in production")
+			return SecurityConfig{}, configError("OIDC_ISSUER_URL must use HTTPS in production")
 		}
 		if publicURL.Scheme != "https" {
-			return SecurityConfig{}, authConfigError("OPENPLAN_PUBLIC_URL must use HTTPS in production")
+			return SecurityConfig{}, configError("OPENPLAN_PUBLIC_URL must use HTTPS in production")
 		}
 		if err := refusePublishedKey("SESSION_ENCRYPTION_KEY", sessionKey); err != nil {
 			return SecurityConfig{}, err
@@ -207,16 +207,16 @@ func loadSecurityConfig(getenv func(string) string, environment Environment) (Se
 func loadRootConfig(getenv func(string) string) (RootConfig, error) {
 	for _, retired := range []string{"OPENPLAN_ROOT_PASSWORD", "OPENPLAN_ROOT_USERNAME"} {
 		if getenv(retired) != "" {
-			return RootConfig{}, authConfigError("%s is retired: root is an identity-provider user, named by OPENPLAN_ROOT_SUBJECT", retired)
+			return RootConfig{}, configError("%s is retired: root is an identity-provider user, named by OPENPLAN_ROOT_SUBJECT", retired)
 		}
 	}
 
 	subject := strings.TrimSpace(getenv("OPENPLAN_ROOT_SUBJECT"))
 	if subject == "" {
-		return RootConfig{}, authConfigError("OPENPLAN_ROOT_SUBJECT is required: it names the identity-provider user a fresh install is administered from")
+		return RootConfig{}, configError("OPENPLAN_ROOT_SUBJECT is required: it names the identity-provider user a fresh install is administered from")
 	}
 	if !strval.SafeOpaque(subject) {
-		return RootConfig{}, authConfigError("OPENPLAN_ROOT_SUBJECT must not contain whitespace or control characters")
+		return RootConfig{}, configError("OPENPLAN_ROOT_SUBJECT must not contain whitespace or control characters")
 	}
 	return RootConfig{Subject: subject}, nil
 }
@@ -225,7 +225,7 @@ func loadRootConfig(getenv func(string) string) (RootConfig, error) {
 // the provider is the only way in.
 func loadOIDCConfig(getenv func(string) string) (OIDCConfig, error) {
 	if strings.TrimSpace(getenv("OIDC_AUDIENCE")) != "" {
-		return OIDCConfig{}, authConfigError("OIDC_AUDIENCE is retired: set OIDC_CLIENT_ID to the OAuth client ID instead")
+		return OIDCConfig{}, configError("OIDC_AUDIENCE is retired: set OIDC_CLIENT_ID to the OAuth client ID instead")
 	}
 
 	rawIssuer := strings.TrimSpace(getenv("OIDC_ISSUER_URL"))
@@ -237,13 +237,13 @@ func loadOIDCConfig(getenv func(string) string) (OIDCConfig, error) {
 		return OIDCConfig{}, err
 	}
 	if clientID == "" {
-		return OIDCConfig{}, authConfigError("OIDC_CLIENT_ID is required")
+		return OIDCConfig{}, configError("OIDC_CLIENT_ID is required")
 	}
 	if !strval.SafeOpaque(clientID) {
-		return OIDCConfig{}, authConfigError("OIDC_CLIENT_ID must not contain whitespace or control characters")
+		return OIDCConfig{}, configError("OIDC_CLIENT_ID must not contain whitespace or control characters")
 	}
 	if clientSecret.Empty() {
-		return OIDCConfig{}, authConfigError("OIDC_CLIENT_SECRET is required")
+		return OIDCConfig{}, configError("OIDC_CLIENT_SECRET is required")
 	}
 	return OIDCConfig{IssuerURL: issuerURL, ClientID: clientID, ClientSecret: clientSecret}, nil
 }
@@ -264,7 +264,7 @@ func loadOpenFGAConfig(getenv func(string) string) (OpenFGAConfig, error) {
 		storeName = DefaultOpenFGAStoreName
 	}
 	if !strval.SafeOpaque(storeName) {
-		return OpenFGAConfig{}, authConfigError("OPENFGA_STORE_NAME must not contain whitespace or control characters")
+		return OpenFGAConfig{}, configError("OPENFGA_STORE_NAME must not contain whitespace or control characters")
 	}
 	return OpenFGAConfig{StoreName: storeName}, nil
 }
@@ -272,7 +272,7 @@ func loadOpenFGAConfig(getenv func(string) string) (OpenFGAConfig, error) {
 func parseConfigURL(name, raw string) (*url.URL, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return nil, authConfigError("%s is required", name)
+		return nil, configError("%s is required", name)
 	}
 	return parseAbsoluteURL(name, raw)
 }
@@ -280,16 +280,16 @@ func parseConfigURL(name, raw string) (*url.URL, error) {
 func parseAbsoluteURL(name, raw string) (*url.URL, error) {
 	parsed, err := url.Parse(raw)
 	if err != nil || !parsed.IsAbs() || parsed.Hostname() == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return nil, authConfigError("%s must be an absolute HTTP or HTTPS URL", name)
+		return nil, configError("%s must be an absolute HTTP or HTTPS URL", name)
 	}
 	if parsed.User != nil {
-		return nil, authConfigError("%s must not include user information", name)
+		return nil, configError("%s must not include user information", name)
 	}
 	if parsed.RawQuery != "" || parsed.ForceQuery {
-		return nil, authConfigError("%s must not include a query", name)
+		return nil, configError("%s must not include a query", name)
 	}
 	if parsed.Fragment != "" || strings.Contains(raw, "#") {
-		return nil, authConfigError("%s must not include a fragment", name)
+		return nil, configError("%s must not include a fragment", name)
 	}
 	return parsed, nil
 }
@@ -301,11 +301,7 @@ func optionalPositiveDuration(getenv func(string) string, name string, fallback 
 	}
 	value, err := time.ParseDuration(raw)
 	if err != nil || value <= 0 {
-		return 0, authConfigError("%s must be a positive duration such as 45m or 2h", name)
+		return 0, configError("%s must be a positive duration such as 45m or 2h", name)
 	}
 	return value, nil
-}
-
-func authConfigError(format string, arguments ...any) error {
-	return fmt.Errorf("%w: %s", ErrInvalidConfig, fmt.Sprintf(format, arguments...))
 }
