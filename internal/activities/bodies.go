@@ -124,10 +124,7 @@ func handle[Request any, Result any](body func(context.Context, Request, io.Writ
 }
 
 func (b *Bodies) fetchSource(ctx context.Context, request fetchSourceRequest, _ io.Writer) (struct{}, error) {
-	var credential runner.GitCredential
-	if request.Token != "" {
-		credential = runner.NewGitCredential(request.Token)
-	}
+	credential := runner.NewGitCredential(request.Token)
 	if request.CommitSHA != "" {
 		if err := b.git.CheckoutCommit(ctx, request.RepoURL, request.CommitSHA, request.SourcePath, credential); err != nil {
 			return struct{}{}, fmt.Errorf("checkout source commit %s: %w", request.CommitSHA, err)
@@ -238,13 +235,33 @@ func (b *Bodies) stores(cfg config.ArtifactStoreConfig) (bodyStores, error) {
 	if b.logs != nil || b.plans != nil || b.changes != nil {
 		return bodyStores{logs: b.logs, plans: b.plans, changes: b.changes}, nil
 	}
-	store, err := artifacts.NewObjectStore(cfg)
+	stores, err := openStores(cfg)
 	if err != nil {
 		return bodyStores{}, fmt.Errorf("open the artifact store: %w", err)
+	}
+	return stores, nil
+}
+
+// openStores opens the artifact store cfg names, under each store the bodies
+// and the executor write through.
+func openStores(cfg config.ArtifactStoreConfig) (bodyStores, error) {
+	store, err := artifacts.NewObjectStore(cfg)
+	if err != nil {
+		return bodyStores{}, err
 	}
 	return bodyStores{
 		logs:    artifacts.NewLogStore(store),
 		plans:   artifacts.NewPlanStore(store),
 		changes: artifacts.NewPlanChangesStore(store),
 	}, nil
+}
+
+// OpenPlanStore opens the plan store cfg names: the executor's, which
+// CleanupWorkspace deletes applied plans from.
+func OpenPlanStore(cfg config.ArtifactStoreConfig) (PlanArtifactStore, error) {
+	stores, err := openStores(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return stores.plans, nil
 }

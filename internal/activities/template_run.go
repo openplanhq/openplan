@@ -206,10 +206,7 @@ func (activities *TemplateRunActivities) RunTerraform(ctx context.Context, input
 	if err != nil {
 		return domain.RunTerraformActivityOutput{}, err
 	}
-	if !domain.ValidLogName(input.LogName) {
-		return domain.RunTerraformActivityOutput{}, fmt.Errorf("invalid log name %q", input.LogName)
-	}
-	logsDir, err := activities.workspaces.LogsDir(string(input.TenantID), string(input.RunID))
+	logsDir, err := activities.logsDir(input.TenantID, input.RunID, input.LogName)
 	if err != nil {
 		return domain.RunTerraformActivityOutput{}, err
 	}
@@ -325,10 +322,7 @@ func changesFileName(logName string) string {
 // UploadLog uploads the log RunTerraform spooled for a command, from a
 // sandbox that sees only the spool and the artifact store.
 func (activities *TemplateRunActivities) UploadLog(ctx context.Context, input domain.UploadLogActivityInput) (domain.TemplateRunLog, error) {
-	if !domain.ValidLogName(input.LogName) {
-		return domain.TemplateRunLog{}, fmt.Errorf("invalid log name %q", input.LogName)
-	}
-	logsDir, err := activities.workspaces.LogsDir(string(input.TenantID), string(input.RunID))
+	logsDir, err := activities.logsDir(input.TenantID, input.RunID, input.LogName)
 	if err != nil {
 		return domain.TemplateRunLog{}, err
 	}
@@ -398,6 +392,15 @@ func (activities *TemplateRunActivities) storeAccess() ([]sandbox.Mount, []uint3
 		return nil, nil
 	}
 	return []sandbox.Mount{{Path: activities.store.FilesystemRoot}}, []uint32{artifactsGroup}
+}
+
+// logsDir is the run's logs directory, once logName is checked to be a name
+// the workflow could have given a log: it becomes a file name there.
+func (activities *TemplateRunActivities) logsDir(tenant domain.TenantID, run domain.TemplateRunID, logName string) (string, error) {
+	if !domain.ValidLogName(logName) {
+		return "", fmt.Errorf("invalid log name %q", logName)
+	}
+	return activities.workspaces.LogsDir(string(tenant), string(run))
 }
 
 // within returns path, cleaned, if it is the workspace or inside it. Paths in

@@ -1,7 +1,6 @@
 package workflows
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/vishu42/openplan/internal/domain"
@@ -71,15 +70,11 @@ func (r *templateSync) sync() (domain.TemplateSyncActivityOutput, error) {
 
 // Record records the step the sync is starting.
 func (r *templateSync) Record(step domain.TemplateSyncStep) error {
-	return workflow.ExecuteActivity(
-		r.ctx,
-		domain.RecordTemplateSyncStepActivityName,
-		domain.TemplateSyncStepActivityInput{
-			SyncID:   r.input.SyncID,
-			TenantID: r.input.TenantID,
-			Step:     step,
-		},
-	).Get(r.ctx, nil)
+	return execute(r.ctx, domain.RecordTemplateSyncStepActivityName, domain.TemplateSyncStepActivityInput{
+		SyncID:   r.input.SyncID,
+		TenantID: r.input.TenantID,
+		Step:     step,
+	}, nil)
 }
 
 // lifecycle carries a sync through its status. It marks the sync
@@ -89,29 +84,20 @@ func (r *templateSync) Record(step domain.TemplateSyncStep) error {
 // completed.
 //
 // Any error, including one writing that outcome, marks the sync failed
-// before lifecycle returns it. If recording the failure also fails, both
-// errors are surfaced: the original wrapped with %w to stay matchable by
-// callers, the persistence error appended as context.
+// before lifecycle returns it, as recordFailure says.
 func (r *templateSync) lifecycle(work func() (domain.TemplateSyncActivityOutput, error)) (err error) {
 	setStatus := func(status domain.TemplateSyncStatusActivityInput) error {
 		status.SyncID = r.input.SyncID
 		status.TenantID = r.input.TenantID
-		return workflow.ExecuteActivity(
-			r.ctx,
-			domain.RecordTemplateSyncStatusActivityName,
-			status,
-		).Get(r.ctx, nil)
+		return execute(r.ctx, domain.RecordTemplateSyncStatusActivityName, status, nil)
 	}
 	defer func() {
-		if err == nil {
-			return
-		}
-		if recordErr := setStatus(domain.TemplateSyncStatusActivityInput{
-			Status:       domain.TemplateSyncStateFailed,
-			ErrorSummary: err.Error(),
-		}); recordErr != nil {
-			err = fmt.Errorf("%w (also failed to persist failure status: %w)", err, recordErr)
-		}
+		err = recordFailure(err, func() error {
+			return setStatus(domain.TemplateSyncStatusActivityInput{
+				Status:       domain.TemplateSyncStateFailed,
+				ErrorSummary: err.Error(),
+			})
+		})
 	}()
 
 	if err := setStatus(domain.TemplateSyncStatusActivityInput{

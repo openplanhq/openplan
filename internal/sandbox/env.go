@@ -5,28 +5,22 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/vishu42/openplan/internal/runner"
 )
 
 // guestPath is PATH inside the guest root.
 const guestPath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-// forwardedVariables are the executor's own settings a sandbox's commands
-// need: corporate egress, and the CA it trusts, whose paths trustMounts
-// brings into the sandbox.
-var forwardedVariables = []string{
-	"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",
-	"http_proxy", "https_proxy", "no_proxy",
-	"SSL_CERT_FILE", "SSL_CERT_DIR",
-}
-
 // baseEnvironment is every sandbox's environment, built from scratch. The
 // executor's own environment holds the storage keys and the Temporal settings,
-// so nothing of it passes but forwardedVariables. HOME and TMPDIR are the
+// so nothing of it passes but runner.EgressVariables, the CA among them
+// whose paths trustMounts brings into the sandbox. HOME and TMPDIR are the
 // sandbox's private /tmp. An activity's credentials are not here: they arrive
 // over stdin and go only to the commands that need them.
 func baseEnvironment(lookup func(string) (string, bool)) []string {
 	env := []string{"PATH=" + guestPath, "HOME=/tmp", "TMPDIR=/tmp", "TF_IN_AUTOMATION=1"}
-	for _, name := range forwardedVariables {
+	for _, name := range runner.EgressVariables {
 		if value, ok := lookup(name); ok {
 			env = append(env, name+"="+value)
 		}

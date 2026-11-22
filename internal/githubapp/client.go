@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/lestrrat-go/jwx/v3/jwa"
@@ -110,24 +111,15 @@ func (client *Client) appJWT() (string, error) {
 // installation here for each, and each mints its own token.
 func (client *Client) InstallationForRepo(ctx context.Context, owner string, repo string) (int64, error) {
 	url := fmt.Sprintf("%s/repos/%s/%s/installation", client.baseURL, owner, repo)
-	response, err := client.do(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return 0, err
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode == http.StatusNotFound {
-		return 0, fmt.Errorf("%w: %s/%s", ErrAppNotInstalled, owner, repo)
-	}
-	if response.StatusCode != http.StatusOK {
-		return 0, client.statusError("resolve installation", response)
-	}
-
 	var payload struct {
 		ID int64 `json:"id"`
 	}
-	if err := json.NewDecoder(io.LimitReader(response.Body, maxErrorBody<<4)).Decode(&payload); err != nil {
-		return 0, fmt.Errorf("decode installation: %w", err)
+	status, err := client.call(ctx, http.MethodGet, url, nil, "resolve installation", "installation", &payload, http.StatusOK)
+	if status == http.StatusNotFound {
+		return 0, fmt.Errorf("%w: %s/%s", ErrAppNotInstalled, owner, repo)
+	}
+	if err != nil {
+		return 0, err
 	}
 	if payload.ID == 0 {
 		return 0, fmt.Errorf("resolve installation: response carried no id")
@@ -150,22 +142,12 @@ func (client *Client) MintToken(ctx context.Context, installationID int64, repo 
 		return Token{}, fmt.Errorf("encode token request: %w", err)
 	}
 
-	response, err := client.do(ctx, http.MethodPost, url, body)
-	if err != nil {
-		return Token{}, err
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode != http.StatusCreated && response.StatusCode != http.StatusOK {
-		return Token{}, client.statusError("mint installation token", response)
-	}
-
 	var payload struct {
 		Token     string `json:"token"`
 		ExpiresAt string `json:"expires_at"`
 	}
-	if err := json.NewDecoder(io.LimitReader(response.Body, maxErrorBody<<4)).Decode(&payload); err != nil {
-		return Token{}, fmt.Errorf("decode installation token: %w", err)
+	if _, err := client.call(ctx, http.MethodPost, url, body, "mint installation token", "installation token", &payload, http.StatusCreated, http.StatusOK); err != nil {
+		return Token{}, err
 	}
 	if payload.Token == "" {
 		return Token{}, fmt.Errorf("mint installation token: response carried no token")
@@ -177,10 +159,14 @@ func (client *Client) MintToken(ctx context.Context, installationID int64, repo 
 	return Token{Value: payload.Token, ExpiresAt: expiresAt.UTC()}, nil
 }
 
-func (client *Client) do(ctx context.Context, method string, url string, body []byte) (*http.Response, error) {
+// call sends one request as the App and decodes the response, bounded, into
+// out. A status other than ok fails as action's statusError, and a body that
+// does not decode as a decode of what; the status is returned either way, 0
+// when no response arrived, so a caller can tell a status it gives meaning to.
+func (client *Client) call(ctx context.Context, method, url string, body []byte, action, what string, out any, ok ...int) (int, error) {
 	assertion, err := client.appJWT()
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
 	var reader io.Reader
@@ -189,7 +175,7 @@ func (client *Client) do(ctx context.Context, method string, url string, body []
 	}
 	request, err := http.NewRequestWithContext(ctx, method, url, reader)
 	if err != nil {
-		return nil, fmt.Errorf("build github request: %w", err)
+		return 0, fmt.Errorf("build github request: %w", err)
 	}
 	request.Header.Set("Authorization", "Bearer "+assertion)
 	request.Header.Set("Accept", "application/vnd.github+json")
@@ -200,9 +186,17 @@ func (client *Client) do(ctx context.Context, method string, url string, body []
 
 	response, err := client.http.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("github request failed: %w", err)
+		return 0, fmt.Errorf("github request failed: %w", err)
 	}
-	return response, nil
+	defer response.Body.Close()
+
+	if !slices.Contains(ok, response.StatusCode) {
+		return response.StatusCode, client.statusError(action, response)
+	}
+	if err := json.NewDecoder(io.LimitReader(response.Body, maxErrorBody<<4)).Decode(out); err != nil {
+		return response.StatusCode, fmt.Errorf("decode %s: %w", what, err)
+	}
+	return response.StatusCode, nil
 }
 
 // statusError renders a bounded slice of the failure body. GitHub echoes little
