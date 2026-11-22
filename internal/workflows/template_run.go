@@ -28,20 +28,21 @@ const (
 	sessionCreationTimeout = 10 * time.Minute
 )
 
+// runNonRetryableErrorTypes are the failures no retry of a run's activity
+// can fix, whichever of the run's retry policies it has.
+var runNonRetryableErrorTypes = []string{"InvalidConfig", "UnsupportedCommand"}
+
 // defaultRunRetryPolicy is the retry policy applied to activities in the
 // template-run workflow when no activity-specific override is set.
 // MaximumAttempts is temporarily pinned to 1 (no automatic retries) — in
 // Temporal, 0 means unlimited attempts, not zero retries, so 1 is the value
 // that disables retries.
 var defaultRunRetryPolicy = &temporal.RetryPolicy{
-	InitialInterval:    30 * time.Second,
-	BackoffCoefficient: 2.0,
-	MaximumInterval:    5 * time.Minute,
-	MaximumAttempts:    1,
-	NonRetryableErrorTypes: []string{
-		"InvalidConfig",
-		"UnsupportedCommand",
-	},
+	InitialInterval:        30 * time.Second,
+	BackoffCoefficient:     2.0,
+	MaximumInterval:        5 * time.Minute,
+	MaximumAttempts:        1,
+	NonRetryableErrorTypes: runNonRetryableErrorTypes,
 }
 
 // terraformRetryPolicy is applied to long-running Terraform commands (plan,
@@ -49,14 +50,11 @@ var defaultRunRetryPolicy = &temporal.RetryPolicy{
 // in Temporal, 0 means unlimited attempts, not zero retries, so 1 is the
 // value that disables retries.
 var terraformRetryPolicy = &temporal.RetryPolicy{
-	InitialInterval:    time.Minute,
-	BackoffCoefficient: 2.0,
-	MaximumInterval:    10 * time.Minute,
-	MaximumAttempts:    1,
-	NonRetryableErrorTypes: []string{
-		"InvalidConfig",
-		"UnsupportedCommand",
-	},
+	InitialInterval:        time.Minute,
+	BackoffCoefficient:     2.0,
+	MaximumInterval:        10 * time.Minute,
+	MaximumAttempts:        1,
+	NonRetryableErrorTypes: runNonRetryableErrorTypes,
 }
 
 // uploadLogRetryPolicy retries UploadLog where defaultRunRetryPolicy would
