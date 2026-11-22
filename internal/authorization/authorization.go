@@ -152,9 +152,7 @@ func (auth *Authorization) ListGrants(ctx context.Context, object Object) ([]Gra
 
 	var grants []Grant
 	seenGrants := map[string]struct{}{}
-	seenTokens := map[string]struct{}{}
-	token := ""
-	for {
+	err := eachPage(fmt.Errorf("read grants on %s: repeated continuation token", object), func(token string) (string, error) {
 		response, err := auth.server.Read(ctx, &openfgav1.ReadRequest{
 			StoreId:           auth.storeID,
 			TupleKey:          &openfgav1.ReadRequestTupleKey{Object: object.String()},
@@ -162,7 +160,7 @@ func (auth *Authorization) ListGrants(ctx context.Context, object Object) ([]Gra
 			ContinuationToken: token,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("read grants on %s: %w", object, err)
+			return "", fmt.Errorf("read grants on %s: %w", object, err)
 		}
 		for _, stored := range response.GetTuples() {
 			grant, err := grantFromTuple(stored.GetKey(), object)
@@ -170,23 +168,19 @@ func (auth *Authorization) ListGrants(ctx context.Context, object Object) ([]Gra
 				continue
 			}
 			if err != nil {
-				return nil, fmt.Errorf("read grants on %s: %w", object, err)
+				return "", fmt.Errorf("read grants on %s: %w", object, err)
 			}
 			key := grant.Subject().String() + "\x00" + grant.Relation().String()
 			if _, duplicate := seenGrants[key]; duplicate {
-				return nil, fmt.Errorf("read grants on %s: duplicate grant", object)
+				return "", fmt.Errorf("read grants on %s: duplicate grant", object)
 			}
 			seenGrants[key] = struct{}{}
 			grants = append(grants, grant)
 		}
-		token = response.GetContinuationToken()
-		if token == "" {
-			break
-		}
-		if _, repeated := seenTokens[token]; repeated {
-			return nil, fmt.Errorf("read grants on %s: repeated continuation token", object)
-		}
-		seenTokens[token] = struct{}{}
+		return response.GetContinuationToken(), nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	sort.Slice(grants, func(i, j int) bool {

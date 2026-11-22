@@ -33,7 +33,7 @@ func ReapSessions(ctx context.Context, sessions SessionStore, interval time.Dura
 		interval = DefaultSessionReapInterval
 	}
 	if clock == nil {
-		clock = func() time.Time { return time.Now().UTC() }
+		clock = utcNow
 	}
 
 	ticker := time.NewTicker(interval)
@@ -58,3 +58,6 @@ func ReapSessions(ctx context.Context, sessions SessionStore, interval time.Dura
 		}
 	}
 }
+
+// utcNow is the clock a caller gets when it injects none.
+func utcNow() time.Time { return time.Now().UTC() }

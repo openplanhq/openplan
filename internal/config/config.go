@@ -31,6 +31,12 @@ const (
 
 var ErrInvalidConfig = errors.New("invalid config")
 
+// configError is an ErrInvalidConfig that names the setting at fault, so every
+// refusal reads the same way and still matches errors.Is.
+func configError(format string, arguments ...any) error {
+	return fmt.Errorf("%w: %s", ErrInvalidConfig, fmt.Sprintf(format, arguments...))
+}
+
 type APIConfig struct {
 	// Environment is OPENPLAN_ENVIRONMENT. Production turns on the checks a
 	// development install would fail: HTTPS URLs, secure cookies, and refusing
@@ -133,7 +139,7 @@ func parseEnvironment(raw string) (Environment, error) {
 	case string(EnvironmentProduction):
 		return EnvironmentProduction, nil
 	default:
-		return "", fmt.Errorf("%w: OPENPLAN_ENVIRONMENT must be development or production", ErrInvalidConfig)
+		return "", configError("OPENPLAN_ENVIRONMENT must be development or production")
 	}
 }
 
@@ -153,7 +159,7 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 
 	cfg := APIConfig{
 		PostgresURL:       strings.TrimSpace(getenv("POSTGRES_URL")),
-		HTTPAddress:       strings.TrimSpace(getenv("HTTP_ADDRESS")),
+		HTTPAddress:       optionalString(getenv, "HTTP_ADDRESS", DefaultHTTPAddress),
 		TemporalAddress:   strings.TrimSpace(getenv("TEMPORAL_ADDRESS")),
 		TemporalNamespace: strings.TrimSpace(getenv("TEMPORAL_NAMESPACE")),
 		ArtifactStore:     artifactStore,
@@ -161,11 +167,8 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 		Environment:       environment,
 		Security:          security,
 	}
-	if cfg.HTTPAddress == "" {
-		cfg.HTTPAddress = DefaultHTTPAddress
-	}
 	cfg.Debug = parseBool(getenv("OPENPLAN_DEBUG"))
-	credentialKey, err := loadCredentialEncryptionKey(getenv)
+	credentialKey, err := optionalEncryptionKey(getenv, "CREDENTIAL_ENCRYPTION_KEY")
 	if err != nil {
 		return APIConfig{}, err
 	}
@@ -198,14 +201,8 @@ func LoadAPIConfig(getenv func(string) string) (APIConfig, error) {
 	}
 	cfg.TerraformTimeout = terraformTimeout
 
-	if cfg.PostgresURL == "" {
-		return APIConfig{}, fmt.Errorf("%w: POSTGRES_URL is required", ErrInvalidConfig)
-	}
-	if cfg.TemporalAddress == "" {
-		return APIConfig{}, fmt.Errorf("%w: TEMPORAL_ADDRESS is required", ErrInvalidConfig)
-	}
-	if cfg.ValkeyURL == "" {
-		return APIConfig{}, fmt.Errorf("%w: VALKEY_URL is required", ErrInvalidConfig)
+	if err := requireAll(setting{"POSTGRES_URL", cfg.PostgresURL}, setting{"TEMPORAL_ADDRESS", cfg.TemporalAddress}, setting{"VALKEY_URL", cfg.ValkeyURL}); err != nil {
+		return APIConfig{}, err
 	}
 
 	return cfg, nil
@@ -220,23 +217,18 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 	cfg := ExecutorConfig{
 		TemporalAddress:   strings.TrimSpace(getenv("TEMPORAL_ADDRESS")),
 		TemporalNamespace: strings.TrimSpace(getenv("TEMPORAL_NAMESPACE")),
-		RunRoot:           strings.TrimSpace(getenv("EXECUTOR_RUN_ROOT")),
+		RunRoot:           optionalString(getenv, "EXECUTOR_RUN_ROOT", DefaultExecutorRunRoot),
 		ArtifactStore:     artifactStore,
 		ValkeyURL:         strings.TrimSpace(getenv("VALKEY_URL")),
 	}
-	if cfg.RunRoot == "" {
-		cfg.RunRoot = DefaultExecutorRunRoot
+	maxSessions, err := optionalPositiveInt(getenv, "EXECUTOR_MAX_SESSIONS", DefaultExecutorMaxSessions)
+	if err != nil {
+		return ExecutorConfig{}, err
 	}
-	cfg.MaxSessions = DefaultExecutorMaxSessions
-	if raw := strings.TrimSpace(getenv("EXECUTOR_MAX_SESSIONS")); raw != "" {
-		maxSessions, err := strconv.Atoi(raw)
-		if err != nil || maxSessions < 1 {
-			return ExecutorConfig{}, fmt.Errorf("%w: EXECUTOR_MAX_SESSIONS must be a positive integer, got %q", ErrInvalidConfig, raw)
-		}
-		cfg.MaxSessions = maxSessions
-	}
+	cfg.MaxSessions = int(maxSessions)
 	cfg.Sandbox = SandboxConfig{
-		Runsc: DefaultExecutorSandboxRunsc, Root: DefaultExecutorSandboxRoot,
+		Runsc:     optionalString(getenv, "EXECUTOR_SANDBOX_RUNSC", DefaultExecutorSandboxRunsc),
+		Root:      optionalString(getenv, "EXECUTOR_SANDBOX_ROOT", DefaultExecutorSandboxRoot),
 		MemoryMiB: DefaultExecutorSandboxMemoryMiB, CPUs: DefaultExecutorSandboxCPUs, Pids: DefaultExecutorSandboxPids,
 		Subnet: netip.MustParsePrefix(DefaultExecutorSandboxSubnet),
 	}
@@ -244,15 +236,9 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 		subnet, err := netip.ParsePrefix(raw)
 		// /29 at most: the network, the gateway and broadcast leave five.
 		if err != nil || !subnet.Addr().Is4() || subnet.Bits() > 29 {
-			return ExecutorConfig{}, fmt.Errorf("%w: EXECUTOR_SANDBOX_SUBNET must be an IPv4 subnet of /29 or larger, got %q", ErrInvalidConfig, raw)
+			return ExecutorConfig{}, configError("EXECUTOR_SANDBOX_SUBNET must be an IPv4 subnet of /29 or larger, got %q", raw)
 		}
 		cfg.Sandbox.Subnet = subnet.Masked()
-	}
-	if v := strings.TrimSpace(getenv("EXECUTOR_SANDBOX_RUNSC")); v != "" {
-		cfg.Sandbox.Runsc = v
-	}
-	if v := strings.TrimSpace(getenv("EXECUTOR_SANDBOX_ROOT")); v != "" {
-		cfg.Sandbox.Root = v
 	}
 	for _, setting := range []struct {
 		name  string
@@ -262,27 +248,18 @@ func LoadExecutorConfig(getenv func(string) string) (ExecutorConfig, error) {
 		{"EXECUTOR_SANDBOX_CPUS", &cfg.Sandbox.CPUs},
 		{"EXECUTOR_SANDBOX_PIDS", &cfg.Sandbox.Pids},
 	} {
-		raw := strings.TrimSpace(getenv(setting.name))
-		if raw == "" {
-			continue
+		if *setting.value, err = optionalPositiveInt(getenv, setting.name, *setting.value); err != nil {
+			return ExecutorConfig{}, err
 		}
-		parsed, err := strconv.ParseInt(raw, 10, 64)
-		if err != nil || parsed < 1 {
-			return ExecutorConfig{}, fmt.Errorf("%w: %s must be a positive integer, got %q", ErrInvalidConfig, setting.name, raw)
-		}
-		*setting.value = parsed
 	}
 	// Every running sandbox holds one of the subnet's addresses, and every
 	// session can be running one. Too few, and activities would fail to start
 	// once the addresses ran out, rather than the executor refuse its config.
 	if hosts := sandboxAddresses(cfg.Sandbox.Subnet); hosts < cfg.MaxSessions {
-		return ExecutorConfig{}, fmt.Errorf("%w: EXECUTOR_SANDBOX_SUBNET %s holds %d sandbox addresses, fewer than EXECUTOR_MAX_SESSIONS (%d)", ErrInvalidConfig, cfg.Sandbox.Subnet, hosts, cfg.MaxSessions)
+		return ExecutorConfig{}, configError("EXECUTOR_SANDBOX_SUBNET %s holds %d sandbox addresses, fewer than EXECUTOR_MAX_SESSIONS (%d)", cfg.Sandbox.Subnet, hosts, cfg.MaxSessions)
 	}
-	if cfg.TemporalAddress == "" {
-		return ExecutorConfig{}, fmt.Errorf("%w: TEMPORAL_ADDRESS is required", ErrInvalidConfig)
-	}
-	if cfg.ValkeyURL == "" {
-		return ExecutorConfig{}, fmt.Errorf("%w: VALKEY_URL is required", ErrInvalidConfig)
+	if err := requireAll(setting{"TEMPORAL_ADDRESS", cfg.TemporalAddress}, setting{"VALKEY_URL", cfg.ValkeyURL}); err != nil {
+		return ExecutorConfig{}, err
 	}
 
 	return cfg, nil
@@ -295,18 +272,18 @@ func sandboxAddresses(subnet netip.Prefix) int {
 	return 1<<(32-subnet.Bits()) - 3
 }
 
-// loadCredentialEncryptionKey validates CREDENTIAL_ENCRYPTION_KEY the same
-// way SESSION_ENCRYPTION_KEY is validated: by constructing the cipher it
-// backs. Unlike SESSION_ENCRYPTION_KEY, it is optional — an empty value means
-// credential encryption is unavailable, not misconfigured — but a value that
-// is present and malformed must fail at startup rather than at first use.
-func loadCredentialEncryptionKey(getenv func(string) string) (Secret, error) {
-	key := newSecret(strings.TrimSpace(getenv("CREDENTIAL_ENCRYPTION_KEY")))
+// optionalEncryptionKey validates a key by constructing the cipher it backs,
+// so a value that is present and malformed fails at startup rather than at
+// first use. An empty value is returned as is: CREDENTIAL_ENCRYPTION_KEY may be
+// unset, which means credential encryption is unavailable, not misconfigured,
+// while SESSION_ENCRYPTION_KEY's caller refuses it.
+func optionalEncryptionKey(getenv func(string) string, name string) (Secret, error) {
+	key := newSecret(strings.TrimSpace(getenv(name)))
 	if key.Empty() {
 		return key, nil
 	}
 	if _, err := encryption.NewCipher(key.Value()); err != nil {
-		return Secret{}, fmt.Errorf("%w: CREDENTIAL_ENCRYPTION_KEY must be a 32-byte raw, base64, or hex key", ErrInvalidConfig)
+		return Secret{}, configError("%s must be a 32-byte raw, base64, or hex key", name)
 	}
 	return key, nil
 }
@@ -328,7 +305,7 @@ func (cfg GitHubAppConfig) Enabled() bool {
 }
 
 // loadGitHubAppConfig validates GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY the
-// same way loadCredentialEncryptionKey validates its key: by constructing the
+// same way optionalEncryptionKey validates its key: by constructing the
 // thing it backs, so a malformed value fails at startup rather than at the
 // first clone.
 //
@@ -343,29 +320,24 @@ func loadGitHubAppConfig(getenv func(string) string) (GitHubAppConfig, error) {
 		return GitHubAppConfig{}, nil
 	}
 	if appID == "" {
-		return GitHubAppConfig{}, fmt.Errorf("%w: GITHUB_APP_ID is required when GITHUB_APP_PRIVATE_KEY is set", ErrInvalidConfig)
+		return GitHubAppConfig{}, configError("GITHUB_APP_ID is required when GITHUB_APP_PRIVATE_KEY is set")
 	}
 	if privateKey.Empty() {
-		return GitHubAppConfig{}, fmt.Errorf("%w: GITHUB_APP_PRIVATE_KEY is required when GITHUB_APP_ID is set", ErrInvalidConfig)
+		return GitHubAppConfig{}, configError("GITHUB_APP_PRIVATE_KEY is required when GITHUB_APP_ID is set")
 	}
 	if _, err := strconv.ParseInt(appID, 10, 64); err != nil {
-		return GitHubAppConfig{}, fmt.Errorf("%w: GITHUB_APP_ID must be the App's numeric id", ErrInvalidConfig)
+		return GitHubAppConfig{}, configError("GITHUB_APP_ID must be the App's numeric id")
 	}
 	if _, err := githubapp.ParsePrivateKey(privateKey.Value()); err != nil {
-		return GitHubAppConfig{}, fmt.Errorf("%w: GITHUB_APP_PRIVATE_KEY must be an RSA private key as PEM or base64-encoded PEM", ErrInvalidConfig)
+		return GitHubAppConfig{}, configError("GITHUB_APP_PRIVATE_KEY must be an RSA private key as PEM or base64-encoded PEM")
 	}
 	return GitHubAppConfig{AppID: appID, PrivateKey: privateKey}, nil
 }
 
 func loadArtifactStoreConfig(getenv func(string) string) (ArtifactStoreConfig, error) {
-	kind := ArtifactStoreKind(strings.TrimSpace(getenv("ARTIFACT_STORE_KIND")))
-	if kind == "" {
-		kind = ArtifactStoreFilesystem
-	}
-
 	cfg := ArtifactStoreConfig{
-		Kind:           kind,
-		FilesystemRoot: strings.TrimSpace(getenv("ARTIFACT_STORE_FILESYSTEM_ROOT")),
+		Kind:           ArtifactStoreKind(optionalString(getenv, "ARTIFACT_STORE_KIND", string(ArtifactStoreFilesystem))),
+		FilesystemRoot: optionalString(getenv, "ARTIFACT_STORE_FILESYSTEM_ROOT", DefaultArtifactStoreFilesystemRoot),
 		S3: S3Config{
 			Bucket:          strings.TrimSpace(getenv("S3_BUCKET")),
 			Region:          strings.TrimSpace(getenv("S3_REGION")),
@@ -375,29 +347,21 @@ func loadArtifactStoreConfig(getenv func(string) string) (ArtifactStoreConfig, e
 			ForcePathStyle:  parseBool(getenv("S3_FORCE_PATH_STYLE")),
 		},
 	}
-	if cfg.FilesystemRoot == "" {
-		cfg.FilesystemRoot = DefaultArtifactStoreFilesystemRoot
-	}
-
 	switch cfg.Kind {
 	case ArtifactStoreFilesystem:
 		return cfg, nil
 	case ArtifactStoreS3:
-		if cfg.S3.Bucket == "" {
-			return ArtifactStoreConfig{}, fmt.Errorf("%w: S3_BUCKET is required", ErrInvalidConfig)
-		}
-		if cfg.S3.Region == "" {
-			return ArtifactStoreConfig{}, fmt.Errorf("%w: S3_REGION is required", ErrInvalidConfig)
-		}
-		if cfg.S3.AccessKeyID == "" {
-			return ArtifactStoreConfig{}, fmt.Errorf("%w: S3_ACCESS_KEY_ID is required", ErrInvalidConfig)
-		}
-		if cfg.S3.SecretAccessKey == "" {
-			return ArtifactStoreConfig{}, fmt.Errorf("%w: S3_SECRET_ACCESS_KEY is required", ErrInvalidConfig)
+		if err := requireAll(
+			setting{"S3_BUCKET", cfg.S3.Bucket},
+			setting{"S3_REGION", cfg.S3.Region},
+			setting{"S3_ACCESS_KEY_ID", cfg.S3.AccessKeyID},
+			setting{"S3_SECRET_ACCESS_KEY", cfg.S3.SecretAccessKey},
+		); err != nil {
+			return ArtifactStoreConfig{}, err
 		}
 		return cfg, nil
 	default:
-		return ArtifactStoreConfig{}, fmt.Errorf("%w: ARTIFACT_STORE_KIND must be filesystem or s3", ErrInvalidConfig)
+		return ArtifactStoreConfig{}, configError("ARTIFACT_STORE_KIND must be filesystem or s3")
 	}
 }
 

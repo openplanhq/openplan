@@ -2,6 +2,7 @@ package authorization
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	openfgav1 "github.com/openfga/api/proto/openfga/v1"
@@ -58,9 +59,7 @@ func (auth *Authorization) bootstrap(ctx context.Context, storeName string) erro
 // resolveStore finds the single store with this name, or creates it.
 func (auth *Authorization) resolveStore(ctx context.Context, storeName string) (string, error) {
 	var matches []string
-	token := ""
-	seen := map[string]bool{}
-	for {
+	err := eachPage(errors.New("authorization: list stores repeated a continuation token"), func(token string) (string, error) {
 		response, err := auth.server.ListStores(ctx, &openfgav1.ListStoresRequest{
 			PageSize:          wrapperspb.Int32(bootstrapPageSize),
 			ContinuationToken: token,
@@ -76,17 +75,10 @@ func (auth *Authorization) resolveStore(ctx context.Context, storeName string) (
 				matches = append(matches, store.GetId())
 			}
 		}
-		token = response.GetContinuationToken()
-		if token == "" {
-			break
-		}
-		// A provider that keeps handing back the same token would loop here
-		// forever, so a repeat is treated as a broken response rather than
-		// more pages.
-		if seen[token] {
-			return "", fmt.Errorf("authorization: list stores repeated a continuation token")
-		}
-		seen[token] = true
+		return response.GetContinuationToken(), nil
+	})
+	if err != nil {
+		return "", err
 	}
 
 	if len(matches) > 1 {
@@ -110,9 +102,7 @@ func (auth *Authorization) resolveStore(ctx context.Context, storeName string) (
 // new version when none does.
 func (auth *Authorization) resolveModel(ctx context.Context, storeID string, desired *openfgav1.AuthorizationModel) (string, error) {
 	var matches []string
-	token := ""
-	seen := map[string]bool{}
-	for {
+	err := eachPage(errors.New("authorization: list models repeated a continuation token"), func(token string) (string, error) {
 		response, err := auth.server.ReadAuthorizationModels(ctx, &openfgav1.ReadAuthorizationModelsRequest{
 			StoreId:           storeID,
 			PageSize:          wrapperspb.Int32(bootstrapPageSize),
@@ -126,14 +116,10 @@ func (auth *Authorization) resolveModel(ctx context.Context, storeID string, des
 				matches = append(matches, message.GetId())
 			}
 		}
-		token = response.GetContinuationToken()
-		if token == "" {
-			break
-		}
-		if seen[token] {
-			return "", fmt.Errorf("authorization: list models repeated a continuation token")
-		}
-		seen[token] = true
+		return response.GetContinuationToken(), nil
+	})
+	if err != nil {
+		return "", err
 	}
 
 	if len(matches) > 1 {
@@ -151,6 +137,29 @@ func (auth *Authorization) resolveModel(ctx context.Context, storeID string, des
 		return "", fmt.Errorf("authorization: written model has an unsafe id")
 	}
 	return written.GetAuthorizationModelId(), nil
+}
+
+// eachPage calls page with each continuation token, starting from none, until
+// it hands back none. A provider that keeps handing back the same token would
+// loop here forever, so a repeat fails with repeated rather than reading more
+// pages.
+func eachPage(repeated error, page func(token string) (next string, err error)) error {
+	seen := map[string]bool{}
+	token := ""
+	for {
+		next, err := page(token)
+		if err != nil {
+			return err
+		}
+		if next == "" {
+			return nil
+		}
+		if seen[next] {
+			return repeated
+		}
+		seen[next] = true
+		token = next
+	}
 }
 
 // modelFromProto converts a stored model into the comparable shape.

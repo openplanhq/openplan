@@ -25,7 +25,7 @@ func refusePublishedKey(name string, key Secret) error {
 	// A key that does not decode is not a published one; the variable's own
 	// validation reports it.
 	if err == nil && isPublishedKey(raw) {
-		return authConfigError("%s is an example key published in the openplan repository and cannot be used in production; generate one with `openssl rand -hex 32`", name)
+		return configError("%s is an example key published in the openplan repository and cannot be used in production; generate one with `openssl rand -hex 32`", name)
 	}
 	return nil
 }
@@ -52,7 +52,7 @@ func refusePublishedValkeyPassword(name, rawURL string) error {
 	// A URL that does not parse has no password to judge; dialing it
 	// reports the problem.
 	if err == nil && isPublishedValkeyPassword(parsed.User) {
-		return authConfigError("%s signs in with an example password published in the openplan repository and cannot be used in production; set the Valkey user's password to a fresh one, such as `openssl rand -hex 32`", name)
+		return configError("%s signs in with an example password published in the openplan repository and cannot be used in production; set the Valkey user's password to a fresh one, such as `openssl rand -hex 32`", name)
 	}
 	return nil
 }
