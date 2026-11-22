@@ -371,15 +371,7 @@ func (store *Store) GetTemplateRevisionVariables(ctx context.Context, tenantID d
 	}
 
 	return queryRows(ctx, store.pool, "get template revision variables", scanTemplateVariable, `
-		select
-			template_revision_id,
-			name,
-			type_expression,
-			description,
-			required,
-			has_default,
-			sensitive,
-			has_validation
+		select`+templateVariableColumns+`
 		from template_variables
 		where template_revision_id = $1
 		order by name
@@ -735,16 +727,7 @@ func insertStack(ctx context.Context, tx pgx.Tx, stack domain.Stack) error {
 
 func (store *Store) GetStack(ctx context.Context, tenantID domain.TenantID, stackID domain.StackID) (domain.Stack, error) {
 	row := store.pool.QueryRow(ctx, `
-		select
-			id,
-			tenant_id,
-			name,
-			slug,
-			status,
-			tags_json,
-			default_credential_ids_json,
-			created_by,
-			created_at
+		select`+stackColumns+`
 		from stacks
 		where tenant_id = $1
 			and id = $2
@@ -761,16 +744,7 @@ func (store *Store) GetStack(ctx context.Context, tenantID domain.TenantID, stac
 
 func (store *Store) ListStacks(ctx context.Context, tenantID domain.TenantID) ([]domain.Stack, error) {
 	return queryRows(ctx, store.pool, "list stacks", scanStack, `
-		select
-			id,
-			tenant_id,
-			name,
-			slug,
-			status,
-			tags_json,
-			default_credential_ids_json,
-			created_by,
-			created_at
+		select`+stackColumns+`
 		from stacks
 		where tenant_id = $1
 		order by created_at desc, id desc
@@ -788,16 +762,7 @@ func (store *Store) ListStacksPage(ctx context.Context, tenantID domain.TenantID
 		afterID = after.ID
 	}
 	return queryRows(ctx, store.pool, "list stack page", scanStack, `
-		select
-			id,
-			tenant_id,
-			name,
-			slug,
-			status,
-			tags_json,
-			default_credential_ids_json,
-			created_by,
-			created_at
+		select`+stackColumns+`
 		from stacks
 		where tenant_id = $1
 			and ($2::timestamptz is null or (created_at, id) < ($2, $3))
@@ -1347,19 +1312,7 @@ func (store *Store) RecordTemplateRunLog(ctx context.Context, log domain.Templat
 
 func (store *Store) GetTemplateRunLog(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, name string) (domain.TemplateRunLog, error) {
 	log, err := scanTemplateRunLog(store.pool.QueryRow(ctx, `
-		select
-			tenant_id,
-			run_id,
-			name,
-			run_phase,
-			seq,
-			command,
-			state,
-			lost_reason,
-			object_key,
-			content_type,
-			size_bytes,
-			uploaded_at
+		select`+templateRunLogColumns+`
 		from template_run_logs
 		where tenant_id = $1
 			and run_id = $2
@@ -1376,19 +1329,7 @@ func (store *Store) GetTemplateRunLog(ctx context.Context, tenantID domain.Tenan
 
 func (store *Store) ListTemplateRunLogs(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) ([]domain.TemplateRunLog, error) {
 	return queryRows(ctx, store.pool, "list template run logs", scanTemplateRunLog, `
-		select
-			tenant_id,
-			run_id,
-			name,
-			run_phase,
-			seq,
-			command,
-			state,
-			lost_reason,
-			object_key,
-			content_type,
-			size_bytes,
-			uploaded_at
+		select`+templateRunLogColumns+`
 		from template_run_logs
 		where tenant_id = $1
 			and run_id = $2
@@ -1396,10 +1337,9 @@ func (store *Store) ListTemplateRunLogs(ctx context.Context, tenantID domain.Ten
 	`, tenantID, runID)
 }
 
-// scanTemplateRunLog reads one row of the columns GetTemplateRunLog and
-// ListTemplateRunLogs select, in their order. The nullable columns come back
-// as the domain's zero values, so a log that is not complete carries no
-// object fields and one that is not lost no reason.
+// scanTemplateRunLog reads one row of templateRunLogColumns. The nullable
+// columns come back as the domain's zero values, so a log that is not
+// complete carries no object fields and one that is not lost no reason.
 func scanTemplateRunLog(row pgx.Row) (domain.TemplateRunLog, error) {
 	var log domain.TemplateRunLog
 	var objectKey, contentType, lostReason *string
@@ -1748,6 +1688,50 @@ const stackTemplateColumns = `
 	lifecycle
 `
 
+// stackColumns are a stacks row's columns in the order scanStack scans them.
+const stackColumns = `
+	id,
+	tenant_id,
+	name,
+	slug,
+	status,
+	tags_json,
+	default_credential_ids_json,
+	created_by,
+	created_at
+`
+
+// templateRunLogColumns are a template_run_logs row's columns in the order
+// scanTemplateRunLog scans them.
+const templateRunLogColumns = `
+	tenant_id,
+	run_id,
+	name,
+	run_phase,
+	seq,
+	command,
+	state,
+	lost_reason,
+	object_key,
+	content_type,
+	size_bytes,
+	uploaded_at
+`
+
+// templateVariableColumns are a template_variables row's columns in the
+// order scanTemplateVariable scans them and insertTemplateVariables writes
+// them.
+const templateVariableColumns = `
+	template_revision_id,
+	name,
+	type_expression,
+	description,
+	required,
+	has_default,
+	sensitive,
+	has_validation
+`
+
 // templateRevisionColumns are a template_revisions row's columns in the order
 // scanTemplateRevision scans them, for a select list or a returning clause.
 const templateRevisionColumns = `
@@ -1992,16 +1976,7 @@ func nullJSON(input json.RawMessage) any {
 func insertTemplateVariables(ctx context.Context, tx pgx.Tx, revisionID domain.TemplateRevisionID, variables []domain.TemplateVariable) error {
 	for _, variable := range variables {
 		if _, err := tx.Exec(ctx, `
-			insert into template_variables (
-				template_revision_id,
-				name,
-				type_expression,
-				description,
-				required,
-				has_default,
-				sensitive,
-				has_validation
-			) values ($1, $2, $3, $4, $5, $6, $7, $8)
+			insert into template_variables (`+templateVariableColumns+`) values ($1, $2, $3, $4, $5, $6, $7, $8)
 		`,
 			revisionID,
 			variable.Name,
