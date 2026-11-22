@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	openfgav1 "github.com/openfga/api/proto/openfga/v1"
 	"github.com/openfga/openfga/pkg/storage/memory"
 	"github.com/stretchr/testify/require"
 
@@ -81,4 +82,24 @@ func TestNewRefusesAnUnmigratedDatabase(t *testing.T) {
 	_, err := authorization.New(ctx, pool, "openplan-unmigrated-test")
 	require.ErrorContains(t, err, "schema is not migrated")
 	require.ErrorContains(t, err, "Migrate")
+}
+
+// An adopted model's id pins the process just as a written one does, so a
+// stored model that matches the repository's but carries an id that isn't
+// safe to transmit is refused, as an unsafe store id is.
+func TestBootstrapRefusesAMatchingModelWithAnUnsafeID(t *testing.T) {
+	ctx := context.Background()
+	datastore := memory.New()
+	store, err := datastore.CreateStore(ctx, &openfgav1.Store{Id: "01JABCDEFGHJKMNPQRSTVWXYZ0", Name: "openplan-test"})
+	require.NoError(t, err)
+	model, err := authorization.DesiredModelForTest()
+	require.NoError(t, err)
+	model.Id = "model id"
+	require.NoError(t, datastore.WriteAuthorizationModel(ctx, store.GetId(), model))
+
+	auth, err := authorization.NewWithDatastore(ctx, datastore, "openplan-test")
+	if err == nil {
+		auth.Close()
+	}
+	require.ErrorContains(t, err, "unsafe id")
 }
