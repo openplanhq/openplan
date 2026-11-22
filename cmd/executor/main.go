@@ -9,7 +9,6 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/vishu42/openplan/internal/activities"
-	"github.com/vishu42/openplan/internal/artifacts"
 	"github.com/vishu42/openplan/internal/config"
 	"github.com/vishu42/openplan/internal/domain"
 	"github.com/vishu42/openplan/internal/logsink"
@@ -83,14 +82,8 @@ func defaultExecutorDependencies() executorDependencies {
 			return temporalworker.New(temporalClient, taskQueue, options)
 		},
 		registerActivities: registerActivities,
-		newPlanStore: func(cfg config.ArtifactStoreConfig) (activities.PlanArtifactStore, error) {
-			store, err := artifacts.NewObjectStore(cfg)
-			if err != nil {
-				return nil, err
-			}
-			return artifacts.NewPlanStore(store), nil
-		},
-		interruptCh: temporalworker.InterruptCh,
+		newPlanStore:       activities.OpenPlanStore,
+		interruptCh:        temporalworker.InterruptCh,
 		newSandbox: func(cfg config.SandboxConfig, runRoot string) (sandbox.Runner, error) {
 			if err := (sandbox.Workspaces{Root: runRoot}).Check(); err != nil {
 				return nil, err

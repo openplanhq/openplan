@@ -235,13 +235,33 @@ func (b *Bodies) stores(cfg config.ArtifactStoreConfig) (bodyStores, error) {
 	if b.logs != nil || b.plans != nil || b.changes != nil {
 		return bodyStores{logs: b.logs, plans: b.plans, changes: b.changes}, nil
 	}
-	store, err := artifacts.NewObjectStore(cfg)
+	stores, err := openStores(cfg)
 	if err != nil {
 		return bodyStores{}, fmt.Errorf("open the artifact store: %w", err)
+	}
+	return stores, nil
+}
+
+// openStores opens the artifact store cfg names, under each store the bodies
+// and the executor write through.
+func openStores(cfg config.ArtifactStoreConfig) (bodyStores, error) {
+	store, err := artifacts.NewObjectStore(cfg)
+	if err != nil {
+		return bodyStores{}, err
 	}
 	return bodyStores{
 		logs:    artifacts.NewLogStore(store),
 		plans:   artifacts.NewPlanStore(store),
 		changes: artifacts.NewPlanChangesStore(store),
 	}, nil
+}
+
+// OpenPlanStore opens the plan store cfg names: the executor's, which
+// CleanupWorkspace deletes applied plans from.
+func OpenPlanStore(cfg config.ArtifactStoreConfig) (PlanArtifactStore, error) {
+	stores, err := openStores(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return stores.plans, nil
 }
