@@ -1467,7 +1467,7 @@ func (service *Service) ListTemplates(ctx context.Context, command ListTemplates
 	if err != nil {
 		return Page[domain.Template]{}, fmt.Errorf("list templates: %w", err)
 	}
-	return pageFrom(templates, command.Page.Limit, templatesList, func(template domain.Template) cursorKey {
+	return PageFrom(templates, command.Page.Limit, templatesList, func(template domain.Template) cursorKey {
 		return TemplateCursor{CreatedAt: template.CreatedAt, ID: template.ID}
 	}), nil
 }
@@ -1531,7 +1531,7 @@ func (service *Service) ListTemplateRevisionsForTemplate(ctx context.Context, co
 	if err != nil {
 		return Page[domain.TemplateRevision]{}, fmt.Errorf("list template revisions: %w", err)
 	}
-	return pageFrom(revisions, command.Page.Limit, templateRevisionsOfTemplateList, func(revision domain.TemplateRevision) cursorKey {
+	return PageFrom(revisions, command.Page.Limit, templateRevisionsOfTemplateList, func(revision domain.TemplateRevision) cursorKey {
 		return TemplateRevisionCursor{CreatedAt: revision.CreatedAt, ID: revision.ID}
 	}), nil
 }
@@ -1580,7 +1580,7 @@ func (service *Service) SearchUsers(ctx context.Context, command SearchUsersComm
 	if err != nil {
 		return Page[UserProfile]{}, err
 	}
-	return pageFrom(users, command.Page.Limit, usersList, func(user UserProfile) cursorKey {
+	return PageFrom(users, command.Page.Limit, usersList, func(user UserProfile) cursorKey {
 		return UserCursor{DisplayName: user.DisplayName, Sub: user.Sub}
 	}), nil
 }
@@ -2318,7 +2318,7 @@ func (service *Service) ListTemplateRuns(ctx context.Context, command ListTempla
 	if err != nil {
 		return Page[domain.TemplateRun]{}, fmt.Errorf("list template runs: %w", err)
 	}
-	page := pageFrom(runs, command.Page.Limit, templateRunsList, func(run domain.TemplateRun) cursorKey {
+	page := PageFrom(runs, command.Page.Limit, templateRunsList, func(run domain.TemplateRun) cursorKey {
 		return templateRunCursor{RunNumber: run.RunNumber}
 	})
 	if len(page.Items) == 0 {

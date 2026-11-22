@@ -61,7 +61,7 @@ func (service *Service) ListTemplateRunResourceChanges(ctx context.Context, comm
 	if err != nil {
 		return Page[domain.PlanResourceChange]{}, fmt.Errorf("list template run resource changes: %w", err)
 	}
-	return pageFrom(changes, command.Page.Limit, planChangesList, func(change domain.PlanResourceChange) cursorKey {
+	return PageFrom(changes, command.Page.Limit, planChangesList, func(change domain.PlanResourceChange) cursorKey {
 		return planChangeCursor{Position: change.Position}
 	}), nil
 }

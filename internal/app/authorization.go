@@ -136,7 +136,7 @@ func listAccessibleStacksPage(ctx context.Context, auth *authorization.Authoriza
 	if err != nil {
 		return Page[domain.Stack]{}, err
 	}
-	return pageFrom(stacks, page.Limit, stacksList, func(stack domain.Stack) cursorKey {
+	return PageFrom(stacks, page.Limit, stacksList, func(stack domain.Stack) cursorKey {
 		return StackPageCursor{CreatedAt: stack.CreatedAt, ID: stack.ID}
 	}), nil
 }

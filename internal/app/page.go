@@ -122,11 +122,12 @@ func strictUnmarshal(data []byte, into any) error {
 	return nil
 }
 
-// pageFrom turns rows fetched with limit+1 into a page: the extra row, when
+// PageFrom turns rows fetched with limit+1 into a page: the extra row, when
 // there is one, only proves a next page exists, and the cursor is the key of
 // the last row the page keeps. A page never ends with a cursor that leads to
-// nothing.
-func pageFrom[T any](rows []T, limit int, list string, key func(T) cursorKey) Page[T] {
+// nothing. The API pages the queue with it too, hence exported, and generic
+// in K so a caller outside the package can name its key type.
+func PageFrom[T any, K cursorKey](rows []T, limit int, list string, key func(T) K) Page[T] {
 	if rows == nil {
 		rows = []T{}
 	}

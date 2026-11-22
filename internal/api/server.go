@@ -3,6 +3,7 @@ package api
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -1462,36 +1463,26 @@ func (server *Server) handleListQueue(response http.ResponseWriter, request *htt
 		return
 	}
 
-	// One more than the page, which only proves a next page exists.
 	statuses, err := server.queue.ListByActor(request.Context(), request.PathValue("tenant_id"), principal.Subject, after, page.Limit+1)
 	if err != nil {
 		writeAppError(response, fmt.Errorf("list queue: %w", err))
 		return
 	}
-	nextCursor := ""
-	if len(statuses) > page.Limit {
-		statuses = statuses[:page.Limit]
-		last := statuses[len(statuses)-1]
-		nextCursor = app.EncodeCursor(queueList, queue.Cursor{CreatedAt: last.CreatedAt, ID: last.ID})
-	}
-
-	items := make([]queueItemResponse, 0, len(statuses))
-	for _, status := range statuses {
-		summary := status.Summary
-		if summary == "" {
-			summary = string(status.Kind)
-		}
-		items = append(items, queueItemResponse{
+	listed := app.PageFrom(statuses, page.Limit, queueList, func(status queue.Status) queue.Cursor {
+		return queue.Cursor{CreatedAt: status.CreatedAt, ID: status.ID}
+	})
+	items := mapItems(listed.Items, func(status queue.Status) queueItemResponse {
+		return queueItemResponse{
 			Kind:        string(status.Kind),
 			State:       string(status.State),
-			Summary:     summary,
+			Summary:     cmp.Or(status.Summary, string(status.Kind)),
 			Attempts:    status.Attempts,
 			LastError:   status.LastError,
 			CreatedAt:   status.CreatedAt,
 			DeliveredAt: status.DeliveredAt,
-		})
-	}
-	writeJSON(response, http.StatusOK, newListResponse(items, nextCursor))
+		}
+	})
+	writeJSON(response, http.StatusOK, newListResponse(items, listed.NextCursor))
 }
 
 // queueList names the queue list's cursors.

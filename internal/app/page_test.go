@@ -83,19 +83,19 @@ func TestPageFrom(t *testing.T) {
 	key := func(s domain.Stack) cursorKey { return StackPageCursor{CreatedAt: s.CreatedAt, ID: s.ID} }
 
 	// limit+1 rows: the extra row only proves there is a next page.
-	page := pageFrom([]domain.Stack{stack("c"), stack("b"), stack("a")}, 2, "stacks", key)
+	page := PageFrom([]domain.Stack{stack("c"), stack("b"), stack("a")}, 2, "stacks", key)
 	assert.Equal(t, []domain.Stack{stack("c"), stack("b")}, page.Items)
 	next, err := DecodeCursor[StackPageCursor]("stacks", page.NextCursor)
 	require.NoError(t, err)
 	assert.Equal(t, domain.StackID("b"), next.ID)
 
 	// Exactly limit rows is the last page: no cursor leading to nothing.
-	page = pageFrom([]domain.Stack{stack("b"), stack("a")}, 2, "stacks", key)
+	page = PageFrom([]domain.Stack{stack("b"), stack("a")}, 2, "stacks", key)
 	assert.Len(t, page.Items, 2)
 	assert.Empty(t, page.NextCursor)
 
 	// No rows is an empty list, never nil.
-	page = pageFrom[domain.Stack](nil, 2, "stacks", key)
+	page = PageFrom[domain.Stack](nil, 2, "stacks", key)
 	assert.NotNil(t, page.Items)
 	assert.Empty(t, page.NextCursor)
 }
