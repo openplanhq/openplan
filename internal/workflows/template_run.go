@@ -263,19 +263,12 @@ func (r *run) setStatus(status domain.TemplateRunStatus, errorSummary, commandEr
 	}, nil)
 }
 
-// failOnError marks the run failed if err is set, and returns it; each
-// lifecycle defers it on its result. If recording the failure also fails, the
-// run's persisted status will not match reality, so both errors are surfaced:
-// the original wrapped with %w to stay matchable by callers, the persistence
-// error appended as context.
+// failOnError marks the run failed if err is set, and returns it, as
+// recordFailure says; each lifecycle defers it on its result.
 func (r *run) failOnError(err error) error {
-	if err == nil {
-		return nil
-	}
-	if failureErr := r.setStatus(domain.TemplateRunFailed, fmt.Sprintf("template run activity failed: %v", err), commandError(err)); failureErr != nil {
-		return fmt.Errorf("%w (also failed to persist failure status: %w)", err, failureErr)
-	}
-	return err
+	return recordFailure(err, func() error {
+		return r.setStatus(domain.TemplateRunFailed, fmt.Sprintf("template run activity failed: %v", err), commandError(err))
+	})
 }
 
 // commandError is what the Terraform command behind err said, when err is a

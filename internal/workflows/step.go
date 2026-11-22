@@ -1,6 +1,10 @@
 package workflows
 
-import "go.temporal.io/sdk/workflow"
+import (
+	"fmt"
+
+	"go.temporal.io/sdk/workflow"
+)
 
 // Recorder records the step a workflow's work is on, for the people watching
 // it. S is the workflow's step vocabulary.
@@ -35,4 +39,18 @@ func ExecuteStep[S ~string](ctx workflow.Context, r Recorder[S], step S, activit
 // workflows schedule outside ExecuteStep is waited for before they go on.
 func execute(ctx workflow.Context, activity string, input, out any) error {
 	return workflow.ExecuteActivity(ctx, activity, input).Get(ctx, out)
+}
+
+// recordFailure records a failed workflow with record if err is set, and
+// returns err. If recording the failure also fails, the persisted status will
+// not match reality, so both errors are surfaced: the original wrapped with %w
+// to stay matchable by callers, the persistence error appended as context.
+func recordFailure(err error, record func() error) error {
+	if err == nil {
+		return nil
+	}
+	if recordErr := record(); recordErr != nil {
+		return fmt.Errorf("%w (also failed to persist failure status: %w)", err, recordErr)
+	}
+	return err
 }
