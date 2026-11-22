@@ -327,8 +327,7 @@ func (reg *Registry) fanOut(t *tailer, batch []Entry) bool {
 			}
 			// Fallen subscriberBuffer entries or subscriberBufferBytes
 			// behind: dropped, not waited for.
-			delete(t.subscribers, sub)
-			close(sub.inbox)
+			t.drop(sub)
 		}
 		// Only the first end counts: a retried RecordTemplateRunLog can
 		// append a second one.
@@ -387,8 +386,7 @@ func (reg *Registry) leave(t *tailer, sub *subscriber) {
 	reg.mu.Lock()
 	defer reg.mu.Unlock()
 	if _, ok := t.subscribers[sub]; ok {
-		delete(t.subscribers, sub)
-		close(sub.inbox)
+		t.drop(sub)
 	}
 	if len(t.subscribers) == 0 {
 		reg.teardown(t)
@@ -403,8 +401,7 @@ func (reg *Registry) teardown(t *tailer) {
 	}
 	t.closed = true
 	for sub := range t.subscribers {
-		delete(t.subscribers, sub)
-		close(sub.inbox)
+		t.drop(sub)
 	}
 	if reg.tailers[t.key] == t {
 		delete(reg.tailers, t.key)
@@ -413,6 +410,13 @@ func (reg *Registry) teardown(t *tailer) {
 		reg.slots--
 	}
 	t.stop()
+}
+
+// drop removes sub from t and closes its inbox, which ends its forward. The
+// caller holds mu.
+func (t *tailer) drop(sub *subscriber) {
+	delete(t.subscribers, sub)
+	close(sub.inbox)
 }
 
 // parseOrSkip parses a stream message, skipping one it cannot make sense
