@@ -172,7 +172,7 @@ func TestTenantBoundaryRejectsMissingAndMalformedPaths(t *testing.T) {
 func TestAuthenticatedServerEvaluatesTenantAfterAuthentication(t *testing.T) {
 	t.Parallel()
 
-	server, cookie := sessionCookieServer(t, nil)
+	server, cookie := sessionCookieServer(t, app.NewService(app.Service{}))
 	path := "/v1/tenants/tenant_other/stacks"
 
 	unauthenticated := httptest.NewRecorder()

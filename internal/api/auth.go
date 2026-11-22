@@ -157,7 +157,7 @@ func (server *Server) establishSession(
 	if err != nil {
 		return fmt.Errorf("failed to generate session id: %w", err)
 	}
-	now := server.now()
+	now := server.service.Clock.Now()
 	session := identity
 	session.IDHash = authentication.HashSessionID(sessionID)
 	session.CreatedAt = now
@@ -201,7 +201,7 @@ func (server *Server) handleAuthLogout(response http.ResponseWriter, request *ht
 		if session, err := server.auth.Sessions.SessionByHash(request.Context(), idHash); err == nil {
 			idTokenHint = session.IDToken
 		}
-		if err := server.auth.Sessions.RevokeSession(request.Context(), idHash, server.now()); err != nil {
+		if err := server.auth.Sessions.RevokeSession(request.Context(), idHash, server.service.Clock.Now()); err != nil {
 			// The cookie is cleared regardless, so the browser is signed out
 			// either way; the row outliving it is what this logs.
 			log.Printf("auth logout: failed to revoke session: %v", err)

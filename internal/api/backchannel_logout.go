@@ -52,7 +52,7 @@ func (server *Server) handleBackchannelLogout(response http.ResponseWriter, requ
 		return
 	}
 
-	now := server.now()
+	now := server.service.Clock.Now()
 	// sid identifies one browser session; sub identifies the person. Prefer
 	// the narrower one, so a provider that signs one device out does not sign
 	// the user out everywhere.

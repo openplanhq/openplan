@@ -89,8 +89,6 @@ type AuthConfig struct {
 	// LogoutTokenVerifier authenticates back-channel logout notifications.
 	// *authentication.OIDCVerifier satisfies it in production.
 	LogoutTokenVerifier LogoutTokenVerifier
-	// Clock is time.Now when nil. Tests set it.
-	Clock func() time.Time
 }
 
 // WithAuth enables the browser login routes.
@@ -310,7 +308,8 @@ func NewAuthenticatedServer(service *app.Service, tenantID domain.TenantID, debu
 	server.handler = authentication.RequireAuthentication(
 		server.auth.Sessions,
 		server.auth.SessionIdleTTL,
-		server.auth.Clock,
+		// One clock for the whole server: sessions age by the time handlers stamp.
+		server.service.Clock.Now,
 		// Sign-in has to be reachable before there is a session.
 		"/healthz", "/v1/auth/login", "/v1/auth/callback", "/v1/auth/logout", "/v1/auth/backchannel-logout",
 	)(server.handler)
@@ -358,13 +357,6 @@ func (server *Server) requireConfiguredTenant(next http.Handler) http.Handler {
 func (server *Server) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	server.debugf("%s %s", request.Method, request.URL.Path)
 	withRequestID(server.handler).ServeHTTP(response, request)
-}
-
-func (server *Server) now() time.Time {
-	if server.auth.Clock != nil {
-		return server.auth.Clock()
-	}
-	return time.Now().UTC()
 }
 
 func (server *Server) debugf(format string, args ...any) {
