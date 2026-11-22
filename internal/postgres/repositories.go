@@ -203,45 +203,26 @@ func templateSyncGone(ctx context.Context, exec pgxExecutor, tenantID domain.Ten
 // sync that is gone, deleted with its template, has nothing left to
 // record and succeeds; see templateSyncGone.
 func (store *Store) RecordTemplateSyncStatus(ctx context.Context, input domain.TemplateSyncStatusActivityInput) error {
-	var err error
-	if terminalTemplateSyncState(input.Status) {
-		_, err = store.pool.Exec(ctx, `
-			update template_syncs
-			set
-				status = $1,
-				template_revision_id = $2,
-				resolved_commit_sha = $3,
-				error_summary = $4,
-				completed_at = coalesce(completed_at, now())
-			where tenant_id = $5
-				and id = $6
-		`,
-			input.Status,
-			input.TemplateRevisionID,
-			input.ResolvedCommitSHA,
-			input.ErrorSummary,
-			input.TenantID,
-			input.SyncID,
-		)
-	} else {
-		_, err = store.pool.Exec(ctx, `
-			update template_syncs
-			set
-				status = $1,
-				template_revision_id = $2,
-				resolved_commit_sha = $3,
-				error_summary = $4
-			where tenant_id = $5
-				and id = $6
-		`,
-			input.Status,
-			input.TemplateRevisionID,
-			input.ResolvedCommitSHA,
-			input.ErrorSummary,
-			input.TenantID,
-			input.SyncID,
-		)
-	}
+	// Only a terminal status completes the sync.
+	_, err := store.pool.Exec(ctx, `
+		update template_syncs
+		set
+			status = $1,
+			template_revision_id = $2,
+			resolved_commit_sha = $3,
+			error_summary = $4,
+			completed_at = case when $7 then coalesce(completed_at, now()) else completed_at end
+		where tenant_id = $5
+			and id = $6
+	`,
+		input.Status,
+		input.TemplateRevisionID,
+		input.ResolvedCommitSHA,
+		input.ErrorSummary,
+		input.TenantID,
+		input.SyncID,
+		terminalTemplateSyncState(input.Status),
+	)
 	if err != nil {
 		return fmt.Errorf("record template sync status: %w", err)
 	}
