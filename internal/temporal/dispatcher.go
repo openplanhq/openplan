@@ -2,11 +2,13 @@ package temporal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/vishu42/openplan/internal/domain"
 	enumspb "go.temporal.io/api/enums/v1"
+	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
 )
 
@@ -46,18 +48,9 @@ func (dispatcher *Dispatcher) StartTemplatePlan(ctx context.Context, input domai
 
 // StartTemplateSync dispatches one TemplateSyncWorkflow execution to Temporal.
 func (dispatcher *Dispatcher) StartTemplateSync(ctx context.Context, input domain.TemplateSyncWorkflowInput) error {
-	_, err := dispatcher.client.ExecuteWorkflow(
-		ctx,
-		client.StartWorkflowOptions{
-			ID:        templateSyncWorkflowID(input.TenantID, input.SyncID),
-			TaskQueue: domain.ControlTaskQueue,
-		},
-		domain.TemplateSyncWorkflowName,
-		input)
-	if err != nil {
+	if err := dispatcher.start(ctx, templateSyncWorkflowID(input.TenantID, input.SyncID), domain.TemplateSyncWorkflowName, input); err != nil {
 		return fmt.Errorf("start template sync workflow: %w", err)
 	}
-
 	return nil
 }
 
@@ -82,6 +75,15 @@ func (dispatcher *Dispatcher) startRunWorkflow(ctx context.Context, workflowID s
 	if input.TerraformTimeout <= 0 {
 		input.TerraformTimeout = dispatcher.options.TerraformTimeout
 	}
+	return dispatcher.start(ctx, workflowID, workflowName, input)
+}
+
+// start starts workflowName under workflowID at most once. The queue delivers
+// a start at least once, so a redelivery finds the workflow running, and one
+// after it closed is refused by the reuse policy rather than starting it again.
+// Either way the workflow asked for did start, so both succeed: an error would
+// reschedule the queued intent forever.
+func (dispatcher *Dispatcher) start(ctx context.Context, workflowID string, workflowName string, input any) error {
 	_, err := dispatcher.client.ExecuteWorkflow(
 		ctx,
 		client.StartWorkflowOptions{
@@ -92,6 +94,9 @@ func (dispatcher *Dispatcher) startRunWorkflow(ctx context.Context, workflowID s
 		},
 		workflowName,
 		input)
+	if _, ok := errors.AsType[*serviceerror.WorkflowExecutionAlreadyStarted](err); ok {
+		return nil
+	}
 	return err
 }
 
