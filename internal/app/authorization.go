@@ -201,7 +201,7 @@ func accessibleStacks(
 			}
 		}
 
-		allowed, err := visibleStackCandidates(ctx, auth, principal.Subject, candidates, administrator)
+		allowed, err := checkStacks(ctx, auth, principal.Subject, administrator, candidates, []authorization.Relation{authorization.RelationCanView})
 		if err != nil {
 			return nil, err
 		}
@@ -221,37 +221,6 @@ func accessibleStacks(
 		last := candidates[len(candidates)-1]
 		cursor = &StackPageCursor{CreatedAt: last.CreatedAt, ID: last.ID}
 	}
-}
-
-// visibleStackCandidates answers can_view for each candidate in one
-// BatchCheck. An administrator can view every stack, so needs none.
-func visibleStackCandidates(ctx context.Context, auth *authorization.Authorization, subject string, candidates []domain.Stack, administrator bool) ([]bool, error) {
-	if administrator {
-		allowed := make([]bool, len(candidates))
-		for i := range allowed {
-			allowed[i] = true
-		}
-		return allowed, nil
-	}
-	checks := make([]authorization.Check, len(candidates))
-	for i, candidate := range candidates {
-		object, err := authorization.ObjectFromID(authorization.TypeStack, string(candidate.ID))
-		if errors.Is(err, authorization.ErrInvalidInput) {
-			return nil, fmt.Errorf("stack candidate has invalid ID")
-		}
-		if err != nil {
-			return nil, err
-		}
-		checks[i] = authorization.Check{Relation: authorization.RelationCanView, Object: object}
-	}
-	allowed, err := auth.CanAll(ctx, subject, checks)
-	if err != nil {
-		return nil, err
-	}
-	if len(allowed) != len(candidates) {
-		return nil, fmt.Errorf("batch result count does not match stack candidates")
-	}
-	return allowed, nil
 }
 
 func stackPageOrderBefore(left, right domain.Stack) bool {
@@ -481,7 +450,14 @@ func batchCheckObject(
 	for i, relation := range relations {
 		checks[i] = authorization.Check{Relation: relation, Object: object}
 	}
-	results, err := auth.CanAll(ctx, principal.Subject, checks)
+	return canAll(ctx, auth, principal.Subject, checks)
+}
+
+// canAll is auth.CanAll with the answer's length checked. Every caller decodes
+// the answers positionally, so a short or long result would otherwise be read
+// as the wrong permission rather than as a failure.
+func canAll(ctx context.Context, auth *authorization.Authorization, subject string, checks []authorization.Check) ([]bool, error) {
+	results, err := auth.CanAll(ctx, subject, checks)
 	if err != nil {
 		return nil, err
 	}
@@ -489,6 +465,40 @@ func batchCheckObject(
 		return nil, fmt.Errorf("batch result count does not match checks")
 	}
 	return results, nil
+}
+
+// checkStacks asks every relation about every stack in one BatchCheck. The
+// answers come one stack at a time, each stack's in relations order. An
+// administrator holds every relation on every stack, so is answered without a
+// BatchCheck: the callers' stacks come from walking the whole tenant, which
+// would otherwise cost a check per relation per stack only for the model to
+// say yes to each.
+func checkStacks(
+	ctx context.Context,
+	auth *authorization.Authorization,
+	subject string,
+	administrator bool,
+	stacks []domain.Stack,
+	relations []authorization.Relation,
+) ([]bool, error) {
+	if administrator {
+		allowed := make([]bool, len(stacks)*len(relations))
+		for i := range allowed {
+			allowed[i] = true
+		}
+		return allowed, nil
+	}
+	checks := make([]authorization.Check, 0, len(stacks)*len(relations))
+	for _, stack := range stacks {
+		object, err := authorization.ObjectFromID(authorization.TypeStack, string(stack.ID))
+		if err != nil {
+			return nil, err
+		}
+		for _, relation := range relations {
+			checks = append(checks, authorization.Check{Relation: relation, Object: object})
+		}
+	}
+	return canAll(ctx, auth, subject, checks)
 }
 
 func ResolveStackCapabilities(ctx context.Context, auth *authorization.Authorization, stackID domain.StackID) (StackCapabilities, error) {
@@ -521,37 +531,12 @@ func ResolveStacksCapabilities(ctx context.Context, auth *authorization.Authoriz
 	if err != nil {
 		return nil, err
 	}
-	// Kept for the same reason as in accessibleStacks: stacks arrives from an
-	// unbounded ListStacks, so this collapses four checks per stack in the
-	// tenant into one.
-	if administrator {
-		all := StackCapabilities{CanView: true, CanOperate: true, CanApprove: true, CanManageAccess: true}
-		result := make(map[domain.StackID]StackCapabilities, len(stacks))
-		for _, s := range stacks {
-			result[s.ID] = all
-		}
-		return result, nil
-	}
-	checks := make([]authorization.Check, 0, len(stacks)*len(stackCapabilityRelations))
-	for _, s := range stacks {
-		object, err := authorization.ObjectFromID(authorization.TypeStack, string(s.ID))
-		if err != nil {
-			return nil, err
-		}
-		for _, relation := range stackCapabilityRelations {
-			checks = append(checks, authorization.Check{Relation: relation, Object: object})
-		}
-	}
-	results, err := auth.CanAll(ctx, principal.Subject, checks)
+	results, err := checkStacks(ctx, auth, principal.Subject, administrator, stacks, stackCapabilityRelations)
 	if err != nil {
 		return nil, err
 	}
-	if len(results) != len(checks) {
-		return nil, fmt.Errorf("batch result count does not match checks")
-	}
-	// One stack's relations occupy one contiguous run, in the order they were
-	// appended above, so each run decodes with the same function the
-	// single-stack resolver uses.
+	// Each stack's answers are one contiguous run in stackCapabilityRelations
+	// order, so each decodes with the function the single-stack resolver uses.
 	caps := make(map[domain.StackID]StackCapabilities, len(stacks))
 	for i, s := range stacks {
 		base := i * len(stackCapabilityRelations)
