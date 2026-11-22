@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/vishu42/openplan/internal/app"
 )
 
@@ -42,31 +43,14 @@ func (store *Store) SearchUsers(ctx context.Context, query string, after *app.Us
 	if after != nil {
 		afterName, afterSub = after.DisplayName, after.Sub
 	}
-	rows, err := store.pool.Query(ctx, `
-		select sub, display_name, email
+	return queryRows(ctx, store.pool, "search users", scanUser, `
+		select`+userColumns+`
 		from users
 		where (display_name ilike $1 escape '\' or email ilike $1 escape '\')
 			and ($2::text is null or (display_name, sub) > ($2, $3::text))
 		order by display_name, sub
 		limit $4
 	`, pattern, afterName, afterSub, limit)
-	if err != nil {
-		return nil, fmt.Errorf("search users: %w", err)
-	}
-	defer rows.Close()
-
-	users := make([]app.UserProfile, 0, limit)
-	for rows.Next() {
-		var user app.UserProfile
-		if err := rows.Scan(&user.Sub, &user.DisplayName, &user.Email); err != nil {
-			return nil, fmt.Errorf("search users: %w", err)
-		}
-		users = append(users, user)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("search users: %w", err)
-	}
-	return users, nil
 }
 
 // UsersBySubs resolves many subjects in one round trip. A subject with no row
@@ -77,27 +61,27 @@ func (store *Store) UsersBySubs(ctx context.Context, subs []string) (map[string]
 	if len(subs) == 0 {
 		return profiles, nil
 	}
-	rows, err := store.pool.Query(ctx, `
-		select sub, display_name, email
+	users, err := queryRows(ctx, store.pool, "users by subs", scanUser, `
+		select`+userColumns+`
 		from users
 		where sub = any($1)
 	`, subs)
 	if err != nil {
-		return nil, fmt.Errorf("users by subs: %w", err)
+		return nil, err
 	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var user app.UserProfile
-		if err := rows.Scan(&user.Sub, &user.DisplayName, &user.Email); err != nil {
-			return nil, fmt.Errorf("users by subs: %w", err)
-		}
+	for _, user := range users {
 		profiles[user.Sub] = user
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("users by subs: %w", err)
-	}
 	return profiles, nil
+}
+
+// userColumns are a users row's columns in the order scanUser scans them.
+const userColumns = ` sub, display_name, email`
+
+func scanUser(row pgx.Row) (app.UserProfile, error) {
+	var user app.UserProfile
+	err := row.Scan(&user.Sub, &user.DisplayName, &user.Email)
+	return user, err
 }
 
 // escapeLikePattern neutralises the LIKE metacharacters so a search term is

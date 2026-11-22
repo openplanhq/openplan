@@ -123,31 +123,27 @@ func (store *Store) RevokeSession(ctx context.Context, idHash string, at time.Ti
 }
 
 func (store *Store) RevokeSessionsByIDPSessionID(ctx context.Context, idpSessionID string, at time.Time) (int, error) {
-	// An empty sid would match every session from a provider that omits the
-	// claim, so it is never a revocation key.
-	if idpSessionID == "" {
-		return 0, nil
-	}
-	tag, err := store.pool.Exec(ctx, `
-		update sessions set revoked_at = $2
-		where idp_session_id = $1 and revoked_at is null
-	`, idpSessionID, at)
-	if err != nil {
-		return 0, fmt.Errorf("revoke sessions by idp session id: %w", err)
-	}
-	return int(tag.RowsAffected()), nil
+	return store.revokeSessions(ctx, "revoke sessions by idp session id", "idp_session_id = $1", idpSessionID, at)
 }
 
 func (store *Store) RevokeSessionsBySubject(ctx context.Context, subject string, at time.Time) (int, error) {
-	if subject == "" {
+	return store.revokeSessions(ctx, "revoke sessions by subject", "subject = $1", subject, at)
+}
+
+// revokeSessions revokes the live sessions that where, a constant of the
+// caller's, picks by key. An empty key is never a revocation key: an empty
+// sid, for one, would match every session from a provider that omits the
+// claim.
+func (store *Store) revokeSessions(ctx context.Context, label, where, key string, at time.Time) (int, error) {
+	if key == "" {
 		return 0, nil
 	}
 	tag, err := store.pool.Exec(ctx, `
 		update sessions set revoked_at = $2
-		where subject = $1 and revoked_at is null
-	`, subject, at)
+		where `+where+` and revoked_at is null
+	`, key, at)
 	if err != nil {
-		return 0, fmt.Errorf("revoke sessions by subject: %w", err)
+		return 0, fmt.Errorf("%s: %w", label, err)
 	}
 	return int(tag.RowsAffected()), nil
 }
@@ -172,15 +168,5 @@ func (store *Store) DeleteSessionsExpiredBefore(ctx context.Context, cutoff time
 // way to reach them; rows that do carry a sid are deliberately left alone,
 // since each is addressable by its own.
 func (store *Store) RevokeSessionsBySubjectWithoutIDPSession(ctx context.Context, subject string, at time.Time) (int, error) {
-	if subject == "" {
-		return 0, nil
-	}
-	tag, err := store.pool.Exec(ctx, `
-		update sessions set revoked_at = $2
-		where subject = $1 and idp_session_id = '' and revoked_at is null
-	`, subject, at)
-	if err != nil {
-		return 0, fmt.Errorf("revoke sessions by subject without idp session: %w", err)
-	}
-	return int(tag.RowsAffected()), nil
+	return store.revokeSessions(ctx, "revoke sessions by subject without idp session", "subject = $1 and idp_session_id = ''", subject, at)
 }

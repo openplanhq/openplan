@@ -97,14 +97,23 @@ func (store *Store) PlanKey(ctx context.Context, tenantID domain.TenantID, runID
 // Either way a plan with changes stores its resource changes with its counts;
 // nil changes records them as unavailable.
 func (store *Store) FinishTemplatePlan(ctx context.Context, input domain.FinishPlanActivityInput, changes *domain.PlanChanges) (domain.PlanOutcome, error) {
-	tx, err := store.pool.Begin(ctx)
+	var outcome domain.PlanOutcome
+	err := store.withTx(ctx, "finish plan", func(tx pgx.Tx) error {
+		var err error
+		outcome, err = finishPlan(ctx, tx, input, changes)
+		return err
+	})
 	if err != nil {
-		return "", fmt.Errorf("begin finish plan: %w", err)
+		return "", err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	return outcome, nil
+}
 
+// finishPlan is FinishTemplatePlan's work, inside its transaction.
+func finishPlan(ctx context.Context, tx pgx.Tx, input domain.FinishPlanActivityInput, changes *domain.PlanChanges) (domain.PlanOutcome, error) {
+	var outcome domain.PlanOutcome
 	var status domain.TemplateRunStatus
-	err = tx.QueryRow(ctx, `
+	err := tx.QueryRow(ctx, `
 		select status
 		from template_runs
 		where tenant_id = $1 and id = $2 and stack_template_id = $3 and operation = $4
@@ -117,7 +126,6 @@ func (store *Store) FinishTemplatePlan(ctx context.Context, input domain.FinishP
 		return "", fmt.Errorf("read finished plan run: %w", err)
 	}
 
-	var outcome domain.PlanOutcome
 	switch {
 	case !input.HasChanges:
 		if input.Operation != domain.OperationDestroy {
@@ -189,9 +197,6 @@ func (store *Store) FinishTemplatePlan(ctx context.Context, input domain.FinishP
 		}
 	}
 
-	if err := tx.Commit(ctx); err != nil {
-		return "", fmt.Errorf("commit finish plan: %w", err)
-	}
 	return outcome, nil
 }
 
@@ -211,30 +216,24 @@ func (store *Store) BeginTemplateApply(ctx context.Context, tenantID domain.Tena
 	if autoApprove {
 		from = domain.TemplateRunQueued
 	}
-	tx, err := store.pool.Begin(ctx)
-	if err != nil {
-		return false, fmt.Errorf("begin claim run for apply: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	commandTag, err := tx.Exec(ctx, `
-		update template_runs
-		set status = $1
-		where tenant_id = $2 and id = $3 and status in ($4, $1) and auto_approve = $5
-	`, domain.TemplateRunRunning, tenantID, runID, from, autoApprove)
-	if err != nil {
-		return false, fmt.Errorf("claim run for apply: %w", err)
-	}
-	if commandTag.RowsAffected() != 1 {
-		return false, nil
-	}
-	if _, err := insertWorkflowExecution(ctx, tx, tenantID, runID, domain.RunPhaseApply, workflowID, domain.TemplateRunExecutionRunning, "", ""); err != nil {
-		return false, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return false, fmt.Errorf("commit claim run for apply: %w", err)
-	}
-	return true, nil
+	var claimed bool
+	err := store.withTx(ctx, "claim run for apply", func(tx pgx.Tx) error {
+		commandTag, err := tx.Exec(ctx, `
+			update template_runs
+			set status = $1
+			where tenant_id = $2 and id = $3 and status in ($4, $1) and auto_approve = $5
+		`, domain.TemplateRunRunning, tenantID, runID, from, autoApprove)
+		if err != nil {
+			return fmt.Errorf("claim run for apply: %w", err)
+		}
+		claimed = commandTag.RowsAffected() == 1
+		if !claimed {
+			return nil
+		}
+		_, err = insertWorkflowExecution(ctx, tx, tenantID, runID, domain.RunPhaseApply, workflowID, domain.TemplateRunExecutionRunning, "", "")
+		return err
+	})
+	return claimed && err == nil, err
 }
 
 // discardTemplateRun discards a run whose plan is waiting for approval, or

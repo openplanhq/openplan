@@ -87,51 +87,70 @@ func (store LogStore) ReadTemplateRunLog(ctx context.Context, log domain.Templat
 	return content, nil
 }
 
+// runObject is one object a run keeps in the store, at key: its saved plan
+// or its plan's changes. label names it in errors.
+type runObject struct {
+	store       ObjectStore
+	key         func(domain.TenantID, domain.TemplateRunID) (string, error)
+	contentType string
+	label       string
+}
+
+func (object runObject) put(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, body []byte) error {
+	key, err := object.key(tenantID, runID)
+	if err != nil {
+		return err
+	}
+	if err := object.store.PutObject(ctx, key, object.contentType, bytes.NewReader(body)); err != nil {
+		return fmt.Errorf("put %s: %w", object.label, err)
+	}
+	return nil
+}
+
+func (object runObject) get(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) ([]byte, error) {
+	key, err := object.key(tenantID, runID)
+	if err != nil {
+		return nil, err
+	}
+	body, err := object.store.GetObject(ctx, key)
+	if err != nil {
+		return nil, fmt.Errorf("get %s: %w", object.label, err)
+	}
+	return body, nil
+}
+
+func (object runObject) delete(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) error {
+	key, err := object.key(tenantID, runID)
+	if err != nil {
+		return err
+	}
+	if err := object.store.DeleteObject(ctx, key); err != nil {
+		return fmt.Errorf("delete %s: %w", object.label, err)
+	}
+	return nil
+}
+
 // PlanStore keeps a run's saved plan: the encrypted bundle the plan phase
 // uploads and the apply phase downloads. It never sees plaintext; encryption
 // happens on the executor before Put and after Get.
 type PlanStore struct {
-	store ObjectStore
+	plan runObject
 }
 
 func NewPlanStore(store ObjectStore) PlanStore {
-	return PlanStore{store: store}
+	return PlanStore{runObject{store: store, key: PlanKey, contentType: "application/octet-stream", label: "saved plan"}}
 }
 
-const planContentType = "application/octet-stream"
-
 func (store PlanStore) PutPlan(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, sealed []byte) error {
-	key, err := PlanKey(tenantID, runID)
-	if err != nil {
-		return err
-	}
-	if err := store.store.PutObject(ctx, key, planContentType, bytes.NewReader(sealed)); err != nil {
-		return fmt.Errorf("put saved plan: %w", err)
-	}
-	return nil
+	return store.plan.put(ctx, tenantID, runID, sealed)
 }
 
 func (store PlanStore) GetPlan(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) ([]byte, error) {
-	key, err := PlanKey(tenantID, runID)
-	if err != nil {
-		return nil, err
-	}
-	sealed, err := store.store.GetObject(ctx, key)
-	if err != nil {
-		return nil, fmt.Errorf("get saved plan: %w", err)
-	}
-	return sealed, nil
+	return store.plan.get(ctx, tenantID, runID)
 }
 
 func (store PlanStore) DeletePlan(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) error {
-	key, err := PlanKey(tenantID, runID)
-	if err != nil {
-		return err
-	}
-	if err := store.store.DeleteObject(ctx, key); err != nil {
-		return fmt.Errorf("delete saved plan: %w", err)
-	}
-	return nil
+	return store.plan.delete(ctx, tenantID, runID)
 }
 
 // PlanKey is where a run's saved plan lives, next to its logs. With the
@@ -145,51 +164,27 @@ func PlanKey(tenantID domain.TenantID, runID domain.TemplateRunID) (string, erro
 // executor, from the executor's upload until the control plane records them
 // in Postgres at FinishPlan.
 type PlanChangesStore struct {
-	store ObjectStore
+	changes runObject
 }
 
 func NewPlanChangesStore(store ObjectStore) PlanChangesStore {
-	return PlanChangesStore{store: store}
+	return PlanChangesStore{runObject{store: store, key: PlanChangesKey, contentType: "application/json", label: "plan changes"}}
 }
 
-const planChangesContentType = "application/json"
-
 func (store PlanChangesStore) PutPlanChanges(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID, body []byte) error {
-	key, err := PlanChangesKey(tenantID, runID)
-	if err != nil {
-		return err
-	}
-	if err := store.store.PutObject(ctx, key, planChangesContentType, bytes.NewReader(body)); err != nil {
-		return fmt.Errorf("put plan changes: %w", err)
-	}
-	return nil
+	return store.changes.put(ctx, tenantID, runID, body)
 }
 
 // GetPlanChanges returns the run's uploaded changes. A run whose executor
 // uploaded none reads as an error wrapping os.ErrNotExist.
 func (store PlanChangesStore) GetPlanChanges(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) ([]byte, error) {
-	key, err := PlanChangesKey(tenantID, runID)
-	if err != nil {
-		return nil, err
-	}
-	body, err := store.store.GetObject(ctx, key)
-	if err != nil {
-		return nil, fmt.Errorf("get plan changes: %w", err)
-	}
-	return body, nil
+	return store.changes.get(ctx, tenantID, runID)
 }
 
 // DeletePlanChanges removes the run's uploaded changes once the control plane
 // has recorded them. Deleting none succeeds.
 func (store PlanChangesStore) DeletePlanChanges(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) error {
-	key, err := PlanChangesKey(tenantID, runID)
-	if err != nil {
-		return err
-	}
-	if err := store.store.DeleteObject(ctx, key); err != nil {
-		return fmt.Errorf("delete plan changes: %w", err)
-	}
-	return nil
+	return store.changes.delete(ctx, tenantID, runID)
 }
 
 // PlanChangesKey is where a run's plan's resource changes live, beside its
@@ -573,11 +568,7 @@ func escapePath(value string) string {
 }
 
 func joinURLPath(parts ...string) string {
-	joined := path.Join(parts...)
-	if strings.HasPrefix(parts[0], "/") {
-		return "/" + strings.TrimPrefix(joined, "/")
-	}
-	return "/" + strings.TrimPrefix(joined, "/")
+	return "/" + strings.TrimPrefix(path.Join(parts...), "/")
 }
 
 func safePathComponent(component string) bool {
