@@ -37,7 +37,7 @@ func RequireAuthentication(
 		public[path] = struct{}{}
 	}
 	if clock == nil {
-		clock = func() time.Time { return time.Now().UTC() }
+		clock = utcNow
 	}
 
 	return func(next http.Handler) http.Handler {
