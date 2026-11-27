@@ -4,19 +4,12 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TemplateVariable } from "../../api/types";
 import VariableFields from "./VariableFields";
+import { templateVariable } from "../../api/testSupport";
 
+// Optional unless a test says otherwise, so a field shows as required only
+// where the test asks for it.
 function variable(overrides: Partial<TemplateVariable> = {}): TemplateVariable {
-  return {
-    template_revision_id: "rev_1",
-    name: "region",
-    type_expression: "string",
-    description: "",
-    required: false,
-    has_default: false,
-    sensitive: false,
-    has_validation: false,
-    ...overrides
-  };
+  return templateVariable({ required: false, ...overrides });
 }
 
 function renderFields(variables: TemplateVariable[], props: Partial<React.ComponentProps<typeof VariableFields>> = {}) {

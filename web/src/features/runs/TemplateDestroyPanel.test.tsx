@@ -8,30 +8,8 @@ import type { StackCapabilities } from "../../auth/types";
 import { queryKeys } from "../../api/queryKeys";
 import type { StackTemplate, TemplateRun } from "../../api/types";
 import TemplateDestroyPanel from "./TemplateDestroyPanel";
-import { jsonResponse, pagesOf, testQueryClient } from "../../api/testSupport";
+import { jsonResponse, pagesOf, stackTemplate, testQueryClient } from "../../api/testSupport";
 import { authValue } from "../../auth/testSupport";
-
-function stackTemplate(overrides: Partial<StackTemplate> = {}): StackTemplate {
-  return {
-    id: "stpl_1",
-    stack_id: "stack_1",
-    key: "primary",
-    template_id: "tpl_1",
-    desired_template_revision_id: "rev_1",
-    last_applied_template_revision_id: "",
-    source_ref: "main",
-    workspace_name: "acme-prod-primary",
-    display_name: "",
-    config: {},
-    last_applied_run_id: "",
-    pending_plan_run_id: "",
-    plan_state: "none",
-    live_state: "never",
-    created_by: "user_123",
-    lifecycle: "active",
-    ...overrides
-  };
-}
 
 function run(overrides: Partial<TemplateRun> = {}): TemplateRun {
   return {
@@ -85,7 +63,7 @@ function renderPanel(queryClient: QueryClient, overrides: Partial<StackTemplate>
     <QueryClientProvider client={queryClient}>
       <AuthContext.Provider value={authValue()}>
         <MemoryRouter initialEntries={["/stacks/stack_1/templates/stpl_1/settings"]}>
-          <TemplateDestroyPanel stackId="stack_1" stackTemplate={stackTemplate(overrides)} />
+          <TemplateDestroyPanel stackId="stack_1" stackTemplate={stackTemplate({ id: "stpl_1", ...overrides })} />
           <LocationProbe />
         </MemoryRouter>
       </AuthContext.Provider>

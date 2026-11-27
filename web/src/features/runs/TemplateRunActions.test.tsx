@@ -10,30 +10,8 @@ import type { StackTemplate, TemplateRun } from "../../api/types";
 import TemplateRunActions from "./TemplateRunActions";
 import TemplateRunHistory from "./TemplateRunHistory";
 import TemplateRunNotices from "./TemplateRunNotices";
-import { jsonResponse, pagesOf, testQueryClient } from "../../api/testSupport";
+import { jsonResponse, pagesOf, stackTemplate, testQueryClient } from "../../api/testSupport";
 import { authValue } from "../../auth/testSupport";
-
-function stackTemplate(overrides: Partial<StackTemplate> = {}): StackTemplate {
-  return {
-    id: "stpl_1",
-    stack_id: "stack_1",
-    key: "primary",
-    template_id: "tpl_1",
-    desired_template_revision_id: "rev_1",
-    last_applied_template_revision_id: "",
-    source_ref: "main",
-    workspace_name: "acme-prod-primary",
-    display_name: "",
-    config: {},
-    last_applied_run_id: "",
-    pending_plan_run_id: "",
-    plan_state: "none",
-    live_state: "never",
-    created_by: "user_123",
-    lifecycle: "active",
-    ...overrides
-  };
-}
 
 function run(overrides: Partial<TemplateRun> = {}): TemplateRun {
   return {
@@ -89,8 +67,8 @@ function actionsElement(queryClient: QueryClient, overrides: Partial<StackTempla
         <MemoryRouter initialEntries={["/stacks/stack_1/templates/stpl_1/runs"]}>
           {/* The Runs tab as TemplateRunsTab composes it: the toolbar, what
               waits on a person, then the runs. */}
-          <TemplateRunActions stackId="stack_1" stackTemplate={stackTemplate(overrides)} />
-          <TemplateRunNotices stackId="stack_1" stackTemplate={stackTemplate(overrides)} />
+          <TemplateRunActions stackId="stack_1" stackTemplate={stackTemplate({ id: "stpl_1", ...overrides })} />
+          <TemplateRunNotices stackId="stack_1" stackTemplate={stackTemplate({ id: "stpl_1", ...overrides })} />
           <TemplateRunHistory stackId="stack_1" stackTemplateId="stpl_1" />
         </MemoryRouter>
       </AuthContext.Provider>

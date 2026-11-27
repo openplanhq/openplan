@@ -1,45 +1,32 @@
 import { QueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../../api/queryKeys";
 import type { Template, TemplateLatestSync, TemplateRevision, TemplateVariable } from "../../api/types";
-import { jsonResponse } from "../../api/testSupport";
+import { jsonResponse, templateRevision, templateVariable, TENANT } from "../../api/testSupport";
 
 // Fixtures for the templates tests. Not a test file itself, so it carries no
 // assertions and imports nothing from Vitest.
 
-export const TENANT = "tenant_123";
+export { TENANT };
 
+// The templates screens' module, acme/infra-modules at aws/eks, and the
+// cluster name it asks for.
 export function revision(overrides: Partial<TemplateRevision> = {}): TemplateRevision {
-  return {
-    id: "rev_1",
-    tenant_id: TENANT,
+  return templateRevision({
     template_id: "tpl_1",
     repo_owner: "acme",
     repo_name: "infra-modules",
-    source_ref: "main",
     resolved_commit_sha: "3f9c2a1d8e7b6a5c4d3e2f1a0b9c8d7e6f5a4b3c",
-    commit_subject: "",
     root_path: "aws/eks",
     name: "eks",
     description: "An EKS cluster with one managed node group.",
     tags: ["aws", "kubernetes"],
-    status: "active",
     created_at: "2026-09-22T10:00:00Z",
     ...overrides
-  };
+  });
 }
 
 export function variable(overrides: Partial<TemplateVariable> = {}): TemplateVariable {
-  return {
-    template_revision_id: "rev_1",
-    name: "cluster_name",
-    type_expression: "string",
-    description: "Name of the EKS cluster.",
-    required: true,
-    has_default: false,
-    sensitive: false,
-    has_validation: false,
-    ...overrides
-  };
+  return templateVariable({ name: "cluster_name", description: "Name of the EKS cluster.", ...overrides });
 }
 
 // The template rev_1 belongs to, never synced unless latest_sync is given.

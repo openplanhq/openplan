@@ -8,8 +8,8 @@ import type { AuthContextValue } from "../../auth/AuthContext";
 import StacksListScreen from "./StacksListScreen";
 import { formatDateTime, formatTimestamp } from "../../shared/formatTimestamp";
 import { queryKeys } from "../../api/queryKeys";
-import type { AttentionItem, StackListItem, StackTemplate, StackView, TemplateRun } from "../../api/types";
-import { jsonResponse, pagesOf, testQueryClient } from "../../api/testSupport";
+import type { AttentionItem, StackListItem, StackView, TemplateRun } from "../../api/types";
+import { jsonResponse, pagesOf, stackTemplate, testQueryClient } from "../../api/testSupport";
 import { authValue } from "../../auth/testSupport";
 
 const TENANT = "tenant_123";
@@ -27,28 +27,6 @@ function stack(overrides: Partial<StackListItem> = {}): StackListItem {
     created_at: "2026-07-19T00:00:00Z",
     effective_capabilities: { can_view: true, can_operate: false, can_approve: false, can_manage_access: false },
     template_count: 0,
-    ...overrides
-  };
-}
-
-function stackTemplate(overrides: Partial<StackTemplate> = {}): StackTemplate {
-  return {
-    id: "tpl_1",
-    stack_id: "stack_1",
-    key: "eks",
-    template_id: "source_1",
-    desired_template_revision_id: "rev_1",
-    last_applied_template_revision_id: "",
-    source_ref: "main",
-    workspace_name: "ws_1",
-    display_name: "eks-cluster",
-    config: {},
-    last_applied_run_id: "",
-    pending_plan_run_id: "",
-    plan_state: "none",
-    live_state: "never",
-    created_by: "user_123",
-    lifecycle: "active",
     ...overrides
   };
 }
@@ -396,7 +374,7 @@ describe("StacksListScreen", () => {
         {
           stack: listed,
           templates: [
-            stackTemplate({ live_state: "differs", pending_plan_run_id: "run_1" }),
+            stackTemplate({ id: "tpl_1", display_name: "eks-cluster", live_state: "differs", pending_plan_run_id: "run_1" }),
             stackTemplate({ id: "tpl_2", display_name: "network", live_state: "matches", last_applied_at: "2026-09-22T10:00:00Z" }),
             stackTemplate({ id: "tpl_3", display_name: "rds-postgres" })
           ]

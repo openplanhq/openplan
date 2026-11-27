@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { pagesOf, testQueryClient } from "../../api/testSupport";
+import { pagesOf, stackTemplate, templateRevision, templateVariable, testQueryClient } from "../../api/testSupport";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { Navigate, MemoryRouter, Route, Routes } from "react-router-dom";
@@ -8,7 +8,7 @@ import { AuthContext } from "../../auth/AuthContext";
 import type { AuthContextValue } from "../../auth/AuthContext";
 import RequireCapability from "../../auth/RequireCapability";
 import { queryKeys } from "../../api/queryKeys";
-import type { StackTemplate, StackView, TemplateRevision, TemplateRun, TemplateVariable } from "../../api/types";
+import type { StackTemplate, StackView, TemplateRun } from "../../api/types";
 import type { StackCapabilities } from "../../auth/types";
 import RunDetailScreen from "../runs/RunDetailScreen";
 import TemplatePanel from "./TemplatePanel";
@@ -43,71 +43,26 @@ function stackView(capabilities: StackCapabilities, templates: StackTemplate[]):
   };
 }
 
-function stackTemplate(overrides: Partial<StackTemplate> = {}): StackTemplate {
-  return {
-    id: "st_1",
-    stack_id: "stack_1",
-    key: "vpc",
-    template_id: "tmpl_src_1",
-    desired_template_revision_id: "rev_1",
+// Applied at rev_0 by run_9; rev_1 is desired.
+function installedTemplate(overrides: Partial<StackTemplate> = {}): StackTemplate {
+  return stackTemplate({
     last_applied_template_revision_id: "rev_0",
-    source_ref: "main",
     workspace_name: "ws-payments",
-    display_name: "",
     config: { region: "us-east-1" },
     last_applied_run_id: "run_9",
-    pending_plan_run_id: "",
-    plan_state: "none",
-    live_state: "never",
-    created_by: "user_123",
-    lifecycle: "active",
     ...overrides
-  };
-}
-
-function templateRevision(overrides: Partial<TemplateRevision> = {}): TemplateRevision {
-  return {
-    id: "rev_1",
-    tenant_id: "tenant_123",
-    template_id: "tmpl_src_1",
-    repo_owner: "hashicorp",
-    repo_name: "vpc",
-    source_ref: "main",
-    resolved_commit_sha: "abcdef1234567890",
-    commit_subject: "",
-    root_path: ".",
-    name: "vpc",
-    description: "",
-    tags: [],
-    status: "active",
-    created_at: "2026-07-19T00:00:00Z",
-    ...overrides
-  };
-}
-
-function variable(overrides: Partial<TemplateVariable> = {}): TemplateVariable {
-  return {
-    template_revision_id: "rev_1",
-    name: "region",
-    type_expression: "string",
-    description: "",
-    required: true,
-    has_default: false,
-    sensitive: false,
-    has_validation: false,
-    ...overrides
-  };
+  });
 }
 
 function seedDefaultData(queryClient: QueryClient, capabilities: StackCapabilities = allAllowed) {
-  queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(capabilities, [stackTemplate()]));
+  queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(capabilities, [installedTemplate()]));
   queryClient.setQueryData(queryKeys.attention("tenant_123"), []);
   seedTemplates(queryClient, [
     templateRevision(),
     templateRevision({ id: "rev_2", source_ref: "v2", resolved_commit_sha: "1234567abcdef" })
   ]);
-  queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [variable()]);
-  queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_2"), [variable()]);
+  queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [templateVariable()]);
+  queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_2"), [templateVariable()]);
   // The inline run sections query runs for whichever template is selected;
   // seeding both keeps these tests off the network.
   queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_1"), pagesOf([]));
@@ -230,7 +185,7 @@ describe("TemplatePanel", () => {
     queryClient.setQueryData(
       queryKeys.stack("tenant_123", "stack_1"),
       stackView(allAllowed, [
-        stackTemplate({ display_name: "eks-cluster", source_ref: "v1.4.0", pending_plan_run_id: "run_14", pending_plan_at: "2026-10-03T09:30:00Z" })
+        installedTemplate({ display_name: "eks-cluster", source_ref: "v1.4.0", pending_plan_run_id: "run_14", pending_plan_at: "2026-10-03T09:30:00Z" })
       ])
     );
     queryClient.setQueryData(queryKeys.attention("tenant_123"), [
@@ -307,7 +262,7 @@ describe("TemplatePanel", () => {
       .spyOn(globalThis, "fetch")
       .mockImplementation(
         async () =>
-          new Response(JSON.stringify(stackView(allAllowed, [stackTemplate()])), { status: 200, headers: { "content-type": "application/json" } })
+          new Response(JSON.stringify(stackView(allAllowed, [installedTemplate()])), { status: 200, headers: { "content-type": "application/json" } })
       );
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/variables");
@@ -322,7 +277,7 @@ describe("TemplateRunsTab", () => {
     seedDefaultData(queryClient);
     queryClient.setQueryData(
       queryKeys.stack("tenant_123", "stack_1"),
-      stackView(allAllowed, [stackTemplate(), stackTemplate({ id: "st_2", desired_template_revision_id: "rev_2" })])
+      stackView(allAllowed, [installedTemplate(), installedTemplate({ id: "st_2", desired_template_revision_id: "rev_2" })])
     );
     queryClient.setQueryData(queryKeys.templateRuns("tenant_123", "st_2"), pagesOf([runFor("st_2")]));
 
@@ -339,7 +294,7 @@ describe("TemplateVariablesTab", () => {
   it("shows a loading state while the template's variables are pending", () => {
     vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, [stackTemplate()]));
+    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, [installedTemplate()]));
     queryClient.setQueryData(queryKeys.attention("tenant_123"), []);
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/variables");
@@ -362,8 +317,8 @@ describe("TemplateVariablesTab", () => {
     queryClient.setQueryData(
       queryKeys.stack("tenant_123", "stack_1"),
       stackView(allAllowed, [
-        stackTemplate(),
-        stackTemplate({ id: "st_2", desired_template_revision_id: "rev_2", config: { region: "ap-south-1" } })
+        installedTemplate(),
+        installedTemplate({ id: "st_2", desired_template_revision_id: "rev_2", config: { region: "ap-south-1" } })
       ])
     );
 
@@ -401,9 +356,9 @@ describe("TemplateVariablesTab", () => {
   it("shows a structured value as JSON and does not count reformatting it as an edit", () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);
-    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, [stackTemplate({ config: { subnets: ["a", "b"] } })]));
+    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, [installedTemplate({ config: { subnets: ["a", "b"] } })]));
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [
-      variable({ name: "subnets", type_expression: "list(string)" })
+      templateVariable({ name: "subnets", type_expression: "list(string)" })
     ]);
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/variables");
@@ -418,9 +373,9 @@ describe("TemplateVariablesTab", () => {
   it("refuses a structured value that isn't JSON before any request", async () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);
-    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, [stackTemplate({ config: { subnets: ["a"] } })]));
+    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, [installedTemplate({ config: { subnets: ["a"] } })]));
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [
-      variable({ name: "subnets", type_expression: "list(string)" })
+      templateVariable({ name: "subnets", type_expression: "list(string)" })
     ]);
     const fetchMock = vi.spyOn(globalThis, "fetch");
 
@@ -467,7 +422,7 @@ describe("TemplateVariablesTab", () => {
       })
     );
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, [stackTemplate()]));
+    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, [installedTemplate()]));
     queryClient.setQueryData(queryKeys.attention("tenant_123"), []);
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/variables");
   }
@@ -507,7 +462,7 @@ describe("TemplateVariablesTab", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation((input) =>
       String(input).endsWith("/stacks/stack_1")
         ? Promise.resolve(
-            new Response(JSON.stringify(stackView(allAllowed, [stackTemplate()])), { status: 200, headers: { "content-type": "application/json" } })
+            new Response(JSON.stringify(stackView(allAllowed, [installedTemplate()])), { status: 200, headers: { "content-type": "application/json" } })
           )
         : new Promise<Response>(() => {})
     );
@@ -637,7 +592,7 @@ describe("TemplateSettingsTab", () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);
     seedTemplates(queryClient, [templateRevision({ root_path: "aws/eks" })]);
-    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, [stackTemplate({ source_ref: "v1.4.0" })]));
+    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, [installedTemplate({ source_ref: "v1.4.0" })]));
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/settings");
 
@@ -686,7 +641,7 @@ describe("TemplateSettingsTab", () => {
   it("disables revision selection while the template is destroying", () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);
-    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, [stackTemplate({ lifecycle: "destroying" })]));
+    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(allAllowed, [installedTemplate({ lifecycle: "destroying" })]));
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/settings");
 
