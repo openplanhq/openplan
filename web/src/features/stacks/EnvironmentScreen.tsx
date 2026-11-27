@@ -1,4 +1,3 @@
-import { LoaderCircle } from "lucide-react";
 import type { ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import {
@@ -12,6 +11,7 @@ import PageHeader from "../../shared/PageHeader";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import EnvironmentTabs from "./EnvironmentTabs";
 import LoadError from "../../shared/LoadError";
+import LoadingLine from "../../shared/LoadingLine";
 
 // A stack's Environment page, on openplan UI: its header and trail on the
 // canvas, and the Secrets and Variables tabs in one card, centred at the
@@ -33,10 +33,7 @@ export default function EnvironmentScreen() {
   let content: ReactNode;
   if (credentialsQuery.status === "pending") {
     content = (
-      <p className="flex items-center gap-2 text-meta text-muted-foreground" data-testid="environment-loading">
-        <LoaderCircle aria-hidden="true" strokeWidth={2.25} className="size-3.5 animate-spin" />
-        Loading environment…
-      </p>
+      <LoadingLine testId="environment-loading">Loading environment…</LoadingLine>
     );
   } else if (credentialsQuery.status === "error") {
     // A list that never arrived is not an empty one, so the tabs and their

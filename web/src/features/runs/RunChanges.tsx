@@ -5,6 +5,7 @@ import type { PlanChangeAction, PlanResourceChange, TemplateRun } from "../../ap
 import { buttonClass } from "../../shared/buttonClass";
 import LoadError from "../../shared/LoadError";
 import { pluralWord } from "../../shared/plural";
+import LoadingLine from "../../shared/LoadingLine";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { ACTION_ORDER, actionLook, changeReason, changesNote, diffLines, isApplied } from "./planChanges";
@@ -59,7 +60,7 @@ export default function RunChanges({ run, changes, failed, onRetry, toolbar }: R
             Something went wrong while loading this plan's changes.
           </LoadError>
         ) : (
-          <p className="text-meta text-muted-foreground">Loading changes…</p>
+          <LoadingLine>Loading changes…</LoadingLine>
         )}
       </RunViewFrame>
     );

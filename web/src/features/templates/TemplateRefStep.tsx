@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { GitBranch, Loader2 } from "lucide-react";
+import { GitBranch } from "lucide-react";
 import { apiErrorMessage, isProblem } from "../../api/problems";
 import { useChangeTemplateRefMutation } from "../../api/queries";
 import { problemTypes } from "../../api/types";
@@ -7,6 +7,7 @@ import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
 import { fieldLabelClass, inputClass } from "../../shared/fieldClass";
+import BusyIcon from "../../shared/BusyIcon";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -93,11 +94,7 @@ export function TemplateRefStep({
           className={cn(buttonClass("primary"), "pointer-coarse:h-11", !ready && !busy && "opacity-50")}
           aria-disabled={ready ? undefined : "true"}
         >
-          {busy ? (
-            <Loader2 data-icon="inline-start" aria-hidden="true" className="animate-spin" />
-          ) : (
-            <GitBranch data-icon="inline-start" aria-hidden="true" />
-          )}
+          <BusyIcon busy={busy} icon={GitBranch} />
           Change ref
         </button>
       </div>

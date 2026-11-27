@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { FileSearch, Loader2, Play } from "lucide-react";
+import { FileSearch, Play } from "lucide-react";
 import { apiErrorMessage, isProblem } from "../../api/problems";
 import { queryKeys } from "../../api/queryKeys";
 import { useStartTemplateRunMutation } from "../../api/queries";
@@ -10,6 +10,7 @@ import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
 import { problemTypes } from "../../api/types";
+import BusyIcon from "../../shared/BusyIcon";
 import { cn } from "@/lib/utils";
 import { startRunLockReason, useLockState } from "./lockReasons";
 
@@ -75,19 +76,11 @@ export default function TemplateRunActions({ stackId, stackTemplate }: TemplateR
             </label>
           </RequireCapability>
           <button type="button" className={cn(buttonClass("outline"), "pointer-coarse:h-11")} disabled={disabled} onClick={() => void startRun("plan")}>
-            {startingOperation === "plan" ? (
-              <Loader2 data-icon="inline-start" aria-hidden="true" className="animate-spin" />
-            ) : (
-              <FileSearch data-icon="inline-start" aria-hidden="true" />
-            )}
+            <BusyIcon busy={startingOperation === "plan"} icon={FileSearch} />
             Plan
           </button>
           <button type="button" className={cn(buttonClass("primary"), "pointer-coarse:h-11")} disabled={disabled} onClick={() => void startRun("apply")}>
-            {startingOperation === "apply" ? (
-              <Loader2 data-icon="inline-start" aria-hidden="true" className="animate-spin" />
-            ) : (
-              <Play data-icon="inline-start" aria-hidden="true" />
-            )}
+            <BusyIcon busy={startingOperation === "apply"} icon={Play} />
             Apply
           </button>
         </div>

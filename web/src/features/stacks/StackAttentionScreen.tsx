@@ -1,4 +1,4 @@
-import { Check, Hourglass, Loader2, TriangleAlert } from "lucide-react";
+import { Check, Hourglass, TriangleAlert } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -15,6 +15,7 @@ import { buttonClass } from "../../shared/buttonClass";
 import EmptyState from "../../shared/EmptyState";
 import LoadError from "../../shared/LoadError";
 import Separator from "../../shared/Separator";
+import LoadingLine from "../../shared/LoadingLine";
 import { cn } from "@/lib/utils";
 
 const trail = [{ label: "Stacks", to: "/stacks" }];
@@ -33,9 +34,7 @@ export default function StackAttentionScreen() {
   if (status === "pending") {
     return (
       <section data-testid="attention-loading">
-        <p className="flex items-center gap-2 text-muted-foreground">
-          <Loader2 aria-hidden="true" className="size-4 animate-spin" /> Loading…
-        </p>
+        <LoadingLine>Loading…</LoadingLine>
       </section>
     );
   }

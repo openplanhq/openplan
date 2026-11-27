@@ -23,12 +23,19 @@ const TONE_CLASSES: Record<StatusLabelTone, string> = {
   failed: "text-destructive"
 };
 
-type StatusLabelProps = ComponentProps<"span"> & {
-  icon: LucideIcon;
-  tone: StatusLabelTone;
-  /** Medium weight, for a state that needs a person now. */
-  strong?: boolean;
-};
+// Either the parts, or an indicator that holds them, as the features' mappers
+// (runIndicator, revisionIndicator) return.
+type StatusLabelProps = ComponentProps<"span"> &
+  (
+    | {
+        icon: LucideIcon;
+        tone: StatusLabelTone;
+        /** Medium weight, for a state that needs a person now. */
+        strong?: boolean;
+        indicator?: never;
+      }
+    | { indicator: StatusIndicator; icon?: never; tone?: never; strong?: never }
+  );
 
 // A state as an icon and a word, with no pill and no fill: openplan UI's
 // StatusLabel. The word carries the meaning, so the icon is decorative, and
@@ -38,7 +45,15 @@ type StatusLabelProps = ComponentProps<"span"> & {
 // whole label centred instead, its baseline would be the icon's bottom edge,
 // and in a line of text, such as a table cell, the words would ride 2px
 // above their neighbours.
-export default function StatusLabel({ icon: Icon, tone, strong = false, className, children, ...props }: StatusLabelProps) {
+export default function StatusLabel({
+  indicator,
+  icon: Icon = indicator!.icon,
+  tone = indicator!.tone,
+  strong = indicator?.strong ?? false,
+  children = indicator?.label,
+  className,
+  ...props
+}: StatusLabelProps) {
   return (
     <span
       data-tone={tone}

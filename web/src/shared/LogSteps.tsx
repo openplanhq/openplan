@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
+import { formatDuration, formatTimeOfDay } from "./formatTimestamp";
+import Separator from "./Separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ScrollArea, ScrollAreaContent, ScrollAreaScrollbar, ScrollAreaThumb, ScrollAreaViewport } from "@/components/ui/scroll-area";
 
@@ -72,5 +74,30 @@ export function LogStep({ name, label, meta, open, onOpenChange, children }: Log
         </ScrollArea>
       </CollapsibleContent>
     </Collapsible>
+  );
+}
+
+// A step's meta in a run: when it started, to the second (the phase header
+// gives the day), and once it ends, how long it took (issue 571). A step still
+// running shows only its start: its log's dots say it is going. Nothing until
+// the run's steps arrive. A function, not a component, so a step with no time
+// leaves LogStep's meta empty.
+export function logStepTime(step: { started_at: string; finished_at?: string } | undefined): ReactNode {
+  if (!step) {
+    return null;
+  }
+  const took = step.finished_at ? formatDuration(step.started_at, step.finished_at) : "";
+  return (
+    <>
+      <time dateTime={step.started_at} title={step.started_at}>
+        {formatTimeOfDay(step.started_at)}
+      </time>
+      {took && (
+        <>
+          <Separator />
+          <span>{took}</span>
+        </>
+      )}
+    </>
   );
 }

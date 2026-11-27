@@ -3,9 +3,9 @@ import type { AttentionItem, StackTemplate } from "../../api/types";
 import { formatDateTime, formatTimestamp } from "../../shared/formatTimestamp";
 import StatusLabel from "../../shared/StatusLabel";
 import type { StatusIndicator } from "../../shared/StatusLabel";
-import type { StatusTone } from "../../shared/statusTone";
 import { failedOperation } from "./attention";
 import { stackTemplateStatus } from "./stackWorkflow";
+import type { StatusTone } from "./stackWorkflow";
 
 const BY_TONE: Record<StatusTone, Omit<StatusIndicator, "label">> = {
   settled: { icon: Check, tone: "settled", strong: false },
@@ -66,10 +66,5 @@ export default function StackTemplateStatusLabel({
   stackTemplate: StackTemplate;
   attention: AttentionItem | undefined;
 }) {
-  const indicator = stackTemplateIndicator(stackTemplate, attention);
-  return (
-    <StatusLabel icon={indicator.icon} tone={indicator.tone} strong={indicator.strong} data-testid={`stack-template-status-${stackTemplate.id}`}>
-      {indicator.label}
-    </StatusLabel>
-  );
+  return <StatusLabel indicator={stackTemplateIndicator(stackTemplate, attention)} data-testid={`stack-template-status-${stackTemplate.id}`} />;
 }

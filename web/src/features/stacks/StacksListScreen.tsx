@@ -1,4 +1,4 @@
-import { ArrowRight, Hourglass, Layers, Loader2, Plus, TriangleAlert } from "lucide-react";
+import { ArrowRight, Hourglass, Layers, Plus, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAttentionQuery, useStacksQuery } from "../../api/queries";
@@ -27,6 +27,7 @@ import { useDebounce } from "../../shared/useDebounce";
 import EmptyState from "../../shared/EmptyState";
 import LoadError from "../../shared/LoadError";
 import Separator from "../../shared/Separator";
+import LoadingLine from "../../shared/LoadingLine";
 import { cn } from "@/lib/utils";
 
 // /stacks: every stack the person can view, with the one selected shown beside
@@ -90,9 +91,7 @@ export default function StacksListScreen() {
     return (
       <section>
         {header()}
-        <p className="flex items-center gap-2 text-meta text-muted-foreground" data-testid="stacks-list-loading">
-          <Loader2 aria-hidden="true" className="size-4 animate-spin" /> Loading stacks…
-        </p>
+        <LoadingLine testId="stacks-list-loading">Loading stacks…</LoadingLine>
       </section>
     );
   }

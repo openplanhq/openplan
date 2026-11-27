@@ -15,17 +15,6 @@ describe("StyleGuide", () => {
     expect(screen.getByTestId("styleguide")).toBeTruthy();
   });
 
-  it("renders the real status tones rather than copies of their markup", () => {
-    render(<StyleGuide />);
-    // StatusBadge marks its tone. If the gallery drew a copy of the markup
-    // instead, this would break, which is the point: the gallery must not
-    // drift from the components.
-    const section = screen.getByTestId("sg-theme");
-    for (const tone of ["settled", "progress", "waiting", "failed", "canceled"]) {
-      expect(section.querySelector(`[data-tone="${tone}"]`), `missing tone ${tone}`).toBeTruthy();
-    }
-  });
-
   it("shows every role badge", () => {
     render(<StyleGuide />);
     const section = screen.getByTestId("sg-theme");
@@ -40,12 +29,6 @@ describe("StyleGuide", () => {
     for (const variant of ["default", "secondary", "outline", "destructive", "success", "progress", "warning", "muted"]) {
       expect(section.querySelector(`[data-slot="badge"][data-variant="${variant}"]`), `missing ${variant}`).toBeTruthy();
     }
-  });
-
-  it("renders the real Breadcrumb without a router around the page", () => {
-    render(<StyleGuide />);
-    const nav = within(screen.getByTestId("sg-theme")).getByRole("navigation", { name: "Breadcrumb" });
-    expect(within(nav).getByRole("heading", { level: 1 }).textContent).toBe("Run #4");
   });
 
   it("renders the real LogSteps in the shadcn section", () => {

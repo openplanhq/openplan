@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { isTerminalRunStatus } from "../../api/polling";
 import { apiErrorMessage, isProblem } from "../../api/problems";
@@ -11,6 +10,7 @@ import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
 import { problemTypes } from "../../api/types";
+import BusyIcon from "../../shared/BusyIcon";
 import { cn } from "@/lib/utils";
 import SettingsSection from "../stacks/SettingsSection";
 import { stackTemplatePath } from "../stacks/templateSelection";
@@ -74,7 +74,7 @@ export default function TemplateDestroyPanel({ stackId, stackTemplate }: Templat
           disabled={reason !== "" || destroyBusy}
           onClick={() => void handleDestroy()}
         >
-          {destroyBusy && <Loader2 data-icon="inline-start" aria-hidden="true" className="animate-spin" />}
+          <BusyIcon busy={destroyBusy} />
           Destroy
         </button>
       }

@@ -1,8 +1,8 @@
-import { Loader2 } from "lucide-react";
 import type { TemplateVariable } from "../../api/types";
 import { buttonClass } from "../../shared/buttonClass";
 import VariableFields from "./VariableFields";
 import type { SecretSetting } from "./VariableFields";
+import BusyIcon from "../../shared/BusyIcon";
 import { cn } from "@/lib/utils";
 
 interface StackTemplateConfigPanelProps {
@@ -59,7 +59,7 @@ export default function StackTemplateConfigPanel({
         disabled={locked || !canSave || saveBusy}
         onClick={onSave}
       >
-        {saveBusy && <Loader2 data-icon="inline-start" aria-hidden="true" className="animate-spin" />}
+        <BusyIcon busy={saveBusy} />
         Save variables
       </button>
     </div>

@@ -1,9 +1,9 @@
-import { Loader2 } from "lucide-react";
 import { useTemplateRevisionVariablesQuery } from "../../api/queries";
 import { useTenantID } from "../../auth/useTenantID";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import LoadError from "../../shared/LoadError";
 import Tag from "../../shared/Tag";
+import LoadingLine from "../../shared/LoadingLine";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { useTemplate } from "./templateContext";
@@ -36,9 +36,7 @@ export default function VariablesTab() {
   // shown here, they would read as the newest revision's.
   if (variablesQuery.status === "pending" || variablesQuery.isPlaceholderData) {
     return (
-      <p className="flex items-center gap-2 text-meta text-muted-foreground" data-testid="template-variables-loading">
-        <Loader2 aria-hidden="true" className="size-3.5 animate-spin" /> Loading variables…
-      </p>
+      <LoadingLine testId="template-variables-loading">Loading variables…</LoadingLine>
     );
   }
 

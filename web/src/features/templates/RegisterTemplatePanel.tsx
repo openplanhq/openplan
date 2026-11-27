@@ -11,6 +11,7 @@ import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorPanel from "../../shared/ErrorPanel";
 import { fieldLabelClass, inputClass } from "../../shared/fieldClass";
+import BusyIcon from "../../shared/BusyIcon";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -148,7 +149,7 @@ export default function RegisterTemplatePanel() {
             so the empty region adds no space. */}
         <div className="flex flex-col">
           <button type="submit" className={cn(buttonClass("primary"), "self-start pointer-coarse:h-11")} disabled={busy} data-testid="register-template-submit">
-            {busy ? <Loader2 data-icon="inline-start" aria-hidden="true" className="animate-spin" /> : <Plus data-icon="inline-start" aria-hidden="true" />}
+            <BusyIcon busy={busy} icon={Plus} />
             Register template
           </button>
           <div role="status">

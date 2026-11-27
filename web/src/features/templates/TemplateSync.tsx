@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Loader2, LoaderCircle, Minus, RefreshCw } from "lucide-react";
+import { Check, LoaderCircle, Minus, RefreshCw } from "lucide-react";
 import { isSyncSettled } from "../../api/polling";
 import { apiErrorMessage } from "../../api/problems";
 import { queryKeys } from "../../api/queryKeys";
@@ -13,6 +13,7 @@ import { buttonClass } from "../../shared/buttonClass";
 import ErrorPanel from "../../shared/ErrorPanel";
 import { formatDateTime } from "../../shared/formatTimestamp";
 import StatusLabel from "../../shared/StatusLabel";
+import BusyIcon from "../../shared/BusyIcon";
 import { cn } from "@/lib/utils";
 import { shortCommitSHA } from "./templateWorkflow";
 
@@ -159,11 +160,7 @@ export default function TemplateSync({
                   onClick={() => void handleSync()}
                   data-testid="template-sync"
                 >
-                  {syncing ? (
-                    <Loader2 data-icon="inline-start" aria-hidden="true" strokeWidth={2.42} className="size-3.25 animate-spin" />
-                  ) : (
-                    <RefreshCw data-icon="inline-start" aria-hidden="true" strokeWidth={2.42} className="size-3.25" />
-                  )}
+                  <BusyIcon busy={syncing} icon={RefreshCw} strokeWidth={2.42} className="size-3.25" />
                   Sync
                 </button>
               </RequireCapability>

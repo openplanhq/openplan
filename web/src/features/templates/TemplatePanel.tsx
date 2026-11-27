@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { BookMarked, Folder, GitBranch, GitCommitHorizontal, Loader2, Trash2 } from "lucide-react";
+import { BookMarked, Folder, GitBranch, GitCommitHorizontal, Trash2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { apiErrorMessage, classifyQueryError, isProblem } from "../../api/problems";
@@ -24,6 +24,7 @@ import TemplateSync from "./TemplateSync";
 import { shortCommitSHA, templateDisplayName } from "./templateWorkflow";
 import LoadError from "../../shared/LoadError";
 import Tag from "../../shared/Tag";
+import LoadingLine from "../../shared/LoadingLine";
 import { cn } from "@/lib/utils";
 
 // The right side of /templates: one template, and its latest revision for
@@ -69,9 +70,7 @@ export default function TemplatePanel({ templateId, children }: { templateId?: s
 
   if (template !== null && revisionsQuery.isPending) {
     return (
-      <p className="flex items-center gap-2 px-7 py-6 text-meta text-muted-foreground" role="status" data-testid="template-loading">
-        <Loader2 aria-hidden="true" className="size-3.5 animate-spin" /> Loading template…
-      </p>
+      <LoadingLine className="px-7 py-6" testId="template-loading">Loading template…</LoadingLine>
     );
   }
 

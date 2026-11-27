@@ -1,4 +1,4 @@
-import { ArrowRight, KeyRound, Loader2, Users } from "lucide-react";
+import { ArrowRight, KeyRound, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useStackQuery } from "../../api/queries";
 import type { AttentionItem, StackListItem } from "../../api/types";
@@ -11,6 +11,7 @@ import StackTemplateStatusLabel, { stackTemplateActivity } from "./StackTemplate
 import { stackTemplateLabel } from "./stackWorkflow";
 import { buttonClass } from "../../shared/buttonClass";
 import RequestIdNote from "../../shared/RequestIdNote";
+import LoadingLine from "../../shared/LoadingLine";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
@@ -82,9 +83,7 @@ export default function StackPreview({
           </RequireCapability>
         </div>
         {stackQuery.status === "pending" ? (
-          <p className="flex items-center gap-2 text-meta text-muted-foreground" data-testid="stack-preview-loading">
-            <Loader2 aria-hidden="true" className="size-4 animate-spin" /> Loading templates…
-          </p>
+          <LoadingLine testId="stack-preview-loading">Loading templates…</LoadingLine>
         ) : stackQuery.status === "error" ? (
           <div className="flex flex-col gap-1">
             <p className="text-meta text-muted-foreground" data-testid="stack-preview-error">

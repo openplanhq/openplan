@@ -59,11 +59,7 @@ export default function RevisionsTab() {
                             latest
                           </Tag>
                         )}
-                        {indicator && (
-                          <StatusLabel icon={indicator.icon} tone={indicator.tone} strong={indicator.strong}>
-                            {indicator.label}
-                          </StatusLabel>
-                        )}
+                        {indicator && <StatusLabel indicator={indicator} />}
                       </span>
                     </span>
                   </TableCell>

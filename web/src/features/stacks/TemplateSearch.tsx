@@ -188,11 +188,7 @@ export function TemplateChoiceState({ revisions }: { revisions: TemplateRevision
   const installableCount = activeRevisions(revisions).length;
   return (
     <span className="flex shrink-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
-      {latestState && (
-        <StatusLabel icon={latestState.icon} tone={latestState.tone} strong={latestState.strong}>
-          {latestState.label}
-        </StatusLabel>
-      )}
+      {latestState && <StatusLabel indicator={latestState} />}
       {installableCount > 0 && <span className="text-meta text-muted-foreground">{pluralCount(installableCount, "revision", "revisions")}</span>}
     </span>
   );

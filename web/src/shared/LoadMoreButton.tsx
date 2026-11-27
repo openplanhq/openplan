@@ -1,6 +1,6 @@
-import { Loader2 } from "lucide-react";
 import { buttonClass } from "./buttonClass";
 import ErrorLine from "./ErrorLine";
+import BusyIcon from "./BusyIcon";
 import { cn } from "@/lib/utils";
 
 /**
@@ -36,7 +36,7 @@ export default function LoadMoreButton({
         aria-busy={loading || undefined}
         data-testid={testId}
       >
-        {loading && <Loader2 data-icon="inline-start" aria-hidden="true" className="animate-spin" />}
+        <BusyIcon busy={loading} />
         {loading ? "Loading…" : failed ? "Try again" : "Load more"}
       </button>
     </div>

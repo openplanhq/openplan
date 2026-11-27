@@ -1,6 +1,5 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
-import { Loader2 } from "lucide-react";
 import { useParams } from "react-router-dom";
 import {
   useApproveRunMutation,
@@ -21,8 +20,10 @@ import PlanDiff from "../../shared/PlanDiff";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import LoadError from "../../shared/LoadError";
 import { shortCommitSHA } from "../templates/templateWorkflow";
+import StatusLabel from "../../shared/StatusLabel";
+import Breadcrumb from "../../shared/Breadcrumb";
+import LoadingLine from "../../shared/LoadingLine";
 import { cn } from "@/lib/utils";
-import PanelTrail from "../stacks/PanelTrail";
 import { stackTemplatePath } from "../stacks/templateSelection";
 import RunChanges, { RunViewFrame } from "./RunChanges";
 import RunLogsPanel from "./RunLogsPanel";
@@ -30,8 +31,7 @@ import { defaultRunView } from "./planChanges";
 import type { RunView } from "./planChanges";
 import type { TemplateRun, TemplateRunLog } from "../../api/types";
 import SegmentedControl from "../../shared/SegmentedControl";
-import { runProgressTag } from "./runIndicator";
-import RunStatusLabel from "./RunStatusLabel";
+import { runIndicator, runProgressTag } from "./runIndicator";
 import WaitingRunActions from "./WaitingRunActions";
 
 // /stacks/:stackId/templates/:stackTemplateId/runs/:runNumber — plan/apply
@@ -149,7 +149,7 @@ export default function RunDetailScreen() {
   }
 
   const trail = (
-    <PanelTrail name="Run" parent={{ label: "Runs", to: stackTemplatePath(stackId, stackTemplateId, "runs") }} current={`Run #${runNumber}`} />
+    <Breadcrumb label="Run" crumbs={[{ label: "Runs", to: stackTemplatePath(stackId, stackTemplateId, "runs") }]} current={`Run #${runNumber}`} />
   );
 
   if (missing) {
@@ -184,9 +184,7 @@ export default function RunDetailScreen() {
     return (
       <section className="flex min-w-0 flex-col gap-5" data-testid="run-detail-loading">
         {trail}
-        <p className="flex items-center gap-2 text-meta text-muted-foreground">
-          <Loader2 aria-hidden="true" className="size-4 animate-spin" /> Loading run…
-        </p>
+        <LoadingLine>Loading run…</LoadingLine>
       </section>
     );
   }
@@ -199,7 +197,7 @@ export default function RunDetailScreen() {
           <header className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex min-w-0 flex-wrap items-center gap-3">
               <h3 className="font-heading text-title">Run #{run.run_number}</h3>
-              <RunStatusLabel run={run} data-testid="run-detail-status" />
+              <StatusLabel indicator={runIndicator(run)} data-testid="run-detail-status" />
             </div>
             {canApprove && (
               <div className="flex flex-wrap gap-2">

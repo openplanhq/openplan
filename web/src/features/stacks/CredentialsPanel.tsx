@@ -1,6 +1,6 @@
 import { useId, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { Loader2, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { apiErrorMessage } from "../../api/problems";
 import type { CredentialMetadata, CredentialRequest } from "../../api/types";
 import { buttonClass } from "../../shared/buttonClass";
@@ -12,6 +12,7 @@ import { formatTimestamp } from "../../shared/formatTimestamp";
 import EmptyState from "../../shared/EmptyState";
 import { pluralWord } from "../../shared/plural";
 import { useFieldErrors } from "../../shared/useFieldErrors";
+import LoadingLine from "../../shared/LoadingLine";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -131,9 +132,7 @@ export default function CredentialsPanel({ kind, emptyTitle, emptyDescription, c
           delete, and the add button fills it. */}
       <div className="grid grid-cols-environment gap-x-2 gap-y-5">
         {loading ? (
-          <p className="col-span-3 flex items-center gap-2 text-meta text-muted-foreground">
-            <Loader2 aria-hidden="true" className="size-3.5 animate-spin" /> Loading environment…
-          </p>
+          <LoadingLine className="col-span-3">Loading environment…</LoadingLine>
         ) : credentials.length === 0 ? (
           <EmptyState title={emptyTitle} description={emptyDescription} short className="col-span-3" />
         ) : (

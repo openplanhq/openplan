@@ -1,4 +1,3 @@
-import { LoaderCircle } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiErrorMessage, fieldsShown } from "../../api/problems";
@@ -9,6 +8,7 @@ import ErrorLine from "../../shared/ErrorLine";
 import { fieldLabelClass, inputClass } from "../../shared/fieldClass";
 import PageHeader from "../../shared/PageHeader";
 import { useFieldErrors } from "../../shared/useFieldErrors";
+import BusyIcon from "../../shared/BusyIcon";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -91,14 +91,8 @@ export default function CreateStackScreen() {
           className={cn(buttonClass("primary"), "pointer-coarse:h-11")}
           disabled={trimmed === "" || mutation.isPending}
         >
-          {mutation.isPending ? (
-            <>
-              <LoaderCircle data-icon="inline-start" aria-hidden="true" className="animate-spin" />
-              Creating…
-            </>
-          ) : (
-            "Create stack"
-          )}
+          <BusyIcon busy={mutation.isPending} />
+          {mutation.isPending ? "Creating…" : "Create stack"}
         </button>
         {errorMessage && <ErrorLine testId="create-stack-error">{errorMessage}</ErrorLine>}
       </form>

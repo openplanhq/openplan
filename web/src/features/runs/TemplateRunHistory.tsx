@@ -8,9 +8,10 @@ import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import EmptyState from "../../shared/EmptyState";
 import LoadError from "../../shared/LoadError";
 import { stackTemplateRunPath } from "../stacks/templateSelection";
+import StatusLabel from "../../shared/StatusLabel";
+import { runIndicator } from "./runIndicator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import RunStatusLabel from "./RunStatusLabel";
 import LoadMoreButton from "../../shared/LoadMoreButton";
 
 // 8px either side of a column boundary makes the 16px between columns, and
@@ -117,7 +118,7 @@ function RunRow({ run, to }: { run: TemplateRun; to: string }) {
       <TableCell className={cellClass}>
         {/* A status that names its step can be wider than the column, so it
             wraps here rather than running into the changes beside it. */}
-        <RunStatusLabel run={run} className="whitespace-normal" data-testid={`template-run-status-${run.id}`} />
+        <StatusLabel indicator={runIndicator(run)} className="whitespace-normal" data-testid={`template-run-status-${run.id}`} />
       </TableCell>
       <TableCell className={cellClass} data-testid={`template-run-summary-${run.id}`}>
         {run.plan_summary && <PlanDiff summary={run.plan_summary} />}
