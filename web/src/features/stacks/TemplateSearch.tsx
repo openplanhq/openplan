@@ -9,6 +9,7 @@ import type { Template, TemplateRevision } from "../../api/types";
 import { activeRevisions, revisionCountLabel, searchTemplates, templateDisplayName, templateRootPathLabel } from "../templates/templateWorkflow";
 import type { TemplateSearchMatch } from "../templates/templateWorkflow";
 import Separator from "../../shared/Separator";
+import { matchCountLabel } from "../../shared/matchCountLabel";
 import { ComboboxContent, ComboboxEmpty, ComboboxList, useComboboxAnchor } from "@/components/ui/combobox";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { cn } from "@/lib/utils";
@@ -233,6 +234,5 @@ function countLabel(total: number, shown: number, searching: boolean): string {
     if (total > shown) return `Showing ${shown} of ${total} templates · type to narrow`;
     return total === 1 ? "1 template" : `${total} templates`;
   }
-  if (total > shown) return `${shown} of ${total} matches · keep typing to narrow`;
-  return total === 1 ? "1 match" : `${total} matches`;
+  return matchCountLabel(total, shown);
 }

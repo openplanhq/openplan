@@ -4,7 +4,6 @@ import {
   canSaveInstalledTemplateConfig,
   canChangeStackTemplateRevision,
   configFromVariableValues,
-  findSelectedStackTemplate,
   isStructuredVariable,
   partitionRevisionChangeVariables,
   stackTemplateLabel,
@@ -15,15 +14,6 @@ import {
 } from "./stackWorkflow";
 
 describe("stack workflow helpers", () => {
-  it("finds a stack template by id among a stack's installs", () => {
-    const firstTemplate = stackTemplate({ id: "stack_template_first", workspace_name: "prod-web" });
-    const activeTemplate = stackTemplate({ id: "stack_template_active", workspace_name: "prod-api" });
-    const stackTemplates = [firstTemplate, activeTemplate];
-
-    expect(findSelectedStackTemplate(stackTemplates, activeTemplate.id)).toEqual(activeTemplate);
-    expect(findSelectedStackTemplate(stackTemplates, "missing_stack_template")).toBeNull();
-  });
-
   // Two suffixes have now been dropped from this label. The lifecycle read
   // "(active)" on every row a user ever sees, and the status pill carries it.
   // The ref is part of a template's identity, so it read the same on

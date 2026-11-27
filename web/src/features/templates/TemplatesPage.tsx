@@ -10,7 +10,8 @@ import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import LoadError from "../../shared/LoadError";
 import { cn } from "@/lib/utils";
 import TemplateList from "./TemplateList";
-import type { TemplatesLocationState, TemplatesPageOutletContext } from "./templatesPageOutlet";
+import type { IndexOutletContext } from "../../shared/indexOutlet";
+import type { TemplatesLocationState } from "./templatesPageOutlet";
 import { templatesByName } from "./templateWorkflow";
 
 const registerLinkClass = cn(buttonClass("primary", "lg"), "w-full pointer-coarse:h-11 md:w-auto");
@@ -63,7 +64,7 @@ export default function TemplatesPage() {
   const onPanel = templateMatch !== null;
   const registering = templateMatch?.params.templateId === "new";
   const selectedId = onPanel ? (registering ? null : templateMatch.params.templateId ?? null) : first?.id ?? null;
-  const outletContext: TemplatesPageOutletContext = { indexTemplateId: first?.id ?? null };
+  const outletContext: IndexOutletContext = { indexTemplateId: first?.id ?? null };
 
   return (
     <section data-testid="templates-page">

@@ -5,7 +5,7 @@ import { useAuth } from "../../auth/AuthContext";
 import EmptyState from "../../shared/EmptyState";
 import { cn } from "@/lib/utils";
 import TemplatePanel from "./TemplatePanel";
-import { useIndexTemplateId } from "./templatesPageOutlet";
+import { useIndexTemplateId } from "../../shared/indexOutlet";
 import VariablesTab from "./VariablesTab";
 
 // /templates itself: the first template's panel on its Variables tab, drawn

@@ -9,7 +9,7 @@ import PageHeader from "../../shared/PageHeader";
 import { cn } from "@/lib/utils";
 import { attentionByStackTemplate } from "./attention";
 import StackMeta from "./StackMeta";
-import type { StackPageOutletContext } from "./stackPageOutlet";
+import type { IndexOutletContext } from "../../shared/indexOutlet";
 import StackTemplateList from "./StackTemplateList";
 import { defaultStackTemplate } from "./templateSelection";
 
@@ -55,7 +55,7 @@ export default function StackPage() {
   const { stack } = stackView;
   const adding = templateMatch?.params.stackTemplateId === "new";
   const selectedId = onPanel ? (adding ? null : templateMatch.params.stackTemplateId ?? null) : indexTemplateId;
-  const outletContext: StackPageOutletContext = { indexTemplateId };
+  const outletContext: IndexOutletContext = { indexTemplateId };
 
   return (
     <section data-testid="stack-page">

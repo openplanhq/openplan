@@ -4,7 +4,6 @@ import {
   attentionByStack,
   attentionRunPath,
   attentionSummary,
-  failedChipLabel,
   failedOperation,
   runFailedChipLabel,
   templateCountWord,
@@ -105,15 +104,12 @@ describe("labels", () => {
   ])("waiting chip for %i", (n, label) => expect(waitingChipLabel(n)).toBe(label));
 
   it.each([
-    [1, "destroy failed"],
-    [2, "2 destroys failed"]
-  ])("failed chip for %i", (n, label) => expect(failedChipLabel(n)).toBe(label));
-
-  it.each([
     ["plan", 1, "plan failed"],
     ["plan", 2, "2 plans failed"],
     ["apply", 1, "apply failed"],
-    ["apply", 3, "3 applies failed"]
+    ["apply", 3, "3 applies failed"],
+    ["destroy", 1, "destroy failed"],
+    ["destroy", 2, "2 destroys failed"]
   ] as const)("failed %s chip for %i", (operation, n, label) => expect(runFailedChipLabel(operation, n)).toBe(label));
 
   it.each([
