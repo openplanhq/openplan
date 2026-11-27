@@ -1,19 +1,19 @@
-import { Loader2 } from "lucide-react";
 import { useTemplateRevisionVariablesQuery } from "../../api/queries";
 import { useTenantID } from "../../auth/useTenantID";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import LoadError from "../../shared/LoadError";
 import Tag from "../../shared/Tag";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import LoadingLine from "../../shared/LoadingLine";
+import DataTable, { tableCellClass } from "../../shared/DataTable";
+import { TableCell, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { useTemplate } from "./templateContext";
 import { Breakable, piecesAfter } from "../../shared/breakAfter";
 
-// 8px either side of a column boundary makes the 16px between columns, and
-// 16px at the row's ends. Name 200, type 120 and value 90, plus that padding.
-// Baseline, not the table's centring: a row shares one baseline, so a value
-// stays beside the first line of a name that wraps or carries a tag.
-const cellClass = "px-2 py-2 align-baseline first:pl-4 last:pr-4";
+// Name 200, type 120 and value 90, plus the table's padding. Baseline, not
+// the table's centring: a row shares one baseline, so a value stays beside
+// the first line of a name that wraps or carries a tag.
+const cellClass = cn(tableCellClass, "align-baseline");
 
 // A type expression wraps only at its structure: after an opening bracket, a
 // comma or a space (which the browser already breaks at), never inside a
@@ -36,9 +36,7 @@ export default function VariablesTab() {
   // shown here, they would read as the newest revision's.
   if (variablesQuery.status === "pending" || variablesQuery.isPlaceholderData) {
     return (
-      <p className="flex items-center gap-2 text-meta text-muted-foreground" data-testid="template-variables-loading">
-        <Loader2 aria-hidden="true" className="size-3.5 animate-spin" /> Loading variables…
-      </p>
+      <LoadingLine testId="template-variables-loading">Loading variables…</LoadingLine>
     );
   }
 
@@ -64,52 +62,32 @@ export default function VariablesTab() {
 
   return (
     <section className="flex min-w-0 flex-col gap-3" data-testid="template-variables">
-      {/* Fixed columns in a frame that scrolls sideways on a phone. */}
-      <div className="overflow-x-auto rounded-lg border">
-        <Table className="min-w-2xl">
-          <colgroup>
-            <col className="w-56" />
-            <col className="w-34" />
-            <col className="w-26" />
-            <col />
-          </colgroup>
-          <TableHeader>
-            <TableRow className="border-divider hover:bg-transparent">
-              {["Name", "Type", "Value", "Description"].map((heading) => (
-                <TableHead key={heading} scope="col" className={cn(cellClass, "h-10 text-caption font-medium text-muted-foreground")}>
-                  {heading}
-                </TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {variables.map((templateVariable) => (
-              <TableRow key={templateVariable.name} className="h-12 border-divider hover:bg-transparent" data-testid={`template-variable-${templateVariable.name}`}>
-                <TableCell className={cn(cellClass, "font-mono text-meta whitespace-normal wrap-anywhere")}>
-                  {/* Sensitive is a fact about the variable, not about whether it
-                      needs a value, so it rides with the name in the Tag look
-                      "latest" uses, and wraps under a long name. */}
-                  {templateVariable.sensitive ? (
-                    <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                      <span>{templateVariable.name}</span>
-                      <Tag>sensitive</Tag>
-                    </span>
-                  ) : (
-                    templateVariable.name
-                  )}
-                </TableCell>
-                <TableCell className={cn(cellClass, "font-mono text-caption whitespace-normal text-muted-foreground wrap-anywhere")}>
-                  <Breakable pieces={typePieces(templateVariable.type_expression || "any")} />
-                </TableCell>
-                <TableCell className={cn(cellClass, "text-meta", templateVariable.required ? "font-medium text-foreground" : "text-muted-foreground")}>
-                  {templateVariable.required ? "required" : "optional"}
-                </TableCell>
-                <TableCell className={cn(cellClass, "text-meta whitespace-normal text-muted-foreground")}>{templateVariable.description}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+      <DataTable columns={["w-56", "w-34", "w-26", undefined]} headings={["Name", "Type", "Value", "Description"]} cellClass={cellClass} className="min-w-2xl">
+        {variables.map((templateVariable) => (
+          <TableRow key={templateVariable.name} className="h-12 border-divider hover:bg-transparent" data-testid={`template-variable-${templateVariable.name}`}>
+            <TableCell className={cn(cellClass, "font-mono text-meta whitespace-normal wrap-anywhere")}>
+              {/* Sensitive is a fact about the variable, not about whether it
+                  needs a value, so it rides with the name in the Tag look
+                  "latest" uses, and wraps under a long name. */}
+              {templateVariable.sensitive ? (
+                <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <span>{templateVariable.name}</span>
+                  <Tag>sensitive</Tag>
+                </span>
+              ) : (
+                templateVariable.name
+              )}
+            </TableCell>
+            <TableCell className={cn(cellClass, "font-mono text-caption whitespace-normal text-muted-foreground wrap-anywhere")}>
+              <Breakable pieces={typePieces(templateVariable.type_expression || "any")} />
+            </TableCell>
+            <TableCell className={cn(cellClass, "text-meta", templateVariable.required ? "font-medium text-foreground" : "text-muted-foreground")}>
+              {templateVariable.required ? "required" : "optional"}
+            </TableCell>
+            <TableCell className={cn(cellClass, "text-meta whitespace-normal text-muted-foreground")}>{templateVariable.description}</TableCell>
+          </TableRow>
+        ))}
+      </DataTable>
     </section>
   );
 }

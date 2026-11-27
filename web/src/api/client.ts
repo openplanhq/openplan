@@ -89,27 +89,28 @@ export function getMe(): Promise<Me> {
   return requestJSON("/v1/me");
 }
 
-function templatePath(tenantID: string, templateID: string): string {
-  return `/v1/tenants/${encodeURIComponent(tenantID)}/templates/${encodeURIComponent(templateID)}`;
+// Encodes every segment, fixed ones included (they encode to themselves).
+function tenantPath(tenantID: string, ...segments: string[]): string {
+  return ["/v1/tenants", ...[tenantID, ...segments].map((segment) => encodeURIComponent(segment))].join("/");
 }
 
 // Registering answers with the template, whose latest_sync is the sync it
 // queued. A source registered already answers with its template, syncing
 // again.
 export function registerTemplate(tenantID: string, body: RegisterTemplateRequest): Promise<Template> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/templates`, {
+  return requestJSON(tenantPath(tenantID, "templates"), {
     method: "POST",
     body: JSON.stringify(body)
   });
 }
 
 export function getTemplate(tenantID: string, templateID: string): Promise<Template> {
-  return requestJSON(templatePath(tenantID, templateID));
+  return requestJSON(tenantPath(tenantID, "templates", templateID));
 }
 
 // Answers with the template, whose latest_sync is the sync just queued.
 export function syncTemplate(tenantID: string, templateID: string): Promise<Template> {
-  return requestJSON(`${templatePath(tenantID, templateID)}/syncs`, {
+  return requestJSON(tenantPath(tenantID, "templates", templateID, "syncs"), {
     method: "POST",
     body: JSON.stringify({})
   });
@@ -120,7 +121,7 @@ export function syncTemplate(tenantID: string, templateID: string): Promise<Temp
 // queued. Refused with duplicate-template-source when another template
 // already follows the ref.
 export function changeTemplateRef(tenantID: string, templateID: string, sourceRef: string): Promise<Template> {
-  return requestJSON(templatePath(tenantID, templateID), {
+  return requestJSON(tenantPath(tenantID, "templates", templateID), {
     method: "PATCH",
     body: JSON.stringify({ source_ref: sourceRef })
   });
@@ -128,13 +129,11 @@ export function changeTemplateRef(tenantID: string, templateID: string, sourceRe
 
 // Refused with template-in-use while any stack uses the template.
 export function deleteTemplate(tenantID: string, templateID: string): Promise<void> {
-  return requestNoContent(templatePath(tenantID, templateID), { method: "DELETE" });
+  return requestNoContent(tenantPath(tenantID, "templates", templateID), { method: "DELETE" });
 }
 
 export async function getTemplateRevisionVariables(tenantID: string, templateRevisionID: string): Promise<TemplateVariable[]> {
-  return listItems<TemplateVariable>(
-    `/v1/tenants/${encodeURIComponent(tenantID)}/template-revisions/${encodeURIComponent(templateRevisionID)}/variables`
-  );
+  return listItems<TemplateVariable>(tenantPath(tenantID, "template-revisions", templateRevisionID, "variables"));
 }
 
 // Where a list starts and how much of it to read. cursor is the previous
@@ -174,6 +173,10 @@ export async function listAll<T>(fetchPage: (cursor: string | undefined) => Prom
   return items;
 }
 
+function listEvery<T>(path: string): Promise<T[]> {
+  return listAll((cursor) => requestJSON<ListPage<T>>(`${path}${pageQuery({ cursor, limit: MAX_PAGE_LIMIT })}`));
+}
+
 // A list that is always one page: its items, never null.
 async function listItems<T>(path: string): Promise<T[]> {
   const page = await requestJSON<ListPage<T>>(path);
@@ -183,20 +186,16 @@ async function listItems<T>(path: string): Promise<T[]> {
 // Every template, read a page at a time: the registry sorts them by name
 // and filters them as someone types, which needs the whole set.
 export function listTemplates(tenantID: string): Promise<Template[]> {
-  return listAll((cursor) =>
-    requestJSON<ListPage<Template>>(`/v1/tenants/${encodeURIComponent(tenantID)}/templates${pageQuery({ cursor, limit: MAX_PAGE_LIMIT })}`)
-  );
+  return listEvery(tenantPath(tenantID, "templates"));
 }
 
 // Every revision of one template, newest first, read a page at a time.
 export function listTemplateRevisions(tenantID: string, templateID: string): Promise<TemplateRevision[]> {
-  return listAll((cursor) =>
-    requestJSON<ListPage<TemplateRevision>>(`${templatePath(tenantID, templateID)}/revisions${pageQuery({ cursor, limit: MAX_PAGE_LIMIT })}`)
-  );
+  return listEvery(tenantPath(tenantID, "templates", templateID, "revisions"));
 }
 
 export function createStack(tenantID: string, body: CreateStackRequest): Promise<Stack> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/stacks`, {
+  return requestJSON(tenantPath(tenantID, "stacks"), {
     method: "POST",
     body: JSON.stringify(body)
   });
@@ -204,119 +203,121 @@ export function createStack(tenantID: string, body: CreateStackRequest): Promise
 
 /** One page of the stacks the caller can view, newest first; q matches name or slug. */
 export function listStacks(tenantID: string, options: PageOptions & { q?: string } = {}): Promise<ListPage<StackListItem>> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/stacks${pageQuery(options)}`);
+  return requestJSON(`${tenantPath(tenantID, "stacks")}${pageQuery(options)}`);
 }
 
 /** Lists plans waiting for approval and failed destroys on every visible stack. */
 export function listAttention(tenantID: string): Promise<AttentionItem[]> {
-  return listItems(`/v1/tenants/${encodeURIComponent(tenantID)}/attention`);
+  return listItems(tenantPath(tenantID, "attention"));
 }
 
 export function getStack(tenantID: string, stackID: string): Promise<StackView> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/stacks/${encodeURIComponent(stackID)}`);
+  return requestJSON(tenantPath(tenantID, "stacks", stackID));
 }
 
 /** Lists Stack credentials; a value comes back only for a credential that is not sensitive. */
 export function listStackCredentials(tenantID: string, stackID: string): Promise<CredentialMetadata[]> {
-  return listItems(`/v1/tenants/${encodeURIComponent(tenantID)}/stacks/${encodeURIComponent(stackID)}/credentials`);
+  return listItems(tenantPath(tenantID, "stacks", stackID, "credentials"));
 }
 
 /** Stores one Stack-scoped credential; the answer carries the value only when it is not sensitive. */
 export function createStackCredential(tenantID: string, stackID: string, body: CredentialRequest): Promise<CredentialMetadata> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/stacks/${encodeURIComponent(stackID)}/credentials`, { method: "POST", body: JSON.stringify(body) });
+  return requestJSON(tenantPath(tenantID, "stacks", stackID, "credentials"), { method: "POST", body: JSON.stringify(body) });
 }
 
 /** Deletes one Stack-scoped credential. */
 export function deleteStackCredential(tenantID: string, stackID: string, credentialID: string): Promise<void> {
-  return requestNoContent(`/v1/tenants/${encodeURIComponent(tenantID)}/stacks/${encodeURIComponent(stackID)}/credentials/${encodeURIComponent(credentialID)}`, { method: "DELETE" });
+  return requestNoContent(tenantPath(tenantID, "stacks", stackID, "credentials", credentialID), { method: "DELETE" });
 }
 
 /** Lists StackTemplate credentials; a value comes back only for a credential that is not sensitive. */
 export function listStackTemplateCredentials(tenantID: string, stackTemplateID: string): Promise<CredentialMetadata[]> {
-  return listItems(`/v1/tenants/${encodeURIComponent(tenantID)}/stack-templates/${encodeURIComponent(stackTemplateID)}/credentials`);
+  return listItems(tenantPath(tenantID, "stack-templates", stackTemplateID, "credentials"));
 }
 
 /** Stores one StackTemplate-scoped credential; the answer carries the value only when it is not sensitive. */
 export function createStackTemplateCredential(tenantID: string, stackTemplateID: string, body: CredentialRequest): Promise<CredentialMetadata> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/stack-templates/${encodeURIComponent(stackTemplateID)}/credentials`, { method: "POST", body: JSON.stringify(body) });
+  return requestJSON(tenantPath(tenantID, "stack-templates", stackTemplateID, "credentials"), { method: "POST", body: JSON.stringify(body) });
 }
 
 /** Deletes one StackTemplate-scoped credential. */
 export function deleteStackTemplateCredential(tenantID: string, stackTemplateID: string, credentialID: string): Promise<void> {
-  return requestNoContent(`/v1/tenants/${encodeURIComponent(tenantID)}/stack-templates/${encodeURIComponent(stackTemplateID)}/credentials/${encodeURIComponent(credentialID)}`, { method: "DELETE" });
+  return requestNoContent(tenantPath(tenantID, "stack-templates", stackTemplateID, "credentials", credentialID), { method: "DELETE" });
 }
 
 export function addTemplateToStack(tenantID: string, stackID: string, body: AddTemplateToStackRequest): Promise<StackTemplate> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/stacks/${encodeURIComponent(stackID)}/templates`, {
+  return requestJSON(tenantPath(tenantID, "stacks", stackID, "templates"), {
     method: "POST",
     body: JSON.stringify(body)
   });
 }
 
 export function updateStackTemplateConfig(tenantID: string, stackTemplateID: string, body: UpdateStackTemplateConfigRequest): Promise<StackTemplate> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/stack-templates/${encodeURIComponent(stackTemplateID)}/config`, {
+  return requestJSON(tenantPath(tenantID, "stack-templates", stackTemplateID, "config"), {
     method: "PUT",
     body: JSON.stringify(body)
   });
 }
 
 export function changeStackTemplateRevision(tenantID: string, stackTemplateID: string, body: ChangeStackTemplateRevisionRequest): Promise<StackTemplate> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/stack-templates/${encodeURIComponent(stackTemplateID)}/change-revision`, {
+  return requestJSON(tenantPath(tenantID, "stack-templates", stackTemplateID, "change-revision"), {
     method: "POST",
     body: JSON.stringify(body)
   });
 }
 
 export function startTemplateRun(tenantID: string, stackTemplateID: string, body: StartRunRequest): Promise<TemplateRun> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/stack-templates/${encodeURIComponent(stackTemplateID)}/runs`, {
+  return requestJSON(tenantPath(tenantID, "stack-templates", stackTemplateID, "runs"), {
     method: "POST",
     body: JSON.stringify(body)
   });
 }
 
 export function getTemplateRun(tenantID: string, runID: string): Promise<TemplateRun> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/template-runs/${encodeURIComponent(runID)}`);
+  return requestJSON(tenantPath(tenantID, "template-runs", runID));
 }
 
 /** One page of a template's runs, newest first. */
 export function listTemplateRuns(tenantID: string, stackTemplateID: string, options: PageOptions = {}): Promise<ListPage<TemplateRun>> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/stack-templates/${encodeURIComponent(stackTemplateID)}/runs${pageQuery(options)}`);
+  return requestJSON(`${tenantPath(tenantID, "stack-templates", stackTemplateID, "runs")}${pageQuery(options)}`);
 }
 
 // A run's page is addressed by its number, which the runs list may not reach
 // on its first page, so the run is read by number rather than found in it.
 export function getTemplateRunByNumber(tenantID: string, stackTemplateID: string, runNumber: string): Promise<TemplateRun> {
-  return requestJSON(
-    `/v1/tenants/${encodeURIComponent(tenantID)}/stack-templates/${encodeURIComponent(stackTemplateID)}/runs/${encodeURIComponent(runNumber)}`
-  );
+  return requestJSON(tenantPath(tenantID, "stack-templates", stackTemplateID, "runs", runNumber));
 }
 
-// A run's plan's resource changes, a page at a time, removals first. One
-// run lists at most 1,000, so a caller can read them all with listAll.
-export function listTemplateRunChanges(tenantID: string, runID: string, options: PageOptions = {}): Promise<ListPage<PlanResourceChange>> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/template-runs/${encodeURIComponent(runID)}/changes${pageQuery(options)}`);
+// Every resource change of a run's plan, removals first. One run lists at
+// most 1,000, so every page is read.
+export function listTemplateRunChanges(tenantID: string, runID: string): Promise<PlanResourceChange[]> {
+  return listEvery(tenantPath(tenantID, "template-runs", runID, "changes"));
 }
 
 export function listTemplateRunLogs(tenantID: string, runID: string): Promise<TemplateRunLog[]> {
-  return listItems(`/v1/tenants/${encodeURIComponent(tenantID)}/template-runs/${encodeURIComponent(runID)}/logs`);
+  return listItems(tenantPath(tenantID, "template-runs", runID, "logs"));
 }
 
 // name is the log's name from the run's log list, such as "plan-1", not a
 // run phase: one phase can write several logs.
 export function getTemplateRunLog(tenantID: string, runID: string, name: string): Promise<string> {
-  return requestText(`/v1/tenants/${encodeURIComponent(tenantID)}/template-runs/${encodeURIComponent(runID)}/logs/${encodeURIComponent(name)}`);
+  return requestText(templateRunLogPath(tenantID, runID, name));
 }
 
 // A live log's server-sent events, for an EventSource rather than fetch: the
 // browser holds the stream open and reconnects it on its own.
 export function templateRunLogEventsURL(tenantID: string, runID: string, name: string): string {
-  return `/v1/tenants/${encodeURIComponent(tenantID)}/template-runs/${encodeURIComponent(runID)}/logs/${encodeURIComponent(name)}/events`;
+  return `${templateRunLogPath(tenantID, runID, name)}/events`;
+}
+
+function templateRunLogPath(tenantID: string, runID: string, name: string): string {
+  return tenantPath(tenantID, "template-runs", runID, "logs", name);
 }
 
 // approveRun answers with the run, already approved, while its apply waits for
 // an executor.
 export function approveRun(tenantID: string, runID: string): Promise<TemplateRun> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/template-runs/${encodeURIComponent(runID)}/approve`, {
+  return requestJSON(tenantPath(tenantID, "template-runs", runID, "approve"), {
     method: "POST",
     body: JSON.stringify({})
   });
@@ -325,7 +326,7 @@ export function approveRun(tenantID: string, runID: string): Promise<TemplateRun
 // discardRun throws away a plan waiting for approval. A run that is planning
 // or applying cannot be stopped.
 export function discardRun(tenantID: string, runID: string, body: DiscardRunRequest): Promise<void> {
-  return requestNoContent(`/v1/tenants/${encodeURIComponent(tenantID)}/template-runs/${encodeURIComponent(runID)}/discard`, {
+  return requestNoContent(tenantPath(tenantID, "template-runs", runID, "discard"), {
     method: "POST",
     body: JSON.stringify(body)
   });
@@ -336,20 +337,20 @@ interface AssignStackRoleBody {
 }
 
 export function listStackGrants(tenantID: string, stackID: string): Promise<GrantView[]> {
-  return listItems(`/v1/tenants/${encodeURIComponent(tenantID)}/stacks/${encodeURIComponent(stackID)}/grants`);
+  return listItems(tenantPath(tenantID, "stacks", stackID, "grants"));
 }
 
 // assignStackRole sets userSub's role on the stack, creating the grant or
 // replacing the role they hold.
 export function assignStackRole(tenantID: string, stackID: string, userSub: string, body: AssignStackRoleBody): Promise<GrantView> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/stacks/${encodeURIComponent(stackID)}/grants/${encodeURIComponent(userSub)}`, {
+  return requestJSON(tenantPath(tenantID, "stacks", stackID, "grants", userSub), {
     method: "PUT",
     body: JSON.stringify(body)
   });
 }
 
 export function revokeStackRole(tenantID: string, stackID: string, userSub: string): Promise<void> {
-  return requestNoContent(`/v1/tenants/${encodeURIComponent(tenantID)}/stacks/${encodeURIComponent(stackID)}/grants/${encodeURIComponent(userSub)}`, {
+  return requestNoContent(tenantPath(tenantID, "stacks", stackID, "grants", userSub), {
     method: "DELETE"
   });
 }
@@ -357,20 +358,20 @@ export function revokeStackRole(tenantID: string, stackID: string, userSub: stri
 // Who holds a platform role. Root isn't among them: the server sets it from
 // OPENPLAN_ROOT_SUBJECT and never lists it as a grant.
 export function listPlatformGrants(tenantID: string): Promise<GrantView[]> {
-  return listItems(`/v1/tenants/${encodeURIComponent(tenantID)}/platform/grants`);
+  return listItems(tenantPath(tenantID, "platform", "grants"));
 }
 
 // assignPlatformRole sets userSub's platform role, creating the grant or
 // replacing the role they hold, as assignStackRole does for a stack.
 export function assignPlatformRole(tenantID: string, userSub: string, body: AssignStackRoleBody): Promise<GrantView> {
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/platform/grants/${encodeURIComponent(userSub)}`, {
+  return requestJSON(tenantPath(tenantID, "platform", "grants", userSub), {
     method: "PUT",
     body: JSON.stringify(body)
   });
 }
 
 export function revokePlatformRole(tenantID: string, userSub: string): Promise<void> {
-  return requestNoContent(`/v1/tenants/${encodeURIComponent(tenantID)}/platform/grants/${encodeURIComponent(userSub)}`, {
+  return requestNoContent(tenantPath(tenantID, "platform", "grants", userSub), {
     method: "DELETE"
   });
 }
@@ -384,7 +385,7 @@ export function revokePlatformRole(tenantID: string, userSub: string): Promise<v
 export function searchUsers(tenantID: string, stackID: string, q: string, options: PageOptions = {}): Promise<ListPage<UserProfile>> {
   const query = pageQuery({ ...options, q });
   const stack = stackID === "" ? "" : `${query === "" ? "?" : "&"}stack_id=${encodeURIComponent(stackID)}`;
-  return requestJSON(`/v1/tenants/${encodeURIComponent(tenantID)}/users/search${query}${stack}`);
+  return requestJSON(`${tenantPath(tenantID, "users", "search")}${query}${stack}`);
 }
 
 // The app's own sign-in screen. Not a server route: it is a page with one

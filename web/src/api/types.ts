@@ -54,6 +54,8 @@ export const problemTypes = {
   malformedBody: `${problemBase}malformed-body`,
   invalidQuery: `${problemBase}invalid-query`,
   validationFailed: `${problemBase}validation-failed`,
+  // The run controls lock while a run is in flight, so a caller that gets
+  // this has stale run history (another tab or person started one): refetch.
   runInFlight: `${problemBase}run-in-flight`,
   planStale: `${problemBase}plan-stale`,
   runNotApprovable: `${problemBase}run-not-approvable`,

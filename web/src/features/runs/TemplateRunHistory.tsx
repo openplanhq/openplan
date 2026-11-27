@@ -7,17 +7,19 @@ import PlanDiff from "../../shared/PlanDiff";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import EmptyState from "../../shared/EmptyState";
 import LoadError from "../../shared/LoadError";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { stackTemplateRunPath } from "../stacks/templateSelection";
+import StatusLabel from "../../shared/StatusLabel";
+import { runIndicator } from "./runIndicator";
+import DataTable, { tableCellClass } from "../../shared/DataTable";
+import { TableCell, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import RunStatusLabel from "./RunStatusLabel";
 import LoadMoreButton from "../../shared/LoadMoreButton";
 
-// 8px either side of a column boundary makes the 16px between columns, and
-// 16px at the row's ends. Each column's width is its content's (run 64,
-// status 190, changes 110, time 110) plus that padding. Every cell holds
-// meta-sized text, and sets it as its own size so all five share one
-// baseline; the table's 14px would put a 13px name 1px off its neighbours.
-const cellClass = "px-2 py-2 text-meta first:pl-4 last:pr-4";
+// Each column's width is its content's (run 64, status 190, changes 110, time
+// 110) plus the table's padding. Every cell holds meta-sized text, and sets it
+// as its own size so all five share one baseline; the table's 14px would put a
+// 13px name 1px off its neighbours.
+const cellClass = cn(tableCellClass, "text-meta");
 
 interface TemplateRunHistoryProps {
   stackId: string;
@@ -59,33 +61,11 @@ export default function TemplateRunHistory({ stackId, stackTemplateId }: Templat
       {runs.length === 0 ? (
         <EmptyState title="No runs yet" titleAs="h3" description="Plan to see what this template would create." testId="template-run-history-empty" />
       ) : (
-        // Fixed columns in a frame that scrolls sideways on a phone, so a
-        // status that changes length never moves the columns after it.
-        <div className="overflow-x-auto rounded-lg border">
-          <Table className="min-w-2xl">
-            <colgroup>
-              <col className="w-22" />
-              <col className="w-51.5" />
-              <col className="w-31.5" />
-              <col />
-              <col className="w-33.5" />
-            </colgroup>
-            <TableHeader>
-              <TableRow className="border-divider hover:bg-transparent">
-                {["Run", "Status", "Changes", "Started by", "Time"].map((heading) => (
-                  <TableHead key={heading} scope="col" className={cn(cellClass, "h-10 text-caption font-medium text-muted-foreground")}>
-                    {heading}
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {runs.map((run) => (
-                <RunRow key={run.id} run={run} to={`/stacks/${stackId}/templates/${stackTemplateId}/runs/${run.run_number}`} />
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <DataTable columns={["w-22", "w-51.5", "w-31.5", undefined, "w-33.5"]} headings={["Run", "Status", "Changes", "Started by", "Time"]} className="min-w-2xl">
+          {runs.map((run) => (
+            <RunRow key={run.id} run={run} to={stackTemplateRunPath(stackId, stackTemplateId, run.run_number)} />
+          ))}
+        </DataTable>
       )}
       {runsQuery.hasNextPage && (
         <LoadMoreButton
@@ -116,7 +96,7 @@ function RunRow({ run, to }: { run: TemplateRun; to: string }) {
       <TableCell className={cellClass}>
         {/* A status that names its step can be wider than the column, so it
             wraps here rather than running into the changes beside it. */}
-        <RunStatusLabel run={run} className="whitespace-normal" data-testid={`template-run-status-${run.id}`} />
+        <StatusLabel indicator={runIndicator(run)} className="whitespace-normal" data-testid={`template-run-status-${run.id}`} />
       </TableCell>
       <TableCell className={cellClass} data-testid={`template-run-summary-${run.id}`}>
         {run.plan_summary && <PlanDiff summary={run.plan_summary} />}

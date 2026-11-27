@@ -227,14 +227,14 @@ export function useTemplateRunByNumberQuery(tenantID: string, stackTemplateID: s
 // on screen while it does, but only for the same run: another run's phases
 // would be requested under this run's id.
 /**
- * Every resource change a run's plan lists, read once its list exists. A run
- * lists at most 1,000, so the pages are read in full, a hundred at a time:
- * the view filters and counts them, which a partial list would get wrong.
+ * Every resource change a run's plan lists, read once its list exists. The
+ * whole list, because the view filters and counts the changes, which a
+ * partial list would get wrong.
  */
 export function useTemplateRunChangesQuery(tenantID: string, runID: string, state: PlanChangesState | "") {
   return useQuery({
     queryKey: queryKeys.templateRunChanges(tenantID, runID, state),
-    queryFn: () => client.listAll((cursor) => client.listTemplateRunChanges(tenantID, runID, { cursor, limit: 100 })),
+    queryFn: () => client.listTemplateRunChanges(tenantID, runID),
     enabled: runID !== "" && (state === "complete" || state === "truncated"),
     staleTime: Infinity
   });

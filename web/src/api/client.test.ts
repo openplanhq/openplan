@@ -33,7 +33,7 @@ import {
   updateStackTemplateConfig,
   changeStackTemplateRevision
 } from "./client";
-import { isRunInFlightError } from "../features/runs/runErrors";
+import { isProblem } from "./problems";
 import { problemTypes } from "./types";
 
 describe("api client", () => {
@@ -381,7 +381,7 @@ describe("api client", () => {
 
     const error = await listStacks("tenant_123").catch((caught: unknown) => caught);
 
-    expect(isRunInFlightError(error)).toBe(true);
+    expect(isProblem(error, problemTypes.runInFlight)).toBe(true);
     expect(error).toMatchObject({ status: 409, requestId: "req-2", errors: [] });
   });
 

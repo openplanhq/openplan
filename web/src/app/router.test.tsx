@@ -1,4 +1,4 @@
-import { pagesOf } from "../api/testSupport";
+import { pagesOf, stackTemplate, templateRevision } from "../api/testSupport";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, Outlet, RouterProvider } from "react-router-dom";
@@ -36,24 +36,7 @@ function stackQueryClient(
 }
 
 // The panel draws its outlet only for a template the stack has.
-const installedTemplate = {
-  id: "st_1",
-  stack_id: "stack_1",
-  key: "vpc",
-  template_id: "tmpl_src_1",
-  desired_template_revision_id: "rev_1",
-  last_applied_template_revision_id: "",
-  source_ref: "main",
-  workspace_name: "ws",
-  display_name: "",
-  config: {},
-  last_applied_run_id: "",
-  pending_plan_run_id: "",
-  plan_state: "none",
-  live_state: "never",
-  created_by: "user_123",
-  lifecycle: "active"
-};
+const installedTemplate = stackTemplate({ workspace_name: "ws" });
 
 describe("routeConfig", () => {
   afterEach(() => {
@@ -201,22 +184,7 @@ describe("routeConfig", () => {
     expect(markup).not.toContain('data-testid="stack-detail-shell"');
   });
 
-  const registeredRevision = {
-    id: "rev_1",
-    tenant_id: "tenant_123",
-    template_id: "tpl_1",
-    repo_owner: "hashicorp",
-    repo_name: "terraform-aws-vpc",
-    source_ref: "main",
-    resolved_commit_sha: "abcdef1234567890",
-    commit_subject: "",
-    root_path: ".",
-    name: "VPC",
-    description: "",
-    tags: [],
-    status: "active" as const,
-    created_at: "2026-07-19T00:00:00Z"
-  };
+  const registeredRevision = templateRevision({ template_id: "tpl_1", repo_name: "terraform-aws-vpc", name: "VPC" });
 
   // Signs in a publisher or not. The mocked SessionProvider always signs in a
   // publisher, inside the router, where no AuthContext around RouterProvider

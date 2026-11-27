@@ -1,7 +1,8 @@
-import { LoaderCircle, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import type { GrantView } from "../../api/types";
 import ErrorLine from "../../shared/ErrorLine";
 import { buttonClass } from "../../shared/buttonClass";
+import BusyIcon from "../../shared/BusyIcon";
 import { cn } from "@/lib/utils";
 import RoleSelect from "./RoleSelect";
 import type { RoleDefinition } from "./roles";
@@ -91,11 +92,7 @@ export default function GrantRow({
             onClick={() => !busy && onRemove()}
             data-remove
           >
-            {busy ? (
-              <LoaderCircle aria-hidden="true" strokeWidth={2.25} className="size-3.5 animate-spin" />
-            ) : (
-              <Trash2 aria-hidden="true" strokeWidth={2.25} className="size-3.5" />
-            )}
+            <BusyIcon busy={busy} icon={Trash2} strokeWidth={2.25} className="size-3.5" />
           </button>
         </div>
       </div>

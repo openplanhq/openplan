@@ -1,4 +1,6 @@
 import type { AttentionItem } from "../../api/types";
+import { pluralCount } from "../../shared/plural";
+import { stackTemplateRunPath } from "./templateSelection";
 
 // What needs a person, counted the ways the stacks screens show it.
 
@@ -46,10 +48,6 @@ export function attentionByStackTemplate(items: AttentionItem[]): Map<string, At
   return new Map(items.map((item) => [item.stack_template.id, item]));
 }
 
-function count(n: number, one: string, many: string): string {
-  return `${n} ${n === 1 ? one : many}`;
-}
-
 /**
  * The summary line's two halves: how many stacks need attention, and what
  * the items are. Null when nothing does, since an all-clear line is noise.
@@ -67,19 +65,19 @@ export function attentionSummary(items: AttentionItem[]): { lead: string; breakd
     total.applyFailed += counts.applyFailed;
   }
   const parts: string[] = [];
-  if (total.waiting > 0) parts.push(`${count(total.waiting, "plan", "plans")} waiting for approval`);
-  if (total.destroyFailed > 0) parts.push(`${count(total.destroyFailed, "destroy", "destroys")} failed`);
-  if (total.planFailed > 0) parts.push(`${count(total.planFailed, "plan", "plans")} failed`);
-  if (total.applyFailed > 0) parts.push(`${count(total.applyFailed, "apply", "applies")} failed`);
+  if (total.waiting > 0) parts.push(`${pluralCount(total.waiting, "plan", "plans")} waiting for approval`);
+  if (total.destroyFailed > 0) parts.push(`${pluralCount(total.destroyFailed, "destroy", "destroys")} failed`);
+  if (total.planFailed > 0) parts.push(`${pluralCount(total.planFailed, "plan", "plans")} failed`);
+  if (total.applyFailed > 0) parts.push(`${pluralCount(total.applyFailed, "apply", "applies")} failed`);
   return {
-    lead: `${count(stacks.size, "stack needs", "stacks need")} attention`,
+    lead: `${pluralCount(stacks.size, "stack needs", "stacks need")} attention`,
     breakdown: parts.join(", ")
   };
 }
 
 /** A list row's chip text for its waiting plans. */
 export function waitingChipLabel(waiting: number): string {
-  return `${count(waiting, "plan", "plans")} to approve`;
+  return `${pluralCount(waiting, "plan", "plans")} to approve`;
 }
 
 /** A list row's chip text for its failed plans, applies or destroys: the
@@ -91,16 +89,7 @@ export function runFailedChipLabel(operation: "plan" | "apply" | "destroy", fail
   return `${failed} ${operation === "apply" ? "applies" : `${operation}s`} failed`;
 }
 
-/** The word after a list row's template count; the row sets the number apart
-    and says "No templates" itself when there are none. */
-export function templateCountWord(templates: number): string {
-  return templates === 1 ? "template" : "templates";
-}
-
 /** Where an item's run is read, or null when it has none. */
 export function attentionRunPath(item: AttentionItem): string | null {
-  if (!item.run) {
-    return null;
-  }
-  return `/stacks/${item.stack.id}/templates/${item.stack_template.id}/runs/${item.run.run_number}`;
+  return item.run && stackTemplateRunPath(item.stack.id, item.stack_template.id, item.run.run_number);
 }

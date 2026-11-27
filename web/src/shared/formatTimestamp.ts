@@ -10,14 +10,15 @@ const FORMATTER = new Intl.DateTimeFormat("en-GB", {
   year: "numeric"
 });
 
-export function formatTimestamp(isoTimestamp: string): string {
+// An unparseable value yields NaN, and formatting that throws a RangeError.
+// Showing the raw string beats taking the screen down over a bad timestamp.
+function formatWith(formatter: Intl.DateTimeFormat, isoTimestamp: string): string {
   const parsed = new Date(isoTimestamp);
-  // An unparseable value yields NaN, and formatting that throws a RangeError.
-  // Showing the raw string beats taking the screen down over a bad timestamp.
-  if (Number.isNaN(parsed.getTime())) {
-    return isoTimestamp;
-  }
-  return FORMATTER.format(parsed);
+  return Number.isNaN(parsed.getTime()) ? isoTimestamp : formatter.format(parsed);
+}
+
+export function formatTimestamp(isoTimestamp: string): string {
+  return formatWith(FORMATTER, isoTimestamp);
 }
 
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
@@ -32,11 +33,7 @@ const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
 // such as runs: "21 Sep, 05:21". In the viewer's time zone; render it inside a
 // <time dateTime> so the exact instant is still there to read.
 export function formatDateTime(isoTimestamp: string): string {
-  const parsed = new Date(isoTimestamp);
-  if (Number.isNaN(parsed.getTime())) {
-    return isoTimestamp;
-  }
-  return DATE_TIME_FORMATTER.format(parsed);
+  return formatWith(DATE_TIME_FORMATTER, isoTimestamp);
 }
 
 const TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
@@ -49,11 +46,7 @@ const TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
 // The time alone, to the second, for steps under a header that already gives
 // the day: "15:02:11". In the viewer's time zone, like formatDateTime.
 export function formatTimeOfDay(isoTimestamp: string): string {
-  const parsed = new Date(isoTimestamp);
-  if (Number.isNaN(parsed.getTime())) {
-    return isoTimestamp;
-  }
-  return TIME_FORMATTER.format(parsed);
+  return formatWith(TIME_FORMATTER, isoTimestamp);
 }
 
 // How long from one instant to the next, as CI systems print a step's time:

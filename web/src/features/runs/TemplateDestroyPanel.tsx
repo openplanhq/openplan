@@ -1,20 +1,20 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { isTerminalRunStatus } from "../../api/polling";
-import { apiErrorMessage } from "../../api/problems";
+import { apiErrorMessage, isProblem } from "../../api/problems";
 import { queryKeys } from "../../api/queryKeys";
 import { cachedTemplateRuns, useStartTemplateRunMutation } from "../../api/queries";
 import type { StackTemplate } from "../../api/types";
 import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
+import { problemTypes } from "../../api/types";
+import BusyIcon from "../../shared/BusyIcon";
 import { cn } from "@/lib/utils";
 import SettingsSection from "../stacks/SettingsSection";
 import { stackTemplatePath } from "../stacks/templateSelection";
 import { destroyLockReason, useLockState } from "./lockReasons";
-import { isRunInFlightError } from "./runErrors";
 
 interface TemplateDestroyPanelProps {
   stackId: string;
@@ -53,7 +53,7 @@ export default function TemplateDestroyPanel({ stackId, stackTemplate }: Templat
       navigate(stackTemplatePath(stackId, stackTemplate.id, "runs"));
     } catch (error) {
       setErrorMessage(apiErrorMessage(error, "Request failed"));
-      if (isRunInFlightError(error)) {
+      if (isProblem(error, problemTypes.runInFlight)) {
         await queryClient.invalidateQueries({ queryKey: queryKeys.templateRuns(tenantID, stackTemplate.id) });
       }
     }
@@ -74,7 +74,7 @@ export default function TemplateDestroyPanel({ stackId, stackTemplate }: Templat
           disabled={reason !== "" || destroyBusy}
           onClick={() => void handleDestroy()}
         >
-          {destroyBusy && <Loader2 data-icon="inline-start" aria-hidden="true" className="animate-spin" />}
+          <BusyIcon busy={destroyBusy} />
           Destroy
         </button>
       }

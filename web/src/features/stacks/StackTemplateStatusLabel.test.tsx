@@ -1,29 +1,8 @@
 import { Check, Diff, Hourglass, LoaderCircle, Minus, TriangleAlert } from "lucide-react";
 import { describe, expect, it } from "vitest";
-import type { AttentionItem, StackTemplate } from "../../api/types";
+import type { AttentionItem } from "../../api/types";
 import { stackTemplateActivity, stackTemplateIndicator } from "./StackTemplateStatusLabel";
-
-function template(overrides: Partial<StackTemplate> = {}): StackTemplate {
-  return {
-    id: "tpl_1",
-    stack_id: "stack_1",
-    key: "eks",
-    template_id: "source_1",
-    desired_template_revision_id: "rev_1",
-    last_applied_template_revision_id: "",
-    source_ref: "main",
-    workspace_name: "ws_1",
-    display_name: "eks-cluster",
-    config: {},
-    last_applied_run_id: "",
-    pending_plan_run_id: "",
-    plan_state: "none",
-    live_state: "never",
-    created_by: "user_1",
-    lifecycle: "active",
-    ...overrides
-  };
-}
+import { stackTemplate } from "../../api/testSupport";
 
 const waiting = { kind: "waiting_approval", at: "2026-10-03T09:30:00Z" } as AttentionItem;
 const failedPlan = { kind: "run_failed", at: "2026-10-03T11:00:00Z", run: { operation: "plan" } } as AttentionItem;
@@ -35,20 +14,20 @@ describe("stackTemplateIndicator", () => {
   // Every state is an icon and a word; only those that need a person are
   // coloured, and only those carry weight.
   it.each([
-    ["applied", template({ live_state: "matches" }), undefined, Check, "settled", false],
-    ["changed", template({ live_state: "differs" }), undefined, Diff, "attention", false],
-    ["not applied", template(), undefined, Minus, "idle", false],
-    ["destroy failed", template({ lifecycle: "failed" }), undefined, TriangleAlert, "failed", true],
-    ["destroying", template({ lifecycle: "destroying" }), undefined, LoaderCircle, "settled", false],
-    ["waiting for approval", template({ live_state: "differs" }), waiting, Hourglass, "attention", true],
+    ["applied", stackTemplate({ live_state: "matches" }), undefined, Check, "settled", false],
+    ["changed", stackTemplate({ live_state: "differs" }), undefined, Diff, "attention", false],
+    ["not applied", stackTemplate(), undefined, Minus, "idle", false],
+    ["destroy failed", stackTemplate({ lifecycle: "failed" }), undefined, TriangleAlert, "failed", true],
+    ["destroying", stackTemplate({ lifecycle: "destroying" }), undefined, LoaderCircle, "settled", false],
+    ["waiting for approval", stackTemplate({ live_state: "differs" }), waiting, Hourglass, "attention", true],
     // An approved plan stays the template's pending plan while it applies;
     // with no waiting item, nothing waits (issue 567).
-    ["changed", template({ live_state: "differs", pending_plan_run_id: "run_14" }), undefined, Diff, "attention", false],
+    ["changed", stackTemplate({ live_state: "differs", pending_plan_run_id: "run_14" }), undefined, Diff, "attention", false],
     // The latest run failed: that, not the live state before it, is what
     // needs a person, whether or not the template was ever applied.
-    ["plan failed", template(), failedPlan, TriangleAlert, "failed", true],
-    ["apply failed", template({ live_state: "matches", last_applied_at: "2026-09-22T10:00:00Z" }), failedApply, TriangleAlert, "failed", true],
-    ["plan failed", template({ live_state: "matches" }), applyFailedPlanning, TriangleAlert, "failed", true]
+    ["plan failed", stackTemplate(), failedPlan, TriangleAlert, "failed", true],
+    ["apply failed", stackTemplate({ live_state: "matches", last_applied_at: "2026-09-22T10:00:00Z" }), failedApply, TriangleAlert, "failed", true],
+    ["plan failed", stackTemplate({ live_state: "matches" }), applyFailedPlanning, TriangleAlert, "failed", true]
   ] as const)("shows %s", (label, stackTemplate, attention, icon, tone, strong) => {
     expect(stackTemplateIndicator(stackTemplate, attention)).toEqual({ label, icon, tone, strong });
   });
@@ -56,22 +35,22 @@ describe("stackTemplateIndicator", () => {
 
 describe("stackTemplateActivity", () => {
   it("says a template was never applied", () => {
-    expect(stackTemplateActivity(template(), undefined)).toBe("Never applied");
+    expect(stackTemplateActivity(stackTemplate(), undefined)).toBe("Never applied");
   });
 
   it("says nothing of a destroy in progress", () => {
-    expect(stackTemplateActivity(template({ lifecycle: "destroying", last_applied_at: "2026-09-22T10:00:00Z" }), undefined)).toBe("");
+    expect(stackTemplateActivity(stackTemplate({ lifecycle: "destroying", last_applied_at: "2026-09-22T10:00:00Z" }), undefined)).toBe("");
   });
 
   it("doesn't call a plan that is applying planned", () => {
-    expect(stackTemplateActivity(template({ pending_plan_run_id: "run_14", pending_plan_at: "2026-10-03T09:30:00Z" }), undefined)).toBe("Never applied");
+    expect(stackTemplateActivity(stackTemplate({ pending_plan_run_id: "run_14", pending_plan_at: "2026-10-03T09:30:00Z" }), undefined)).toBe("Never applied");
   });
 
   it("dates a failed plan or apply from when it stopped", () => {
-    expect(stackTemplateActivity(template({ last_applied_at: "2026-09-22T10:00:00Z" }), failedApply)).toMatch(/^Failed 3 Oct, \d\d:\d\d$/);
+    expect(stackTemplateActivity(stackTemplate({ last_applied_at: "2026-09-22T10:00:00Z" }), failedApply)).toMatch(/^Failed 3 Oct, \d\d:\d\d$/);
   });
 
   it("dates a waiting plan from when it finished", () => {
-    expect(stackTemplateActivity(template(), waiting)).toMatch(/^Planned 3 Oct, \d\d:\d\d$/);
+    expect(stackTemplateActivity(stackTemplate(), waiting)).toMatch(/^Planned 3 Oct, \d\d:\d\d$/);
   });
 });

@@ -1,7 +1,9 @@
-import { Loader2, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import type { TemplateRun } from "../../api/types";
 import RequireCapability from "../../auth/RequireCapability";
 import { buttonClass } from "../../shared/buttonClass";
+import { pluralCount } from "../../shared/plural";
+import BusyIcon from "../../shared/BusyIcon";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -32,14 +34,13 @@ interface WaitingRunActionsProps {
 // button is the action's name alone; the count is the dialog's, where it is
 // read as a number of resources (issue 569).
 export default function WaitingRunActions({ run, stackId, approveBusy, discardBusy, onApprove, onDiscard }: WaitingRunActionsProps) {
-  const count = run.plan_summary?.destroy ?? 0;
-  const title = `Destroy ${count} ${count === 1 ? "resource" : "resources"}`;
+  const title = `Destroy ${pluralCount(run.plan_summary?.destroy ?? 0, "resource", "resources")}`;
 
   return (
     <>
       <RequireCapability capability="can_operate" stackId={stackId}>
         <button type="button" className={cn(buttonClass("outline"), "pointer-coarse:h-11")} disabled={discardBusy} onClick={onDiscard}>
-          {discardBusy && <Loader2 data-icon="inline-start" aria-hidden="true" className="animate-spin" />}
+          <BusyIcon busy={discardBusy} />
           Discard
         </button>
       </RequireCapability>
@@ -49,7 +50,7 @@ export default function WaitingRunActions({ run, stackId, approveBusy, discardBu
             <AlertDialogTrigger
               render={<Button variant="destructive" className="pointer-coarse:h-11" disabled={approveBusy} title={title} />}
             >
-              <Trash2 className="size-4" />
+              <Trash2 data-icon="inline-start" aria-hidden="true" />
               Destroy
             </AlertDialogTrigger>
             <AlertDialogContent>
@@ -67,7 +68,7 @@ export default function WaitingRunActions({ run, stackId, approveBusy, discardBu
                   render={<Button variant="destructive" className="pointer-coarse:h-11" disabled={approveBusy} />}
                   onClick={onApprove}
                 >
-                  {approveBusy ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                  <BusyIcon busy={approveBusy} icon={Trash2} />
                   Confirm destroy
                 </AlertDialogClose>
               </div>
@@ -75,7 +76,7 @@ export default function WaitingRunActions({ run, stackId, approveBusy, discardBu
           </AlertDialog>
         ) : (
           <button type="button" className={cn(buttonClass("primary"), "pointer-coarse:h-11")} disabled={approveBusy} onClick={onApprove}>
-            {approveBusy && <Loader2 data-icon="inline-start" aria-hidden="true" className="animate-spin" />}
+            <BusyIcon busy={approveBusy} />
             Approve
           </button>
         )}

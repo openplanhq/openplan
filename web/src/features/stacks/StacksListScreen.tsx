@@ -1,4 +1,4 @@
-import { ArrowRight, Hourglass, Layers, Loader2, Plus, TriangleAlert } from "lucide-react";
+import { ArrowRight, Hourglass, Layers, Plus } from "lucide-react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAttentionQuery, useStacksQuery } from "../../api/queries";
@@ -7,19 +7,13 @@ import { useAuth } from "../../auth/AuthContext";
 import RequireCapability from "../../auth/RequireCapability";
 import { useTenantID } from "../../auth/useTenantID";
 import PageHeader from "../../shared/PageHeader";
+import { pluralWord } from "../../shared/plural";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
-import {
-  attentionByStack,
-  attentionByStackTemplate,
-  attentionSummary,
-  runFailedChipLabel,
-  templateCountWord,
-  waitingChipLabel
-} from "./attention";
+import { attentionByStack, attentionByStackTemplate, attentionSummary } from "./attention";
 import type { StackAttention } from "./attention";
+import AttentionChips from "./AttentionChips";
 import StackPreview from "./StackPreview";
 import { buttonClass } from "../../shared/buttonClass";
-import Chip from "../../shared/Chip";
 import { listItemClass } from "../../shared/listItemClass";
 import SearchField from "../../shared/SearchField";
 import LoadMoreButton from "../../shared/LoadMoreButton";
@@ -27,6 +21,7 @@ import { useDebounce } from "../../shared/useDebounce";
 import EmptyState from "../../shared/EmptyState";
 import LoadError from "../../shared/LoadError";
 import Separator from "../../shared/Separator";
+import LoadingLine from "../../shared/LoadingLine";
 import { cn } from "@/lib/utils";
 
 // /stacks: every stack the person can view, with the one selected shown beside
@@ -90,9 +85,7 @@ export default function StacksListScreen() {
     return (
       <section>
         {header()}
-        <p className="flex items-center gap-2 text-meta text-muted-foreground" data-testid="stacks-list-loading">
-          <Loader2 aria-hidden="true" className="size-4 animate-spin" /> Loading stacks…
-        </p>
+        <LoadingLine testId="stacks-list-loading">Loading stacks…</LoadingLine>
       </section>
     );
   }
@@ -254,30 +247,7 @@ function StackRow({ stack, selected, attention }: { stack: StackListItem; select
         </span>
         <TemplateCount templates={stack.template_count} selected={selected} />
       </span>
-      {attention && (
-        <span className="flex shrink-0 flex-col items-end gap-1">
-          {attention.waiting > 0 && (
-            <Chip tone="warning" icon={Hourglass}>
-              {waitingChipLabel(attention.waiting)}
-            </Chip>
-          )}
-          {attention.destroyFailed > 0 && (
-            <Chip tone="destructive" icon={TriangleAlert}>
-              {runFailedChipLabel("destroy", attention.destroyFailed)}
-            </Chip>
-          )}
-          {attention.planFailed > 0 && (
-            <Chip tone="destructive" icon={TriangleAlert}>
-              {runFailedChipLabel("plan", attention.planFailed)}
-            </Chip>
-          )}
-          {attention.applyFailed > 0 && (
-            <Chip tone="destructive" icon={TriangleAlert}>
-              {runFailedChipLabel("apply", attention.applyFailed)}
-            </Chip>
-          )}
-        </span>
-      )}
+      {attention && <AttentionChips attention={attention} />}
     </Link>
   );
 }
@@ -297,7 +267,7 @@ function TemplateCount({ templates, selected }: { templates: number; selected: b
         "No templates"
       ) : (
         <span>
-          <span className="font-medium text-foreground">{templates}</span> {templateCountWord(templates)}
+          <span className="font-medium text-foreground">{templates}</span> {pluralWord(templates, "template", "templates")}
         </span>
       )}
     </span>

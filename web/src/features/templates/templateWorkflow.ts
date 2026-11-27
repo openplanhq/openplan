@@ -1,4 +1,5 @@
 import type { Template, TemplateRevision } from "../../api/types";
+import { rootPathOf } from "./templateLinks";
 
 /**
  * The templates Add template offers: those a sync has produced a revision
@@ -176,15 +177,7 @@ function scoreWord(word: string, text: string, fuzzy: boolean): { score: number;
  * the repository. A root path of "." names nothing and is skipped.
  */
 export function templateDisplayName(named: Pick<Template, "name" | "root_path" | "repo_name">): string {
-  const name = named.name.trim();
-  if (name !== "") {
-    return name;
-  }
-  const rootPath = named.root_path.trim();
-  if (rootPath !== "" && rootPath !== ".") {
-    return rootPath;
-  }
-  return named.repo_name;
+  return named.name.trim() || rootPathOf(named.root_path) || named.repo_name;
 }
 
 /**
@@ -192,11 +185,8 @@ export function templateDisplayName(named: Pick<Template, "name" | "root_path" |
  * repository root, or a path already serving as the template's name.
  */
 export function templateRootPathLabel(rootPath: string, name: string): string {
-  const trimmed = rootPath.trim();
-  if (trimmed === "" || trimmed === "." || trimmed === name) {
-    return "";
-  }
-  return trimmed;
+  const path = rootPathOf(rootPath);
+  return path === null || path === name ? "" : path;
 }
 
 /**
@@ -204,12 +194,7 @@ export function templateRootPathLabel(rootPath: string, name: string): string {
  * or the repository for a template that sits at the repository's root.
  */
 export function revisionSourceLabel(revision: Pick<TemplateRevision, "root_path" | "repo_owner" | "repo_name">): string {
-  const rootPath = revision.root_path.trim();
-  return rootPath === "" || rootPath === "." ? `${revision.repo_owner}/${revision.repo_name}` : rootPath;
-}
-
-export function revisionCountLabel(count: number): string {
-  return count === 1 ? "1 revision" : `${count} revisions`;
+  return rootPathOf(revision.root_path) ?? `${revision.repo_owner}/${revision.repo_name}`;
 }
 
 export function shortCommitSHA(commitSHA: string): string {

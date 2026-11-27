@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { pagesOf } from "../../api/testSupport";
+import { pagesOf, stackTemplate } from "../../api/testSupport";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createMemoryRouter, redirect, RouterProvider } from "react-router-dom";
@@ -20,27 +20,19 @@ import { authValue } from "../../auth/testSupport";
 const TENANT = "tenant_123";
 const allAllowed: StackCapabilities = { can_view: true, can_operate: true, can_approve: true, can_manage_access: true };
 
+// Applied at v1.0.0 and named by its id, which every row and heading shows.
 function template(id: string, overrides: Partial<StackTemplate> = {}): StackTemplate {
-  return {
+  return stackTemplate({
     id,
-    stack_id: "stack_1",
-    key: id,
     template_id: "source_1",
-    desired_template_revision_id: "rev_1",
     last_applied_template_revision_id: "rev_1",
     source_ref: "v1.0.0",
     workspace_name: id,
     display_name: id,
-    config: {},
-    last_applied_run_id: "",
     last_applied_at: "2026-09-22T10:00:00Z",
-    pending_plan_run_id: "",
-    plan_state: "none",
     live_state: "matches",
-    created_by: "user_1",
-    lifecycle: "active",
     ...overrides
-  };
+  });
 }
 
 const network = template("network");

@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { LoaderCircle, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import type { GrantView, UserProfile } from "../../api/types";
 import { apiErrorMessage } from "../../api/problems";
 import ErrorLine from "../../shared/ErrorLine";
@@ -8,6 +8,8 @@ import SearchField from "../../shared/SearchField";
 import { buttonClass } from "../../shared/buttonClass";
 import EmptyState from "../../shared/EmptyState";
 import LoadError from "../../shared/LoadError";
+import LoadingLine from "../../shared/LoadingLine";
+import BusyIcon from "../../shared/BusyIcon";
 import { cn } from "@/lib/utils";
 import GrantRow from "./GrantRow";
 import PersonPicker from "./PersonPicker";
@@ -273,7 +275,7 @@ export default function AccessList({
             disabled={!ready || !picked || granting}
             onClick={grantPicked}
           >
-            {granting ? <LoaderCircle data-icon="inline-start" aria-hidden="true" className="animate-spin" /> : <Plus data-icon="inline-start" aria-hidden="true" />}
+            <BusyIcon busy={granting} icon={Plus} />
             Grant access
           </button>
         </div>
@@ -287,10 +289,7 @@ export default function AccessList({
       )}
 
       {status === "pending" && (
-        <p className="flex items-center gap-2 px-5 py-4 text-meta text-muted-foreground" data-testid="access-loading">
-          <LoaderCircle aria-hidden="true" strokeWidth={2.25} className="size-3.5 animate-spin" />
-          Loading who has access…
-        </p>
+        <LoadingLine className="px-5 py-4" testId="access-loading">Loading who has access…</LoadingLine>
       )}
 
       {status === "error" && (

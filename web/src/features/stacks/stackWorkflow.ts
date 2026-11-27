@@ -1,5 +1,4 @@
-import type { PlanSummary, Stack, StackTemplate, TemplateRevision, TemplateVariable } from "../../api/types";
-import type { StatusTone } from "../../shared/statusTone";
+import type { Stack, StackTemplate, TemplateRevision, TemplateVariable } from "../../api/types";
 
 // No ref suffix: source_ref is part of a template's identity, so it read
 // the same on every install of that template and separated nothing. The ref
@@ -153,14 +152,8 @@ export function upsertStackTemplate(stackTemplates: StackTemplate[], stackTempla
   return [stackTemplate, ...stackTemplates];
 }
 
-// planSummaryLabel reads a saved plan's counts the way tofu's summary line
-// does, compressed: "+3 ~1 -0" is three to add, one to change, none to destroy.
-export function planSummaryLabel(summary: PlanSummary | null): string {
-  if (!summary) {
-    return "";
-  }
-  return `+${summary.add} ~${summary.change} -${summary.destroy}`;
-}
+// The five looks a template's state takes; StackTemplateStatusLabel draws each.
+export type StatusTone = "settled" | "progress" | "waiting" | "failed" | "canceled";
 
 export interface StackTemplateStatus {
   label: string;
@@ -178,10 +171,6 @@ export interface StackTemplateStatus {
 // lifecycle is read first because a template being torn down keeps the
 // last_applied_* pointers of the apply that put it live, so live_state would
 // report a destroying template as applied.
-//
-// The tone is returned rather than derived through statusTone(): that helper
-// classifies API status strings, and would read "changed" and "destroying" as
-// settled.
 export function stackTemplateStatus(stackTemplate: StackTemplate): StackTemplateStatus {
   if (stackTemplate.lifecycle === "destroying") {
     return {

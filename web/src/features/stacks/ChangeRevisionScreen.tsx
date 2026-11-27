@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Loader2, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTemplateRevisionVariablesQuery, useTemplateRevisionsQuery, useChangeStackTemplateRevisionMutation } from "../../api/queries";
 import { useStackCapabilities } from "../../auth/useStackCapabilities";
@@ -12,7 +12,6 @@ import { lifecycleLockReason } from "../runs/lockReasons";
 import { formatTimestamp } from "../../shared/formatTimestamp";
 import RevisionSubject from "../templates/RevisionSubject";
 import { activeRevisions, shortCommitSHA } from "../templates/templateWorkflow";
-import PanelTrail from "./PanelTrail";
 import { useStackTemplate } from "./stackTemplateContext";
 import {
   configFromVariableValues,
@@ -26,6 +25,9 @@ import { apiErrorMessage, fieldsShown } from "../../api/problems";
 import { useFieldErrors } from "../../shared/useFieldErrors";
 import LoadError from "../../shared/LoadError";
 import Separator from "../../shared/Separator";
+import LoadingLine from "../../shared/LoadingLine";
+import BusyIcon from "../../shared/BusyIcon";
+import Breadcrumb from "../../shared/Breadcrumb";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -85,7 +87,7 @@ export default function ChangeRevisionScreen() {
   // here are never wiped out by a background sign-in redirect.
   const hasUnsavedValues = Object.keys(editedValues).length > 0;
   const settingsPath = stackTemplatePath(stackId, stackTemplate.id, "settings");
-  const trail = <PanelTrail name="Change revision" parent={{ label: "Settings", to: settingsPath }} current="Change revision" />;
+  const trail = <Breadcrumb label="Change revision" crumbs={[{ label: "Settings", to: settingsPath }]} current="Change revision" />;
 
   async function handleChangeRevision() {
     if (!targetRevision || targetVariablesRefreshing) {
@@ -126,9 +128,7 @@ export default function ChangeRevisionScreen() {
     return (
       <section className="flex min-w-0 flex-col gap-5" data-testid="change-revision-loading">
         {trail}
-        <p className="flex items-center gap-2 text-meta text-muted-foreground">
-          <Loader2 aria-hidden="true" className="size-3.5 animate-spin" /> Loading revisions…
-        </p>
+        <LoadingLine>Loading revisions…</LoadingLine>
       </section>
     );
   }
@@ -237,9 +237,7 @@ export default function ChangeRevisionScreen() {
               // Inline, not the loading view: a new target is a small change to
               // a drawn view. It replaces only what would be wrong while the
               // previous target's data is still served: the notes and fields.
-              <p className="flex items-center gap-2 text-meta text-muted-foreground" data-testid="change-revision-target-variables-loading">
-                <Loader2 aria-hidden="true" className="size-3.5 animate-spin" /> Loading variables for the selected revision…
-              </p>
+              <LoadingLine testId="change-revision-target-variables-loading">Loading variables for the selected revision…</LoadingLine>
             ) : (
               <>
                 {/* What the change does to the config, stated outright: new
@@ -287,11 +285,7 @@ export default function ChangeRevisionScreen() {
               disabled={targetVariablesRefreshing || changeStackTemplateRevisionMutation.isPending}
               onClick={() => void handleChangeRevision()}
             >
-              {changeStackTemplateRevisionMutation.isPending ? (
-                <Loader2 data-icon="inline-start" aria-hidden="true" className="animate-spin" />
-              ) : (
-                <RefreshCw data-icon="inline-start" aria-hidden="true" />
-              )}
+              <BusyIcon busy={changeStackTemplateRevisionMutation.isPending} icon={RefreshCw} />
               Change revision
             </button>
             <Link to={settingsPath} className={cn(buttonClass("outline"), "pointer-coarse:h-11")}>

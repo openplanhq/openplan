@@ -1,7 +1,7 @@
 import { useId, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { Loader2, Trash2 } from "lucide-react";
-import { apiErrorMessage, fieldErrors } from "../../api/problems";
+import { Trash2 } from "lucide-react";
+import { apiErrorMessage } from "../../api/problems";
 import type { CredentialMetadata, CredentialRequest } from "../../api/types";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
@@ -10,6 +10,9 @@ import ValueTextarea from "../../shared/ValueTextarea";
 import { fieldLabelClass, inputClass } from "../../shared/fieldClass";
 import { formatTimestamp } from "../../shared/formatTimestamp";
 import EmptyState from "../../shared/EmptyState";
+import { pluralWord } from "../../shared/plural";
+import { useFieldErrors } from "../../shared/useFieldErrors";
+import LoadingLine from "../../shared/LoadingLine";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -50,7 +53,7 @@ export default function CredentialsPanel({ kind, emptyTitle, emptyDescription, c
   const [error, setError] = useState("");
   // The fields the server refused. The row keeps its one line of error, so
   // a refused field is marked invalid and points at that line.
-  const [invalid, setInvalid] = useState<Record<string, string>>({});
+  const { errors: invalid, show: showInvalid, clear: clearInvalid } = useFieldErrors("#/");
   const nameId = useId();
   const valueId = useId();
   const errorId = useId();
@@ -63,7 +66,7 @@ export default function CredentialsPanel({ kind, emptyTitle, emptyDescription, c
       return;
     }
     setError("");
-    setInvalid({});
+    clearInvalid();
     const sentName = name;
     const sentValue = value;
     try {
@@ -74,7 +77,7 @@ export default function CredentialsPanel({ kind, emptyTitle, emptyDescription, c
       setValue((current) => (current === sentValue ? "" : current));
       setValueRevealed(false);
     } catch (nextError) {
-      setInvalid(fieldErrors(nextError, "#/"));
+      showInvalid(nextError);
       setError(apiErrorMessage(nextError, "Request failed"));
     }
   }
@@ -82,7 +85,7 @@ export default function CredentialsPanel({ kind, emptyTitle, emptyDescription, c
   /** Deletes one credential, and says why in the same line when that fails. */
   async function remove(id: string) {
     setError("");
-    setInvalid({});
+    clearInvalid();
     try {
       await onDelete(id);
     } catch (nextError) {
@@ -129,9 +132,7 @@ export default function CredentialsPanel({ kind, emptyTitle, emptyDescription, c
           delete, and the add button fills it. */}
       <div className="grid grid-cols-environment gap-x-2 gap-y-5">
         {loading ? (
-          <p className="col-span-3 flex items-center gap-2 text-meta text-muted-foreground">
-            <Loader2 aria-hidden="true" className="size-3.5 animate-spin" /> Loading environment…
-          </p>
+          <LoadingLine className="col-span-3">Loading environment…</LoadingLine>
         ) : credentials.length === 0 ? (
           <EmptyState title={emptyTitle} description={emptyDescription} short className="col-span-3" />
         ) : (
@@ -278,7 +279,7 @@ function ListedValue({ value }: { value: string }) {
       </span>
       {more > 0 && (
         <span className="text-caption text-muted-foreground">
-          {more} more {more === 1 ? "line" : "lines"}
+          {more} more {pluralWord(more, "line", "lines")}
         </span>
       )}
     </span>

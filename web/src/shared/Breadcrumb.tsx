@@ -8,76 +8,50 @@ import {
   BreadcrumbList,
   BreadcrumbSeparator
 } from "@/components/ui/breadcrumb";
-import { cn } from "@/lib/utils";
 
 export type Crumb = {
   label: ReactNode;
-  /** Omitted on the last crumb, which is the current page. */
-  to?: string;
+  to: string;
   testId?: string;
 };
 
-// The page's title bar. The last crumb is the page's h1, so every screen keeps
-// exactly one top-level heading even though nothing on screen looks like one.
-// The separators are aria-hidden, so assistive tech counts only real crumbs.
-//
-// The last crumb is the page's h1 and Preflight leaves it with the body's type,
-// so it sets its own family, size, weight and tracking.
+// openplan UI's Breadcrumb: the pages above this one, each a link, then this
+// one as plain text. label names the navigation: "Breadcrumb" above a page's
+// title, or the view's own name for a view nested in a tab ("Runs / Run #14").
 //
 // Any crumb can hold a long, user-chosen name. wrap-anywhere, unlike shadcn's
 // wrap-break-word, lets a crumb shrink below its longest word.
 export default function Breadcrumb({
-  items,
-  detail,
+  crumbs,
+  current,
+  label = "Breadcrumb",
   className
 }: {
-  items: Crumb[];
-  detail?: ReactNode;
-  /** Replaces the page spacing below it; header rows pass "mb-0". */
+  crumbs: Crumb[];
+  current: ReactNode;
+  label?: string;
   className?: string;
 }) {
-  const current = items[items.length - 1];
-  const trail = items.slice(0, -1);
-
   return (
-    <BreadcrumbNav
-      aria-label="Breadcrumb"
-      className={cn("mb-6 flex min-h-9 min-w-0 flex-wrap items-center gap-x-3 gap-y-1", className)}
-    >
-      <BreadcrumbList className="wrap-anywhere">
-        {trail.map((crumb, index) => (
+    <BreadcrumbNav aria-label={label} className={className}>
+      <BreadcrumbList className="gap-1.5 text-body wrap-anywhere sm:gap-1.5">
+        {crumbs.map((crumb, index) => (
           <Fragment key={index}>
             <BreadcrumbItem>
-              {crumb.to ? (
-                <BreadcrumbLink
-                  render={<Link to={crumb.to} />}
-                  className="text-muted-foreground"
-                  data-testid={crumb.testId}
-                >
-                  {crumb.label}
-                </BreadcrumbLink>
-              ) : (
-                <span data-testid={crumb.testId}>{crumb.label}</span>
-              )}
+              <BreadcrumbLink render={<Link to={crumb.to} />} className="text-muted-foreground hover:underline" data-testid={crumb.testId}>
+                {crumb.label}
+              </BreadcrumbLink>
             </BreadcrumbItem>
-            <BreadcrumbSeparator />
+            <BreadcrumbSeparator className="text-separator">/</BreadcrumbSeparator>
           </Fragment>
         ))}
+        {/* Plain text: shadcn's BreadcrumbPage claims role="link". */}
         <BreadcrumbItem>
-          <h1
-            aria-current="page"
-            data-testid={current.testId}
-            className="font-sans text-body font-normal tracking-normal text-foreground"
-          >
-            {current.label}
-          </h1>
+          <span aria-current="page" className="text-foreground">
+            {current}
+          </span>
         </BreadcrumbItem>
       </BreadcrumbList>
-      {detail && (
-        <span data-slot="breadcrumb-detail" className="font-mono text-caption text-muted-foreground wrap-anywhere">
-          {detail}
-        </span>
-      )}
     </BreadcrumbNav>
   );
 }

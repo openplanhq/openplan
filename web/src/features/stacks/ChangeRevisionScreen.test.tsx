@@ -7,32 +7,22 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import ChangeRevisionScreen from "./ChangeRevisionScreen";
 import { StackTemplateContext } from "./stackTemplateContext";
 import { queryKeys } from "../../api/queryKeys";
-import type { StackTemplate, StackView, TemplateRevision, TemplateVariable } from "../../api/types";
+import type { StackTemplate, StackView } from "../../api/types";
 import { AuthContext } from "../../auth/AuthContext";
 import { seedTemplates } from "../templates/testSupport";
 import { authValue } from "../../auth/testSupport";
-import { testQueryClient } from "../../api/testSupport";
+import { stackTemplate, templateRevision, templateVariable, testQueryClient } from "../../api/testSupport";
 
-function stackTemplate(overrides: Partial<StackTemplate> = {}): StackTemplate {
-  return {
-    id: "st_1",
-    stack_id: "stack_1",
-    key: "vpc",
-    template_id: "tmpl_src_1",
+// Applied at rev_current, with a value for legacy_flag, which rev_next drops.
+function installedTemplate(overrides: Partial<StackTemplate> = {}): StackTemplate {
+  return stackTemplate({
     desired_template_revision_id: "rev_current",
     last_applied_template_revision_id: "rev_current",
-    source_ref: "main",
     workspace_name: "ws-payments",
-    display_name: "",
     config: { region: "us-east-1", legacy_flag: "yes" },
     last_applied_run_id: "run_9",
-    pending_plan_run_id: "",
-    plan_state: "none",
-    live_state: "never",
-    created_by: "user_123",
-    lifecycle: "active",
     ...overrides
-  };
+  });
 }
 
 function stackView(templates: StackTemplate[]): StackView {
@@ -53,40 +43,6 @@ function stackView(templates: StackTemplate[]): StackView {
   };
 }
 
-function templateRevision(overrides: Partial<TemplateRevision> = {}): TemplateRevision {
-  return {
-    id: "rev_current",
-    tenant_id: "tenant_123",
-    template_id: "tmpl_src_1",
-    repo_owner: "hashicorp",
-    repo_name: "vpc",
-    source_ref: "main",
-    resolved_commit_sha: "abcdef1234567890",
-    commit_subject: "",
-    root_path: ".",
-    name: "vpc",
-    description: "",
-    tags: [],
-    status: "active",
-    created_at: "2026-07-19T00:00:00Z",
-    ...overrides
-  };
-}
-
-function variable(overrides: Partial<TemplateVariable> = {}): TemplateVariable {
-  return {
-    template_revision_id: "rev_current",
-    name: "region",
-    type_expression: "string",
-    description: "",
-    required: true,
-    has_default: false,
-    sensitive: false,
-    has_validation: false,
-    ...overrides
-  };
-}
-
 /** The target picker, and the label of the revision it shows. */
 const targetSelect = () => screen.getByRole("combobox", { name: "Revision" });
 const shownTarget = () => targetSelect().querySelector('[data-slot="select-value"]')?.textContent ?? "";
@@ -101,18 +57,18 @@ async function targetOptions(): Promise<string[]> {
 
 /** Installed rev_current has region + legacy_flag; rev_next drops legacy_flag and adds new_var. */
 function seedChangeable(queryClient: QueryClient) {
-  queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([stackTemplate()]));
+  queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([installedTemplate()]));
   seedTemplates(queryClient, [
     templateRevision({ id: "rev_next", source_ref: "main", resolved_commit_sha: "9f21abc0000000", commit_subject: "Bump the EKS module to 20.8" }),
     templateRevision({ id: "rev_current" })
   ]);
   queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_current"), [
-    variable({ name: "region" }),
-    variable({ name: "legacy_flag" })
+    templateVariable({ name: "region" }),
+    templateVariable({ name: "legacy_flag" })
   ]);
   queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_next"), [
-    variable({ name: "region", template_revision_id: "rev_next" }),
-    variable({ name: "new_var", template_revision_id: "rev_next" })
+    templateVariable({ name: "region", template_revision_id: "rev_next" }),
+    templateVariable({ name: "new_var", template_revision_id: "rev_next" })
   ]);
 }
 
@@ -123,7 +79,7 @@ function LocationProbe() {
 
 // The screen renders inside the template's panel, which provides the template
 // through context; the panel's own tests cover a template the stack lacks.
-function renderScreen(queryClient: QueryClient, template: StackTemplate = stackTemplate()) {
+function renderScreen(queryClient: QueryClient, template: StackTemplate = installedTemplate()) {
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthContext.Provider value={authValue()}>
@@ -178,14 +134,14 @@ describe("ChangeRevisionScreen", () => {
   // never merely the first option, which is only the newest other revision.
   it("marks the newest active revision latest, and no other", async () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([stackTemplate()]));
+    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([installedTemplate()]));
     seedTemplates(queryClient, [
       templateRevision({ id: "rev_newest", resolved_commit_sha: "1111111000000000" }),
       templateRevision({ id: "rev_middle", resolved_commit_sha: "2222222000000000" }),
       templateRevision({ id: "rev_current" })
     ]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_current"), [variable()]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_newest"), [variable({ template_revision_id: "rev_newest" })]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_current"), [templateVariable()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_newest"), [templateVariable({ template_revision_id: "rev_newest" })]);
 
     renderScreen(queryClient);
 
@@ -196,10 +152,10 @@ describe("ChangeRevisionScreen", () => {
 
   it("marks no option latest when the stack already runs the newest revision", async () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([stackTemplate()]));
+    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([installedTemplate()]));
     seedTemplates(queryClient, [templateRevision({ id: "rev_current" }), templateRevision({ id: "rev_older", resolved_commit_sha: "0000000000000000" })]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_current"), [variable()]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_older"), [variable({ template_revision_id: "rev_older" })]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_current"), [templateVariable()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_older"), [templateVariable({ template_revision_id: "rev_older" })]);
 
     renderScreen(queryClient);
 
@@ -210,10 +166,10 @@ describe("ChangeRevisionScreen", () => {
 
   it("shows the SHA alone for an option with no subject", async () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([stackTemplate()]));
+    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([installedTemplate()]));
     seedTemplates(queryClient, [templateRevision({ id: "rev_older", resolved_commit_sha: "0000000000000000" }), templateRevision({ id: "rev_current" })]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_current"), [variable()]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_older"), [variable({ template_revision_id: "rev_older" })]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_current"), [templateVariable()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_older"), [templateVariable({ template_revision_id: "rev_older" })]);
 
     renderScreen(queryClient);
 
@@ -229,7 +185,7 @@ describe("ChangeRevisionScreen", () => {
 
   it("allows selecting an active same-source revision even when its commit is older", async () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([stackTemplate()]));
+    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([installedTemplate()]));
     seedTemplates(queryClient, [
       templateRevision({
         id: "rev_older",
@@ -238,8 +194,8 @@ describe("ChangeRevisionScreen", () => {
       }),
       templateRevision({ id: "rev_current" })
     ]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_current"), [variable()]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_older"), [variable({ template_revision_id: "rev_older" })]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_current"), [templateVariable()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_older"), [templateVariable({ template_revision_id: "rev_older" })]);
 
     renderScreen(queryClient);
 
@@ -308,19 +264,19 @@ describe("ChangeRevisionScreen", () => {
   // it. The screen says so, like a dropped variable, and names the secret.
   it("says a value that became sensitive won't carry, and doesn't send it", async () => {
     const queryClient = testQueryClient();
-    const installed = stackTemplate({ config: { region: "us-east-1", password: "hunter2" } });
+    const installed = installedTemplate({ config: { region: "us-east-1", password: "hunter2" } });
     queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([installed]));
     seedTemplates(queryClient, [
       templateRevision({ id: "rev_next", source_ref: "main", resolved_commit_sha: "9f21abc0000000" }),
       templateRevision({ id: "rev_current" })
     ]);
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_current"), [
-      variable({ name: "region" }),
-      variable({ name: "password" })
+      templateVariable({ name: "region" }),
+      templateVariable({ name: "password" })
     ]);
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_next"), [
-      variable({ name: "region", template_revision_id: "rev_next" }),
-      variable({ name: "password", template_revision_id: "rev_next", sensitive: true })
+      templateVariable({ name: "region", template_revision_id: "rev_next" }),
+      templateVariable({ name: "password", template_revision_id: "rev_next", sensitive: true })
     ]);
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ id: "st_1" }), { status: 200, headers: { "content-type": "application/json" } })
@@ -338,14 +294,14 @@ describe("ChangeRevisionScreen", () => {
 
   it("renders the loading state instead of a false diff while the target revision's variables have not loaded", () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([stackTemplate()]));
+    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([installedTemplate()]));
     seedTemplates(queryClient, [
       templateRevision({ id: "rev_next", source_ref: "main", resolved_commit_sha: "9f21abc0000000" }),
       templateRevision({ id: "rev_current" })
     ]);
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_current"), [
-      variable({ name: "region" }),
-      variable({ name: "legacy_flag" })
+      templateVariable({ name: "region" }),
+      templateVariable({ name: "legacy_flag" })
     ]);
     // rev_next's variables are deliberately left unseeded, and fetch never
     // resolves — on arrival this is the default first frame, not an edge
@@ -362,19 +318,19 @@ describe("ChangeRevisionScreen", () => {
 
   it("suppresses the previous target's fields and diff notes while switching to a target whose variables have not loaded", async () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([stackTemplate()]));
+    queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([installedTemplate()]));
     seedTemplates(queryClient, [
       templateRevision({ id: "rev_next", source_ref: "main", resolved_commit_sha: "9f21abc0000000" }),
       templateRevision({ id: "rev_next_2", source_ref: "main", resolved_commit_sha: "aa00bb1111111" }),
       templateRevision({ id: "rev_current" })
     ]);
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_current"), [
-      variable({ name: "region" }),
-      variable({ name: "legacy_flag" })
+      templateVariable({ name: "region" }),
+      templateVariable({ name: "legacy_flag" })
     ]);
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_next"), [
-      variable({ name: "region", template_revision_id: "rev_next" }),
-      variable({ name: "new_var", template_revision_id: "rev_next" })
+      templateVariable({ name: "region", template_revision_id: "rev_next" }),
+      templateVariable({ name: "new_var", template_revision_id: "rev_next" })
     ]);
     // rev_next_2's variables are deliberately left unseeded.
 
@@ -413,7 +369,7 @@ describe("ChangeRevisionScreen", () => {
       templateRevision({ id: "rev_current" })
     ]);
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_next_2"), [
-      variable({ name: "region", template_revision_id: "rev_next_2" })
+      templateVariable({ name: "region", template_revision_id: "rev_next_2" })
     ]);
 
     renderScreen(queryClient);
@@ -434,7 +390,7 @@ describe("ChangeRevisionScreen", () => {
     const queryClient = testQueryClient();
     seedChangeable(queryClient);
 
-    renderScreen(queryClient, stackTemplate({ lifecycle: "destroying" }));
+    renderScreen(queryClient, installedTemplate({ lifecycle: "destroying" }));
 
     expect(screen.getByTestId("change-revision-locked").textContent).toContain("Destroy in progress.");
     expect(screen.queryByRole("button", { name: /Change revision/ })).toBeNull();
@@ -446,7 +402,7 @@ describe("ChangeRevisionScreen", () => {
     const queryClient = testQueryClient();
     seedChangeable(queryClient);
 
-    renderScreen(queryClient, stackTemplate({ lifecycle: "failed" }));
+    renderScreen(queryClient, installedTemplate({ lifecycle: "failed" }));
 
     expect(screen.getByTestId("change-revision-locked").textContent).toContain("A template whose destroy failed cannot change revision.");
     expect(screen.queryByRole("button", { name: /Change revision/ })).toBeNull();
@@ -518,8 +474,8 @@ describe("ChangeRevisionScreen", () => {
     const queryClient = testQueryClient();
     seedChangeable(queryClient);
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_next"), [
-      variable({ name: "region", template_revision_id: "rev_next" }),
-      variable({ name: "new_var", template_revision_id: "rev_next", type_expression: "map(string)" })
+      templateVariable({ name: "region", template_revision_id: "rev_next" }),
+      templateVariable({ name: "new_var", template_revision_id: "rev_next", type_expression: "map(string)" })
     ]);
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ id: "st_1" }), { status: 200, headers: { "content-type": "application/json" } })

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { FileSearch, Loader2, Play } from "lucide-react";
-import { apiErrorMessage } from "../../api/problems";
+import { FileSearch, Play } from "lucide-react";
+import { apiErrorMessage, isProblem } from "../../api/problems";
 import { queryKeys } from "../../api/queryKeys";
 import { useStartTemplateRunMutation } from "../../api/queries";
 import type { StackTemplate } from "../../api/types";
@@ -9,9 +9,10 @@ import RequireCapability from "../../auth/RequireCapability";
 import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
+import { problemTypes } from "../../api/types";
+import BusyIcon from "../../shared/BusyIcon";
 import { cn } from "@/lib/utils";
 import { startRunLockReason, useLockState } from "./lockReasons";
-import { isRunInFlightError } from "./runErrors";
 
 interface TemplateRunActionsProps {
   stackId: string;
@@ -47,7 +48,7 @@ export default function TemplateRunActions({ stackId, stackTemplate }: TemplateR
       await queryClient.invalidateQueries({ queryKey: queryKeys.templateRuns(tenantID, stackTemplate.id) });
     } catch (error) {
       setErrorMessage(apiErrorMessage(error, "Request failed"));
-      if (isRunInFlightError(error)) {
+      if (isProblem(error, problemTypes.runInFlight)) {
         await queryClient.invalidateQueries({ queryKey: queryKeys.templateRuns(tenantID, stackTemplate.id) });
       }
     }
@@ -75,19 +76,11 @@ export default function TemplateRunActions({ stackId, stackTemplate }: TemplateR
             </label>
           </RequireCapability>
           <button type="button" className={cn(buttonClass("outline"), "pointer-coarse:h-11")} disabled={disabled} onClick={() => void startRun("plan")}>
-            {startingOperation === "plan" ? (
-              <Loader2 data-icon="inline-start" aria-hidden="true" className="animate-spin" />
-            ) : (
-              <FileSearch data-icon="inline-start" aria-hidden="true" />
-            )}
+            <BusyIcon busy={startingOperation === "plan"} icon={FileSearch} />
             Plan
           </button>
           <button type="button" className={cn(buttonClass("primary"), "pointer-coarse:h-11")} disabled={disabled} onClick={() => void startRun("apply")}>
-            {startingOperation === "apply" ? (
-              <Loader2 data-icon="inline-start" aria-hidden="true" className="animate-spin" />
-            ) : (
-              <Play data-icon="inline-start" aria-hidden="true" />
-            )}
+            <BusyIcon busy={startingOperation === "apply"} icon={Play} />
             Apply
           </button>
         </div>

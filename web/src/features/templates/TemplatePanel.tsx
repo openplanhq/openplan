@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { BookMarked, Folder, GitBranch, GitCommitHorizontal, Loader2, Trash2 } from "lucide-react";
+import { BookMarked, Folder, GitBranch, GitCommitHorizontal, Trash2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
-import { ApiRequestError } from "../../api/client";
-import { apiErrorMessage } from "../../api/problems";
+import { apiErrorMessage, classifyQueryError, isProblem } from "../../api/problems";
 import { queryKeys } from "../../api/queryKeys";
 import { useDeleteTemplateMutation, useTemplateRevisionsQuery, useTemplatesQuery } from "../../api/queries";
 import { problemTypes } from "../../api/types";
@@ -25,6 +24,7 @@ import TemplateSync from "./TemplateSync";
 import { shortCommitSHA, templateDisplayName } from "./templateWorkflow";
 import LoadError from "../../shared/LoadError";
 import Tag from "../../shared/Tag";
+import LoadingLine from "../../shared/LoadingLine";
 import { cn } from "@/lib/utils";
 
 // The right side of /templates: one template, and its latest revision for
@@ -70,9 +70,7 @@ export default function TemplatePanel({ templateId, children }: { templateId?: s
 
   if (template !== null && revisionsQuery.isPending) {
     return (
-      <p className="flex items-center gap-2 px-7 py-6 text-meta text-muted-foreground" role="status" data-testid="template-loading">
-        <Loader2 aria-hidden="true" className="size-3.5 animate-spin" /> Loading template…
-      </p>
+      <LoadingLine className="px-7 py-6" testId="template-loading">Loading template…</LoadingLine>
     );
   }
 
@@ -313,14 +311,14 @@ function useTemplateDelete(id: string) {
         await deleteTemplateMutation.mutateAsync(id);
         done(name);
       } catch (error) {
-        if (error instanceof ApiRequestError && error.status === 404) {
+        if (classifyQueryError(error) === 404) {
           // The mutation only clears its reads on success; the list must
           // drop the template here too.
           await queryClient.invalidateQueries({ queryKey: queryKeys.templates(tenantID), exact: true });
           done(name);
           return;
         }
-        const inUse = error instanceof ApiRequestError && error.type === problemTypes.templateInUse;
+        const inUse = isProblem(error, problemTypes.templateInUse);
         setAskedFor(null);
         setRefusal({ id, refusal: inUse ? "in-use" : { message: apiErrorMessage(error, "Request failed") } });
         // The confirm that held focus is gone; Delete is where to try again.

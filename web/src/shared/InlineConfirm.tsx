@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
-import { Loader2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { buttonClass } from "./buttonClass";
+import BusyIcon from "./BusyIcon";
 import { cn } from "@/lib/utils";
 
 // openplan UI confirms in place, never in a dialog: the question appears where
@@ -71,11 +71,7 @@ export default function InlineConfirm({
           aria-disabled={busy ? "true" : undefined}
           onClick={() => !busy && onConfirm()}
         >
-          {busy ? (
-            <Loader2 data-icon="inline-start" aria-hidden="true" className="animate-spin" />
-          ) : (
-            <ConfirmIcon data-icon="inline-start" aria-hidden="true" />
-          )}
+          <BusyIcon busy={busy} icon={ConfirmIcon} />
           {confirmLabel}
         </button>
       </div>

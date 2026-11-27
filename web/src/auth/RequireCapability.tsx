@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Outlet, useOutletContext, useParams } from "react-router-dom";
 import { useStackQuery } from "../api/queries";
 import { useTenantID } from "./useTenantID";
-import { classifyQueryError, useQueryErrorBoundary } from "../shared/queryErrorBoundary";
+import { useQueryErrorBoundary } from "../shared/queryErrorBoundary";
 import { useAuth } from "./AuthContext";
 import { useStackCapabilities } from "./useStackCapabilities";
 import type { Me } from "./types";
@@ -10,6 +10,7 @@ import type { StackCapabilities } from "./types";
 import NotFound from "../app/NotFound";
 import AccessDenied from "../app/AccessDenied";
 import LoadError from "../shared/LoadError";
+import { classifyQueryError } from "../api/problems";
 
 type GlobalCapabilityKey = keyof Me["global_capabilities"];
 type StackCapabilityKey = keyof StackCapabilities;

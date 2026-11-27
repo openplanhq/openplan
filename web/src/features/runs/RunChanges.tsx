@@ -4,13 +4,17 @@ import { ChevronRight } from "lucide-react";
 import type { PlanChangeAction, PlanResourceChange, TemplateRun } from "../../api/types";
 import { buttonClass } from "../../shared/buttonClass";
 import LoadError from "../../shared/LoadError";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { pluralWord } from "../../shared/plural";
+import LoadingLine from "../../shared/LoadingLine";
+import DataTable from "../../shared/DataTable";
+import { TableCell, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { ACTION_ORDER, actionLook, changeReason, changesNote, diffLines, isApplied } from "./planChanges";
 
 // Every cell sets its text in meta itself, as the runs table's do, so the
 // three share one baseline: the table's own 14px would put a 13px cell off its
-// neighbours.
+// neighbours. Each keeps 16px at both sides, header included, rather than the
+// table rule's 8px between columns: ChangeDetail's inset counts on it.
 const cellClass = "px-4 py-3.5 text-meta whitespace-normal";
 
 // How many rows show before Show more, per filter.
@@ -58,7 +62,7 @@ export default function RunChanges({ run, changes, failed, onRetry, toolbar }: R
             Something went wrong while loading this plan's changes.
           </LoadError>
         ) : (
-          <p className="text-meta text-muted-foreground">Loading changes…</p>
+          <LoadingLine>Loading changes…</LoadingLine>
         )}
       </RunViewFrame>
     );
@@ -122,38 +126,20 @@ export default function RunChanges({ run, changes, failed, onRetry, toolbar }: R
           Showing the first {changes.length} of {total} changes; the plan log has them all.
         </p>
       )}
-      <div className="overflow-x-auto rounded-lg border">
-        <Table>
-          <colgroup>
-            <col className="w-30" />
-            <col />
-            <col className="w-70" />
-          </colgroup>
-          <TableHeader>
-            <TableRow className="border-divider hover:bg-transparent">
-              {["Action", "Resource", "Why"].map((heading) => (
-                <TableHead key={heading} scope="col" className="h-10 px-4 text-caption font-medium text-muted-foreground">
-                  {heading}
-                </TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {visible.map((change) => {
-              const key = `${change.address}#${change.deposed}`;
-              return (
-                <ChangeRow
-                  key={key}
-                  change={change}
-                  past={past}
-                  open={open[key] ?? false}
-                  onToggle={() => setOpen((current) => ({ ...current, [key]: !current[key] }))}
-                />
-              );
-            })}
-          </TableBody>
-        </Table>
-      </div>
+      <DataTable columns={["w-30", undefined, "w-70"]} headings={["Action", "Resource", "Why"]} cellClass="px-4">
+        {visible.map((change) => {
+          const key = `${change.address}#${change.deposed}`;
+          return (
+            <ChangeRow
+              key={key}
+              change={change}
+              past={past}
+              open={open[key] ?? false}
+              onToggle={() => setOpen((current) => ({ ...current, [key]: !current[key] }))}
+            />
+          );
+        })}
+      </DataTable>
       {filtered.length > shown && (
         <button type="button" className={cn(buttonClass("quiet"), "self-start")} onClick={() => setShown(shown + CHANGES_PAGE)}>
           Show {Math.min(CHANGES_PAGE, filtered.length - shown)} more
@@ -292,7 +278,7 @@ function ChangeDetail({ id, change }: { id: string; change: PlanResourceChange }
       ))}
       {unchanged > 0 && (
         <p className="text-muted-foreground">
-          # ({unchanged} unchanged {unchanged === 1 ? "attribute" : "attributes"} hidden)
+          # ({unchanged} unchanged {pluralWord(unchanged, "attribute", "attributes")} hidden)
         </p>
       )}
     </div>

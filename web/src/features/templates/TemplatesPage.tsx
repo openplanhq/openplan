@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { ArrowLeft, Info, Loader2, Plus } from "lucide-react";
+import { ArrowLeft, Info, Plus } from "lucide-react";
 import { Link, Outlet, useLocation, useMatch } from "react-router-dom";
 import { useTemplatesQuery } from "../../api/queries";
 import RequireCapability from "../../auth/RequireCapability";
@@ -8,6 +8,7 @@ import { buttonClass } from "../../shared/buttonClass";
 import PageHeader from "../../shared/PageHeader";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import LoadError from "../../shared/LoadError";
+import LoadingLine from "../../shared/LoadingLine";
 import { cn } from "@/lib/utils";
 import TemplateList from "./TemplateList";
 import type { IndexOutletContext } from "../../shared/indexOutlet";
@@ -36,9 +37,7 @@ export default function TemplatesPage() {
   if (templatesQuery.status === "pending") {
     return (
       <section data-testid="templates-loading">
-        <p className="flex items-center gap-2 text-meta text-muted-foreground" role="status">
-          <Loader2 aria-hidden="true" className="size-4 animate-spin" /> Loading templates…
-        </p>
+        <LoadingLine>Loading templates…</LoadingLine>
       </section>
     );
   }

@@ -1,19 +1,16 @@
 import { useState } from "react";
-import { ArrowLeft, KeyRound, Users } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { Link, Outlet, useMatch, useParams } from "react-router-dom";
 import { useAttentionQuery, useStackQuery } from "../../api/queries";
-import RequireCapability from "../../auth/RequireCapability";
 import { useTenantID } from "../../auth/useTenantID";
-import { buttonClass } from "../../shared/buttonClass";
 import PageHeader from "../../shared/PageHeader";
+import StackSectionLinks from "./StackSectionLinks";
 import { cn } from "@/lib/utils";
 import { attentionByStackTemplate } from "./attention";
 import StackMeta from "./StackMeta";
 import type { IndexOutletContext } from "../../shared/indexOutlet";
 import StackTemplateList from "./StackTemplateList";
 import { defaultStackTemplate } from "./templateSelection";
-
-const sectionLinkClass = cn(buttonClass("outline", "lg"), "pointer-coarse:h-11");
 
 // /stacks/:stackId: the stack's one page. Its templates on the left; on the
 // right, the selected template's panel, which is the route below rendered
@@ -62,22 +59,7 @@ export default function StackPage() {
       <PageHeader
         title={stack.name}
         trail={[{ label: "Stacks", to: "/stacks" }]}
-        action={
-          <RequireCapability capability="can_manage_access" stackId={stackId}>
-            {/* The buttons hold their row: a long stack name wraps instead,
-                rather than squeezing them into a ragged column. */}
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
-              <Link to={`/stacks/${stackId}/environment`} className={sectionLinkClass}>
-                <KeyRound data-icon="inline-start" aria-hidden="true" />
-                Environment
-              </Link>
-              <Link to={`/stacks/${stackId}/access`} className={sectionLinkClass}>
-                <Users data-icon="inline-start" aria-hidden="true" />
-                Access
-              </Link>
-            </div>
-          </RequireCapability>
-        }
+        action={<StackSectionLinks stackId={stackId} />}
       >
         <StackMeta stack={stack} />
       </PageHeader>

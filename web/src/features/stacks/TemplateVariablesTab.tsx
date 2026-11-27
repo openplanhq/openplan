@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
 import { useTemplateRevisionVariablesQuery, useUpdateStackTemplateConfigMutation } from "../../api/queries";
 import { apiErrorMessage, fieldsShown } from "../../api/problems";
 import { useStackCapabilities } from "../../auth/useStackCapabilities";
@@ -13,6 +12,7 @@ import { useStackTemplate } from "./stackTemplateContext";
 import { canSaveInstalledTemplateConfig, configFromVariableValues, variableValuesFromConfig } from "./stackWorkflow";
 import { stackTemplatePath } from "./templateSelection";
 import LoadError from "../../shared/LoadError";
+import LoadingLine from "../../shared/LoadingLine";
 
 // /stacks/:stackId/templates/:stackTemplateId/variables — the installed
 // template's configuration. Choosing another revision is a separate view
@@ -71,9 +71,7 @@ export default function TemplateVariablesTab() {
 
   if (variablesQuery.status === "pending") {
     return (
-      <p className="flex items-center gap-2 text-meta text-muted-foreground" data-testid="template-variables-loading">
-        <Loader2 aria-hidden="true" className="size-3.5 animate-spin" /> Loading variables…
-      </p>
+      <LoadingLine testId="template-variables-loading">Loading variables…</LoadingLine>
     );
   }
 

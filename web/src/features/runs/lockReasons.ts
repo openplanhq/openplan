@@ -39,21 +39,6 @@ export function runInFlightReason(run: TemplateRun, change: string): string {
   return `${action} run #${run.run_number} before ${change}.`;
 }
 
-// Each function below returns why its control cannot be used now, or "" when
-// it can. The order is the same everywhere: who you are, then what the
-// template is, then whether its runs are known, then the run in flight.
-
-/** Plan and Apply. */
-export function startRunLockReason(state: LockState): string {
-  if (!state.canOperate) return "Starting a run requires operator access.";
-  const lifecycleReason = lifecycleLockReason(state.lifecycle, "run");
-  if (lifecycleReason) return lifecycleReason;
-  if (state.runs === "pending") return RUNS_LOADING;
-  if (state.runs === "error") return RUNS_FAILED_TOOLBAR;
-  if (state.activeRun) return runInFlightReason(state.activeRun, "starting another run");
-  return "";
-}
-
 /**
  * Why a template in this lifecycle cannot make this change, or "" when it
  * can. The server refuses every one for any template that is not active.
@@ -67,31 +52,46 @@ export function lifecycleLockReason(lifecycle: string, change: "run" | "destroy"
   return `Only an active template can ${change === "destroy" ? "be destroyed" : what}.`;
 }
 
+// What sets one control's lock apart; lockReason runs the same check for all.
+interface LockedControl {
+  access: string;
+  change: Parameters<typeof lifecycleLockReason>[1];
+  /** Ends runInFlightReason's sentence: "… before <inFlight>." */
+  inFlight: string;
+  /** Only the controls that start a run wait for the runs to be known; this
+      is what they say when the runs could not be loaded. */
+  runsFailed?: string;
+}
+
+// Why a control cannot be used now, or "" when it can. One function so the
+// order holds everywhere: who you are, then what the template is, then
+// whether its runs are known, then the run in flight.
+function lockReason(state: LockState, control: LockedControl): string {
+  if (!state.canOperate) return control.access;
+  const lifecycleReason = lifecycleLockReason(state.lifecycle, control.change);
+  if (lifecycleReason) return lifecycleReason;
+  if (control.runsFailed && state.runs === "pending") return RUNS_LOADING;
+  if (control.runsFailed && state.runs === "error") return control.runsFailed;
+  if (state.activeRun) return runInFlightReason(state.activeRun, control.inFlight);
+  return "";
+}
+
+/** Plan and Apply. */
+export function startRunLockReason(state: LockState): string {
+  return lockReason(state, { access: "Starting a run requires operator access.", change: "run", inFlight: "starting another run", runsFailed: RUNS_FAILED_TOOLBAR });
+}
+
 /** Save variables, and the fields above it. */
 export function variablesLockReason(state: LockState): string {
-  if (!state.canOperate) return "Editing requires operator access.";
-  const lifecycleReason = lifecycleLockReason(state.lifecycle, "config");
-  if (lifecycleReason) return lifecycleReason;
-  if (state.activeRun) return runInFlightReason(state.activeRun, "changing the config");
-  return "";
+  return lockReason(state, { access: "Editing requires operator access.", change: "config", inFlight: "changing the config" });
 }
 
 /** Change revision. */
 export function revisionLockReason(state: LockState): string {
-  if (!state.canOperate) return "Changing the revision requires operator access.";
-  const lifecycleReason = lifecycleLockReason(state.lifecycle, "revision");
-  if (lifecycleReason) return lifecycleReason;
-  if (state.activeRun) return runInFlightReason(state.activeRun, "changing the revision");
-  return "";
+  return lockReason(state, { access: "Changing the revision requires operator access.", change: "revision", inFlight: "changing the revision" });
 }
 
 /** Destroy, which starts a run, so it waits for the runs like Plan does. */
 export function destroyLockReason(state: LockState): string {
-  if (!state.canOperate) return "Destroying requires operator access.";
-  const lifecycleReason = lifecycleLockReason(state.lifecycle, "destroy");
-  if (lifecycleReason) return lifecycleReason;
-  if (state.runs === "pending") return RUNS_LOADING;
-  if (state.runs === "error") return RUNS_FAILED;
-  if (state.activeRun) return runInFlightReason(state.activeRun, "destroying");
-  return "";
+  return lockReason(state, { access: "Destroying requires operator access.", change: "destroy", inFlight: "destroying", runsFailed: RUNS_FAILED });
 }

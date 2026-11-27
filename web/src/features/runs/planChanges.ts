@@ -1,5 +1,6 @@
 import type { PlanChangeAction, PlanResourceChange, TemplateRun } from "../../api/types";
 import { isMovingRun, isTerminalRunStatus } from "../../api/polling";
+import { pluralWord } from "../../shared/plural";
 
 export type RunView = "changes" | "logs";
 
@@ -111,7 +112,7 @@ export function changeReason(change: PlanResourceChange): string {
   const parts: string[] = [];
   if (change.action === "replace" && change.replace_paths && change.replace_paths.length > 0) {
     const paths = change.replace_paths.map(pathText);
-    parts.push(`${paths.join(", ")} ${paths.length === 1 ? "forces" : "force"} replacement`);
+    parts.push(`${paths.join(", ")} ${pluralWord(paths.length, "forces", "force")} replacement`);
   } else if (change.action === "update") {
     const changed = changedAttributes(change);
     if (changed.length === 1 && isShortScalar(changed[0].before) && isShortScalar(changed[0].after)) {

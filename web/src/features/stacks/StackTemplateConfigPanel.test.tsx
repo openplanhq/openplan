@@ -1,26 +1,12 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { TemplateVariable } from "../../api/types";
 import StackTemplateConfigPanel from "./StackTemplateConfigPanel";
-
-function variable(overrides: Partial<TemplateVariable> = {}): TemplateVariable {
-  return {
-    template_revision_id: "rev_1",
-    name: "region",
-    type_expression: "string",
-    description: "",
-    required: true,
-    has_default: false,
-    sensitive: false,
-    has_validation: false,
-    ...overrides
-  };
-}
+import { templateVariable } from "../../api/testSupport";
 
 function renderPanel(overrides: Partial<React.ComponentProps<typeof StackTemplateConfigPanel>> = {}) {
   const props = {
-    variables: [variable()],
+    variables: [templateVariable()],
     variableValues: { region: "us-east-1" },
     onVariableValueChange: vi.fn(),
     canSave: true,
@@ -69,7 +55,7 @@ describe("StackTemplateConfigPanel", () => {
   });
 
   it("names a required variable with an asterisk and describes it under its input", () => {
-    renderPanel({ variables: [variable({ description: "Region to deploy into." })] });
+    renderPanel({ variables: [templateVariable({ description: "Region to deploy into." })] });
 
     const input = screen.getByLabelText("region *");
     const describedBy = input.getAttribute("aria-describedby") ?? "";

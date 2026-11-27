@@ -1,13 +1,10 @@
 import { useState } from "react";
-import { Combobox } from "@base-ui/react";
-import { Search, X } from "lucide-react";
+import { X } from "lucide-react";
 import type { UserProfile } from "../../api/types";
-import { searchFieldClass } from "../../shared/SearchField";
 import { useDebounce } from "../../shared/useDebounce";
 import { buttonClass } from "../../shared/buttonClass";
 import { matchCountLabel } from "../../shared/matchCountLabel";
-import { ComboboxContent, ComboboxEmpty, ComboboxList, useComboboxAnchor } from "@/components/ui/combobox";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import SearchPicker, { ChoiceRow, Highlighted } from "../../shared/SearchPicker";
 import { cn } from "@/lib/utils";
 import RoleLabel from "./RoleLabel";
 import type { RoleDefinition } from "./roles";
@@ -53,7 +50,6 @@ export default function PersonPicker({
   // After a pick is cleared the search comes back focused, so a keyboard user
   // carries on where they were.
   const [focusSearch, setFocusSearch] = useState(false);
-  const anchorRef = useComboboxAnchor();
   const debounced = useDebounce(query.trim(), DEBOUNCE_MS);
   const searching = debounced.length >= MIN_QUERY;
   const results = useSearch(searching ? debounced : "").data;
@@ -84,68 +80,44 @@ export default function PersonPicker({
   }
 
   return (
-    <Combobox.Root<UserProfile>
+    // The server ranks and filters; the list shows its answer as it is.
+    <SearchPicker<UserProfile>
       items={shown}
-      // The server ranks and filters; the list shows its answer as it is.
-      filter={null}
-      value={null}
-      onValueChange={(user) => {
-        if (!user) return;
+      query={query}
+      onQueryChange={setQuery}
+      onPick={(user) => {
         setQuery("");
         setOpen(false);
         onPick(user);
       }}
-      inputValue={query}
-      onInputValueChange={(value, { reason }) => {
-        // A pick writes the person's name into the input; only typing is a query.
-        if (reason === "input-change") setQuery(value);
-      }}
       open={open && query.trim().length >= MIN_QUERY}
       onOpenChange={(next) => setOpen(next)}
-      autoHighlight
       itemToStringLabel={(user) => user.display_name}
       isItemEqualToValue={(a, b) => a.sub === b.sub}
       disabled={disabled}
+      input={{
+        id: inputId,
+        "aria-label": "Search people",
+        placeholder: "Search people by name or email",
+        autoFocus: focusSearch,
+        onFocus: () => setOpen(true),
+        "data-testid": "person-search"
+      }}
+      emptyClassName="gap-1 text-muted-foreground"
+      empty={
+        results === undefined || !searching ? (
+          <span>Searching…</span>
+        ) : (
+          <>
+            <span>No one matches “{debounced}”.</span>
+            <span>People appear here once they have signed in to openplan. Ask them to sign in, then search again.</span>
+          </>
+        )
+      }
+      count={matchCountLabel(results?.length ?? 0, shown.length)}
     >
-      <InputGroup ref={anchorRef} className={cn(searchFieldClass, "pointer-coarse:h-11", disabled && "opacity-50")}>
-        <InputGroupAddon className="pl-2.5">
-          <Search aria-hidden="true" className="text-subtle-foreground" />
-        </InputGroupAddon>
-        <Combobox.Input
-          render={<InputGroupInput />}
-          id={inputId}
-          aria-label="Search people"
-          placeholder="Search people by name or email"
-          autoFocus={focusSearch}
-          onFocus={() => setOpen(true)}
-          className="placeholder:text-subtle-foreground"
-          data-testid="person-search"
-        />
-      </InputGroup>
-      <ComboboxContent anchor={anchorRef} className="flex min-w-0 flex-col border bg-card shadow-none ring-0">
-        <ComboboxEmpty className="flex-col items-start justify-start gap-1 px-4 py-3 text-left text-meta text-muted-foreground">
-          {results === undefined || !searching ? (
-            <span>Searching…</span>
-          ) : (
-            <>
-              <span>No one matches “{debounced}”.</span>
-              <span>People appear here once they have signed in to openplan. Ask them to sign in, then search again.</span>
-            </>
-          )}
-        </ComboboxEmpty>
-        <ComboboxList className="max-h-96 min-h-0 divide-y divide-divider p-0">
-          {(user: UserProfile) => <PersonChoice key={user.sub} user={user} query={debounced} roles={roles} held={heldRole(user.sub)} isMe={user.sub === meSub} />}
-        </ComboboxList>
-        {shown.length > 0 && (
-          <div className="flex items-center justify-between gap-4 border-t border-divider bg-canvas px-4 py-2 text-caption text-muted-foreground">
-            <span>{matchCountLabel(results?.length ?? 0, shown.length)}</span>
-            <span aria-hidden="true" className="whitespace-nowrap pointer-coarse:hidden">
-              ↑ ↓ to move · Enter to choose · Esc to close
-            </span>
-          </div>
-        )}
-      </ComboboxContent>
-    </Combobox.Root>
+      {(user) => <PersonChoice key={user.sub} user={user} query={debounced} roles={roles} held={heldRole(user.sub)} isMe={user.sub === meSub} />}
+    </SearchPicker>
   );
 }
 
@@ -155,25 +127,23 @@ export default function PersonPicker({
 function PersonChoice({ user, query, roles, held, isMe }: { user: UserProfile; query: string; roles: readonly RoleDefinition[]; held?: string; isMe: boolean }) {
   const lead = user.display_name.toLowerCase().startsWith(query.toLowerCase()) ? query.length : 0;
   return (
-    <Combobox.Item
+    <ChoiceRow
       value={user}
       disabled={held !== undefined}
-      className="flex min-h-13 w-full cursor-pointer items-center justify-between gap-4 px-4 py-2 text-left outline-none select-none data-disabled:cursor-not-allowed data-highlighted:bg-primary-tint pointer-coarse:min-h-14"
-    >
-      <span className="flex min-w-0 flex-col gap-0.5">
-        <span className={cn("truncate text-label", held ? "text-muted-foreground" : "text-foreground")}>
-          {lead > 0 && <mark className="bg-transparent font-semibold text-foreground">{user.display_name.slice(0, lead)}</mark>}
-          {user.display_name.slice(lead)}
+      name={
+        <>
+          <Highlighted text={user.display_name} hits={[...Array(lead).keys()]} markClassName="font-semibold" />
           {isMe && <span className="font-normal text-muted-foreground"> (you)</span>}
-        </span>
-        {user.email && <span className="truncate text-caption text-muted-foreground">{user.email}</span>}
-      </span>
-      {held && (
-        <RoleLabel roles={roles} role={held} className="shrink-0 text-muted-foreground">
-          already {held}
-        </RoleLabel>
-      )}
-    </Combobox.Item>
+        </>
+      }
+      caption={user.email && <span className="truncate text-caption text-muted-foreground">{user.email}</span>}
+      aside={
+        held && (
+          <RoleLabel roles={roles} role={held} className="shrink-0 text-muted-foreground">
+            already {held}
+          </RoleLabel>
+        )
+      }
+    />
   );
 }
-

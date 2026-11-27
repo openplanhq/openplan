@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Loader2, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   useAddTemplateToStackMutation,
@@ -26,6 +26,8 @@ import { apiErrorMessage, fieldsShown } from "../../api/problems";
 import { useFieldErrors } from "../../shared/useFieldErrors";
 import EmptyState from "../../shared/EmptyState";
 import LoadError from "../../shared/LoadError";
+import LoadingLine from "../../shared/LoadingLine";
+import BusyIcon from "../../shared/BusyIcon";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -176,9 +178,7 @@ export default function AddStackTemplateScreen() {
   let content: ReactNode;
   if (templatesQuery.status === "pending") {
     content = (
-      <p className="flex items-center gap-2 text-meta text-muted-foreground" data-testid="add-stack-template-loading">
-        <Loader2 aria-hidden="true" className="size-3.5 animate-spin" /> Loading templates…
-      </p>
+      <LoadingLine testId="add-stack-template-loading">Loading templates…</LoadingLine>
     );
   } else if (templatesQuery.status === "error") {
     content = (
@@ -243,9 +243,7 @@ export default function AddStackTemplateScreen() {
           )}
         </section>
         {revisionsLoading && (
-          <p className="flex items-center gap-2 text-meta text-muted-foreground" data-testid="add-stack-template-revisions-loading">
-            <Loader2 aria-hidden="true" className="size-3.5 animate-spin" /> Loading revisions…
-          </p>
+          <LoadingLine testId="add-stack-template-revisions-loading">Loading revisions…</LoadingLine>
         )}
         {revisionsFailed && (
           <LoadError live error={chosenRevisionsQuery.error} onRetry={() => void chosenRevisionsQuery.refetch()} testId="add-stack-template-revisions-error">
@@ -282,9 +280,7 @@ export default function AddStackTemplateScreen() {
               </Select>
             </div>
             {variablesLoading ? (
-              <p className="flex items-center gap-2 text-meta text-muted-foreground" data-testid="add-stack-template-variables-loading">
-                <Loader2 aria-hidden="true" className="size-3.5 animate-spin" /> Loading variables…
-              </p>
+              <LoadingLine testId="add-stack-template-variables-loading">Loading variables…</LoadingLine>
             ) : variablesFailed ? (
               // Not the empty message: a fetch that failed must never read as
               // "this template declares no variables". Inline, so the picker
@@ -317,11 +313,7 @@ export default function AddStackTemplateScreen() {
               disabled={variablesLoading || variablesFailed || addTemplateToStackMutation.isPending}
               onClick={() => void handleInstall()}
             >
-              {addTemplateToStackMutation.isPending ? (
-                <Loader2 data-icon="inline-start" aria-hidden="true" className="animate-spin" />
-              ) : (
-                <Plus data-icon="inline-start" aria-hidden="true" />
-              )}
+              <BusyIcon busy={addTemplateToStackMutation.isPending} icon={Plus} />
               Add template
             </button>
           </section>

@@ -8,70 +8,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import AddStackTemplateScreen from "./AddStackTemplateScreen";
 import TemplatePanel from "./TemplatePanel";
 import { queryKeys } from "../../api/queryKeys";
-import type { StackTemplate, TemplateRevision, TemplateVariable } from "../../api/types";
+import type { StackTemplate } from "../../api/types";
 import { AuthContext } from "../../auth/AuthContext";
-import { jsonResponse, testQueryClient } from "../../api/testSupport";
+import { jsonResponse, stackTemplate, templateRevision, templateVariable, testQueryClient } from "../../api/testSupport";
 import { seedTemplates, template, templateReadResponse } from "../templates/testSupport";
 import { authValue } from "../../auth/testSupport";
-
-function templateRevision(overrides: Partial<TemplateRevision> = {}): TemplateRevision {
-  return {
-    id: "rev_1",
-    tenant_id: "tenant_123",
-    template_id: "tmpl_src_1",
-    repo_owner: "hashicorp",
-    repo_name: "vpc",
-    source_ref: "main",
-    resolved_commit_sha: "abcdef1234567890",
-    commit_subject: "",
-    root_path: ".",
-    name: "vpc",
-    description: "",
-    tags: [],
-    status: "active",
-    created_at: "2026-07-19T00:00:00Z",
-    ...overrides
-  };
-}
-
-function variable(overrides: Partial<TemplateVariable> = {}): TemplateVariable {
-  return {
-    template_revision_id: "rev_1",
-    name: "region",
-    type_expression: "string",
-    description: "",
-    required: true,
-    has_default: false,
-    sensitive: false,
-    has_validation: false,
-    ...overrides
-  };
-}
 
 function LocationProbe() {
   const location = useLocation();
   return <span data-testid="location">{`${location.pathname}${location.search}`}</span>;
-}
-
-function installedTemplate(id: string): StackTemplate {
-  return {
-    id,
-    stack_id: "stack_1",
-    key: "vpc",
-    template_id: "tmpl_src_1",
-    desired_template_revision_id: "rev_1",
-    last_applied_template_revision_id: "",
-    source_ref: "main",
-    workspace_name: "ws-vpc",
-    display_name: "",
-    config: { region: "eu-west-1" },
-    last_applied_run_id: "",
-    pending_plan_run_id: "",
-    plan_state: "none",
-    live_state: "never",
-    created_by: "user_123",
-    lifecycle: "active"
-  };
 }
 
 function stackView(templates: StackTemplate[]) {
@@ -206,7 +151,7 @@ describe("AddStackTemplateScreen", () => {
   it("reads a picked template's revisions, then offers its newest active one", async () => {
     const queryClient = testQueryClient();
     const revisions = [templateRevision({ id: "rev_2", resolved_commit_sha: "44b2e0199999" }), templateRevision()];
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_2"), [variable({ template_revision_id: "rev_2" })]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_2"), [templateVariable({ template_revision_id: "rev_2" })]);
     let answerRevisions: (response: Response) => void = () => {};
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
       if (String(input).includes("/revisions")) {
@@ -261,7 +206,7 @@ describe("AddStackTemplateScreen", () => {
       templateRevision(),
       templateRevision({ id: "rev_2", template_id: "tmpl_src_2", name: "rds", repo_owner: "my-org", repo_name: "rds" })
     ]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [variable()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [templateVariable()]);
 
     renderScreen(queryClient);
     expect(screen.queryByTestId("add-stack-template-variables")).toBeNull();
@@ -281,7 +226,7 @@ describe("AddStackTemplateScreen", () => {
   it("moves focus to the first variable once a template is chosen", async () => {
     const queryClient = testQueryClient();
     seedTemplates(queryClient, [templateRevision()]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [variable()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [templateVariable()]);
 
     renderScreen(queryClient);
     await chooseTemplate(userEvent.setup(), "vpc");
@@ -292,7 +237,7 @@ describe("AddStackTemplateScreen", () => {
   it("goes back to the chosen template when Change is left with Escape", async () => {
     const queryClient = testQueryClient();
     seedTemplates(queryClient, [templateRevision()]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [variable()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [templateVariable()]);
 
     renderScreen(queryClient);
     const user = userEvent.setup();
@@ -313,7 +258,7 @@ describe("AddStackTemplateScreen", () => {
   it("marks itself unsaved once a variable value is typed, so SessionProvider's proactive re-auth defers", async () => {
     const queryClient = testQueryClient();
     seedTemplates(queryClient, [templateRevision()]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [variable()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [templateVariable()]);
 
     renderScreen(queryClient);
     await chooseTemplate(userEvent.setup(), "vpc");
@@ -331,8 +276,8 @@ describe("AddStackTemplateScreen", () => {
       templateRevision({ id: "rev_new", resolved_commit_sha: "f17f9834444" }),
       templateRevision({ id: "rev_old", resolved_commit_sha: "3c0e1126666" })
     ]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_new"), [variable()]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_old"), [variable()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_new"), [templateVariable()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_old"), [templateVariable()]);
 
     renderScreen(queryClient);
     const user = userEvent.setup();
@@ -375,7 +320,7 @@ describe("AddStackTemplateScreen", () => {
       templateRevision({ id: "rev_bad", status: "invalid", resolved_commit_sha: "44b2e0199999" }),
       templateRevision({ id: "rev_good", status: "active" })
     ]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_good"), [variable()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_good"), [templateVariable()]);
 
     renderScreen(queryClient);
     const user = userEvent.setup();
@@ -398,7 +343,7 @@ describe("AddStackTemplateScreen", () => {
   it("adds the chosen revision and opens the new template's Runs", async () => {
     const queryClient = testQueryClient();
     seedTemplates(queryClient, [templateRevision()]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [variable()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [templateVariable()]);
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ id: "st_new" }), {
         status: 200,
@@ -430,7 +375,7 @@ describe("AddStackTemplateScreen", () => {
     const queryClient = testQueryClient();
     seedTemplates(queryClient, [templateRevision()]);
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [
-      variable({ name: "subnets", type_expression: "list(string)" })
+      templateVariable({ name: "subnets", type_expression: "list(string)" })
     ]);
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ id: "st_new" }), { status: 200, headers: { "content-type": "application/json" } })
@@ -454,8 +399,8 @@ describe("AddStackTemplateScreen", () => {
     const queryClient = testQueryClient();
     seedTemplates(queryClient, [templateRevision()]);
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [
-      variable({ name: "db_password", sensitive: true, required: true }),
-      variable({ name: "region" })
+      templateVariable({ name: "db_password", sensitive: true, required: true }),
+      templateVariable({ name: "region" })
     ]);
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ id: "st_new" }), { status: 200, headers: { "content-type": "application/json" } })
@@ -480,7 +425,7 @@ describe("AddStackTemplateScreen", () => {
     const queryClient = testQueryClient();
     seedTemplates(queryClient, [templateRevision()]);
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [
-      variable({ name: "subnets", type_expression: "list(string)" })
+      templateVariable({ name: "subnets", type_expression: "list(string)" })
     ]);
     const fetchMock = vi.spyOn(globalThis, "fetch");
 
@@ -503,7 +448,7 @@ describe("AddStackTemplateScreen", () => {
   it("surfaces a failed install without leaving the screen", async () => {
     const queryClient = testQueryClient();
     seedTemplates(queryClient, [templateRevision()]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [variable()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [templateVariable()]);
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ type: "about:blank", title: "Conflict", detail: "already installed" }), {
         status: 409,
@@ -525,8 +470,8 @@ describe("AddStackTemplateScreen", () => {
     const queryClient = testQueryClient();
     seedTemplates(queryClient, [templateRevision()]);
     queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [
-      variable(),
-      variable({ name: "size", required: false })
+      templateVariable(),
+      templateVariable({ name: "size", required: false })
     ]);
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
@@ -570,7 +515,7 @@ describe("AddStackTemplateScreen", () => {
   it("says in the form line what it can't put on a field", async () => {
     const queryClient = testQueryClient();
     seedTemplates(queryClient, [templateRevision()]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [variable()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [templateVariable()]);
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -622,7 +567,7 @@ describe("AddStackTemplateScreen", () => {
       templateRevision(),
       templateRevision({ id: "rev_2", template_id: "tmpl_src_2", name: "rds", repo_owner: "my-org", repo_name: "rds" })
     ]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [variable()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [templateVariable()]);
     // rev_2's variables are deliberately left unseeded, and fetch never
     // resolves. Without gating on isFetching, keepPreviousData would keep
     // rendering rev_1's "region" field under rev_2's name.
@@ -676,7 +621,7 @@ describe("AddStackTemplateScreen", () => {
       // Not active, so not offered.
       templateRevision({ id: "rev_old", status: "invalid", resolved_commit_sha: "44b2e0199999" })
     ]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [variable()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [templateVariable()]);
 
     renderScreen(queryClient);
     const user = userEvent.setup();
@@ -697,7 +642,7 @@ describe("AddStackTemplateScreen", () => {
       templateRevision({ id: "rev_mid", resolved_commit_sha: "a91c2045555", created_at: "2026-08-02T09:30:00Z" }),
       templateRevision({ id: "rev_old", resolved_commit_sha: "3c0e1126666", created_at: "2026-06-28T14:15:00Z" })
     ]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_new"), [variable()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_new"), [templateVariable()]);
 
     renderScreen(queryClient);
     const user = userEvent.setup();
@@ -723,8 +668,8 @@ describe("AddStackTemplateScreen", () => {
       templateRevision({ id: "rev_new", resolved_commit_sha: "f17f9834444" }),
       templateRevision({ id: "rev_old", resolved_commit_sha: "3c0e1126666" })
     ]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_new"), [variable()]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_old"), [variable()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_new"), [templateVariable()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_old"), [templateVariable()]);
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ id: "st_new" }), {
         status: 200,
@@ -784,12 +729,12 @@ describe("AddStackTemplateScreen", () => {
   it("opens the new template's panel once the stack has reloaded with it, labelled", async () => {
     const queryClient = testQueryClient();
     seedTemplates(queryClient, [templateRevision()]);
-    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [variable()]);
+    queryClient.setQueryData(queryKeys.templateRevisionVariables("tenant_123", "rev_1"), [templateVariable()]);
     queryClient.setQueryData(queryKeys.attention("tenant_123"), []);
     let answerStack: (response: Response) => void = () => {};
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
       if (init?.method === "POST") {
-        return Promise.resolve(jsonResponse({ ...installedTemplate("st_new"), source_ref: "" }, 201));
+        return Promise.resolve(jsonResponse(stackTemplate({ id: "st_new", config: { region: "eu-west-1" }, source_ref: "" }), 201));
       }
       if (String(input).endsWith("/stacks/stack_1")) {
         return new Promise<Response>((resolve) => {
@@ -814,7 +759,7 @@ describe("AddStackTemplateScreen", () => {
     expect(screen.queryByTestId("template-panel")).toBeNull();
     expect((screen.getByRole("button", { name: "Add template" }) as HTMLButtonElement).disabled).toBe(true);
 
-    answerStack(jsonResponse(stackView([{ ...installedTemplate("st_new"), display_name: "vpc" }])));
+    answerStack(jsonResponse(stackView([stackTemplate({ id: "st_new", config: { region: "eu-west-1" }, display_name: "vpc" })])));
 
     expect(await screen.findByRole("heading", { level: 2, name: "vpc" })).toBeTruthy();
     expect(screen.queryByText("ws-vpc")).toBeNull();

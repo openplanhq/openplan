@@ -3,14 +3,10 @@ import type { ReactNode } from "react";
 import { MemoryRouter, useInRouterContext } from "react-router-dom";
 import RouteMessage from "../app/RouteMessage";
 import Breadcrumb from "../shared/Breadcrumb";
-import { LogPhase, LogStep } from "../shared/LogSteps";
-import StatusRow from "../shared/StatusRow";
-import { statusTone } from "../shared/statusTone";
+import { LogPhase, LogStep, logStepTime } from "../shared/LogSteps";
 import RoleLabel from "../features/access/RoleLabel";
 import { PLATFORM_ROLES, STACK_ROLES } from "../features/access/roles";
-import StatusBadge from "../shared/StatusBadge";
 import { CircleAlert, Info, Plus, Search, SearchX } from "lucide-react";
-import Separator from "../shared/Separator";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -72,8 +68,6 @@ const THEME_SWATCHES = [
 const BUTTON_VARIANTS = ["default", "outline", "secondary", "ghost", "destructive", "link"] as const;
 const BUTTON_SIZES = ["xs", "sm", "default", "lg"] as const;
 const BADGE_VARIANTS = ["default", "secondary", "outline", "destructive", "success", "progress", "warning", "muted"] as const;
-// One status per tone: settled, progress, waiting, failed, canceled.
-const STATUS_SAMPLES = ["completed", "running", "waiting_approval", "failed", "canceled"];
 const titleCase = (word: string) => word[0].toUpperCase() + word.slice(1);
 const STACK_NAMES = ["payments-core", "payments-edge", "billing", "identity", "search"];
 
@@ -155,28 +149,17 @@ function WithRouter({ children }: { children: ReactNode }) {
   return useInRouterContext() ? <>{children}</> : <MemoryRouter>{children}</MemoryRouter>;
 }
 
-// A row's start and time taken, as RunLogsPanel draws them.
-function SpecimenStepTime({ at, took }: { at: string; took: string }) {
-  return (
-    <>
-      <time>{at}</time>
-      <Separator />
-      <span>{took}</span>
-    </>
-  );
-}
-
 function LogStepsSpecimen() {
   const [open, setOpen] = useState<Record<string, boolean>>({ "plan-3": true });
   const setStep = (name: string) => (isOpen: boolean) => setOpen((current) => ({ ...current, [name]: isOpen }));
   return (
     <div className="divide-y divide-divider">
       <LogPhase title="Plan" detail="started by Priya Raman · 3 Oct, 15:00">
-        <LogStep name="plan-1" label="tofu init" meta={<SpecimenStepTime at="15:00:02" took="12s" />} open={open["plan-1"] ?? false} onOpenChange={setStep("plan-1")}>
+        <LogStep name="plan-1" label="tofu init" meta={logStepTime({ started_at: "2026-10-03T15:00:02Z", finished_at: "2026-10-03T15:00:14Z" })} open={open["plan-1"] ?? false} onOpenChange={setStep("plan-1")}>
           {`Initializing the backend...
 Successfully configured the backend "s3"!`}
         </LogStep>
-        <LogStep name="plan-3" label="tofu plan" meta={<SpecimenStepTime at="15:00:16" took="41s" />} open={open["plan-3"] ?? false} onOpenChange={setStep("plan-3")}>
+        <LogStep name="plan-3" label="tofu plan" meta={logStepTime({ started_at: "2026-10-03T15:00:16Z", finished_at: "2026-10-03T15:00:57Z" })} open={open["plan-3"] ?? false} onOpenChange={setStep("plan-3")}>
           {`OpenTofu will perform the following actions:
 Plan: 3 to add, 1 to change, 0 to destroy.
 Error: creating S3 Bucket: BucketAlreadyExists`}
@@ -266,23 +249,6 @@ export default function StyleGuide() {
                 </Badge>
               ))}
             </Specimen>
-            <Specimen label="StatusBadge" hint="real component, tone from statusTone()">
-              {STATUS_SAMPLES.map((status) => (
-                <StatusBadge key={status} tone={statusTone(status)}>
-                  {status}
-                </StatusBadge>
-              ))}
-            </Specimen>
-            <Specimen label="StatusRow" hint="real component" stack>
-              <div className="w-full max-w-md">
-                <StatusRow label="Template" value="completed" />
-                <StatusRow label="Plan" value="running" />
-                <StatusRow label="Approval" value="waiting_approval" />
-                <StatusRow label="Apply" value="failed" />
-                <StatusRow label="Cancelled" value="canceled" />
-                <StatusRow label="Approved" value="approved" />
-              </div>
-            </Specimen>
             <Specimen label="RoleLabel" hint="real component">
               {STACK_ROLES.map(({ value }) => (
                 <RoleLabel key={value} roles={STACK_ROLES} role={value} />
@@ -293,11 +259,7 @@ export default function StyleGuide() {
             </Specimen>
             <Specimen label="Breadcrumb" hint="real component" stack>
               <WithRouter>
-                <Breadcrumb
-                  className="mb-0"
-                  items={[{ label: "Stacks", to: "#theme" }, { label: "payments", to: "#theme" }, { label: "Run #4" }]}
-                  detail="acme/vpc · main"
-                />
+                <Breadcrumb crumbs={[{ label: "Stacks", to: "#theme" }, { label: "payments", to: "#theme" }]} current="Run #4" />
               </WithRouter>
             </Specimen>
             <Specimen label="LogSteps" hint="real component, on Collapsible" stack>
@@ -494,7 +456,7 @@ export default function StyleGuide() {
           <Section
             id="colour"
             title="Colour"
-            note="The primary is the only saturated colour in ordinary use. The three status colours are reserved for state, and each clears AA against its own tint, which is how StatusBadge paints them."
+            note="The primary is the only saturated colour in ordinary use. The three status colours are reserved for state, and each clears AA against its own tint."
           >
             <Specimen label="Palette" hint="values read from theme.css at runtime">
               <div className="grid w-full grid-cols-2 gap-4 sm:grid-cols-4">

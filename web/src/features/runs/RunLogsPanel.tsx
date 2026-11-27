@@ -14,13 +14,13 @@ import type {
 } from "../../api/types";
 import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
-import { formatDateTime, formatDuration, formatTimeOfDay } from "../../shared/formatTimestamp";
-import { LogPhase, LogStep } from "../../shared/LogSteps";
+import { formatDateTime } from "../../shared/formatTimestamp";
+import { LogPhase, LogStep, logStepTime } from "../../shared/LogSteps";
 import StatusLabel from "../../shared/StatusLabel";
 import type { StatusLabelTone } from "../../shared/StatusLabel";
 import { useLiveTemplateRunLog } from "./useLiveTemplateRunLog";
 import type { LiveTemplateRunLog } from "./useLiveTemplateRunLog";
-import Separator from "../../shared/Separator";
+import LoadingLine from "../../shared/LoadingLine";
 
 interface RunLogsPanelProps {
   runId: string;
@@ -52,7 +52,11 @@ export default function RunLogsPanel({ runId, logs, executions, failed, finished
 
   let content;
   if (logs === undefined) {
-    content = <p className="px-4 py-3 text-meta text-muted-foreground">{failed ? "Could not load this run's logs." : "Loading logs…"}</p>;
+    content = failed ? (
+      <p className="px-4 py-3 text-meta text-muted-foreground">Could not load this run's logs.</p>
+    ) : (
+      <LoadingLine className="px-4 py-3">Loading logs…</LoadingLine>
+    );
   } else if (logs.length === 0) {
     content = <p className="px-4 py-3 text-meta text-muted-foreground">{finished ? "No logs." : "No logs yet."}</p>;
   } else {
@@ -65,7 +69,7 @@ export default function RunLogsPanel({ runId, logs, executions, failed, finished
                 key={log.name}
                 name={log.name}
                 label={log.command_line}
-                meta={stepTime(commandStep(log, executions))}
+                meta={logStepTime(commandStep(log, executions))}
                 open={open[log.name] ?? false}
                 onOpenChange={(isOpen) => setOpen((current) => ({ ...current, [log.name]: isOpen }))}
               >
@@ -143,30 +147,6 @@ const STEP_OF_COMMAND: Record<string, TemplateRunStep> = {
 function commandStep(log: TemplateRunLog, executions: TemplateRunExecution[] | undefined): TemplateRunStepExecution | undefined {
   const step = STEP_OF_COMMAND[log.command];
   return executions?.find((execution) => execution.phase === log.run_phase)?.steps?.find((candidate) => candidate.step === step);
-}
-
-// When a command started, to the second (the phase header gives the day), and
-// once it ends, how long it took (issue 571). A command still running shows
-// only its start: its log's dots say it is going. Nothing until the run's
-// steps arrive.
-function stepTime(step: TemplateRunStepExecution | undefined): ReactNode {
-  if (!step) {
-    return null;
-  }
-  const took = step.finished_at ? formatDuration(step.started_at, step.finished_at) : "";
-  return (
-    <>
-      <time dateTime={step.started_at} title={step.started_at}>
-        {formatTimeOfDay(step.started_at)}
-      </time>
-      {took && (
-        <>
-          <Separator />
-          <span>{took}</span>
-        </>
-      )}
-    </>
-  );
 }
 
 // A log reads by where its output is: still being written, stored, or never

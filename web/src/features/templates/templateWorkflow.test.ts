@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { Template, TemplateRevision } from "../../api/types";
+import type { Template } from "../../api/types";
 import {
   activeRevisions,
   latestActiveRevision,
   matchesTemplateFilter,
-  revisionCountLabel,
   revisionSourceLabel,
   searchTemplates,
   templateDisplayName,
@@ -13,6 +12,7 @@ import {
   templatesWithRevision
 } from "./templateWorkflow";
 import { template } from "./testSupport";
+import { templateRevision } from "../../api/testSupport";
 
 describe("templateDisplayName", () => {
   it("prefers the revision's own name", () => {
@@ -40,13 +40,6 @@ describe("templateRootPathLabel", () => {
 
   it("keeps a path that locates the module", () => {
     expect(templateRootPathLabel("environments/dev", "Supabase")).toBe("environments/dev");
-  });
-});
-
-describe("revisionCountLabel", () => {
-  it("singularises one revision", () => {
-    expect(revisionCountLabel(1)).toBe("1 revision");
-    expect(revisionCountLabel(4)).toBe("4 revisions");
   });
 });
 
@@ -107,26 +100,6 @@ describe("latestActiveRevision", () => {
     expect(latestActiveRevision([])).toBeNull();
   });
 });
-
-function templateRevision(overrides: Partial<TemplateRevision>): TemplateRevision {
-  return {
-    id: "template_123",
-    tenant_id: "tenant_123",
-    template_id: "source_template_123",
-    repo_owner: "hashicorp",
-    repo_name: "terraform-template",
-    source_ref: "main",
-    resolved_commit_sha: "abc123",
-    commit_subject: "",
-    root_path: ".",
-    name: "Terraform Template",
-    description: "",
-    tags: [],
-    status: "active",
-    created_at: "2026-07-06T00:00:00Z",
-    ...overrides
-  };
-}
 
 describe("revisionSourceLabel", () => {
   it("names a revision by its root path", () => {

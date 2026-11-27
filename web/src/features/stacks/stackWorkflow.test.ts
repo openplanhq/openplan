@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Stack, StackTemplate, TemplateRevision, TemplateVariable } from "../../api/types";
+import type { Stack } from "../../api/types";
 import {
   canSaveInstalledTemplateConfig,
   canChangeStackTemplateRevision,
@@ -12,6 +12,7 @@ import {
   upsertStackTemplate,
   variableValuesFromConfig
 } from "./stackWorkflow";
+import { stackTemplate, templateRevision, templateVariable } from "../../api/testSupport";
 
 describe("stack workflow helpers", () => {
   // Two suffixes have now been dropped from this label. The lifecycle read
@@ -239,8 +240,8 @@ describe("stack workflow helpers", () => {
   });
 
   it("splits revision change variables into added, carried, and removed by name", () => {
-    const current = [variable({ name: "region" }), variable({ name: "legacy_flag" })];
-    const target = [variable({ name: "region" }), variable({ name: "new_var" })];
+    const current = [templateVariable({ name: "region" }), templateVariable({ name: "legacy_flag" })];
+    const target = [templateVariable({ name: "region" }), templateVariable({ name: "new_var" })];
 
     const partition = partitionRevisionChangeVariables(current, target);
 
@@ -250,7 +251,7 @@ describe("stack workflow helpers", () => {
   });
 
   it("carries every variable when the revision's variable set is unchanged", () => {
-    const variables = [variable({ name: "region" }), variable({ name: "cidr_block" })];
+    const variables = [templateVariable({ name: "region" }), templateVariable({ name: "cidr_block" })];
 
     const partition = partitionRevisionChangeVariables(variables, variables);
 
@@ -260,7 +261,7 @@ describe("stack workflow helpers", () => {
   });
 
   it("treats a fully disjoint variable set as all added and all removed", () => {
-    const partition = partitionRevisionChangeVariables([variable({ name: "old" })], [variable({ name: "new" })]);
+    const partition = partitionRevisionChangeVariables([templateVariable({ name: "old" })], [templateVariable({ name: "new" })]);
 
     expect(partition.added.map((item) => item.name)).toEqual(["new"]);
     expect(partition.carried).toEqual([]);
@@ -268,8 +269,8 @@ describe("stack workflow helpers", () => {
   });
 
   it("returns the target revision's variable definitions for carried variables", () => {
-    const current = [variable({ name: "region", template_revision_id: "rev_current", required: false })];
-    const target = [variable({ name: "region", template_revision_id: "rev_target", required: true })];
+    const current = [templateVariable({ name: "region", template_revision_id: "rev_current", required: false })];
+    const target = [templateVariable({ name: "region", template_revision_id: "rev_target", required: true })];
 
     const partition = partitionRevisionChangeVariables(current, target);
 
@@ -279,7 +280,7 @@ describe("stack workflow helpers", () => {
 
   it("enables saving installed config only when a value differs from what is stored", () => {
     const installed = stackTemplate({ config: { region: "us-east-1" } });
-    const variables = [variable({ name: "region" })];
+    const variables = [templateVariable({ name: "region" })];
 
     expect(canSaveInstalledTemplateConfig(installed, variables, { region: "us-east-1" })).toBe(false);
     expect(canSaveInstalledTemplateConfig(installed, variables, { region: "eu-west-1" })).toBe(true);
@@ -287,7 +288,7 @@ describe("stack workflow helpers", () => {
 
   it("does not count reformatted JSON as a change, and counts text that isn't JSON as one", () => {
     const installed = stackTemplate({ config: { subnets: ["a", "b"] } });
-    const variables = [variable({ name: "subnets", type_expression: "list(string)" })];
+    const variables = [templateVariable({ name: "subnets", type_expression: "list(string)" })];
 
     expect(canSaveInstalledTemplateConfig(installed, variables, { subnets: '[ "a",\n "b" ]' })).toBe(false);
     expect(canSaveInstalledTemplateConfig(installed, variables, { subnets: '["a"]' })).toBe(true);
@@ -296,7 +297,7 @@ describe("stack workflow helpers", () => {
   });
 
   it("does not enable saving installed config without an installed template", () => {
-    expect(canSaveInstalledTemplateConfig(null, [variable({ name: "region" })], { region: "eu-west-1" })).toBe(false);
+    expect(canSaveInstalledTemplateConfig(null, [templateVariable({ name: "region" })], { region: "eu-west-1" })).toBe(false);
   });
 });
 
@@ -314,64 +315,4 @@ function stack(overrides: Partial<Stack>): Stack {
     effective_capabilities: { can_view: true, can_operate: true, can_approve: true, can_manage_access: true },
     ...overrides
   };
-}
-
-function templateRevision(overrides: Partial<TemplateRevision>): TemplateRevision {
-  return {
-    id: "template_123",
-    tenant_id: "tenant_123",
-    template_id: "source_template_123",
-    repo_owner: "hashicorp",
-    repo_name: "terraform-template",
-    source_ref: "main",
-    resolved_commit_sha: "abc123",
-    commit_subject: "",
-    root_path: ".",
-    name: "Terraform Template",
-    description: "",
-    tags: [],
-    status: "active",
-    created_at: "2026-07-06T00:00:00Z",
-    ...overrides
-  };
-}
-
-function stackTemplate(overrides: Partial<StackTemplate>): StackTemplate {
-  return {
-    id: "stack_template_123",
-    stack_id: "stack_123",
-    key: "primary",
-    template_id: "source_template_123",
-    desired_template_revision_id: "template_123",
-    last_applied_template_revision_id: "",
-    source_ref: "main",
-    workspace_name: "prod-workspace",
-    display_name: "",
-    config: {},
-    last_applied_run_id: "",
-    pending_plan_run_id: "",
-    plan_state: "none",
-    live_state: "never",
-    created_by: "user_123",
-    lifecycle: "active",
-    ...overrides
-  };
-}
-
-function templateVariable(overrides: Partial<TemplateVariable>): TemplateVariable {
-  return {
-    template_revision_id: "template_123",
-    name: "region",
-    type_expression: "string",
-    description: "",
-    required: true,
-    has_default: false,
-    sensitive: false,
-    has_validation: false,
-    ...overrides
-  };
-}
-
-function variable(overrides: Partial<TemplateVariable>): TemplateVariable {
-  return templateVariable(overrides);
 }
