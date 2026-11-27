@@ -9,7 +9,9 @@ import { queryKeys } from "../../api/queryKeys";
 import { problemTypes } from "../../api/types";
 import type { TemplateLatestSync, TemplateRevision } from "../../api/types";
 import TemplatePanel from "./TemplatePanel";
-import { authValue, jsonResponse, latestSync, revision, seedTemplates, template, templateReadResponse, TENANT, testQueryClient, variable } from "./testSupport";
+import { latestSync, revision, seedTemplates, template, templateReadResponse, TENANT, variable } from "./testSupport";
+import { jsonResponse, testQueryClient } from "../../api/testSupport";
+import { authValue } from "../../auth/testSupport";
 
 const latest = revision({ id: "rev_2", resolved_commit_sha: "9e7d3b2aaaabbbbccccddddeeeeffff000011112", created_at: "2026-10-05T09:30:00Z" });
 const older = revision({ id: "rev_1" });
@@ -45,7 +47,7 @@ function renderPanel(queryClient: QueryClient, path: string, canManageTemplates 
   );
   render(
     <QueryClientProvider client={queryClient}>
-      <AuthContext.Provider value={authValue(canManageTemplates)}>
+      <AuthContext.Provider value={authValue({ capabilities: { can_manage_templates: canManageTemplates } })}>
         <RouterProvider router={router} />
       </AuthContext.Provider>
     </QueryClientProvider>

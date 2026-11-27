@@ -5,11 +5,11 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../../auth/AuthContext";
-import type { AuthContextValue } from "../../auth/AuthContext";
 import CreateStackScreen from "./CreateStackScreen";
 import { queryKeys } from "../../api/queryKeys";
 import type { Stack } from "../../api/types";
-import { asListBody } from "../../api/listTestSupport";
+import { jsonResponse, testQueryClient } from "../../api/testSupport";
+import { authValue } from "../../auth/testSupport";
 
 function stack(overrides: Partial<Stack> = {}): Stack {
   return {
@@ -27,34 +27,16 @@ function stack(overrides: Partial<Stack> = {}): Stack {
   };
 }
 
-function testQueryClient(): QueryClient {
-  return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-}
-
-function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
-  return {
-    me: { sub: "user_1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: true, can_manage_templates: true, can_manage_platform_access: false } },
-    status: "authenticated",
-    login: () => {},
-    logout: () => {},
-    ...overrides,
-  };
-}
-
 function renderScreen(queryClient?: QueryClient) {
   return render(
     <QueryClientProvider client={queryClient ?? testQueryClient()}>
-      <AuthContext.Provider value={authValue()}>
+      <AuthContext.Provider value={authValue({ capabilities: { can_create_stack: true, can_manage_templates: true } })}>
         <MemoryRouter initialEntries={["/stacks/new"]}>
           <CreateStackScreen />
         </MemoryRouter>
       </AuthContext.Provider>
     </QueryClientProvider>
   );
-}
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(asListBody(body)), { status, headers: { "content-type": "application/json" } });
 }
 
 describe("CreateStackScreen", () => {

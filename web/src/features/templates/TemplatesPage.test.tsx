@@ -7,7 +7,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../../auth/AuthContext";
 import type { TemplateRevision } from "../../api/types";
 import TemplatesPage from "./TemplatesPage";
-import { authValue, jsonResponse, latestSync, revision, seedTemplates, template, testQueryClient } from "./testSupport";
+import { latestSync, revision, seedTemplates, template } from "./testSupport";
+import { jsonResponse, testQueryClient } from "../../api/testSupport";
+import { authValue } from "../../auth/testSupport";
 
 // The page through the same route shape as router.tsx, with the panel's
 // routes stubbed: these tests are about the frame, the header and the list.
@@ -48,7 +50,7 @@ function renderPage(queryClient: QueryClient, path: string, canManageTemplates =
   );
   render(
     <QueryClientProvider client={queryClient}>
-      <AuthContext.Provider value={authValue(canManageTemplates)}>
+      <AuthContext.Provider value={authValue({ capabilities: { can_manage_templates: canManageTemplates } })}>
         <RouterProvider router={router} />
       </AuthContext.Provider>
     </QueryClientProvider>

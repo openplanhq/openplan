@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { pagesOf } from "../../api/listTestSupport";
+import { pagesOf, testQueryClient } from "../../api/testSupport";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { Navigate, MemoryRouter, Route, Routes } from "react-router-dom";
@@ -17,6 +17,7 @@ import TemplateRunsTab from "./TemplateRunsTab";
 import TemplateSettingsTab from "./TemplateSettingsTab";
 import TemplateVariablesTab from "./TemplateVariablesTab";
 import { seedTemplates } from "../templates/testSupport";
+import { authValue } from "../../auth/testSupport";
 
 // The panel for one template and its tabs, rendered through the same route
 // shape as router.tsx so tab links and the index redirect are exercised the
@@ -98,12 +99,6 @@ function variable(overrides: Partial<TemplateVariable> = {}): TemplateVariable {
   };
 }
 
-// staleTime: Infinity keeps seeded cache data from triggering a background
-// refetch on mount — see the identical rationale in StacksListScreen.test.tsx.
-function testQueryClient(): QueryClient {
-  return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-}
-
 function seedDefaultData(queryClient: QueryClient, capabilities: StackCapabilities = allAllowed) {
   queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView(capabilities, [stackTemplate()]));
   queryClient.setQueryData(queryKeys.attention("tenant_123"), []);
@@ -122,16 +117,6 @@ function seedDefaultData(queryClient: QueryClient, capabilities: StackCapabiliti
 /** True when `first` appears before `second` in document order. */
 function precedes(first: HTMLElement, second: HTMLElement): boolean {
   return Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING);
-}
-
-function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
-  return {
-    me: { sub: "user_1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_manage_templates: false, can_manage_platform_access: false } },
-    status: "authenticated",
-    login: () => {},
-    logout: () => {},
-    ...overrides,
-  };
 }
 
 function runFor(stackTemplateID: string, overrides: Partial<TemplateRun> = {}): TemplateRun {

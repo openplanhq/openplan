@@ -1,17 +1,17 @@
 // @vitest-environment jsdom
-import { pagesOf } from "../../api/listTestSupport";
+import { pagesOf } from "../../api/testSupport";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createMemoryRouter, redirect, RouterProvider } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../../auth/AuthContext";
-import type { AuthContextValue } from "../../auth/AuthContext";
 import type { StackCapabilities } from "../../auth/types";
 import { queryKeys } from "../../api/queryKeys";
 import type { AttentionItem, StackTemplate, StackView } from "../../api/types";
 import StackIndexPanel from "./StackIndexPanel";
 import StackPage from "./StackPage";
 import TemplatePanel from "./TemplatePanel";
+import { authValue } from "../../auth/testSupport";
 
 // The stack's page through the same route shape as router.tsx, with each
 // template tab stubbed, so these tests are about the frame: the header, the
@@ -89,15 +89,6 @@ function seed(templates: StackTemplate[], capabilities: StackCapabilities = allA
     queryClient.setQueryData(queryKeys.templateRuns(TENANT, stackTemplate.id), pagesOf([]));
   }
   return queryClient;
-}
-
-function authValue(): AuthContextValue {
-  return {
-    me: { sub: "user_1", tenant_id: TENANT, display_name: "Test User", global_capabilities: { can_create_stack: false, can_manage_templates: false, can_manage_platform_access: false } },
-    status: "authenticated",
-    login: () => {},
-    logout: () => {}
-  };
 }
 
 function renderPage(queryClient: QueryClient, path: string) {

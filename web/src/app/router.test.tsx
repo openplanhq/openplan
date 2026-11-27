@@ -1,23 +1,13 @@
-import { pagesOf } from "../api/listTestSupport";
+import { pagesOf } from "../api/testSupport";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, Outlet, RouterProvider } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../auth/AuthContext";
-import type { AuthContextValue } from "../auth/AuthContext";
 import { seedTemplates } from "../features/templates/testSupport";
+import { authValue } from "../auth/testSupport";
 
 vi.mock("../auth/SessionProvider");
-
-function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
-  return {
-    me: { sub: "user_1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_manage_templates: false, can_manage_platform_access: false } },
-    status: "authenticated",
-    login: () => {},
-    logout: () => {},
-    ...overrides,
-  };
-}
 
 // The stack every stack-route test below seeds: can_view-gated routes resolve
 // once the stack query cache has effective_capabilities. retry: false +
@@ -90,7 +80,7 @@ describe("routeConfig", () => {
       const testRouter = createMemoryRouter(routeConfig, { initialEntries: ["/stacks/new"] });
       const markup = renderToStaticMarkup(
         <QueryClientProvider client={new QueryClient()}>
-          <AuthContext.Provider value={authValue({ me: { ...authValue().me!, global_capabilities: { can_create_stack: true, can_manage_templates: true, can_manage_platform_access: false } } })}>
+          <AuthContext.Provider value={authValue({ capabilities: { can_create_stack: true, can_manage_templates: true } })}>
             <RouterProvider router={testRouter} />
           </AuthContext.Provider>
         </QueryClientProvider>
@@ -237,9 +227,7 @@ describe("routeConfig", () => {
   async function renderTemplatesRoute(path: string, canManageTemplates = false) {
     vi.doMock("../auth/SessionProvider", async () => {
       const { AuthContext: RouterAuthContext } = await import("../auth/AuthContext");
-      const signedIn = authValue({
-        me: { sub: "user_1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_manage_templates: canManageTemplates, can_manage_platform_access: false } }
-      });
+      const signedIn = authValue({ capabilities: { can_manage_templates: canManageTemplates } });
       return {
         default: () => (
           <RouterAuthContext.Provider value={signedIn}>
@@ -423,7 +411,6 @@ describe("routeConfig", () => {
 
   it("renders the 404 screen for unknown paths", async () => {
     const { routeConfig } = await import("./router");
-
 
     const testRouter = createMemoryRouter(routeConfig, { initialEntries: ["/nonexistent"] });
     const markup = renderToStaticMarkup(

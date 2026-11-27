@@ -9,7 +9,8 @@ import StacksListScreen from "./StacksListScreen";
 import { formatDateTime, formatTimestamp } from "../../shared/formatTimestamp";
 import { queryKeys } from "../../api/queryKeys";
 import type { AttentionItem, StackListItem, StackTemplate, StackView, TemplateRun } from "../../api/types";
-import { asListBody, pagesOf } from "../../api/listTestSupport";
+import { jsonResponse, pagesOf, testQueryClient } from "../../api/testSupport";
+import { authValue } from "../../auth/testSupport";
 
 const TENANT = "tenant_123";
 
@@ -63,12 +64,6 @@ function waitingItem(overrides: Partial<AttentionItem> = {}): AttentionItem {
   };
 }
 
-// staleTime: Infinity keeps seeded cache data from triggering a background
-// refetch on mount — see the identical rationale in useStackCapabilities.test.tsx.
-function testQueryClient(): QueryClient {
-  return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-}
-
 function seed(queryClient: QueryClient, data: { stacks?: StackListItem[]; attention?: AttentionItem[]; views?: StackView[] }) {
   if (data.stacks) queryClient.setQueryData(queryKeys.stackList(TENANT, ""), pagesOf(data.stacks));
   queryClient.setQueryData(queryKeys.attention(TENANT), data.attention ?? []);
@@ -77,30 +72,16 @@ function seed(queryClient: QueryClient, data: { stacks?: StackListItem[]; attent
   }
 }
 
-function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
-  return {
-    me: { sub: "user_1", tenant_id: TENANT, display_name: "Test User", global_capabilities: { can_create_stack: true, can_manage_templates: true, can_manage_platform_access: false } },
-    status: "authenticated",
-    login: () => {},
-    logout: () => {},
-    ...overrides
-  };
-}
-
 function renderScreen(queryClient: QueryClient, options: { auth?: AuthContextValue; path?: string; state?: unknown } = {}) {
   return render(
     <QueryClientProvider client={queryClient}>
-      <AuthContext.Provider value={options.auth ?? authValue()}>
+      <AuthContext.Provider value={options.auth ?? authValue({ capabilities: { can_create_stack: true, can_manage_templates: true } })}>
         <MemoryRouter initialEntries={[options.state === undefined ? (options.path ?? "/stacks") : { pathname: options.path ?? "/stacks", state: options.state }]}>
           <StacksListScreen />
         </MemoryRouter>
       </AuthContext.Provider>
     </QueryClientProvider>
   );
-}
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(asListBody(body)), { status, headers: { "content-type": "application/json" } });
 }
 
 /** Answers each API path with its own response; anything else never settles. */
@@ -547,7 +528,7 @@ describe("StacksListScreen", () => {
     seed(queryClient, { stacks: [] });
 
     renderScreen(queryClient, {
-      auth: authValue({ me: { sub: "user_1", tenant_id: TENANT, display_name: "Test User", global_capabilities: { can_create_stack: false, can_manage_templates: false, can_manage_platform_access: false } } })
+      auth: authValue()
     });
 
     const empty = screen.getByTestId("stacks-list-empty");
@@ -655,7 +636,7 @@ describe("StacksListScreen", () => {
     seed(queryClient, { stacks: [stack()] });
 
     renderScreen(queryClient, {
-      auth: authValue({ me: { ...authValue().me!, global_capabilities: { can_create_stack: false, can_manage_templates: false, can_manage_platform_access: false } } })
+      auth: authValue()
     });
 
     expect(screen.getByTestId("stacks-list")).toBeTruthy();
