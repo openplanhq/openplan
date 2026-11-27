@@ -1,8 +1,5 @@
-import { Fragment, useId, useState } from "react";
-import { Combobox } from "@base-ui/react";
-import { Search } from "lucide-react";
+import { useId, useState } from "react";
 import { Link } from "react-router-dom";
-import { searchFieldClass } from "../../shared/SearchField";
 import StatusLabel from "../../shared/StatusLabel";
 import { revisionIndicator } from "../templates/revisionIndicator";
 import type { Template, TemplateRevision } from "../../api/types";
@@ -11,8 +8,7 @@ import type { TemplateSearchMatch } from "../templates/templateWorkflow";
 import Separator from "../../shared/Separator";
 import { matchCountLabel } from "../../shared/matchCountLabel";
 import { pluralCount } from "../../shared/plural";
-import { ComboboxContent, ComboboxEmpty, ComboboxList, useComboboxAnchor } from "@/components/ui/combobox";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import SearchPicker, { ChoiceRow, Highlighted } from "../../shared/SearchPicker";
 import { cn } from "@/lib/utils";
 
 // The most choices the list shows at once. The registry can hold hundreds of
@@ -42,29 +38,17 @@ export default function TemplateSearch({
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(autoFocus);
   const hintId = useId();
-  // The whole field, glass and all, so the list lines up with its edges.
-  const anchorRef = useComboboxAnchor();
 
   const matches = searchTemplates(templates, query);
   const shown = matches.slice(0, MAX_CHOICES);
 
   return (
     <div className="flex flex-col gap-1.5">
-      {/* The list answers what is typed as searchTemplates ranks it
-          (filter={null}), and the pick is never the Combobox's value: a pick
-          closes the search, and the screen shows the picked template instead. */}
-      <Combobox.Root<TemplateSearchMatch>
+      <SearchPicker<TemplateSearchMatch>
         items={shown}
-        filter={null}
-        value={null}
-        onValueChange={(match) => {
-          if (match) onPick(match.template);
-        }}
-        inputValue={query}
-        onInputValueChange={(value, { reason }) => {
-          // A pick writes the template's name into the input; only typing is a query.
-          if (reason === "input-change") setQuery(value);
-        }}
+        query={query}
+        onQueryChange={setQuery}
+        onPick={(match) => onPick(match.template)}
         open={open}
         onOpenChange={(next, { reason }) => {
           setOpen(next);
@@ -72,76 +56,46 @@ export default function TemplateSearch({
           if (reason === "escape-key") onDismiss?.("escape");
           else if (reason === "focus-out" || reason === "outside-press") onDismiss?.("elsewhere");
         }}
-        autoHighlight
         itemToStringLabel={(match) => match.name}
         isItemEqualToValue={(a, b) => a.template.id === b.template.id}
-      >
-        <InputGroup ref={anchorRef} className={cn(searchFieldClass, "pointer-coarse:h-11")}>
-          <InputGroupAddon className="pl-2.5">
-            <Search aria-hidden="true" className="text-subtle-foreground" />
-          </InputGroupAddon>
-          <Combobox.Input
-            render={<InputGroupInput />}
-            aria-label="Search templates"
-            aria-describedby={hintId}
-            placeholder="Search templates by name, repository or path"
-            autoFocus={autoFocus}
-            onFocus={() => setOpen(true)}
-            // Leaving a closed list fires no close, so say so here. An open
-            // list reports its own close, and acting here could shut it under
-            // a press on one of its choices.
-            onBlur={() => {
-              if (!open) onDismiss?.("elsewhere");
-            }}
-            className="placeholder:text-subtle-foreground"
-          />
-        </InputGroup>
-        {/* The vendored popup and list, as wide as the field and drawn like a
-            ChoiceRow group: a border, no shadow, choices a divider apart. */}
-        <ComboboxContent anchor={anchorRef} className="flex min-w-0 flex-col border bg-card shadow-none ring-0">
-          <ComboboxEmpty className="flex-col items-start justify-start gap-2 px-4 py-3 text-left text-meta">
+        input={{
+          "aria-label": "Search templates",
+          "aria-describedby": hintId,
+          placeholder: "Search templates by name, repository or path",
+          autoFocus,
+          onFocus: () => setOpen(true),
+          // Leaving a closed list fires no close, so say so here. An open
+          // list reports its own close, and acting here could shut it under
+          // a press on one of its choices.
+          onBlur: () => !open && onDismiss?.("elsewhere")
+        }}
+        emptyClassName="gap-2"
+        empty={
+          <>
             <span>No templates match this search.</span>
             <Link to="/templates/new" className="font-medium text-primary hover:underline" data-testid="add-template-search-register">
               Register template
             </Link>
-          </ComboboxEmpty>
-          <ComboboxList className="max-h-96 min-h-0 divide-y divide-divider p-0">
-            {(match: TemplateSearchMatch) => <Choice key={match.template.id} match={match} />}
-          </ComboboxList>
-          {shown.length > 0 && (
-            <div className="flex items-center justify-between gap-4 border-t border-divider bg-canvas px-4 py-2 text-caption text-muted-foreground">
-              <span>{countLabel(matches.length, shown.length, query.trim() !== "")}</span>
-              <span aria-hidden="true" className="whitespace-nowrap pointer-coarse:hidden">
-                ↑ ↓ to move · Enter to choose · Esc to close
-              </span>
-            </div>
-          )}
-        </ComboboxContent>
-      </Combobox.Root>
+          </>
+        }
+        count={countLabel(matches.length, shown.length, query.trim() !== "")}
+      >
+        {(match) => (
+          // Its revisions are read only once it is picked, so it has no
+          // revision count or state of its own here.
+          <ChoiceRow
+            key={match.template.id}
+            value={match}
+            name={<Highlighted text={match.name} hits={match.nameHits} markClassName="font-semibold" />}
+            caption={<TemplateSource template={match.template} repositoryHits={match.repositoryHits} pathHits={match.pathHits} className="truncate" />}
+          />
+        )}
+      </SearchPicker>
       <p id={hintId} className="text-caption text-muted-foreground">
         {pluralCount(templates.length, "template", "templates")} in{" "}
         {pluralCount(repositoryCount, "repository", "repositories")}.
       </p>
     </div>
-  );
-}
-
-// One match as a ChoiceRow. Its revisions are read only once it is picked,
-// so it has no revision count or state of its own here.
-function Choice({ match }: { match: TemplateSearchMatch }) {
-  const { template } = match;
-  return (
-    <Combobox.Item
-      value={match}
-      className="flex min-h-13 w-full cursor-pointer items-center justify-between gap-4 px-4 py-2 text-left outline-none select-none data-highlighted:bg-primary-tint pointer-coarse:min-h-14"
-    >
-      <span className="flex min-w-0 flex-col gap-0.5">
-        <span className="truncate text-label text-foreground">
-          <Highlighted text={match.name} hits={match.nameHits} markClassName="font-semibold" />
-        </span>
-        <TemplateSource template={template} repositoryHits={match.repositoryHits} pathHits={match.pathHits} className="truncate" />
-      </span>
-    </Combobox.Item>
   );
 }
 
@@ -191,38 +145,6 @@ export function TemplateChoiceState({ revisions }: { revisions: TemplateRevision
       {latestState && <StatusLabel indicator={latestState} />}
       {installableCount > 0 && <span className="text-meta text-muted-foreground">{pluralCount(installableCount, "revision", "revisions")}</span>}
     </span>
-  );
-}
-
-// The matched letters drawn heavier, never in colour: primary is kept for the
-// action, the link, the focus ring and the selection.
-function Highlighted({ text, hits, markClassName }: { text: string; hits: number[]; markClassName: string }) {
-  if (hits.length === 0) {
-    return <>{text}</>;
-  }
-  const hit = new Set(hits);
-  const runs: Array<{ text: string; hit: boolean }> = [];
-  for (let index = 0; index < text.length; index++) {
-    const isHit = hit.has(index);
-    const last = runs[runs.length - 1];
-    if (last && last.hit === isHit) {
-      last.text += text[index];
-    } else {
-      runs.push({ text: text[index], hit: isHit });
-    }
-  }
-  return (
-    <>
-      {runs.map((run, index) =>
-        run.hit ? (
-          <mark key={index} className={cn("bg-transparent text-foreground", markClassName)}>
-            {run.text}
-          </mark>
-        ) : (
-          <Fragment key={index}>{run.text}</Fragment>
-        )
-      )}
-    </>
   );
 }
 

@@ -5,12 +5,12 @@ import { useCreateStackMutation } from "../../api/queries";
 import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
-import { fieldLabelClass, inputClass } from "../../shared/fieldClass";
+import Field from "../../shared/Field";
+import { inputClass } from "../../shared/fieldClass";
 import PageHeader from "../../shared/PageHeader";
 import { useFieldErrors } from "../../shared/useFieldErrors";
 import BusyIcon from "../../shared/BusyIcon";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 // Create stack, on openplan UI: its header and trail on the canvas, and the
@@ -62,30 +62,22 @@ export default function CreateStackScreen() {
         className="flex flex-col items-start gap-5 rounded-panel border bg-card px-7 pt-6 pb-7"
         onSubmit={handleSubmit}
       >
-        <div className="flex flex-col gap-1.5 self-stretch">
-          <Label htmlFor="create-stack-name" className={fieldLabelClass}>
-            Name
-          </Label>
-          <Input
-            id="create-stack-name"
-            value={name}
-            onChange={(event) => {
-              setName(event.target.value);
-              nameErrors.clear("name");
-            }}
-            aria-invalid={nameErrors.errors.name ? true : undefined}
-            aria-describedby={nameErrors.errors.name ? "create-stack-name-error" : undefined}
-            placeholder="prod"
-            autoComplete="off"
-            autoFocus
-            className={inputClass}
-          />
-          {nameErrors.errors.name && (
-            <ErrorLine id="create-stack-name-error" live={false}>
-              {nameErrors.errors.name}
-            </ErrorLine>
+        <Field id="create-stack-name" label="Name" error={nameErrors.errors.name} className="self-stretch">
+          {(control) => (
+            <Input
+              {...control}
+              value={name}
+              onChange={(event) => {
+                setName(event.target.value);
+                nameErrors.clear("name");
+              }}
+              placeholder="prod"
+              autoComplete="off"
+              autoFocus
+              className={inputClass}
+            />
           )}
-        </div>
+        </Field>
         <button
           type="submit"
           className={cn(buttonClass("primary"), "pointer-coarse:h-11")}

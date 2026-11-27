@@ -1,14 +1,14 @@
-import { Hourglass, Plus, TriangleAlert } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import type { AttentionItem, StackTemplate } from "../../api/types";
 import RequireCapability from "../../auth/RequireCapability";
-import Chip from "../../shared/Chip";
 import { listItemClass } from "../../shared/listItemClass";
 import SearchField from "../../shared/SearchField";
 import Separator from "../../shared/Separator";
 import { cn } from "@/lib/utils";
-import { failedOperation, runFailedChipLabel } from "./attention";
+import { failedOperation } from "./attention";
+import AttentionChips from "./AttentionChips";
 import { stackTemplateActivity } from "./StackTemplateStatusLabel";
 import { stackTemplatePath, templateTabOf } from "./templateSelection";
 import { stackTemplateLabel } from "./stackWorkflow";
@@ -99,9 +99,6 @@ function StackTemplateRow({
 }) {
   const label = stackTemplateLabel(stackTemplate);
   const activity = stackTemplateActivity(stackTemplate, attention);
-  // As the status label reads it: a pending plan is still pending while it applies.
-  const waiting = attention?.kind === "waiting_approval";
-  const failed = stackTemplate.lifecycle === "failed";
   const runFailed = attention?.kind === "run_failed" ? failedOperation(attention) : null;
 
   return (
@@ -125,25 +122,16 @@ function StackTemplateRow({
           )}
         </span>
       </span>
-      {(waiting || failed || runFailed) && (
-        <span className="flex shrink-0 flex-col items-end gap-1">
-          {waiting && (
-            <Chip tone="warning" icon={Hourglass}>
-              plan to approve
-            </Chip>
-          )}
-          {failed && (
-            <Chip tone="destructive" icon={TriangleAlert}>
-              destroy failed
-            </Chip>
-          )}
-          {runFailed && (
-            <Chip tone="destructive" icon={TriangleAlert}>
-              {runFailedChipLabel(runFailed, 1)}
-            </Chip>
-          )}
-        </span>
-      )}
+      <AttentionChips
+        single
+        attention={{
+          // As the status label reads it: a pending plan is still pending while it applies.
+          waiting: Number(attention?.kind === "waiting_approval"),
+          destroyFailed: Number(stackTemplate.lifecycle === "failed"),
+          planFailed: Number(runFailed === "plan"),
+          applyFailed: Number(runFailed === "apply")
+        }}
+      />
     </Link>
   );
 }

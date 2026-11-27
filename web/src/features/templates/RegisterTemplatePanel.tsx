@@ -10,10 +10,10 @@ import { useRegisterTemplateMutation, useTemplateQuery, useTemplatesQuery } from
 import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import ErrorPanel from "../../shared/ErrorPanel";
-import { fieldLabelClass, inputClass } from "../../shared/fieldClass";
+import Field from "../../shared/Field";
+import { inputClass } from "../../shared/fieldClass";
 import BusyIcon from "../../shared/BusyIcon";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { rootPathOf } from "./templateLinks";
 import { templatePath } from "./templateRoutes";
@@ -122,26 +122,21 @@ export default function RegisterTemplatePanel() {
           openplan clones the repository, reads the module's variables and its <span className="font-mono text-code-foreground">template.yaml</span>, and
           registers the commit the ref points at.
         </p>
+        {/* Owner and Repository grow side by side, and wrap on a phone. */}
         <div className="flex flex-wrap gap-x-2 gap-y-4">
-          <Field id="template-repo-owner" label="Owner" hint="The GitHub organization or user." value={repoOwner} onChange={setRepoOwner} disabled={busy} grow />
-          <Field id="template-repo-name" label="Repository" hint="The repository name." value={repoName} onChange={setRepoName} disabled={busy} grow />
+          <Field id="template-repo-owner" label="Owner" hint="The GitHub organization or user." className="flex-1 basis-50">
+            {(control) => <Input {...control} value={repoOwner} onChange={(event) => setRepoOwner(event.target.value)} disabled={busy} className={inputClass} />}
+          </Field>
+          <Field id="template-repo-name" label="Repository" hint="The repository name." className="flex-1 basis-50">
+            {(control) => <Input {...control} value={repoName} onChange={(event) => setRepoName(event.target.value)} disabled={busy} className={inputClass} />}
+          </Field>
         </div>
-        <Field
-          id="template-source-ref"
-          label="Ref"
-          hint="A branch or a tag. On a branch, Sync picks up new commits."
-          value={sourceRef}
-          onChange={setSourceRef}
-          disabled={busy}
-        />
-        <Field
-          id="template-root-path"
-          label="Root path"
-          hint="The module's directory in the repository, or . when the module is at its root."
-          value={rootPath}
-          onChange={setRootPath}
-          disabled={busy}
-        />
+        <Field id="template-source-ref" label="Ref" hint="A branch or a tag. On a branch, Sync picks up new commits.">
+          {(control) => <Input {...control} value={sourceRef} onChange={(event) => setSourceRef(event.target.value)} disabled={busy} className={inputClass} />}
+        </Field>
+        <Field id="template-root-path" label="Root path" hint="The module's directory in the repository, or . when the module is at its root.">
+          {(control) => <Input {...control} value={rootPath} onChange={(event) => setRootPath(event.target.value)} disabled={busy} className={inputClass} />}
+        </Field>
         {/* The status region is always mounted, empty while idle, so the
             progress row is announced when it arrives, as a region inserted
             with its words already in it may not be. It shares a column with
@@ -179,37 +174,5 @@ export default function RegisterTemplatePanel() {
         )}
       </form>
     </section>
-  );
-}
-
-// openplan UI's Field: a label over its control over what it is for. Owner
-// and Repository grow side by side and wrap on a phone.
-function Field({
-  id,
-  label,
-  hint,
-  value,
-  onChange,
-  disabled,
-  grow = false
-}: {
-  id: string;
-  label: string;
-  hint: string;
-  value: string;
-  onChange: (value: string) => void;
-  disabled: boolean;
-  grow?: boolean;
-}) {
-  return (
-    <div className={cn("flex min-w-0 flex-col gap-1.5", grow && "flex-1 basis-50")}>
-      <Label htmlFor={id} className={fieldLabelClass}>
-        {label}
-      </Label>
-      <Input id={id} value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} aria-describedby={`${id}-hint`} className={inputClass} />
-      <p id={`${id}-hint`} className="text-caption text-muted-foreground">
-        {hint}
-      </p>
-    </div>
   );
 }

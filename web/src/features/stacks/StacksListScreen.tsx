@@ -1,4 +1,4 @@
-import { ArrowRight, Hourglass, Layers, Plus, TriangleAlert } from "lucide-react";
+import { ArrowRight, Hourglass, Layers, Plus } from "lucide-react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAttentionQuery, useStacksQuery } from "../../api/queries";
@@ -9,17 +9,11 @@ import { useTenantID } from "../../auth/useTenantID";
 import PageHeader from "../../shared/PageHeader";
 import { pluralWord } from "../../shared/plural";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
-import {
-  attentionByStack,
-  attentionByStackTemplate,
-  attentionSummary,
-  runFailedChipLabel,
-  waitingChipLabel
-} from "./attention";
+import { attentionByStack, attentionByStackTemplate, attentionSummary } from "./attention";
 import type { StackAttention } from "./attention";
+import AttentionChips from "./AttentionChips";
 import StackPreview from "./StackPreview";
 import { buttonClass } from "../../shared/buttonClass";
-import Chip from "../../shared/Chip";
 import { listItemClass } from "../../shared/listItemClass";
 import SearchField from "../../shared/SearchField";
 import LoadMoreButton from "../../shared/LoadMoreButton";
@@ -253,30 +247,7 @@ function StackRow({ stack, selected, attention }: { stack: StackListItem; select
         </span>
         <TemplateCount templates={stack.template_count} selected={selected} />
       </span>
-      {attention && (
-        <span className="flex shrink-0 flex-col items-end gap-1">
-          {attention.waiting > 0 && (
-            <Chip tone="warning" icon={Hourglass}>
-              {waitingChipLabel(attention.waiting)}
-            </Chip>
-          )}
-          {attention.destroyFailed > 0 && (
-            <Chip tone="destructive" icon={TriangleAlert}>
-              {runFailedChipLabel("destroy", attention.destroyFailed)}
-            </Chip>
-          )}
-          {attention.planFailed > 0 && (
-            <Chip tone="destructive" icon={TriangleAlert}>
-              {runFailedChipLabel("plan", attention.planFailed)}
-            </Chip>
-          )}
-          {attention.applyFailed > 0 && (
-            <Chip tone="destructive" icon={TriangleAlert}>
-              {runFailedChipLabel("apply", attention.applyFailed)}
-            </Chip>
-          )}
-        </span>
-      )}
+      {attention && <AttentionChips attention={attention} />}
     </Link>
   );
 }

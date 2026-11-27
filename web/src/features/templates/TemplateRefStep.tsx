@@ -5,11 +5,10 @@ import { useChangeTemplateRefMutation } from "../../api/queries";
 import { problemTypes } from "../../api/types";
 import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
-import ErrorLine from "../../shared/ErrorLine";
-import { fieldLabelClass, inputClass } from "../../shared/fieldClass";
+import Field from "../../shared/Field";
+import { inputClass } from "../../shared/fieldClass";
 import BusyIcon from "../../shared/BusyIcon";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 // Changing the ref a template follows, from Change ref on the name's line:
@@ -62,29 +61,26 @@ export function TemplateRefStep({
         }
       }}
     >
-      <div className="flex min-w-0 grow flex-col gap-1.5">
-        <Label htmlFor="template-ref" className={fieldLabelClass}>
-          Ref
-        </Label>
-        <Input
-          ref={inputRef}
-          id="template-ref"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          aria-invalid={refusal !== null ? true : undefined}
-          aria-describedby="template-ref-said"
-          spellCheck={false}
-          autoComplete="off"
-          className={cn(inputClass, "max-w-90")}
-        />
-        {refusal !== null ? (
-          <ErrorLine id="template-ref-said">{refusal}</ErrorLine>
-        ) : (
-          <p id="template-ref-said" className="text-caption text-muted-foreground">
-            Stacks stay on their revision until someone changes it.
-          </p>
+      <Field
+        id="template-ref"
+        label="Ref"
+        error={refusal ?? undefined}
+        liveError
+        hint={refusal === null && "Stacks stay on their revision until someone changes it."}
+        className="grow"
+      >
+        {(control) => (
+          <Input
+            {...control}
+            ref={inputRef}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            spellCheck={false}
+            autoComplete="off"
+            className={cn(inputClass, "max-w-90")}
+          />
         )}
-      </div>
+      </Field>
       <div className="flex shrink-0 items-center gap-2">
         <button type="button" className={cn(buttonClass("outline"), "pointer-coarse:h-11")} onClick={() => !busy && onCancel()}>
           Cancel
