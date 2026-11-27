@@ -2,7 +2,7 @@ import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClie
 import type { InfiniteData, QueryClient } from "@tanstack/react-query";
 import * as client from "./client";
 import { queryKeys } from "./queryKeys";
-import { isSyncSettled, isTerminalRunStatus } from "./polling";
+import { isMovingRun, isSyncSettled, isTerminalRunStatus } from "./polling";
 import type { ListPage, PlanChangesState, Template, TemplateRun, TemplateRunStatus } from "./types";
 
 // What getNextPageParam gives back: the next page's cursor, or undefined on
@@ -22,7 +22,7 @@ export function useStacksQuery(tenantID: string, q = "") {
     queryFn: ({ pageParam }) => client.listStacks(tenantID, { cursor: pageParam, q }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: nextCursor,
-    select: (data) => data.pages.flatMap((page) => page.items),
+    select: pageItems,
     placeholderData: keepPreviousData
   });
 }
@@ -172,16 +172,15 @@ export function runsRefetchInterval(state: { data?: TemplateRun[]; fetchFailureC
   return state.data.some(isMovingRun) ? POLL_INTERVAL_MS : SETTLED_RUNS_POLL_INTERVAL_MS;
 }
 
-// A plan waiting for approval counts as settled here: it can wait for days,
-// and moves only when someone approves or discards it on the run's own page.
-function isMovingRun(run: TemplateRun): boolean {
-  return run.status !== "waiting_approval" && !isTerminalRunStatus(run.status);
-}
-
 type RunPages = InfiniteData<ListPage<TemplateRun>, string | undefined>;
 
+// A paged list's loaded items, every page in order.
+function pageItems<T>(data: InfiniteData<ListPage<T>, string | undefined>): T[] {
+  return data.pages.flatMap((page) => page.items);
+}
+
 function runsOf(data: RunPages | undefined): TemplateRun[] | undefined {
-  return data?.pages.flatMap((page) => page.items);
+  return data && pageItems(data);
 }
 
 /**

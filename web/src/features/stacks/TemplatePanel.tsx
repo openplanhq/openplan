@@ -10,7 +10,7 @@ import { useRefreshStackOnRunChange } from "../runs/useRefreshStackOnRunChange";
 import { attentionByStackTemplate } from "./attention";
 import { StackTemplateContext } from "./stackTemplateContext";
 import StackTemplateStatusLabel, { stackTemplateActivity } from "./StackTemplateStatusLabel";
-import { findSelectedStackTemplate, stackTemplateLabel } from "./stackWorkflow";
+import { stackTemplateLabel } from "./stackWorkflow";
 import TemplateTabs from "./TemplateTabs";
 import { cn } from "@/lib/utils";
 
@@ -28,7 +28,7 @@ export default function TemplatePanel({ stackTemplateId, children }: { stackTemp
   const stackId = params.stackId ?? "";
   const id = stackTemplateId ?? params.stackTemplateId ?? "";
   const templates = useStackQuery(tenantID, stackId).data?.templates ?? [];
-  const found = findSelectedStackTemplate(templates, id);
+  const found = templates.find((candidate) => candidate.id === id) ?? null;
   // A destroy that finishes takes its template out of the stack, while
   // whoever approved it may still be reading its run. A template this panel
   // has shown and then lost was destroyed: the panel keeps it, says so, and

@@ -82,18 +82,13 @@ export function waitingChipLabel(waiting: number): string {
   return `${count(waiting, "plan", "plans")} to approve`;
 }
 
-/** A list row's chip text for its failed destroys. */
-export function failedChipLabel(failed: number): string {
-  return failed === 1 ? "destroy failed" : `${failed} destroys failed`;
-}
-
-/** A list row's chip text for its failed plans or applies, the word alone
-    for one, as a failed destroy's is. */
-export function runFailedChipLabel(operation: "plan" | "apply", failed: number): string {
+/** A list row's chip text for its failed plans, applies or destroys: the
+    word alone for one. */
+export function runFailedChipLabel(operation: "plan" | "apply" | "destroy", failed: number): string {
   if (failed === 1) {
     return `${operation} failed`;
   }
-  return `${failed} ${operation === "apply" ? "applies" : "plans"} failed`;
+  return `${failed} ${operation === "apply" ? "applies" : `${operation}s`} failed`;
 }
 
 /** The word after a list row's template count; the row sets the number apart

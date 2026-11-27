@@ -1,5 +1,5 @@
 import type { PlanChangeAction, PlanResourceChange, TemplateRun } from "../../api/types";
-import { isTerminalRunStatus } from "../../api/polling";
+import { isMovingRun, isTerminalRunStatus } from "../../api/polling";
 
 export type RunView = "changes" | "logs";
 
@@ -52,7 +52,7 @@ export function isApplied(run: TemplateRun): boolean {
  * nothing to change, the log says so as plainly as the Changes view would.
  */
 export function defaultRunView(run: TemplateRun): RunView {
-  if (run.status === "failed" || (run.status !== "waiting_approval" && !isTerminalRunStatus(run.status))) {
+  if (run.status === "failed" || isMovingRun(run)) {
     return "logs";
   }
   const state = run.plan_changes?.state;

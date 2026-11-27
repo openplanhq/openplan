@@ -1,7 +1,7 @@
 import { useParams } from "react-router-dom";
 import NoTemplatesState from "./NoTemplatesState";
 import TemplatePanel from "./TemplatePanel";
-import { useIndexTemplateId } from "./stackPageOutlet";
+import { useIndexTemplateId } from "../../shared/indexOutlet";
 import TemplateRunsTab from "./TemplateRunsTab";
 
 // /stacks/:stackId itself: the default template's panel on its Runs tab,

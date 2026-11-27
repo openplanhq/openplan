@@ -5,6 +5,7 @@ import type { UserProfile } from "../../api/types";
 import { searchFieldClass } from "../../shared/SearchField";
 import { useDebounce } from "../../shared/useDebounce";
 import { buttonClass } from "../../shared/buttonClass";
+import { matchCountLabel } from "../../shared/matchCountLabel";
 import { ComboboxContent, ComboboxEmpty, ComboboxList, useComboboxAnchor } from "@/components/ui/combobox";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { cn } from "@/lib/utils";
@@ -137,7 +138,7 @@ export default function PersonPicker({
         </ComboboxList>
         {shown.length > 0 && (
           <div className="flex items-center justify-between gap-4 border-t border-divider bg-canvas px-4 py-2 text-caption text-muted-foreground">
-            <span>{matchCount(results?.length ?? 0, shown.length)}</span>
+            <span>{matchCountLabel(results?.length ?? 0, shown.length)}</span>
             <span aria-hidden="true" className="whitespace-nowrap pointer-coarse:hidden">
               ↑ ↓ to move · Enter to choose · Esc to close
             </span>
@@ -176,7 +177,3 @@ function PersonChoice({ user, query, roles, held, isMe }: { user: UserProfile; q
   );
 }
 
-function matchCount(total: number, shown: number): string {
-  if (total > shown) return `${shown} of ${total} matches · keep typing to narrow`;
-  return total === 1 ? "1 match" : `${total} matches`;
-}

@@ -13,7 +13,6 @@ import {
   attentionByStack,
   attentionByStackTemplate,
   attentionSummary,
-  failedChipLabel,
   runFailedChipLabel,
   templateCountWord,
   waitingChipLabel
@@ -275,7 +274,7 @@ function StackRow({ stack, selected, attention }: { stack: StackListItem; select
           )}
           {attention.destroyFailed > 0 && (
             <Chip tone="destructive" icon={TriangleAlert}>
-              {failedChipLabel(attention.destroyFailed)}
+              {runFailedChipLabel("destroy", attention.destroyFailed)}
             </Chip>
           )}
           {attention.planFailed > 0 && (

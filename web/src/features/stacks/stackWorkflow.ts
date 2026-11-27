@@ -1,10 +1,5 @@
 import type { PlanSummary, Stack, StackTemplate, TemplateRevision, TemplateVariable } from "../../api/types";
-import { findSelectedID } from "../../shared/listSelection";
 import type { StatusTone } from "../../shared/statusTone";
-
-export function findSelectedStackTemplate(stackTemplates: StackTemplate[], selectedStackTemplateID: string): StackTemplate | null {
-  return findSelectedID(stackTemplates, selectedStackTemplateID);
-}
 
 // No ref suffix: source_ref is part of a template's identity, so it read
 // the same on every install of that template and separated nothing. The ref
@@ -67,7 +62,9 @@ export function partitionRevisionChangeVariables(
  * Save is available when the edited values differ from what is stored on the
  * stack template. It takes no revision: the template screen always renders the
  * installed template's desired revision, so there is no selection that could
- * disagree with it.
+ * disagree with it. Encoded values are compared, so reformatting JSON alone is
+ * not a change. Text that doesn't parse counts as one: Save stays enabled and
+ * the click is what shows the error.
  */
 export function canSaveInstalledTemplateConfig(
   stackTemplate: StackTemplate | null,
@@ -77,7 +74,16 @@ export function canSaveInstalledTemplateConfig(
   if (!stackTemplate) {
     return false;
   }
-  return hasConfigChanged(stackTemplate, variables, variableValues);
+  const current = configFromVariableValues(variables, variableValues);
+  if (Object.keys(current.errors).length > 0) {
+    return true;
+  }
+  const saved = configFromVariableValues(variables, variableValuesFromConfig(stackTemplate.config, variables)).config;
+  const currentNames = Object.keys(current.config);
+  if (currentNames.length !== Object.keys(saved).length) {
+    return true;
+  }
+  return currentNames.some((name) => !(name in saved) || JSON.stringify(current.config[name]) !== JSON.stringify(saved[name]));
 }
 
 // Terraform's simple types keep a plain input and are sent as typed: the
@@ -223,22 +229,3 @@ export function stackTemplateStatus(stackTemplate: StackTemplate): StackTemplate
   }
 }
 
-// hasConfigChanged compares encoded values, so reformatting JSON alone is not
-// a change. Text that doesn't parse counts as one: Save stays enabled and the
-// click is what shows the error.
-function hasConfigChanged(
-  stackTemplate: StackTemplate,
-  variables: TemplateVariable[],
-  variableValues: Record<string, string>
-): boolean {
-  const current = configFromVariableValues(variables, variableValues);
-  if (Object.keys(current.errors).length > 0) {
-    return true;
-  }
-  const saved = configFromVariableValues(variables, variableValuesFromConfig(stackTemplate.config, variables)).config;
-  const currentNames = Object.keys(current.config);
-  if (currentNames.length !== Object.keys(saved).length) {
-    return true;
-  }
-  return currentNames.some((name) => !(name in saved) || JSON.stringify(current.config[name]) !== JSON.stringify(saved[name]));
-}

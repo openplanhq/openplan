@@ -21,6 +21,7 @@ import ErrorLine from "../../shared/ErrorLine";
 import ErrorPanel from "../../shared/ErrorPanel";
 import PlanDiff from "../../shared/PlanDiff";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
+import { shortCommitSHA } from "../templates/templateWorkflow";
 import { cn } from "@/lib/utils";
 import PanelTrail from "../stacks/PanelTrail";
 import { stackTemplatePath } from "../stacks/templateSelection";
@@ -241,7 +242,7 @@ export default function RunDetailScreen() {
             )}
             <Fact term="Started by">{run.trigger_actor_display_name}</Fact>
             <Fact term="Source" mono>
-              {run.source_ref} @ {run.resolved_commit_sha.slice(0, 7)}
+              {run.source_ref} @ {shortCommitSHA(run.resolved_commit_sha)}
             </Fact>
           </dl>
           {run.command_error.trim() ? (
