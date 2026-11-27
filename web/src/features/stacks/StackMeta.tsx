@@ -1,4 +1,5 @@
 import type { Stack } from "../../api/types";
+import Tag from "../../shared/Tag";
 
 // The line under a stack's name: its slug, then its tags as written, never
 // coloured by their value. A slug derived from the name only repeats it, so it
@@ -12,9 +13,9 @@ export default function StackMeta({ stack }: { stack: Pick<Stack, "slug" | "slug
     <div className="flex flex-wrap items-center gap-2">
       {!stack.slug_is_derived && <span className="font-mono text-caption text-muted-foreground">{stack.slug}</span>}
       {tags.map(([key, value]) => (
-        <span key={key} className="rounded-sm border bg-canvas px-1.75 py-px font-mono text-caption text-tag-foreground">
+        <Tag key={key}>
           {key}: {value}
-        </span>
+        </Tag>
       ))}
     </div>
   );

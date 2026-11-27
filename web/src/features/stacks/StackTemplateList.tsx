@@ -6,6 +6,7 @@ import RequireCapability from "../../auth/RequireCapability";
 import Chip from "../../shared/Chip";
 import { listItemClass } from "../../shared/listItemClass";
 import SearchField from "../../shared/SearchField";
+import Separator from "../../shared/Separator";
 import { cn } from "@/lib/utils";
 import { failedOperation, runFailedChipLabel } from "./attention";
 import { stackTemplateActivity } from "./StackTemplateStatusLabel";
@@ -118,9 +119,7 @@ function StackTemplateRow({
           </span>
           {activity && (
             <>
-              <span aria-hidden="true" className="shrink-0 text-separator">
-                ·
-              </span>
+              <Separator className="shrink-0" />
               <span className="shrink-0">{activity}</span>
             </>
           )}

@@ -12,6 +12,7 @@ import { StackTemplateContext } from "./stackTemplateContext";
 import StackTemplateStatusLabel, { stackTemplateActivity } from "./StackTemplateStatusLabel";
 import { findSelectedStackTemplate, stackTemplateLabel } from "./stackWorkflow";
 import TemplateTabs from "./TemplateTabs";
+import Separator from "../../shared/Separator";
 import { cn } from "@/lib/utils";
 
 // The right side of the stack's page: one template, its state and its tabs.
@@ -66,15 +67,11 @@ export default function TemplatePanel({ stackTemplateId, children }: { stackTemp
               ) : (
                 <StackTemplateStatusLabel stackTemplate={stackTemplate} attention={attention} />
               )}
-              <span aria-hidden="true" className="text-separator">
-                ·
-              </span>
+              <Separator />
               <span className="font-mono text-caption">{stackTemplate.source_ref}</span>
               {activity && !destroyed && (
                 <>
-                  <span aria-hidden="true" className="text-separator">
-                    ·
-                  </span>
+                  <Separator />
                   <span>{activity}</span>
                 </>
               )}

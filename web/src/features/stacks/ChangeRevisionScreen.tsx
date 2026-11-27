@@ -24,7 +24,8 @@ import { stackTemplatePath } from "./templateSelection";
 import VariableFields from "./VariableFields";
 import { apiErrorMessage, fieldsShown } from "../../api/problems";
 import { useFieldErrors } from "../../shared/useFieldErrors";
-import RequestIdNote from "../../shared/RequestIdNote";
+import LoadError from "../../shared/LoadError";
+import Separator from "../../shared/Separator";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -137,24 +138,21 @@ export default function ChangeRevisionScreen() {
       return <>{boundary}</>;
     }
     return (
-      <section className="flex min-w-0 flex-col items-start gap-5" data-testid="change-revision-load-error">
-        {trail}
-        <ErrorLine live={false}>Something went wrong while loading revisions.</ErrorLine>
-        <RequestIdNote error={templateRevisionsQuery.error ?? currentVariablesQuery.error ?? targetVariablesQuery.error} />
-        <button
-          type="button"
-          className={cn(buttonClass("outline"), "pointer-coarse:h-11")}
-          data-testid="change-revision-retry"
-          onClick={() => {
-            void templateRevisionsQuery.refetch();
-            void currentVariablesQuery.refetch();
-            void targetVariablesQuery.refetch();
-          }}
-        >
-          <RefreshCw data-icon="inline-start" aria-hidden="true" />
-          Retry
-        </button>
-      </section>
+      <LoadError
+        as="section"
+        className="min-w-0 gap-5"
+        lead={trail}
+        error={templateRevisionsQuery.error ?? currentVariablesQuery.error ?? targetVariablesQuery.error}
+        onRetry={() => {
+          void templateRevisionsQuery.refetch();
+          void currentVariablesQuery.refetch();
+          void targetVariablesQuery.refetch();
+        }}
+        testId="change-revision-load-error"
+        retryTestId="change-revision-retry"
+      >
+        Something went wrong while loading revisions.
+      </LoadError>
     );
   }
 
@@ -220,15 +218,11 @@ export default function ChangeRevisionScreen() {
                         <RevisionSubject subject={candidate.commit_subject} />
                         <span className="flex items-baseline gap-1.5 text-caption text-muted-foreground">
                           <span className="font-mono">{shortCommitSHA(candidate.resolved_commit_sha)}</span>
-                          <span aria-hidden="true" className="text-separator">
-                            ·
-                          </span>
+                          <Separator />
                           {formatTimestamp(candidate.created_at)}
                           {candidate.id === latestID && (
                             <>
-                              <span aria-hidden="true" className="text-separator">
-                                ·
-                              </span>
+                              <Separator />
                               latest
                             </>
                           )}

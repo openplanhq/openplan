@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { BookMarked, Folder, GitBranch, GitCommitHorizontal, Loader2, RefreshCw, Trash2 } from "lucide-react";
+import { BookMarked, Folder, GitBranch, GitCommitHorizontal, Loader2, Trash2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ApiRequestError } from "../../api/client";
@@ -12,11 +12,9 @@ import { problemTypes } from "../../api/types";
 import RequireCapability from "../../auth/RequireCapability";
 import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
-import ErrorLine from "../../shared/ErrorLine";
 import ErrorPanel from "../../shared/ErrorPanel";
 import ExternalLink from "../../shared/ExternalLink";
 import InlineConfirm from "../../shared/InlineConfirm";
-import RequestIdNote from "../../shared/RequestIdNote";
 import UnderlineTabs from "../../shared/UnderlineTabs";
 import { TemplateContext } from "./templateContext";
 import { githubLinks, rootPathOf } from "./templateLinks";
@@ -25,6 +23,8 @@ import { templatePath, templateTabOf } from "./templateRoutes";
 import type { TemplatesLocationState } from "./templatesPageOutlet";
 import TemplateSync from "./TemplateSync";
 import { shortCommitSHA, templateDisplayName } from "./templateWorkflow";
+import LoadError from "../../shared/LoadError";
+import Tag from "../../shared/Tag";
 import { cn } from "@/lib/utils";
 
 // The right side of /templates: one template, and its latest revision for
@@ -78,14 +78,9 @@ export default function TemplatePanel({ templateId, children }: { templateId?: s
 
   if (revisionsQuery.isError) {
     return (
-      <div className="flex flex-col items-start gap-3 px-7 py-6" data-testid="template-error">
-        <ErrorLine live={false}>Something went wrong while loading this template.</ErrorLine>
-        <RequestIdNote error={revisionsQuery.error} />
-        <button type="button" className={cn(buttonClass("outline"), "pointer-coarse:h-11")} onClick={() => void revisionsQuery.refetch()}>
-          <RefreshCw data-icon="inline-start" aria-hidden="true" />
-          Retry
-        </button>
-      </div>
+      <LoadError className="px-7 py-6" error={revisionsQuery.error} onRetry={() => void revisionsQuery.refetch()} testId="template-error">
+        Something went wrong while loading this template.
+      </LoadError>
     );
   }
 
@@ -221,9 +216,9 @@ export default function TemplatePanel({ templateId, children }: { templateId?: s
       {template.tags.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {template.tags.map((tag) => (
-            <span key={tag} className="rounded-sm border bg-canvas px-1.75 py-px font-mono text-caption text-tag-foreground">
+            <Tag key={tag}>
               {tag}
-            </span>
+            </Tag>
           ))}
         </div>
       )}

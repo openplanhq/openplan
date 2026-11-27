@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useTemplateRevisionVariablesQuery, useUpdateStackTemplateConfigMutation } from "../../api/queries";
 import { apiErrorMessage, fieldsShown } from "../../api/problems";
 import { useStackCapabilities } from "../../auth/useStackCapabilities";
 import { useTenantID } from "../../auth/useTenantID";
-import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import { useFieldErrors } from "../../shared/useFieldErrors";
@@ -13,8 +12,7 @@ import StackTemplateConfigPanel from "./StackTemplateConfigPanel";
 import { useStackTemplate } from "./stackTemplateContext";
 import { canSaveInstalledTemplateConfig, configFromVariableValues, variableValuesFromConfig } from "./stackWorkflow";
 import { stackTemplatePath } from "./templateSelection";
-import RequestIdNote from "../../shared/RequestIdNote";
-import { cn } from "@/lib/utils";
+import LoadError from "../../shared/LoadError";
 
 // /stacks/:stackId/templates/:stackTemplateId/variables — the installed
 // template's configuration. Choosing another revision is a separate view
@@ -84,19 +82,9 @@ export default function TemplateVariablesTab() {
       return <>{boundary}</>;
     }
     return (
-      <div className="flex flex-col items-start gap-3" data-testid="template-variables-error">
-        <ErrorLine live={false}>Something went wrong while loading the template's variables.</ErrorLine>
-        <RequestIdNote error={variablesQuery.error} />
-        <button
-          type="button"
-          className={cn(buttonClass("outline"), "pointer-coarse:h-11")}
-          data-testid="template-variables-retry"
-          onClick={() => void variablesQuery.refetch()}
-        >
-          <RefreshCw data-icon="inline-start" aria-hidden="true" />
-          Retry
-        </button>
-      </div>
+      <LoadError error={variablesQuery.error} onRetry={() => void variablesQuery.refetch()} testId="template-variables-error" retryTestId="template-variables-retry">
+        Something went wrong while loading the template's variables.
+      </LoadError>
     );
   }
 

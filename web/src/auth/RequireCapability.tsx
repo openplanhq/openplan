@@ -1,10 +1,7 @@
-import { RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
 import { Outlet, useOutletContext, useParams } from "react-router-dom";
 import { useStackQuery } from "../api/queries";
 import { useTenantID } from "./useTenantID";
-import { buttonClass } from "../shared/buttonClass";
-import ErrorLine from "../shared/ErrorLine";
 import { classifyQueryError, useQueryErrorBoundary } from "../shared/queryErrorBoundary";
 import { useAuth } from "./AuthContext";
 import { useStackCapabilities } from "./useStackCapabilities";
@@ -12,8 +9,7 @@ import type { Me } from "./types";
 import type { StackCapabilities } from "./types";
 import NotFound from "../app/NotFound";
 import AccessDenied from "../app/AccessDenied";
-import RequestIdNote from "../shared/RequestIdNote";
-import { cn } from "@/lib/utils";
+import LoadError from "../shared/LoadError";
 
 type GlobalCapabilityKey = keyof Me["global_capabilities"];
 type StackCapabilityKey = keyof StackCapabilities;
@@ -114,18 +110,8 @@ function StackRoutePending({ stackId }: { stackId: string }) {
     return <>{boundary}</>;
   }
   return (
-    <section className="flex flex-col items-start gap-3" data-testid="stack-route-error">
-      <ErrorLine>Something went wrong while loading this stack.</ErrorLine>
-      <RequestIdNote error={stackQuery.error} />
-      <button
-        type="button"
-        className={cn(buttonClass("outline"), "pointer-coarse:h-11")}
-        data-testid="stack-route-retry"
-        onClick={() => void stackQuery.refetch()}
-      >
-        <RefreshCw data-icon="inline-start" aria-hidden="true" />
-        Retry
-      </button>
-    </section>
+    <LoadError as="section" live error={stackQuery.error} onRetry={() => void stackQuery.refetch()} testId="stack-route-error" retryTestId="stack-route-retry">
+      Something went wrong while loading this stack.
+    </LoadError>
   );
 }

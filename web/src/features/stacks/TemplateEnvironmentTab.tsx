@@ -1,17 +1,13 @@
-import { RefreshCw } from "lucide-react";
 import {
   useCreateStackTemplateCredentialMutation,
   useDeleteStackTemplateCredentialMutation,
   useStackTemplateCredentialsQuery
 } from "../../api/queries";
 import { useTenantID } from "../../auth/useTenantID";
-import { buttonClass } from "../../shared/buttonClass";
-import ErrorLine from "../../shared/ErrorLine";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import EnvironmentTabs from "./EnvironmentTabs";
 import { useStackTemplate } from "./stackTemplateContext";
-import RequestIdNote from "../../shared/RequestIdNote";
-import { cn } from "@/lib/utils";
+import LoadError from "../../shared/LoadError";
 
 // /stacks/:stackId/templates/:stackTemplateId/environment — variables that
 // override the stack's environment for this template only. The route itself is
@@ -33,19 +29,9 @@ export default function TemplateEnvironmentTab() {
       return <>{boundary}</>;
     }
     return (
-      <div className="flex flex-col items-start gap-3" data-testid="template-environment-error">
-        <ErrorLine live={false}>Something went wrong while loading this template's environment.</ErrorLine>
-        <RequestIdNote error={credentialsQuery.error} />
-        <button
-          type="button"
-          className={cn(buttonClass("outline"), "pointer-coarse:h-11")}
-          data-testid="template-environment-retry"
-          onClick={() => void credentialsQuery.refetch()}
-        >
-          <RefreshCw data-icon="inline-start" aria-hidden="true" />
-          Retry
-        </button>
-      </div>
+      <LoadError error={credentialsQuery.error} onRetry={() => void credentialsQuery.refetch()} testId="template-environment-error" retryTestId="template-environment-retry">
+        Something went wrong while loading this template's environment.
+      </LoadError>
     );
   }
 

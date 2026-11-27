@@ -1,12 +1,13 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { LoaderCircle, Plus, RefreshCw } from "lucide-react";
+import { LoaderCircle, Plus } from "lucide-react";
 import type { GrantView, UserProfile } from "../../api/types";
 import { apiErrorMessage } from "../../api/problems";
 import ErrorLine from "../../shared/ErrorLine";
-import RequestIdNote from "../../shared/RequestIdNote";
 import SearchField from "../../shared/SearchField";
 import { buttonClass } from "../../shared/buttonClass";
+import EmptyState from "../../shared/EmptyState";
+import LoadError from "../../shared/LoadError";
 import { cn } from "@/lib/utils";
 import GrantRow from "./GrantRow";
 import PersonPicker from "./PersonPicker";
@@ -293,21 +294,14 @@ export default function AccessList({
       )}
 
       {status === "error" && (
-        <div className="flex flex-col items-start gap-3 px-5 pt-4 pb-5" data-testid="access-error">
-          <ErrorLine>{copy.loadError}</ErrorLine>
-          <RequestIdNote error={error} />
-          <button type="button" className={cn(buttonClass("outline"), "pointer-coarse:h-11")} onClick={onRetry}>
-            <RefreshCw data-icon="inline-start" aria-hidden="true" />
-            Retry
-          </button>
-        </div>
+        <LoadError live className="px-5 pt-4 pb-5" error={error} onRetry={onRetry} testId="access-error">
+          {copy.loadError}
+        </LoadError>
       )}
 
       {ready && rows.length === 0 && !lead && (
         <div className="p-5">
-          <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-dashed-border px-5 py-10 text-center" data-testid="access-empty">
-            <p className="text-label">{copy.emptyTitle}</p>
-          </div>
+          <EmptyState title={copy.emptyTitle} testId="access-empty" />
         </div>
       )}
 
