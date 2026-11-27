@@ -3,6 +3,7 @@ import { LogIn } from "lucide-react";
 import { ssoLoginURL } from "../api/client";
 import { clearLoginAttempts, loginLoopDetected, recordLoginAttempt } from "./loginAttempts";
 import AuthCard, { AuthCardTitle } from "./AuthCard";
+import CookiesBlockedCard from "./CookiesBlockedCard";
 import { Button } from "@/components/ui/button";
 import { CardContent, CardHeader } from "@/components/ui/card";
 
@@ -88,25 +89,7 @@ export default function SignInScreen() {
 
   if (cookiesBlocked) {
     return (
-      <AuthCard data-testid="signin-cookies-blocked">
-        <CardHeader>
-          <AuthCardTitle>We could not keep you signed in</AuthCardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          <p className="text-muted-foreground">
-            Sign-in worked, but this browser did not hold on to the session, so every page load
-            started it over. That happens when cookies are blocked for this site — by browser
-            settings, an extension, or a privacy mode that clears them between page loads.
-          </p>
-          <p className="text-muted-foreground">
-            Allow cookies for this site and try again. If it keeps failing, contact your
-            administrator.
-          </p>
-          <Button className="w-full pointer-coarse:h-11" onClick={handleRetry} data-testid="signin-cookies-retry">
-            Try again
-          </Button>
-        </CardContent>
-      </AuthCard>
+      <CookiesBlockedCard onRetry={handleRetry} testId="signin-cookies-blocked" retryTestId="signin-cookies-retry" />
     );
   }
 

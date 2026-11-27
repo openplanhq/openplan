@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useParams } from "react-router-dom";
 import {
   useApproveRunMutation,
@@ -16,11 +16,11 @@ import { isTerminalRunStatus } from "../../api/polling";
 import { apiErrorMessage } from "../../api/problems";
 import { useTenantID } from "../../auth/useTenantID";
 import { formatDateTime } from "../../shared/formatTimestamp";
-import { buttonClass } from "../../shared/buttonClass";
 import ErrorLine from "../../shared/ErrorLine";
 import ErrorPanel from "../../shared/ErrorPanel";
 import PlanDiff from "../../shared/PlanDiff";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
+import LoadError from "../../shared/LoadError";
 import { cn } from "@/lib/utils";
 import PanelTrail from "../stacks/PanelTrail";
 import { stackTemplatePath } from "../stacks/templateSelection";
@@ -33,7 +33,6 @@ import SegmentedControl from "../../shared/SegmentedControl";
 import { runProgressTag } from "./runIndicator";
 import RunStatusLabel from "./RunStatusLabel";
 import WaitingRunActions from "./WaitingRunActions";
-import RequestIdNote from "../../shared/RequestIdNote";
 
 // /stacks/:stackId/templates/:stackTemplateId/runs/:runNumber — plan/apply
 // detail with per-phase logs, inside the template's panel under a trail back
@@ -167,20 +166,17 @@ export default function RunDetailScreen() {
       return <>{boundary}</>;
     }
     return (
-      <section className="flex min-w-0 flex-col gap-5" data-testid="run-detail-error">
-        {trail}
-        <ErrorLine live={false}>Something went wrong while loading the run.</ErrorLine>
-        <RequestIdNote error={lookupError ?? runQuery.error} />
-        <button
-          type="button"
-          className={cn(buttonClass("outline"), "self-start pointer-coarse:h-11")}
-          data-testid="run-detail-retry"
-          onClick={() => (lookupError ? byNumberQuery.refetch() : runQuery.refetch())}
-        >
-          <RefreshCw data-icon="inline-start" aria-hidden="true" />
-          Retry
-        </button>
-      </section>
+      <LoadError
+        as="section"
+        className="min-w-0 gap-5"
+        lead={trail}
+        error={lookupError ?? runQuery.error}
+        onRetry={() => void (lookupError ? byNumberQuery.refetch() : runQuery.refetch())}
+        testId="run-detail-error"
+        retryTestId="run-detail-retry"
+      >
+        Something went wrong while loading the run.
+      </LoadError>
     );
   }
 

@@ -6,13 +6,8 @@ import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
 import { formatDateTime } from "../../shared/formatTimestamp";
 import PlanDiff from "../../shared/PlanDiff";
+import Separator from "../../shared/Separator";
 import { cn } from "@/lib/utils";
-
-const separator = (
-  <span aria-hidden="true" className="text-separator">
-    ·
-  </span>
-);
 
 // What on a template waits on a person, above its runs: a plan waiting for
 // approval, which Review plan opens, and a destroy that stopped before it
@@ -40,9 +35,9 @@ export default function TemplateRunNotices({ stackId, stackTemplate }: { stackId
             </span>
             <span className="flex flex-wrap items-center gap-x-1.5 text-meta text-muted-foreground">
               <span>Run #{waiting.run_number}</span>
-              {separator}
+              <Separator />
               <span>Planned by {waiting.trigger_actor_display_name}</span>
-              {separator}
+              <Separator />
               <time dateTime={stackTemplate.pending_plan_at || waiting.created_at}>
                 {formatDateTime(stackTemplate.pending_plan_at || waiting.created_at)}
               </time>

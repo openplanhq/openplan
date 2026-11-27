@@ -5,9 +5,10 @@ import { ApiRequestError, apiRequestsMade, loginURL, logout as postLogout } from
 import { AuthContext } from "./AuthContext";
 import { clearLoginAttempts, loginLoopDetected } from "./loginAttempts";
 import { useMeQuery } from "./useMeQuery";
-import AuthCard, { AuthCardTitle } from "./AuthCard";
+import AuthCard from "./AuthCard";
+import CookiesBlockedCard from "./CookiesBlockedCard";
 import { Button } from "@/components/ui/button";
-import { CardContent, CardHeader } from "@/components/ui/card";
+import { CardContent } from "@/components/ui/card";
 
 // How long before expiry to re-authenticate. Long enough that the round trip
 // completes with room to spare, short enough that it is rare.
@@ -183,25 +184,7 @@ export default function SessionProvider() {
 
   if (status === "loop") {
     return (
-      <AuthCard data-testid="auth-loop-error">
-        <CardHeader>
-          <AuthCardTitle>We could not keep you signed in</AuthCardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          <p className="text-muted-foreground">
-            Sign-in worked, but this browser did not hold on to the session, so every page load
-            started it over. That happens when cookies are blocked for this site — by browser
-            settings, an extension, or a privacy mode that clears them between page loads.
-          </p>
-          <p className="text-muted-foreground">
-            Allow cookies for this site and try again. If it keeps failing, contact your
-            administrator.
-          </p>
-          <Button className="w-full pointer-coarse:h-11" onClick={retryLogin} data-testid="auth-loop-retry-button">
-            Try again
-          </Button>
-        </CardContent>
-      </AuthCard>
+      <CookiesBlockedCard onRetry={retryLogin} testId="auth-loop-error" retryTestId="auth-loop-retry-button" />
     );
   }
 

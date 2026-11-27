@@ -1,8 +1,8 @@
 import { Plus } from "lucide-react";
 import { Link } from "react-router-dom";
-import RequireCapability from "../../auth/RequireCapability";
 import { buttonClass } from "../../shared/buttonClass";
-import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty";
+import { useAuth } from "../../auth/AuthContext";
+import EmptyState from "../../shared/EmptyState";
 import { cn } from "@/lib/utils";
 import TemplatePanel from "./TemplatePanel";
 import { useIndexTemplateId } from "./templatesPageOutlet";
@@ -14,27 +14,29 @@ import VariablesTab from "./VariablesTab";
 // to do, or who does it.
 export default function TemplatesIndexPanel() {
   const selectedId = useIndexTemplateId();
+  const canPublish = useAuth().me?.global_capabilities.can_manage_templates === true;
 
   if (!selectedId) {
     return (
       <div className="p-7">
-        <Empty className="gap-3 rounded-lg border border-dashed border-dashed-border px-5 py-10" data-testid="templates-empty">
-          <EmptyHeader className="gap-3">
-            <h2 className="text-label">No templates yet</h2>
-            <RequireCapability
-              capability="can_manage_templates"
-              fallback={<EmptyDescription className="text-meta">Templates appear here once someone who can publish registers one.</EmptyDescription>}
-            >
-              <EmptyDescription className="text-meta">Register a Terraform module from a Git repository to make it available to your stacks.</EmptyDescription>
-            </RequireCapability>
-          </EmptyHeader>
-          <RequireCapability capability="can_manage_templates">
-            <Link to="/templates/new" className={cn(buttonClass("primary"), "pointer-coarse:h-11")}>
-              <Plus data-icon="inline-start" aria-hidden="true" />
-              Register template
-            </Link>
-          </RequireCapability>
-        </Empty>
+        <EmptyState
+          title="No templates yet"
+          titleAs="h2"
+          description={
+            canPublish
+              ? "Register a Terraform module from a Git repository to make it available to your stacks."
+              : "Templates appear here once someone who can publish registers one."
+          }
+          action={
+            canPublish && (
+              <Link to="/templates/new" className={cn(buttonClass("primary"), "pointer-coarse:h-11")}>
+                <Plus data-icon="inline-start" aria-hidden="true" />
+                Register template
+              </Link>
+            )
+          }
+          testId="templates-empty"
+        />
       </div>
     );
   }

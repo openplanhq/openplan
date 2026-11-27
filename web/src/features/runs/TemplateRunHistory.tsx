@@ -1,18 +1,15 @@
-import { RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTemplateRunsQuery } from "../../api/queries";
 import type { TemplateRun } from "../../api/types";
 import { useTenantID } from "../../auth/useTenantID";
-import { buttonClass } from "../../shared/buttonClass";
-import ErrorLine from "../../shared/ErrorLine";
 import { formatDateTime } from "../../shared/formatTimestamp";
 import PlanDiff from "../../shared/PlanDiff";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
-import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty";
+import EmptyState from "../../shared/EmptyState";
+import LoadError from "../../shared/LoadError";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import RunStatusLabel from "./RunStatusLabel";
-import RequestIdNote from "../../shared/RequestIdNote";
 import LoadMoreButton from "../../shared/LoadMoreButton";
 
 // 8px either side of a column boundary makes the 16px between columns, and
@@ -51,31 +48,16 @@ export default function TemplateRunHistory({ stackId, stackTemplateId }: Templat
       return <>{boundary}</>;
     }
     return (
-      <div className="flex flex-col items-start gap-3" data-testid="template-run-history-error">
-        <ErrorLine live={false}>Something went wrong while loading this template's runs.</ErrorLine>
-        <RequestIdNote error={runsQuery.error} />
-        <button
-          type="button"
-          className={cn(buttonClass("outline"), "pointer-coarse:h-11")}
-          data-testid="template-run-history-retry"
-          onClick={() => void runsQuery.refetch()}
-        >
-          <RefreshCw data-icon="inline-start" aria-hidden="true" />
-          Retry
-        </button>
-      </div>
+      <LoadError error={runsQuery.error} onRetry={() => void runsQuery.refetch()} testId="template-run-history-error" retryTestId="template-run-history-retry">
+        Something went wrong while loading this template's runs.
+      </LoadError>
     );
   }
 
   return (
     <div className="min-w-0" data-testid="template-run-history">
       {runs.length === 0 ? (
-        <Empty className="gap-2 rounded-lg border border-dashed border-dashed-border px-5 py-10" data-testid="template-run-history-empty">
-          <EmptyHeader className="gap-2">
-            <h3 className="text-label">No runs yet</h3>
-            <EmptyDescription className="text-meta">Plan to see what this template would create.</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        <EmptyState title="No runs yet" titleAs="h3" description="Plan to see what this template would create." testId="template-run-history-empty" />
       ) : (
         // Fixed columns in a frame that scrolls sideways on a phone, so a
         // status that changes length never moves the columns after it.

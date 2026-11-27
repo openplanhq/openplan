@@ -1,4 +1,4 @@
-import { LoaderCircle, RefreshCw } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import type { ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import {
@@ -8,13 +8,10 @@ import {
   useStackQuery
 } from "../../api/queries";
 import { useTenantID } from "../../auth/useTenantID";
-import { buttonClass } from "../../shared/buttonClass";
-import ErrorLine from "../../shared/ErrorLine";
 import PageHeader from "../../shared/PageHeader";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import EnvironmentTabs from "./EnvironmentTabs";
-import RequestIdNote from "../../shared/RequestIdNote";
-import { cn } from "@/lib/utils";
+import LoadError from "../../shared/LoadError";
 
 // A stack's Environment page, on openplan UI: its header and trail on the
 // canvas, and the Secrets and Variables tabs in one card, centred at the
@@ -45,19 +42,9 @@ export default function EnvironmentScreen() {
     // A list that never arrived is not an empty one, so the tabs and their
     // form wait for it rather than invite a second copy of an entry.
     content = (
-      <div className="flex flex-col items-start gap-3" data-testid="environment-error">
-        <ErrorLine live={false}>Something went wrong while loading the environment.</ErrorLine>
-        <RequestIdNote error={credentialsQuery.error} />
-        <button
-          type="button"
-          className={cn(buttonClass("outline"), "pointer-coarse:h-11")}
-          data-testid="environment-retry"
-          onClick={() => void credentialsQuery.refetch()}
-        >
-          <RefreshCw data-icon="inline-start" aria-hidden="true" />
-          Retry
-        </button>
-      </div>
+      <LoadError error={credentialsQuery.error} onRetry={() => void credentialsQuery.refetch()} testId="environment-error" retryTestId="environment-retry">
+        Something went wrong while loading the environment.
+      </LoadError>
     );
   } else {
     content = (

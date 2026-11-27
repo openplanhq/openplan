@@ -8,6 +8,7 @@ import { revisionIndicator } from "../templates/revisionIndicator";
 import type { Template, TemplateRevision } from "../../api/types";
 import { activeRevisions, revisionCountLabel, searchTemplates, templateDisplayName, templateRootPathLabel } from "../templates/templateWorkflow";
 import type { TemplateSearchMatch } from "../templates/templateWorkflow";
+import Separator from "../../shared/Separator";
 import { ComboboxContent, ComboboxEmpty, ComboboxList, useComboboxAnchor } from "@/components/ui/combobox";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { cn } from "@/lib/utils";
@@ -163,13 +164,13 @@ export function TemplateSource({
       <Highlighted text={`${repo_owner}/${repo_name}`} hits={repositoryHits} markClassName="font-medium" />
       {showPath && (
         <>
-          <Separator />
+          <Separator spaced />
           <Highlighted text={root_path} hits={pathHits} markClassName="font-medium" />
         </>
       )}
       {source_ref && (
         <>
-          <Separator />
+          <Separator spaced />
           {source_ref}
         </>
       )}
@@ -191,14 +192,6 @@ export function TemplateChoiceState({ revisions }: { revisions: TemplateRevision
         </StatusLabel>
       )}
       {installableCount > 0 && <span className="text-meta text-muted-foreground">{revisionCountLabel(installableCount)}</span>}
-    </span>
-  );
-}
-
-function Separator() {
-  return (
-    <span aria-hidden="true" className="text-separator">
-      {" · "}
     </span>
   );
 }

@@ -20,6 +20,7 @@ import StatusLabel from "../../shared/StatusLabel";
 import type { StatusLabelTone } from "../../shared/StatusLabel";
 import { useLiveTemplateRunLog } from "./useLiveTemplateRunLog";
 import type { LiveTemplateRunLog } from "./useLiveTemplateRunLog";
+import Separator from "../../shared/Separator";
 
 interface RunLogsPanelProps {
   runId: string;
@@ -160,9 +161,7 @@ function stepTime(step: TemplateRunStepExecution | undefined): ReactNode {
       </time>
       {took && (
         <>
-          <span aria-hidden="true" className="text-separator">
-            ·
-          </span>
+          <Separator />
           <span>{took}</span>
         </>
       )}

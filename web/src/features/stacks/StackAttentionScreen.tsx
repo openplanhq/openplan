@@ -1,4 +1,4 @@
-import { Check, Hourglass, Loader2, RefreshCw, TriangleAlert } from "lucide-react";
+import { Check, Hourglass, Loader2, TriangleAlert } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -12,9 +12,9 @@ import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import { attentionRunPath, failedOperation } from "./attention";
 import { stackTemplateLabel } from "./stackWorkflow";
 import { buttonClass } from "../../shared/buttonClass";
-import RequestIdNote from "../../shared/RequestIdNote";
-import { Button } from "@/components/ui/button";
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from "@/components/ui/empty";
+import EmptyState from "../../shared/EmptyState";
+import LoadError from "../../shared/LoadError";
+import Separator from "../../shared/Separator";
 import { cn } from "@/lib/utils";
 
 const trail = [{ label: "Stacks", to: "/stacks" }];
@@ -45,15 +45,17 @@ export default function StackAttentionScreen() {
       return <>{boundary}</>;
     }
     return (
-      <section className="mx-auto grid max-w-260 justify-items-start gap-4" data-testid="attention-error">
-        <PageHeader title="Needs attention" trail={trail} />
-        <p className="text-muted-foreground">Something went wrong while loading what needs attention.</p>
-        <RequestIdNote error={error} />
-        <Button className="pointer-coarse:h-11" data-testid="attention-retry" onClick={() => refetch()}>
-          <RefreshCw data-icon="inline-start" aria-hidden="true" />
-          Retry
-        </Button>
-      </section>
+      <LoadError
+        as="section"
+        className="mx-auto max-w-260 gap-4"
+        lead={<PageHeader title="Needs attention" trail={trail} />}
+        error={error}
+        onRetry={() => void refetch()}
+        testId="attention-error"
+        retryTestId="attention-retry"
+      >
+        Something went wrong while loading what needs attention.
+      </LoadError>
     );
   }
 
@@ -65,18 +67,19 @@ export default function StackAttentionScreen() {
     <section className="mx-auto max-w-260">
       <PageHeader title="Needs attention" trail={trail} />
       {items.length === 0 ? (
-        <Empty className="gap-3 rounded-panel border border-solid bg-card px-5 py-14" data-testid="attention-empty">
-          <EmptyHeader className="gap-3">
-            <EmptyMedia>
-              <Check aria-hidden="true" className="size-5 text-muted-foreground" />
-            </EmptyMedia>
-            <h2 className="text-label">Nothing needs attention</h2>
-            <EmptyDescription className="text-meta">Nothing is waiting for approval and nothing has failed.</EmptyDescription>
-          </EmptyHeader>
-          <Link to="/stacks" className={cn(buttonClass("outline"), "pointer-coarse:h-11")}>
-            Back to stacks
-          </Link>
-        </Empty>
+        <EmptyState
+          variant="page"
+          icon={Check}
+          title="Nothing needs attention"
+          titleAs="h2"
+          description="Nothing is waiting for approval and nothing has failed."
+          action={
+            <Link to="/stacks" className={cn(buttonClass("outline"), "pointer-coarse:h-11")}>
+              Back to stacks
+            </Link>
+          }
+          testId="attention-empty"
+        />
       ) : (
         <div className="flex flex-col gap-7">
           {waiting.length > 0 && (
@@ -164,9 +167,7 @@ function AttentionRow({ item }: { item: AttentionItem }) {
           className="group flex min-w-0 flex-wrap items-baseline gap-x-1.5 text-foreground focus-visible:-outline-offset-2"
         >
           <span className="text-label transition-colors group-hover:text-primary">{item.stack.name}</span>
-          <span aria-hidden="true" className="text-separator">
-            /
-          </span>
+          <Separator glyph="/" />
           <span className="font-mono text-meta text-code-foreground group-hover:text-primary group-hover:underline">
             {templateName}
           </span>

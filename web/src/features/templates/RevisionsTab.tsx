@@ -1,6 +1,7 @@
 import ExternalLink from "../../shared/ExternalLink";
 import { formatTimestamp } from "../../shared/formatTimestamp";
 import StatusLabel from "../../shared/StatusLabel";
+import Tag from "../../shared/Tag";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { revisionIndicator } from "./revisionIndicator";
@@ -54,9 +55,9 @@ export default function RevisionsTab() {
                           {shortCommitSHA(templateRevision.resolved_commit_sha)}
                         </ExternalLink>
                         {templateRevision.id === latest.id && (
-                          <span className="rounded-sm border bg-canvas px-1.75 py-px font-mono text-caption text-tag-foreground" data-testid="revision-latest">
+                          <Tag testId="revision-latest">
                             latest
-                          </span>
+                          </Tag>
                         )}
                         {indicator && (
                           <StatusLabel icon={indicator.icon} tone={indicator.tone} strong={indicator.strong}>

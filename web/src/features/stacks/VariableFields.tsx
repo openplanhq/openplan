@@ -4,6 +4,7 @@ import type { TemplateVariable } from "../../api/types";
 import ErrorLine from "../../shared/ErrorLine";
 import { inputClass, textareaClass } from "../../shared/fieldClass";
 import { isStructuredVariable } from "./stackWorkflow";
+import Tag from "../../shared/Tag";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -172,7 +173,7 @@ function SensitiveVariable({ variable, description, secrets }: { variable: Templ
           {variable.name}
           {variable.required ? " *" : ""}
         </p>
-        <span className="rounded-sm border bg-canvas px-1.75 py-px font-mono text-caption text-tag-foreground">sensitive</span>
+        <Tag>sensitive</Tag>
       </div>
       {/* A TF_VAR_ name has no break points of its own, so a long one breaks
           anywhere rather than widening the column. */}
