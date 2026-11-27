@@ -8,7 +8,9 @@ import { AuthContext } from "../../auth/AuthContext";
 import type { TemplateLatestSync, TemplateRevision } from "../../api/types";
 import RegisterTemplatePanel from "./RegisterTemplatePanel";
 import TemplatesPage from "./TemplatesPage";
-import { authValue, jsonResponse, latestSync, revision, seedTemplates, template, templateReadResponse, TENANT, testQueryClient } from "./testSupport";
+import { latestSync, revision, seedTemplates, template, templateReadResponse, TENANT } from "./testSupport";
+import { jsonResponse, testQueryClient } from "../../api/testSupport";
+import { authValue } from "../../auth/testSupport";
 
 const added = revision({ id: "rev_9", template_id: "tpl_9", repo_name: "edge", root_path: "." });
 
@@ -65,7 +67,7 @@ function renderPanel(queryClient: QueryClient) {
   );
   render(
     <QueryClientProvider client={queryClient}>
-      <AuthContext.Provider value={authValue()}>
+      <AuthContext.Provider value={authValue({ capabilities: { can_manage_templates: true } })}>
         <RouterProvider router={router} />
       </AuthContext.Provider>
     </QueryClientProvider>
@@ -91,7 +93,7 @@ function renderInPage(queryClient: QueryClient) {
   );
   render(
     <QueryClientProvider client={queryClient}>
-      <AuthContext.Provider value={authValue()}>
+      <AuthContext.Provider value={authValue({ capabilities: { can_manage_templates: true } })}>
         <RouterProvider router={router} />
       </AuthContext.Provider>
     </QueryClientProvider>

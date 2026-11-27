@@ -10,6 +10,7 @@ import RoleLabel from "../features/access/RoleLabel";
 import { PLATFORM_ROLES, STACK_ROLES } from "../features/access/roles";
 import StatusBadge from "../shared/StatusBadge";
 import { CircleAlert, Info, Plus, Search, SearchX } from "lucide-react";
+import Separator from "../shared/Separator";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -159,9 +160,7 @@ function SpecimenStepTime({ at, took }: { at: string; took: string }) {
   return (
     <>
       <time>{at}</time>
-      <span aria-hidden="true" className="text-separator">
-        ·
-      </span>
+      <Separator />
       <span>{took}</span>
     </>
   );

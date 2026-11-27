@@ -1,13 +1,12 @@
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useTemplateRevisionVariablesQuery } from "../../api/queries";
 import { useTenantID } from "../../auth/useTenantID";
-import { buttonClass } from "../../shared/buttonClass";
-import ErrorLine from "../../shared/ErrorLine";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
+import LoadError from "../../shared/LoadError";
+import Tag from "../../shared/Tag";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { useTemplate } from "./templateContext";
-import RequestIdNote from "../../shared/RequestIdNote";
 import { Breakable, piecesAfter } from "../../shared/breakAfter";
 
 // 8px either side of a column boundary makes the 16px between columns, and
@@ -48,19 +47,9 @@ export default function VariablesTab() {
       return <>{boundary}</>;
     }
     return (
-      <div className="flex flex-col items-start gap-3" data-testid="template-variables-error">
-        <ErrorLine live={false}>Something went wrong while loading the template's variables.</ErrorLine>
-        <RequestIdNote error={variablesQuery.error} />
-        <button
-          type="button"
-          className={cn(buttonClass("outline"), "pointer-coarse:h-11")}
-          data-testid="template-variables-retry"
-          onClick={() => void variablesQuery.refetch()}
-        >
-          <RefreshCw data-icon="inline-start" aria-hidden="true" />
-          Retry
-        </button>
-      </div>
+      <LoadError error={variablesQuery.error} onRetry={() => void variablesQuery.refetch()} testId="template-variables-error" retryTestId="template-variables-retry">
+        Something went wrong while loading the template's variables.
+      </LoadError>
     );
   }
 
@@ -103,7 +92,7 @@ export default function VariablesTab() {
                   {templateVariable.sensitive ? (
                     <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                       <span>{templateVariable.name}</span>
-                      <span className="rounded-sm border bg-canvas px-1.75 py-px font-mono text-caption text-tag-foreground">sensitive</span>
+                      <Tag>sensitive</Tag>
                     </span>
                   ) : (
                     templateVariable.name

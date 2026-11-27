@@ -10,7 +10,9 @@ import { queryKeys } from "../../api/queryKeys";
 import type { TemplateLatestSync, TemplateRevision } from "../../api/types";
 import RevisionsTab from "./RevisionsTab";
 import TemplatePanel from "./TemplatePanel";
-import { authValue, jsonResponse, latestSync, revision, seedTemplates, template, templateReadResponse, TENANT, testQueryClient } from "./testSupport";
+import { latestSync, revision, seedTemplates, template, templateReadResponse, TENANT } from "./testSupport";
+import { jsonResponse, testQueryClient } from "../../api/testSupport";
+import { authValue } from "../../auth/testSupport";
 
 const current = revision();
 const other = revision({ id: "rev_net", template_id: "tpl_net", name: "network", root_path: "aws/network" });
@@ -57,7 +59,7 @@ function renderPanel(queryClient: QueryClient, canManageTemplates = true) {
   );
   render(
     <QueryClientProvider client={queryClient}>
-      <AuthContext.Provider value={authValue(canManageTemplates)}>
+      <AuthContext.Provider value={authValue({ capabilities: { can_manage_templates: canManageTemplates } })}>
         <RouterProvider router={router} />
       </AuthContext.Provider>
     </QueryClientProvider>

@@ -10,23 +10,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { AuthContext } from "../auth/AuthContext";
 import type { AuthContextValue } from "../auth/AuthContext";
+import { authValue } from "../auth/testSupport";
 
-function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
-  return {
-    me: {
-      sub: "user_1",
-      tenant_id: "tenant_123",
-      display_name: "Otto Operator",
-      global_capabilities: { can_create_stack: true, can_manage_templates: true, can_manage_platform_access: false },
-    },
-    status: "authenticated",
-    login: () => {},
-    logout: () => {},
-    ...overrides,
-  };
-}
+// The shell's signed-in user: named, and allowed to create stacks and manage templates.
+const otto = { me: { display_name: "Otto Operator" }, capabilities: { can_create_stack: true, can_manage_templates: true } };
 
-function TestAuthWrapper({ value = authValue(), children }: { value?: AuthContextValue; children: ReactNode }) {
+function TestAuthWrapper({ value = authValue(otto), children }: { value?: AuthContextValue; children: ReactNode }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
@@ -53,7 +42,7 @@ async function shellMarkup() {
   );
 }
 
-async function renderShell(value = authValue()) {
+async function renderShell(value = authValue(otto)) {
   const router = await shellRouter();
   return render(
     <TestAuthWrapper value={value}>
@@ -94,7 +83,7 @@ describe("AppShell", () => {
     expect(within(screen.getByRole("navigation", { name: "Primary" })).queryByRole("link", { name: "Access" })).toBeNull();
     cleanup();
 
-    const admin = authValue();
+    const admin = authValue(otto);
     admin.me!.global_capabilities.can_manage_platform_access = true;
     await renderShell(admin);
     expect(within(screen.getByRole("navigation", { name: "Primary" })).getByRole("link", { name: "Access" }).getAttribute("href")).toBe("/access");
@@ -133,7 +122,7 @@ describe("AppShell", () => {
 
   it("logs out from the identity menu", async () => {
     const logout = vi.fn();
-    await renderShell(authValue({ logout }));
+    await renderShell(authValue({ ...otto, logout }));
 
     await userEvent.click(screen.getByRole("button", { name: "Log out" }));
     expect(logout).toHaveBeenCalledTimes(1);

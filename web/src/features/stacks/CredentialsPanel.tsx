@@ -9,7 +9,7 @@ import SecretInput from "../../shared/SecretInput";
 import ValueTextarea from "../../shared/ValueTextarea";
 import { fieldLabelClass, inputClass } from "../../shared/fieldClass";
 import { formatTimestamp } from "../../shared/formatTimestamp";
-import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty";
+import EmptyState from "../../shared/EmptyState";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -133,12 +133,7 @@ export default function CredentialsPanel({ kind, emptyTitle, emptyDescription, c
             <Loader2 aria-hidden="true" className="size-3.5 animate-spin" /> Loading environment…
           </p>
         ) : credentials.length === 0 ? (
-          <Empty className="col-span-3 gap-2 rounded-lg border border-dashed border-dashed-border px-5 py-7">
-            <EmptyHeader className="gap-2">
-              <p className="text-label">{emptyTitle}</p>
-              <EmptyDescription className="text-meta">{emptyDescription}</EmptyDescription>
-            </EmptyHeader>
-          </Empty>
+          <EmptyState title={emptyTitle} description={emptyDescription} short className="col-span-3" />
         ) : (
           <ul className="col-span-3 grid grid-cols-subgrid divide-y divide-divider overflow-hidden rounded-lg border">
             {credentials.map((credential) => (

@@ -9,8 +9,9 @@ import { StackTemplateContext } from "./stackTemplateContext";
 import { queryKeys } from "../../api/queryKeys";
 import type { StackTemplate, StackView, TemplateRevision, TemplateVariable } from "../../api/types";
 import { AuthContext } from "../../auth/AuthContext";
-import type { AuthContextValue } from "../../auth/AuthContext";
 import { seedTemplates } from "../templates/testSupport";
+import { authValue } from "../../auth/testSupport";
+import { testQueryClient } from "../../api/testSupport";
 
 function stackTemplate(overrides: Partial<StackTemplate> = {}): StackTemplate {
   return {
@@ -98,10 +99,6 @@ async function targetOptions(): Promise<string[]> {
     .map((option) => option.textContent ?? "");
 }
 
-function testQueryClient(): QueryClient {
-  return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-}
-
 /** Installed rev_current has region + legacy_flag; rev_next drops legacy_flag and adds new_var. */
 function seedChangeable(queryClient: QueryClient) {
   queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), stackView([stackTemplate()]));
@@ -122,22 +119,6 @@ function seedChangeable(queryClient: QueryClient) {
 function LocationProbe() {
   const location = useLocation();
   return <span data-testid="location">{`${location.pathname}${location.search}`}</span>;
-}
-
-// ChangeRevisionScreen renders via useQueryErrorBoundary, which calls
-// useAuth() unconditionally (see queryErrorBoundary.tsx and its use in every
-// sibling screen test — AddStackTemplateScreen.test.tsx, StackTemplateScreen.test.tsx,
-// etc.). Without an AuthContext.Provider the hook throws "useAuth must be used
-// within an AuthProvider" before the screen can render at all, so this
-// wrapper is required infrastructure, not a test case change.
-function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
-  return {
-    me: { sub: "user_1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_manage_templates: false, can_manage_platform_access: false } },
-    status: "authenticated",
-    login: () => {},
-    logout: () => {},
-    ...overrides
-  };
 }
 
 // The screen renders inside the template's panel, which provides the template

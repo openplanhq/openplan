@@ -10,16 +10,7 @@ import { classifyQueryError, useQueryErrorBoundary } from "./queryErrorBoundary"
 import AccessDenied from "../app/AccessDenied";
 import NotFound from "../app/NotFound";
 import ServiceUnavailable from "../app/ServiceUnavailable";
-
-function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
-  return {
-    me: { sub: "s1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_manage_templates: false, can_manage_platform_access: false } },
-    status: "authenticated",
-    login: () => {},
-    logout: () => {},
-    ...overrides
-  };
-}
+import { authValue } from "../auth/testSupport";
 
 function wrapper(auth: AuthContextValue) {
   return function Wrapper({ children }: { children: ReactNode }) {
@@ -104,6 +95,5 @@ describe("useQueryErrorBoundary", () => {
     rerender({ error: new ApiRequestError({ type: "about:blank", title: "unauthorized", status: 401, detail: "expired" }) });
     expect(logout).toHaveBeenCalledTimes(1);
   });
-
 
 });

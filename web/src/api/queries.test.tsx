@@ -33,7 +33,7 @@ import {
   useChangeStackTemplateRevisionMutation
 } from "./queries";
 import { queryKeys } from "./queryKeys";
-import { asListBody } from "./listTestSupport";
+import { jsonResponse } from "./testSupport";
 
 function wrapper(queryClient: QueryClient) {
   return function Wrapper({ children }: { children: ReactNode }) {
@@ -61,10 +61,6 @@ function syncingTemplate(status: TemplateSyncStatus): Template {
 
 function testQueryClient(): QueryClient {
   return new QueryClient({ defaultOptions: { queries: { retry: false } } });
-}
-
-function jsonResponse(body: unknown): Response {
-  return new Response(JSON.stringify(asListBody(body)), { status: 200, headers: { "content-type": "application/json" } });
 }
 
 describe("read-only query hooks", () => {

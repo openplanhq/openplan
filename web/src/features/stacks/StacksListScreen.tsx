@@ -1,4 +1,4 @@
-import { ArrowRight, Hourglass, Layers, Loader2, Plus, RefreshCw, TriangleAlert } from "lucide-react";
+import { ArrowRight, Hourglass, Layers, Loader2, Plus, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAttentionQuery, useStacksQuery } from "../../api/queries";
@@ -6,7 +6,6 @@ import type { AttentionItem, StackListItem } from "../../api/types";
 import { useAuth } from "../../auth/AuthContext";
 import RequireCapability from "../../auth/RequireCapability";
 import { useTenantID } from "../../auth/useTenantID";
-import ErrorLine from "../../shared/ErrorLine";
 import PageHeader from "../../shared/PageHeader";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import {
@@ -23,10 +22,11 @@ import { buttonClass } from "../../shared/buttonClass";
 import Chip from "../../shared/Chip";
 import { listItemClass } from "../../shared/listItemClass";
 import SearchField from "../../shared/SearchField";
-import RequestIdNote from "../../shared/RequestIdNote";
 import LoadMoreButton from "../../shared/LoadMoreButton";
 import { useDebounce } from "../../shared/useDebounce";
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from "@/components/ui/empty";
+import EmptyState from "../../shared/EmptyState";
+import LoadError from "../../shared/LoadError";
+import Separator from "../../shared/Separator";
 import { cn } from "@/lib/utils";
 
 // /stacks: every stack the person can view, with the one selected shown beside
@@ -107,19 +107,9 @@ export default function StacksListScreen() {
     return (
       <section>
         {header()}
-        <div className="flex flex-col items-start gap-3" data-testid="stacks-list-error">
-          <ErrorLine>Something went wrong while loading stacks.</ErrorLine>
-          <RequestIdNote error={error} />
-          <button
-            type="button"
-            className={cn(buttonClass("outline"), "pointer-coarse:h-11")}
-            data-testid="stacks-list-retry"
-            onClick={() => void refetch()}
-          >
-            <RefreshCw data-icon="inline-start" aria-hidden="true" />
-            Retry
-          </button>
-        </div>
+        <LoadError live error={error} onRetry={() => void refetch()} testId="stacks-list-error" retryTestId="stacks-list-retry">
+          Something went wrong while loading stacks.
+        </LoadError>
       </section>
     );
   }
@@ -143,25 +133,26 @@ export default function StacksListScreen() {
         // rather than on a tile. It is the first screen of a new install, so
         // it says what a stack is for and offers the action that makes one;
         // someone who may not create one learns how one reaches them.
-        <Empty className="gap-3 rounded-panel border border-solid bg-card px-5 py-14" data-testid="stacks-list-empty">
-          <EmptyHeader className="gap-3">
-            <EmptyMedia>
-              <Layers aria-hidden="true" className="size-5 text-muted-foreground" />
-            </EmptyMedia>
-            <h2 className="font-heading text-label">No stacks yet</h2>
-            <EmptyDescription className="text-meta">
-              {canCreateStack
-                ? "Create a stack for each environment you deploy to, such as prod or staging."
-                : "Stacks appear here once someone gives you access to one."}
-            </EmptyDescription>
-          </EmptyHeader>
-          {canCreateStack && (
-            <Link to="/stacks/new" className={cn(buttonClass("outline"), "pointer-coarse:h-11")} data-testid="stacks-empty-create">
-              <Plus data-icon="inline-start" aria-hidden="true" />
-              Create stack
-            </Link>
-          )}
-        </Empty>
+        <EmptyState
+          variant="page"
+          icon={Layers}
+          title="No stacks yet"
+          titleAs="h2"
+          description={
+            canCreateStack
+              ? "Create a stack for each environment you deploy to, such as prod or staging."
+              : "Stacks appear here once someone gives you access to one."
+          }
+          action={
+            canCreateStack && (
+              <Link to="/stacks/new" className={cn(buttonClass("outline"), "pointer-coarse:h-11")} data-testid="stacks-empty-create">
+                <Plus data-icon="inline-start" aria-hidden="true" />
+                Create stack
+              </Link>
+            )
+          }
+          testId="stacks-list-empty"
+        />
       ) : (
         // One panel: the list, then the selected stack. On a wide screen they
         // sit side by side and the preview stays in view while the list
@@ -219,9 +210,7 @@ function AttentionSummary({ items }: { items: AttentionItem[] }) {
     >
       <Hourglass aria-hidden="true" className="size-4 shrink-0 text-warning" />
       <span className="font-medium text-warning underline-offset-3 group-hover:underline">{summary.lead}</span>
-      <span aria-hidden="true" className="text-separator">
-        ·
-      </span>
+      <Separator />
       <span>{summary.breakdown}</span>
       <ArrowRight
         aria-hidden="true"

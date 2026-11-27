@@ -1,19 +1,18 @@
 import { useEffect, useRef } from "react";
-import { ArrowLeft, Info, Loader2, Plus, RefreshCw } from "lucide-react";
+import { ArrowLeft, Info, Loader2, Plus } from "lucide-react";
 import { Link, Outlet, useLocation, useMatch } from "react-router-dom";
 import { useTemplatesQuery } from "../../api/queries";
 import RequireCapability from "../../auth/RequireCapability";
 import { useTenantID } from "../../auth/useTenantID";
 import { buttonClass } from "../../shared/buttonClass";
-import ErrorLine from "../../shared/ErrorLine";
 import PageHeader from "../../shared/PageHeader";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
+import LoadError from "../../shared/LoadError";
 import { cn } from "@/lib/utils";
 import TemplateList from "./TemplateList";
 import type { IndexOutletContext } from "../../shared/indexOutlet";
 import type { TemplatesLocationState } from "./templatesPageOutlet";
 import { templatesByName } from "./templateWorkflow";
-import RequestIdNote from "../../shared/RequestIdNote";
 
 const registerLinkClass = cn(buttonClass("primary", "lg"), "w-full pointer-coarse:h-11 md:w-auto");
 
@@ -51,19 +50,9 @@ export default function TemplatesPage() {
     return (
       <section data-testid="templates-error">
         <PageHeader title="Templates" />
-        <div className="flex flex-col items-start gap-3">
-          <ErrorLine live={false}>Something went wrong while loading templates.</ErrorLine>
-          <RequestIdNote error={templatesQuery.error} />
-          <button
-            type="button"
-            className={cn(buttonClass("outline"), "pointer-coarse:h-11")}
-            data-testid="templates-retry"
-            onClick={() => void templatesQuery.refetch()}
-          >
-            <RefreshCw data-icon="inline-start" aria-hidden="true" />
-            Retry
-          </button>
-        </div>
+        <LoadError error={templatesQuery.error} onRetry={() => void templatesQuery.refetch()} retryTestId="templates-retry">
+          Something went wrong while loading templates.
+        </LoadError>
       </section>
     );
   }

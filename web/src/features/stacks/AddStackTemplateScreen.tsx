@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Loader2, Plus, RefreshCw } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   useAddTemplateToStackMutation,
@@ -24,8 +24,8 @@ import TemplateSearch, { TemplateChoiceState, TemplateSource } from "./TemplateS
 import VariableFields from "./VariableFields";
 import { apiErrorMessage, fieldsShown } from "../../api/problems";
 import { useFieldErrors } from "../../shared/useFieldErrors";
-import RequestIdNote from "../../shared/RequestIdNote";
-import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty";
+import EmptyState from "../../shared/EmptyState";
+import LoadError from "../../shared/LoadError";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -182,32 +182,23 @@ export default function AddStackTemplateScreen() {
     );
   } else if (templatesQuery.status === "error") {
     content = (
-      <div className="flex flex-col items-start gap-3" data-testid="add-stack-template-load-error">
-        <ErrorLine live={false}>Something went wrong while loading templates.</ErrorLine>
-        <RequestIdNote error={templatesQuery.error} />
-        <button
-          type="button"
-          className={cn(buttonClass("outline"), "pointer-coarse:h-11")}
-          data-testid="add-stack-template-retry"
-          onClick={() => void templatesQuery.refetch()}
-        >
-          <RefreshCw data-icon="inline-start" aria-hidden="true" />
-          Retry
-        </button>
-      </div>
+      <LoadError error={templatesQuery.error} onRetry={() => void templatesQuery.refetch()} testId="add-stack-template-load-error" retryTestId="add-stack-template-retry">
+        Something went wrong while loading templates.
+      </LoadError>
     );
   } else if (templates.length === 0) {
     content = (
-      <Empty className="gap-3 rounded-lg border border-dashed border-dashed-border px-5 py-10" data-testid="add-stack-template-none">
-        <EmptyHeader className="gap-2">
-          <p className="text-label">No templates registered yet</p>
-          <EmptyDescription className="text-meta">Register a template, then add it to this stack.</EmptyDescription>
-        </EmptyHeader>
-        <Link to="/templates/new" className={cn(buttonClass("primary"), "pointer-coarse:h-11")} data-testid="register-template-link">
-          <Plus data-icon="inline-start" aria-hidden="true" />
-          Register template
-        </Link>
-      </Empty>
+      <EmptyState
+        title="No templates registered yet"
+        description="Register a template, then add it to this stack."
+        action={
+          <Link to="/templates/new" className={cn(buttonClass("primary"), "pointer-coarse:h-11")} data-testid="register-template-link">
+            <Plus data-icon="inline-start" aria-hidden="true" />
+            Register template
+          </Link>
+        }
+        testId="add-stack-template-none"
+      />
     );
   } else {
     content = (
@@ -257,13 +248,9 @@ export default function AddStackTemplateScreen() {
           </p>
         )}
         {revisionsFailed && (
-          <div className="flex flex-col items-start gap-3" data-testid="add-stack-template-revisions-error">
-            <ErrorLine>Could not load this template's revisions.</ErrorLine>
-            <button type="button" className={cn(buttonClass("outline"), "pointer-coarse:h-11")} onClick={() => void chosenRevisionsQuery.refetch()}>
-              <RefreshCw data-icon="inline-start" aria-hidden="true" />
-              Retry
-            </button>
-          </div>
+          <LoadError live error={chosenRevisionsQuery.error} onRetry={() => void chosenRevisionsQuery.refetch()} testId="add-stack-template-revisions-error">
+            Could not load this template's revisions.
+          </LoadError>
         )}
         {chosenRevision && chosenTemplate && (
           <section aria-labelledby={configureHeadingId} className="flex max-w-140 flex-col gap-4" data-testid="add-stack-template-variables">
@@ -302,13 +289,9 @@ export default function AddStackTemplateScreen() {
               // Not the empty message: a fetch that failed must never read as
               // "this template declares no variables". Inline, so the picker
               // stays usable.
-              <div className="flex flex-col items-start gap-3" data-testid="add-stack-template-variables-error">
-                <ErrorLine>Could not load this template's variables.</ErrorLine>
-                <button type="button" className={cn(buttonClass("outline"), "pointer-coarse:h-11")} onClick={() => void variablesQuery.refetch()}>
-                  <RefreshCw data-icon="inline-start" aria-hidden="true" />
-                  Retry
-                </button>
-              </div>
+              <LoadError live error={variablesQuery.error} onRetry={() => void variablesQuery.refetch()} testId="add-stack-template-variables-error">
+                Could not load this template's variables.
+              </LoadError>
             ) : (
               <div ref={variableFieldsRef}>
                 <VariableFields

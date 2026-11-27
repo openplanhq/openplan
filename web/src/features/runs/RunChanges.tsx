@@ -1,9 +1,9 @@
 import { Fragment, useId, useState } from "react";
 import type { ReactNode } from "react";
-import { ChevronRight, RefreshCw } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import type { PlanChangeAction, PlanResourceChange, TemplateRun } from "../../api/types";
 import { buttonClass } from "../../shared/buttonClass";
-import ErrorLine from "../../shared/ErrorLine";
+import LoadError from "../../shared/LoadError";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { ACTION_ORDER, actionLook, changeReason, changesNote, diffLines, isApplied } from "./planChanges";
@@ -54,13 +54,9 @@ export default function RunChanges({ run, changes, failed, onRetry, toolbar }: R
     return (
       <RunViewFrame toolbar={toolbar}>
         {failed ? (
-          <div className="flex flex-col items-start gap-3" data-testid="run-changes-error">
-            <ErrorLine live={false}>Something went wrong while loading this plan's changes.</ErrorLine>
-            <button type="button" className={cn(buttonClass("outline"), "pointer-coarse:h-11")} onClick={onRetry}>
-              <RefreshCw data-icon="inline-start" aria-hidden="true" />
-              Retry
-            </button>
-          </div>
+          <LoadError onRetry={onRetry} testId="run-changes-error">
+            Something went wrong while loading this plan's changes.
+          </LoadError>
         ) : (
           <p className="text-meta text-muted-foreground">Loading changes…</p>
         )}

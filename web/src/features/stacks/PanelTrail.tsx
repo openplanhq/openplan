@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import Separator from "../../shared/Separator";
 
 // The crumb row at the top of a view nested in a tab, such as a run under
 // Runs or Change revision under Settings: the tab as a link back, then this
@@ -9,9 +10,7 @@ export default function PanelTrail({ name, parent, current }: { name: string; pa
       <Link to={parent.to} className="hover:text-foreground hover:underline">
         {parent.label}
       </Link>
-      <span aria-hidden="true" className="text-separator">
-        /
-      </span>
+      <Separator glyph="/" />
       <span aria-current="page" className="text-foreground">
         {current}
       </span>
