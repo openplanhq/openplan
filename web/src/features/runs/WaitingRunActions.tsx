@@ -2,6 +2,7 @@ import { Loader2, Trash2 } from "lucide-react";
 import type { TemplateRun } from "../../api/types";
 import RequireCapability from "../../auth/RequireCapability";
 import { buttonClass } from "../../shared/buttonClass";
+import { pluralCount } from "../../shared/plural";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -32,8 +33,7 @@ interface WaitingRunActionsProps {
 // button is the action's name alone; the count is the dialog's, where it is
 // read as a number of resources (issue 569).
 export default function WaitingRunActions({ run, stackId, approveBusy, discardBusy, onApprove, onDiscard }: WaitingRunActionsProps) {
-  const count = run.plan_summary?.destroy ?? 0;
-  const title = `Destroy ${count} ${count === 1 ? "resource" : "resources"}`;
+  const title = `Destroy ${pluralCount(run.plan_summary?.destroy ?? 0, "resource", "resources")}`;
 
   return (
     <>

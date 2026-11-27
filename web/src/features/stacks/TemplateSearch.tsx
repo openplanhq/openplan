@@ -6,10 +6,11 @@ import { searchFieldClass } from "../../shared/SearchField";
 import StatusLabel from "../../shared/StatusLabel";
 import { revisionIndicator } from "../templates/revisionIndicator";
 import type { Template, TemplateRevision } from "../../api/types";
-import { activeRevisions, revisionCountLabel, searchTemplates, templateDisplayName, templateRootPathLabel } from "../templates/templateWorkflow";
+import { activeRevisions, searchTemplates, templateDisplayName, templateRootPathLabel } from "../templates/templateWorkflow";
 import type { TemplateSearchMatch } from "../templates/templateWorkflow";
 import Separator from "../../shared/Separator";
 import { matchCountLabel } from "../../shared/matchCountLabel";
+import { pluralCount } from "../../shared/plural";
 import { ComboboxContent, ComboboxEmpty, ComboboxList, useComboboxAnchor } from "@/components/ui/combobox";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { cn } from "@/lib/utils";
@@ -118,8 +119,8 @@ export default function TemplateSearch({
         </ComboboxContent>
       </Combobox.Root>
       <p id={hintId} className="text-caption text-muted-foreground">
-        {templates.length === 1 ? "1 template" : `${templates.length} templates`} in{" "}
-        {repositoryCount === 1 ? "1 repository" : `${repositoryCount} repositories`}.
+        {pluralCount(templates.length, "template", "templates")} in{" "}
+        {pluralCount(repositoryCount, "repository", "repositories")}.
       </p>
     </div>
   );
@@ -192,7 +193,7 @@ export function TemplateChoiceState({ revisions }: { revisions: TemplateRevision
           {latestState.label}
         </StatusLabel>
       )}
-      {installableCount > 0 && <span className="text-meta text-muted-foreground">{revisionCountLabel(installableCount)}</span>}
+      {installableCount > 0 && <span className="text-meta text-muted-foreground">{pluralCount(installableCount, "revision", "revisions")}</span>}
     </span>
   );
 }
@@ -232,7 +233,7 @@ function Highlighted({ text, hits, markClassName }: { text: string; hits: number
 function countLabel(total: number, shown: number, searching: boolean): string {
   if (!searching) {
     if (total > shown) return `Showing ${shown} of ${total} templates · type to narrow`;
-    return total === 1 ? "1 template" : `${total} templates`;
+    return pluralCount(total, "template", "templates");
   }
   return matchCountLabel(total, shown);
 }

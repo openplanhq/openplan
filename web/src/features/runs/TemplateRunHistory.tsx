@@ -7,6 +7,7 @@ import PlanDiff from "../../shared/PlanDiff";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import EmptyState from "../../shared/EmptyState";
 import LoadError from "../../shared/LoadError";
+import { stackTemplateRunPath } from "../stacks/templateSelection";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import RunStatusLabel from "./RunStatusLabel";
@@ -81,7 +82,7 @@ export default function TemplateRunHistory({ stackId, stackTemplateId }: Templat
             </TableHeader>
             <TableBody>
               {runs.map((run) => (
-                <RunRow key={run.id} run={run} to={`/stacks/${stackId}/templates/${stackTemplateId}/runs/${run.run_number}`} />
+                <RunRow key={run.id} run={run} to={stackTemplateRunPath(stackId, stackTemplateId, run.run_number)} />
               ))}
             </TableBody>
           </Table>

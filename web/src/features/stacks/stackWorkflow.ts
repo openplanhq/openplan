@@ -1,4 +1,4 @@
-import type { PlanSummary, Stack, StackTemplate, TemplateRevision, TemplateVariable } from "../../api/types";
+import type { Stack, StackTemplate, TemplateRevision, TemplateVariable } from "../../api/types";
 import type { StatusTone } from "../../shared/statusTone";
 
 // No ref suffix: source_ref is part of a template's identity, so it read
@@ -151,15 +151,6 @@ export function upsertStackTemplate(stackTemplates: StackTemplate[], stackTempla
     return stackTemplates.map((item) => item.id === stackTemplate.id ? stackTemplate : item);
   }
   return [stackTemplate, ...stackTemplates];
-}
-
-// planSummaryLabel reads a saved plan's counts the way tofu's summary line
-// does, compressed: "+3 ~1 -0" is three to add, one to change, none to destroy.
-export function planSummaryLabel(summary: PlanSummary | null): string {
-  if (!summary) {
-    return "";
-  }
-  return `+${summary.add} ~${summary.change} -${summary.destroy}`;
 }
 
 export interface StackTemplateStatus {

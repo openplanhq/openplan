@@ -41,3 +41,8 @@ export function templateTabOf(pathname: string): TemplateTab {
 export function stackTemplatePath(stackId: string, stackTemplateId: string, section: TemplateTab | "change-revision" = "runs"): string {
   return `/stacks/${stackId}/templates/${stackTemplateId}/${section}`;
 }
+
+/** Where one of a template's runs is read, nested under Runs so that tab stays lit. */
+export function stackTemplateRunPath(stackId: string, stackTemplateId: string, runNumber: number): string {
+  return `${stackTemplatePath(stackId, stackTemplateId, "runs")}/${runNumber}`;
+}

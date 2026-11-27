@@ -4,6 +4,7 @@ import { ChevronRight } from "lucide-react";
 import type { PlanChangeAction, PlanResourceChange, TemplateRun } from "../../api/types";
 import { buttonClass } from "../../shared/buttonClass";
 import LoadError from "../../shared/LoadError";
+import { pluralWord } from "../../shared/plural";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { ACTION_ORDER, actionLook, changeReason, changesNote, diffLines, isApplied } from "./planChanges";
@@ -292,7 +293,7 @@ function ChangeDetail({ id, change }: { id: string; change: PlanResourceChange }
       ))}
       {unchanged > 0 && (
         <p className="text-muted-foreground">
-          # ({unchanged} unchanged {unchanged === 1 ? "attribute" : "attributes"} hidden)
+          # ({unchanged} unchanged {pluralWord(unchanged, "attribute", "attributes")} hidden)
         </p>
       )}
     </div>

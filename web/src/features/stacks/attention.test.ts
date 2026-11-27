@@ -6,7 +6,6 @@ import {
   attentionSummary,
   failedOperation,
   runFailedChipLabel,
-  templateCountWord,
   waitingChipLabel
 } from "./attention";
 
@@ -111,11 +110,6 @@ describe("labels", () => {
     ["destroy", 1, "destroy failed"],
     ["destroy", 2, "2 destroys failed"]
   ] as const)("failed %s chip for %i", (operation, n, label) => expect(runFailedChipLabel(operation, n)).toBe(label));
-
-  it.each([
-    [1, "template"],
-    [4, "templates"]
-  ])("template count word for %i", (n, word) => expect(templateCountWord(n)).toBe(word));
 });
 
 describe("attentionRunPath", () => {

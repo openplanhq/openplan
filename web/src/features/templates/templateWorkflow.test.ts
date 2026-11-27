@@ -4,7 +4,6 @@ import {
   activeRevisions,
   latestActiveRevision,
   matchesTemplateFilter,
-  revisionCountLabel,
   revisionSourceLabel,
   searchTemplates,
   templateDisplayName,
@@ -41,13 +40,6 @@ describe("templateRootPathLabel", () => {
 
   it("keeps a path that locates the module", () => {
     expect(templateRootPathLabel("environments/dev", "Supabase")).toBe("environments/dev");
-  });
-});
-
-describe("revisionCountLabel", () => {
-  it("singularises one revision", () => {
-    expect(revisionCountLabel(1)).toBe("1 revision");
-    expect(revisionCountLabel(4)).toBe("4 revisions");
   });
 });
 

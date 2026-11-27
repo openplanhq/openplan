@@ -7,6 +7,7 @@ import { buttonClass } from "../../shared/buttonClass";
 import { formatDateTime } from "../../shared/formatTimestamp";
 import PlanDiff from "../../shared/PlanDiff";
 import Separator from "../../shared/Separator";
+import { stackTemplateRunPath } from "../stacks/templateSelection";
 import { cn } from "@/lib/utils";
 
 // What on a template waits on a person, above its runs: a plan waiting for
@@ -18,7 +19,7 @@ export default function TemplateRunNotices({ stackId, stackTemplate }: { stackId
   const waiting = runs.find((run) => run.status === "waiting_approval") ?? null;
   const failed = stackTemplate.lifecycle === "failed";
   const failedRun = failed ? runs.find((run) => run.operation === "destroy" && run.status === "failed") ?? null : null;
-  const runPath = (run: TemplateRun) => `/stacks/${stackId}/templates/${stackTemplate.id}/runs/${run.run_number}`;
+  const runPath = (run: TemplateRun) => stackTemplateRunPath(stackId, stackTemplate.id, run.run_number);
 
   if (!waiting && !failed) {
     return null;

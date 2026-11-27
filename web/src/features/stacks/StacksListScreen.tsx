@@ -7,13 +7,13 @@ import { useAuth } from "../../auth/AuthContext";
 import RequireCapability from "../../auth/RequireCapability";
 import { useTenantID } from "../../auth/useTenantID";
 import PageHeader from "../../shared/PageHeader";
+import { pluralWord } from "../../shared/plural";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import {
   attentionByStack,
   attentionByStackTemplate,
   attentionSummary,
   runFailedChipLabel,
-  templateCountWord,
   waitingChipLabel
 } from "./attention";
 import type { StackAttention } from "./attention";
@@ -297,7 +297,7 @@ function TemplateCount({ templates, selected }: { templates: number; selected: b
         "No templates"
       ) : (
         <span>
-          <span className="font-medium text-foreground">{templates}</span> {templateCountWord(templates)}
+          <span className="font-medium text-foreground">{templates}</span> {pluralWord(templates, "template", "templates")}
         </span>
       )}
     </span>
