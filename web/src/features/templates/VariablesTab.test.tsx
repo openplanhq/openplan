@@ -9,7 +9,9 @@ import { queryKeys } from "../../api/queryKeys";
 import type { TemplateVariable } from "../../api/types";
 import TemplatePanel from "./TemplatePanel";
 import VariablesTab from "./VariablesTab";
-import { authValue, jsonResponse, revision, TENANT, testQueryClient, variable, seedTemplates } from "./testSupport";
+import { revision, TENANT, variable, seedTemplates } from "./testSupport";
+import { jsonResponse, testQueryClient } from "../../api/testSupport";
+import { authValue } from "../../auth/testSupport";
 
 function seed(variables?: TemplateVariable[]): QueryClient {
   const queryClient = testQueryClient();
@@ -27,7 +29,7 @@ function renderTab(queryClient: QueryClient) {
   );
   render(
     <QueryClientProvider client={queryClient}>
-      <AuthContext.Provider value={authValue()}>
+      <AuthContext.Provider value={authValue({ capabilities: { can_manage_templates: true } })}>
         <RouterProvider router={router} />
       </AuthContext.Provider>
     </QueryClientProvider>

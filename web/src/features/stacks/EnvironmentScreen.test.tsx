@@ -7,27 +7,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import EnvironmentScreen from "./EnvironmentScreen";
 import { queryKeys } from "../../api/queryKeys";
 import { AuthContext } from "../../auth/AuthContext";
-import type { AuthContextValue } from "../../auth/AuthContext";
-import { asListBody } from "../../api/listTestSupport";
-
-function authValue(): AuthContextValue {
-  return {
-    me: { sub: "user_1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_manage_templates: false, can_manage_platform_access: false } },
-    status: "authenticated",
-    login: () => {},
-    logout: () => {}
-  };
-}
-
-function testQueryClient(): QueryClient {
-  return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-}
+import { jsonResponse, testQueryClient } from "../../api/testSupport";
+import { authValue } from "../../auth/testSupport";
 
 const credential = { id: "credential_1", name: "TF_VAR_TEST", scope: "stack" as const, sensitive: true, created_at: "2026-07-19T00:00:00Z" };
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(asListBody(body)), { status, headers: { "content-type": "application/json" } });
-}
 
 // The two tabs' panels are both mounted, so a field is looked up in the
 // panel it belongs to.

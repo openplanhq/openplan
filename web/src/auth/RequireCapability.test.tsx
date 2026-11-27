@@ -10,28 +10,8 @@ import type { AuthContextValue } from "./AuthContext";
 import RequireCapability from "./RequireCapability";
 import { queryKeys } from "../api/queryKeys";
 import type { StackView } from "../api/types";
-
-function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
-  return {
-    me: {
-      sub: "user_1",
-      tenant_id: "tenant_123",
-      display_name: "Test User",
-      global_capabilities: { can_create_stack: false, can_manage_templates: false, can_manage_platform_access: false }
-    },
-    status: "authenticated",
-    login: () => {},
-    logout: () => {},
-    ...overrides
-  };
-}
-
-function testQueryClient(): QueryClient {
-  // staleTime: Infinity keeps seeded cache data from triggering a background
-  // refetch on mount (the default staleTime: 0 would refetch stale data even
-  // though it's already cached, defeating the "no additional fetch" assertions).
-  return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-}
+import { authValue } from "./testSupport";
+import { testQueryClient } from "../api/testSupport";
 
 function stackView(capabilities: Partial<StackView["stack"]["effective_capabilities"]>): StackView {
   return {
@@ -76,7 +56,7 @@ describe("RequireCapability — gate mode (component-level)", () => {
       <RequireCapability capability="can_create_stack">
         <span data-testid="protected">shown</span>
       </RequireCapability>,
-      { auth: authValue({ me: { ...authValue().me!, global_capabilities: { can_create_stack: true, can_manage_templates: true, can_manage_platform_access: false } } }) }
+      { auth: authValue({ capabilities: { can_create_stack: true, can_manage_templates: true } }) }
     );
 
     expect(markup).toContain('data-testid="protected"');

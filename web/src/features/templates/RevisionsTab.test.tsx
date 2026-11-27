@@ -8,7 +8,9 @@ import { AuthContext } from "../../auth/AuthContext";
 import { queryKeys } from "../../api/queryKeys";
 import RevisionsTab from "./RevisionsTab";
 import TemplatePanel from "./TemplatePanel";
-import { authValue, revision, TENANT, testQueryClient, seedTemplates } from "./testSupport";
+import { revision, TENANT, seedTemplates } from "./testSupport";
+import { testQueryClient } from "../../api/testSupport";
+import { authValue } from "../../auth/testSupport";
 
 const newest = revision({ id: "rev_3", resolved_commit_sha: "e3a7c4d000", commit_subject: "Bump the EKS module to 20.8", created_at: "2026-09-30T10:00:00Z" });
 const middle = revision({ id: "rev_2", resolved_commit_sha: "b51f08a000", created_at: "2026-09-14T10:00:00Z", status: "validating" });
@@ -27,7 +29,7 @@ function renderTab(queryClient: QueryClient) {
   );
   render(
     <QueryClientProvider client={queryClient}>
-      <AuthContext.Provider value={authValue()}>
+      <AuthContext.Provider value={authValue({ capabilities: { can_manage_templates: true } })}>
         <RouterProvider router={router} />
       </AuthContext.Provider>
     </QueryClientProvider>

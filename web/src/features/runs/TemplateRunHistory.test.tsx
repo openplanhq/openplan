@@ -7,7 +7,7 @@ import { queryKeys } from "../../api/queryKeys";
 import type { TemplateRun } from "../../api/types";
 import { AuthContext } from "../../auth/AuthContext";
 import TemplateRunHistory from "./TemplateRunHistory";
-import { asListBody, pagesOf } from "../../api/listTestSupport";
+import { jsonResponse, pagesOf, testQueryClient } from "../../api/testSupport";
 
 function run(overrides: Partial<TemplateRun> = {}): TemplateRun {
   return {
@@ -31,10 +31,6 @@ function run(overrides: Partial<TemplateRun> = {}): TemplateRun {
     plan_changes: null,
     ...overrides
   };
-}
-
-function testQueryClient(): QueryClient {
-  return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
 }
 
 function seedRuns(queryClient: QueryClient, runs: TemplateRun[]) {
@@ -194,6 +190,3 @@ describe("TemplateRunHistory", () => {
   });
 });
 
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(asListBody(body)), { status, headers: { "content-type": "application/json" } });
-}

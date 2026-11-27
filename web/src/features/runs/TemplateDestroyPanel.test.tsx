@@ -4,12 +4,12 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthContext } from "../../auth/AuthContext";
-import type { AuthContextValue } from "../../auth/AuthContext";
 import type { StackCapabilities } from "../../auth/types";
 import { queryKeys } from "../../api/queryKeys";
 import type { StackTemplate, TemplateRun } from "../../api/types";
 import TemplateDestroyPanel from "./TemplateDestroyPanel";
-import { asListBody, pagesOf } from "../../api/listTestSupport";
+import { jsonResponse, pagesOf, testQueryClient } from "../../api/testSupport";
+import { authValue } from "../../auth/testSupport";
 
 function stackTemplate(overrides: Partial<StackTemplate> = {}): StackTemplate {
   return {
@@ -59,19 +59,6 @@ function run(overrides: Partial<TemplateRun> = {}): TemplateRun {
 
 const allAllowed: StackCapabilities = { can_view: true, can_operate: true, can_approve: true, can_manage_access: true };
 
-function testQueryClient(): QueryClient {
-  return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-}
-
-function authValue(): AuthContextValue {
-  return {
-    me: { sub: "user_1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_manage_templates: false, can_manage_platform_access: false } },
-    status: "authenticated",
-    login: () => {},
-    logout: () => {}
-  };
-}
-
 function seedCapabilities(queryClient: QueryClient, capabilities: StackCapabilities) {
   queryClient.setQueryData(queryKeys.stack("tenant_123", "stack_1"), {
     stack: {
@@ -108,10 +95,6 @@ function renderPanel(queryClient: QueryClient, overrides: Partial<StackTemplate>
 
 function LocationProbe() {
   return <span data-testid="location">{useLocation().pathname}</span>;
-}
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(asListBody(body)), { status, headers: { "content-type": "application/json" } });
 }
 
 function isDisabled(element: HTMLElement): boolean {

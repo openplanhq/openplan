@@ -10,9 +10,9 @@ import TemplatePanel from "./TemplatePanel";
 import { queryKeys } from "../../api/queryKeys";
 import type { StackTemplate, TemplateRevision, TemplateVariable } from "../../api/types";
 import { AuthContext } from "../../auth/AuthContext";
-import type { AuthContextValue } from "../../auth/AuthContext";
-import { asListBody } from "../../api/listTestSupport";
+import { jsonResponse, testQueryClient } from "../../api/testSupport";
 import { seedTemplates, template, templateReadResponse } from "../templates/testSupport";
+import { authValue } from "../../auth/testSupport";
 
 function templateRevision(overrides: Partial<TemplateRevision> = {}): TemplateRevision {
   return {
@@ -48,34 +48,9 @@ function variable(overrides: Partial<TemplateVariable> = {}): TemplateVariable {
   };
 }
 
-function testQueryClient(): QueryClient {
-  return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-}
-
-// AddStackTemplateScreen renders via useQueryErrorBoundary, which calls
-// useAuth() unconditionally (see queryErrorBoundary.tsx and its use in every
-// sibling screen test — StackTemplateScreen.test.tsx, CreateStackScreen.test.tsx,
-// TemplateRegistryScreen.test.tsx, etc.). Without an AuthContext.Provider the
-// hook throws "useAuth must be used within an AuthProvider" before the screen
-// can render at all, so this wrapper is required infrastructure, not a test
-// case change.
-function authValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
-  return {
-    me: { sub: "user_1", tenant_id: "tenant_123", display_name: "Test User", global_capabilities: { can_create_stack: false, can_manage_templates: false, can_manage_platform_access: false } },
-    status: "authenticated",
-    login: () => {},
-    logout: () => {},
-    ...overrides
-  };
-}
-
 function LocationProbe() {
   const location = useLocation();
   return <span data-testid="location">{`${location.pathname}${location.search}`}</span>;
-}
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(asListBody(body)), { status, headers: { "content-type": "application/json" } });
 }
 
 function installedTemplate(id: string): StackTemplate {

@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { pagesOf } from "../../api/listTestSupport";
+import { pagesOf } from "../../api/testSupport";
 import { queryKeys } from "../../api/queryKeys";
 import type { TemplateRun } from "../../api/types";
 import { AuthContext } from "../../auth/AuthContext";
