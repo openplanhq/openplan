@@ -36,10 +36,20 @@ var (
 	ErrTemplateRunInFlight                = errors.New("a run is already in flight for this stack template")
 	ErrRunNotApprovable                   = errors.New("run is not approvable")
 	ErrRunNotDiscardable                  = errors.New("run has no plan waiting to discard")
-	ErrLastOwner                          = errors.New("cannot remove the last stack owner")
-	ErrCredentialNameInvalid              = errors.New("credential name is invalid")
-	ErrDuplicateCredentialName            = errors.New("duplicate credential name")
-	ErrCredentialEncryptionUnavailable    = errors.New("credential encryption is unavailable")
+	// ErrRunNotEndable refuses ending a run that is not queued or running:
+	// a plan waiting for approval is discarded, and a finished run is over.
+	ErrRunNotEndable = errors.New("run is not queued or running")
+	// ErrRunWorkflowRunning refuses ending a run whose workflow Temporal
+	// still runs: that workflow will end the run itself, or an operator
+	// terminates it there first.
+	ErrRunWorkflowRunning = errors.New("run's workflow is still running")
+	// ErrWorkflowsUnavailable is Temporal not answering, so whether a run's
+	// workflow is gone cannot be known.
+	ErrWorkflowsUnavailable            = errors.New("workflows cannot be reached")
+	ErrLastOwner                       = errors.New("cannot remove the last stack owner")
+	ErrCredentialNameInvalid           = errors.New("credential name is invalid")
+	ErrDuplicateCredentialName         = errors.New("duplicate credential name")
+	ErrCredentialEncryptionUnavailable = errors.New("credential encryption is unavailable")
 	// ErrTemplateInUse refuses deleting a template while a stack has an
 	// install of it that isn't destroyed.
 	ErrTemplateInUse = errors.New("template is installed in a stack")
@@ -97,6 +107,9 @@ type TxRepo interface {
 	// DiscardTemplateRun discards a run waiting for approval, or approved but
 	// not yet claimed by its apply, and reports whether it did.
 	DiscardTemplateRun(ctx context.Context, discard domain.TemplateRunDiscard) (bool, error)
+	// EndTemplateRun ends a queued or running run as failed, by an
+	// operator's hand, and reports whether it did.
+	EndTemplateRun(ctx context.Context, end domain.TemplateRunEnd) (bool, error)
 }
 
 // UnitOfWork commits a domain write and a queued intent atomically. This is
@@ -202,6 +215,10 @@ type WorkflowDispatcher interface {
 	// StartTemplateApply starts the workflow that applies an approved run's
 	// saved plan.
 	StartTemplateApply(ctx context.Context, input domain.TemplateRunWorkflowInput) error
+	// DescribeTemplateRunWorkflows reports what Temporal holds for the run's
+	// plan and apply workflows. A workflow Temporal does not have is absent,
+	// not an error; an error means Temporal could not be asked.
+	DescribeTemplateRunWorkflows(ctx context.Context, tenantID domain.TenantID, runID domain.TemplateRunID) ([]domain.TemplateRunWorkflow, error)
 }
 
 // AuditRepository appends security audit events. It exposes no update or
@@ -592,6 +609,14 @@ type ApproveRunCommand struct {
 
 // DiscardRunCommand asks the app to discard a plan waiting for approval.
 type DiscardRunCommand struct {
+	TenantID domain.TenantID
+	RunID    domain.TemplateRunID
+	Reason   string
+}
+
+// EndRunCommand asks the app to end a queued or running run whose workflow
+// is gone, with the reason the operator gave, if any.
+type EndRunCommand struct {
 	TenantID domain.TenantID
 	RunID    domain.TemplateRunID
 	Reason   string
@@ -2262,6 +2287,107 @@ func (service *Service) DiscardRun(ctx context.Context, command DiscardRunComman
 	}
 
 	return nil
+}
+
+// EndRun ends a queued or running run whose workflow is gone, by an
+// operator's hand. A run is carried by its workflow, and only that workflow
+// ends it; when Temporal has lost the workflow, or has it closed without this
+// database ever hearing (a restore, a crash that took Temporal's store), the
+// run would stay in flight forever and block its stack template. Ending it
+// marks it failed, with a summary of what Temporal said, so the next plan
+// shows what is real.
+//
+// Temporal is asked first, and the answer decides: a workflow still running
+// will end the run itself, so the end is refused rather than racing it; no
+// answer at all refuses too, since a gone workflow and an unreachable Temporal
+// look the same from here and only one of them is safe to act on. The check
+// and the write are not one transaction. The one writer that could appear
+// between them is a start intent still queued for a queued run, and a
+// workflow that starts against an ended run fails cleanly: its running write
+// is refused, and its failed write finds the run already failed.
+func (service *Service) EndRun(ctx context.Context, command EndRunCommand) error {
+	principal, run, _, err := service.guardRunWrite(ctx, writeAttempt{Operation: domain.AuditOperationEndRun, TenantID: command.TenantID, TargetID: string(command.RunID)}, command.RunID, authorization.RelationCanOperate)
+	if err != nil {
+		return err
+	}
+	actor := domain.UserID(principal.Subject)
+	if run.Status != domain.TemplateRunQueued && run.Status != domain.TemplateRunRunning {
+		return fmt.Errorf("end template run: %w", ErrRunNotEndable)
+	}
+	workflows, err := service.Workflows.DescribeTemplateRunWorkflows(ctx, command.TenantID, command.RunID)
+	if err != nil {
+		return fmt.Errorf("end template run: %w: %w", ErrWorkflowsUnavailable, err)
+	}
+	for _, workflow := range workflows {
+		if workflow.State == domain.TemplateRunWorkflowRunning {
+			return fmt.Errorf("end template run: %w", &RunWorkflowRunningError{RunNumber: run.RunNumber})
+		}
+	}
+
+	executions, err := service.TemplateRuns.ListTemplateRunExecutions(ctx, command.TenantID, command.RunID)
+	if err != nil {
+		return fmt.Errorf("end template run: list template run executions: %w", err)
+	}
+	carrier := carrierWorkflow(run, executions, workflows)
+	end := domain.TemplateRunEnd{
+		RunID:      command.RunID,
+		TenantID:   command.TenantID,
+		EndedBy:    actor,
+		Reason:     command.Reason,
+		EndedAt:    service.Clock.Now(),
+		Summary:    endedRunSummary(run, carrier),
+		WorkflowID: carrier.WorkflowID,
+	}
+	if err := service.Work.InTx(ctx, func(ctx context.Context, repository TxRepo, _ queue.Enqueuer) error {
+		ended, err := repository.EndTemplateRun(ctx, end)
+		if err != nil {
+			return err
+		}
+		if !ended {
+			return ErrRunNotEndable
+		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("end template run: %w", err)
+	}
+	return nil
+}
+
+// carrierWorkflow is the workflow that carries the run: the one whose
+// execution is running, or, for a run no workflow has claimed, the one that
+// would claim it, which is the plan workflow unless the run is auto-approved.
+// Its answer from Temporal is what the ended run reports, and a queued run's
+// failed execution is recorded under its id.
+func carrierWorkflow(run domain.TemplateRun, executions []domain.TemplateRunWorkflowExecution, workflows []domain.TemplateRunWorkflow) domain.TemplateRunWorkflow {
+	phase := domain.RunPhasePlan
+	if run.AutoApprove {
+		phase = domain.RunPhaseApply
+	}
+	for _, execution := range executions {
+		if execution.Status == domain.TemplateRunExecutionRunning {
+			phase = execution.Phase
+		}
+	}
+	for _, workflow := range workflows {
+		if workflow.Phase == phase {
+			return workflow
+		}
+	}
+	return domain.TemplateRunWorkflow{}
+}
+
+// endedRunSummary is what an ended run says about itself: that an operator
+// ended it, what Temporal held of the workflow that carried it, and, for a
+// run that can change infrastructure, that the next step is a plan.
+func endedRunSummary(run domain.TemplateRun, carrier domain.TemplateRunWorkflow) string {
+	summary := "Ended by an operator: its workflow was not found in Temporal, so nothing could finish it."
+	if carrier.State == domain.TemplateRunWorkflowClosed {
+		summary = fmt.Sprintf("Ended by an operator: its workflow had already ended in Temporal (%s), but the run never recorded that.", carrier.CloseStatus)
+	}
+	if run.Operation != domain.OperationPlan {
+		summary += " If its apply had started, the infrastructure may have changed: plan again before relying on this stack."
+	}
+	return summary
 }
 
 // GetTemplateRun returns one tenant-owned run, with the workflow executions

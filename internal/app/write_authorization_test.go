@@ -140,6 +140,9 @@ var writePaths = []writePath{
 	{"DiscardRun", viaRun, domain.AuditOperationDiscardRun, "run_123", func(service *Service, ctx context.Context, _ domain.StackID) error {
 		return service.DiscardRun(ctx, DiscardRunCommand{TenantID: "tenant_123", RunID: "run_123"})
 	}},
+	{"EndRun", viaRun, domain.AuditOperationEndRun, "run_123", func(service *Service, ctx context.Context, _ domain.StackID) error {
+		return service.EndRun(ctx, EndRunCommand{TenantID: "tenant_123", RunID: "run_123"})
+	}},
 }
 
 // writeFixture is a service whose stack template and run both belong to

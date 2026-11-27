@@ -394,14 +394,25 @@ export function useApproveRunMutation(tenantID: string) {
 }
 
 export function useDiscardRunMutation(tenantID: string) {
+  return useRunEndingMutation(tenantID, client.discardRun);
+}
+
+// An ended run fails, which frees its template just as a discard does.
+export function useEndRunMutation(tenantID: string) {
+  return useRunEndingMutation(tenantID, client.endRun);
+}
+
+// A discard and an end both finish the run on screen and answer with nothing,
+// so they refresh the same reads.
+function useRunEndingMutation(tenantID: string, end: typeof client.discardRun) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (variables: { runID: string; body: Parameters<typeof client.discardRun>[2] }) =>
-      client.discardRun(tenantID, variables.runID, variables.body),
+      end(tenantID, variables.runID, variables.body),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.templateRun(tenantID, variables.runID) });
       queryClient.invalidateQueries({ queryKey: queryKeys.attention(tenantID) });
-      // As on approval. A discard answers with nothing, so the template comes
+      // As on approval. Neither answers with the run, so the template comes
       // from the run on screen.
       const run = queryClient.getQueryData<TemplateRun>(queryKeys.templateRun(tenantID, variables.runID));
       if (run) {
