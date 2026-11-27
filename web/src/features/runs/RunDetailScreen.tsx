@@ -11,9 +11,8 @@ import {
   useTemplateRunQuery,
   useTemplateRunsQuery
 } from "../../api/queries";
-import { ApiRequestError } from "../../api/client";
 import { isTerminalRunStatus } from "../../api/polling";
-import { apiErrorMessage } from "../../api/problems";
+import { apiErrorMessage, classifyQueryError } from "../../api/problems";
 import { useTenantID } from "../../auth/useTenantID";
 import { formatDateTime } from "../../shared/formatTimestamp";
 import ErrorLine from "../../shared/ErrorLine";
@@ -59,7 +58,7 @@ export default function RunDetailScreen() {
   });
   const runId = listedId ?? byNumberQuery.data?.id ?? "";
   // A number with no run is this page's own answer, not the app's not-found page.
-  const missing = byNumberQuery.error instanceof ApiRequestError && byNumberQuery.error.status === 404;
+  const missing = classifyQueryError(byNumberQuery.error) === 404;
   const lookupError = missing ? null : byNumberQuery.error;
 
   const runQuery = useTemplateRunQuery(tenantID, runId, { poll: true });

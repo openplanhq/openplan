@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { useIsMutating } from "@tanstack/react-query";
-import { ApiRequestError, apiRequestsMade, loginURL, logout as postLogout } from "../api/client";
+import { apiRequestsMade, loginURL, logout as postLogout } from "../api/client";
 import { AuthContext } from "./AuthContext";
 import { clearLoginAttempts, loginLoopDetected } from "./loginAttempts";
 import { useMeQuery } from "./useMeQuery";
 import AuthCard from "./AuthCard";
 import CookiesBlockedCard from "./CookiesBlockedCard";
+import { classifyQueryError } from "../api/problems";
 import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
 
@@ -82,7 +83,7 @@ export default function SessionProvider() {
       setStatus((current) => (current === "error" ? "loading" : current));
       return;
     }
-    if (meError instanceof ApiRequestError && meError.status === 401) {
+    if (classifyQueryError(meError) === 401) {
       login();
       return;
     }

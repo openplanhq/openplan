@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { GitBranch, Loader2 } from "lucide-react";
-import { ApiRequestError } from "../../api/client";
-import { apiErrorMessage } from "../../api/problems";
+import { apiErrorMessage, isProblem } from "../../api/problems";
 import { useChangeTemplateRefMutation } from "../../api/queries";
 import { problemTypes } from "../../api/types";
 import { useTenantID } from "../../auth/useTenantID";
@@ -160,7 +159,7 @@ export function useTemplateRefChange(id: string) {
         if (openNow.current !== id) {
           return;
         }
-        const taken = error instanceof ApiRequestError && error.type === problemTypes.duplicateTemplateSource;
+        const taken = isProblem(error, problemTypes.duplicateTemplateSource);
         setRefusal({ id, message: taken ? `Another template already follows ${sourceRef}.` : apiErrorMessage(error, "Request failed") });
       }
     }

@@ -1,22 +1,11 @@
 // web/src/shared/queryErrorBoundary.tsx
 import { useEffect } from "react";
 import type { ReactNode } from "react";
-import { ApiRequestError } from "../api/client";
+import { classifyQueryError } from "../api/problems";
 import { useAuth } from "../auth/AuthContext";
 import AccessDenied from "../app/AccessDenied";
 import NotFound from "../app/NotFound";
 import ServiceUnavailable from "../app/ServiceUnavailable";
-
-export type QueryErrorStatus = 401 | 403 | 404 | 503;
-
-const HANDLED_STATUSES: readonly QueryErrorStatus[] = [401, 403, 404, 503];
-
-export function classifyQueryError(error: unknown): QueryErrorStatus | null {
-  if (!(error instanceof ApiRequestError)) {
-    return null;
-  }
-  return (HANDLED_STATUSES as readonly number[]).includes(error.status) ? (error.status as QueryErrorStatus) : null;
-}
 
 export function useQueryErrorBoundary(error: unknown): ReactNode | null {
   const { logout } = useAuth();

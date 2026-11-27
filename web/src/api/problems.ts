@@ -40,6 +40,27 @@ export function fieldsShown(prefix: string, keys: readonly string[]): (pointer: 
   return (pointer) => pointer.startsWith(prefix) && rendered.has(decodePointerSegment(pointer.slice(prefix.length)));
 }
 
+export function isProblem(error: unknown, type: string): boolean {
+  return error instanceof ApiRequestError && error.type === type;
+}
+
+// Only a server fault's request id is worth quoting: the API logs the cause
+// under it. A 4xx or a network failure has no log line to search for.
+export function quotableRequestId(error: unknown): string {
+  return error instanceof ApiRequestError && error.status >= 500 ? error.requestId : "";
+}
+
+export type QueryErrorStatus = 401 | 403 | 404 | 503;
+
+const HANDLED_STATUSES: readonly QueryErrorStatus[] = [401, 403, 404, 503];
+
+export function classifyQueryError(error: unknown): QueryErrorStatus | null {
+  if (!(error instanceof ApiRequestError)) {
+    return null;
+  }
+  return (HANDLED_STATUSES as readonly number[]).includes(error.status) ? (error.status as QueryErrorStatus) : null;
+}
+
 // apiErrorMessage is the one line a screen shows for a failed request.
 // - Field errors the screen draws on their fields (those shownInline accepts)
 //   are left out; the rest are listed, since a summary like "2 fields need
@@ -58,8 +79,6 @@ export function apiErrorMessage(error: unknown, fallback: string, shownInline?: 
       .join("; ");
   }
   const message = error.message || fallback;
-  if (error.status >= 500 && error.requestId !== "") {
-    return `${message} Request ID: ${error.requestId}.`;
-  }
-  return message;
+  const requestId = quotableRequestId(error);
+  return requestId === "" ? message : `${message} Request ID: ${requestId}.`;
 }

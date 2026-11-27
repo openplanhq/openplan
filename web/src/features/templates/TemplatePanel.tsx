@@ -4,8 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { BookMarked, Folder, GitBranch, GitCommitHorizontal, Loader2, Trash2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
-import { ApiRequestError } from "../../api/client";
-import { apiErrorMessage } from "../../api/problems";
+import { apiErrorMessage, classifyQueryError, isProblem } from "../../api/problems";
 import { queryKeys } from "../../api/queryKeys";
 import { useDeleteTemplateMutation, useTemplateRevisionsQuery, useTemplatesQuery } from "../../api/queries";
 import { problemTypes } from "../../api/types";
@@ -313,14 +312,14 @@ function useTemplateDelete(id: string) {
         await deleteTemplateMutation.mutateAsync(id);
         done(name);
       } catch (error) {
-        if (error instanceof ApiRequestError && error.status === 404) {
+        if (classifyQueryError(error) === 404) {
           // The mutation only clears its reads on success; the list must
           // drop the template here too.
           await queryClient.invalidateQueries({ queryKey: queryKeys.templates(tenantID), exact: true });
           done(name);
           return;
         }
-        const inUse = error instanceof ApiRequestError && error.type === problemTypes.templateInUse;
+        const inUse = isProblem(error, problemTypes.templateInUse);
         setAskedFor(null);
         setRefusal({ id, refusal: inUse ? "in-use" : { message: apiErrorMessage(error, "Request failed") } });
         // The confirm that held focus is gone; Delete is where to try again.
