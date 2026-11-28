@@ -359,11 +359,15 @@ describe("mutation hooks", () => {
     expect(queryClient.getQueryData(queryKeys.template("tenant_123", "tpl_1"))).toEqual(registered);
   });
 
-  it("syncs a template and seeds its query with the sync it queued", async () => {
+  // The list holds the syncing template too, so it polls until the sync
+  // ends and the row shows how it did.
+  it("syncs a template and puts the sync it queued in its query and in the list", async () => {
     const synced = syncingTemplate("syncing");
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(synced));
     const queryClient = testQueryClient();
+    const other = { ...syncingTemplate("synced"), id: "tpl_2" };
     queryClient.setQueryData(queryKeys.template("tenant_123", "tpl_1"), syncingTemplate("failed"));
+    queryClient.setQueryData(queryKeys.templates("tenant_123"), [syncingTemplate("failed"), other]);
     const { result } = renderHook(() => useSyncTemplateMutation("tenant_123"), { wrapper: wrapper(queryClient) });
 
     await act(async () => {
@@ -372,6 +376,7 @@ describe("mutation hooks", () => {
 
     expect(fetchMock).toHaveBeenCalledWith("/v1/tenants/tenant_123/templates/tpl_1/syncs", expect.objectContaining({ method: "POST" }));
     expect(queryClient.getQueryData(queryKeys.template("tenant_123", "tpl_1"))).toEqual(synced);
+    expect(queryClient.getQueryData(queryKeys.templates("tenant_123"))).toEqual([synced, other]);
   });
 
   it("changes a template's ref and puts the template on its new ref in its own query and in the list", async () => {

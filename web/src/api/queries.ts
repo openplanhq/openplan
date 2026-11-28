@@ -246,15 +246,23 @@ export function useTemplateRunLogQuery(tenantID: string, runID: string, name: st
   });
 }
 
-// Register and Sync answer with the template, its latest_sync the sync they
-// queued, so useTemplateQuery starts from it rather than from an older read.
+// Register, Sync and Change ref answer with the template, its latest_sync the
+// sync they queued. It replaces itself in its own read, so useTemplateQuery
+// starts from that sync rather than an older read, and in the list, so the
+// list polls while the sync runs and its row learns how it ended. A template
+// just registered is not in the list yet: the register panel refetches it.
+function cacheTemplate(queryClient: QueryClient, tenantID: string, template: Template) {
+  queryClient.setQueryData(queryKeys.template(tenantID, template.id), template);
+  queryClient.setQueryData<Template[]>(queryKeys.templates(tenantID), (templates) =>
+    templates?.map((candidate) => (candidate.id === template.id ? template : candidate))
+  );
+}
+
 export function useRegisterTemplateMutation(tenantID: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: Parameters<typeof client.registerTemplate>[1]) => client.registerTemplate(tenantID, body),
-    onSuccess: (template) => {
-      queryClient.setQueryData(queryKeys.template(tenantID, template.id), template);
-    }
+    onSuccess: (template) => cacheTemplate(queryClient, tenantID, template)
   });
 }
 
@@ -262,24 +270,15 @@ export function useSyncTemplateMutation(tenantID: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (templateID: string) => client.syncTemplate(tenantID, templateID),
-    onSuccess: (template) => {
-      queryClient.setQueryData(queryKeys.template(tenantID, template.id), template);
-    }
+    onSuccess: (template) => cacheTemplate(queryClient, tenantID, template)
   });
 }
 
-// A template on its new ref replaces itself in its own read and in the list
-// at once, so the panel shows the new ref and follows the sync it queued.
 export function useChangeTemplateRefMutation(tenantID: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ templateID, sourceRef }: { templateID: string; sourceRef: string }) => client.changeTemplateRef(tenantID, templateID, sourceRef),
-    onSuccess: (template) => {
-      queryClient.setQueryData(queryKeys.template(tenantID, template.id), template);
-      queryClient.setQueryData<Template[]>(queryKeys.templates(tenantID), (templates) =>
-        templates?.map((candidate) => (candidate.id === template.id ? template : candidate))
-      );
-    }
+    onSuccess: (template) => cacheTemplate(queryClient, tenantID, template)
   });
 }
 
