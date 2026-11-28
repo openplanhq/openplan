@@ -8,8 +8,8 @@ import {
   assignStackRole,
   discardRun,
   createStack,
-  createStackCredential,
-  createStackTemplateCredential,
+  createCredential,
+  deleteCredential,
   deleteTemplate,
   getTemplate,
   getTemplateRevisionVariables,
@@ -17,7 +17,7 @@ import {
   getTemplateRunLog,
   listAll,
   listPlatformGrants,
-  listStackCredentials,
+  listCredentials,
   listStacks,
   listTemplateRevisions,
   listTemplateRuns,
@@ -411,8 +411,8 @@ describe("api client", () => {
   it("sends sensitive with every new credential, on both scopes", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(() => Promise.resolve(jsonResponse({ id: "c1" }, 201)));
 
-    await createStackCredential("tenant_123", "stack_1", { name: "AWS_REGION", value: "us-east-1", sensitive: false });
-    await createStackTemplateCredential("tenant_123", "st_1", { name: "TOKEN", value: "s3cret", sensitive: true });
+    await createCredential("tenant_123", { scope: "stacks", id: "stack_1" }, { name: "AWS_REGION", value: "us-east-1", sensitive: false });
+    await createCredential("tenant_123", { scope: "stack-templates", id: "st_1" }, { name: "TOKEN", value: "s3cret", sensitive: true });
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
@@ -426,6 +426,20 @@ describe("api client", () => {
     );
   });
 
+  it.each([
+    [{ scope: "stacks", id: "stack_1" }, "/v1/tenants/tenant_123/stacks/stack_1/credentials"],
+    [{ scope: "stack-templates", id: "st_1" }, "/v1/tenants/tenant_123/stack-templates/st_1/credentials"]
+  ] as const)("lists and deletes %o's credentials under its own path", async (owner, path) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(() => Promise.resolve(jsonResponse({ items: [], next_cursor: null })));
+
+    await listCredentials("tenant_123", owner);
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    await deleteCredential("tenant_123", owner, "c1");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, path, expect.anything());
+    expect(fetchMock).toHaveBeenNthCalledWith(2, `${path}/c1`, expect.objectContaining({ method: "DELETE" }));
+  });
+
   it("lists credentials with the value of each one that is not sensitive", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({
@@ -437,7 +451,7 @@ describe("api client", () => {
       })
     );
 
-    const credentials = await listStackCredentials("tenant_123", "stack_1");
+    const credentials = await listCredentials("tenant_123", { scope: "stacks", id: "stack_1" });
 
     expect(credentials.map(({ name, sensitive, value }) => ({ name, sensitive, value }))).toEqual([
       { name: "AWS_REGION", sensitive: false, value: "us-east-1" },

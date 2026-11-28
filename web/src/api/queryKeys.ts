@@ -1,3 +1,5 @@
+import type { CredentialOwner } from "./types";
+
 export const queryKeys = {
   me: ["me"] as const,
   stacks: (tenantID: string) => ["stacks", tenantID] as const,
@@ -10,8 +12,7 @@ export const queryKeys = {
   template: (tenantID: string, templateID: string) => ["templates", tenantID, templateID] as const,
   templateRevisions: (tenantID: string, templateID: string) => ["templateRevisions", tenantID, templateID] as const,
   stack: (tenantID: string, stackID: string) => ["stack", tenantID, stackID] as const,
-  stackCredentials: (tenantID: string, stackID: string) => ["stackCredentials", tenantID, stackID] as const,
-  stackTemplateCredentials: (tenantID: string, stackTemplateID: string) => ["stackTemplateCredentials", tenantID, stackTemplateID] as const,
+  credentials: (tenantID: string, scope: CredentialOwner["scope"], id: string) => ["credentials", tenantID, scope, id] as const,
   templateRevisionVariables: (tenantID: string, templateRevisionID: string) =>
     ["templateRevisionVariables", tenantID, templateRevisionID] as const,
   templateRun: (tenantID: string, runID: string) => ["templateRun", tenantID, runID] as const,

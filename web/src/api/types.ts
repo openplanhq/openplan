@@ -236,6 +236,12 @@ export interface CredentialMetadata {
   created_at: string;
 }
 
+/** What a credential belongs to, named by its path segment: a stack, or one template on a stack. */
+export interface CredentialOwner {
+  scope: "stacks" | "stack-templates";
+  id: string;
+}
+
 /** One new credential. The server treats a missing `sensitive` as true. */
 export interface CredentialRequest {
   name: string;

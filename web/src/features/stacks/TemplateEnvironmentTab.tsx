@@ -1,8 +1,4 @@
-import {
-  useCreateStackTemplateCredentialMutation,
-  useDeleteStackTemplateCredentialMutation,
-  useStackTemplateCredentialsQuery
-} from "../../api/queries";
+import { useCredentials } from "../../api/queries";
 import { useTenantID } from "../../auth/useTenantID";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
 import EnvironmentTabs from "./EnvironmentTabs";
@@ -15,21 +11,19 @@ import LoadError from "../../shared/LoadError";
 export default function TemplateEnvironmentTab() {
   const tenantID = useTenantID();
   const { stackTemplate } = useStackTemplate();
-  const credentialsQuery = useStackTemplateCredentialsQuery(tenantID, stackTemplate.id);
-  const createMutation = useCreateStackTemplateCredentialMutation(tenantID, stackTemplate.id);
-  const deleteMutation = useDeleteStackTemplateCredentialMutation(tenantID, stackTemplate.id);
-  const boundary = useQueryErrorBoundary(credentialsQuery.error);
+  const { list, create, remove } = useCredentials(tenantID, { scope: "stack-templates", id: stackTemplate.id });
+  const boundary = useQueryErrorBoundary(list.error);
 
   // A list that never arrived is not an empty one: "No overrides for this
   // template" would tell someone its runs use the stack environment when they
   // may not, and invite a second copy of a variable already there. So the
   // form waits for the list too. A failed refetch keeps the list it had.
-  if (credentialsQuery.status === "error" && credentialsQuery.data === undefined) {
+  if (list.status === "error" && list.data === undefined) {
     if (boundary !== null) {
       return <>{boundary}</>;
     }
     return (
-      <LoadError error={credentialsQuery.error} onRetry={() => void credentialsQuery.refetch()} testId="template-environment-error" retryTestId="template-environment-retry">
+      <LoadError error={list.error} onRetry={() => void list.refetch()} testId="template-environment-error" retryTestId="template-environment-retry">
         Something went wrong while loading this template's environment.
       </LoadError>
     );
@@ -46,13 +40,13 @@ export default function TemplateEnvironmentTab() {
           emptyTitle: "No variable overrides for this template",
           emptyDescription: "Its runs use the stack's variables."
         }}
-        credentials={credentialsQuery.data ?? []}
-        loading={credentialsQuery.isPending}
-        busy={createMutation.isPending || deleteMutation.isPending}
+        credentials={list.data ?? []}
+        loading={list.isPending}
+        busy={create.isPending || remove.isPending}
         onCreate={async (credential) => {
-          await createMutation.mutateAsync(credential);
+          await create.mutateAsync(credential);
         }}
-        onDelete={(id) => deleteMutation.mutateAsync(id)}
+        onDelete={(id) => remove.mutateAsync(id)}
       />
     </div>
   );

@@ -104,7 +104,7 @@ describe("routeConfig", () => {
     const { routeConfig } = await import("./router");
     const { queryKeys } = await import("../api/queryKeys");
     const queryClient = stackQueryClient(queryKeys);
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), []);
 
     const testRouter = createMemoryRouter(routeConfig, { initialEntries: ["/stacks/stack_1/environment"] });
     const markup = renderToStaticMarkup(

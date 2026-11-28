@@ -3,7 +3,7 @@ import type { InfiniteData, QueryClient } from "@tanstack/react-query";
 import * as client from "./client";
 import { queryKeys } from "./queryKeys";
 import { isMovingRun, isSyncSettled, isTerminalRunStatus } from "./polling";
-import type { ListPage, PlanChangesState, Template, TemplateRun, TemplateRunStatus } from "./types";
+import type { CredentialOwner, CredentialRequest, ListPage, PlanChangesState, Template, TemplateRun, TemplateRunStatus } from "./types";
 
 // What getNextPageParam gives back: the next page's cursor, or undefined on
 // the last page, which is how TanStack Query knows there is no next page.
@@ -79,38 +79,19 @@ export function useStackQuery(tenantID: string, stackID: string) {
   });
 }
 
-/** Loads the credentials owned by a Stack, with values only for those that are not sensitive. */
-export function useStackCredentialsQuery(tenantID: string, stackID: string) {
-  return useQuery({ queryKey: queryKeys.stackCredentials(tenantID, stackID), queryFn: () => client.listStackCredentials(tenantID, stackID), enabled: stackID !== "" });
-}
-
-/** Loads the credentials owned by a StackTemplate, with values only for those that are not sensitive. */
-export function useStackTemplateCredentialsQuery(tenantID: string, stackTemplateID: string) {
-  return useQuery({ queryKey: queryKeys.stackTemplateCredentials(tenantID, stackTemplateID), queryFn: () => client.listStackTemplateCredentials(tenantID, stackTemplateID), enabled: stackTemplateID !== "" });
-}
-
-/** Creates a Stack credential and refreshes its list. */
-export function useCreateStackCredentialMutation(tenantID: string, stackID: string) {
+/**
+ * One owner's credentials, with values only for those that are not sensitive,
+ * and the two mutations that change them; each refreshes the list.
+ */
+export function useCredentials(tenantID: string, owner: CredentialOwner) {
   const queryClient = useQueryClient();
-  return useMutation({ mutationFn: (body: Parameters<typeof client.createStackCredential>[2]) => client.createStackCredential(tenantID, stackID, body), onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.stackCredentials(tenantID, stackID) }) });
-}
-
-/** Deletes a Stack credential and refreshes its list. */
-export function useDeleteStackCredentialMutation(tenantID: string, stackID: string) {
-  const queryClient = useQueryClient();
-  return useMutation({ mutationFn: (credentialID: string) => client.deleteStackCredential(tenantID, stackID, credentialID), onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.stackCredentials(tenantID, stackID) }) });
-}
-
-/** Creates a StackTemplate credential and refreshes its list. */
-export function useCreateStackTemplateCredentialMutation(tenantID: string, stackTemplateID: string) {
-  const queryClient = useQueryClient();
-  return useMutation({ mutationFn: (body: Parameters<typeof client.createStackTemplateCredential>[2]) => client.createStackTemplateCredential(tenantID, stackTemplateID, body), onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.stackTemplateCredentials(tenantID, stackTemplateID) }) });
-}
-
-/** Deletes a StackTemplate credential and refreshes its list. */
-export function useDeleteStackTemplateCredentialMutation(tenantID: string, stackTemplateID: string) {
-  const queryClient = useQueryClient();
-  return useMutation({ mutationFn: (credentialID: string) => client.deleteStackTemplateCredential(tenantID, stackTemplateID, credentialID), onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.stackTemplateCredentials(tenantID, stackTemplateID) }) });
+  const queryKey = queryKeys.credentials(tenantID, owner.scope, owner.id);
+  const onSuccess = () => queryClient.invalidateQueries({ queryKey });
+  return {
+    list: useQuery({ queryKey, queryFn: () => client.listCredentials(tenantID, owner), enabled: owner.id !== "" }),
+    create: useMutation({ mutationFn: (body: CredentialRequest) => client.createCredential(tenantID, owner, body), onSuccess }),
+    remove: useMutation({ mutationFn: (credentialID: string) => client.deleteCredential(tenantID, owner, credentialID), onSuccess })
+  };
 }
 
 export function useTemplateRevisionVariablesQuery(tenantID: string, templateRevisionID: string) {

@@ -4,6 +4,7 @@ import type {
   ApiProblem,
   AttentionItem,
   CredentialMetadata,
+  CredentialOwner,
   CredentialRequest,
   GrantView,
   ListPage,
@@ -216,34 +217,22 @@ export function getStack(tenantID: string, stackID: string): Promise<StackView> 
   return requestJSON(tenantPath(tenantID, "stacks", stackID));
 }
 
-/** Lists Stack credentials; a value comes back only for a credential that is not sensitive. */
-export function listStackCredentials(tenantID: string, stackID: string): Promise<CredentialMetadata[]> {
-  return listItems(tenantPath(tenantID, "stacks", stackID, "credentials"));
+function credentialsPath(tenantID: string, owner: CredentialOwner, ...segments: string[]): string {
+  return tenantPath(tenantID, owner.scope, owner.id, "credentials", ...segments);
 }
 
-/** Stores one Stack-scoped credential; the answer carries the value only when it is not sensitive. */
-export function createStackCredential(tenantID: string, stackID: string, body: CredentialRequest): Promise<CredentialMetadata> {
-  return requestJSON(tenantPath(tenantID, "stacks", stackID, "credentials"), { method: "POST", body: JSON.stringify(body) });
+/** Lists an owner's credentials; a value comes back only for a credential that is not sensitive. */
+export function listCredentials(tenantID: string, owner: CredentialOwner): Promise<CredentialMetadata[]> {
+  return listItems(credentialsPath(tenantID, owner));
 }
 
-/** Deletes one Stack-scoped credential. */
-export function deleteStackCredential(tenantID: string, stackID: string, credentialID: string): Promise<void> {
-  return requestNoContent(tenantPath(tenantID, "stacks", stackID, "credentials", credentialID), { method: "DELETE" });
+/** Stores one credential; the answer carries the value only when it is not sensitive. */
+export function createCredential(tenantID: string, owner: CredentialOwner, body: CredentialRequest): Promise<CredentialMetadata> {
+  return requestJSON(credentialsPath(tenantID, owner), { method: "POST", body: JSON.stringify(body) });
 }
 
-/** Lists StackTemplate credentials; a value comes back only for a credential that is not sensitive. */
-export function listStackTemplateCredentials(tenantID: string, stackTemplateID: string): Promise<CredentialMetadata[]> {
-  return listItems(tenantPath(tenantID, "stack-templates", stackTemplateID, "credentials"));
-}
-
-/** Stores one StackTemplate-scoped credential; the answer carries the value only when it is not sensitive. */
-export function createStackTemplateCredential(tenantID: string, stackTemplateID: string, body: CredentialRequest): Promise<CredentialMetadata> {
-  return requestJSON(tenantPath(tenantID, "stack-templates", stackTemplateID, "credentials"), { method: "POST", body: JSON.stringify(body) });
-}
-
-/** Deletes one StackTemplate-scoped credential. */
-export function deleteStackTemplateCredential(tenantID: string, stackTemplateID: string, credentialID: string): Promise<void> {
-  return requestNoContent(tenantPath(tenantID, "stack-templates", stackTemplateID, "credentials", credentialID), { method: "DELETE" });
+export function deleteCredential(tenantID: string, owner: CredentialOwner, credentialID: string): Promise<void> {
+  return requestNoContent(credentialsPath(tenantID, owner, credentialID), { method: "DELETE" });
 }
 
 export function addTemplateToStack(tenantID: string, stackID: string, body: AddTemplateToStackRequest): Promise<StackTemplate> {
