@@ -453,17 +453,11 @@ export function usePlatformGrantsQuery(tenantID: string) {
   });
 }
 
-// A platform role decides /v1/me's global capabilities, so a change re-reads
-// it too: changing your own role must take Access and Create stack away (or
-// give them) without a reload.
 export function useAssignPlatformRoleMutation(tenantID: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ userSub, role }: { userSub: string; role: string }) => client.assignPlatformRole(tenantID, userSub, { role }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.platformGrants(tenantID) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.me });
-    }
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.platformGrants(tenantID) })
   });
 }
 
@@ -471,9 +465,6 @@ export function useRevokePlatformRoleMutation(tenantID: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (userSub: string) => client.revokePlatformRole(tenantID, userSub),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.platformGrants(tenantID) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.me });
-    }
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.platformGrants(tenantID) })
   });
 }
