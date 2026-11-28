@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { useIsMutating } from "@tanstack/react-query";
-import { apiRequestsMade, loginURL, logout as postLogout } from "../api/client";
+import { apiRequestsMade, goToSignIn, logout as postLogout } from "../api/client";
 import { AuthContext } from "./AuthContext";
 import { clearLoginAttempts, loginLoopDetected } from "./loginAttempts";
 import { useMeQuery } from "./useMeQuery";
@@ -45,7 +45,7 @@ export default function SessionProvider() {
       return;
     }
     navigated.current = true;
-    globalThis.location.assign(loginURL());
+    goToSignIn();
   }, []);
 
   // Reaching /v1/me with an identity proves the cookie survived the round
@@ -58,7 +58,7 @@ export default function SessionProvider() {
     clearLoginAttempts();
     setStatus("loading");
     navigated.current = true;
-    globalThis.location.assign(loginURL());
+    goToSignIn();
   }, []);
 
   const logout = useCallback(() => {

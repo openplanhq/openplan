@@ -404,9 +404,12 @@ export function searchUsers(tenantID: string, stackID: string, q: string, option
 // chooses to leave rather than bouncing straight to the identity provider.
 export const signInPath = "/signin";
 
-export function loginURL(): string {
+// A full navigation rather than a router push: fetchWithAuth runs outside
+// React, and a reload is also what re-reads the session state from scratch.
+// The current page rides along as return_to so sign-in lands back on it.
+export function goToSignIn(): void {
   const returnTo = `${globalThis.location.pathname}${globalThis.location.search}`;
-  return `${signInPath}?return_to=${encodeURIComponent(returnTo)}`;
+  globalThis.location.assign(`${signInPath}?return_to=${encodeURIComponent(returnTo)}`);
 }
 
 // The OIDC authorization request, reached by a full navigation from the
@@ -448,12 +451,11 @@ async function fetchWithAuth(path: string, init: RequestInit): Promise<Response>
     // is looking at.
     globalThis.location.pathname !== signInPath
   ) {
-    // A full navigation rather than a router push: this runs outside React, and
-    // a reload is also what re-reads the session state from scratch. Once the
-    // loop guard has tripped the navigation is skipped and the 401 surfaces as
-    // an error instead, so the browser stops bouncing and SessionProvider can
-    // explain what went wrong.
-    globalThis.location.assign(loginURL());
+    // The one place a lost session is handled. Once the loop guard has tripped
+    // the navigation is skipped and the 401 surfaces as an error instead, so
+    // the browser stops bouncing and SessionProvider can explain what went
+    // wrong.
+    goToSignIn();
   }
 
   return response;
