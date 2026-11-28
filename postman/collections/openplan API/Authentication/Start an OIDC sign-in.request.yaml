@@ -1,0 +1,29 @@
+$kind: http-request
+description: |-
+  Redirects the browser to the identity provider's authorization
+  endpoint. Makes no network call of its own: the endpoint comes from
+  discovery the verifier already cached. Sets a short-lived sealed
+  transaction cookie (`openplan_auth_tx`) carrying state, nonce and PKCE
+  verifier.
+method: GET
+url: '{{base_url}}/v1/auth/login?return_to=/stacks'
+queryParams:
+  - key: return_to
+    value: /stacks
+    description: |-
+      Where to send the browser after a successful sign-in. Validated as
+      a same-site path; anything else falls back to the site root.
+settings:
+  followRedirects: false
+scripts:
+  - type: beforeRequest
+    code: |-
+      // Sent without a session, as a browser reaches this route.
+      pm.request.headers.remove('Cookie');
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('status is 302', () => pm.response.to.have.status(302));
+      pm.test('redirects to the identity provider', () => pm.expect(pm.response.headers.get('Location')).to.be.a('string').and.not.empty);
+    language: text/javascript
+order: 1000

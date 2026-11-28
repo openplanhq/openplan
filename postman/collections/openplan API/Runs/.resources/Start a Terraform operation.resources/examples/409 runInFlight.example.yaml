@@ -1,0 +1,21 @@
+$kind: http-example
+request:
+  url: '{{base_url}}/v1/tenants/{{tenant_id}}/stack-templates/{{stack_template_id}}/runs'
+  method: POST
+response:
+  statusCode: 409
+  statusText: Conflict
+  headers:
+    - key: Content-Type
+      value: application/problem+json
+  body:
+    type: json
+    content: |-
+      {
+        "type": "https://openplan.run/problems/run-in-flight",
+        "title": "Another run is in progress",
+        "status": 409,
+        "detail": "Run #4 is still running. Wait for it to finish or discard it.",
+        "request_id": "d9f09fc4c32729cc73d7a3bd8042f2f4"
+      }
+order: 1000

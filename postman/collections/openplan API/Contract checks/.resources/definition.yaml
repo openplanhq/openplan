@@ -1,0 +1,3 @@
+$kind: collection
+description: Negative cases that pin down status codes and problem types.
+order: 10000

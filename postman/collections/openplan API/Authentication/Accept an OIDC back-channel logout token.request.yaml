@@ -1,0 +1,32 @@
+$kind: http-request
+description: |-
+  A server-to-server POST from Dex, not a redirect the browser follows.
+  Dex v2.45.1 never calls it; a Dex release with browser sessions does,
+  once the client registers it as `backchannelLogoutURI`. The address
+  must be one Dex can reach — on the Compose stack
+  `http://api:8081/v1/auth/backchannel-logout`, not `OPENPLAN_PUBLIC_URL`.
+
+  It ends openplan sessions as soon as the Dex session behind them ends,
+  instead of at their own expiry — openplan stops consulting Dex once a
+  session exists.
+
+  The body is capped at 64 KiB.
+
+  Only the identity provider can send a valid logout token. A forged one is refused.
+method: POST
+url: '{{base_url}}/v1/auth/backchannel-logout'
+body:
+  type: urlencoded
+  content:
+    - key: logout_token
+      value: not.a.jwt
+scripts:
+  - type: beforeRequest
+    code: |-
+      // Sent without a session, as a browser reaches this route.
+      pm.request.headers.remove('Cookie');
+    language: text/javascript
+  - type: afterResponse
+    code: pm.test('status is one of 400, 503', () => pm.expect(pm.response.code).to.be.oneOf([400, 503]));
+    language: text/javascript
+order: 4000

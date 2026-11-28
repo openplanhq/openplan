@@ -1,0 +1,41 @@
+# The browser and the api both reach Dex through Traefik at one name, and the
+# api compares the discovered issuer to its own setting byte for byte, so
+# there is one string for both.
+issuer: ${issuer_url}
+
+storage:
+  type: postgres
+  config:
+    host: postgres
+    port: 5432
+    database: dex
+    user: dex
+    password: $DEX_DB_PASSWORD
+    ssl:
+      mode: disable
+
+web:
+  http: 0.0.0.0:5556
+
+telemetry:
+  http: 0.0.0.0:5558
+
+oauth2:
+  responseTypes: ["code"]
+  skipApprovalScreen: true
+
+staticClients:
+  - id: openplan-api
+    name: openplan
+    secretEnv: OIDC_CLIENT_SECRET
+    redirectURIs:
+      - ${redirect_uri}
+
+enablePasswordDB: true
+
+staticPasswords:
+  - email: ${admin_email}
+    hash: ${admin_hash}
+    username: admin
+    name: openplan admin
+    userID: ${admin_user_id}

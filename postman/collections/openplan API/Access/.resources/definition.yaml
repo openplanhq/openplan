@@ -1,0 +1,3 @@
+$kind: collection
+description: Role grants, per stack and on the platform.
+order: 8000

@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal
+  namespace: ${namespace}
+  labels:
+    app.kubernetes.io/part-of: openplan
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: temporal
+  template:
+    metadata:
+      labels:
+        app: temporal
+        app.kubernetes.io/part-of: openplan
+    spec:
+      # Kubernetes has no depends_on: wait for the init Job's last database
+      # here, rather than crash-loop into a long restart backoff.
+      initContainers:
+        - name: wait-for-database
+          image: ${postgres_image}
+          command: ["sh", "-c", "until psql -c 'SELECT 1' >/dev/null 2>&1; do sleep 2; done"]
+          env:
+            - {name: PGHOST, value: postgres}
+            - {name: PGUSER, value: temporal}
+            - {name: PGDATABASE, value: temporal_visibility}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef: {name: openplan-dependencies, key: temporal-db-password}
+          resources:
+            requests: {cpu: 50m, memory: 32Mi}
+            limits: {cpu: 50m, memory: 32Mi}
+      containers:
+        - name: temporal
+          image: temporalio/auto-setup:1.28.1
+          env:
+            - {name: DB, value: postgres12}
+            - {name: DB_PORT, value: "5432"}
+            - {name: POSTGRES_SEEDS, value: postgres}
+            - {name: POSTGRES_USER, value: temporal}
+            - name: POSTGRES_PWD
+              valueFrom:
+                secretKeyRef: {name: openplan-dependencies, key: temporal-db-password}
+            # The temporal role has no CREATEDB; the init Job made both
+            # databases.
+            - {name: SKIP_DB_CREATE, value: "true"}
+          ports:
+            - containerPort: 7233
+          readinessProbe:
+            exec:
+              # auto-setup binds the frontend to the pod IP, not loopback.
+              command: ["sh", "-c", "temporal operator cluster health --address $(hostname -i):7233"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests: {cpu: 500m, memory: 1Gi}
+            limits: {cpu: 500m, memory: 1Gi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: temporal
+  namespace: ${namespace}
+  labels:
+    app.kubernetes.io/part-of: openplan
+spec:
+  selector:
+    app: temporal
+  ports:
+    - port: 7233

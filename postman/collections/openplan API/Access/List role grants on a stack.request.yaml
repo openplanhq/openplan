@@ -1,0 +1,8 @@
+$kind: http-request
+method: GET
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/stacks/{{stack_id}}/grants'
+scripts:
+  - type: afterResponse
+    code: pm.test('status is 200', () => pm.response.to.have.status(200));
+    language: text/javascript
+order: 1000

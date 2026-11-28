@@ -1,0 +1,11 @@
+apiVersion: v2
+name: openplan
+description: Self-hosted Terraform and OpenTofu runs with a web UI, per-stack authorization and a gVisor sandbox for every run.
+type: application
+home: https://openplan.run
+sources:
+  - https://github.com/openplanhq/openplan
+# The chart version is the app version. The release workflow packages with
+# --version and --app-version from the tag, so these placeholders never ship.
+version: 0.0.0-dev
+appVersion: 0.0.0-dev

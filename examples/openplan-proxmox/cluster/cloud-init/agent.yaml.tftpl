@@ -1,0 +1,16 @@
+#cloud-config
+hostname: ${hostname}
+users:
+  - name: debian
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - ${ssh_authorized_key}
+package_update: true
+packages: [qemu-guest-agent, curl]
+runcmd:
+  - systemctl enable --now qemu-guest-agent
+  # The agent retries until the server answers, so the nodes can boot in any
+  # order.
+  - curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION='${k3s_version}' K3S_URL='https://${server}:6443' K3S_TOKEN='${token}' sh -s - agent --node-ip ${address}

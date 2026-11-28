@@ -1,0 +1,13 @@
+$kind: http-request
+description: |-
+  Who holds a platform role. Root is not listed: it comes from
+  `OPENPLAN_ROOT_SUBJECT` at boot and is not a grant this API manages.
+  Needs `can_manage_platform_access`, which platform administrators
+  and root hold.
+method: GET
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/platform/grants'
+scripts:
+  - type: afterResponse
+    code: pm.test('status is 200', () => pm.response.to.have.status(200));
+    language: text/javascript
+order: 4000

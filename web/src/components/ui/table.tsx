@@ -12,8 +12,8 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
         // Edited from the CLI's output: table-fixed comes after className so
         // no caller can undo it. With automatic layout a cell's content sizes
         // its column, and a status going from queued to waiting_approval
-        // shifts every column after it. tables.guard.test.ts checks this, and
-        // that every <Table> declares its widths in a <colgroup>.
+        // shifts every column after it, so every <Table> declares its widths in a
+        // <colgroup>.
         className={cn("w-full caption-bottom text-sm", className, "table-fixed")}
         {...props}
       />

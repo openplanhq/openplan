@@ -40,7 +40,7 @@ Backend, from the repository root:
 
 Frontend, from web/:
 
-    npm ci && npm test && npm run build
+    npm ci && npm run build
 
 Lint, from the repository root:
 

@@ -1,0 +1,402 @@
+# The whole local stack, in one file:
+#
+#   docker compose up -d
+#
+# It used to be two. docker-compose.app.yaml existed so infrastructure could be
+# brought up and provisioned first, because an operator had to read the OpenFGA
+# store and model identifiers out of a provisioning run and paste them into
+# .env before the application would start. OpenFGA is embedded now and resolves
+# both in process, so there is no phase boundary and nothing to record.
+#
+# The api, executor and web services pull published images by default and build
+# from source only when the pull fails, so a first run is a pull of a few tens
+# of megabytes rather than a multi-minute build. Pin a version by setting
+# OPENPLAN_IMAGE_TAG in .env (see .env.example); unset means `latest`, which is
+# the latest release.
+#
+# To work on openplan itself, build locally instead:
+#
+#   OPENPLAN_PULL_POLICY=build docker compose up -d --build
+#
+# `build` forces a source build and skips the registry entirely, so an edit to
+# the Go or the frontend is never shadowed by a published image. Leave it unset
+# when you are running the project rather than changing it.
+#
+# Local development only. Every credential and key defaulted here is a
+# throwaway matching .env.example, including CREDENTIAL_ENCRYPTION_KEY, which is
+# duplicated there. Never point a real deployment at these values.
+name: openplan-compose
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${OPENPLAN_DB_USER:-openplan}
+      POSTGRES_PASSWORD: ${OPENPLAN_DB_PASSWORD:-openplan}
+      POSTGRES_DB: ${OPENPLAN_DB_NAME:-openplan}
+      DEX_DB_USER: ${DEX_DB_USER:-dex}
+      DEX_DB_PASSWORD: ${DEX_DB_PASSWORD:-dex-local-only}
+      TEMPORAL_DB_USER: ${TEMPORAL_DB_USER:-temporal}
+      TEMPORAL_DB_PASSWORD: ${TEMPORAL_DB_PASSWORD:-temporal}
+    ports:
+      - "55432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./deploy/postgres/init.sh:/docker-entrypoint-initdb.d/10-databases.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${OPENPLAN_DB_USER:-openplan} -d ${OPENPLAN_DB_NAME:-openplan}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # The identity provider. Configured in deploy/dex/config.yaml; see
+  # docs/authentication.md.
+  dex:
+    image: ghcr.io/dexidp/dex:v2.45.1
+    command: ["dex", "serve", "/etc/dex/config.yaml"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DEX_DB_USER: ${DEX_DB_USER:-dex}
+      DEX_DB_PASSWORD: ${DEX_DB_PASSWORD:-dex-local-only}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-openplan-api-local-only}
+    volumes:
+      - ./deploy/dex/config.yaml:/etc/dex/config.yaml:ro
+    ports:
+      - "5556:5556"
+    networks:
+      default:
+        aliases:
+          - dex.localhost
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:5558/healthz/ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: on-failure
+
+  # Carries a running command's output from the executor to the api; see
+  # "Logs" in docs/architecture.md. Required: neither starts without it.
+  #
+  # Nothing stored is rebuilt from it, so it keeps no data on disk. noeviction
+  # because an evicted stream would look like a log that never ends: a full
+  # Valkey refuses new output instead.
+  #
+  # Each process signs in as its own user, so every local run exercises the
+  # executor's write-only user. The executor can append to a log stream and set
+  # its expiry, and cannot read one. The api also reads (XREAD to follow,
+  # XRANGE to catch up, XREVRANGE for a stream's last entry) and appends the end
+  # entry. The default user is off, so nothing connects without a password.
+  #
+  # Beyond signing in, each user may only PING (startup checks the server
+  # with it), not the rest of @connection: CLIENT KILL, SELECT and the like
+  # are no business of either process.
+  #
+  # The users are defined here, one --user per rule with each word its own
+  # argument, rather than in an ACL file, so their passwords come from the same
+  # variables as the URLs below and cannot drift apart. The defaults are local
+  # throwaways. A password must avoid spaces, being one word of a rule, and the
+  # URL-reserved characters @ / : % #, being part of a URL.
+  valkey:
+    image: valkey/valkey:8-alpine
+    command:
+      - valkey-server
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - noeviction
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --user
+      - default
+      - "off"
+      - --user
+      - api
+      - "on"
+      - ">${VALKEY_API_PASSWORD:-api-local-only}"
+      - "~runlog:*"
+      - +ping
+      - +xread
+      - +xrange
+      - +xrevrange
+      - +xadd
+      - +expire
+      - --user
+      - executor
+      - "on"
+      - ">${VALKEY_EXECUTOR_PASSWORD:-executor-local-only}"
+      - "~runlog:*"
+      - +ping
+      - +xadd
+      - +expire
+    # For an api or executor run on the host. 56379, not 6379, so a Valkey or
+    # Redis already on the host keeps its port, as postgres does with 55432.
+    # Loopback only: the passwords are throwaways.
+    ports:
+      - "127.0.0.1:56379:6379"
+    healthcheck:
+      # --no-auth-warning keeps valkey-cli's warning about a password on the
+      # command line out of every health check's output.
+      test: ["CMD", "valkey-cli", "--no-auth-warning", "--user", "api", "--pass", "${VALKEY_API_PASSWORD:-api-local-only}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  temporal:
+    image: temporalio/auto-setup:1.28.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_SEEDS: postgres
+      POSTGRES_USER: ${TEMPORAL_DB_USER:-temporal}
+      POSTGRES_PWD: ${TEMPORAL_DB_PASSWORD:-temporal}
+      # temporal and temporal_visibility are pre-created by deploy/postgres/init.sh
+      # with the temporal role as owner. The temporal role intentionally has no
+      # CREATEDB privilege on the shared server, so auto-setup must not attempt
+      # its own CREATE DATABASE step (it otherwise only skips that step for the
+      # main DB when DBNAME equals POSTGRES_USER, which never holds for the
+      # visibility database).
+      SKIP_DB_CREATE: "true"
+    ports:
+      - "7233:7233"
+    healthcheck:
+      test: ["CMD", "temporal", "operator", "cluster", "health", "--address", "temporal:7233"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  temporal-ui:
+    profiles: ["debug"]
+    image: temporalio/ui:2.49.1
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:3000,http://localhost:8080
+    ports:
+      - "8080:8080"
+
+  minio:
+    profiles: ["s3"]
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-openplan}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-openplan-secret}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+
+  minio-init:
+    profiles: ["s3"]
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-openplan} ${MINIO_ROOT_PASSWORD:-openplan-secret}; do
+        sleep 1;
+      done;
+      mc mb --ignore-existing local/${S3_BUCKET:-openplan-artifacts}
+      "
+
+  api:
+    # image plus build: Compose pulls the published image and falls back to
+    # building from source only when the pull fails, which is what makes the
+    # default path a pull. OPENPLAN_PULL_POLICY=build skips the registry
+    # entirely, so a contributor's source build is never shadowed by a
+    # published image.
+    image: ghcr.io/openplanhq/openplan-api:${OPENPLAN_IMAGE_TAG:-latest}
+    pull_policy: ${OPENPLAN_PULL_POLICY:-missing}
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+      # The API discovers the provider while it starts, and an unreachable
+      # issuer is a boot failure.
+      dex:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    environment:
+      HTTP_ADDRESS: ":8081"
+      POSTGRES_URL: postgres://${OPENPLAN_DB_USER:-openplan}:${OPENPLAN_DB_PASSWORD:-openplan}@postgres:5432/${OPENPLAN_DB_NAME:-openplan}?sslmode=disable
+      VALKEY_URL: redis://api:${VALKEY_API_PASSWORD:-api-local-only}@valkey:6379/0
+      TEMPORAL_ADDRESS: temporal:7233
+      OPENPLAN_ENVIRONMENT: development
+      CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:-717cb4d0fd1db07a30442806c2987599580f6d7c6e63b9bddf509bc183a086d3}
+      # Dex by default. The secret must match what Dex registers for the
+      # client, which reads the same variable.
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-http://dex.localhost:5556/dex}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-openplan-api}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-openplan-api-local-only}
+      OPENPLAN_PUBLIC_URL: ${OPENPLAN_PUBLIC_URL:-http://localhost:5173}
+      SESSION_ENCRYPTION_KEY: ${SESSION_ENCRYPTION_KEY:-b6f1d2c4a8e0937516243b8c5d7e9f0a1b2c3d4e5f60718293a4b5c6d7e8f9a0}
+      ARTIFACT_STORE_KIND: filesystem
+      ARTIFACT_STORE_FILESYSTEM_ROOT: /var/lib/openplan/artifacts
+      # Template sync runs in the API's control-plane worker and clones private
+      # repositories with an installation token.
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
+      # How long one Terraform command may run. The control plane owns it: it
+      # is what tells Temporal when to give up on an executor.
+      OPENPLAN_TERRAFORM_TIMEOUT: ${OPENPLAN_TERRAFORM_TIMEOUT:-45m}
+      # The Dex user root is granted to: the sub of admin@openplan.local in
+      # deploy/dex/config.yaml. Required by the API -- without it the process
+      # exits at startup and the service restart-loops.
+      OPENPLAN_ROOT_SUBJECT: ${OPENPLAN_ROOT_SUBJECT:-CiQ3YzRiMmYwZS0zZDFhLTRlOGItOWY2Yy0yYTVkOGUxYjBjNDcSBWxvY2Fs}
+    restart: on-failure
+    ports:
+      - "8081:8081"
+    volumes:
+      - artifacts:/var/lib/openplan/artifacts
+
+  # The data plane. It runs tenant Terraform, so it gets no database URL and no
+  # key: secrets arrive sealed to a per-run key, and results go back to the API
+  # through Temporal. Add nothing here a template must not read.
+  #
+  # Two replicas, so runs actually land on different hosts. A Temporal session
+  # pins each run's activities and sealing key to one executor, so the run root
+  # is a tmpfs of that container's own.
+  executor:
+    image: ghcr.io/openplanhq/openplan-executor:${OPENPLAN_IMAGE_TAG:-latest}
+    pull_policy: ${OPENPLAN_PULL_POLICY:-missing}
+    build:
+      context: .
+      dockerfile: Dockerfile.executor
+    deploy:
+      replicas: 2
+    depends_on:
+      temporal:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      # Its one new route outside Temporal, for live output only. The user can
+      # append to log streams and set their expiry, and cannot read one; tofu's
+      # sandbox never sees this variable.
+      VALKEY_URL: redis://executor:${VALKEY_EXECUTOR_PASSWORD:-executor-local-only}@valkey:6379/0
+      ARTIFACT_STORE_KIND: filesystem
+      ARTIFACT_STORE_FILESYSTEM_ROOT: /var/lib/openplan/artifacts
+      EXECUTOR_RUN_ROOT: /var/lib/openplan/runs
+      EXECUTOR_SANDBOX_ROOT: /var/lib/openplan/sandboxes
+    restart: on-failure
+    # Each activity runs in a gVisor sandbox of its own (#245), started from
+    # here with runsc: root with these seven capabilities, and Docker's
+    # seccomp and AppArmor profiles off. The sandboxes' process runs
+    # unprivileged. NET_ADMIN and NET_RAW wire each sandbox's network to this
+    # container's, through a bridge and NAT, which needs forwarding on.
+    cap_drop: [ALL]
+    cap_add: [SYS_ADMIN, SETUID, SETGID, SETFCAP, CHOWN, NET_ADMIN, NET_RAW]
+    security_opt:
+      - "no-new-privileges:true"
+      - "seccomp=unconfined"
+      - "apparmor=unconfined"
+    sysctls:
+      net.ipv4.ip_forward: 1
+    # The sandboxes' cgroups live under this container's own.
+    cgroup: private
+    # Ephemeral, so an executor that restarts starts with no runs and no
+    # sandboxes. exec: providers are programs in the run's workspace, and
+    # Docker mounts a tmpfs noexec by default.
+    tmpfs:
+      - /var/lib/openplan/runs:size=8g,exec
+      - /var/lib/openplan/sandboxes:size=64m
+    volumes:
+      - artifacts:/var/lib/openplan/artifacts
+
+  web:
+    image: ghcr.io/openplanhq/openplan-web:${OPENPLAN_IMAGE_TAG:-latest}
+    pull_policy: ${OPENPLAN_PULL_POLICY:-missing}
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    depends_on:
+      - api
+    restart: on-failure
+    ports:
+      - "5173:5173"
+
+  # Per-container resource usage, opt in:
+  #
+  #   docker compose --profile metrics up -d
+  #
+  # cAdvisor reads every container through containerd, Prometheus scrapes it,
+  # and Grafana serves a provisioned dashboard at http://localhost:3001 grouped
+  # by Compose service, so both executor replicas sum under one name.
+  #
+  # No network panels: on Docker Desktop, containerd reports PIDs from a
+  # namespace cAdvisor cannot see, so per-container network counters never
+  # appear.
+  cadvisor:
+    profiles: ["metrics"]
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    # Read containers through containerd, not the Docker socket. Docker
+    # Desktop defaults to the containerd image store, where cAdvisor's Docker
+    # handler cannot find a container's layer and silently drops it. Docker's
+    # containers live in containerd's "moby" namespace.
+    command:
+      - --containerd=/run/containerd/containerd.sock
+      - --containerd-namespace=moby
+      - --docker=unix:///nonexistent.sock
+      - --docker_only=true
+    privileged: true
+    # Docker's cgroup v2 default gives each container a private cgroup
+    # namespace, which hides every other container from cAdvisor.
+    cgroup: host
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /sys:/sys:ro
+      - /run/containerd:/run/containerd:ro
+    ports:
+      # 8080 is temporal-ui's.
+      - "8083:8080"
+
+  prometheus:
+    profiles: ["metrics"]
+    image: prom/prometheus:v3.5.0
+    # docker_sd reads the Docker socket, which only root can open.
+    user: root
+    depends_on:
+      - cadvisor
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Service discovery only: maps container IDs to Compose service names.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    profiles: ["metrics"]
+    image: grafana/grafana:12.1.0
+    depends_on:
+      - prometheus
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/provisioning/dashboards/containers.json
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3001:3000"
+
+volumes:
+  postgres-data:
+  minio-data:
+  artifacts:

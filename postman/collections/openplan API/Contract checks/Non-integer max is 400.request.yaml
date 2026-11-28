@@ -1,0 +1,17 @@
+$kind: http-request
+method: GET
+url: '{{base_url}}/v1/tenants/{{tenant_id}}/users/search?q=a&max=ten'
+queryParams:
+  - key: q
+    value: a
+  - key: max
+    value: ten
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('status is 400', () => pm.response.to.have.status(400));
+      pm.test('is a problem document', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json'));
+      pm.test('type is https://openplan.run/problems/invalid-query', () => pm.expect(pm.response.json().type).to.eql('https://openplan.run/problems/invalid-query'));
+      pm.test('first error is on max', () => pm.expect(pm.response.json().errors[0].parameter).to.eql('max'));
+    language: text/javascript
+order: 9000

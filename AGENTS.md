@@ -1,0 +1,81 @@
+# Repository Guidelines
+
+## Project Structure & Module Organization
+
+This repository contains the `openplan` Terraform platform. Go services live in
+`cmd/` (`api`, `executor`, and provisioning commands) and reusable backend code
+is under `internal/`. Key boundaries include `internal/api`, `internal/app`,
+`internal/postgres`, `internal/workflows`, `internal/activities`, and
+`internal/runner`. The React/Vite frontend is in `web/`; infrastructure and
+local dependencies are defined in `docker-compose.yaml` and the Dockerfiles.
+Architecture and design notes are in `docs/`, while OpenFGA models are in
+`openfga/`, authored in the `.fga` DSL and transformed to OpenFGA's wire format
+in process.
+
+## Build, Test, and Development Commands
+
+Run backend tests and formatting from the repository root:
+
+```bash
+go test ./...
+gofmt -w $(rg --files cmd internal -g '*.go')
+```
+
+Run frontend checks from `web/`:
+
+```bash
+npm install
+npm run build
+```
+
+`npm run build` type-checks and builds the Vite app.
+For local integration work, copy `.env.example` to `.env`, start the
+dependencies as described in `README.md`, then run `go run ./cmd/api`. The
+executor runs only in its Linux image, so keep it in Compose. Start the UI with
+`npm run dev`.
+
+## Coding Style & Naming Conventions
+
+Use standard Go formatting (`gofmt`) and idiomatic Go names: exported symbols
+use PascalCase and unexported symbols use camelCase. Keep packages focused on
+their boundary and place interfaces near the consumer. Frontend code uses
+TypeScript/React conventions: components and types use PascalCase, hooks use
+`use...`.
+
+## Testing Guidelines
+
+The repository keeps only guard tests: checks on behaviour that would
+otherwise fail silently, in production. They are the authorization model matrix
+and the differential test (`internal/authorization`), the sandbox tests
+(`internal/sandbox/sandboxtest`, `make sandbox-test`) and the workflow replay
+test (`internal/workflows`, `make workflow-replay`). Unit tests that pin
+internals are not kept: they push a change into new code beside the old rather
+than into the code that should change. Add a test only when it guards something
+of that kind, using the standard `testing` package with Testify helpers.
+
+`make differential-test` runs the authorization tests that need a real Postgres
+(`docker compose up -d postgres` first). They skip silently without one, and one
+of them -- `TestTransactionalWriteMatchesUpstream` -- is the only guard on
+`internal/authorization/write.go`, which transcribes OpenFGA's own write path so
+a tuple write can join our transaction. **Run it after every
+`go get github.com/openfga/openfga@...`**: a transcription diverges silently, and
+nothing else will tell you.
+
+## Commit & Pull Request Guidelines
+
+Use short, imperative, lowercase-prefixed commit subjects such as
+`feat:`, `fix:`, `test:`, `refactor:`, or `docs:`. Pull requests should explain
+the behavior change, call out configuration or migration impact, link related
+issues/design documents, and list validation commands. Include UI screenshots
+when frontend behavior or layout changes.
+
+Always use the GitHub CLI (`gh`) for GitHub interactions, including inspecting
+issues, pull requests, reviews, checks, and workflows, and for creating or
+updating pull requests. Run `gh auth status` before account-authenticated
+operations.
+
+## Security & Configuration Tips
+
+Treat `.env` credentials and tokens as local secrets; never commit them.
+Provisioning output may contain sensitive identifiers, so copy only the
+documented assignments into `.env` and do not execute bootstrap output.

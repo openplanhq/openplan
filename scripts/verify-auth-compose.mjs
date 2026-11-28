@@ -1,0 +1,159 @@
+#!/usr/bin/env node
+
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const rendered = execFileSync(
+  "docker",
+  [
+    "compose",
+    "--env-file",
+    ".env.example",
+    "-f",
+    "docker-compose.yaml",
+    "config",
+    "--format",
+    "json",
+  ],
+  { cwd: root, encoding: "utf8" },
+);
+const config = JSON.parse(rendered);
+const source = readFileSync(resolve(root, "docker-compose.yaml"), "utf8");
+const envExample = readFileSync(resolve(root, ".env.example"), "utf8");
+
+function envValue(name) {
+  const prefix = `${name}=`;
+  const matches = envExample
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith(prefix));
+  assert.equal(matches.length, 1, `${name} must appear exactly once in .env.example`);
+  return matches[0].slice(prefix.length);
+}
+
+for (const [name, value] of Object.entries({
+  OPENPLAN_ENVIRONMENT: "development",
+  OPENPLAN_PUBLIC_URL: "http://localhost:5173",
+})) {
+  assert.equal(envValue(name), value, `${name} has the wrong local example value`);
+}
+
+function service(name) {
+  const value = config.services?.[name];
+  assert.ok(value, `missing Compose service: ${name}`);
+  return value;
+}
+
+function hasVolume(value, sourceName) {
+  return value.volumes?.some(
+    (volume) => volume.type === "volume" && volume.source === sourceName,
+  );
+}
+
+const postgres = service("postgres");
+const api = service("api");
+
+assert.equal(postgres.image, "postgres:16-alpine");
+assert.ok(postgres.healthcheck, "the shared Postgres needs a health check");
+
+// OPENPLAN_PUBLIC_URL is what the API derives its OIDC redirect and
+// post-logout URIs from, and what a provider must register. A stale Compose
+// default would only surface at sign-in as invalid_redirect_uri, so pin every
+// "${OPENPLAN_PUBLIC_URL:-...}" default to the .env.example value.
+const publicURLDefaults = [
+  ...source.matchAll(/\$\{OPENPLAN_PUBLIC_URL:-([^}]*)\}/g),
+].map((match) => match[1]);
+assert.ok(publicURLDefaults.length > 0, "expected OPENPLAN_PUBLIC_URL to default in the api service");
+for (const value of publicURLDefaults) {
+  assert.equal(
+    value,
+    envValue("OPENPLAN_PUBLIC_URL"),
+    "every OPENPLAN_PUBLIC_URL default in Compose must match .env.example",
+  );
+}
+assert.equal(api.environment?.OPENPLAN_PUBLIC_URL, envValue("OPENPLAN_PUBLIC_URL"));
+
+// Dex is the default stack's identity provider. The API and Dex must agree on
+// the issuer, the client, and its secret, and Compose defaults must match
+// .env.example so the stack runs identically with or without .env.
+const dex = service("dex");
+assert.equal(dex.image, "ghcr.io/dexidp/dex:v2.45.1");
+assert.equal(dex.depends_on?.postgres?.condition, "service_healthy");
+assert.ok(dex.healthcheck?.test?.join(" ").includes("/healthz/ready"));
+assert.ok(
+  dex.networks?.default?.aliases?.includes("dex.localhost"),
+  "dex needs the dex.localhost alias so one issuer string resolves from both sides",
+);
+assert.equal(api.depends_on?.dex?.condition, "service_healthy");
+for (const name of ["OIDC_ISSUER_URL", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET"]) {
+  assert.equal(api.environment?.[name], envValue(name), `api ${name} must match .env.example`);
+}
+assert.equal(
+  dex.environment?.OIDC_CLIENT_SECRET,
+  api.environment?.OIDC_CLIENT_SECRET,
+  "Dex must register the same client secret the API authenticates with",
+);
+
+const dexConfig = readFileSync(resolve(root, "deploy/dex/config.yaml"), "utf8");
+assert.match(
+  dexConfig,
+  new RegExp(`^issuer: ${envValue("OIDC_ISSUER_URL").replace(/[.]/g, "\\.")}$`, "m"),
+  "Dex's issuer must be OIDC_ISSUER_URL exactly",
+);
+assert.match(dexConfig, new RegExp(`- id: ${envValue("OIDC_CLIENT_ID")}$`, "m"));
+assert.ok(
+  dexConfig.includes(`- ${envValue("OPENPLAN_PUBLIC_URL")}/v1/auth/callback`),
+  "Dex must register the redirect URI the API derives from OPENPLAN_PUBLIC_URL",
+);
+
+// Root is a Dex user plus a tuple the API seeds for OPENPLAN_ROOT_SUBJECT. Dex
+// derives the sub from the static password's userID and the "local"
+// connector, so a changed userID would leave the tuple on a sub nobody can sign
+// in as and the install with no administrator. Derive it the way Dex does
+// (server/oauth2.go genSubject: base64url of protobuf {1: user_id, 2: conn_id})
+// and hold the configured value to it.
+function protobufString(field, value) {
+  const bytes = Buffer.from(value, "utf8");
+  assert.ok(bytes.length < 128, "a one-byte length prefix is all this encoder writes");
+  return Buffer.concat([Buffer.from([(field << 3) | 2, bytes.length]), bytes]);
+}
+const staticUserIDs = [...dexConfig.matchAll(/^\s+userID: (\S+)$/gm)].map((match) => match[1]);
+assert.equal(staticUserIDs.length, 1, "deploy/dex/config.yaml must hold exactly one static password user");
+const rootSubject = Buffer.concat([protobufString(1, staticUserIDs[0]), protobufString(2, "local")]).toString("base64url");
+assert.equal(envValue("OPENPLAN_ROOT_SUBJECT"), rootSubject, "OPENPLAN_ROOT_SUBJECT must be the Dex sub of the static root user");
+assert.equal(api.environment?.OPENPLAN_ROOT_SUBJECT, rootSubject, "the api's OPENPLAN_ROOT_SUBJECT default must match .env.example");
+
+// openplan holds no passwords. The API refuses these at startup, so one left in
+// Compose or .env.example would restart-loop the stack.
+for (const retired of ["OPENPLAN_ROOT_PASSWORD", "OPENPLAN_ROOT_USERNAME"]) {
+  assert.ok(!source.includes(retired), `${retired} is retired; docker-compose.yaml must not set it`);
+  assert.ok(!envExample.includes(retired), `${retired} is retired; .env.example must not set it`);
+}
+
+// OpenFGA is embedded in the API. A service, a provisioner, or a required
+// store or model identifier coming back would reintroduce the two-phase
+// startup the single Compose file exists to remove.
+assert.deepEqual(
+  Object.keys(config.services).filter((name) => name.includes("openfga")),
+  [],
+  "OpenFGA runs inside the API; Compose must not start it as a service",
+);
+assert.doesNotMatch(
+  source,
+  /OPENFGA_(STORE_ID|MODEL_ID|API_URL|API_TOKEN)/,
+  "the API resolves its OpenFGA store and model in process; Compose must not pass identifiers or a URL",
+);
+
+assert.ok(hasVolume(postgres, "postgres-data"));
+assert.ok(config.volumes?.["postgres-data"]);
+
+assert.match(
+  source,
+  /\$\{SESSION_ENCRYPTION_KEY:-/,
+  "SESSION_ENCRYPTION_KEY must have an inline default so the stack runs without .env",
+);
+
+console.log("authentication Compose contract verified");

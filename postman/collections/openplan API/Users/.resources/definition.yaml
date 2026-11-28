@@ -1,0 +1,3 @@
+$kind: collection
+description: Searching people who have signed in at least once.
+order: 7000

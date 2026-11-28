@@ -1,0 +1,3 @@
+$kind: collection
+description: Liveness, for probes and smoke checks.
+order: 1000

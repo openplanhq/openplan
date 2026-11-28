@@ -1,0 +1,3279 @@
+openapi: 3.1.0
+
+info:
+  title: openplan API
+  version: 0.1.0
+  summary: HTTP API for the openplan Terraform platform.
+  description: |
+    openplan turns Terraform and OpenTofu modules into infrastructure a team can
+    self-serve. This document describes the HTTP surface the web client uses;
+    it is the same surface a script or a CI job can drive.
+
+    ## Status
+
+    openplan is pre-1.0 and not production ready. Paths are versioned under
+    `/v1`, but nothing here is a frozen contract yet — fields may be added,
+    renamed, or removed between releases.
+
+    ## Authentication
+
+    Every `/v1` route except the sign-in routes requires an opaque session
+    cookie named `openplan_session`. There is no bearer-token path: a token is
+    verified in exactly one place, the OIDC callback, and what the browser
+    carries afterwards is a session openplan owns.
+
+    Get a session by sending the browser to `GET /v1/auth/login`, which
+    redirects to the identity provider and comes back through
+    `GET /v1/auth/callback`. The provider is the only way in: openplan checks
+    no password of its own.
+
+    A session ends at the earlier of its idle and absolute bounds, both of
+    which openplan owns independently of the provider's token lifetimes.
+    `GET /v1/me` returns `session_expires_at` so a client can re-authenticate at
+    a quiet moment instead of being interrupted by a `401`.
+
+    ## Tenancy
+
+    Every tenant-scoped path takes a `{tenant_id}`. A deployment serves exactly
+    one configured tenant; any other value returns `404`, not `403`. Read the
+    one you are allowed to use from `GET /v1/me` (`tenant_id`).
+
+    ## Authorization
+
+    Access is granted per stack, and a stack's templates, runs, credentials
+    and grants follow it. If you can't view the stack, every route under it
+    answers `404` on every method, reads and writes alike, exactly as when it
+    doesn't exist. `403` means you can view the stack but your role doesn't
+    allow this action, such as a viewer starting a run or listing
+    credentials. A refusal never confirms that a stack you can't see exists.
+
+    ## Request bodies
+
+    JSON request bodies must be exactly one JSON object, and unknown fields are
+    rejected with `400 malformed-body`. Approving and discarding a run, and
+    syncing a template, need nothing from the body, so they also accept no
+    body at all; a body that is sent is still held to the schema.
+
+    A JSON request body may be at most 1 MiB; a larger one is rejected with
+    `413` before any of it is acted on.
+
+    ## Errors
+
+    Every error from `/v1` and `/healthz` is an RFC 9457 problem document,
+    served as `application/problem+json`. See the `Problem` schema.
+
+    - `type` is the contract: branch on it. Types are URIs under
+      `https://openplan.run/problems/`; they are never renamed or reused, and
+      they needn't resolve. A status whose meaning is the status alone (`401`,
+      `403`, `404`, `405`, `413` and the plain `500`) uses `about:blank`, and
+      a client branches on `status`.
+    - `title` is fixed per type. `detail` is one sentence about this
+      occurrence, for people; never parse it.
+    - `request_id` repeats the `X-Request-Id` header.
+    - `errors` lists field problems on `validation-failed`, `invalid-query`
+      and the `duplicate-*` types: a JSON Pointer into the body (`pointer`)
+      or a query `parameter`, a stable `issue` code, and a `detail`.
+
+    `400` means the request can't be parsed: malformed JSON, an unknown field
+    or a wrong type (`malformed-body`), or a query parameter that can't be
+    read, such as a `limit` that isn't an integer or a `cursor` the list
+    never gave out (`invalid-query`). `422 validation-failed` means it parses but its
+    content breaks a rule; every problem with the request is in `errors`.
+    `409` means the request is valid but the object's current state doesn't
+    allow it, and each cause has its own type.
+
+    A request no route matches gets `404`, or `405` with an `Allow` header for
+    a known path and the wrong method. The sign-in routes are the exception
+    to all of this: their failures are an HTML page for the browser, and
+    back-channel logout answers Dex in plain text.
+
+    Every response carries an `X-Request-Id` header. A `500` says nothing
+    about its cause; the API logs the cause under that id, so quote it when
+    reporting one. An id a proxy in front of the API already set is kept when
+    it is plain (letters, digits, `.`, `_` and `-`, at most 128 characters),
+    so both logs share it; any other is replaced.
+
+    ## Lists
+
+    Every list answers one shape: `{"items": [...], "next_cursor": ...}`.
+
+    The lists that grow (stacks, templates, template revisions, an
+    installed template's runs, user search and the queue) page by cursor. Ask for up to `limit` items (1 to
+    100, default 50); while `next_cursor` is a string, send it back as
+    `cursor` for the next page, and on the last page it is `null`. A cursor
+    is opaque, belongs to the list that gave it out, and is only a position:
+    a page resumes after the last item of the one before, so an item added
+    meanwhile neither repeats nor shifts what follows. There is no total and
+    no page number.
+
+    The small lists (a run's logs, a stack's grants and credentials, a
+    revision's variables, and attention) are always one page: they take no
+    `limit` or `cursor`, and `next_cursor` is always `null`.
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+  contact:
+    name: openplan
+    url: https://github.com/vishu42/openplan
+
+servers:
+  - url: http://localhost:5173
+    description: Local development. The Vite dev server proxies /v1 and /healthz to the API.
+  - url: http://localhost:8081
+    description: The API process directly.
+
+security:
+  - sessionCookie: []
+
+tags:
+  - name: Health
+    description: Liveness, for probes and smoke checks.
+  - name: Authentication
+    description: Signing in and out. The only routes reachable without a session.
+  - name: Identity
+    description: Who the caller is and what they may do platform-wide.
+  - name: Templates
+    description: Registering Terraform sources as templates, and syncing them into immutable, reusable revisions.
+  - name: Stacks
+    description: Grouping installed templates into one environment or service.
+  - name: Credentials
+    description: |
+      Cloud credentials and other environment variables, injected only while
+      Terraform runs. Sensitive values, the default, are write-only.
+  - name: Runs
+    description: Starting, watching, approving and discarding Terraform operations.
+  - name: Access
+    description: Role grants, per stack and on the platform.
+  - name: Users
+    description: Searching people who have signed in at least once.
+  - name: Queue
+    description: The caller's own asynchronous work items.
+
+paths:
+  /healthz:
+    get:
+      tags: [Health]
+      summary: Report process liveness
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: The process is up.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    const: ok
+                required: [status]
+
+  /v1/auth/login:
+    get:
+      tags: [Authentication]
+      summary: Start an OIDC sign-in
+      description: |
+        Redirects the browser to the identity provider's authorization
+        endpoint. Makes no network call of its own: the endpoint comes from
+        discovery the verifier already cached. Sets a short-lived sealed
+        transaction cookie (`openplan_auth_tx`) carrying state, nonce and PKCE
+        verifier.
+      operationId: startOIDCLogin
+      security: []
+      parameters:
+        - name: return_to
+          in: query
+          required: false
+          description: |
+            Where to send the browser after a successful sign-in. Validated as
+            a same-site path; anything else falls back to the site root.
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to the identity provider.
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+            Set-Cookie:
+              description: The sealed `openplan_auth_tx` transaction cookie.
+              schema: { type: string }
+        "401":
+          $ref: "#/components/responses/SignInFailedHTML"
+
+  /v1/auth/callback:
+    get:
+      tags: [Authentication]
+      summary: Complete an OIDC sign-in
+      description: |
+        Redeems the authorization code on the back channel, verifies the ID
+        token and its nonce, and hands the browser a session cookie. Redirects
+        rather than rendering, so the authorization code leaves the address bar
+        and the browser history.
+
+        Every failure renders one identical page. Distinguishing "bad state"
+        from "expired code" from "nonce mismatch" would tell an attacker which
+        check they tripped.
+      operationId: completeOIDCLogin
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: false
+          description: Authorization code from the provider.
+          schema: { type: string }
+        - name: state
+          in: query
+          required: false
+          description: Compared in constant time against the sealed transaction cookie.
+          schema: { type: string }
+        - name: error
+          in: query
+          required: false
+          description: Set when the provider refused the request.
+          schema: { type: string }
+        - name: error_description
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "302":
+          description: Signed in. Redirects to `return_to`, or to the site root.
+          headers:
+            Location:
+              schema: { type: string }
+            Set-Cookie:
+              description: The `openplan_session` cookie.
+              schema: { type: string }
+        "401":
+          $ref: "#/components/responses/SignInFailedHTML"
+
+  /v1/auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Sign out
+      description: |
+        Revokes the session row and clears the cookie, then sends the browser
+        on to end the provider's session. Revoking the row rather than only
+        clearing the cookie is what makes logout real: a copy of the cookie
+        taken beforehand stops working too.
+
+        The redirect carries the raw ID token as `id_token_hint`, which is how
+        RP-initiated logout is specified and what stops the provider
+        interrupting with a confirmation page. A provider that advertises no
+        end-session endpoint — Dex, today — gets the site root instead. Dex
+        v2.45.1 keeps no browser session, so nothing of the sign-in outlives
+        openplan's session except an upstream connector's own.
+      operationId: logout
+      security: []
+      responses:
+        "303":
+          description: Signed out. Redirects to the provider's end-session URL, or to the site root.
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+            Set-Cookie:
+              description: The cleared `openplan_session` cookie.
+              schema: { type: string }
+
+  /v1/auth/backchannel-logout:
+    post:
+      tags: [Authentication]
+      summary: Accept an OIDC back-channel logout token
+      description: |
+        A server-to-server POST from Dex, not a redirect the browser follows.
+        Dex v2.45.1 never calls it; a Dex release with browser sessions does,
+        once the client registers it as `backchannelLogoutURI`. The address
+        must be one Dex can reach — on the Compose stack
+        `http://api:8081/v1/auth/backchannel-logout`, not `OPENPLAN_PUBLIC_URL`.
+
+        It ends openplan sessions as soon as the Dex session behind them ends,
+        instead of at their own expiry — openplan stops consulting Dex once a
+        session exists.
+
+        The body is capped at 64 KiB.
+      operationId: backchannelLogout
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                logout_token:
+                  type: string
+                  description: A signed JWT logout token, per OIDC Back-Channel Logout.
+              required: [logout_token]
+      responses:
+        "200":
+          description: Accepted. Matching sessions are revoked.
+        "400":
+          description: Unparseable body, missing `logout_token`, or a token that failed verification.
+          content:
+            text/plain:
+              schema: { type: string }
+        "500":
+          description: Revocation failed.
+          content:
+            text/plain:
+              schema: { type: string }
+        "503":
+          description: No logout token verifier is configured.
+          content:
+            text/plain:
+              schema: { type: string }
+
+  /v1/me:
+    get:
+      tags: [Identity]
+      summary: Read the caller's identity and platform capabilities
+      operationId: getMe
+      responses:
+        "200":
+          description: The authenticated principal.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/tenants/{tenant_id}/templates:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+    post:
+      tags: [Templates]
+      summary: Register a template
+      description: |
+        Points openplan at a Terraform source in a GitHub repository: an owner,
+        a repository, a ref and a root path. Returns `202` with the template,
+        and queues a sync that resolves the ref to a commit, fetches the
+        source, and records a revision with its input variables.
+
+        A source names one template, so registering a source that is already
+        registered returns the same template, and syncs it again. The answer's
+        `latest_sync` is the sync just queued; read the template while
+        `latest_sync.status` is `syncing` to follow it.
+      operationId: createTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterTemplateRevisionRequest" }
+            example:
+              repo_owner: vishu42
+              repo_name: terraform-modules
+              source_ref: v1.4.0
+              root_path: modules/vpc
+      responses:
+        "202":
+          description: The template, with a sync of it queued.
+          headers:
+            Location:
+              description: The template's own URL, `/v1/tenants/{tenant_id}/templates/{template_id}`.
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Template" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    get:
+      tags: [Templates]
+      summary: List templates
+      description: |
+        Newest first, a page at a time. A template shows from the moment it is
+        registered, before any sync has recorded a revision of it.
+      operationId: listTemplates
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of the tenant's templates.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TemplateList" }
+        "400": { $ref: "#/components/responses/InvalidQuery" }
+        "422": { $ref: "#/components/responses/InvalidPaging" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/templates/{template_id}:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/TemplateID"
+    get:
+      tags: [Templates]
+      summary: Read a template
+      operationId: getTemplate
+      responses:
+        "200":
+          description: The template.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Template" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    patch:
+      tags: [Templates]
+      summary: Change a template's ref
+      description: |
+        Points the template at another ref of its repository: the branch a
+        feature merged into, or a newer tag. Only `source_ref` changes. The
+        template keeps its id, its revisions and every stack that installed
+        it, and a sync from the new ref starts at once; the answer's
+        `latest_sync` is that sync.
+
+        Stacks don't move on their own: each moves to a commit on the new
+        ref with change-revision, then a plan and an apply. A sync still
+        running on the old ref records its revision but never becomes the
+        template's latest. Sending the template's current ref only syncs it
+        again.
+      operationId: updateTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateTemplateRequest" }
+            example:
+              source_ref: main
+      responses:
+        "202":
+          description: The template on its new ref, with a sync of it queued.
+          headers:
+            Location:
+              description: The template's own URL, `/v1/tenants/{tenant_id}/templates/{template_id}`.
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Template" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: |
+            Another template of the same repository and root path already
+            follows that ref (`duplicate-template-source`), reported on
+            `source_ref`.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    delete:
+      tags: [Templates]
+      summary: Delete a template
+      description: |
+        Deletes the template with its revisions and syncs. Refused while any
+        stack has an install of it that isn't destroyed. A destroyed install
+        lets go of its template and keeps its run history.
+
+        A sync still running ends without recording anything.
+      operationId: deleteTemplate
+      responses:
+        "204":
+          description: Deleted.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: A stack has an install of the template that isn't destroyed (`template-in-use`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/templates/{template_id}/syncs:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/TemplateID"
+    post:
+      tags: [Templates]
+      summary: Sync a template
+      description: |
+        Queues a sync of the template's source, to pick up a new commit on its
+        ref or to retry a sync that failed.
+
+        Takes no fields: send `{}` or no body at all. Returns `202` with the
+        template, whose `latest_sync` is the sync just queued; a sync has no
+        read of its own, so read the template to follow it.
+      operationId: startTemplateSync
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+            example: {}
+      responses:
+        "202":
+          description: The template, with a sync of it queued.
+          headers:
+            Location:
+              description: The template's own URL, `/v1/tenants/{tenant_id}/templates/{template_id}`.
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Template" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/templates/{template_id}/revisions:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/TemplateID"
+    get:
+      tags: [Templates]
+      summary: List a template's revisions
+      description: |
+        Newest first, a page at a time. A template no sync has recorded a
+        revision of yet has an empty list; an unknown template is a `404`.
+      operationId: listTemplateRevisionsForTemplate
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of the template's revisions.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TemplateRevisionList" }
+        "400": { $ref: "#/components/responses/InvalidQuery" }
+        "422": { $ref: "#/components/responses/InvalidPaging" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/template-revisions/{template_revision_id}/variables:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - name: template_revision_id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Templates]
+      summary: List a revision's input variables
+      description: |
+        The variables inferred from the revision's Terraform root module. A
+        revision is immutable, so this answer never changes for a given id.
+
+        This is the schema a stack template's `config` is validated against.
+      operationId: listTemplateRevisionVariables
+      responses:
+        "200":
+          description: The revision's variables.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TemplateVariableList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/stacks:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+    post:
+      tags: [Stacks]
+      summary: Create a stack
+      description: |
+        Synchronous. The stack row, the audit event and the authorization edges
+        that make the stack reachable are written in one transaction, so a
+        `201` response describes a stack that is already usable and a failure
+        leaves no stack behind. There is nothing to poll.
+      operationId: createStack
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateStackRequest" }
+            example:
+              name: Payments production
+              slug: payments-prod
+              tags: { env: prod, team: payments }
+              default_credential_ids: []
+      responses:
+        "201":
+          description: The stack was created.
+          headers:
+            Location:
+              description: The stack's own URL, `/v1/tenants/{tenant_id}/stacks/{stack_id}`.
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Stack" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: |
+            The slug is already taken in this tenant (`duplicate-slug`). Its
+            `errors` entry points at `#/slug`, or at `#/name` when no slug was
+            sent and the server made it from the name.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    get:
+      tags: [Stacks]
+      summary: List stacks
+      description: |
+        Only the stacks the caller may view, newest first, a page at a time.
+        Each carries its `effective_capabilities`, so a client renders the
+        controls a person actually has rather than probing for them.
+
+        A page holds `limit` stacks the caller can view, however sparse they
+        are among the tenant's, unless it is the last.
+      operationId: listStacks
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: |
+            Only stacks whose name or slug contains this, case-insensitively,
+            as typed: `%` and `_` match themselves. Trimmed; at most 200
+            characters.
+          schema: { type: string, maxLength: 200 }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of the caller's visible stacks.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StackListItemList" }
+        "400": { $ref: "#/components/responses/InvalidQuery" }
+        "422": { $ref: "#/components/responses/InvalidPaging" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/attention:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+    get:
+      tags: [Stacks]
+      summary: List what needs a person
+      description: |
+        Plans waiting for approval and destroys that failed, on every stack
+        the caller may view: waiting plans first, then failed destroys, each
+        newest first. Viewing a stack is enough to see its items; approving
+        is checked when someone approves.
+      operationId: listAttention
+      responses:
+        "200":
+          description: The items, possibly none.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AttentionItemList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/stacks/{stack_id}:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/StackID"
+    get:
+      tags: [Stacks]
+      summary: Read a stack with its installed templates
+      operationId: getStack
+      responses:
+        "200":
+          description: The stack and its installed templates.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StackView" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/stacks/{stack_id}/templates:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/StackID"
+    post:
+      tags: [Stacks]
+      summary: Install a template revision into a stack
+      description: |
+        `config` is validated against the revision's variables, so register the
+        revision and read its variables first.
+      operationId: addTemplateToStack
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddTemplateToStackRequest" }
+            example:
+              template_revision_id: 01J9K2M4P7QW8X0YZ1A2B3C4D5
+              key: vpc
+              config:
+                cidr_block: 10.0.0.0/16
+                region: us-east-1
+                azs: [us-east-1a, us-east-1b]
+                tags: { team: platform, env: dev }
+      responses:
+        "201":
+          description: The template was installed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StackTemplate" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: |
+            The revision is still syncing or its sync failed
+            (`revision-not-installable`), or `key` is already used on
+            this stack (`duplicate-stack-template-key`, with an `errors` entry on
+            `#/key`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/stacks/{stack_id}/credentials:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/StackID"
+    post:
+      tags: [Credentials]
+      summary: Add a stack-scoped credential
+      description: |
+        The value is encrypted on the way in and injected into the process
+        environment only while Terraform runs. A credential is sensitive unless
+        the request sets `sensitive` to `false`: a sensitive value is never
+        readable back through the API, and one that is not sensitive comes back
+        on this response and on every list. Sensitivity is set on create and
+        can't change. To change a value, delete it and create it again.
+
+        `name` is the provider environment variable name, such as
+        `AWS_SECRET_ACCESS_KEY`.
+      operationId: createStackCredential
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateCredentialRequest" }
+      responses:
+        "201":
+          description: Created. The value comes back only when it is not sensitive.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Credential" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: |
+            The name is already used in this scope (`duplicate-credential-name`,
+            with an `errors` entry on `#/name`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/CredentialEncryptionUnavailable" }
+    get:
+      tags: [Credentials]
+      summary: List stack-scoped credentials
+      description: |
+        Metadata for every credential, and the value of each one that is not
+        sensitive, oldest first. Sensitive values are never returned.
+      operationId: listStackCredentials
+      responses:
+        "200":
+          description: The stack's credentials.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CredentialList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/CredentialEncryptionUnavailable" }
+
+  /v1/tenants/{tenant_id}/stacks/{stack_id}/credentials/{credential_id}:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/StackID"
+      - $ref: "#/components/parameters/CredentialID"
+    delete:
+      tags: [Credentials]
+      summary: Delete a stack-scoped credential
+      operationId: deleteStackCredential
+      responses:
+        "204":
+          description: Deleted.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/CredentialEncryptionUnavailable" }
+
+  /v1/tenants/{tenant_id}/stacks/{stack_id}/grants:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/StackID"
+    get:
+      tags: [Access]
+      summary: List role grants on a stack
+      operationId: listStackGrants
+      responses:
+        "200":
+          description: Who has a role on this stack.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GrantList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/stacks/{stack_id}/grants/{user_sub}:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/StackID"
+      - name: user_sub
+        in: path
+        required: true
+        description: |
+          The person's subject identifier, as returned by
+          `GET /v1/tenants/{tenant_id}/users/search`.
+        schema: { type: string }
+    put:
+      tags: [Access]
+      summary: Set a person's role on a stack
+      description: |
+        Creates the person's grant, or replaces whatever role they already
+        held — one person has at most one role on a stack. Answers `201` when
+        the person held no role before, and `200` when the call changed or
+        kept the role they had. The person is named by the path only; a body
+        that also sends `user_sub` is refused as an unknown field (`400
+        malformed-body`).
+
+        The person must have signed in to openplan at least once. openplan is
+        not a directory: a person exists here only once a verified token has
+        projected them. Granting to a subject it has never seen returns `422
+        validation-failed` with an `errors` entry on `#/user_sub` whose issue
+        is `not_signed_in`. Use `GET /v1/tenants/{tenant_id}/users/search` to
+        find one.
+
+        The response is the grant, rendered from the identity lookup the
+        request already performed. The role is written in the request's own
+        transaction, so it is in effect when the response arrives.
+      operationId: assignStackRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssignStackRoleRequest" }
+            example:
+              role: operator
+      responses:
+        "200":
+          description: The person's role was changed or already held.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Grant" }
+        "201":
+          description: The person had no role on the stack; this created it.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Grant" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The change would remove the stack's last owner (`last-owner`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "422":
+          description: |
+            An unknown role (`#/role`, `unsupported`), a malformed subject in
+            the path (`#/user_sub`, `invalid_format`), or a person who has
+            never signed in (`#/user_sub`, `not_signed_in`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    delete:
+      tags: [Access]
+      summary: Revoke a role on a stack
+      operationId: revokeStackRole
+      responses:
+        "204":
+          description: Revoked.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: This is the stack's last owner (`last-owner`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/platform/grants:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+    get:
+      tags: [Access]
+      summary: List platform role grants
+      description: |
+        Who holds a platform role. Root is not listed: it comes from
+        `OPENPLAN_ROOT_SUBJECT` at boot and is not a grant this API manages.
+        Needs `can_manage_platform_access`, which platform administrators
+        and root hold.
+      operationId: listPlatformGrants
+      responses:
+        "200":
+          description: Who holds a platform role.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlatformGrantList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/platform/grants/{user_sub}:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - name: user_sub
+        in: path
+        required: true
+        description: |
+          The person's subject identifier, as returned by
+          `GET /v1/tenants/{tenant_id}/users/search` with no `stack_id`.
+        schema: { type: string }
+    put:
+      tags: [Access]
+      summary: Set a person's platform role
+      description: |
+        Creates the person's platform grant, or replaces whatever platform
+        role they already held: one person has at most one. Answers `201`
+        when the person held no platform role before, and `200` when the call
+        changed or kept the role they had. The person is named by the path
+        only; a body that also sends `user_sub` is refused as an unknown
+        field (`400 malformed-body`).
+
+        The person must have signed in to openplan at least once, as for a
+        stack grant (`422`, `#/user_sub`, `not_signed_in`). Their stack roles
+        are untouched.
+
+        There is no last-admin guard: root can't be granted or revoked here,
+        so the platform stays administrable whoever gives up `admin`. The
+        role is written in the request's own transaction, so it is in effect
+        when the response arrives.
+      operationId: assignPlatformRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssignPlatformRoleRequest" }
+            example:
+              role: editor
+      responses:
+        "200":
+          description: The person's platform role was changed or already held.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlatformGrant" }
+        "201":
+          description: The person had no platform role; this created it.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlatformGrant" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "422":
+          description: |
+            A role the platform doesn't grant (`#/role`, `unsupported`), a
+            stack role or `root` included; a malformed subject in the path
+            (`#/user_sub`, `invalid_format`); or a person who has never
+            signed in (`#/user_sub`, `not_signed_in`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    delete:
+      tags: [Access]
+      summary: Revoke a person's platform role
+      description: |
+        Removes the person's platform role, if they hold one; revoking what
+        isn't held succeeds. Their stack roles are untouched. Revoking the
+        last `admin` is allowed: root remains.
+      operationId: revokePlatformRole
+      responses:
+        "204":
+          description: Revoked.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/config:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/StackTemplateID"
+    put:
+      tags: [Stacks]
+      summary: Replace an installed template's desired config
+      description: |
+        Replaces the desired config wholesale — this is not a field-level
+        merge. The new config is validated against the desired revision's
+        variables.
+
+        Refused with `409 run-in-flight` while the installed template has an unfinished
+        run, a plan waiting for approval included: a run snapshots the config
+        when it starts, and the plan being reviewed has to stay a plan of what
+        the installed template says. Apply or discard the run first.
+      operationId: updateStackTemplateConfig
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateStackTemplateConfigRequest" }
+      responses:
+        "200":
+          description: The updated installed template.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StackTemplate" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: |
+            The installed template is being torn down, so its config can no longer be
+            edited (`stack-template-not-editable`), or a run is unfinished
+            (`run-in-flight`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "422":
+          description: |
+            No `config` (`#/config`, `required`): the edit replaces the whole
+            config, so a missing one is refused rather than read as "clear
+            everything"; send `{}` to clear it on purpose. Or the config does
+            not satisfy the revision's variables: one entry per variable,
+            under `#/config/<name>`.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/change-revision:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/StackTemplateID"
+    post:
+      tags: [Stacks]
+      summary: Stage an installed template on another revision
+      description: |
+        Moves the installed template's *desired* revision. Nothing is applied here —
+        changing revision is a deliberate, reviewable step, so the new revision takes
+        effect only when a subsequent apply succeeds. Until then
+        `desired_template_revision_id` and `last_applied_template_revision_id`
+        differ and `live_state` reads `differs`.
+
+        Omit `config` to carry the current one forward; supply it when the new
+        revision's variables changed.
+      operationId: changeStackTemplateRevision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangeStackTemplateRevisionRequest" }
+      responses:
+        "200":
+          description: The installed template, now staged on the target revision.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StackTemplate" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: |
+            The installed template is being torn down (`stack-template-revision-not-changeable`), the
+            target revision is still syncing or failed
+            (`revision-not-installable`), or a run is unfinished
+            (`run-in-flight`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "422":
+          description: |
+            The target is a revision of a different template
+            (`#/target_template_revision_id`, `different_template`), or the
+            config does not satisfy its variables (`#/config/<name>`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/credentials:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/StackTemplateID"
+    post:
+      tags: [Credentials]
+      summary: Add a template-scoped credential
+      description: |
+        Same contract as a stack credential, sensitivity included, scoped to
+        one installed template. Use this to override a stack-wide credential
+        for a single installed template; the override's own `sensitive` decides whether
+        its value is shown.
+      operationId: createStackTemplateCredential
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateCredentialRequest" }
+      responses:
+        "201":
+          description: Created. The value comes back only when it is not sensitive.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Credential" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: |
+            The name is already used in this scope (`duplicate-credential-name`,
+            with an `errors` entry on `#/name`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/CredentialEncryptionUnavailable" }
+    get:
+      tags: [Credentials]
+      summary: List template-scoped credentials
+      description: |
+        Metadata for every credential, and the value of each one that is not
+        sensitive, oldest first. Sensitive values are never returned.
+      operationId: listStackTemplateCredentials
+      responses:
+        "200":
+          description: The installed template's credentials.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CredentialList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/CredentialEncryptionUnavailable" }
+
+  /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/credentials/{credential_id}:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/StackTemplateID"
+      - $ref: "#/components/parameters/CredentialID"
+    delete:
+      tags: [Credentials]
+      summary: Delete a template-scoped credential
+      operationId: deleteStackTemplateCredential
+      responses:
+        "204":
+          description: Deleted.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/CredentialEncryptionUnavailable" }
+
+  /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/runs:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/StackTemplateID"
+    post:
+      tags: [Runs]
+      summary: Start a Terraform operation
+      description: |
+        Runs are durably orchestrated: a plan or apply survives a process
+        restart rather than being lost halfway.
+
+        Operations work the way the Terraform CLI's do. `plan` only plans the
+        desired config: the run records what would change and completes,
+        keeping no plan. `apply` plans the desired config and saves the plan;
+        `destroy` plans the destruction of everything the installed template manages
+        and saves that. For either, a plan with no changes completes the run,
+        and a plan with changes waits in `waiting_approval`, where approving it
+        applies exactly that saved plan (see the approval endpoint).
+
+        `auto_approve` is allowed on `apply` only. The run then applies
+        straight away, with no saved plan and nothing to approve, and records
+        the counts the apply reports. It takes approve permission on the stack
+        as well as operate permission.
+
+        One installed template runs one operation at a time, and a plan waiting for
+        approval counts. Starting a second while one is in flight returns `409
+        run-in-flight` — the competing run is visible through the list
+        endpoint, so a client can wait for it, or approve or discard it.
+      operationId: startTemplateRun
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StartTemplateRunRequest" }
+            example: { operation: apply, auto_approve: false }
+      responses:
+        "202":
+          description: The run was created and queued.
+          headers:
+            Location:
+              description: Where to poll it, `/v1/tenants/{tenant_id}/template-runs/{run_id}`.
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TemplateRun" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: |
+            `run-in-flight` — another run is already active for this installed template.
+            `stack-template-not-runnable` — the installed template is being torn down, or has
+            no revision to run.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+              examples:
+                runInFlight:
+                  value:
+                    type: https://openplan.run/problems/run-in-flight
+                    title: Another run is in progress
+                    status: 409
+                    detail: "Run #4 is still running. Wait for it to finish or discard it."
+                    request_id: d9f09fc4c32729cc73d7a3bd8042f2f4
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "422":
+          description: |
+            An unsupported `operation` (`#/operation`, `unsupported`), or
+            `auto_approve` on an operation other than `apply`
+            (`#/auto_approve`, `apply_only`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    get:
+      tags: [Runs]
+      summary: List an installed template's runs
+      description: Most recent first, a page at a time.
+      operationId: listTemplateRuns
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of the installed template's run history.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TemplateRunList" }
+        "400": { $ref: "#/components/responses/InvalidQuery" }
+        "422": { $ref: "#/components/responses/InvalidPaging" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/stack-templates/{stack_template_id}/runs/{run_number}:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/StackTemplateID"
+      - name: run_number
+        in: path
+        required: true
+        description: The run's `run_number`, its number within the installed template, from 1.
+        schema: { type: integer, minimum: 1 }
+    get:
+      tags: [Runs]
+      summary: Read a run by its number
+      description: |
+        The same run `GET /v1/tenants/{tenant_id}/template-runs/{run_id}`
+        returns, executions included, found by the number people see and a
+        run's page is addressed by, so a run beyond the first page of the
+        list can be opened directly. A number with no run, or one that isn't
+        a positive integer, returns `404`.
+      operationId: getTemplateRunByNumber
+      responses:
+        "200":
+          description: The run.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TemplateRun" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/template-runs/{run_id}:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/RunID"
+    get:
+      tags: [Runs]
+      summary: Read a run
+      description: Poll this to follow a run. `status` moves through the `TemplateRunStatus` values.
+      operationId: getTemplateRun
+      responses:
+        "200":
+          description: The run's current state.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TemplateRun" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/template-runs/{run_id}/changes:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/RunID"
+    get:
+      tags: [Runs]
+      summary: List the resources a run's plan changes
+      description: |
+        One entry per resource the run's saved plan changes, in reading
+        order: replacements, then destroys, updates, creates, then the rest
+        (forgets, imports, moves, and any action this openplan doesn't name),
+        each kind by address. Reads and no-ops are left out, as tofu's own
+        summary leaves them out.
+
+        The executor reads them from `tofu show -json` inside the plan's
+        sandbox and replaces every sensitive value with `(sensitive)` there;
+        the plan JSON itself never leaves the executor. Unknown values read
+        `(known after apply)`, and a value over 16 KiB reads
+        `(too large to show)`.
+
+        The run's `plan_changes` says what this list is: `complete`,
+        `truncated` (the first of `total`; the plan log has the rest) or
+        `unavailable` (the plan had changes this openplan couldn't list, such
+        as a plan format it doesn't read; the plan log has them). A run whose
+        plan has not finished, or had no changes, answers an empty list.
+      operationId: listTemplateRunResourceChanges
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: One page of the plan's resource changes.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlanResourceChangeList" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/template-runs/{run_id}/logs:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/RunID"
+    get:
+      tags: [Runs]
+      summary: List a run's logs
+      description: |
+        Metadata for each Terraform command that has started, in the order
+        they ran: the plan's logs, then the apply's, each by `seq` — not the
+        output itself. Each entry's `state` says whether its body can be
+        read yet. Fetch a `complete` log's body from the per-log endpoint by
+        the log's `name`.
+      operationId: listTemplateRunLogs
+      responses:
+        "200":
+          description: One entry per started command.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TemplateRunLogList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{name}:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/RunID"
+      - name: name
+        in: path
+        required: true
+        description: |
+          The log's name, such as `plan-1`: the `name` field of an entry in
+          the run's log list. Not the run phase (`run_phase`), which writes
+          several logs.
+        schema: { $ref: "#/components/schemas/LogName" }
+    get:
+      tags: [Runs]
+      summary: Read one log's body
+      description: |
+        Returns the raw Terraform output as `text/plain`, not JSON. Only a
+        log whose `state` is `complete` has a body: a `live` one returns
+        `409 log-live`, a `lost` one `404 log-lost`. A log that has not
+        started yet, or a name that isn't a log name, returns `404`.
+      operationId: getTemplateRunLog
+      responses:
+        "200":
+          description: The command's output.
+          content:
+            text/plain:
+              schema: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: |
+            No such log, or one the caller can't see (`about:blank`); or the
+            log's output was not stored (`log-lost`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "409":
+          description: |
+            The command is still running, so its output isn't stored yet
+            (`log-live`). Try again when the log is `complete`.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{name}/events:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/RunID"
+      - name: name
+        in: path
+        required: true
+        description: The log's name, such as `plan-1`, as for its body.
+        schema: { $ref: "#/components/schemas/LogName" }
+      - name: Last-Event-ID
+        in: header
+        required: false
+        description: |
+          The `id` of the last `log` event the client has. The stream starts
+          after it instead of from the log's first byte, and sends none of the
+          bytes that event already carried. A browser's `EventSource` sends it
+          on its own when it reconnects.
+        schema: { type: string, example: "1760720000000-0" }
+    get:
+      tags: [Runs]
+      summary: Follow one log live
+      description: |
+        Streams a running command's output as server-sent events
+        (`text/event-stream`), for a browser's `EventSource`. The stream
+        replays the output so far, then follows it as the command writes,
+        and ends with one `log_end` event. Three event types, each with a
+        JSON `data` line:
+
+        - `log`: the next bytes of output. `data` is
+          `{"offset": <n>, "end": <m>, "data": "<text>"}`: `offset` is the
+          first byte's position in the log, `end` the position after the
+          last, counted on the raw bytes, and `text` is the bytes as UTF-8,
+          with any invalid sequence replaced by U+FFFD. Events follow one
+          another without gaps or overlaps, across reconnects too, so a
+          client appends each `text` as it arrives. The event's `id` is what
+          to send back as `Last-Event-ID`.
+        - `log_truncated`: the output outgrew what is streamed live, and no
+          more `log` events follow. `data` is `{}`. Read the rest from the
+          log's body once it is `complete`.
+        - `log_end`: the last event. `data` is `{"state": "<state>"}`:
+          `complete` (read the whole body from the log's body endpoint),
+          `lost` (the output was not stored), or `live` (the command is still
+          running, but this stream stopped following it: reconnect with
+          `Last-Event-ID`). A stream that could not follow the log at all,
+          because the server's live log store failed or this server is
+          following as many logs as it can, sends `retry: 3000` before its
+          `log_end` `live`, so `EventSource` waits three seconds.
+
+        A log that is not `live` when the request arrives gets its
+        `log_end` straight away. While the command prints nothing, the
+        stream carries no event, only a comment line every 20 seconds.
+      operationId: streamTemplateRunLog
+      responses:
+        "200":
+          description: The log's events, until its `log_end`.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              example: |
+                event: log
+                id: 1760720000000-0
+                data: {"offset":0,"end":28,"data":"Initializing the backend...\n"}
+
+                event: log_end
+                data: {"state":"complete"}
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503":
+          description: |
+            Live logs aren't configured for this deployment
+            (`live-logs-unavailable`). The log's body can be read once it is
+            `complete`.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /v1/tenants/{tenant_id}/template-runs/{run_id}/approve:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/RunID"
+    post:
+      tags: [Runs]
+      summary: Approve a waiting plan, which applies it
+      description: |
+        Valid only while the run's `status` is `waiting_approval`. Approving
+        starts the apply of the plan the run saved: the same file, applied
+        with `tofu apply` on whichever executor picks it up, so what was
+        reviewed is exactly what runs. If the state has moved on since the
+        plan was made, tofu refuses the plan and the run fails; plan again.
+
+        Refused with `409 plan-stale` if the plan no longer describes the
+        installed template's desired config and revision. Those cannot change while
+        the plan waits, so this is a backstop.
+
+        Takes no fields: send `{}` or no body at all. Returns `202` with the
+        run, now `approved`, while its apply waits for an executor; poll the
+        run until its `status` is terminal.
+      operationId: approveRun
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+            example: {}
+      responses:
+        "202":
+          description: Approved, and the apply queued.
+          headers:
+            Location:
+              description: Where to poll it, `/v1/tenants/{tenant_id}/template-runs/{run_id}`.
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TemplateRun" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: |
+            The run is not waiting for approval (`run-not-approvable`), or the
+            plan no longer matches the desired state (`plan-stale`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/template-runs/{run_id}/discard:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/RunID"
+    post:
+      tags: [Runs]
+      summary: Discard a plan waiting for approval
+      description: |
+        Throws away a run's saved plan while it waits for approval (or is
+        approved and not yet applying). The run ends `canceled` straight away
+        and its plan can never be applied. A run that is planning or applying
+        cannot be stopped.
+
+        The body is optional: send no body to discard without a reason.
+      operationId: discardRun
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DiscardRunRequest" }
+            example: { reason: superseded by a newer plan }
+      responses:
+        "204":
+          description: The plan was discarded.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The run has no plan waiting to discard (`run-not-discardable`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/template-runs/{run_id}/end:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/RunID"
+    post:
+      tags: [Runs]
+      summary: End a run whose workflow is gone
+      description: |
+        Ends a run that is `queued` or `running` but whose workflow Temporal
+        no longer runs: it was lost (a crash that took Temporal's store, a
+        restore from before it started) or it closed without the run ever
+        recording that (a restore from before it finished). Such a run would
+        stay in flight forever and block its installed template. Ending it
+        marks it `failed`, with an `error_summary` that says an operator ended
+        it and what Temporal held of its workflow, and the installed template
+        takes a new run.
+
+        Temporal is asked first. A workflow still running refuses the end
+        (`run-workflow-running`): it will finish the run itself, or an
+        operator terminates it in Temporal first. No answer from Temporal
+        refuses too (`workflows-unavailable`), since a gone workflow and an
+        unreachable Temporal look the same and only one is safe to act on.
+
+        Ending a run does not undo anything it did. If its apply had started,
+        the infrastructure may have changed: plan again before relying on
+        the installed template. Needs `can_operate` on the stack, as
+        discarding does.
+
+        The body is optional: send no body to end without a reason.
+      operationId: endRun
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EndRunRequest" }
+            example: { reason: Temporal was restored from a backup taken before this run }
+      responses:
+        "204":
+          description: The run was ended.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: |
+            The run is not queued or running (`run-not-endable`), or its
+            workflow is still running in Temporal (`run-workflow-running`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "413": { $ref: "#/components/responses/RequestTooLarge" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503":
+          description: Temporal didn't answer, so nothing was changed (`workflows-unavailable`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /v1/tenants/{tenant_id}/users/search:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+    get:
+      tags: [Users]
+      summary: Search people who have signed in
+      description: |
+        Matches display name or email, case-insensitively.
+
+        This is not a directory lookup. It searches openplan's projection of
+        identities it has actually verified, so a person who has never signed
+        in will not appear — and cannot be granted a role. That is the same
+        limitation `PUT .../grants/{user_sub}` enforces as `not_signed_in`.
+
+        Ordered by display name, a page at a time. The cursor is a position in
+        that order, so one kept across a changed `q` resumes after the same
+        name.
+
+        Who may search: with `stack_id`, anyone with operator access or
+        higher on that stack (a stack the caller can't see is `404`, a viewer
+        is `403`); without it, platform administrators only.
+      operationId: searchUsers
+      parameters:
+        - name: stack_id
+          in: query
+          required: false
+          description: |
+            The stack the search is for, such as the one whose access form is
+            open. Lets a non-administrator search.
+          schema:
+            type: string
+        - name: q
+          in: query
+          required: true
+          description: The search term.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of matching people.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserProfileList" }
+        "400": { $ref: "#/components/responses/InvalidQuery" }
+        "422":
+          description: |
+            `q` missing (`required`) or over 200 characters (`too_long`), or
+            `limit` out of range (`out_of_range`). One `errors` entry per
+            parameter, with `parameter` set.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenants/{tenant_id}/queue:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+    get:
+      tags: [Queue]
+      summary: List the caller's queued work items
+      description: |
+        The asynchronous work the caller queued — template syncs,
+        template runs. Scoped by actor alone, so no new permission concept is
+        involved: a caller only ever sees their own items. Newest first, a
+        page at a time.
+      operationId: listQueue
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: The caller's work items.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QueueItemList" }
+        "400": { $ref: "#/components/responses/InvalidQuery" }
+        "422": { $ref: "#/components/responses/InvalidPaging" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503":
+          description: No queue is configured for this deployment (`queue-unavailable`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: openplan_session
+      description: |
+        An opaque session identifier set by either sign-in route. It is not a
+        JWT and carries no claims: the middleware authenticates it against the
+        session store on every request, so revoking a session takes effect
+        immediately.
+
+  parameters:
+    TenantID:
+      name: tenant_id
+      in: path
+      required: true
+      description: |
+        The tenant. Every deployment serves the one tenant `default`; any other
+        value returns `404`. `GET /v1/me` returns it as `tenant_id`.
+      schema: { type: string }
+    TemplateID:
+      name: template_id
+      in: path
+      required: true
+      description: A registered template, as `POST /v1/tenants/{tenant_id}/templates` returned it.
+      schema: { type: string }
+    StackID:
+      name: stack_id
+      in: path
+      required: true
+      schema: { type: string }
+    StackTemplateID:
+      name: stack_template_id
+      in: path
+      required: true
+      description: An installed template — a template revision inside a stack.
+      schema: { type: string }
+    CredentialID:
+      name: credential_id
+      in: path
+      required: true
+      schema: { type: string }
+    RunID:
+      name: run_id
+      in: path
+      required: true
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: |
+        At most how many items the page holds. Out of range is a `422`; not an
+        integer, a `400` (`invalid-query`).
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: |
+        The previous page's `next_cursor`, for the page after it; leave it out
+        for the first page. Opaque. One this list didn't give out is a `400`
+        (`invalid-query`).
+      schema: { type: string }
+
+  responses:
+    Unauthorized:
+      description: No live session (`about:blank`). Sign in again.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example:
+            type: about:blank
+            title: Unauthorized
+            status: 401
+            detail: Sign in to continue.
+            request_id: 8cf6602cb5083bde8ff76e5dffded40d
+    Forbidden:
+      description: The caller can see the object but may not do this to it (`about:blank`).
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example:
+            type: about:blank
+            title: Forbidden
+            status: 403
+            detail: You don't have permission to do this.
+            request_id: 8cf6602cb5083bde8ff76e5dffded40d
+    NotFound:
+      description: |
+        No such resource, or one the caller can't see (`about:blank`). Also
+        returned when `tenant_id` is not the configured tenant.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example:
+            type: about:blank
+            title: Not Found
+            status: 404
+            detail: The resource doesn't exist, or you can't see it.
+            request_id: 8cf6602cb5083bde8ff76e5dffded40d
+    BadRequest:
+      description: |
+        The body can't be parsed (`malformed-body`): it isn't one JSON object,
+        has an unknown field or a wrong type, or has trailing data. A client
+        shouldn't send one; treat it as a bug.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example:
+            type: https://openplan.run/problems/malformed-body
+            title: The request body can't be read
+            status: 400
+            detail: "The request body doesn't match the expected schema: a field is unknown or has the wrong type."
+            request_id: 8cf6602cb5083bde8ff76e5dffded40d
+    InvalidQuery:
+      description: |
+        A query parameter can't be read (`invalid-query`): a `limit` that
+        isn't an integer, or a `cursor` this list never gave out. One `errors`
+        entry per parameter.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example:
+            type: https://openplan.run/problems/invalid-query
+            title: The query string can't be read
+            status: 400
+            detail: cursor isn't one this list gave out; start again from the first page
+            request_id: 3f1c2b9a8d7e6f5a4b3c2d1e0f9a8b7c
+            errors:
+              - { parameter: cursor, issue: invalid_format, detail: "cursor isn't one this list gave out; start again from the first page" }
+    InvalidPaging:
+      description: |
+        A paging parameter reads but breaks a rule (`validation-failed`): a
+        `limit` outside 1 to 100 (`out_of_range`), or a `q` over 200
+        characters (`too_long`).
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example:
+            type: https://openplan.run/problems/validation-failed
+            title: The request has invalid fields
+            status: 422
+            detail: limit must be between 1 and 100
+            request_id: 3f1c2b9a8d7e6f5a4b3c2d1e0f9a8b7c
+            errors:
+              - { parameter: limit, issue: out_of_range, detail: limit must be between 1 and 100 }
+    ValidationFailed:
+      description: |
+        The body parses, but its content breaks a rule (`validation-failed`).
+        `errors` holds one entry per problem, each with a JSON Pointer into
+        the body.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example:
+            type: https://openplan.run/problems/validation-failed
+            title: The request has invalid fields
+            status: 422
+            detail: 2 fields need attention.
+            request_id: 8cf6602cb5083bde8ff76e5dffded40d
+            errors:
+              - { pointer: "#/config/region", issue: required, detail: region is required }
+              - { pointer: "#/config/size", issue: unknown, detail: size is not a variable of this template }
+    RequestTooLarge:
+      description: The JSON request body is larger than 1 MiB (`about:blank`).
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example:
+            type: about:blank
+            title: Request Entity Too Large
+            status: 413
+            detail: The request body must not exceed 1 MiB.
+            request_id: 8cf6602cb5083bde8ff76e5dffded40d
+    InternalError:
+      description: |
+        An unexpected failure (`about:blank`). The detail is deliberately
+        generic; the cause is in the server log under `request_id`.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example:
+            type: about:blank
+            title: Internal Server Error
+            status: 500
+            detail: Something went wrong on the server. Quote the request ID when you report it.
+            request_id: 8cf6602cb5083bde8ff76e5dffded40d
+    CredentialEncryptionUnavailable:
+      description: |
+        No credential encryption key is configured on this deployment
+        (`credential-encryption-unavailable`). Nothing a client sends can fix
+        it; an operator has to configure the key.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+          example:
+            type: https://openplan.run/problems/credential-encryption-unavailable
+            title: Credential encryption isn't configured
+            status: 503
+            detail: No credential encryption key is configured. An operator has to set one.
+            request_id: 8cf6602cb5083bde8ff76e5dffded40d
+    SignInFailedHTML:
+      description: |
+        Sign-in could not be completed. One identical page for every cause:
+        distinguishing bad state from an expired code from a nonce mismatch
+        would tell an attacker which check they tripped.
+      content:
+        text/html:
+          schema: { type: string }
+
+  schemas:
+    NextCursor:
+      type: [string, "null"]
+      description: |
+        Send it back as `cursor` for the next page. `null` on the last page,
+        and always on a list that is one page.
+    TemplateList:
+      type: object
+      description: One page of templates, newest first.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Template" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
+    TemplateRevisionList:
+      type: object
+      description: One page of registered template revisions, newest first.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TemplateRevision" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
+    TemplateVariableList:
+      type: object
+      description: One page of a revision's variables; always one page.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TemplateVariable" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
+    StackListItemList:
+      type: object
+      description: One page of stacks the caller can view, newest first.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/StackListItem" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
+    AttentionItemList:
+      type: object
+      description: One page of what needs a person; always one page.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AttentionItem" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
+    CredentialList:
+      type: object
+      description: One page of credentials; always one page.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Credential" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
+    GrantList:
+      type: object
+      description: One page of role grants on a stack; always one page.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Grant" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
+    PlatformGrantList:
+      type: object
+      description: Every platform role grant; always one page.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PlatformGrant" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
+    TemplateRunList:
+      type: object
+      description: One page of an installed template's runs, newest first.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TemplateRun" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
+    PlanResourceChangeList:
+      type: object
+      description: One page of a run's plan's resource changes, in reading order.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PlanResourceChange" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
+    PlanResourceChange:
+      type: object
+      description: One resource a run's plan changes.
+      properties:
+        address: { type: string, description: "The resource's full address, module path included." }
+        previous_address:
+          type: string
+          description: Where a `moved` block moved it from. Empty otherwise.
+        module_address: { type: string, description: Empty for a resource in the root module. }
+        mode: { type: string, description: "`managed`, or `data` for a data source." }
+        type: { type: string }
+        name: { type: string }
+        provider_name: { type: string }
+        deposed: { type: string, description: The deposed object's key, for a change to a deposed object. Empty otherwise. }
+        action:
+          type: string
+          description: |
+            `create`, `update`, `replace`, `destroy`, `forget` (left in place,
+            dropped from the state), `import` or `move` (a no-op that imports
+            or moves the resource). Any other value is an action tofu named
+            that this openplan doesn't, kept as tofu's own words.
+        create_before_destroy:
+          type: boolean
+          description: A `replace` that creates the new object before destroying the old one.
+        action_reason:
+          type: string
+          description: |
+            tofu's reason for the action, such as `replace_because_cannot_update`
+            or `delete_because_no_resource_config`. Empty when it gives none.
+            A display hint: treat a value you don't know as no reason.
+        importing_id: { type: string, description: The ID an import reads the resource by. Empty otherwise. }
+        replace_paths:
+          description: The attribute paths that force a `replace`, each a list of keys and indexes. Null otherwise.
+        before:
+          description: The resource's values before, sensitive ones masked. Null for a create.
+        after:
+          description: The resource's values after, sensitive and unknown ones masked. Null for a destroy or a forget.
+      required:
+        [address, previous_address, module_address, mode, type, name,
+         provider_name, deposed, action, create_before_destroy, action_reason,
+         importing_id, replace_paths, before, after]
+    TemplateRunLogList:
+      type: object
+      description: One page of a run's logs, in the order they ran; always one page.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TemplateRunLog" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
+    UserProfileList:
+      type: object
+      description: One page of people matching a search, by display name.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/UserProfile" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
+    QueueItemList:
+      type: object
+      description: One page of the caller's work items, newest first.
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/QueueItem" }
+        next_cursor: { $ref: "#/components/schemas/NextCursor" }
+      required: [items, next_cursor]
+    Problem:
+      type: object
+      description: |
+        An RFC 9457 problem document, served as `application/problem+json`.
+        Every error the API writes is one.
+      properties:
+        type:
+          type: string
+          format: uri
+          description: |
+            The contract: branch on it. `about:blank` when the status says it
+            all; otherwise one of the types below, under
+            `https://openplan.run/problems/`. Never renamed or reused.
+          examples:
+            - about:blank
+            - https://openplan.run/problems/malformed-body
+            - https://openplan.run/problems/invalid-query
+            - https://openplan.run/problems/validation-failed
+            - https://openplan.run/problems/run-in-flight
+            - https://openplan.run/problems/plan-stale
+            - https://openplan.run/problems/run-not-approvable
+            - https://openplan.run/problems/run-not-discardable
+            - https://openplan.run/problems/run-not-endable
+            - https://openplan.run/problems/run-workflow-running
+            - https://openplan.run/problems/workflows-unavailable
+            - https://openplan.run/problems/stack-template-not-runnable
+            - https://openplan.run/problems/stack-template-not-editable
+            - https://openplan.run/problems/stack-template-revision-not-changeable
+            - https://openplan.run/problems/revision-not-installable
+            - https://openplan.run/problems/duplicate-slug
+            - https://openplan.run/problems/duplicate-stack-template-key
+            - https://openplan.run/problems/duplicate-credential-name
+            - https://openplan.run/problems/last-owner
+            - https://openplan.run/problems/log-live
+            - https://openplan.run/problems/log-lost
+            - https://openplan.run/problems/credential-encryption-unavailable
+            - https://openplan.run/problems/queue-unavailable
+            - https://openplan.run/problems/live-logs-unavailable
+        title:
+          type: string
+          description: |
+            Fixed per type, for people. For `about:blank` it is the HTTP
+            reason phrase.
+        status:
+          type: integer
+          description: The HTTP status, repeated.
+        detail:
+          type: string
+          description: |
+            One sentence about this occurrence, for people. Never parse it;
+            for a `500` it is deliberately generic.
+        request_id:
+          type: string
+          description: |
+            The same id as the response's `X-Request-Id` header, which the
+            API's log lines carry too.
+        errors:
+          type: array
+          description: |
+            One entry per field problem. Present on `validation-failed`,
+            `invalid-query` and the `duplicate-*` types.
+          items: { $ref: "#/components/schemas/ProblemFieldError" }
+      required: [type, title, status, request_id]
+
+    ProblemFieldError:
+      type: object
+      description: |
+        One problem with one field. Exactly one of `pointer` and `parameter`
+        is set.
+      properties:
+        pointer:
+          type: string
+          description: |
+            A JSON Pointer into the request body, in URI-fragment form, e.g.
+            `#/config/region`.
+        parameter:
+          type: string
+          description: A query parameter's name, e.g. `max`.
+        issue:
+          type: string
+          description: A stable code for what is wrong. Never renamed.
+          enum:
+            - required
+            - unknown
+            # Quoted, or YAML reads it as null rather than the code.
+            - "null"
+            - not_object
+            - invalid_format
+            - invalid
+            - unsupported
+            - apply_only
+            - different_template
+            - not_signed_in
+            - too_long
+            - out_of_range
+            - duplicate
+            - sensitive
+        detail:
+          type: string
+          description: One sentence for people, naming the field.
+      required: [issue, detail]
+
+    Me:
+      type: object
+      description: |
+        Who the caller is, what they may do platform-wide, and the tenant this
+        deployment serves.
+      properties:
+        sub:
+          type: string
+          description: The subject identifier, stable across sign-ins.
+        display_name: { type: string }
+        email: { type: string, format: email }
+        global_capabilities:
+          type: object
+          properties:
+            can_create_stack: { type: boolean }
+            can_manage_templates: { type: boolean }
+            can_manage_platform_access:
+              type: boolean
+              description: May grant and revoke platform roles. Platform administrators and root.
+          required: [can_create_stack, can_manage_templates, can_manage_platform_access]
+        tenant_id:
+          type: string
+          description: The tenant this deployment serves. Use it in every tenant-scoped path.
+        session_expires_at:
+          type: string
+          format: date-time
+          description: |
+            When this session ends: the earlier of its idle and absolute
+            bounds, both of which openplan owns. It lets a client
+            re-authenticate at a quiet moment instead of being interrupted by
+            a `401`. It is not a control — the API rejects an expired session
+            regardless of what the browser believes.
+      required: [sub, display_name, global_capabilities, tenant_id]
+
+    UserProfile:
+      type: object
+      properties:
+        sub: { type: string }
+        display_name: { type: string }
+        email: { type: string, format: email }
+      required: [sub, display_name, email]
+
+    RegisterTemplateRevisionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        repo_owner:
+          type: string
+          description: The GitHub owner or organization.
+        repo_name:
+          type: string
+          description: The repository name.
+        source_ref:
+          type: string
+          description: |
+            A branch, tag, or commit SHA. It is resolved to an immutable commit
+            by each sync and recorded as `resolved_commit_sha`.
+        root_path:
+          type: string
+          description: |
+            Path to the Terraform root module within the repository. Empty for
+            the repository root.
+      required: [repo_owner, repo_name, source_ref]
+
+    UpdateTemplateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        source_ref:
+          type: string
+          description: |
+            The branch, tag or commit SHA the template follows from now on.
+            Another ref of the same repository; the repository and root path
+            don't change.
+      required: [source_ref]
+
+    Template:
+      type: object
+      description: |
+        A registered Terraform source: one repository, ref and root path.
+        Its revisions are the commits its syncs recorded; stacks install a
+        revision, never the template itself.
+      properties:
+        id: { type: string }
+        tenant_id: { type: string }
+        repo_owner: { type: string }
+        repo_name: { type: string }
+        source_ref:
+          type: string
+          description: |
+            The ref every sync resolves to a commit. It can change
+            (`PATCH` the template); each revision keeps the ref it was synced
+            from.
+        root_path: { type: string }
+        name:
+          type: string
+          description: |
+            The latest revision's name. Before the first revision, the last
+            element of `root_path`, or `repo_name` for a template at the
+            repository root.
+        description:
+          type: string
+          description: The latest revision's description; empty before the first revision.
+        tags:
+          type: array
+          items: { type: string }
+          description: The latest revision's tags; empty before the first revision.
+        latest_template_revision_id:
+          type: string
+          description: The newest revision a sync recorded. Empty until one has.
+        latest_sync:
+          type: [object, "null"]
+          description: |
+            The newest sync requested for the template, whoever requested it
+            and whether or not it has finished. Null until the template's
+            first sync is requested.
+          properties:
+            status: { $ref: "#/components/schemas/TemplateSyncStatus" }
+            error_summary:
+              type: string
+              description: |
+                Why the sync was `invalid` or `failed`, with paths relative
+                to the repository. Empty otherwise.
+            resolved_commit_sha:
+              type: string
+              description: The commit `source_ref` resolved to. Empty until the sync resolves it.
+            requested_at: { type: string, format: date-time }
+            completed_at:
+              type: string
+              format: date-time
+              description: Absent until the sync ends.
+          required: [status, error_summary, resolved_commit_sha, requested_at]
+        created_at: { type: string, format: date-time }
+      required:
+        [id, tenant_id, repo_owner, repo_name, source_ref, root_path, name,
+         description, tags, latest_template_revision_id, latest_sync,
+         created_at]
+
+    TemplateSyncStatus:
+      type: string
+      enum: [syncing, stalled, up_to_date, synced, invalid, failed]
+      description: |
+        How a template's latest sync reads now, derived each time the
+        template is read:
+
+        - `syncing`: queued or running, requested under 30 minutes ago.
+        - `stalled`: still queued or running 30 minutes after it was
+          requested. Its retries are exhausted by then, so it will not finish
+          on its own; sync again.
+        - `up_to_date`: finished, and the commit it resolved to was already
+          a revision, so nothing new was recorded.
+        - `synced`: finished, and recorded a new revision.
+        - `invalid`: the source was rejected, for example a root path that
+          does not exist; `error_summary` says why.
+        - `failed`: the sync itself broke, for example a clone that failed;
+          `error_summary` says why.
+
+    TemplateRevision:
+      type: object
+      description: |
+        An immutable snapshot of a Terraform source at one commit. Stacks
+        install revisions, never branches, which is why changing revision is an
+        explicit step rather than something that drifts.
+      properties:
+        id: { type: string }
+        tenant_id: { type: string }
+        template_id:
+          type: string
+          description: |
+            Groups the revisions of one source together. Two revisions of the
+            same repository and root path share this id.
+        repo_owner: { type: string }
+        repo_name: { type: string }
+        source_ref:
+          type: string
+          description: The ref as requested. A label — the commit is what is used.
+        resolved_commit_sha: { type: string }
+        commit_subject:
+          type: string
+          description: |
+            The commit's subject line as its author wrote it, cleaned to one
+            line of at most 500 characters. Empty when the revision was synced
+            before openplan read subjects, or the commit has none.
+        root_path: { type: string }
+        name: { type: string }
+        description: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        status: { $ref: "#/components/schemas/TemplateRevisionStatus" }
+        created_at: { type: string, format: date-time }
+      required:
+        [id, tenant_id, template_id, repo_owner, repo_name, source_ref,
+         resolved_commit_sha, commit_subject, root_path, name, description,
+         status, created_at]
+
+    TemplateRevisionStatus:
+      type: string
+      enum: [pending_validation, validating, active, invalid]
+      description: Only an `active` revision can be installed into a stack.
+
+    TemplateVariable:
+      type: object
+      description: One input variable inferred from the revision's Terraform root module.
+      properties:
+        template_revision_id: { type: string }
+        name: { type: string }
+        type_expression:
+          type: string
+          description: The Terraform type expression verbatim, such as `string` or `list(object({...}))`.
+        description: { type: string }
+        required:
+          type: boolean
+          description: |
+            True when the variable has no default and must be supplied: in
+            `config`, or, when it is `sensitive`, as an Environment secret
+            named `TF_VAR_<name>`.
+        has_default: { type: boolean }
+        sensitive:
+          type: boolean
+          description: |
+            Marked sensitive in Terraform. Its value can't go in `config`,
+            which is stored in the clear: it comes from an Environment secret
+            named `TF_VAR_<name>`, which is write-only and blanked in run
+            logs. See `StackTemplateConfig`.
+        has_validation: { type: boolean }
+      required:
+        [template_revision_id, name, type_expression, description, required,
+         has_default, sensitive, has_validation]
+
+    CreateStackRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          description: Human-readable label.
+        slug:
+          type: string
+          description: URL-safe identifier, unique within the tenant.
+        tags:
+          type: object
+          additionalProperties: { type: string }
+        default_credential_ids:
+          type: array
+          items: { type: string }
+          description: Credentials every installed template in the stack inherits.
+      required: [name, slug]
+
+    Stack:
+      type: object
+      properties:
+        id: { type: string }
+        tenant_id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        slug_is_derived:
+          type: boolean
+          description: |
+            True when the slug is the one the name gives (lower case, each run
+            of other characters one `-`), as it is for a stack created without
+            a slug. Screens show the slug only when this is false.
+        status: { $ref: "#/components/schemas/StackStatus" }
+        tags:
+          type: object
+          additionalProperties: { type: string }
+        default_credential_ids:
+          type: array
+          items: { type: string }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+        effective_capabilities:
+          $ref: "#/components/schemas/StackCapabilities"
+      required:
+        [id, tenant_id, name, slug, slug_is_derived, status, tags,
+         default_credential_ids, created_by, created_at,
+         effective_capabilities]
+
+    StackListItem:
+      description: A stack as the stacks index lists it.
+      allOf:
+        - $ref: "#/components/schemas/Stack"
+        - type: object
+          properties:
+            template_count:
+              type: integer
+              minimum: 0
+              description: The stack's installed templates that are not destroyed.
+          required: [template_count]
+
+    AttentionItem:
+      type: object
+      description: One installed template that needs a person.
+      properties:
+        kind:
+          type: string
+          enum: [waiting_approval, destroy_failed, run_failed]
+          description: |
+            `waiting_approval` is a plan with changes waiting to be approved
+            or discarded. `destroy_failed` is a destroy that stopped before it
+            finished, so some resources may still exist. `run_failed` is a
+            plan or apply that failed and is still the template's latest run;
+            any newer run on the template, whatever its outcome, clears it.
+            The run's `operation` says which.
+        at:
+          type: string
+          description: |
+            When the item began to need a person: when the plan finished, or
+            when the destroy, plan or apply stopped. An RFC 3339 timestamp,
+            absent when unknown.
+        stack:
+          type: object
+          properties:
+            id: { type: string }
+            name: { type: string }
+            slug: { type: string }
+          required: [id, name, slug]
+        stack_template:
+          type: object
+          properties:
+            id: { type: string }
+            display_name: { type: string }
+          required: [id, display_name]
+        run:
+          description: |
+            The plan waiting for approval, the destroy that failed, or the
+            plan or apply that failed. Null for a failed template with no
+            destroy run on record.
+          oneOf:
+            - $ref: "#/components/schemas/TemplateRun"
+            - type: "null"
+      required: [kind, stack, stack_template, run]
+
+    StackStatus:
+      type: string
+      enum: [ready]
+      description: |
+        `ready` is currently the only value: a stack is created together with
+        its authorization edges in one transaction, so it is never observable
+        in an intermediate state. The field is kept because a future
+        non-instant state, such as deletion, would belong here.
+
+    StackCapabilities:
+      type: object
+      description: |
+        What this caller may do on this stack, resolved per request. Render
+        controls from these rather than inferring them from a role — the
+        mapping from roles to capabilities is the server's to own.
+      properties:
+        can_view: { type: boolean }
+        can_operate:
+          type: boolean
+          description: May start plans, applies and destroys.
+        can_approve:
+          type: boolean
+          description: May approve a run — though never one they started themselves.
+        can_manage_access:
+          type: boolean
+          description: May grant and revoke roles on this stack.
+      required: [can_view, can_operate, can_approve, can_manage_access]
+
+    StackView:
+      type: object
+      properties:
+        stack: { $ref: "#/components/schemas/Stack" }
+        templates:
+          type: array
+          items: { $ref: "#/components/schemas/StackTemplate" }
+      required: [stack, templates]
+
+    AddTemplateToStackRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        template_revision_id: { type: string }
+        key:
+          type: string
+          description: |
+            Names this installed template within the stack. It is what lets one stack
+            install the same template twice.
+        config:
+          $ref: "#/components/schemas/StackTemplateConfig"
+          description: |
+            Terraform input variables, keyed by variable name. Validated
+            against the revision's variables. Omit or send `{}` for none.
+      required: [template_revision_id, key]
+
+    StackTemplateConfig:
+      type: object
+      additionalProperties: true
+      description: |
+        Terraform input variables, keyed by variable name. Each value is the
+        variable's value in Terraform's JSON value encoding (as in
+        `.tfvars.json`): a list or set is an array, a map or object is an
+        object, and a string is accepted for `string`, `number` and `bool`,
+        using Terraform's own conversion, at any depth.
+
+        A value that doesn't fit the variable's declared type is refused with
+        `422 validation-failed`, pointer `#/config/<name>` and issue
+        `invalid`; the detail says where inside the value it is wrong, as in
+        `subnets[1]: a number is required`. A type openplan can't read is not
+        checked here, and Terraform reports it at plan. `null` is refused:
+        leave a variable out to use its default. The value is stored and
+        passed to the run as sent, not as converted.
+
+        A variable marked `sensitive` takes no value here: config is stored
+        in the clear and returned to everyone who can view the stack. A key
+        for one, `null` included, is refused with `422 validation-failed`,
+        pointer `#/config/<name>` and issue `sensitive`. Set its value as an
+        Environment secret named `TF_VAR_<name>`, on the stack or on the
+        installed template; a required one with no secret fails at plan,
+        where Terraform names it.
+      example:
+        region: us-east-1
+        azs: [us-east-1a, us-east-1b]
+        network: { cidr: 10.0.0.0/16, tags: { team: platform } }
+
+    UpdateStackTemplateConfigRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        config:
+          $ref: "#/components/schemas/StackTemplateConfig"
+          description: The complete desired config. Replaces the current one wholesale.
+      required: [config]
+
+    ChangeStackTemplateRevisionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        target_template_revision_id:
+          type: string
+          description: The revision to stage. Must share the installed template's `template_id`.
+        config:
+          $ref: "#/components/schemas/StackTemplateConfig"
+          description: |
+            Optional. Omit to carry the current config forward; supply it when
+            the target revision's variables changed. A carried value is kept
+            only for a variable the target still declares and doesn't mark
+            `sensitive`: a variable the target made sensitive loses its value
+            here, and takes it from its `TF_VAR_<name>` secret, or its default
+            when no secret sets it.
+      required: [target_template_revision_id]
+
+    StackTemplate:
+      type: object
+      description: One template revision installed into one stack.
+      properties:
+        id: { type: string }
+        stack_id: { type: string }
+        key: { type: string }
+        template_id: { type: string }
+        desired_template_revision_id:
+          type: string
+          description: The revision this installed template should be running.
+        last_applied_template_revision_id:
+          type: string
+          description: |
+            The revision actually applied. Differs from the desired one after
+            a revision change is staged and before it is applied.
+        source_ref:
+          type: string
+          description: |
+            The desired revision's ref, resolved per request. A label, not
+            stack template state — an installed template does not own a ref.
+        workspace_name: { type: string }
+        display_name:
+          type: string
+          description: |
+            Resolved per response, on reads and writes alike, from the desired
+            revision's metadata: the last
+            segment of its root path (`modules/network/vpc` is `vpc`), or the
+            repository name for a template at the repository root.
+        config:
+          $ref: "#/components/schemas/StackTemplateConfig"
+          description: The desired Terraform input variables.
+        last_applied_run_id: { type: string }
+        last_applied_at: { type: string, format: date-time }
+        pending_plan_run_id:
+          type: string
+          description: |
+            The run whose plan is waiting for approval, or empty when none is.
+        pending_plan_at: { type: string, format: date-time }
+        plan_state: { $ref: "#/components/schemas/PlanState" }
+        live_state: { $ref: "#/components/schemas/LiveState" }
+        created_by: { type: string }
+        lifecycle: { $ref: "#/components/schemas/StackTemplateLifecycle" }
+      required:
+        [id, stack_id, key, template_id,
+         desired_template_revision_id, last_applied_template_revision_id,
+         source_ref, workspace_name, display_name, config,
+         last_applied_run_id, pending_plan_run_id, plan_state, live_state,
+         created_by, lifecycle]
+
+    PlanState:
+      type: string
+      enum: [none, stale, matches]
+      description: |
+        Whether the plan waiting for approval still describes the desired
+        config and revision. `none` — no plan is waiting. `stale` — it no
+        longer does; approving returns `409 plan-stale`. `matches` — it does.
+
+        Derived server-side on purpose. The snapshots it is computed from are
+        deliberately not returned: a client re-deriving this comparison is the
+        mistake this field replaced.
+
+    LiveState:
+      type: string
+      enum: [never, differs, matches]
+      description: |
+        Whether what is applied matches what is desired. `never` — nothing
+        applied yet. `differs` — desired config or revision has moved ahead of
+        what is live. `matches` — live infrastructure reflects the desired
+        state.
+
+    StackTemplateLifecycle:
+      type: string
+      enum: [active, destroying, destroyed, failed, orphaned]
+
+    CreateCredentialRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          description: |
+            The provider environment variable name, such as
+            `AWS_SECRET_ACCESS_KEY`. Must be a valid environment variable name
+            and unique within its scope.
+        value:
+          type: string
+          format: password
+          description: |
+            The value. Accepted only on create and encrypted at rest. A
+            sensitive value is never returned by any endpoint. To rotate one,
+            delete it and create it again.
+        sensitive:
+          type: boolean
+          default: true
+          description: |
+            Whether the value is secret. Leave it out, or set it to `true`, and
+            the value is write-only. Set it to `false` for a value that is safe
+            to show, such as `AWS_REGION`, and it comes back on reads. It can't
+            be changed after create.
+      required: [name, value]
+
+    Credential:
+      type: object
+      description: |
+        Credential metadata, and the value when the credential is not
+        sensitive. A sensitive value is never part of any response.
+      properties:
+        id: { type: string }
+        name: { type: string }
+        scope: { $ref: "#/components/schemas/CredentialScope" }
+        stack_id:
+          type: string
+          description: Present when `scope` is `stack`.
+        stack_template_id:
+          type: string
+          description: Present when `scope` is `stack_template`.
+        sensitive:
+          type: boolean
+          description: Whether the value is write-only.
+        value:
+          type: string
+          description: Present only when `sensitive` is `false`.
+        created_at: { type: string, format: date-time }
+      required: [id, name, scope, sensitive, created_at]
+
+    CredentialScope:
+      type: string
+      enum: [stack, stack_template]
+      description: |
+        `stack` credentials are inherited by every installed template in the stack;
+        `stack_template` credentials apply to one installed template and override the
+        stack's.
+
+    StartTemplateRunRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        operation: { $ref: "#/components/schemas/OperationType" }
+        auto_approve:
+          type: boolean
+          description: |
+            Apply straight away, with no saved plan and no approval. Allowed
+            on `apply` only. Needs approve permission on the stack as well as
+            operate permission.
+      required: [operation]
+
+    OperationType:
+      type: string
+      enum: [plan, apply, destroy]
+      description: |
+        `plan` only plans. `apply` saves a plan to approve, or with
+        `auto_approve` applies without one. `destroy` saves a plan to destroy
+        everything, to approve.
+
+    DiscardRunRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          description: Recorded with the discard. Optional.
+
+    EndRunRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          description: Recorded with the end. Optional.
+
+    TemplateRun:
+      type: object
+      description: One Terraform operation against one installed template.
+      properties:
+        id: { type: string }
+        tenant_id: { type: string }
+        stack_template_id: { type: string }
+        template_revision_id:
+          type: string
+          description: |
+            The desired revision's source ref, copied when the run started, so
+            history stays accurate after a revision change.
+        operation: { $ref: "#/components/schemas/OperationType" }
+        source_ref: { type: string }
+        resolved_commit_sha: { type: string }
+        status: { $ref: "#/components/schemas/TemplateRunStatus" }
+        step:
+          allOf: [{ $ref: "#/components/schemas/TemplateRunStep" }]
+          description: |
+            The latest step of the workflow execution that started last.
+            Empty when that execution has not started a step, as for an
+            apply between claiming the run and its first step.
+        trigger_actor:
+          type: string
+          description: |
+            Who started the run. This is the subject that may not approve it.
+        trigger_actor_display_name:
+          type: string
+          description: |
+            Who started the run, for people to read: the name openplan
+            recorded for `trigger_actor` when they last signed in, or
+            `trigger_actor` itself if it has none. Display only;
+            `trigger_actor` is the identity.
+        created_at:
+          type: string
+          format: date-time
+          description: |
+            When the run was requested. When its work started is its
+            executions' `started_at`.
+        completed_at:
+          type: string
+          format: date-time
+          description: Absent until the run ends.
+        error_summary:
+          type: string
+          description: Why the run failed, from its failed workflow execution. Empty otherwise.
+        command_error:
+          type: string
+          description: |
+            The first error the Terraform or OpenTofu command the run failed in
+            printed, as it printed it: redacted, and cut to 4096 bytes. Empty
+            when the run did not fail in a command. `error_summary` still holds
+            the workflow's wrapper around it.
+        run_number:
+          type: integer
+          minimum: 1
+          description: |
+            Counts runs within one stack template, from 1, in the order they
+            were started. Unique per stack template, not globally; `id` is the
+            identifier every other endpoint takes.
+        auto_approve:
+          type: boolean
+          description: An `apply` run that applied straight away, with no saved plan.
+        plan_summary:
+          type: [object, "null"]
+          description: |
+            What the plan would change, counted the way tofu's own summary
+            line counts: a replacement is one add and one destroy. From the
+            run's plan execution; null until a plan with changes has
+            finished. For an auto-approved `apply`, which has no plan, what
+            the apply changed, read from its "Apply complete!" line, and
+            null until it finishes.
+          properties:
+            add: { type: integer, minimum: 0 }
+            change: { type: integer, minimum: 0 }
+            destroy: { type: integer, minimum: 0 }
+          required: [add, change, destroy]
+        plan_changes:
+          type: [object, "null"]
+          description: |
+            What `GET .../template-runs/{run_id}/changes` holds for this run.
+            Null until a plan with changes has finished.
+          properties:
+            state:
+              type: string
+              enum: [complete, truncated, unavailable]
+              description: |
+                `complete`: every change is listed. `truncated`: the first of
+                `total` are; the plan log has the rest. `unavailable`: the
+                plan had changes, but none could be listed; the plan log has
+                them.
+            total:
+              type: [integer, "null"]
+              minimum: 0
+              description: Every change the plan has, listed or not. Null when `unavailable`.
+          required: [state, total]
+        executions:
+          type: array
+          description: |
+            The workflows that carried the run, in the order they started:
+            its plan, then its apply, or only one of them. Present only on
+            `GET /v1/tenants/{tenant_id}/template-runs/{run_id}`.
+          items: { $ref: "#/components/schemas/TemplateRunWorkflowExecution" }
+      required:
+        [id, tenant_id, stack_template_id, template_revision_id, operation,
+         source_ref, resolved_commit_sha, status, step, trigger_actor,
+         trigger_actor_display_name, created_at, error_summary, command_error, run_number,
+         auto_approve, plan_summary, plan_changes]
+
+    TemplateRunStatus:
+      type: string
+      description: |
+        A run's lifecycle state: what may happen to it next. Terminal states
+        are `completed`, `failed` and `canceled`, which is how a discarded
+        plan ends; anything else means the run is still in flight. A run an
+        operator ended because its workflow was gone is `failed`, and its
+        `error_summary` says so.
+
+        `waiting_approval` is the one that needs a person — post to the run's
+        `approve` endpoint to release it. What a `running` run is doing is its
+        `step`.
+      enum:
+        - queued
+        - running
+        - waiting_approval
+        - approved
+        - completed
+        - failed
+        - canceled
+
+    TemplateRunStep:
+      type: string
+      description: |
+        What a running run is doing right now, or, once it ended, what it was
+        doing last, so a failed run says where it failed. Empty until the run
+        starts its first step. It is for people: nothing about what a run may
+        do next depends on it.
+      enum:
+        - ""
+        - waiting_for_executor
+        - preparing_workspace
+        - fetching_source
+        - restoring_plan
+        - initializing
+        - selecting_workspace
+        - planning
+        - saving_plan
+        - applying
+
+    TemplateRunExecutionStatus:
+      type: string
+      description: Where one workflow execution of a run, or one step of it, stands.
+      enum: [running, succeeded, failed]
+
+    TemplateRunWorkflowExecution:
+      type: object
+      description: One workflow that carried a run.
+      properties:
+        phase: { type: string, enum: [plan, apply] }
+        actor:
+          type: string
+          description: |
+            Who started this execution: the run's requester for a plan or an
+            auto-approved apply, and its approver for an approved apply.
+        actor_display_name:
+          type: string
+          description: |
+            `actor` for people to read, as `trigger_actor_display_name` is for
+            the run's trigger actor. Display only.
+        status: { $ref: "#/components/schemas/TemplateRunExecutionStatus" }
+        started_at: { type: string, format: date-time }
+        finished_at:
+          type: string
+          format: date-time
+          description: Absent while the execution runs.
+        error_summary: { type: string, description: Why it failed. Empty otherwise. }
+        command_error:
+          type: string
+          description: |
+            The first error the Terraform or OpenTofu command this execution
+            failed in printed, as it printed it: redacted, and cut to 4096
+            bytes. Empty when this execution did not fail in a command.
+        summary:
+          type: [object, "null"]
+          description: |
+            A plan's counts of what it would change, or an apply's of what it
+            changed. Null for a plan with no changes, and until known.
+          properties:
+            add: { type: integer, minimum: 0 }
+            change: { type: integer, minimum: 0 }
+            destroy: { type: integer, minimum: 0 }
+          required: [add, change, destroy]
+        steps:
+          type: array
+          description: The steps it ran, in the order they started.
+          items: { $ref: "#/components/schemas/TemplateRunStepExecution" }
+      required: [phase, actor, actor_display_name, status, started_at, error_summary, command_error, summary, steps]
+
+    TemplateRunStepExecution:
+      type: object
+      description: |
+        One step a workflow execution ran. A step runs until the next one
+        starts, or until its execution ends.
+      properties:
+        step: { $ref: "#/components/schemas/TemplateRunStep" }
+        status: { $ref: "#/components/schemas/TemplateRunExecutionStatus" }
+        started_at: { type: string, format: date-time }
+        finished_at:
+          type: string
+          format: date-time
+          description: Absent while the step runs.
+      required: [step, status, started_at]
+
+    LogName:
+      type: string
+      pattern: "^[a-z][a-z0-9-]{0,62}$"
+      description: |
+        A log's name, unique within its run: its `run_phase` and `seq`, such
+        as `plan-1` or `apply-3`. The key it is stored and read under, and
+        nothing more: show `command_line` under its `run_phase` instead.
+
+    TemplateRunLog:
+      type: object
+      description: |
+        One command's log, from the moment the command starts. Once its
+        `state` is `complete`, read the body from
+        `GET /v1/tenants/{tenant_id}/template-runs/{run_id}/logs/{name}`,
+        with this entry's `name`.
+      properties:
+        tenant_id: { type: string }
+        run_id: { type: string }
+        name: { $ref: "#/components/schemas/LogName" }
+        run_phase:
+          type: string
+          enum: [plan, apply]
+          description: |
+            The run phase whose command wrote the log. Init and workspace
+            selection run in both, so a run can have two logs with the same
+            `command`.
+        seq:
+          type: integer
+          minimum: 1
+          description: |
+            The log's place among its phase's logs, from 1: the order the
+            commands ran in. A list sorts by `run_phase`, plan first, then
+            `seq`.
+        command: { $ref: "#/components/schemas/TerraformCommand" }
+        command_line:
+          type: string
+          description: |
+            `command` as people read it, such as `tofu init` or
+            `tofu plan -destroy`: the binary and subcommand that ran, without
+            the arguments. A destroy's second step reads `tofu apply`, since
+            it applies the saved destroy plan.
+        state:
+          type: string
+          enum: [live, complete, lost]
+          description: |
+            Where the output is. `live` — the command is still running and
+            its output isn't stored yet. `complete` — the output is stored;
+            read the body. `lost` — the output will never be stored;
+            `lost_reason` says why.
+        lost_reason:
+          type: string
+          enum: [upload_failed, executor_gone, run_terminated, record_failed]
+          description: |
+            Present only when `state` is `lost`. `upload_failed` — the
+            command finished but its output couldn't be stored.
+            `executor_gone` — the executor stopped answering before the
+            output was stored. `run_terminated` — the run was canceled
+            while the log was still live. `record_failed` — the run
+            completed or failed while the log was still live, so its final
+            record was never written. The last two derive from the run's
+            status, so a run whose workflow was terminated outside openplan,
+            which keeps its status today, reports neither.
+        content_type:
+          type: string
+          description: Present only when `state` is `complete`.
+        size_bytes:
+          type: integer
+          format: int64
+          description: Present only when `state` is `complete`.
+        uploaded_at:
+          type: string
+          format: date-time
+          description: Present only when `state` is `complete`.
+      required:
+        [tenant_id, run_id, name, run_phase, seq, command, command_line,
+         state]
+
+    TerraformCommand:
+      type: string
+      description: |
+        The Terraform command that wrote a log. `plan_destroy` is a destroy
+        run's plan; `destroy` applies its saved plan; `apply_auto_approve` is
+        an auto-approved apply's one step.
+      enum: [init, select_workspace, plan, plan_destroy, apply, destroy, apply_auto_approve]
+
+    AssignStackRoleRequest:
+      type: object
+      additionalProperties: false
+      description: The person is named by the path, so the body holds only the role.
+      properties:
+        role: { $ref: "#/components/schemas/StackRole" }
+      required: [role]
+
+    StackRole:
+      type: string
+      enum: [viewer, operator, approver, owner]
+      description: |
+        A stack role. `viewer` reads; `operator` starts runs; `approver`
+        releases runs waiting on approval; `owner` also manages access.
+
+        A stack must keep at least one owner — the request that would remove
+        the last one is refused.
+
+    Grant:
+      type: object
+      description: One person's role on a stack, with the identity resolved for display.
+      properties:
+        user_sub: { type: string }
+        role: { $ref: "#/components/schemas/StackRole" }
+        display_name: { type: string }
+        email: { type: string, format: email }
+      required: [user_sub, role, display_name, email]
+
+    AssignPlatformRoleRequest:
+      type: object
+      additionalProperties: false
+      description: The person is named by the path, so the body holds only the role.
+      properties:
+        role: { $ref: "#/components/schemas/PlatformRole" }
+      required: [role]
+
+    PlatformRole:
+      type: string
+      enum: [viewer, editor, admin]
+      description: |
+        A platform role. `viewer` sees every stack and reads the template
+        catalog; `editor` also creates stacks and manages templates;
+        `admin` also operates, approves and manages access on every stack,
+        and manages platform access. Root is not a role this API grants.
+
+    PlatformGrant:
+      type: object
+      description: One person's platform role, with the identity resolved for display.
+      properties:
+        user_sub: { type: string }
+        role: { $ref: "#/components/schemas/PlatformRole" }
+        display_name: { type: string }
+        email: { type: string, format: email }
+      required: [user_sub, role, display_name, email]
+
+    QueueItem:
+      type: object
+      properties:
+        kind:
+          type: string
+          description: What kind of work this is, such as a template run.
+        state: { type: string }
+        summary:
+          type: string
+          description: A human-readable label. Falls back to `kind` when empty.
+        attempts:
+          type: integer
+          description: How many times delivery has been tried.
+        last_error:
+          type: string
+          description: The most recent failure. Empty when there has been none.
+        created_at: { type: string, format: date-time }
+        delivered_at:
+          type: string
+          format: date-time
+          description: Absent until the item has been delivered.
+      required: [kind, state, summary, attempts, last_error, created_at]

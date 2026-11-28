@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dex
+  namespace: ${namespace}
+  labels:
+    app.kubernetes.io/part-of: openplan
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dex
+  template:
+    metadata:
+      labels:
+        app: dex
+        app.kubernetes.io/part-of: openplan
+      annotations:
+        # The config is a mounted Secret, which a running Dex never rereads;
+        # a new hash rolls the pod when it changes.
+        openplan.run/config-hash: ${config_hash}
+    spec:
+      initContainers:
+        - name: wait-for-database
+          image: ${postgres_image}
+          command: ["sh", "-c", "until psql -c 'SELECT 1' >/dev/null 2>&1; do sleep 2; done"]
+          env:
+            - {name: PGHOST, value: postgres}
+            - {name: PGUSER, value: dex}
+            - {name: PGDATABASE, value: dex}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef: {name: openplan-dependencies, key: dex-db-password}
+          resources:
+            requests: {cpu: 50m, memory: 32Mi}
+            limits: {cpu: 50m, memory: 32Mi}
+      containers:
+        - name: dex
+          image: ghcr.io/dexidp/dex:v2.45.1
+          command: ["dex", "serve", "/etc/dex/config.yaml"]
+          env:
+            - name: DEX_DB_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: openplan-dependencies, key: dex-db-password}
+            - name: OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: {name: openplan-dependencies, key: oidc-client-secret}
+          ports:
+            - containerPort: 5556
+          readinessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: 5558
+            periodSeconds: 5
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: 100m, memory: 128Mi}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/dex
+      volumes:
+        - name: config
+          secret:
+            secretName: dex-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dex
+  namespace: ${namespace}
+  labels:
+    app.kubernetes.io/part-of: openplan
+spec:
+  selector:
+    app: dex
+  ports:
+    - port: 5556
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dex
+  namespace: ${namespace}
+  labels:
+    app.kubernetes.io/part-of: openplan
+spec:
+  ingressClassName: traefik
+  tls:
+    # One certificate covers openplan's host and Dex's.
+    - hosts: [${dex_host}]
+      secretName: openplan-tls
+  rules:
+    - host: ${dex_host}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dex
+                port:
+                  number: 5556

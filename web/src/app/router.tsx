@@ -1,4 +1,4 @@
-import { createBrowserRouter, createMemoryRouter, Navigate, redirect } from "react-router-dom";
+import { createBrowserRouter, Navigate, redirect } from "react-router-dom";
 import type { RouteObject } from "react-router-dom";
 import AppShell from "./AppShell";
 import type { RouteHandle } from "./AppShell";
@@ -59,7 +59,7 @@ const devRoutes: RouteObject[] = import.meta.env.DEV
 // The pages redesigned on openplan UI, which the shell puts on the grey canvas.
 const canvas: RouteHandle = { canvas: true };
 
-export const routeConfig: RouteObject[] = [
+const routeConfig: RouteObject[] = [
   ...devRoutes,
   // A sibling of "/", not a child, for the same reason /styleguide is one:
   // everything under "/" renders inside SessionProvider, which resolves only
@@ -184,11 +184,4 @@ export const routeConfig: RouteObject[] = [
   }
 ];
 
-// createBrowserRouter touches `document` as soon as it's called, which blows
-// up when this module is evaluated under Vitest's node environment (used by
-// router.test.tsx to read `routeConfig`) or any other non-browser context.
-// Fall back to a memory router there; both factories return the same Router
-// type, so the browser (and Task 4's main.tsx) always gets a real
-// createBrowserRouter(routeConfig) instance.
-export const router =
-  typeof document === "undefined" ? createMemoryRouter(routeConfig) : createBrowserRouter(routeConfig);
+export const router = createBrowserRouter(routeConfig);

@@ -1,0 +1,43 @@
+# Argo CD managing its own install, from argocd-values.yaml on develop, so its
+# settings change on merge instead of only when someone reruns bootstrap.sh.
+# bootstrap.sh reads the chart version below for the first install, so the two
+# can't disagree.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd
+  # No resources finalizer, on purpose: deleting this Application, or the root
+  # in teardown.sh, must leave Argo CD running. Otherwise it would delete its
+  # own controller halfway through deleting everything else, and the
+  # finalizers waiting on that controller would never clear. teardown.sh
+  # uninstalls Argo CD itself, last.
+spec:
+  project: default
+  sources:
+    - repoURL: https://argoproj.github.io/argo-helm
+      chart: argo-cd
+      targetRevision: 10.11.6
+      helm:
+        # The name bootstrap.sh installs it under, so the rendered labels and
+        # selectors match the running install and Argo CD adopts it in place.
+        releaseName: argocd
+        valueFiles:
+          - $values/deploy/docker-desktop/argocd/argocd-values.yaml
+    - repoURL: https://github.com/openplanhq/openplan.git
+      targetRevision: develop
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      # Never prune its own install: a bad render that dropped the CRDs would
+      # delete every Application with them. A setting that removes a resource
+      # leaves it behind until it's deleted by hand.
+      prune: false
+      selfHeal: true
+    syncOptions:
+      # The Application and ApplicationSet CRDs are too large for client-side
+      # apply's last-applied annotation.
+      - ServerSideApply=true

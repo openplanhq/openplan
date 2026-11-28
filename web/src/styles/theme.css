@@ -1,6 +1,5 @@
 /* The shadcn theme, and the only file permitted raw colour literals. Values
-   are hex, converted from shadcn's neutral oklch() defaults, so
-   theme.guard.test.ts can compute contrast. Light only: there is deliberately
+   are hex, converted from shadcn's neutral oklch() defaults. Light only: there is deliberately
    no .dark block. */
 
 /* Test files hold deliberately bad class strings; keep them out of the build. */
@@ -26,8 +25,7 @@
      are Tailwind's text-2xl/lg/sm/xs and Geist's copy-13 (13/18); the
      -0.02em title tracking and 1.2/1.3 leadings are openplan UI's.
      The steps Tailwind ships (text-base, text-xl...) are cleared so nothing
-     off the scale can render; tailwind.guard.test.ts holds app code to these
-     names, and src/lib/utils.ts tells cn about each. */
+     off the scale can render; src/lib/utils.ts tells cn about each. */
   --text-*: initial;
   /* The one h1 of a page. */
   --text-page-title: 1.5rem;
@@ -212,7 +210,7 @@
     text-rendering: optimizeLegibility;
   }
   /* Elements that draw no focus style of their own (plain links, summary)
-     get a solid 2px ring, which theme.guard.test.ts holds at 3:1. The browser
+     get a solid 2px ring, at 3:1 contrast or better. The browser
      default, an auto outline in ring/50, is too faint. shadcn components
      replace it with their own ring: utilities outrank this layer. */
   :focus-visible {
