@@ -1,7 +1,7 @@
 import { Ban, Check, Equal, FileText, Hourglass, LoaderCircle, TriangleAlert } from "lucide-react";
 import { describe, expect, it } from "vitest";
 import type { TemplateRun } from "../../api/types";
-import { runIndicator, runProgressTag } from "./runIndicator";
+import { failedPhase, runIndicator, runProgressTag } from "./runIndicator";
 
 const counts = { add: 1, change: 0, destroy: 0 };
 
@@ -88,6 +88,21 @@ describe("runIndicator words", () => {
     const unknownStep = "cloning" as TemplateRun["step"];
     expect(label("apply", "running", false, false, unknownStep)).toBe("planning");
     expect(label("apply", "failed", false, false, unknownStep)).toBe("plan failed");
+  });
+});
+
+describe("failedPhase", () => {
+  // A run that isn't auto-approved plans first: one that failed before it had
+  // a plan changed nothing, so it failed its plan, as its headline says.
+  it.each([
+    ["a plan", { operation: "plan", plan_summary: counts, auto_approve: false }, "plan"],
+    ["an apply that failed while planning", { operation: "apply", plan_summary: null, auto_approve: false }, "plan"],
+    ["an apply that failed applying its plan", { operation: "apply", plan_summary: counts, auto_approve: false }, "apply"],
+    ["an auto-approved apply", { operation: "apply", plan_summary: null, auto_approve: true }, "apply"],
+    ["a destroy that failed while planning", { operation: "destroy", plan_summary: null, auto_approve: false }, "plan"],
+    ["a destroy that failed destroying", { operation: "destroy", plan_summary: counts, auto_approve: false }, "apply"]
+  ] as const)("names the phase of %s", (_, run, phase) => {
+    expect(failedPhase(run)).toBe(phase);
   });
 });
 

@@ -17,8 +17,8 @@ export type RunFields = Pick<TemplateRun, "operation" | "status" | "step" | "pla
 // A plan run only ever plans, so it reads as planning until it ends. An
 // auto-approved apply run never plans on its own, so it reads as applying
 // throughout. Any other run has plan counts only once a plan with changes has
-// finished, so one that has them and is still working is applying, and one
-// that failed with them failed applying.
+// finished, so one that has them and is still working is applying; failedPhase
+// says which half a failed one failed.
 function runHeadline(run: RunFields): string {
   if (run.operation === "plan") {
     return planRunHeadline(run);
@@ -41,7 +41,7 @@ function runHeadline(run: RunFields): string {
       }
       return destroy ? "destroyed" : "applied";
     case "failed":
-      if (!planned) {
+      if (failedPhase(run) === "plan") {
         return destroy ? "destroy plan failed" : "plan failed";
       }
       return destroy ? "destroy failed" : "apply failed";
@@ -53,6 +53,17 @@ function runHeadline(run: RunFields): string {
       }
       return destroy ? "destroying" : "applying";
   }
+}
+
+/** What failed in a failed run: its plan, or its apply. A plan run only
+    plans. Any other run plans first unless auto-approved, so one that failed
+    with no plan failed planning and changed nothing. The attention list
+    counts failures by this too, so it and the run's headline agree. */
+export function failedPhase(run: Pick<RunFields, "operation" | "plan_summary" | "auto_approve">): "plan" | "apply" {
+  if (run.operation === "plan") {
+    return "plan";
+  }
+  return run.auto_approve || run.plan_summary ? "apply" : "plan";
 }
 
 function planRunHeadline(run: Pick<TemplateRun, "status" | "plan_summary">): string {
