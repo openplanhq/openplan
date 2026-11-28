@@ -1,3 +1,0 @@
-$kind: collection
-description: Registering Terraform sources as templates, and syncing them into immutable, reusable revisions.
-order: 3000

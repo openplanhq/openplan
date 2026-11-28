@@ -1,5 +1,0 @@
-.terraform/
-*.tfstate
-*.tfstate.*
-# A local backend, for an apply from a laptop outside openplan.
-*_override.tf

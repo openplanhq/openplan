@@ -1,3 +1,0 @@
-$kind: collection
-description: Signing in and out. The only routes reachable without a session.
-order: 11000

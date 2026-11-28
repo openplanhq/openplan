@@ -1,3 +1,0 @@
-$kind: collection
-description: The caller's own asynchronous work items.
-order: 9000

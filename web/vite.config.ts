@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { defineConfig } from "vitest/config";
+import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -14,8 +14,5 @@ export default defineConfig({
       "/healthz": "http://localhost:8081",
       "/v1": "http://localhost:8081"
     }
-  },
-  test: {
-    environment: "node"
   }
 });
