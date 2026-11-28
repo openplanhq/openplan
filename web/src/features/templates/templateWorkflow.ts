@@ -86,7 +86,7 @@ export function searchTemplates(templates: Template[], query: string): TemplateS
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const scored: Array<{ match: TemplateSearchMatch; score: number }> = [];
 
-  for (const template of templates) {
+  for (const template of templatesByName(templates)) {
     const match: TemplateSearchMatch = {
       template,
       name: templateDisplayName(template),
@@ -124,7 +124,7 @@ export function searchTemplates(templates: Template[], query: string): TemplateS
   }
 
   if (words.length === 0) {
-    return scored.map(({ match }) => match).sort((a, b) => a.name.localeCompare(b.name));
+    return scored.map(({ match }) => match);
   }
   // Ties go to the shorter name: "redis" before "redis-operator".
   return scored

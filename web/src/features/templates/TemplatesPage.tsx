@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { ArrowLeft, Info, Plus } from "lucide-react";
+import { Info, Plus } from "lucide-react";
 import { Link, Outlet, useLocation, useMatch } from "react-router-dom";
 import { useTemplatesQuery } from "../../api/queries";
 import RequireCapability from "../../auth/RequireCapability";
@@ -15,18 +15,16 @@ import type { IndexOutletContext } from "../../shared/indexOutlet";
 import type { TemplatesLocationState } from "./templatesPageOutlet";
 import { templatesByName } from "./templateWorkflow";
 
-const registerLinkClass = cn(buttonClass("primary", "lg"), "w-full pointer-coarse:h-11 md:w-auto");
+const registerLinkClass = cn(buttonClass("primary", "lg"), "pointer-coarse:h-11");
 
 // /templates: every registered template on the left, by name;
 // on the right, the selected template's panel, which is the route below
 // rendered into <Outlet />. With no template in the URL, the index draws the
 // first one without changing the URL.
 //
-// On a phone the page shows the list or the panel, never both: the list on
-// /templates, the panel on a template's address or /templates/new, with a
-// link back. The frame mirrors StackPage's classes; the two pages differ in
-// their guards, ids and outlet contexts, so they share the look, not a
-// component.
+// The frame mirrors StackPage's classes, and both hand IndexOutletContext to
+// the index; the two pages differ in their guards and ids, so they share the
+// look, not a component.
 export default function TemplatesPage() {
   const tenantID = useTenantID();
   const templatesQuery = useTemplatesQuery(tenantID);
@@ -80,20 +78,11 @@ export default function TemplatesPage() {
       >
         {deleted !== null && <DeletedNote name={deleted} />}
       </PageHeader>
-      <div className="flex flex-col overflow-clip rounded-panel border bg-card md:flex-row">
-        <div className={cn("min-w-0 flex-col md:flex md:w-90 md:shrink-0 md:border-r", onPanel ? "hidden" : "flex")} data-testid="templates-list-column">
+      <div className="flex overflow-clip rounded-panel border bg-card">
+        <div className="flex w-90 min-w-0 shrink-0 flex-col border-r">
           <TemplateList templates={templates} selectedId={selectedId} />
         </div>
-        <div className={cn("min-w-0 flex-1 flex-col md:flex", onPanel ? "flex" : "hidden")} data-testid="templates-panel-column">
-          {onPanel && (
-            <Link
-              to="/templates"
-              className="flex min-h-11 items-center gap-1.5 self-start px-7 pt-4 text-meta font-medium text-primary hover:underline md:hidden"
-            >
-              <ArrowLeft aria-hidden="true" className="size-3.5" />
-              Templates
-            </Link>
-          )}
+        <div className="flex min-w-0 flex-1 flex-col">
           <Outlet context={outletContext} />
         </div>
       </div>

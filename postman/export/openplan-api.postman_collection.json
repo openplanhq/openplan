@@ -444,7 +444,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Postman {{$timestamp}}\",\n  \"tags\": { \"team\": \"platform\" },\n  \"default_credential_ids\": []\n}",
+              "raw": "{\n  \"name\": \"Postman {{$timestamp}}\",\n  \"tags\": { \"team\": \"platform\" }\n}",
               "options": {
                 "raw": {
                   "language": "json"

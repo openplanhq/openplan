@@ -175,7 +175,6 @@ export interface Stack {
   // without one; screens show the slug only when someone chose it.
   slug_is_derived: boolean;
   tags: Record<string, string>;
-  default_credential_ids: string[];
   created_by: string;
   created_at: string;
   // Per-stack authorization booleans resolved by the backend for AUTH-017; see auth/types.ts.
@@ -234,6 +233,12 @@ export interface CredentialMetadata {
   /** Present only when `sensitive` is false. */
   value?: string;
   created_at: string;
+}
+
+/** What a credential belongs to, named by its path segment: a stack, or one template on a stack. */
+export interface CredentialOwner {
+  scope: "stacks" | "stack-templates";
+  id: string;
 }
 
 /** One new credential. The server treats a missing `sensitive` as true. */

@@ -1,11 +1,9 @@
 import { useState } from "react";
-import { ArrowLeft } from "lucide-react";
-import { Link, Outlet, useMatch, useParams } from "react-router-dom";
+import { Outlet, useMatch, useParams } from "react-router-dom";
 import { useAttentionQuery, useStackQuery } from "../../api/queries";
 import { useTenantID } from "../../auth/useTenantID";
 import PageHeader from "../../shared/PageHeader";
 import StackSectionLinks from "./StackSectionLinks";
-import { cn } from "@/lib/utils";
 import { attentionByStackTemplate } from "./attention";
 import StackMeta from "./StackMeta";
 import type { IndexOutletContext } from "../../shared/indexOutlet";
@@ -17,18 +15,13 @@ import { defaultStackTemplate } from "./templateSelection";
 // into <Outlet />. With no template in the URL, the index draws the default
 // one (see defaultStackTemplate) without changing the URL.
 //
-// On a phone the page shows the list or the panel, never both: the list on
-// the stack's own path, the panel on a template's, with a link back. Each
-// column hides below md on the paths where it gives way; nothing measures
-// the screen.
-//
 // The default is picked once, when the stack's own path opens, and kept while
 // the person stays on it: a plan approved underneath must not swap the panel
 // to another template mid-read. It gives way only if its template goes, and
 // is picked afresh on coming back to the path.
 //
 // The canView guard above this route has loaded the stack.
-// TemplatesPage mirrors this list-and-panel frame and its phone rules.
+// TemplatesPage mirrors this list-and-panel frame.
 export default function StackPage() {
   const tenantID = useTenantID();
   const { stackId = "" } = useParams<{ stackId: string }>();
@@ -63,23 +56,11 @@ export default function StackPage() {
       >
         <StackMeta stack={stack} />
       </PageHeader>
-      <div className="flex flex-col overflow-clip rounded-panel border bg-card md:flex-row">
-        <div
-          className={cn("min-w-0 flex-col md:flex md:w-90 md:shrink-0 md:border-r", onPanel ? "hidden" : "flex")}
-          data-testid="stack-list-column"
-        >
+      <div className="flex overflow-clip rounded-panel border bg-card">
+        <div className="flex w-90 min-w-0 shrink-0 flex-col border-r">
           <StackTemplateList stackId={stackId} templates={templates} selectedId={selectedId} adding={adding} attention={attention} />
         </div>
-        <div className={cn("min-w-0 flex-1 flex-col md:flex", onPanel ? "flex" : "hidden")} data-testid="stack-panel-column">
-          {onPanel && (
-            <Link
-              to={`/stacks/${stackId}`}
-              className="flex min-h-11 items-center gap-1.5 self-start px-7 pt-4 text-meta font-medium text-primary hover:underline md:hidden"
-            >
-              <ArrowLeft aria-hidden="true" className="size-3.5" />
-              Templates
-            </Link>
-          )}
+        <div className="flex min-w-0 flex-1 flex-col">
           <Outlet context={outletContext} />
         </div>
       </div>

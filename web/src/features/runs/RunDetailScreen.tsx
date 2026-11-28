@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Ban } from "lucide-react";
+import { Ban, Trash2 } from "lucide-react";
 import { useParams } from "react-router-dom";
 import {
   useApproveRunMutation,
@@ -18,6 +18,7 @@ import RequireCapability from "../../auth/RequireCapability";
 import { useTenantID } from "../../auth/useTenantID";
 import { formatDateTime } from "../../shared/formatTimestamp";
 import { buttonClass } from "../../shared/buttonClass";
+import BusyIcon from "../../shared/BusyIcon";
 import ErrorLine from "../../shared/ErrorLine";
 import ErrorPanel from "../../shared/ErrorPanel";
 import InlineConfirm from "../../shared/InlineConfirm";
@@ -28,6 +29,8 @@ import { shortCommitSHA } from "../templates/templateWorkflow";
 import StatusLabel from "../../shared/StatusLabel";
 import Breadcrumb from "../../shared/Breadcrumb";
 import LoadingLine from "../../shared/LoadingLine";
+import { pluralCount } from "../../shared/plural";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { stackTemplatePath } from "../stacks/templateSelection";
 import RunChanges, { RunViewFrame } from "./RunChanges";
@@ -37,7 +40,6 @@ import type { RunView } from "./planChanges";
 import type { TemplateRun, TemplateRunLog } from "../../api/types";
 import SegmentedControl from "../../shared/SegmentedControl";
 import { runIndicator, runProgressTag } from "./runIndicator";
-import WaitingRunActions from "./WaitingRunActions";
 
 // /stacks/:stackId/templates/:stackTemplateId/runs/:runNumber — plan/apply
 // detail with per-phase logs, inside the template's panel under a trail back
@@ -94,8 +96,12 @@ export default function RunDetailScreen() {
   // refused for a run still working.
   const canApprove = Boolean(run && run.status === "waiting_approval");
   const canEnd = Boolean(run && (run.status === "queued" || run.status === "running"));
-  const [confirmingEnd, setConfirmingEnd] = useState(false);
-  const endButtonRef = useRef<HTMLButtonElement>(null);
+  // Ending a run and approving a destroy each ask first, in place under the
+  // header. A run offers at most one of them, so one opener ref serves both;
+  // the state names which, so a question asked of one status never opens on
+  // the next.
+  const [confirming, setConfirming] = useState<"end" | "destroy" | null>(null);
+  const openerRef = useRef<HTMLButtonElement>(null);
 
   async function runAction(action: () => Promise<void>) {
     setErrorMessage("");
@@ -119,22 +125,23 @@ export default function RunDetailScreen() {
     });
   }
 
-  // The confirm closes either way: ended, the run polls into failed and the
-  // action goes with it; refused, the server's reason shows under the header
-  // and focus returns to the button that asked.
   async function handleEnd() {
     await runAction(async () => {
-      try {
-        await endRunMutation.mutateAsync({ runID: runId, body: { reason: "ended from run detail" } });
-      } finally {
-        closeEndConfirm();
-      }
+      await endRunMutation.mutateAsync({ runID: runId, body: { reason: "ended from run detail" } });
     });
   }
 
-  function closeEndConfirm() {
-    setConfirmingEnd(false);
-    endButtonRef.current?.focus();
+  // A confirm closes either way: done, the run moves on and the action goes
+  // with it; refused, the server's reason shows under the header and focus
+  // returns to the button that asked. runAction never throws.
+  async function confirmThen(action: () => Promise<void>) {
+    await action();
+    closeConfirm();
+  }
+
+  function closeConfirm() {
+    setConfirming(null);
+    openerRef.current?.focus();
   }
 
   // The switch appears once the run has loaded; the logs show before that,
@@ -229,39 +236,75 @@ export default function RunDetailScreen() {
               <StatusLabel indicator={runIndicator(run)} data-testid="run-detail-status" />
             </div>
             {canApprove && (
+              // Discard throws the plan away; Approve applies exactly that
+              // saved plan. On a destroy, approving destroys what the
+              // template manages, so its button asks first, and names the
+              // action alone: the count is the question's, where it reads as
+              // a number of resources (issue 569).
               <div className="flex flex-wrap gap-2">
-                <WaitingRunActions
-                  run={run}
-                  stackId={stackId}
-                  approveBusy={approveRunMutation.isPending}
-                  discardBusy={discardRunMutation.isPending}
-                  onApprove={handleApprove}
-                  onDiscard={handleDiscard}
-                />
+                <RequireCapability capability="can_operate" stackId={stackId}>
+                  <button type="button" className={buttonClass("outline")} disabled={discardRunMutation.isPending} onClick={() => void handleDiscard()}>
+                    <BusyIcon busy={discardRunMutation.isPending} />
+                    Discard
+                  </button>
+                </RequireCapability>
+                <RequireCapability capability="can_approve" stackId={stackId}>
+                  {run.operation === "destroy" ? (
+                    <Button
+                      ref={openerRef}
+                      variant="destructive"
+                      title={destroyTitle(run)}
+                      aria-expanded={confirming === "destroy"}
+                      disabled={approveRunMutation.isPending}
+                      onClick={() => setConfirming("destroy")}
+                    >
+                      <Trash2 data-icon="inline-start" aria-hidden="true" />
+                      Destroy
+                    </Button>
+                  ) : (
+                    <button type="button" className={buttonClass("primary")} disabled={approveRunMutation.isPending} onClick={() => void handleApprove()}>
+                      <BusyIcon busy={approveRunMutation.isPending} />
+                      Approve
+                    </button>
+                  )}
+                </RequireCapability>
               </div>
             )}
             {canEnd && (
               <RequireCapability capability="can_operate" stackId={stackId}>
                 <button
-                  ref={endButtonRef}
+                  ref={openerRef}
                   type="button"
                   className={cn(buttonClass("outline"), "text-destructive hover:text-destructive pointer-coarse:h-11")}
-                  aria-expanded={confirmingEnd}
-                  onClick={() => setConfirmingEnd(true)}
+                  aria-expanded={confirming === "end"}
+                  onClick={() => setConfirming("end")}
                 >
                   End run
                 </button>
               </RequireCapability>
             )}
           </header>
-          {canEnd && confirmingEnd && (
+          {canApprove && confirming === "destroy" && (
+            <InlineConfirm
+              question={`${destroyTitle(run)}?`}
+              confirmLabel="Confirm destroy"
+              confirmIcon={Trash2}
+              busy={approveRunMutation.isPending}
+              onConfirm={() => void confirmThen(handleApprove)}
+              onCancel={closeConfirm}
+              testId="run-destroy-confirm"
+            >
+              Approving this plan destroys these resources. This action cannot be undone.
+            </InlineConfirm>
+          )}
+          {canEnd && confirming === "end" && (
             <InlineConfirm
               question={`End run #${run.run_number}?`}
               confirmLabel="End run"
               confirmIcon={Ban}
               busy={endRunMutation.isPending}
-              onConfirm={() => void handleEnd()}
-              onCancel={closeEndConfirm}
+              onConfirm={() => void confirmThen(handleEnd)}
+              onCancel={closeConfirm}
               testId="run-end-confirm"
             >
               {run.operation === "plan"
@@ -305,6 +348,10 @@ export default function RunDetailScreen() {
       {runView}
     </section>
   );
+}
+
+function destroyTitle(run: TemplateRun): string {
+  return `Destroy ${pluralCount(run.plan_summary?.destroy ?? 0, "resource", "resources")}`;
 }
 
 // A run that failed in a command leads with what the command printed, under

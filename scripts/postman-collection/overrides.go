@@ -126,8 +126,7 @@ var overrides = map[string]override{
 	"createStack": {
 		jsonBody: `{
   "name": "Postman {{$timestamp}}",
-  "tags": { "team": "platform" },
-  "default_credential_ids": []
+  "tags": { "team": "platform" }
 }`,
 		test: save("stack_id", "pm.response.json().id"),
 	},

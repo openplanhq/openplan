@@ -1,11 +1,6 @@
 import type { ReactNode } from "react";
 import { useParams } from "react-router-dom";
-import {
-  useCreateStackCredentialMutation,
-  useDeleteStackCredentialMutation,
-  useStackCredentialsQuery,
-  useStackQuery
-} from "../../api/queries";
+import { useCredentials, useStackQuery } from "../../api/queries";
 import { useTenantID } from "../../auth/useTenantID";
 import PageHeader from "../../shared/PageHeader";
 import { useQueryErrorBoundary } from "../../shared/queryErrorBoundary";
@@ -21,25 +16,25 @@ export default function EnvironmentScreen() {
   const tenantID = useTenantID();
   const { stackId = "" } = useParams<{ stackId: string }>();
   const stackName = useStackQuery(tenantID, stackId).data?.stack.name ?? stackId;
-  const credentialsQuery = useStackCredentialsQuery(tenantID, stackId);
-  const createMutation = useCreateStackCredentialMutation(tenantID, stackId);
-  const deleteMutation = useDeleteStackCredentialMutation(tenantID, stackId);
-  const boundary = useQueryErrorBoundary(credentialsQuery.error);
+  const { list, create, remove } = useCredentials(tenantID, { scope: "stacks", id: stackId });
+  const boundary = useQueryErrorBoundary(list.error);
+  // A list that never arrived is not an empty one, so the tabs and their form
+  // wait for it rather than invite a second copy of an entry. A failed refetch
+  // keeps the list it had.
+  const failed = list.status === "error" && list.data === undefined;
 
-  if (credentialsQuery.status === "error" && boundary !== null) {
+  if (failed && boundary !== null) {
     return <>{boundary}</>;
   }
 
   let content: ReactNode;
-  if (credentialsQuery.status === "pending") {
+  if (list.status === "pending") {
     content = (
       <LoadingLine testId="environment-loading">Loading environment…</LoadingLine>
     );
-  } else if (credentialsQuery.status === "error") {
-    // A list that never arrived is not an empty one, so the tabs and their
-    // form wait for it rather than invite a second copy of an entry.
+  } else if (failed) {
     content = (
-      <LoadError error={credentialsQuery.error} onRetry={() => void credentialsQuery.refetch()} testId="environment-error" retryTestId="environment-retry">
+      <LoadError error={list.error} onRetry={() => void list.refetch()} testId="environment-error" retryTestId="environment-retry">
         Something went wrong while loading the environment.
       </LoadError>
     );
@@ -54,13 +49,13 @@ export default function EnvironmentScreen() {
           emptyTitle: "No variables in this environment",
           emptyDescription: "Variables added here are available to every template in this stack."
         }}
-        credentials={credentialsQuery.data ?? []}
-        loading={credentialsQuery.isPending}
-        busy={createMutation.isPending || deleteMutation.isPending}
+        credentials={list.data ?? []}
+        loading={list.isPending}
+        busy={create.isPending || remove.isPending}
         onCreate={async (credential) => {
-          await createMutation.mutateAsync(credential);
+          await create.mutateAsync(credential);
         }}
-        onDelete={(id) => deleteMutation.mutateAsync(id)}
+        onDelete={(id) => remove.mutateAsync(id)}
       />
     );
   }

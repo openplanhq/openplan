@@ -153,7 +153,7 @@ export function upsertStackTemplate(stackTemplates: StackTemplate[], stackTempla
 }
 
 // The five looks a template's state takes; StackTemplateStatusLabel draws each.
-export type StatusTone = "settled" | "progress" | "waiting" | "failed" | "canceled";
+export type StatusTone = "settled" | "progress" | "waiting" | "failed" | "unapplied";
 
 export interface StackTemplateStatus {
   label: string;
@@ -212,7 +212,7 @@ export function stackTemplateStatus(stackTemplate: StackTemplate): StackTemplate
     default:
       return {
         label: "not applied",
-        tone: "canceled",
+        tone: "unapplied",
         description: "Nothing has been applied yet, so this template has no live resources."
       };
   }

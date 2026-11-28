@@ -1,9 +1,11 @@
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useAssignPlatformRoleMutation,
   usePlatformGrantsQuery,
   useRevokePlatformRoleMutation,
   useSearchUsersQuery
 } from "../../api/queries";
+import { queryKeys } from "../../api/queryKeys";
 import { useAuth } from "../../auth/AuthContext";
 import { useTenantID } from "../../auth/useTenantID";
 import PageHeader from "../../shared/PageHeader";
@@ -14,17 +16,22 @@ import { PLATFORM_ROLES } from "./roles";
 
 // /access: who holds a platform role (admin, editor, viewer), on the same
 // AccessList as a stack's Access page, with root locked above them. Behind
-// can_manage_platform_access; a role change re-reads /v1/me (the mutations
-// do), so losing your own admin turns this page into its refusal.
+// can_manage_platform_access.
 export default function PlatformAccessScreen() {
   const tenantID = useTenantID();
   const grants = usePlatformGrantsQuery(tenantID);
   const assign = useAssignPlatformRoleMutation(tenantID);
   const revoke = useRevokePlatformRoleMutation(tenantID);
   const me = useAuth().me;
+  const queryClient = useQueryClient();
   const boundary = useQueryErrorBoundary(grants.error);
   // No stack: the platform search, over everyone who has signed in.
   const useSearch = (query: string) => useSearchUsersQuery(tenantID, "", query);
+
+  // A platform role decides /v1/me's global capabilities: your own role
+  // changed, so re-read them, and losing your admin takes Access and Create
+  // stack away without a reload, turning this page into its refusal.
+  const onOwnAccessChanged = () => void queryClient.invalidateQueries({ queryKey: queryKeys.me });
 
   if (boundary !== null) return <>{boundary}</>;
 
@@ -55,6 +62,7 @@ export default function PlatformAccessScreen() {
         useSearch={useSearch}
         assign={(userSub, role) => assign.mutateAsync({ userSub, role })}
         revoke={(userSub) => revoke.mutateAsync(userSub)}
+        onOwnAccessChanged={onOwnAccessChanged}
         lead={<RootRow me={meIsRoot && me ? me : undefined} />}
       />
     </section>
