@@ -3,7 +3,7 @@ import type { InfiniteData, QueryClient } from "@tanstack/react-query";
 import * as client from "./client";
 import { queryKeys } from "./queryKeys";
 import { isMovingRun, isSyncSettled, isTerminalRunStatus } from "./polling";
-import type { CredentialOwner, CredentialRequest, ListPage, PlanChangesState, Template, TemplateRun, TemplateRunStatus } from "./types";
+import type { CredentialOwner, CredentialRequest, ListPage, PlanChangesState, StackTemplate, Template, TemplateRun, TemplateRunStatus } from "./types";
 
 // What getNextPageParam gives back: the next page's cursor, or undefined on
 // the last page, which is how TanStack Query knows there is no next page.
@@ -324,24 +324,21 @@ export function useAddTemplateToStackMutation(tenantID: string, stackID: string)
 }
 
 export function useUpdateStackTemplateConfigMutation(tenantID: string, stackID: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (variables: { stackTemplateID: string; body: Parameters<typeof client.updateStackTemplateConfig>[2] }) =>
-      client.updateStackTemplateConfig(tenantID, variables.stackTemplateID, variables.body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.stack(tenantID, stackID) });
-    }
-  });
+  return useStackTemplateMutation(tenantID, stackID, client.updateStackTemplateConfig);
 }
 
 export function useChangeStackTemplateRevisionMutation(tenantID: string, stackID: string) {
+  return useStackTemplateMutation(tenantID, stackID, client.changeStackTemplateRevision);
+}
+
+// A config update and a revision change both answer with the stack template,
+// which no caller reads: the stack, which lists its templates, is refetched
+// instead.
+function useStackTemplateMutation<Body>(tenantID: string, stackID: string, call: (tenantID: string, stackTemplateID: string, body: Body) => Promise<StackTemplate>) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (variables: { stackTemplateID: string; body: Parameters<typeof client.changeStackTemplateRevision>[2] }) =>
-      client.changeStackTemplateRevision(tenantID, variables.stackTemplateID, variables.body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.stack(tenantID, stackID) });
-    }
+    mutationFn: (variables: { stackTemplateID: string; body: Body }) => call(tenantID, variables.stackTemplateID, variables.body),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.stack(tenantID, stackID) })
   });
 }
 
