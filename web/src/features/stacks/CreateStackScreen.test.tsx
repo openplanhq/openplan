@@ -19,7 +19,6 @@ function stack(overrides: Partial<Stack> = {}): Stack {
     slug: "my-stack",
     slug_is_derived: true,
     tags: {},
-    default_credential_ids: [],
     created_by: "user_1",
     created_at: "2026-07-20T00:00:00Z",
     effective_capabilities: { can_view: true, can_operate: false, can_approve: false, can_manage_access: false },

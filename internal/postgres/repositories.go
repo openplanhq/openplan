@@ -671,11 +671,6 @@ func insertStack(ctx context.Context, tx pgx.Tx, stack domain.Stack) error {
 		return fmt.Errorf("marshal stack tags: %w", err)
 	}
 
-	credentialIDsJSON, err := encodeJSONArray(stack.DefaultCredentialIDs)
-	if err != nil {
-		return fmt.Errorf("marshal default credential IDs: %w", err)
-	}
-
 	// A caller that sets no status gets ready, the only one there is.
 	status := stack.Status
 	if status == "" {
@@ -690,10 +685,9 @@ func insertStack(ctx context.Context, tx pgx.Tx, stack domain.Stack) error {
 			slug,
 			status,
 			tags_json,
-			default_credential_ids_json,
 			created_by,
 			created_at
-		) values ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9)
+		) values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
 	`,
 		stack.ID,
 		stack.TenantID,
@@ -701,7 +695,6 @@ func insertStack(ctx context.Context, tx pgx.Tx, stack domain.Stack) error {
 		stack.Slug,
 		string(status),
 		tagsJSON,
-		credentialIDsJSON,
 		stack.CreatedBy,
 		stack.CreatedAt,
 	)
@@ -1664,7 +1657,6 @@ const stackColumns = `
 	slug,
 	status,
 	tags_json,
-	default_credential_ids_json,
 	created_by,
 	created_at
 `
@@ -1847,8 +1839,6 @@ func decodeJSONObject[Value any](stored []byte) (map[string]Value, error) {
 func scanStack(row pgx.Row) (domain.Stack, error) {
 	var stack domain.Stack
 	var tagsJSON []byte
-	var credentialIDsJSON []byte
-
 	var status string
 
 	if err := row.Scan(
@@ -1858,7 +1848,6 @@ func scanStack(row pgx.Row) (domain.Stack, error) {
 		&stack.Slug,
 		&status,
 		&tagsJSON,
-		&credentialIDsJSON,
 		&stack.CreatedBy,
 		&stack.CreatedAt,
 	); err != nil {
@@ -1870,11 +1859,6 @@ func scanStack(row pgx.Row) (domain.Stack, error) {
 		return domain.Stack{}, fmt.Errorf("unmarshal stack tags: %w", err)
 	}
 	stack.Tags = tags
-	credentialIDs, err := decodeJSONArray[domain.CredentialID](credentialIDsJSON)
-	if err != nil {
-		return domain.Stack{}, fmt.Errorf("unmarshal stack credential IDs: %w", err)
-	}
-	stack.DefaultCredentialIDs = credentialIDs
 	return stack, nil
 }
 

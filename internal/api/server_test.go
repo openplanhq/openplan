@@ -1156,7 +1156,7 @@ func TestCreateStackCallsService(t *testing.T) {
 	request := authenticatedRequest(
 		http.MethodPost,
 		"/v1/tenants/tenant_123/stacks",
-		strings.NewReader(`{"name":"Acme Prod","tags":{"env":"prod"},"default_credential_ids":["credential_123"]}`),
+		strings.NewReader(`{"name":"Acme Prod","tags":{"env":"prod"}}`),
 	)
 
 	server.ServeHTTP(response, request)
@@ -2953,7 +2953,7 @@ func TestMutationRequestsRejectMissingPrincipal(t *testing.T) {
 	request := httptest.NewRequest(
 		http.MethodPost,
 		"/v1/tenants/tenant_123/stacks",
-		strings.NewReader(`{"name":"Acme Prod","tags":{"env":"prod"},"default_credential_ids":["credential_123"]}`),
+		strings.NewReader(`{"name":"Acme Prod","tags":{"env":"prod"}}`),
 	)
 
 	server.ServeHTTP(response, request)

@@ -71,8 +71,7 @@ describe("api client", () => {
     await createStack("tenant_123", {
       name: "Acme Prod",
       slug: "",
-      tags: { env: "prod" },
-      default_credential_ids: []
+      tags: { env: "prod" }
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -82,8 +81,7 @@ describe("api client", () => {
         body: JSON.stringify({
           name: "Acme Prod",
           slug: "",
-          tags: { env: "prod" },
-          default_credential_ids: []
+          tags: { env: "prod" }
         })
       })
     );
@@ -355,7 +353,7 @@ describe("api client", () => {
       })
     );
 
-    const error = await createStack("tenant_123", { name: "", slug: "", tags: {}, default_credential_ids: [] }).catch((caught: unknown) => caught);
+    const error = await createStack("tenant_123", { name: "", slug: "", tags: {} }).catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(ApiRequestError);
     expect(error).toMatchObject({
@@ -451,7 +449,7 @@ describe("api client", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(() => Promise.resolve(jsonResponse({ id: "ok" })));
 
     await registerTemplate("tenant_123", { repo_owner: "a", repo_name: "b", source_ref: "main", root_path: "." });
-    await createStack("tenant_123", { name: "s", slug: "", tags: {}, default_credential_ids: [] });
+    await createStack("tenant_123", { name: "s", slug: "", tags: {} });
     await addTemplateToStack("tenant_123", "stack_1", { template_revision_id: "rev_1", config: {} });
     await updateStackTemplateConfig("tenant_123", "st_1", { config: {} });
     await changeStackTemplateRevision("tenant_123", "st_1", { target_template_revision_id: "rev_2" });

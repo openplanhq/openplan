@@ -45,7 +45,6 @@ function seedCapabilities(queryClient: QueryClient, capabilities: StackCapabilit
       name: "Payments",
       slug: "payments",
       tags: {},
-      default_credential_ids: [],
       created_by: "user_123",
       created_at: "2026-07-19T00:00:00Z",
       effective_capabilities: capabilities

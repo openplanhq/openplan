@@ -32,7 +32,7 @@ export default function CreateStackScreen() {
     setErrorMessage("");
     nameErrors.clear();
     try {
-      const result = await mutation.mutateAsync({ name: trimmed, slug: "", tags: {}, default_credential_ids: [] });
+      const result = await mutation.mutateAsync({ name: trimmed, slug: "", tags: {} });
       navigate(`/stacks/${result.id}`);
     } catch (err) {
       // The name's own problems show under it, including a clash on the slug

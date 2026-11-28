@@ -31,7 +31,6 @@ function renderScreen(queryClient: QueryClient) {
       name: "prod",
       slug: "prod",
       tags: {},
-      default_credential_ids: [],
       created_by: "user_1",
       created_at: "2026-07-19T00:00:00Z",
       effective_capabilities: { can_view: true, can_operate: true, can_approve: true, can_manage_access: true }

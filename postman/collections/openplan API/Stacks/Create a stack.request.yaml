@@ -14,8 +14,7 @@ body:
   content: |-
     {
       "name": "Postman {{$timestamp}}",
-      "tags": { "team": "platform" },
-      "default_credential_ids": []
+      "tags": { "team": "platform" }
     }
 scripts:
   - type: afterResponse

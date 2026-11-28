@@ -245,7 +245,7 @@ Package ownership:
 
 - `cmd/api`: control plane boot: config loading, dependency wiring, HTTP server, the queue loop, and the Temporal worker on the `control` queue.
 - `cmd/executor`: data plane boot: Temporal worker on the `execution` queue with the execution activities. No database, no keys.
-- `internal/domain`: the product's core entities and shared contracts, including IDs, statuses, operation types, validation helpers, entities such as `Tenant`, `Template`, `Stack`, `StackTemplate`, `TemplateRun`, `StackRun`, and `CredentialSet`, plus Temporal workflow payloads, signal names, query names, and constants. Keep this package focused on stable cross-boundary data contracts; concrete behavior and side effects belong in the packages that own them.
+- `internal/domain`: the product's core entities and shared contracts, including IDs, statuses, operation types, validation helpers, entities such as `Tenant`, `Template`, `Stack`, `StackTemplate`, `TemplateRun`, `StackRun`, and `Credential`, plus Temporal workflow payloads, signal names, query names, and constants. Keep this package focused on stable cross-boundary data contracts; concrete behavior and side effects belong in the packages that own them.
 - `internal/app`: application use cases such as creating stacks, registering templates, adding templates to stacks, starting runs, approving runs, discarding plans, listing runs, and fetching log metadata. This package owns use-case interfaces for persistence, workflow dispatch, events, locks, artifacts, and secrets; concrete adapters implement those interfaces outside `app`.
 - `internal/api`: HTTP handlers, request and response DTOs, routing, SSE endpoints, API validation, and mapping API input into app commands.
 - `internal/auth`: mock identity for MVP, tenant/user context extraction, and the future authentication boundary.
@@ -393,7 +393,6 @@ Stack
   name
   slug
   tags
-  default credential sets
 ```
 
 Stack tags are key-value pairs.
@@ -504,26 +503,20 @@ Runner secrets are execution credentials, not template input values. Examples:
 
 These are resolved on the control plane, sealed to the run's executor key, and opened only inside the executor for the Terraform subprocess environment. Known secret values are redacted from logs before streaming or persistence.
 
-## Credential Sets
+## Credentials
 
-Credential sets represent execution credentials needed by Terraform.
+A credential is one environment entry for Terraform: a variable name and its encrypted value, owned by a stack or by one of its installed templates (`internal/domain/credential.go`).
 
 ```text
-CredentialSet
+Credential
   tenant_id
+  stack_id | stack_template_id
   name
-  provider_type
-  secret_store_ref
+  ciphertext
+  sensitive
 ```
 
-Stacks inherit credential sets by default:
-
-```text
-Stack default credential sets
-  -> inherited by all StackTemplates
-```
-
-Future versions may allow `StackTemplate` level credential overrides or additions.
+A run gets its stack's credentials with its installed template's on top: a template credential with the same name overrides the stack's.
 
 GitHub source access is not modeled as a stack credential. GitHub source access uses the tenant's GitHub App installation.
 
