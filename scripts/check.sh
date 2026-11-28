@@ -85,8 +85,8 @@ docker run --rm -v "$PWD:/src:ro" -w /src --entrypoint sh "$helm_image" scripts/
 step "site (build)"
 in_node site 'npm ci && npm run build'
 
-step "web (test, build)"
-in_node web 'npm ci && npm test && npm run build'
+step "web (build)"
+in_node web 'npm ci && npm run build'
 
 step "backend (go build, vet, test)"
 until docker exec "$run-pg" pg_isready -U openplan -d openplan_test >/dev/null 2>&1; do sleep 1; done

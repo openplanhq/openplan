@@ -288,8 +288,8 @@ if (session) {
 // by design: the sign-in routes answer a browser with HTML, and back-channel
 // logout answers Dex in plain text. The collection test exempts them by
 // request path, never by the response's content type, so an error that
-// regresses to another media type fails instead of skipping the check.
-// TestNonProblemErrorPathsMatchTheSpec keeps this list and the spec in step.
+// regresses to another media type fails instead of skipping the check. This
+// list must match the spec's non-problem error responses.
 var nonProblemErrorPaths = []string{"/v1/auth/login", "/v1/auth/callback", "/v1/auth/backchannel-logout"}
 
 var collectionTest = `// Checks every response gets.

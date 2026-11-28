@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"net"
-	"sync"
 	"time"
 )
 
@@ -27,10 +26,10 @@ type dnsRelay struct {
 	udp       *net.UDPConn
 	tcp       *net.TCPListener
 	slots     chan struct{}
-	done      sync.WaitGroup
 }
 
-// startDNSRelay listens on listen, over UDP and TCP, and serves until close.
+// startDNSRelay listens on listen, over UDP and TCP, and serves for the life of
+// the process: the executor never stops relaying while it runs sandboxes.
 func startDNSRelay(listen string, resolvers []string) (*dnsRelay, error) {
 	if len(resolvers) == 0 {
 		return nil, errors.New("no resolver to relay DNS to")
@@ -51,22 +50,12 @@ func startDNSRelay(listen string, resolvers []string) (*dnsRelay, error) {
 		return nil, err
 	}
 	r := &dnsRelay{resolvers: resolvers, udp: udp, tcp: tcp, slots: make(chan struct{}, dnsInFlight)}
-	r.done.Add(2)
 	go r.serveUDP()
 	go r.serveTCP()
 	return r, nil
 }
 
-func (r *dnsRelay) addr() string { return r.udp.LocalAddr().String() }
-
-func (r *dnsRelay) close() {
-	_ = r.udp.Close()
-	_ = r.tcp.Close()
-	r.done.Wait()
-}
-
 func (r *dnsRelay) serveUDP() {
-	defer r.done.Done()
 	for {
 		buf := make([]byte, 65535)
 		n, from, err := r.udp.ReadFromUDP(buf)
@@ -120,7 +109,6 @@ func dial(network, address string) (net.Conn, error) {
 }
 
 func (r *dnsRelay) serveTCP() {
-	defer r.done.Done()
 	for {
 		conn, err := r.tcp.Accept()
 		if err != nil {

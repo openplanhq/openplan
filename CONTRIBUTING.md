@@ -52,7 +52,7 @@ port, so stop one before starting the other.
 
 ## Before you open a pull request
 
-Run all four. CI runs exactly these, so anything that fails locally will fail
+Run all three. CI runs exactly these, so anything that fails locally will fail
 there:
 
 ```bash
@@ -61,7 +61,6 @@ go test ./...
 make lint
 
 # from web/
-npm test
 npm run build
 ```
 

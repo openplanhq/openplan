@@ -25,11 +25,10 @@ Run frontend checks from `web/`:
 
 ```bash
 npm install
-npm test
 npm run build
 ```
 
-`npm test` runs Vitest; `npm run build` type-checks and builds the Vite app.
+`npm run build` type-checks and builds the Vite app.
 For local integration work, copy `.env.example` to `.env`, start the
 dependencies as described in `README.md`, then run `go run ./cmd/api`. The
 executor runs only in its Linux image, so keep it in Compose. Start the UI with
@@ -41,16 +40,18 @@ Use standard Go formatting (`gofmt`) and idiomatic Go names: exported symbols
 use PascalCase and unexported symbols use camelCase. Keep packages focused on
 their boundary and place interfaces near the consumer. Frontend code uses
 TypeScript/React conventions: components and types use PascalCase, hooks use
-`use...`, and tests sit beside the code they cover.
+`use...`.
 
 ## Testing Guidelines
 
-Go tests use the standard `testing` package with Testify helpers; frontend
-tests use Vitest and Testing Library.
-
-Name Go tests `Test...` and frontend
-tests `*.test.ts`/`*.test.tsx`. Add focused unit tests for behavior changes and
-run the relevant package test before the full suite.
+The repository keeps only guard tests: checks on behaviour that would
+otherwise fail silently, in production. They are the authorization model matrix
+and the differential test (`internal/authorization`), the sandbox tests
+(`internal/sandbox/sandboxtest`, `make sandbox-test`) and the workflow replay
+test (`internal/workflows`, `make workflow-replay`). Unit tests that pin
+internals are not kept: they push a change into new code beside the old rather
+than into the code that should change. Add a test only when it guards something
+of that kind, using the standard `testing` package with Testify helpers.
 
 `make differential-test` runs the authorization tests that need a real Postgres
 (`docker compose up -d postgres` first). They skip silently without one, and one

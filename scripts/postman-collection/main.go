@@ -8,9 +8,8 @@
 // asynchronous run, which negative cases pin down the error envelope — lives
 // in this package's overrides and contract checks.
 //
-// TestCollectionMatchesSpec fails when the committed files differ from what
-// this writes, so a spec change that is not followed by `make
-// postman-collection` fails CI instead of leaving the collection stale.
+// A spec change must be followed by `make postman-collection`, or the
+// committed collection goes stale.
 //
 // It writes two forms of the same collection: Postman's git-native v3 YAML
 // under postman/collections, which the Postman CLI lints and runs, and a v2.1

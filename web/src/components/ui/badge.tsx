@@ -19,7 +19,6 @@ const badgeVariants = cva(
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline",
         // Status tones. Only warning has a product caller (shared/Chip.tsx).
-        // theme.guard.test.ts checks each text colour on its tint.
         success: "bg-success/10 text-success",
         progress: "bg-primary/10 text-primary",
         warning: "bg-warning/10 text-warning",

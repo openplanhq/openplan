@@ -120,16 +120,8 @@ upstream drift:
 make differential-test
 ```
 
-and the same DSN runs the rest:
-
-```bash
-OPENPLAN_POSTGRES_TEST_DSN='postgres://openplan:openplan@localhost:55432/openplan_test?sslmode=disable' \
-  go test ./internal/postgres/ ./internal/migrationlock/ ./cmd/api/
-```
-
 ```bash
 cd web
-npm test
 npm run build
 ```
 

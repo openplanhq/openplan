@@ -196,7 +196,7 @@ one before it left.
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). `make lint` and `go test ./...` from the
-repository root, `npm test` and `npm run build` from `web/`, and `npm run build`
+repository root, `npm run build` from `web/`, and `npm run build`
 from `site/`. CI runs all of them.
 
 ## License

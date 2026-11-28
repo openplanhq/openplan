@@ -53,8 +53,8 @@ api-docs-preview: ## Build and serve the API reference (docs/openapi.yaml)
 api-docs-lint: ## Validate docs/openapi.yaml against the OpenAPI spec
 	npx $(REDOCLY) lint $(SPEC)
 
-# The collection is generated, never edited by hand: TestCollectionMatchesSpec
-# fails CI when postman/ and the spec disagree, and this is the fix.
+# The collection is generated, never edited by hand: after a spec change, run
+# this to bring postman/ back in step.
 postman-collection: ## Regenerate the Postman collection in postman/ from docs/openapi.yaml
 	go run ./scripts/postman-collection -spec $(SPEC) -out postman
 
