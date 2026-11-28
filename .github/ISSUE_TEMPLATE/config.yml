@@ -1,0 +1,25 @@
+# Issue chooser for openplan.
+#
+# blank_issues_enabled is deliberately true, and the reasoning is worth stating
+# because the obvious-looking alternative is false:
+#
+# The obvious setting is blank_issues_enabled: false plus contact_links pointing
+# at a Discussions tab. This repo cannot do that -- GitHub reports
+# has_discussions: false for both openplan and openplanhq/.github, so a
+# Discussions contact link renders as a button that 404s. A contact link that
+# fails is worse than no contact link: it teaches a first-time contributor that
+# this project's front door is broken.
+#
+# The other common escape hatch -- pointing contact_links back at the issue
+# tracker -- is worse still, since it puts a button on the "New issue" chooser
+# that opens the chooser again, in a loop.
+#
+# So blank issues stay enabled and the chooser earns its place by explaining the
+# two templates. There is no "support" queue to divert from issues into: this is
+# an open-source MVP with no SLA and no commercial users, and every issue filed
+# is read by the maintainer.
+#
+# contact_links is left unset rather than written as an empty list: unset means
+# the same thing to GitHub, and `[]` is not a value this file's schema accepts.
+# When the org does turn Discussions on, add the link here.
+blank_issues_enabled: true
