@@ -213,16 +213,21 @@ describe("RequireCapability — a stack that does not load", () => {
     );
   }
 
-  it("signs the person out on a 401, with nothing drawn in the meantime", async () => {
+  it("leaves a 401 to the sign-in navigation, with nothing drawn and no logout", async () => {
     // A 401 sends client.ts's fetchWithAuth to the sign-in page through
     // location.assign; stub it so jsdom does not try to navigate.
-    vi.stubGlobal("location", { ...window.location, assign: vi.fn() });
+    const assign = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign });
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => respond(401, { type: "about:blank", title: "Unauthorized", detail: "unauthorized" }));
     const logout = vi.fn();
+    const queryClient = testQueryClient();
 
-    renderStackRoute(testQueryClient(), authValue({ logout }));
+    renderStackRoute(queryClient, authValue({ logout }));
 
-    await waitFor(() => expect(logout).toHaveBeenCalled());
+    // Settled, so a logout effect on the error would have run by now.
+    await waitFor(() => expect(queryClient.getQueryCache().getAll().some((query) => query.state.status === "error")).toBe(true));
+    expect(assign).toHaveBeenCalledWith(expect.stringMatching(/^\/signin\?return_to=/));
+    expect(logout).not.toHaveBeenCalled();
     expect(screen.queryByTestId("stack-route-error")).toBeNull();
     expect(screen.queryByTestId("protected-route")).toBeNull();
   });

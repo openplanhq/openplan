@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router-dom";
 import PlatformAccessScreen from "./PlatformAccessScreen";
 import { AuthContext } from "../../auth/AuthContext";
 import type { AuthContextValue } from "../../auth/AuthContext";
+import { queryKeys } from "../../api/queryKeys";
 import type { GrantView, UserProfile } from "../../api/types";
 
 const ME = "user_me";
@@ -53,7 +54,7 @@ function renderScreen(me = { sub: ME, display_name: "Sam Park", email: "sam@acme
     login: () => {},
     logout: () => {}
   };
-  return render(
+  render(
     <QueryClientProvider client={queryClient}>
       <AuthContext.Provider value={auth}>
         <MemoryRouter initialEntries={["/access"]}>
@@ -62,6 +63,7 @@ function renderScreen(me = { sub: ME, display_name: "Sam Park", email: "sam@acme
       </AuthContext.Provider>
     </QueryClientProvider>
   );
+  return queryClient;
 }
 
 const row = (sub: string) => screen.getByTestId(`grant-${sub}`);
@@ -112,6 +114,22 @@ describe("PlatformAccessScreen", () => {
     await screen.findByTestId("grant-u0");
     await user.type(screen.getByTestId("access-filter"), "Person 03");
     expect(names()).toEqual(["Person 03"]);
+  });
+
+  // Only your own role decides what you may do, so only a change to it
+  // re-reads /v1/me.
+  it("re-reads what you may do when your own role changes, and only then", async () => {
+    serve();
+    const user = userEvent.setup();
+    const queryClient = renderScreen();
+    queryClient.setQueryData(queryKeys.me, {});
+    const meInvalidated = () => queryClient.getQueryState(queryKeys.me)?.isInvalidated;
+    await screen.findByTestId("grant-tom");
+    await user.click(within(row("tom")).getByRole("button", { name: "Remove Tom Becker’s access" }));
+    await waitFor(() => expect(screen.queryByTestId("grant-tom")).toBeNull());
+    expect(meInvalidated()).toBe(false);
+    await user.click(within(row(ME)).getByRole("button", { name: /^Remove .* access$/ }));
+    await waitFor(() => expect(meInvalidated()).toBe(true));
   });
 
   it("searches the platform, not a stack, and grants the role picked", async () => {

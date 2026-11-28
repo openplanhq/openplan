@@ -7,14 +7,6 @@ import { LogPhase, LogStep, logStepTime } from "../shared/LogSteps";
 import RoleLabel from "../features/access/RoleLabel";
 import { PLATFORM_ROLES, STACK_ROLES } from "../features/access/roles";
 import { CircleAlert, Info, Plus, Search, SearchX } from "lucide-react";
-import {
-  AlertDialog,
-  AlertDialogClose,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogTitle,
-  AlertDialogTrigger
-} from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -354,30 +346,6 @@ export default function StyleGuide() {
                   </TableBody>
                 </Table>
               </div>
-            </Specimen>
-            <Specimen label="AlertDialog" hint="modal confirmation with focus containment" stack>
-              <AlertDialog>
-                <AlertDialogTrigger
-                  data-testid="styleguide-alert-dialog-trigger"
-                  render={<Button variant="destructive" className="pointer-coarse:h-11" />}
-                >
-                  Destroy 4
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <div className="grid gap-2">
-                    <AlertDialogTitle>Destroy 4 resources?</AlertDialogTitle>
-                    <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
-                  </div>
-                  <div className="flex flex-wrap justify-end gap-2">
-                    <AlertDialogClose render={<Button variant="outline" className="pointer-coarse:h-11" />}>
-                      Cancel
-                    </AlertDialogClose>
-                    <AlertDialogClose render={<Button variant="destructive" className="pointer-coarse:h-11" />}>
-                      Confirm destroy
-                    </AlertDialogClose>
-                  </div>
-                </AlertDialogContent>
-              </AlertDialog>
             </Specimen>
             <Specimen label="ScrollArea" hint="scrollable run log" stack>
               <ScrollArea className="max-h-40 w-full max-w-md rounded-lg border bg-foreground" data-testid="styleguide-scroll-area">

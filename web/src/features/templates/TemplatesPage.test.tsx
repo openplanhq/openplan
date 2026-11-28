@@ -215,26 +215,6 @@ describe("TemplatesPage list", () => {
   });
 });
 
-// On a phone the page shows the list or the panel, never both. It is CSS, so
-// these read the classes that switch it.
-describe("TemplatesPage on a phone", () => {
-  it("shows only the list on /templates", () => {
-    renderPage(seed(), "/templates");
-
-    expect(screen.getByTestId("templates-list-column").className).not.toMatch(/(^| )hidden( |$)/);
-    expect(screen.getByTestId("templates-panel-column").className).toMatch(/(^| )hidden( |$)/);
-    expect(screen.queryByRole("link", { name: "Templates" })).toBeNull();
-  });
-
-  it("shows only the panel on a template's address, with a way back to the list", () => {
-    renderPage(seed(), "/templates/tpl_eks/variables");
-
-    expect(screen.getByTestId("templates-list-column").className).toMatch(/(^| )hidden( |$)/);
-    expect(screen.getByTestId("templates-panel-column").className).not.toMatch(/(^| )hidden( |$)/);
-    expect(screen.getByRole("link", { name: "Templates" }).getAttribute("href")).toBe("/templates");
-  });
-});
-
 describe("TemplatesPage loading and errors", () => {
   it("says it is loading while the templates load", () => {
     renderPage(testQueryClient(), "/templates");

@@ -966,58 +966,54 @@ describe("RunDetailScreen", () => {
     expect(screen.getByRole("img", { name: "2 to add, 0 to change, 1 to destroy" })).toBeTruthy();
   });
 
-  // Approving a destroy plan is what destroys, so it opens an accessible modal
-  // confirmation before it calls the approval endpoint.
-  it("traps focus in destroy confirmation, restores focus on cancel, and approves once", async () => {
+  // Approving a destroy plan is what destroys, so it asks first, in place
+  // under the header, the way End run does, and approves once.
+  it("asks before approving a destroy, restores focus on cancel, and approves once", async () => {
     const queryClient = testQueryClient();
     seedCapabilities(queryClient, allAllowed);
-    queryClient.setQueryData(
-      queryKeys.templateRun("tenant_123", "run_1"),
-      run({ operation: "destroy", status: "waiting_approval", plan_summary: { add: 0, change: 0, destroy: 4 } })
-    );
+    const waiting = run({ operation: "destroy", status: "waiting_approval", plan_summary: { add: 0, change: 0, destroy: 4 } });
+    queryClient.setQueryData(queryKeys.templateRun("tenant_123", "run_1"), waiting);
+    const approved = run({ ...waiting, status: "approved" });
+    let answer: (response: Response) => void = () => {};
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       if (init?.method === "POST") {
-        return jsonResponse(run({ operation: "destroy", status: "approved", plan_summary: { add: 0, change: 0, destroy: 4 } }), 202);
+        return new Promise<Response>((resolve) => {
+          answer = resolve;
+        });
       }
       if (String(input).endsWith("/template-runs/run_1")) {
-        return jsonResponse(run({ operation: "destroy", status: "approved", plan_summary: { add: 0, change: 0, destroy: 4 } }));
+        return jsonResponse(approved);
       }
       return jsonResponse([]);
     });
 
     renderScreen(queryClient);
-    const user = userEvent.setup();
-    // The button names the action; the count is the dialog's (issue 569).
-    const destroyTrigger = screen.getByRole("button", { name: "Destroy" });
-    await user.click(destroyTrigger);
+    // The button names the action; the count is the question's (issue 569).
+    const opener = screen.getByRole("button", { name: "Destroy" });
+    fireEvent.click(opener);
+    const confirm = screen.getByTestId("run-destroy-confirm");
+    expect(opener.getAttribute("aria-expanded")).toBe("true");
+    expect(within(confirm).getByText("Destroy 4 resources?")).toBeTruthy();
+    expect(within(confirm).getByText(/This action cannot be undone/)).toBeTruthy();
+    expect(document.activeElement).toBe(within(confirm).getByRole("button", { name: "Cancel" }));
 
-    const dialog = await screen.findByRole("alertdialog");
-    expect(within(dialog).getByText("Destroy 4 resources?")).toBeTruthy();
-    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
-    await user.tab();
-    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
-    await user.tab();
-    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
-    await user.tab();
-    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
-
-    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
-    expect(screen.queryByRole("alertdialog")).toBeNull();
-    expect(document.activeElement).toBe(destroyTrigger);
+    fireEvent.click(within(confirm).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByTestId("run-destroy-confirm")).toBeNull();
+    expect(document.activeElement).toBe(opener);
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
 
-    await user.click(destroyTrigger);
-    const reopenedDialog = await screen.findByRole("alertdialog");
-    await user.click(within(reopenedDialog).getByRole("button", { name: /Confirm destroy/ }));
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining("/template-runs/run_1/approve"),
-        expect.objectContaining({ method: "POST" })
-      )
-    );
-    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
-    // The approval's own answer moves the run off waiting_approval.
+    fireEvent.click(opener);
+    const confirmButton = within(screen.getByTestId("run-destroy-confirm")).getByRole("button", { name: "Confirm destroy" });
+    fireEvent.click(confirmButton);
+    // The question stays while the approval runs, its icon turning.
+    await waitFor(() => expect(confirmButton.querySelector(".animate-spin")).not.toBeNull());
+    fireEvent.click(confirmButton);
+    answer(jsonResponse(approved, 202));
+
     await waitFor(() => expect(screen.queryByRole("button", { name: "Destroy" })).toBeNull());
+    expect(screen.queryByTestId("run-destroy-confirm")).toBeNull();
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/template-runs/run_1/approve"), expect.objectContaining({ method: "POST" }));
   });
 
   it("hides Approve when canApprove is denied", async () => {

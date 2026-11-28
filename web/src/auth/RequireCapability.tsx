@@ -102,8 +102,8 @@ function StackRoutePending({ stackId }: { stackId: string }) {
   if (answer === 403 || answer === 404) {
     return <NotFound />;
   }
-  // A 401 is the session ending: the boundary signs the person out, and the
-  // sign-in page replaces this one.
+  // A 401 is the session ending: fetchWithAuth has already sent the browser to
+  // sign-in, which replaces this page.
   if (stackQuery.status !== "error" || answer === 401) {
     return null;
   }

@@ -505,10 +505,10 @@ describe("TemplateEnvironmentTab", () => {
   it("shows only this template's environment, under the note on what they override", () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), [
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), [
       { id: "stack_credential", name: "STACK_ONLY", scope: "stack", created_at: "2026-07-19T00:00:00Z" }
     ]);
-    queryClient.setQueryData(queryKeys.stackTemplateCredentials("tenant_123", "st_1"), [
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stack-templates", "st_1"), [
       { id: "template_credential", name: "TEMPLATE_ONLY", scope: "stack_template", sensitive: true, created_at: "2026-07-19T00:00:00Z" },
       { id: "template_variable", name: "TEMPLATE_REGION", scope: "stack_template", sensitive: false, value: "eu-west-1", created_at: "2026-07-19T00:00:00Z" }
     ]);
@@ -528,7 +528,7 @@ describe("TemplateEnvironmentTab", () => {
   it("says its runs use the stack environment when it has no overrides of its own", () => {
     const queryClient = testQueryClient();
     seedDefaultData(queryClient);
-    queryClient.setQueryData(queryKeys.stackTemplateCredentials("tenant_123", "st_1"), []);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stack-templates", "st_1"), []);
 
     renderAt(queryClient, "/stacks/stack_1/templates/st_1/environment");
 

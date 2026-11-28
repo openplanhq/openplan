@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import StyleGuide from "./StyleGuide";
 
@@ -86,12 +85,10 @@ describe("StyleGuide", () => {
     expect(message.getAttribute("data-slot")).toBe("empty");
   });
 
-  it("shows the AlertDialog and ScrollArea components used by PR 7", async () => {
+  it("shows the ScrollArea component used by PR 7", () => {
     render(<StyleGuide />);
     const section = within(screen.getByTestId("sg-theme"));
     expect(section.getByTestId("styleguide-scroll-area").getAttribute("data-slot")).toBe("scroll-area");
-    await userEvent.setup().click(section.getByTestId("styleguide-alert-dialog-trigger"));
-    expect(screen.getByRole("alertdialog")).toBeTruthy();
   });
 
   it("omits the retired hero graphic and registry showcase", () => {

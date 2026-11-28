@@ -12,13 +12,9 @@
    light. */
 @custom-variant dark (&:is(.dark *));
 
-/* Only theme colours exist. Black and white stay because vendored shadcn
-   components use them (alert-dialog's overlay is bg-black/10); the class guard
-   keeps app code off them. */
+/* Only theme colours exist. */
 @theme {
   --color-*: initial;
-  --color-black: #000000;
-  --color-white: #ffffff;
   /* The type scale: the only text sizes there are. Five sizes (24, 18, 14,
      13, 12px), each named for its role, and each role carries its own line
      height, so a child that sets its own size never inherits a parent's

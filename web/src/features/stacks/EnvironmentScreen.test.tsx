@@ -58,7 +58,7 @@ describe("EnvironmentScreen", () => {
 
   it("renders stack credential metadata without rendering secret values", () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), [
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), [
       { id: "credential_1", name: "TF_VAR_TEST", scope: "stack", created_at: "2026-07-19T00:00:00Z" }
     ]);
 
@@ -71,7 +71,7 @@ describe("EnvironmentScreen", () => {
 
   it("marks itself unsaved once a credential secret is typed, so SessionProvider's proactive re-auth defers", () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), []);
 
     renderScreen(queryClient);
 
@@ -82,7 +82,7 @@ describe("EnvironmentScreen", () => {
 
   it("creates a stack credential through the existing API mutation", async () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), []);
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ id: "credential_2", name: "TF_VAR_TEST", scope: "stack", created_at: "2026-07-19T00:00:00Z" }), {
         status: 201,
@@ -105,7 +105,7 @@ describe("EnvironmentScreen", () => {
   // test config does not pin, and midnight UTC is the day before in America.
   it("lists the credentials, one row each, with when each was added and a delete button", () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), [
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), [
       { ...credential, created_at: "2026-07-19T12:00:00Z" },
       { ...credential, id: "credential_2", name: "AWS_ACCESS_KEY_ID", created_at: "2026-08-12T12:00:00Z" }
     ]);
@@ -122,7 +122,7 @@ describe("EnvironmentScreen", () => {
   it("keeps a long credential name whole in its title", () => {
     const longName = "TF_VAR_A_VERY_LONG_CREDENTIAL_NAME_THAT_WILL_NOT_FIT_ON_A_PHONE_ROW";
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), [{ ...credential, name: longName }]);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), [{ ...credential, name: longName }]);
 
     renderScreen(queryClient);
 
@@ -131,7 +131,7 @@ describe("EnvironmentScreen", () => {
 
   it("says so when no credentials are configured, in place of the list", () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), []);
 
     renderScreen(queryClient);
 
@@ -145,7 +145,7 @@ describe("EnvironmentScreen", () => {
   // the server has it. A failed add keeps it, so the user can try again.
   it("masks the secret, and clears both fields once the credential is added", async () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), []);
     // A fresh Response per call: the POST, then the list refetch it triggers.
     // A body can be read only once.
     vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) =>
@@ -172,7 +172,7 @@ describe("EnvironmentScreen", () => {
 
   it("shows the value being typed only while Show value is pressed", async () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), []);
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     renderScreen(queryClient);
     const user = userEvent.setup();
@@ -206,7 +206,7 @@ describe("EnvironmentScreen", () => {
   // trailing newline included.
   it("sends a pasted multi-line secret with its line breaks", async () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), []);
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) =>
       init?.method === "POST" ? jsonResponse(credential, 201) : jsonResponse([credential])
     );
@@ -231,7 +231,7 @@ describe("EnvironmentScreen", () => {
   // when the box was an input; it still does, without a line break.
   it("Enter adds a one-line value", async () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), []);
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) =>
       init?.method === "POST" ? jsonResponse(credential, 201) : jsonResponse([credential])
     );
@@ -254,7 +254,7 @@ describe("EnvironmentScreen", () => {
   // being edited is never sent half done; the button adds it.
   it("Enter in a value that spans lines adds a line, not the entry", async () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), []);
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     renderScreen(queryClient);
     const user = userEvent.setup();
@@ -273,7 +273,7 @@ describe("EnvironmentScreen", () => {
   // A key can still be typed in by hand: Shift+Enter starts its second line.
   it("Shift+Enter starts a second line", async () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), []);
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     renderScreen(queryClient);
     const user = userEvent.setup();
@@ -290,7 +290,7 @@ describe("EnvironmentScreen", () => {
   // as typed, so the box says so rather than letting the provider fail later.
   it("says when a one-line value ends with a line break", () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), []);
     renderScreen(queryClient);
     const value = secrets().getByLabelText<HTMLTextAreaElement>("Value");
     const note = "Ends with a line break, which is saved as part of the value.";
@@ -310,7 +310,7 @@ describe("EnvironmentScreen", () => {
   // is only drawn: the DOM holds the plain secret.
   it("keeps writing assistants out of both Value boxes", () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), []);
     renderScreen(queryClient);
 
     for (const box of [secrets().getByLabelText("Value"), variables().getByLabelText("Value")]) {
@@ -323,7 +323,7 @@ describe("EnvironmentScreen", () => {
 
   it("masks a secret until Show value", async () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), []);
     renderScreen(queryClient);
     const user = userEvent.setup();
     const value = secrets().getByLabelText<HTMLTextAreaElement>("Value");
@@ -339,7 +339,7 @@ describe("EnvironmentScreen", () => {
 
   it("hides the Value box again after an add", async () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), []);
     vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) =>
       init?.method === "POST" ? jsonResponse(credential, 201) : jsonResponse([credential])
     );
@@ -360,7 +360,7 @@ describe("EnvironmentScreen", () => {
 
   it("keeps the value shown when the add fails, so it can be checked", async () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), []);
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({ type: "about:blank", title: "Internal Server Error", detail: "boom" }, 500)
     );
@@ -379,7 +379,7 @@ describe("EnvironmentScreen", () => {
 
   it("keeps what was typed, and says why, when the add fails", async () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), []);
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse(
         {
@@ -414,7 +414,7 @@ describe("EnvironmentScreen", () => {
   // must not wipe the next credential, half typed.
   it("keeps what was typed while an add was in flight", async () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), []);
     let answerPost: (response: Response) => void = () => {};
     vi.spyOn(globalThis, "fetch").mockImplementation((_input, init) =>
       init?.method === "POST"
@@ -445,7 +445,7 @@ describe("EnvironmentScreen", () => {
 
   it("says why, and keeps the row, when a delete fails", async () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), [credential]);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), [credential]);
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({ type: "about:blank", title: "Conflict", detail: "The credential is still in use" }, 409)
     );
@@ -459,7 +459,7 @@ describe("EnvironmentScreen", () => {
 
   it("asks for both fields before sending anything", async () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), []);
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     renderScreen(queryClient);
     const user = userEvent.setup();
@@ -473,7 +473,7 @@ describe("EnvironmentScreen", () => {
 
   it("uses shadcn fields for the credential form", () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), []);
 
     renderScreen(queryClient);
 
@@ -488,7 +488,7 @@ describe("EnvironmentScreen", () => {
   // Every control takes a 44px target on a coarse pointer.
   it("gives every control a 44px target on coarse pointers", () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), [credential]);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), [credential]);
 
     renderScreen(queryClient);
 
@@ -516,9 +516,22 @@ describe("EnvironmentScreen", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("keeps the list it has when a refetch fails", async () => {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), [credential]);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ type: "about:blank", title: "Internal Server Error", detail: "boom" }, 500));
+
+    renderScreen(queryClient);
+    await queryClient.refetchQueries({ queryKey: queryKeys.credentials("tenant_123", "stacks", "stack_1") });
+
+    await waitFor(() => expect(queryClient.getQueryState(queryKeys.credentials("tenant_123", "stacks", "stack_1"))?.status).toBe("error"));
+    expect(card().getByText("TF_VAR_TEST")).toBeTruthy();
+    expect(screen.queryByTestId("environment-error")).toBeNull();
+  });
+
   it("deletes a stack credential through the existing API mutation", async () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), [
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), [
       { id: "credential_1", name: "TF_VAR_TEST", scope: "stack", created_at: "2026-07-19T00:00:00Z" }
     ]);
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
@@ -536,7 +549,7 @@ describe("EnvironmentScreen", () => {
   // only; Variables show each value.
   it("splits the environment into Secrets and Variables by the sensitive flag", async () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), [
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), [
       { ...credential, created_at: "2026-07-19T12:00:00Z" },
       { ...credential, id: "credential_2", name: "AWS_REGION", sensitive: false, value: "eu-west-1", created_at: "2026-07-19T12:00:00Z" }
     ]);
@@ -566,7 +579,7 @@ describe("EnvironmentScreen", () => {
   // its lines apart instead of running them together.
   it("shows a multi-line plain value with its line breaks", () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), [
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), [
       { ...credential, name: "CA_CERT", sensitive: false, value: "line1\nline2", created_at: "2026-07-19T12:00:00Z" }
     ]);
     renderScreen(queryClient);
@@ -584,7 +597,7 @@ describe("EnvironmentScreen", () => {
   it("lists a long plain value's first three lines and how many more", () => {
     const queryClient = testQueryClient();
     const certificate = "-----BEGIN CERTIFICATE-----\nl2\nl3\nl4\nl5\n-----END CERTIFICATE-----\n";
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), [
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), [
       { ...credential, name: "CA_CERT", sensitive: false, value: certificate, created_at: "2026-07-19T12:00:00Z" }
     ]);
     renderScreen(queryClient);
@@ -598,7 +611,7 @@ describe("EnvironmentScreen", () => {
   // An entry whose flag is missing is kept on the side that never shows a value.
   it("keeps an entry with no sensitive flag in Secrets", () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), [
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), [
       { id: "credential_1", name: "TF_VAR_TEST", scope: "stack", created_at: "2026-07-19T12:00:00Z" }
     ]);
     renderScreen(queryClient);
@@ -609,7 +622,7 @@ describe("EnvironmentScreen", () => {
 
   it("adds a variable from the Variables tab as not sensitive, typed in plain text", async () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), []);
     const added = { ...credential, id: "credential_2", name: "AWS_REGION", sensitive: false, value: "eu-west-1" };
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) =>
       init?.method === "POST" ? jsonResponse(added, 201) : jsonResponse([added])
@@ -639,7 +652,7 @@ describe("EnvironmentScreen", () => {
   // toggles. Enter in the Value box adds only a one-line value (tested above).
   it("adds on Enter in the Name box, and Show value never submits", async () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), []);
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) =>
       init?.method === "POST" ? jsonResponse(credential, 201) : jsonResponse([credential])
     );
@@ -666,7 +679,7 @@ describe("EnvironmentScreen", () => {
   // Variables tab's plain box, and is still there on coming back.
   it("keeps a half-typed secret in Secrets when switching tabs", async () => {
     const queryClient = testQueryClient();
-    queryClient.setQueryData(queryKeys.stackCredentials("tenant_123", "stack_1"), []);
+    queryClient.setQueryData(queryKeys.credentials("tenant_123", "stacks", "stack_1"), []);
     renderScreen(queryClient);
     const user = userEvent.setup();
 

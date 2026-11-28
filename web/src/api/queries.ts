@@ -3,7 +3,7 @@ import type { InfiniteData, QueryClient } from "@tanstack/react-query";
 import * as client from "./client";
 import { queryKeys } from "./queryKeys";
 import { isMovingRun, isSyncSettled, isTerminalRunStatus } from "./polling";
-import type { ListPage, PlanChangesState, Template, TemplateRun, TemplateRunStatus } from "./types";
+import type { CredentialOwner, CredentialRequest, ListPage, PlanChangesState, StackTemplate, Template, TemplateRun, TemplateRunStatus } from "./types";
 
 // What getNextPageParam gives back: the next page's cursor, or undefined on
 // the last page, which is how TanStack Query knows there is no next page.
@@ -79,38 +79,19 @@ export function useStackQuery(tenantID: string, stackID: string) {
   });
 }
 
-/** Loads the credentials owned by a Stack, with values only for those that are not sensitive. */
-export function useStackCredentialsQuery(tenantID: string, stackID: string) {
-  return useQuery({ queryKey: queryKeys.stackCredentials(tenantID, stackID), queryFn: () => client.listStackCredentials(tenantID, stackID), enabled: stackID !== "" });
-}
-
-/** Loads the credentials owned by a StackTemplate, with values only for those that are not sensitive. */
-export function useStackTemplateCredentialsQuery(tenantID: string, stackTemplateID: string) {
-  return useQuery({ queryKey: queryKeys.stackTemplateCredentials(tenantID, stackTemplateID), queryFn: () => client.listStackTemplateCredentials(tenantID, stackTemplateID), enabled: stackTemplateID !== "" });
-}
-
-/** Creates a Stack credential and refreshes its list. */
-export function useCreateStackCredentialMutation(tenantID: string, stackID: string) {
+/**
+ * One owner's credentials, with values only for those that are not sensitive,
+ * and the two mutations that change them; each refreshes the list.
+ */
+export function useCredentials(tenantID: string, owner: CredentialOwner) {
   const queryClient = useQueryClient();
-  return useMutation({ mutationFn: (body: Parameters<typeof client.createStackCredential>[2]) => client.createStackCredential(tenantID, stackID, body), onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.stackCredentials(tenantID, stackID) }) });
-}
-
-/** Deletes a Stack credential and refreshes its list. */
-export function useDeleteStackCredentialMutation(tenantID: string, stackID: string) {
-  const queryClient = useQueryClient();
-  return useMutation({ mutationFn: (credentialID: string) => client.deleteStackCredential(tenantID, stackID, credentialID), onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.stackCredentials(tenantID, stackID) }) });
-}
-
-/** Creates a StackTemplate credential and refreshes its list. */
-export function useCreateStackTemplateCredentialMutation(tenantID: string, stackTemplateID: string) {
-  const queryClient = useQueryClient();
-  return useMutation({ mutationFn: (body: Parameters<typeof client.createStackTemplateCredential>[2]) => client.createStackTemplateCredential(tenantID, stackTemplateID, body), onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.stackTemplateCredentials(tenantID, stackTemplateID) }) });
-}
-
-/** Deletes a StackTemplate credential and refreshes its list. */
-export function useDeleteStackTemplateCredentialMutation(tenantID: string, stackTemplateID: string) {
-  const queryClient = useQueryClient();
-  return useMutation({ mutationFn: (credentialID: string) => client.deleteStackTemplateCredential(tenantID, stackTemplateID, credentialID), onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.stackTemplateCredentials(tenantID, stackTemplateID) }) });
+  const queryKey = queryKeys.credentials(tenantID, owner.scope, owner.id);
+  const onSuccess = () => queryClient.invalidateQueries({ queryKey });
+  return {
+    list: useQuery({ queryKey, queryFn: () => client.listCredentials(tenantID, owner), enabled: owner.id !== "" }),
+    create: useMutation({ mutationFn: (body: CredentialRequest) => client.createCredential(tenantID, owner, body), onSuccess }),
+    remove: useMutation({ mutationFn: (credentialID: string) => client.deleteCredential(tenantID, owner, credentialID), onSuccess })
+  };
 }
 
 export function useTemplateRevisionVariablesQuery(tenantID: string, templateRevisionID: string) {
@@ -265,15 +246,23 @@ export function useTemplateRunLogQuery(tenantID: string, runID: string, name: st
   });
 }
 
-// Register and Sync answer with the template, its latest_sync the sync they
-// queued, so useTemplateQuery starts from it rather than from an older read.
+// Register, Sync and Change ref answer with the template, its latest_sync the
+// sync they queued. It replaces itself in its own read, so useTemplateQuery
+// starts from that sync rather than an older read, and in the list, so the
+// list polls while the sync runs and its row learns how it ended. A template
+// just registered is not in the list yet: the register panel refetches it.
+function cacheTemplate(queryClient: QueryClient, tenantID: string, template: Template) {
+  queryClient.setQueryData(queryKeys.template(tenantID, template.id), template);
+  queryClient.setQueryData<Template[]>(queryKeys.templates(tenantID), (templates) =>
+    templates?.map((candidate) => (candidate.id === template.id ? template : candidate))
+  );
+}
+
 export function useRegisterTemplateMutation(tenantID: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: Parameters<typeof client.registerTemplate>[1]) => client.registerTemplate(tenantID, body),
-    onSuccess: (template) => {
-      queryClient.setQueryData(queryKeys.template(tenantID, template.id), template);
-    }
+    onSuccess: (template) => cacheTemplate(queryClient, tenantID, template)
   });
 }
 
@@ -281,24 +270,15 @@ export function useSyncTemplateMutation(tenantID: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (templateID: string) => client.syncTemplate(tenantID, templateID),
-    onSuccess: (template) => {
-      queryClient.setQueryData(queryKeys.template(tenantID, template.id), template);
-    }
+    onSuccess: (template) => cacheTemplate(queryClient, tenantID, template)
   });
 }
 
-// A template on its new ref replaces itself in its own read and in the list
-// at once, so the panel shows the new ref and follows the sync it queued.
 export function useChangeTemplateRefMutation(tenantID: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ templateID, sourceRef }: { templateID: string; sourceRef: string }) => client.changeTemplateRef(tenantID, templateID, sourceRef),
-    onSuccess: (template) => {
-      queryClient.setQueryData(queryKeys.template(tenantID, template.id), template);
-      queryClient.setQueryData<Template[]>(queryKeys.templates(tenantID), (templates) =>
-        templates?.map((candidate) => (candidate.id === template.id ? template : candidate))
-      );
-    }
+    onSuccess: (template) => cacheTemplate(queryClient, tenantID, template)
   });
 }
 
@@ -344,24 +324,21 @@ export function useAddTemplateToStackMutation(tenantID: string, stackID: string)
 }
 
 export function useUpdateStackTemplateConfigMutation(tenantID: string, stackID: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (variables: { stackTemplateID: string; body: Parameters<typeof client.updateStackTemplateConfig>[2] }) =>
-      client.updateStackTemplateConfig(tenantID, variables.stackTemplateID, variables.body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.stack(tenantID, stackID) });
-    }
-  });
+  return useStackTemplateMutation(tenantID, stackID, client.updateStackTemplateConfig);
 }
 
 export function useChangeStackTemplateRevisionMutation(tenantID: string, stackID: string) {
+  return useStackTemplateMutation(tenantID, stackID, client.changeStackTemplateRevision);
+}
+
+// A config update and a revision change both answer with the stack template,
+// which no caller reads: the stack, which lists its templates, is refetched
+// instead.
+function useStackTemplateMutation<Body>(tenantID: string, stackID: string, call: (tenantID: string, stackTemplateID: string, body: Body) => Promise<StackTemplate>) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (variables: { stackTemplateID: string; body: Parameters<typeof client.changeStackTemplateRevision>[2] }) =>
-      client.changeStackTemplateRevision(tenantID, variables.stackTemplateID, variables.body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.stack(tenantID, stackID) });
-    }
+    mutationFn: (variables: { stackTemplateID: string; body: Body }) => call(tenantID, variables.stackTemplateID, variables.body),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.stack(tenantID, stackID) })
   });
 }
 
@@ -472,17 +449,11 @@ export function usePlatformGrantsQuery(tenantID: string) {
   });
 }
 
-// A platform role decides /v1/me's global capabilities, so a change re-reads
-// it too: changing your own role must take Access and Create stack away (or
-// give them) without a reload.
 export function useAssignPlatformRoleMutation(tenantID: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ userSub, role }: { userSub: string; role: string }) => client.assignPlatformRole(tenantID, userSub, { role }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.platformGrants(tenantID) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.me });
-    }
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.platformGrants(tenantID) })
   });
 }
 
@@ -490,9 +461,6 @@ export function useRevokePlatformRoleMutation(tenantID: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (userSub: string) => client.revokePlatformRole(tenantID, userSub),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.platformGrants(tenantID) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.me });
-    }
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.platformGrants(tenantID) })
   });
 }

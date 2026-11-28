@@ -84,15 +84,10 @@ describe("attentionByStack", () => {
 });
 
 describe("failedOperation", () => {
-  // An apply run plans first: one that failed before it had a plan changed
-  // nothing, so it reads as a failed plan, as the run's own label does.
-  it.each([
-    ["a plan", { operation: "plan", plan_summary: null, auto_approve: false }, "plan"],
-    ["an apply that failed while planning", { operation: "apply", plan_summary: null, auto_approve: false }, "plan"],
-    ["an apply that failed applying its plan", { operation: "apply", plan_summary: { add: 1, change: 0, destroy: 0 }, auto_approve: false }, "apply"],
-    ["an auto-approved apply", { operation: "apply", plan_summary: null, auto_approve: true }, "apply"]
-  ] as const)("names the operation of %s", (_, run, operation) => {
-    expect(failedOperation(item({ kind: "run_failed", run: run as unknown as AttentionItem["run"] }))).toBe(operation);
+  // The rule itself is failedPhase's; an item with no run on record has no
+  // apply that could have failed.
+  it("names a plan for an item with no run", () => {
+    expect(failedOperation(item({ kind: "run_failed", run: null }))).toBe("plan");
   });
 });
 

@@ -63,7 +63,7 @@ describe("stack workflow helpers", () => {
     it.each(planStates)("reports not applied when nothing is live, whatever the plan state (%s)", (planState) => {
       const status = stackTemplateStatus(stackTemplate({ lifecycle: "active", live_state: "never", plan_state: planState }));
 
-      expect(status).toMatchObject({ label: "not applied", tone: "canceled" });
+      expect(status).toMatchObject({ label: "not applied", tone: "unapplied" });
     });
 
     // A template being torn down keeps the last_applied_* pointers of the apply

@@ -139,6 +139,11 @@ describe("searchTemplates", () => {
     expect(names("  ", { name: "redis" }, { name: "network" }, { name: "eks" })).toEqual(["eks", "network", "redis"]);
   });
 
+  // The same order as the templates page, so the two screens agree.
+  it("reads numbers in names as numbers when nothing is typed", () => {
+    expect(names("", { name: "web-10" }, { name: "web-2" })).toEqual(["web-2", "web-10"]);
+  });
+
   it("ranks a name that starts with the query first, then one that contains it, then one with its letters apart", () => {
     expect(
       names("redis", { name: "redshift-cluster" }, { name: "memorystore-redis" }, { name: "redis-operator" }, { name: "redis" }, { name: "network" })

@@ -1,5 +1,6 @@
 import type { AttentionItem } from "../../api/types";
 import { pluralCount } from "../../shared/plural";
+import { failedPhase } from "../runs/runIndicator";
 import { stackTemplateRunPath } from "./templateSelection";
 
 // What needs a person, counted the ways the stacks screens show it.
@@ -11,16 +12,9 @@ export interface StackAttention {
   applyFailed: number;
 }
 
-/** What failed in a run_failed item's run: its plan, or its apply. An apply
-    run plans first, so one that failed with no plan (and not auto-approved)
-    failed planning and changed nothing; runIndicator's headline reads it the
-    same way. */
+/** What failed in a run_failed item's run: its plan, or its apply. */
 export function failedOperation(item: AttentionItem): "plan" | "apply" {
-  const run = item.run;
-  if (run?.operation !== "apply") {
-    return "plan";
-  }
-  return run.auto_approve || run.plan_summary ? "apply" : "plan";
+  return item.run ? failedPhase(item.run) : "plan";
 }
 
 /** Counts each stack's items, by kind, failed runs by operation. A stack
