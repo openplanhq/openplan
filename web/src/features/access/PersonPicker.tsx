@@ -59,7 +59,6 @@ export default function PersonPicker({
     return (
       <div
         className="flex h-9 min-w-0 items-center gap-2 rounded-lg border border-primary/35 bg-primary-soft pr-1 pl-3 pointer-coarse:h-11"
-        data-testid="person-picked"
       >
         <span className="truncate text-label text-primary-strong">{picked.display_name}</span>
         {picked.email && <span className="min-w-0 flex-1 truncate text-caption text-muted-foreground">{picked.email}</span>}
@@ -100,8 +99,7 @@ export default function PersonPicker({
         "aria-label": "Search people",
         placeholder: "Search people by name or email",
         autoFocus: focusSearch,
-        onFocus: () => setOpen(true),
-        "data-testid": "person-search"
+        onFocus: () => setOpen(true)
       }}
       emptyClassName="gap-1 text-muted-foreground"
       empty={

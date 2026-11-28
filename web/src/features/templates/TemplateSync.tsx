@@ -158,7 +158,6 @@ export default function TemplateSync({
                   className={cn(buttonClass("subtle", "sm"), "pointer-coarse:h-11")}
                   aria-disabled={syncing ? "true" : undefined}
                   onClick={() => void handleSync()}
-                  data-testid="template-sync"
                 >
                   <BusyIcon busy={syncing} icon={RefreshCw} strokeWidth={2.42} className="size-3.25" />
                   Sync
@@ -170,7 +169,7 @@ export default function TemplateSync({
         </div>
         {about}
       </div>
-      <div className="-mt-5 flex flex-col" role="status" aria-live="polite" data-testid="template-sync-result">
+      <div className="-mt-5 flex flex-col" role="status" aria-live="polite">
         {syncing ? (
           <p className="mt-5">
             <StatusLabel icon={LoaderCircle} tone="settled" className="text-caption">
@@ -201,7 +200,7 @@ export default function TemplateSync({
           // No sync to speak of (none requested, or one that ended without
           // a revision): the template simply has nothing to install yet.
           <p className="mt-5">
-            <StatusLabel icon={Minus} tone="idle" className="text-caption" data-testid="template-no-revision">
+            <StatusLabel icon={Minus} tone="idle" className="text-caption">
               no revision
             </StatusLabel>
           </p>
@@ -209,7 +208,6 @@ export default function TemplateSync({
       </div>
       {showError && (
         <ErrorPanel
-          testId="template-sync-error"
           title={
             unchecked ? (
               "Could not check on this sync"
@@ -258,7 +256,7 @@ function When({ at }: { at: { at: string; started: boolean } | null }) {
     return null;
   }
   return (
-    <span className="font-normal text-muted-foreground" data-testid="template-sync-when">
+    <span className="font-normal text-muted-foreground">
       {" · "}
       {at.started && "started "}
       <time dateTime={at.at} title={at.at}>

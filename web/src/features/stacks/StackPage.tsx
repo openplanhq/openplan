@@ -48,7 +48,7 @@ export default function StackPage() {
   const outletContext: IndexOutletContext = { indexTemplateId };
 
   return (
-    <section data-testid="stack-page">
+    <section>
       <PageHeader
         title={stack.name}
         trail={[{ label: "Stacks", to: "/stacks" }]}

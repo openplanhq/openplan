@@ -15,7 +15,6 @@ export default function DataTable({
   headings,
   cellClass = tableCellClass,
   className,
-  testId,
   children
 }: {
   /** Each column's width class; undefined takes the width left over. */
@@ -24,12 +23,11 @@ export default function DataTable({
   cellClass?: string;
   /** The table's own classes, such as the width it scrolls below. */
   className?: string;
-  testId?: string;
   /** The body's rows. */
   children: ReactNode;
 }) {
   return (
-    <div className="overflow-x-auto rounded-lg border" data-testid={testId}>
+    <div className="overflow-x-auto rounded-lg border">
       <Table className={className}>
         <colgroup>
           {columns.map((width, index) => (

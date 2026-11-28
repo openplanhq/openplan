@@ -36,7 +36,7 @@ export default function VariablesTab() {
   // shown here, they would read as the newest revision's.
   if (variablesQuery.status === "pending" || variablesQuery.isPlaceholderData) {
     return (
-      <LoadingLine testId="template-variables-loading">Loading variables…</LoadingLine>
+      <LoadingLine>Loading variables…</LoadingLine>
     );
   }
 
@@ -45,7 +45,7 @@ export default function VariablesTab() {
       return <>{boundary}</>;
     }
     return (
-      <LoadError error={variablesQuery.error} onRetry={() => void variablesQuery.refetch()} testId="template-variables-error" retryTestId="template-variables-retry">
+      <LoadError error={variablesQuery.error} onRetry={() => void variablesQuery.refetch()}>
         Something went wrong while loading the template's variables.
       </LoadError>
     );
@@ -54,17 +54,17 @@ export default function VariablesTab() {
   const variables = variablesQuery.data;
   if (variables.length === 0) {
     return (
-      <p className="text-meta text-muted-foreground" data-testid="template-variables-none">
+      <p className="text-meta text-muted-foreground">
         This template takes no variables.
       </p>
     );
   }
 
   return (
-    <section className="flex min-w-0 flex-col gap-3" data-testid="template-variables">
+    <section className="flex min-w-0 flex-col gap-3">
       <DataTable columns={["w-56", "w-34", "w-26", undefined]} headings={["Name", "Type", "Value", "Description"]} cellClass={cellClass} className="min-w-2xl">
         {variables.map((templateVariable) => (
-          <TableRow key={templateVariable.name} className="h-12 border-divider hover:bg-transparent" data-testid={`template-variable-${templateVariable.name}`}>
+          <TableRow key={templateVariable.name} className="h-12 border-divider hover:bg-transparent">
             <TableCell className={cn(cellClass, "font-mono text-meta whitespace-normal wrap-anywhere")}>
               {/* Sensitive is a fact about the variable, not about whether it
                   needs a value, so it rides with the name in the Tag look

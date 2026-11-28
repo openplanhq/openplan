@@ -30,7 +30,7 @@ const relativeBase = "https://return-to.invalid";
 //
 // The server applies the same rule to the copy it receives (authentication.SafeReturnTo).
 // Both check, so neither side has to trust the other to have done it.
-export function safeReturnTo(raw: string | null): string {
+function safeReturnTo(raw: string | null): string {
   if (!raw || !raw.startsWith("/")) return defaultReturnTo;
   // The parser drops control characters before it decides what the string
   // means, so a value carrying them navigates somewhere other than the value
@@ -89,7 +89,7 @@ export default function SignInScreen() {
 
   if (cookiesBlocked) {
     return (
-      <CookiesBlockedCard onRetry={handleRetry} testId="signin-cookies-blocked" retryTestId="signin-cookies-retry" />
+      <CookiesBlockedCard onRetry={handleRetry} />
     );
   }
 

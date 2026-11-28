@@ -18,7 +18,7 @@ import { ACTION_ORDER, actionLook, changeReason, changesNote, diffLines, isAppli
 const cellClass = "px-4 py-3.5 text-meta whitespace-normal";
 
 // How many rows show before Show more, per filter.
-export const CHANGES_PAGE = 50;
+const CHANGES_PAGE = 50;
 
 type Filter = "all" | PlanChangeAction;
 
@@ -48,7 +48,7 @@ export default function RunChanges({ run, changes, failed, onRetry, toolbar }: R
   if (note !== null) {
     return (
       <RunViewFrame toolbar={toolbar}>
-        <p className="text-meta text-muted-foreground" data-testid="run-changes-note">
+        <p className="text-meta text-muted-foreground">
           {note}
         </p>
       </RunViewFrame>
@@ -58,7 +58,7 @@ export default function RunChanges({ run, changes, failed, onRetry, toolbar }: R
     return (
       <RunViewFrame toolbar={toolbar}>
         {failed ? (
-          <LoadError onRetry={onRetry} testId="run-changes-error">
+          <LoadError onRetry={onRetry}>
             Something went wrong while loading this plan's changes.
           </LoadError>
         ) : (
@@ -71,7 +71,7 @@ export default function RunChanges({ run, changes, failed, onRetry, toolbar }: R
     // A plan whose only changes are its outputs lists no resources.
     return (
       <RunViewFrame toolbar={toolbar}>
-        <p className="text-meta text-muted-foreground" data-testid="run-changes-note">
+        <p className="text-meta text-muted-foreground">
           This plan changes no resources.
         </p>
       </RunViewFrame>
@@ -96,7 +96,6 @@ export default function RunChanges({ run, changes, failed, onRetry, toolbar }: R
 
   return (
     <RunViewFrame
-      testId="run-changes"
       toolbar={toolbar}
       filter={
         kinds.length > 1 && (
@@ -122,7 +121,7 @@ export default function RunChanges({ run, changes, failed, onRetry, toolbar }: R
       }
     >
       {run.plan_changes?.state === "truncated" && (
-        <p className="text-meta text-muted-foreground" data-testid="run-changes-truncated">
+        <p className="text-meta text-muted-foreground">
           Showing the first {changes.length} of {total} changes; the plan log has them all.
         </p>
       )}
@@ -154,9 +153,9 @@ export default function RunChanges({ run, changes, failed, onRetry, toolbar }: R
  * Changes, the filter at the right, wrapping under it on a narrow panel; then
  * the view, 12px below. Logs uses it too, so switching never moves the switch.
  */
-export function RunViewFrame({ toolbar, filter, testId, children }: { toolbar: ReactNode; filter?: ReactNode; testId?: string; children: ReactNode }) {
+export function RunViewFrame({ toolbar, filter, children }: { toolbar: ReactNode; filter?: ReactNode; children: ReactNode }) {
   return (
-    <div className="flex min-w-0 flex-col gap-3" data-testid={testId}>
+    <div className="flex min-w-0 flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         {toolbar}
         {filter}
@@ -217,7 +216,7 @@ function ChangeRow({ change, past, open, onToggle }: { change: PlanResourceChang
       {/* The whole row toggles for a pointer; the address is the button a
           keyboard and a screen reader reach, so the row is never the only
           control. */}
-      <TableRow className="h-12 cursor-pointer border-divider" onClick={onToggle} data-testid={`run-change-${change.address}`}>
+      <TableRow className="h-12 cursor-pointer border-divider" onClick={onToggle}>
         <TableCell className={cellClass}>
           <span className={cn("inline-flex gap-2", look.tone, look.removes && "font-medium")}>
             <span aria-hidden="true" className="w-2 font-mono">

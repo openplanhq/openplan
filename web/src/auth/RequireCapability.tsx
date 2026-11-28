@@ -14,7 +14,7 @@ import { classifyQueryError } from "../api/problems";
 
 type GlobalCapabilityKey = keyof Me["global_capabilities"];
 type StackCapabilityKey = keyof StackCapabilities;
-export type CapabilityKey = GlobalCapabilityKey | StackCapabilityKey;
+type CapabilityKey = GlobalCapabilityKey | StackCapabilityKey;
 
 const GLOBAL_CAPABILITY_KEYS: readonly GlobalCapabilityKey[] = [
   "can_create_stack",
@@ -26,7 +26,7 @@ function isGlobalCapability(capability: CapabilityKey): capability is GlobalCapa
   return (GLOBAL_CAPABILITY_KEYS as readonly string[]).includes(capability);
 }
 
-export interface RequireCapabilityProps {
+interface RequireCapabilityProps {
   capability: CapabilityKey;
   stackId?: string;
   mode?: "gate" | "route";
@@ -111,7 +111,7 @@ function StackRoutePending({ stackId }: { stackId: string }) {
     return <>{boundary}</>;
   }
   return (
-    <LoadError as="section" live error={stackQuery.error} onRetry={() => void stackQuery.refetch()} testId="stack-route-error" retryTestId="stack-route-retry">
+    <LoadError as="section" live error={stackQuery.error} onRetry={() => void stackQuery.refetch()}>
       Something went wrong while loading this stack.
     </LoadError>
   );

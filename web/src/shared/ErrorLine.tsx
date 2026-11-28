@@ -5,9 +5,9 @@ import type { ReactNode } from "react";
 // an alert box. live announces it: true for something that just happened,
 // such as a refused request; false for a record, such as a run's error.
 // id lets a field point aria-describedby at the line that explains it.
-export default function ErrorLine({ children, live = true, testId, id }: { children: ReactNode; live?: boolean; testId?: string; id?: string }) {
+export default function ErrorLine({ children, live = true, id }: { children: ReactNode; live?: boolean; id?: string }) {
   return (
-    <p id={id} role={live ? "alert" : undefined} className="flex items-start gap-2 text-meta text-destructive" data-testid={testId}>
+    <p id={id} role={live ? "alert" : undefined} className="flex items-start gap-2 text-meta text-destructive">
       <TriangleAlert aria-hidden="true" strokeWidth={2.25} className="mt-0.5 size-3.5 shrink-0" />
       <span className="min-w-0 wrap-anywhere">{children}</span>
     </p>

@@ -7,7 +7,6 @@ export default function ServiceUnavailable() {
       icon={ServerCrash}
       title="Service unavailable"
       description="openplan can't do this right now. Contact your operator."
-      testId="route-service-unavailable"
     />
   );
 }

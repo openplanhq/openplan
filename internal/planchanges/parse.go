@@ -10,7 +10,6 @@ package planchanges
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -47,18 +46,6 @@ func Read(body []byte) (domain.PlanSummary, *domain.PlanChanges, error) {
 		return domain.PlanSummary{}, nil, fmt.Errorf("decode saved plan: %w", err)
 	}
 	return summarize(plan.ResourceChanges), list(plan), nil
-}
-
-// Parse is Read's list alone, failing where Read's would be nil.
-func Parse(body []byte) (domain.PlanChanges, error) {
-	_, changes, err := Read(body)
-	if err != nil {
-		return domain.PlanChanges{}, err
-	}
-	if changes == nil {
-		return domain.PlanChanges{}, errors.New("this plan's changes can't be listed")
-	}
-	return *changes, nil
 }
 
 // summarize counts the changes the way tofu's own "Plan: N to add, N to

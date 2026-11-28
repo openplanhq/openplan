@@ -22,15 +22,15 @@ export default function TemplateList({ templates, selectedId }: { templates: Tem
   return (
     <div className="flex min-w-0 flex-col">
       <div className="border-b border-divider p-3">
-        <SearchField label="Filter templates" value={filter} onChange={setFilter} testId="templates-filter" />
+        <SearchField label="Filter templates" value={filter} onChange={setFilter} />
       </div>
       <div className="flex flex-col p-2">
         {templates.length === 0 ? (
-          <p className="p-3 text-meta text-muted-foreground" data-testid="templates-none">
+          <p className="p-3 text-meta text-muted-foreground">
             No templates yet.
           </p>
         ) : visible.length === 0 ? (
-          <p className="p-3 text-meta text-muted-foreground" data-testid="templates-filter-empty">
+          <p className="p-3 text-meta text-muted-foreground">
             No templates match this filter.
           </p>
         ) : (
@@ -75,19 +75,19 @@ function TemplateRow({ template, to, selected }: { template: Template; to: strin
   const unsynced = template.latest_template_revision_id === "" && syncTrouble === null;
 
   return (
-    <Link to={to} aria-current={selected ? "true" : undefined} className={listItemClass(selected)} data-testid={`template-link-${template.id}`}>
+    <Link to={to} aria-current={selected ? "true" : undefined} className={listItemClass(selected)}>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex h-5 min-w-0 items-baseline justify-between gap-3">
           <span className={cn("truncate text-label", selected && "text-primary-strong")} title={name}>
             {name}
           </span>
           {unsynced && (
-            <StatusLabel icon={Minus} tone="idle" className={cn("shrink-0", selected && "text-muted-foreground")} data-testid={`template-no-revision-${template.id}`}>
+            <StatusLabel icon={Minus} tone="idle" className={cn("shrink-0", selected && "text-muted-foreground")}>
               no revision
             </StatusLabel>
           )}
           {syncTrouble && (
-            <span className="flex shrink-0 self-center" data-testid={`template-sync-trouble-${template.id}`}>
+            <span className="flex shrink-0 self-center">
               <Chip tone="destructive" icon={TriangleAlert}>
                 {syncTrouble}
               </Chip>

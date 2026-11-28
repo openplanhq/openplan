@@ -20,7 +20,6 @@ export default function EmptyState({
   icon: Icon,
   short = false,
   className,
-  testId
 }: {
   title: ReactNode;
   titleAs?: "h2" | "h3" | "h4" | "p";
@@ -30,7 +29,6 @@ export default function EmptyState({
   icon?: LucideIcon;
   short?: boolean;
   className?: string;
-  testId?: string;
 }) {
   const gap = variant === "page" || action ? "gap-3" : "gap-2";
   return (
@@ -40,7 +38,6 @@ export default function EmptyState({
         variant === "page" ? "rounded-panel border border-solid bg-card px-5 py-14" : cn("rounded-lg border border-dashed border-dashed-border px-5", short ? "py-7" : "py-10"),
         className
       )}
-      data-testid={testId}
     >
       <EmptyHeader className={gap}>
         {Icon && (

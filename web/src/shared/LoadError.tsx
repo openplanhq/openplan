@@ -17,8 +17,6 @@ export default function LoadError({
   lead,
   as: Container = "div",
   className,
-  testId,
-  retryTestId
 }: {
   children: ReactNode;
   error?: unknown;
@@ -27,15 +25,13 @@ export default function LoadError({
   lead?: ReactNode;
   as?: "div" | "section";
   className?: string;
-  testId?: string;
-  retryTestId?: string;
 }) {
   return (
-    <Container className={cn("flex flex-col items-start gap-3", className)} data-testid={testId}>
+    <Container className={cn("flex flex-col items-start gap-3", className)}>
       {lead}
       <ErrorLine live={live}>{children}</ErrorLine>
       <RequestIdNote error={error} />
-      <button type="button" className={cn(buttonClass("outline"), "pointer-coarse:h-11")} data-testid={retryTestId} onClick={onRetry}>
+      <button type="button" className={cn(buttonClass("outline"), "pointer-coarse:h-11")} onClick={onRetry}>
         <RefreshCw data-icon="inline-start" aria-hidden="true" />
         Retry
       </button>

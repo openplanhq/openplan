@@ -3,7 +3,7 @@ import type { LucideIcon } from "lucide-react";
 import type { TemplateRun, TemplateRunStep } from "../../api/types";
 import type { StatusIndicator } from "../../shared/StatusLabel";
 
-export type RunFields = Pick<TemplateRun, "operation" | "status" | "step" | "plan_summary" | "auto_approve">;
+type RunFields = Pick<TemplateRun, "operation" | "status" | "step" | "plan_summary" | "auto_approve">;
 
 // runHeadline says where a run is, in words, with the operation folded in so
 // no separate Type is needed: "destroy waiting for approval" rather than

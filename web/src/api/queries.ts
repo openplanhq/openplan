@@ -30,7 +30,7 @@ export function useStacksQuery(tenantID: string, q = "") {
 // A plan reaches waiting_approval, or a destroy fails or resumes, in the
 // executor, with nothing here to invalidate the list, so it is polled; slowly,
 // since it looks across every stack.
-export const ATTENTION_POLL_INTERVAL_MS = 30_000;
+const ATTENTION_POLL_INTERVAL_MS = 30_000;
 
 export function useAttentionQuery(tenantID: string) {
   return useQuery({
@@ -103,21 +103,21 @@ export function useTemplateRevisionVariablesQuery(tenantID: string, templateRevi
   });
 }
 
-export const POLL_INTERVAL_MS = 1500;
+const POLL_INTERVAL_MS = 1500;
 
 // A template with no sync, or one not yet read, has nothing to follow.
-export function templateRefetchInterval(template: Template | undefined): number | false {
+function templateRefetchInterval(template: Template | undefined): number | false {
   const status = template?.latest_sync?.status;
   return status && !isSyncSettled(status) ? POLL_INTERVAL_MS : false;
 }
 
 // The list carries every template's latest sync, so a sync started anywhere,
 // or before a reload, is followed to its outcome without a Sync press here.
-export function templatesRefetchInterval(templates: Template[] | undefined): number | false {
+function templatesRefetchInterval(templates: Template[] | undefined): number | false {
   return templates?.some((template) => templateRefetchInterval(template) !== false) ? POLL_INTERVAL_MS : false;
 }
 
-export function runRefetchInterval(status: TemplateRunStatus | undefined, poll: boolean): number | false {
+function runRefetchInterval(status: TemplateRunStatus | undefined, poll: boolean): number | false {
   if (!poll) {
     return false;
   }
@@ -137,7 +137,7 @@ export function useTemplateRunQuery(tenantID: string, runID: string, options: { 
 // Once every run in a list has settled, nothing on screen can move. Runs this
 // page starts invalidate the list themselves, so the slow poll only has to
 // catch a run started from another tab or by someone else.
-export const SETTLED_RUNS_POLL_INTERVAL_MS = 30_000;
+const SETTLED_RUNS_POLL_INTERVAL_MS = 30_000;
 
 // A runs list polls fast while a run in it is moving, and slowly once all of
 // them have settled. It stops while its first load is failing: a poll starts a
@@ -145,7 +145,7 @@ export const SETTLED_RUNS_POLL_INTERVAL_MS = 30_000;
 // pending, so a list that cannot load would swing between "loading" and
 // "failed" for as long as the page is open. Once it has loaded, a failed poll
 // keeps polling under the runs already on screen.
-export function runsRefetchInterval(state: { data?: TemplateRun[]; fetchFailureCount: number }): number | false {
+function runsRefetchInterval(state: { data?: TemplateRun[]; fetchFailureCount: number }): number | false {
   // (state.data is every run loaded so far, across the pages read.)
   if (state.data === undefined) {
     return state.fetchFailureCount > 0 ? false : POLL_INTERVAL_MS;

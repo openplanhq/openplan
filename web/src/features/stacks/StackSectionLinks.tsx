@@ -12,8 +12,8 @@ export const stackHeaderLinkClass = cn(buttonClass("outline", "lg"), "pointer-co
 // the stack page's header and in the stacks index's preview, so the preview
 // and the page it leads to agree. What follows them (the preview's Open stack)
 // shares their row. The row holds its buttons: a long stack name wraps instead.
-export default function StackSectionLinks({ stackId, testId, children }: { stackId: string; testId?: string; children?: ReactNode }) {
-  const row = (content: ReactNode) => <div className="flex shrink-0 flex-wrap items-center gap-2" data-testid={testId}>{content}</div>;
+export default function StackSectionLinks({ stackId, children }: { stackId: string; children?: ReactNode }) {
+  const row = (content: ReactNode) => <div className="flex shrink-0 flex-wrap items-center gap-2">{content}</div>;
   const gate = (content: ReactNode) => <RequireCapability capability="can_manage_access" stackId={stackId}>{content}</RequireCapability>;
   const links = (
     <>

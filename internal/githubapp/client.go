@@ -42,53 +42,20 @@ type Token struct {
 // Client calls the GitHub App endpoints openplan needs: which installation covers
 // a repository, and a token for it.
 type Client struct {
-	baseURL    string
 	appID      string
 	privateKey *rsa.PrivateKey
 	http       *http.Client
-	now        func() time.Time
 }
 
-type ClientOption func(*Client)
-
-// WithBaseURL points the client at another API root. Tests use it; production
-// does not.
-func WithBaseURL(baseURL string) ClientOption {
-	return func(client *Client) {
-		if baseURL != "" {
-			client.baseURL = baseURL
-		}
-	}
-}
-
-// WithClock replaces the time source, so JWT bounds can be asserted exactly.
-func WithClock(now func() time.Time) ClientOption {
-	return func(client *Client) {
-		if now != nil {
-			client.now = now
-		}
-	}
-}
-
-func NewClient(appID string, privateKey *rsa.PrivateKey, options ...ClientOption) *Client {
-	client := &Client{
-		baseURL:    defaultAPIBaseURL,
-		appID:      appID,
-		privateKey: privateKey,
-		http:       &http.Client{Timeout: defaultHTTPTimeout},
-		now:        time.Now,
-	}
-	for _, option := range options {
-		option(client)
-	}
-	return client
+func NewClient(appID string, privateKey *rsa.PrivateKey) *Client {
+	return &Client{appID: appID, privateKey: privateKey, http: &http.Client{Timeout: defaultHTTPTimeout}}
 }
 
 // appJWT signs the App's identity assertion. It authenticates the App itself,
 // not any installation, and opens only the endpoints below -- it can read no
 // repository content.
 func (client *Client) appJWT() (string, error) {
-	now := client.now()
+	now := time.Now()
 	token, err := jwt.NewBuilder().
 		Issuer(client.appID).
 		IssuedAt(now.Add(-appJWTBackdate)).
@@ -110,7 +77,7 @@ func (client *Client) appJWT() (string, error) {
 // any stored state: one App installed on many accounts yields a different
 // installation here for each, and each mints its own token.
 func (client *Client) InstallationForRepo(ctx context.Context, owner string, repo string) (int64, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/installation", client.baseURL, owner, repo)
+	url := fmt.Sprintf("%s/repos/%s/%s/installation", defaultAPIBaseURL, owner, repo)
 	var payload struct {
 		ID int64 `json:"id"`
 	}
@@ -133,7 +100,7 @@ func (client *Client) InstallationForRepo(ctx context.Context, owner string, rep
 // The narrowing is deliberate: an installation may cover hundreds of
 // repositories with write access, and this token is used for exactly one clone.
 func (client *Client) MintToken(ctx context.Context, installationID int64, repo string) (Token, error) {
-	url := fmt.Sprintf("%s/app/installations/%d/access_tokens", client.baseURL, installationID)
+	url := fmt.Sprintf("%s/app/installations/%d/access_tokens", defaultAPIBaseURL, installationID)
 	body, err := json.Marshal(map[string]any{
 		"repositories": []string{repo},
 		"permissions":  map[string]string{"contents": "read"},

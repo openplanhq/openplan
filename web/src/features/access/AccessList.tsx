@@ -21,7 +21,7 @@ import type { RoleDefinition } from "./roles";
 const FILTER_FROM = 10;
 
 /** The words that differ between a stack's access and the platform's. */
-export interface AccessCopy {
+interface AccessCopy {
   /** What a grant gives: "access to prod", "platform access". */
   access: string;
   /** Where a role applies: "on prod", "on the platform". */
@@ -192,7 +192,7 @@ export default function AccessList({
     // The row is about to go with the button that has focus: hand focus to
     // the next row's Remove, else the one before, else the search.
     const buttons = [...(listRef.current?.querySelectorAll<HTMLButtonElement>("[data-remove]") ?? [])];
-    const at = buttons.findIndex((button) => button.closest("li")?.dataset.testid === `grant-${sub}`);
+    const at = buttons.findIndex((button) => button.dataset.remove === sub);
     const heir = buttons[at + 1] ?? buttons[at - 1];
     try {
       await revoke(sub);
@@ -266,7 +266,6 @@ export default function AccessList({
               label="Role for the new person"
               variant="field"
               disabled={!ready || granting}
-              testId="new-role"
             />
           </div>
           <button
@@ -284,23 +283,23 @@ export default function AccessList({
 
       {ready && rows.length > FILTER_FROM && (
         <div className="border-b border-divider px-5 py-3">
-          <SearchField label="Filter people" value={filter} onChange={setFilter} testId="access-filter" />
+          <SearchField label="Filter people" value={filter} onChange={setFilter} />
         </div>
       )}
 
       {status === "pending" && (
-        <LoadingLine className="px-5 py-4" testId="access-loading">Loading who has access…</LoadingLine>
+        <LoadingLine className="px-5 py-4">Loading who has access…</LoadingLine>
       )}
 
       {status === "error" && (
-        <LoadError live className="px-5 pt-4 pb-5" error={error} onRetry={onRetry} testId="access-error">
+        <LoadError live className="px-5 pt-4 pb-5" error={error} onRetry={onRetry}>
           {copy.loadError}
         </LoadError>
       )}
 
       {ready && rows.length === 0 && !lead && (
         <div className="p-5">
-          <EmptyState title={copy.emptyTitle} testId="access-empty" />
+          <EmptyState title={copy.emptyTitle} />
         </div>
       )}
 

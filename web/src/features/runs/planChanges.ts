@@ -151,7 +151,7 @@ function same(a: unknown, b: unknown): boolean {
 }
 
 /** The top-level attributes whose value the change alters, by name. */
-export function changedAttributes(change: PlanResourceChange): Attribute[] {
+function changedAttributes(change: PlanResourceChange): Attribute[] {
   const before = asObject(change.before);
   const after = asObject(change.after);
   const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])].sort();
@@ -166,7 +166,7 @@ function isShortScalar(value: unknown): boolean {
 const MASKS = new Set(["(sensitive)", "(known after apply)", "(too large to show)"]);
 
 /** One value as tofu writes it: strings quoted, masks and absent values bare. */
-export function valueText(value: unknown): string {
+function valueText(value: unknown): string {
   if (value === undefined || value === null) {
     return "null";
   }
@@ -176,7 +176,7 @@ export function valueText(value: unknown): string {
   return JSON.stringify(value);
 }
 
-export interface DiffLine {
+interface DiffLine {
   sign: "+" | "-" | "~" | " ";
   key: string;
   text: string;

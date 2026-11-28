@@ -23,14 +23,14 @@ export default function TemplateEnvironmentTab() {
       return <>{boundary}</>;
     }
     return (
-      <LoadError error={list.error} onRetry={() => void list.refetch()} testId="template-environment-error" retryTestId="template-environment-retry">
+      <LoadError error={list.error} onRetry={() => void list.refetch()}>
         Something went wrong while loading this template's environment.
       </LoadError>
     );
   }
 
   return (
-    <div className="flex min-w-0 flex-col" data-testid="template-environment-tab">
+    <div className="flex min-w-0 flex-col">
       <EnvironmentTabs
         secrets={{
           emptyTitle: "No secret overrides for this template",

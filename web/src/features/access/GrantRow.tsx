@@ -43,7 +43,7 @@ export default function GrantRow({
   const possessive = isMe ? "your" : `${name}’s`;
 
   return (
-    <li className="border-t border-divider first:border-t-0" data-testid={`grant-${grant.user_sub}`}>
+    <li className="border-t border-divider first:border-t-0">
       <div className="flex min-h-14 items-center gap-4 py-2 pr-3 pl-5">
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="flex min-w-0 items-baseline">
@@ -77,7 +77,6 @@ export default function GrantRow({
             label={isMe ? "Your role" : `${name}’s role`}
             disabled={locked || busy}
             pending={rolePending}
-            testId={`role-${grant.user_sub}`}
           />
         </div>
         <div className="flex w-18 shrink-0 justify-end">
@@ -90,7 +89,7 @@ export default function GrantRow({
             disabled={locked || rolePending}
             aria-disabled={busy || undefined}
             onClick={() => !busy && onRemove()}
-            data-remove
+            data-remove={grant.user_sub}
           >
             <BusyIcon busy={busy} icon={Trash2} strokeWidth={2.25} className="size-3.5" />
           </button>

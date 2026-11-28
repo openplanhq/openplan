@@ -139,7 +139,7 @@ export async function getTemplateRevisionVariables(tenantID: string, templateRev
 
 // Where a list starts and how much of it to read. cursor is the previous
 // page's next_cursor; without one, the first page.
-export interface PageOptions {
+interface PageOptions {
   cursor?: string;
   limit?: number;
 }
@@ -163,7 +163,7 @@ function pageQuery(options: PageOptions & { q?: string }): string {
 const MAX_PAGE_LIMIT = 100;
 
 /** Follows next_cursor from the first page to the last and returns every item. */
-export async function listAll<T>(fetchPage: (cursor: string | undefined) => Promise<ListPage<T>>): Promise<T[]> {
+async function listAll<T>(fetchPage: (cursor: string | undefined) => Promise<ListPage<T>>): Promise<T[]> {
   const items: T[] = [];
   let cursor: string | undefined;
   do {
@@ -390,7 +390,7 @@ export function searchUsers(tenantID: string, stackID: string, q: string, option
 // The app's own sign-in screen. Not a server route: it is a page with one
 // button that starts the OIDC flow, so a lost session lands somewhere the user
 // chooses to leave rather than bouncing straight to the identity provider.
-export const signInPath = "/signin";
+const signInPath = "/signin";
 
 // A full navigation rather than a router push: fetchWithAuth runs outside
 // React, and a reload is also what re-reads the session state from scratch.

@@ -48,7 +48,6 @@ export function TemplateRefStep({
     <form
       aria-label="Change ref"
       className="flex min-w-0 items-end justify-between gap-6 rounded-lg border bg-canvas px-5 py-4"
-      data-testid="template-ref-step"
       onSubmit={(event) => {
         event.preventDefault();
         if (ready) {

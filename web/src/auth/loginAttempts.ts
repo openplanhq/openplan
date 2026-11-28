@@ -20,7 +20,7 @@ const storageKey = "openplan.auth.loginAttempts";
 // Sign-ins allowed before we stop and explain. Enough to absorb an expiry
 // racing a page load, few enough that the user is not sent round a loop that
 // was never going to end.
-export const maxLoginAttempts = 3;
+const maxLoginAttempts = 3;
 
 // Used when sessionStorage is unavailable — Safari private browsing throws on
 // access, and a browser blocking cookies may well block storage too. It resets
@@ -44,7 +44,7 @@ function storage(): Storage | null {
   }
 }
 
-export function readLoginAttempts(): number {
+function readLoginAttempts(): number {
   const store = storage();
   if (!store) return inMemoryAttempts;
   const parsed = Number.parseInt(store.getItem(storageKey) ?? "", 10);

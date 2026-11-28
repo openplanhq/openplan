@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 
 /** Which of the Environment's two tabs a panel is: secrets are write-only,
     variables are read back and shown. */
-export type CredentialKind = "secret" | "variable";
+type CredentialKind = "secret" | "variable";
 
 interface CredentialsPanelProps {
   kind: CredentialKind;

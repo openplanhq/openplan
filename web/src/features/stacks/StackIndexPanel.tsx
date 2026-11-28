@@ -15,7 +15,7 @@ export default function StackIndexPanel() {
   if (!selectedId) {
     return (
       <div className="p-7">
-        <NoTemplatesState stackId={stackId} heading="h2" testId="stack-empty" />
+        <NoTemplatesState stackId={stackId} heading="h2" />
       </div>
     );
   }

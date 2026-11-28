@@ -5,7 +5,7 @@ import { useStackCapabilities } from "../../auth/useStackCapabilities";
 import { useTenantID } from "../../auth/useTenantID";
 
 /** What decides whether a template's controls can be used now. */
-export interface LockState {
+interface LockState {
   canOperate: boolean;
   lifecycle: string;
   /** Whether the template's runs are known. */
@@ -34,7 +34,7 @@ const RUNS_FAILED = "This template's runs could not be loaded.";
 const RUNS_FAILED_TOOLBAR = "Plan and Apply wait until the runs load.";
 
 /** The sentence a control locked by a run shows. */
-export function runInFlightReason(run: TemplateRun, change: string): string {
+function runInFlightReason(run: TemplateRun, change: string): string {
   const action = run.status === "waiting_approval" ? "Apply or discard" : "Wait for";
   return `${action} run #${run.run_number} before ${change}.`;
 }

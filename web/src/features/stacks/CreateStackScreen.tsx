@@ -44,7 +44,7 @@ export default function CreateStackScreen() {
 
   if (mutation.isSuccess && mutation.data) {
     return (
-      <section data-testid="create-stack-success">
+      <section>
         <p className="text-meta text-muted-foreground">Redirecting to your new stack…</p>
       </section>
     );
@@ -86,7 +86,7 @@ export default function CreateStackScreen() {
           <BusyIcon busy={mutation.isPending} />
           {mutation.isPending ? "Creating…" : "Create stack"}
         </button>
-        {errorMessage && <ErrorLine testId="create-stack-error">{errorMessage}</ErrorLine>}
+        {errorMessage && <ErrorLine>{errorMessage}</ErrorLine>}
       </form>
     </section>
   );

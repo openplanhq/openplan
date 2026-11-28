@@ -18,34 +18,13 @@ const expiryMargin = 5 * time.Minute
 // with no GitHub App configured keeps cloning public repositories unchanged.
 type TokenSource struct {
 	client *Client
-	now    func() time.Time
 
 	mu     sync.Mutex
 	tokens map[string]Token
 }
 
-type TokenSourceOption func(*TokenSource)
-
-// WithTokenSourceClock replaces the time source so cache expiry can be tested
-// without sleeping.
-func WithTokenSourceClock(now func() time.Time) TokenSourceOption {
-	return func(source *TokenSource) {
-		if now != nil {
-			source.now = now
-		}
-	}
-}
-
-func NewTokenSource(client *Client, options ...TokenSourceOption) *TokenSource {
-	source := &TokenSource{
-		client: client,
-		now:    time.Now,
-		tokens: make(map[string]Token),
-	}
-	for _, option := range options {
-		option(source)
-	}
-	return source
+func NewTokenSource(client *Client) *TokenSource {
+	return &TokenSource{client: client, tokens: make(map[string]Token)}
 }
 
 // Token returns an installation token that can read owner/repo, or an empty
@@ -87,7 +66,7 @@ func (source *TokenSource) cached(key string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	if !source.now().Add(expiryMargin).Before(token.ExpiresAt) {
+	if !time.Now().Add(expiryMargin).Before(token.ExpiresAt) {
 		delete(source.tokens, key)
 		return "", false
 	}

@@ -73,7 +73,7 @@ export default function TemplateSearch({
         empty={
           <>
             <span>No templates match this search.</span>
-            <Link to="/templates/new" className="font-medium text-primary hover:underline" data-testid="add-template-search-register">
+            <Link to="/templates/new" className="font-medium text-primary hover:underline">
               Register template
             </Link>
           </>

@@ -29,7 +29,7 @@ function isWaiting(attention: AttentionItem | undefined): attention is Attention
  * approval outranks the live state: it is the one thing a person can act on.
  * Everything else is stackTemplateStatus, drawn with an icon instead of a dot.
  */
-export function stackTemplateIndicator(stackTemplate: StackTemplate, attention: AttentionItem | undefined): StatusIndicator {
+function stackTemplateIndicator(stackTemplate: StackTemplate, attention: AttentionItem | undefined): StatusIndicator {
   if (isWaiting(attention)) {
     return { label: "waiting for approval", icon: Hourglass, tone: "attention", strong: true };
   }
@@ -66,5 +66,5 @@ export default function StackTemplateStatusLabel({
   stackTemplate: StackTemplate;
   attention: AttentionItem | undefined;
 }) {
-  return <StatusLabel indicator={stackTemplateIndicator(stackTemplate, attention)} data-testid={`stack-template-status-${stackTemplate.id}`} />;
+  return <StatusLabel indicator={stackTemplateIndicator(stackTemplate, attention)} />;
 }

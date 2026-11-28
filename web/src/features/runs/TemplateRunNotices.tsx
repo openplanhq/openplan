@@ -28,7 +28,7 @@ export default function TemplateRunNotices({ stackId, stackTemplate }: { stackId
   return (
     <>
       {waiting && (
-        <div className="flex flex-col gap-4 rounded-lg border px-5 py-4 md:flex-row md:items-center md:gap-6" data-testid="template-waiting-plan">
+        <div className="flex flex-col gap-4 rounded-lg border px-5 py-4 md:flex-row md:items-center md:gap-6">
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <span className="flex items-center gap-2 text-label">
               <Hourglass aria-hidden="true" className="size-4 shrink-0 text-warning" />
@@ -48,14 +48,13 @@ export default function TemplateRunNotices({ stackId, stackTemplate }: { stackId
           <Link
             to={runPath(waiting)}
             className={cn(buttonClass("primary"), "shrink-0 self-start pointer-coarse:h-11 md:self-auto")}
-            data-testid="template-review-plan"
           >
             Review plan
           </Link>
         </div>
       )}
       {failed && (
-        <div className="flex flex-col gap-4 rounded-lg border px-5 py-4 md:flex-row md:items-center md:gap-6" data-testid="template-failed-destroy">
+        <div className="flex flex-col gap-4 rounded-lg border px-5 py-4 md:flex-row md:items-center md:gap-6">
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <span className="flex items-center gap-2 text-label">
               <TriangleAlert aria-hidden="true" className="size-4 shrink-0 text-destructive" />
@@ -67,7 +66,6 @@ export default function TemplateRunNotices({ stackId, stackTemplate }: { stackId
             <Link
               to={runPath(failedRun)}
               className={cn(buttonClass("outline"), "shrink-0 self-start pointer-coarse:h-11 md:self-auto")}
-              data-testid="template-view-failed-run"
             >
               View run
             </Link>

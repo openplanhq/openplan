@@ -34,7 +34,7 @@ export default function TemplatesPage() {
 
   if (templatesQuery.status === "pending") {
     return (
-      <section data-testid="templates-loading">
+      <section>
         <LoadingLine>Loading templates…</LoadingLine>
       </section>
     );
@@ -45,9 +45,9 @@ export default function TemplatesPage() {
       return <>{boundary}</>;
     }
     return (
-      <section data-testid="templates-error">
+      <section>
         <PageHeader title="Templates" />
-        <LoadError error={templatesQuery.error} onRetry={() => void templatesQuery.refetch()} retryTestId="templates-retry">
+        <LoadError error={templatesQuery.error} onRetry={() => void templatesQuery.refetch()}>
           Something went wrong while loading templates.
         </LoadError>
       </section>
@@ -64,12 +64,12 @@ export default function TemplatesPage() {
   const outletContext: IndexOutletContext = { indexTemplateId: first?.id ?? null };
 
   return (
-    <section data-testid="templates-page">
+    <section>
       <PageHeader
         title="Templates"
         action={
           <RequireCapability capability="can_manage_templates">
-            <Link to="/templates/new" className={registerLinkClass} data-testid="register-template-link">
+            <Link to="/templates/new" className={registerLinkClass}>
               <Plus data-icon="inline-start" aria-hidden="true" />
               Register template
             </Link>
@@ -106,7 +106,6 @@ function DeletedNote({ name }: { name: string }) {
       tabIndex={-1}
       role="status"
       className="flex items-center gap-1.5 text-meta text-muted-foreground outline-none"
-      data-testid="template-deleted"
     >
       <Info aria-hidden="true" className="size-3.5 shrink-0" />
       <span className="wrap-anywhere">Deleted {name}.</span>

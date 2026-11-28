@@ -41,14 +41,14 @@ export default function StackPreview({
   const base = `/stacks/${stack.id}`;
 
   return (
-    <div className="flex min-w-0 flex-col" data-testid="stack-preview">
+    <div className="flex min-w-0 flex-col">
       <div className="flex flex-col gap-4 border-b border-divider px-7 py-6 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 flex-col gap-2">
           <h2 className="font-heading text-title wrap-anywhere">{stack.name}</h2>
           <StackMeta stack={stack} />
         </div>
-        <StackSectionLinks stackId={stack.id} testId="stack-preview-actions">
-          <Link to={base} className={stackHeaderLinkClass} data-testid="stack-preview-open">
+        <StackSectionLinks stackId={stack.id}>
+          <Link to={base} className={stackHeaderLinkClass}>
             Open stack
             <ArrowRight data-icon="inline-end" aria-hidden="true" />
           </Link>
@@ -67,18 +67,18 @@ export default function StackPreview({
           </RequireCapability>
         </div>
         {stackQuery.status === "pending" ? (
-          <LoadingLine testId="stack-preview-loading">Loading templates…</LoadingLine>
+          <LoadingLine>Loading templates…</LoadingLine>
         ) : stackQuery.status === "error" ? (
           <div className="flex flex-col gap-1">
-            <p className="text-meta text-muted-foreground" data-testid="stack-preview-error">
+            <p className="text-meta text-muted-foreground">
               Something went wrong while loading this stack's templates.
             </p>
             <RequestIdNote error={stackQuery.error} />
           </div>
         ) : templates.length === 0 ? (
-          <NoTemplatesState stackId={stack.id} heading="h4" testId="stack-preview-empty" />
+          <NoTemplatesState stackId={stack.id} heading="h4" />
         ) : (
-          <DataTable columns={[undefined, "w-51.5", "w-46.5", "w-31"]} className="min-w-2xl" testId="stack-preview-templates">
+          <DataTable columns={[undefined, "w-51.5", "w-46.5", "w-31"]} className="min-w-2xl">
             {templates.map((stackTemplate) => {
               const item = attention.get(stackTemplate.id);
               const runPath = item ? attentionRunPath(item) : null;

@@ -27,7 +27,6 @@ export default function ErrorPanel({
   details,
   detailsCollapsed = false,
   live = true,
-  testId
 }: {
   /** What failed, in a few words: "Sync failed". */
   title: ReactNode;
@@ -44,14 +43,13 @@ export default function ErrorPanel({
   detailsCollapsed?: boolean;
   /** Announce it when it appears; false for a record. */
   live?: boolean;
-  testId?: string;
 }) {
   const [open, setOpen] = useState(!detailsCollapsed);
   const detailsId = useId();
   const hasDetails = details !== undefined && details.trim() !== "";
 
   return (
-    <div role={live ? "alert" : undefined} className="flex min-w-0 items-start gap-3 rounded-lg border px-5 py-4" data-testid={testId}>
+    <div role={live ? "alert" : undefined} className="flex min-w-0 items-start gap-3 rounded-lg border px-5 py-4">
       <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-destructive" />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <p className="text-label text-foreground">{title}</p>

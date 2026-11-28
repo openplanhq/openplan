@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 // openplan UI's EmptyState inside a panel, for a stack with no templates: what
 // is missing, what to do, and Add template for someone who may.
-export default function NoTemplatesState({ stackId, heading, testId }: { stackId: string; heading: "h2" | "h4"; testId?: string }) {
+export default function NoTemplatesState({ stackId, heading }: { stackId: string; heading: "h2" | "h4" }) {
   return (
     <EmptyState
       title="No templates in this stack yet"
@@ -21,7 +21,6 @@ export default function NoTemplatesState({ stackId, heading, testId }: { stackId
           </Link>
         </RequireCapability>
       }
-      testId={testId}
     />
   );
 }

@@ -1,5 +1,4 @@
 import { ArrowUpRight } from "lucide-react";
-import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Breakable, piecesAfter } from "./breakAfter";
 
@@ -17,7 +16,6 @@ export default function ExternalLink({
   site,
   term,
   mono = true,
-  testId,
   className,
   children
 }: {
@@ -27,7 +25,6 @@ export default function ExternalLink({
   /** What the value is, for a screen reader, when an icon says it on screen. */
   term?: string;
   mono?: boolean;
-  testId?: string;
   /** Overrides the meta size where the line around it is set smaller. */
   className?: string;
   children: string;
@@ -39,7 +36,6 @@ export default function ExternalLink({
       href={href}
       target="_blank"
       rel="noreferrer"
-      data-testid={testId}
       className={cn("min-w-0 text-meta text-foreground wrap-anywhere hover:text-primary hover:underline", mono && "font-mono", className)}
     >
       {term && <span className="sr-only">{term}: </span>}

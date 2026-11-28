@@ -8,7 +8,7 @@ export default function RequestIdNote({ error }: { error: unknown }) {
     return null;
   }
   return (
-    <p className="text-caption text-muted-foreground" data-testid="request-id">
+    <p className="text-caption text-muted-foreground">
       Request ID: <span className="font-mono select-all">{requestId}</span>
     </p>
   );

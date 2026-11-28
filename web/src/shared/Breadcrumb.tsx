@@ -12,7 +12,6 @@ import {
 export type Crumb = {
   label: ReactNode;
   to: string;
-  testId?: string;
 };
 
 // openplan UI's Breadcrumb: the pages above this one, each a link, then this
@@ -38,7 +37,7 @@ export default function Breadcrumb({
         {crumbs.map((crumb, index) => (
           <Fragment key={index}>
             <BreadcrumbItem>
-              <BreadcrumbLink render={<Link to={crumb.to} />} className="text-muted-foreground hover:underline" data-testid={crumb.testId}>
+              <BreadcrumbLink render={<Link to={crumb.to} />} className="text-muted-foreground hover:underline">
                 {crumb.label}
               </BreadcrumbLink>
             </BreadcrumbItem>

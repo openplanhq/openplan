@@ -19,7 +19,7 @@ export default function RevisionsTab() {
   const { template, revisions, latest } = useTemplate();
 
   return (
-    <section className="flex min-w-0 flex-col gap-3" data-testid="template-revisions">
+    <section className="flex min-w-0 flex-col gap-3">
       <p className="text-meta text-muted-foreground">
         Every commit registered from <span className="font-mono text-code-foreground">{template.source_ref}</span>, newest first. A stack keeps the
         revision it was added with until someone changes it.
@@ -28,7 +28,7 @@ export default function RevisionsTab() {
         {revisions.map((templateRevision) => {
           const indicator = revisionIndicator(templateRevision.status);
           return (
-            <TableRow key={templateRevision.id} className="h-12 border-divider hover:bg-transparent" data-testid={`revision-row-${templateRevision.id}`}>
+            <TableRow key={templateRevision.id} className="h-12 border-divider hover:bg-transparent">
               <TableCell className={cellClass}>
                 <span className="flex min-w-0 flex-col gap-1">
                   <RevisionSubject subject={templateRevision.commit_subject} />
@@ -39,7 +39,7 @@ export default function RevisionsTab() {
                       {shortCommitSHA(templateRevision.resolved_commit_sha)}
                     </ExternalLink>
                     {templateRevision.id === latest.id && (
-                      <Tag testId="revision-latest">
+                      <Tag>
                         latest
                       </Tag>
                     )}

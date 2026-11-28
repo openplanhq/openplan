@@ -1,11 +1,10 @@
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
-export interface UnderlineTab {
+interface UnderlineTab {
   to: string;
   label: string;
   current: boolean;
-  testId?: string;
 }
 
 // openplan UI's Tabs: underline links in a nav named for what they switch,
@@ -20,7 +19,6 @@ export default function UnderlineTabs({ label, tabs }: { label: string; tabs: Un
           key={tab.to}
           to={tab.to}
           aria-current={tab.current ? "page" : undefined}
-          data-testid={tab.testId}
           className={cn(
             "-mb-px inline-flex h-10 items-center border-b-2 text-label transition-colors focus-visible:-outline-offset-2 pointer-coarse:h-11",
             tab.current ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
