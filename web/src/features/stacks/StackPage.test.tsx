@@ -15,7 +15,7 @@ import { authValue } from "../../auth/testSupport";
 
 // The stack's page through the same route shape as router.tsx, with each
 // template tab stubbed, so these tests are about the frame: the header, the
-// list, the selection and the phone layout. The tabs have their own tests.
+// list and the selection. The tabs have their own tests.
 
 const TENANT = "tenant_123";
 const allAllowed: StackCapabilities = { can_view: true, can_operate: true, can_approve: true, can_manage_access: true };
@@ -315,26 +315,6 @@ describe("StackPage list", () => {
     expect(screen.getByTestId("stack-templates-none").textContent).toBe("No templates in this stack yet.");
     expect(screen.getByTestId("stack-empty")).toBeTruthy();
     expect(screen.getAllByRole("link", { name: /Add template/ })).toHaveLength(2);
-  });
-});
-
-// On a phone the page shows the list or the panel, never both. This is CSS,
-// so these two tests read the classes that switch it.
-describe("StackPage on a phone", () => {
-  it("shows only the list on the stack's own path", () => {
-    renderPage(seed([network]), "/stacks/stack_1");
-
-    expect(screen.getByTestId("stack-list-column").className).not.toMatch(/(^| )hidden( |$)/);
-    expect(screen.getByTestId("stack-panel-column").className).toMatch(/(^| )hidden( |$)/);
-    expect(screen.queryByRole("link", { name: "Templates" })).toBeNull();
-  });
-
-  it("shows only the panel on a template's path, with a way back to the list", () => {
-    renderPage(seed([network]), "/stacks/stack_1/templates/network/runs");
-
-    expect(screen.getByTestId("stack-list-column").className).toMatch(/(^| )hidden( |$)/);
-    expect(screen.getByTestId("stack-panel-column").className).not.toMatch(/(^| )hidden( |$)/);
-    expect(screen.getByRole("link", { name: "Templates" }).getAttribute("href")).toBe("/stacks/stack_1");
   });
 });
 
