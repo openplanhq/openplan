@@ -10,6 +10,7 @@ import { inputClass } from "../../shared/fieldClass";
 import BusyIcon from "../../shared/BusyIcon";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { useInlineStep } from "./useInlineStep";
 
 // Changing the ref a template follows, from Change ref on the name's line:
 // a step under the source line, drawn as InlineConfirm is (one border, canvas
@@ -98,62 +99,32 @@ export function TemplateRefStep({
   );
 }
 
-// The state of a template's ref change. The panel stays mounted from one
-// template to the next, so the step closes when the template changes, and an
-// answer acts only on a step still open for its template: one that lands
-// after the person moved on, or opened Delete, leaves focus where they put it.
-// After a change focus goes back to Change ref.
+// A template's ref change, in the step useInlineStep keeps. After a change
+// focus goes back to Change ref, as after Cancel.
 export function useTemplateRefChange(id: string) {
   const tenantID = useTenantID();
   const changeTemplateRefMutation = useChangeTemplateRefMutation(tenantID);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const [openFor, setOpenFor] = useState<string | null>(null);
-  // openFor as of now, for an answer that arrives after renders moved on.
-  const openNow = useRef<string | null>(null);
-  const [refusal, setRefusal] = useState<{ id: string; message: string } | null>(null);
+  const step = useInlineStep<string>(id);
   const busy = changeTemplateRefMutation.isPending;
 
-  function dismiss() {
-    openNow.current = null;
-    setOpenFor(null);
-    setRefusal(null);
-  }
-  useEffect(dismiss, [id]);
-
   return {
-    triggerRef,
-    open: openFor === id,
+    ...step,
     busy,
-    refusal: refusal?.id === id ? refusal.message : null,
-    ask() {
-      openNow.current = id;
-      setRefusal(null);
-      setOpenFor(id);
-    },
-    // Another step opening in its place: close, and leave focus where it is.
-    dismiss,
-    cancel() {
-      dismiss();
-      triggerRef.current?.focus();
-    },
     async change(sourceRef: string) {
       if (busy) {
         return;
       }
-      setRefusal(null);
+      step.refuse(null);
       try {
         await changeTemplateRefMutation.mutateAsync({ templateID: id, sourceRef });
-        if (openNow.current !== id) {
-          return;
+        if (step.stillOpen()) {
+          step.cancel();
         }
-        dismiss();
-        triggerRef.current?.focus();
       } catch (error) {
-        if (openNow.current !== id) {
-          return;
+        if (step.stillOpen()) {
+          const taken = isProblem(error, problemTypes.duplicateTemplateSource);
+          step.refuse(taken ? `Another template already follows ${sourceRef}.` : apiErrorMessage(error, "Request failed"));
         }
-        const taken = isProblem(error, problemTypes.duplicateTemplateSource);
-        setRefusal({ id, message: taken ? `Another template already follows ${sourceRef}.` : apiErrorMessage(error, "Request failed") });
       }
     }
   };

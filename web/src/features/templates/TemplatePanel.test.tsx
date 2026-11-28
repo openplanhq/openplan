@@ -472,6 +472,26 @@ describe("TemplatePanel delete", () => {
     return calls;
   }
 
+  // Holds the DELETE until answered, as holdChange does the PATCH. Reads
+  // answer, since a delete that lands waits for the list to refetch.
+  function holdDelete() {
+    let answer: ((response: Response) => void) | null = null;
+    vi.mocked(globalThis.fetch).mockImplementation(async (input, init) =>
+      init?.method === "DELETE"
+        ? new Promise<Response>((resolve) => (answer = resolve))
+        : (templateReadResponse(input, [latest, older, rds, cdn]) ?? new Promise<Response>(() => {}))
+    );
+    return {
+      sent: () => waitFor(() => expect(answer).not.toBeNull()),
+      answer: (response: Response) => act(async () => answer?.(response))
+    };
+  }
+
+  function confirmDelete() {
+    fireEvent.click(screen.getByTestId("template-delete"));
+    fireEvent.click(within(screen.getByTestId("template-delete-confirm")).getByRole("button", { name: "Delete template" }));
+  }
+
   it("is not offered to people who cannot publish templates", () => {
     renderPanel(seed(), "/templates/tpl_1/variables", false);
     expect(screen.queryByTestId("template-delete")).toBeNull();
@@ -579,6 +599,54 @@ describe("TemplatePanel delete", () => {
     fireEvent.click(within(screen.getByTestId("template-delete-confirm")).getByRole("button", { name: "Delete template" }));
 
     await waitFor(() => expect(screen.getByTestId("templates-index").textContent).toContain("eks"));
+  });
+
+  it.each([
+    ["lands", () => new Response(null, { status: 204 })],
+    ["is refused", () => problem(409, problemTypes.templateInUse, "A stack still has this template installed.")]
+  ])("leaves the person where they moved to when the delete %s after they left", async (_answer, response) => {
+    const remove = holdDelete();
+    const router = renderPanel(seed(), "/templates/tpl_1/variables");
+
+    confirmDelete();
+    await remove.sent();
+    await act(() => router.navigate("/templates/tpl_rds/variables"));
+    (document.activeElement as HTMLElement | null)?.blur();
+
+    await remove.answer(response());
+    expect(router.state.location.pathname).toBe("/templates/tpl_rds/variables");
+    expect(router.state.historyAction).toBe("PUSH");
+    expect(document.activeElement).not.toBe(screen.getByTestId("template-delete"));
+  });
+
+  it("keeps Change ref's step alone when it opens before the delete is refused", async () => {
+    const remove = holdDelete();
+    renderPanel(seed(), "/templates/tpl_1/variables");
+
+    confirmDelete();
+    await remove.sent();
+    fireEvent.click(screen.getByTestId("template-change-ref"));
+    const refInput = within(screen.getByTestId("template-ref-step")).getByLabelText("Ref");
+    expect(document.activeElement).toBe(refInput);
+
+    await remove.answer(problem(409, problemTypes.templateInUse, "A stack still has this template installed."));
+    expect(screen.queryByTestId("template-delete-error")).toBeNull();
+    expect(screen.getByTestId("template-ref-step")).toBeTruthy();
+    expect(document.activeElement).toBe(refInput);
+  });
+
+  // A template that is gone has no ref to change, so the delete landing still
+  // ends on the list.
+  it("leaves for the list when the delete lands while Change ref is open on the same template", async () => {
+    const remove = holdDelete();
+    const router = renderPanel(seed(), "/templates/tpl_1/variables");
+
+    confirmDelete();
+    await remove.sent();
+    fireEvent.click(screen.getByTestId("template-change-ref"));
+
+    await remove.answer(new Response(null, { status: 204 }));
+    expect(router.state.location.pathname).toBe("/templates");
   });
 
   it("drops a question asked about another template", () => {

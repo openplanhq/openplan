@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { BookMarked, Folder, GitBranch, GitCommitHorizontal, Trash2 } from "lucide-react";
@@ -22,6 +22,7 @@ import { templatePath, templateTabOf } from "./templateRoutes";
 import type { TemplatesLocationState } from "./templatesPageOutlet";
 import TemplateSync from "./TemplateSync";
 import { shortCommitSHA, templateDisplayName } from "./templateWorkflow";
+import { useInlineStep } from "./useInlineStep";
 import LoadError from "../../shared/LoadError";
 import Tag from "../../shared/Tag";
 import LoadingLine from "../../shared/LoadingLine";
@@ -112,7 +113,7 @@ export default function TemplatePanel({ templateId, children }: { templateId?: s
         ref={remove.triggerRef}
         type="button"
         className={cn(buttonClass("subtle", "sm"), "pointer-coarse:h-11")}
-        aria-expanded={remove.confirming}
+        aria-expanded={remove.open}
         onClick={() => {
           refChange.dismiss();
           remove.ask();
@@ -149,7 +150,7 @@ export default function TemplatePanel({ templateId, children }: { templateId?: s
   ) : null;
   // The question, or why the server refused, under the source line: close
   // to Delete, and above the description it would otherwise push away.
-  const deleteStep = remove.confirming ? (
+  const deleteStep = remove.open ? (
     <InlineConfirm
       testId="template-delete-confirm"
       question={`Delete ${name}?`}
@@ -260,69 +261,43 @@ type DeleteRefusal = "in-use" | { message: string };
 // shows the first template left. Refused because a stack still has it
 // installed (409 template-in-use), it says so; nothing on screen could have told, since
 // the API doesn't say whether a stack uses a template. A template someone
-// else deleted first (404) ends where a delete does.
-//
-// The state belongs to the template it was asked about, so moving to another
-// template drops a question or a refusal rather than carrying it over, and
-// coming back finds neither.
+// else deleted first (404) ends where a delete does. The question and the
+// refusal are a step useInlineStep keeps.
 function useTemplateDelete(id: string) {
   const tenantID = useTenantID();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const deleteTemplateMutation = useDeleteTemplateMutation(tenantID);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const [askedFor, setAskedFor] = useState<string | null>(null);
-  const [refusal, setRefusal] = useState<{ id: string; refusal: DeleteRefusal } | null>(null);
+  const step = useInlineStep<DeleteRefusal>(id);
   const busy = deleteTemplateMutation.isPending;
-  useEffect(() => {
-    setAskedFor(null);
-    setRefusal(null);
-  }, [id]);
-
-  function done(name: string) {
-    // Replace: Back must not return to the address of a template that is gone.
-    const state: TemplatesLocationState = { deletedTemplate: name };
-    navigate("/templates", { replace: true, state });
-  }
 
   return {
-    triggerRef,
-    confirming: askedFor === id,
+    ...step,
     busy,
-    refusal: refusal?.id === id ? refusal.refusal : null,
-    ask() {
-      setRefusal(null);
-      setAskedFor(id);
-    },
-    // Another step opening in its place: close, and leave focus where it is.
-    dismiss() {
-      setAskedFor(null);
-      setRefusal(null);
-    },
-    cancel() {
-      setAskedFor(null);
-      triggerRef.current?.focus();
-    },
     async confirm(name: string) {
       if (busy) {
         return;
       }
       try {
         await deleteTemplateMutation.mutateAsync(id);
-        done(name);
       } catch (error) {
-        if (classifyQueryError(error) === 404) {
-          // The mutation only clears its reads on success; the list must
-          // drop the template here too.
-          await queryClient.invalidateQueries({ queryKey: queryKeys.templates(tenantID), exact: true });
-          done(name);
+        if (classifyQueryError(error) !== 404) {
+          if (step.stillOpen()) {
+            step.close();
+            step.refuse(isProblem(error, problemTypes.templateInUse) ? "in-use" : { message: apiErrorMessage(error, "Request failed") });
+            // The confirm that held focus is gone; Delete is where to try again.
+            step.triggerRef.current?.focus();
+          }
           return;
         }
-        const inUse = isProblem(error, problemTypes.templateInUse);
-        setAskedFor(null);
-        setRefusal({ id, refusal: inUse ? "in-use" : { message: apiErrorMessage(error, "Request failed") } });
-        // The confirm that held focus is gone; Delete is where to try again.
-        triggerRef.current?.focus();
+        // The mutation only clears its reads on success; the list must drop
+        // the template here too.
+        await queryClient.invalidateQueries({ queryKey: queryKeys.templates(tenantID), exact: true });
+      }
+      if (step.stillHere()) {
+        // Replace: Back must not return to the address of a template that is gone.
+        const state: TemplatesLocationState = { deletedTemplate: name };
+        navigate("/templates", { replace: true, state });
       }
     }
   };
