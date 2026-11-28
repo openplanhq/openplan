@@ -10,7 +10,7 @@ import type { StatusTone } from "./stackWorkflow";
 const BY_TONE: Record<StatusTone, Omit<StatusIndicator, "label">> = {
   settled: { icon: Check, tone: "settled", strong: false },
   waiting: { icon: Diff, tone: "attention", strong: false },
-  canceled: { icon: Minus, tone: "idle", strong: false },
+  unapplied: { icon: Minus, tone: "idle", strong: false },
   failed: { icon: TriangleAlert, tone: "failed", strong: true },
   progress: { icon: LoaderCircle, tone: "settled", strong: false }
 };

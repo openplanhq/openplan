@@ -12,7 +12,7 @@ export type RunFields = Pick<TemplateRun, "operation" | "status" | "step" | "pla
 // lowercase, as openplan UI's status words are in rows and beside a title.
 //
 // A saved plan that someone discarded ends canceled, and reads as discarded;
-// nothing else ends canceled, since a running run cannot be stopped.
+// nothing else ends canceled, since a run ended by hand ends failed.
 //
 // A plan run only ever plans, so it reads as planning until it ends. An
 // auto-approved apply run never plans on its own, so it reads as applying
@@ -72,8 +72,6 @@ function planRunHeadline(run: Pick<TemplateRun, "status" | "plan_summary">): str
       return run.plan_summary ? "plan finished" : "no changes";
     case "failed":
       return "plan failed";
-    case "canceled":
-      return "canceled";
     default:
       return "planning";
   }
@@ -85,8 +83,6 @@ function autoApprovedRunHeadline(run: Pick<TemplateRun, "status">): string {
       return "applied";
     case "failed":
       return "apply failed";
-    case "canceled":
-      return "canceled";
     default:
       return "applying";
   }

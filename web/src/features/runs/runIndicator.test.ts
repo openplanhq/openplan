@@ -46,8 +46,7 @@ describe("runIndicator words", () => {
     ["running", true, "planning"],
     ["completed", true, "plan finished"],
     ["completed", false, "no changes"],
-    ["failed", true, "plan failed"],
-    ["canceled", false, "canceled"]
+    ["failed", true, "plan failed"]
   ] as const)("plan run %s (planned: %s) reads %s", (status, planned, expected) => {
     expect(label("plan", status, planned)).toBe(expected);
   });
@@ -58,8 +57,7 @@ describe("runIndicator words", () => {
     ["queued", false, "applying"],
     ["running", false, "applying"],
     ["completed", true, "applied"],
-    ["failed", false, "apply failed"],
-    ["canceled", false, "canceled"]
+    ["failed", false, "apply failed"]
   ] as const)("auto-approved apply %s (counts: %s) reads %s", (status, planned, expected) => {
     expect(label("apply", status, planned, true)).toBe(expected);
   });
