@@ -7,7 +7,6 @@ export default function AccessDenied() {
       icon={LockKeyhole}
       title="Not permitted"
       description="You don't have permission to do this."
-      testId="route-access-denied"
     />
   );
 }

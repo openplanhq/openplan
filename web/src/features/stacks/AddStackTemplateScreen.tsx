@@ -178,11 +178,11 @@ export default function AddStackTemplateScreen() {
   let content: ReactNode;
   if (templatesQuery.status === "pending") {
     content = (
-      <LoadingLine testId="add-stack-template-loading">Loading templates…</LoadingLine>
+      <LoadingLine>Loading templates…</LoadingLine>
     );
   } else if (templatesQuery.status === "error") {
     content = (
-      <LoadError error={templatesQuery.error} onRetry={() => void templatesQuery.refetch()} testId="add-stack-template-load-error" retryTestId="add-stack-template-retry">
+      <LoadError error={templatesQuery.error} onRetry={() => void templatesQuery.refetch()}>
         Something went wrong while loading templates.
       </LoadError>
     );
@@ -192,12 +192,11 @@ export default function AddStackTemplateScreen() {
         title="No templates registered yet"
         description="Register a template, then add it to this stack."
         action={
-          <Link to="/templates/new" className={cn(buttonClass("primary"), "pointer-coarse:h-11")} data-testid="register-template-link">
+          <Link to="/templates/new" className={cn(buttonClass("primary"), "pointer-coarse:h-11")}>
             <Plus data-icon="inline-start" aria-hidden="true" />
             Register template
           </Link>
         }
-        testId="add-stack-template-none"
       />
     );
   } else {
@@ -209,7 +208,7 @@ export default function AddStackTemplateScreen() {
           </h3>
           {chosenTemplate && !changingTemplate ? (
             // The picked ChoiceRow, with Change to search again.
-            <div className="overflow-hidden rounded-lg border" data-testid="add-template-picked">
+            <div className="overflow-hidden rounded-lg border">
               <div className="flex min-h-13 flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-primary-soft py-2 pr-2.5 pl-4">
                 <span className="flex min-w-0 flex-col gap-0.5">
                   <span className="text-label text-primary-strong wrap-anywhere">{templateDisplayName(chosenTemplate)}</span>
@@ -243,15 +242,15 @@ export default function AddStackTemplateScreen() {
           )}
         </section>
         {revisionsLoading && (
-          <LoadingLine testId="add-stack-template-revisions-loading">Loading revisions…</LoadingLine>
+          <LoadingLine>Loading revisions…</LoadingLine>
         )}
         {revisionsFailed && (
-          <LoadError live error={chosenRevisionsQuery.error} onRetry={() => void chosenRevisionsQuery.refetch()} testId="add-stack-template-revisions-error">
+          <LoadError live error={chosenRevisionsQuery.error} onRetry={() => void chosenRevisionsQuery.refetch()}>
             Could not load this template's revisions.
           </LoadError>
         )}
         {chosenRevision && chosenTemplate && (
-          <section aria-labelledby={configureHeadingId} className="flex max-w-140 flex-col gap-4" data-testid="add-stack-template-variables">
+          <section aria-labelledby={configureHeadingId} className="flex max-w-140 flex-col gap-4">
             <h3 id={configureHeadingId} className="text-section-title wrap-anywhere">
               Configure {templateDisplayName(chosenTemplate)}
             </h3>
@@ -267,7 +266,7 @@ export default function AddStackTemplateScreen() {
                   if (revisionID !== null) handleChoose(chosenTemplate.id, revisionID);
                 }}
               >
-                <SelectTrigger id="add-template-revision" data-testid="add-template-revision-select" className={selectTriggerClass}>
+                <SelectTrigger id="add-template-revision" className={selectTriggerClass}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -280,12 +279,12 @@ export default function AddStackTemplateScreen() {
               </Select>
             </div>
             {variablesLoading ? (
-              <LoadingLine testId="add-stack-template-variables-loading">Loading variables…</LoadingLine>
+              <LoadingLine>Loading variables…</LoadingLine>
             ) : variablesFailed ? (
               // Not the empty message: a fetch that failed must never read as
               // "this template declares no variables". Inline, so the picker
               // stays usable.
-              <LoadError live error={variablesQuery.error} onRetry={() => void variablesQuery.refetch()} testId="add-stack-template-variables-error">
+              <LoadError live error={variablesQuery.error} onRetry={() => void variablesQuery.refetch()}>
                 Could not load this template's variables.
               </LoadError>
             ) : (
@@ -305,7 +304,7 @@ export default function AddStackTemplateScreen() {
                 />
               </div>
             )}
-            {errorMessage && <ErrorLine testId="add-stack-template-error">{errorMessage}</ErrorLine>}
+            {errorMessage && <ErrorLine>{errorMessage}</ErrorLine>}
             <button
               ref={installButtonRef}
               type="button"
@@ -323,7 +322,7 @@ export default function AddStackTemplateScreen() {
   }
 
   return (
-    <section className="flex min-w-0 flex-col" data-testid="add-stack-template-screen" data-unsaved={hasUnsavedValues ? "true" : undefined}>
+    <section className="flex min-w-0 flex-col" data-unsaved={hasUnsavedValues ? "true" : undefined}>
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b border-divider px-7 py-6">
         <div className="flex min-w-0 flex-col gap-2">
           <h2 className="font-heading text-title">Add template</h2>

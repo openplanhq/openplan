@@ -34,9 +34,6 @@ type PageRequest struct {
 	Cursor string
 }
 
-// FirstPage is the default page a caller with no paging parameters gets.
-func FirstPage() PageRequest { return PageRequest{Limit: DefaultPageLimit} }
-
 // Page is one page of a list. NextCursor is empty on the last page.
 type Page[T any] struct {
 	Items      []T

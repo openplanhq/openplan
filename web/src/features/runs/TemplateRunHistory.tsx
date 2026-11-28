@@ -50,16 +50,16 @@ export default function TemplateRunHistory({ stackId, stackTemplateId }: Templat
       return <>{boundary}</>;
     }
     return (
-      <LoadError error={runsQuery.error} onRetry={() => void runsQuery.refetch()} testId="template-run-history-error" retryTestId="template-run-history-retry">
+      <LoadError error={runsQuery.error} onRetry={() => void runsQuery.refetch()}>
         Something went wrong while loading this template's runs.
       </LoadError>
     );
   }
 
   return (
-    <div className="min-w-0" data-testid="template-run-history">
+    <div className="min-w-0">
       {runs.length === 0 ? (
-        <EmptyState title="No runs yet" titleAs="h3" description="Plan to see what this template would create." testId="template-run-history-empty" />
+        <EmptyState title="No runs yet" titleAs="h3" description="Plan to see what this template would create." />
       ) : (
         <DataTable columns={["w-22", "w-51.5", "w-31.5", undefined, "w-33.5"]} headings={["Run", "Status", "Changes", "Started by", "Time"]} className="min-w-2xl">
           {runs.map((run) => (
@@ -74,7 +74,6 @@ export default function TemplateRunHistory({ stackId, stackTemplateId }: Templat
           loading={runsQuery.isFetchingNextPage}
           failed={runsQuery.isFetchNextPageError}
           onClick={() => void runsQuery.fetchNextPage()}
-          testId="template-run-history-load-more"
         />
       )}
     </div>
@@ -83,12 +82,11 @@ export default function TemplateRunHistory({ stackId, stackTemplateId }: Templat
 
 function RunRow({ run, to }: { run: TemplateRun; to: string }) {
   return (
-    <TableRow className="h-12 border-divider hover:bg-transparent" data-testid={`template-run-row-${run.id}`}>
+    <TableRow className="h-12 border-divider hover:bg-transparent">
       <TableCell className={cellClass}>
         <Link
           to={to}
           className="font-mono text-meta text-foreground hover:text-primary hover:underline focus-visible:-outline-offset-2 pointer-coarse:py-3"
-          data-testid={`template-run-history-${run.id}`}
         >
           #{run.run_number}
         </Link>
@@ -96,9 +94,9 @@ function RunRow({ run, to }: { run: TemplateRun; to: string }) {
       <TableCell className={cellClass}>
         {/* A status that names its step can be wider than the column, so it
             wraps here rather than running into the changes beside it. */}
-        <StatusLabel indicator={runIndicator(run)} className="whitespace-normal" data-testid={`template-run-status-${run.id}`} />
+        <StatusLabel indicator={runIndicator(run)} className="whitespace-normal" />
       </TableCell>
-      <TableCell className={cellClass} data-testid={`template-run-summary-${run.id}`}>
+      <TableCell className={cellClass}>
         {run.plan_summary && <PlanDiff summary={run.plan_summary} />}
       </TableCell>
       <TableCell className={cn(cellClass, "truncate text-meta text-muted-foreground")} title={run.trigger_actor_display_name}>

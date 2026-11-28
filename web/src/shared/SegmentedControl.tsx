@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-export interface SegmentedOption<Value extends string> {
+interface SegmentedOption<Value extends string> {
   value: Value;
   label: string;
 }

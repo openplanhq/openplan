@@ -50,7 +50,7 @@ export function quotableRequestId(error: unknown): string {
   return error instanceof ApiRequestError && error.status >= 500 ? error.requestId : "";
 }
 
-export type QueryErrorStatus = 401 | 403 | 404 | 503;
+type QueryErrorStatus = 401 | 403 | 404 | 503;
 
 const HANDLED_STATUSES: readonly QueryErrorStatus[] = [401, 403, 404, 503];
 

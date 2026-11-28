@@ -27,10 +27,9 @@ export default function TemplateSettingsTab() {
   const actionClass = cn(buttonClass("outline"), "pointer-coarse:h-11");
 
   return (
-    <div className="flex min-w-0 flex-col gap-5" data-testid="template-settings-tab">
+    <div className="flex min-w-0 flex-col gap-5">
       <SettingsSection
         title="Revision"
-        testId="stack-template-revision-action"
         description={
           <>
             This template runs revision{" "}
@@ -48,17 +47,15 @@ export default function TemplateSettingsTab() {
           </>
         }
         reason={reason}
-        reasonTestId="change-revision-disabled-reason"
         action={
           reason ? (
-            <button type="button" disabled className={actionClass} data-testid="change-stack-template-revision-link">
+            <button type="button" disabled className={actionClass}>
               Change revision
             </button>
           ) : (
             <Link
               to={stackTemplatePath(stackId, stackTemplate.id, "change-revision")}
               className={actionClass}
-              data-testid="change-stack-template-revision-link"
             >
               Change revision
             </Link>

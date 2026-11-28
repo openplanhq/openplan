@@ -19,12 +19,10 @@ export default function SearchField({
   label,
   value,
   onChange,
-  testId
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  testId?: string;
 }) {
   return (
     <InputGroup className={searchFieldClass}>
@@ -38,7 +36,6 @@ export default function SearchField({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="placeholder:text-subtle-foreground"
-        data-testid={testId}
       />
     </InputGroup>
   );

@@ -38,9 +38,9 @@ export default function StackTemplateConfigPanel({
 }: StackTemplateConfigPanelProps) {
   const locked = Boolean(disabledReason);
   return (
-    <div className="flex min-w-0 flex-col gap-5" data-testid="stack-template-config">
+    <div className="flex min-w-0 flex-col gap-5">
       {disabledReason && (
-        <p className="text-meta text-muted-foreground" data-testid="variables-disabled-reason">
+        <p className="text-meta text-muted-foreground">
           {disabledReason}
         </p>
       )}

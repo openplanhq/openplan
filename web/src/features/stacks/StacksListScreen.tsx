@@ -69,7 +69,6 @@ export default function StacksListScreen() {
           <Link
             className={cn(buttonClass("primary", "lg"), "w-full pointer-coarse:h-11 md:w-auto")}
             to="/stacks/new"
-            data-testid="create-stack-link"
           >
             <Plus data-icon="inline-start" aria-hidden="true" />
             Create stack
@@ -85,7 +84,7 @@ export default function StacksListScreen() {
     return (
       <section>
         {header()}
-        <LoadingLine testId="stacks-list-loading">Loading stacks…</LoadingLine>
+        <LoadingLine>Loading stacks…</LoadingLine>
       </section>
     );
   }
@@ -100,7 +99,7 @@ export default function StacksListScreen() {
     return (
       <section>
         {header()}
-        <LoadError live error={error} onRetry={() => void refetch()} testId="stacks-list-error" retryTestId="stacks-list-retry">
+        <LoadError live error={error} onRetry={() => void refetch()}>
           Something went wrong while loading stacks.
         </LoadError>
       </section>
@@ -138,25 +137,24 @@ export default function StacksListScreen() {
           }
           action={
             canCreateStack && (
-              <Link to="/stacks/new" className={cn(buttonClass("outline"), "pointer-coarse:h-11")} data-testid="stacks-empty-create">
+              <Link to="/stacks/new" className={cn(buttonClass("outline"), "pointer-coarse:h-11")}>
                 <Plus data-icon="inline-start" aria-hidden="true" />
                 Create stack
               </Link>
             )
           }
-          testId="stacks-list-empty"
         />
       ) : (
         // One panel: the list, then the selected stack. On a wide screen they
         // sit side by side and the preview stays in view while the list
         // scrolls; clip rather than hidden overflow, so the sticky still works.
-        <div className="flex flex-col overflow-clip rounded-panel border bg-card md:flex-row" data-testid="stacks-list">
+        <div className="flex flex-col overflow-clip rounded-panel border bg-card md:flex-row">
           <div className="flex min-w-0 flex-col border-b md:w-90 md:shrink-0 md:border-r md:border-b-0">
             <div className="border-b border-divider p-3">
-              <SearchField label="Filter stacks" value={filter} onChange={setFilter} testId="stacks-filter" />
+              <SearchField label="Filter stacks" value={filter} onChange={setFilter} />
             </div>
             {stacks.length === 0 ? (
-              <p className="px-5 py-4 text-meta text-muted-foreground" data-testid="stacks-filter-empty">
+              <p className="px-5 py-4 text-meta text-muted-foreground">
                 No stacks match this filter.
               </p>
             ) : (
@@ -175,7 +173,6 @@ export default function StacksListScreen() {
                 loading={stacksQuery.isFetchingNextPage}
                 failed={stacksQuery.isFetchNextPageError}
                 onClick={() => void stacksQuery.fetchNextPage()}
-                testId="stacks-load-more"
               />
             )}
           </div>
@@ -199,7 +196,6 @@ function AttentionSummary({ items }: { items: AttentionItem[] }) {
     <Link
       to="/stacks/attention"
       className="group inline-flex min-h-7 w-fit flex-wrap items-center gap-x-2 text-body text-muted-foreground"
-      data-testid="attention-summary"
     >
       <Hourglass aria-hidden="true" className="size-4 shrink-0 text-warning" />
       <span className="font-medium text-warning underline-offset-3 group-hover:underline">{summary.lead}</span>
@@ -222,7 +218,6 @@ function StackRow({ stack, selected, attention }: { stack: StackListItem; select
       replace
       aria-current={selected ? "true" : undefined}
       className={listItemClass(selected)}
-      data-testid={`stack-row-${stack.id}`}
     >
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex min-w-0 items-baseline gap-2">
@@ -260,7 +255,6 @@ function TemplateCount({ templates, selected }: { templates: number; selected: b
   return (
     <span
       className={cn("flex items-center gap-1.25 text-caption", empty && !selected ? "text-subtle-foreground" : "text-muted-foreground")}
-      data-testid="stack-row-templates"
     >
       <Layers aria-hidden="true" className="size-3 shrink-0" strokeWidth={2.25} />
       {empty ? (

@@ -38,7 +38,7 @@ export default function StackAccessScreen() {
   if (boundary !== null) return <>{boundary}</>;
 
   return (
-    <section className="mx-auto max-w-260" data-testid="stack-access-screen">
+    <section className="mx-auto max-w-260">
       <PageHeader
         title="Access"
         trail={[

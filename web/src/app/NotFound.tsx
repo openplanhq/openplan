@@ -7,7 +7,6 @@ export default function NotFound() {
       icon={SearchX}
       title="Page not found"
       description="The page you were looking for doesn't exist."
-      testId="route-not-found"
     />
   );
 }

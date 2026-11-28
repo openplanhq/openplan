@@ -32,8 +32,6 @@ export const PLATFORM_ROLES = [
 // a key the server holds, not a role anyone grants.
 export const ROOT_ROLE = [{ value: "root", description: "", icon: KeyRound }] as const satisfies readonly RoleDefinition[];
 
-export type StackRole = (typeof STACK_ROLES)[number]["value"];
-
 /** The definition of value in roles. The API types a role as a string, so one
     the UI doesn't know yet still has a definition: its raw word, and an icon
     that says it's unknown. */

@@ -25,7 +25,6 @@ export default function InlineConfirm({
   busy = false,
   onConfirm,
   onCancel,
-  testId
 }: {
   /** What is about to happen, as a question: "Delete aws/eks?" */
   question: ReactNode;
@@ -37,7 +36,6 @@ export default function InlineConfirm({
   busy?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
-  testId?: string;
 }) {
   const cancelRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -49,7 +47,6 @@ export default function InlineConfirm({
       role="group"
       aria-label="Confirm"
       className="flex min-w-0 items-center justify-between gap-6 rounded-lg border bg-canvas px-5 py-4"
-      data-testid={testId}
       onKeyDown={(event) => {
         if (event.key === "Escape" && !busy) {
           event.stopPropagation();

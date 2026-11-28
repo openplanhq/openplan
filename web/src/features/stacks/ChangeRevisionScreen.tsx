@@ -126,7 +126,7 @@ export default function ChangeRevisionScreen() {
 
   if (templateRevisionsQuery.status === "pending" || waitingOnCurrentVariables || waitingOnTargetVariables) {
     return (
-      <section className="flex min-w-0 flex-col gap-5" data-testid="change-revision-loading">
+      <section className="flex min-w-0 flex-col gap-5">
         {trail}
         <LoadingLine>Loading revisions…</LoadingLine>
       </section>
@@ -148,8 +148,6 @@ export default function ChangeRevisionScreen() {
           void currentVariablesQuery.refetch();
           void targetVariablesQuery.refetch();
         }}
-        testId="change-revision-load-error"
-        retryTestId="change-revision-retry"
       >
         Something went wrong while loading revisions.
       </LoadError>
@@ -162,7 +160,7 @@ export default function ChangeRevisionScreen() {
   const lifecycleReason = lifecycleLockReason(stackTemplate.lifecycle, "revision");
   if (lifecycleReason) {
     return (
-      <section className="flex min-w-0 flex-col gap-5" data-testid="change-revision-locked">
+      <section className="flex min-w-0 flex-col gap-5">
         {trail}
         <p className="text-meta text-muted-foreground">{lifecycleReason}</p>
       </section>
@@ -173,10 +171,10 @@ export default function ChangeRevisionScreen() {
   const latestID = activeRevisions(templateRevisionsQuery.data ?? [])[0]?.id;
 
   return (
-    <section className="flex min-w-0 flex-col gap-5" data-testid="change-revision-stack-template-screen" data-unsaved={hasUnsavedValues ? "true" : undefined}>
+    <section className="flex min-w-0 flex-col gap-5" data-unsaved={hasUnsavedValues ? "true" : undefined}>
       {trail}
       {candidates.length === 0 ? (
-        <p className="text-meta text-muted-foreground" data-testid="change-revision-no-alternatives">
+        <p className="text-meta text-muted-foreground">
           No other active revisions available.
         </p>
       ) : (
@@ -198,7 +196,7 @@ export default function ChangeRevisionScreen() {
                   setEditedValues({});
                 }}
               >
-                <SelectTrigger id="change-revision-target" data-testid="change-revision-target-select" className={selectTriggerClass}>
+                <SelectTrigger id="change-revision-target" className={selectTriggerClass}>
                   <SelectValue className="min-w-0">
                     {targetRevision && (
                       <>
@@ -237,7 +235,7 @@ export default function ChangeRevisionScreen() {
               // Inline, not the loading view: a new target is a small change to
               // a drawn view. It replaces only what would be wrong while the
               // previous target's data is still served: the notes and fields.
-              <LoadingLine testId="change-revision-target-variables-loading">Loading variables for the selected revision…</LoadingLine>
+              <LoadingLine>Loading variables for the selected revision…</LoadingLine>
             ) : (
               <>
                 {/* What the change does to the config, stated outright: new
@@ -246,17 +244,17 @@ export default function ChangeRevisionScreen() {
                 {(partition.added.length > 0 || partition.removed.length > 0 || nowSensitive.length > 0) && (
                   <ul className="flex flex-col gap-1 text-meta">
                     {partition.added.map((variable) => (
-                      <li key={`added-${variable.name}`} className="text-muted-foreground wrap-anywhere" data-testid={`change-revision-added-${variable.name}`}>
+                      <li key={`added-${variable.name}`} className="text-muted-foreground wrap-anywhere">
                         <span className="font-mono text-code-foreground">{variable.name}</span> is new in this revision.
                       </li>
                     ))}
                     {partition.removed.map((variable) => (
-                      <li key={`removed-${variable.name}`} className="text-warning wrap-anywhere" data-testid={`change-revision-removed-${variable.name}`}>
+                      <li key={`removed-${variable.name}`} className="text-warning wrap-anywhere">
                         <span className="font-mono">{variable.name}</span> is no longer used and will be dropped.
                       </li>
                     ))}
                     {nowSensitive.map((variable) => (
-                      <li key={`now-sensitive-${variable.name}`} className="text-warning wrap-anywhere" data-testid={`change-revision-now-sensitive-${variable.name}`}>
+                      <li key={`now-sensitive-${variable.name}`} className="text-warning wrap-anywhere">
                         <span className="font-mono">{variable.name}</span> is now sensitive, so its value won't carry over. Set it as the secret{" "}
                         <span className="font-mono">{`TF_VAR_${variable.name}`}</span>.
                       </li>
@@ -277,7 +275,7 @@ export default function ChangeRevisionScreen() {
               </>
             )}
           </div>
-          {errorMessage && <ErrorLine testId="change-revision-stack-template-error">{errorMessage}</ErrorLine>}
+          {errorMessage && <ErrorLine>{errorMessage}</ErrorLine>}
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"

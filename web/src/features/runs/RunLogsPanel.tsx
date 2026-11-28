@@ -83,7 +83,7 @@ export default function RunLogsPanel({ runId, logs, executions, failed, finished
   }
 
   return (
-    <section aria-labelledby={headingId} className="overflow-hidden rounded-lg border" data-testid="run-logs-panel">
+    <section aria-labelledby={headingId} className="overflow-hidden rounded-lg border">
       {/* The run's Changes/Logs switch names this view already, so the
           heading is for assistive technology only. */}
       <h4 id={headingId} className="sr-only">

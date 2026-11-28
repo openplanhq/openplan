@@ -30,11 +30,11 @@ export default function EnvironmentScreen() {
   let content: ReactNode;
   if (list.status === "pending") {
     content = (
-      <LoadingLine testId="environment-loading">Loading environment…</LoadingLine>
+      <LoadingLine>Loading environment…</LoadingLine>
     );
   } else if (failed) {
     content = (
-      <LoadError error={list.error} onRetry={() => void list.refetch()} testId="environment-error" retryTestId="environment-retry">
+      <LoadError error={list.error} onRetry={() => void list.refetch()}>
         Something went wrong while loading the environment.
       </LoadError>
     );
@@ -61,7 +61,7 @@ export default function EnvironmentScreen() {
   }
 
   return (
-    <section className="mx-auto max-w-260" data-testid="environment-screen">
+    <section className="mx-auto max-w-260">
       <PageHeader
         title="Environment"
         trail={[
@@ -69,7 +69,7 @@ export default function EnvironmentScreen() {
           { label: stackName, to: `/stacks/${stackId}` }
         ]}
       />
-      <div className="rounded-panel border bg-card px-7 pt-6 pb-7" data-testid="environment-card">
+      <div className="rounded-panel border bg-card px-7 pt-6 pb-7">
         {content}
       </div>
     </section>

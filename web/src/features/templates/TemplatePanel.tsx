@@ -71,13 +71,13 @@ export default function TemplatePanel({ templateId, children }: { templateId?: s
 
   if (template !== null && revisionsQuery.isPending) {
     return (
-      <LoadingLine className="px-7 py-6" testId="template-loading">Loading template…</LoadingLine>
+      <LoadingLine className="px-7 py-6">Loading template…</LoadingLine>
     );
   }
 
   if (revisionsQuery.isError) {
     return (
-      <LoadError className="px-7 py-6" error={revisionsQuery.error} onRetry={() => void revisionsQuery.refetch()} testId="template-error">
+      <LoadError className="px-7 py-6" error={revisionsQuery.error} onRetry={() => void revisionsQuery.refetch()}>
         Something went wrong while loading this template.
       </LoadError>
     );
@@ -85,7 +85,7 @@ export default function TemplatePanel({ templateId, children }: { templateId?: s
 
   if (template === null) {
     return (
-      <p className="px-7 py-6 text-meta text-muted-foreground" data-testid="template-missing">
+      <p className="px-7 py-6 text-meta text-muted-foreground">
         That template is not registered.
       </p>
     );
@@ -118,7 +118,6 @@ export default function TemplatePanel({ templateId, children }: { templateId?: s
           refChange.dismiss();
           remove.ask();
         }}
-        data-testid="template-delete"
       >
         <Trash2 data-icon="inline-start" aria-hidden="true" strokeWidth={2.42} className="size-3.25" />
         Delete
@@ -132,7 +131,6 @@ export default function TemplatePanel({ templateId, children }: { templateId?: s
           remove.dismiss();
           refChange.ask();
         }}
-        data-testid="template-change-ref"
       >
         <GitBranch data-icon="inline-start" aria-hidden="true" strokeWidth={2.42} className="size-3.25" />
         Change ref
@@ -152,7 +150,6 @@ export default function TemplatePanel({ templateId, children }: { templateId?: s
   // to Delete, and above the description it would otherwise push away.
   const deleteStep = remove.open ? (
     <InlineConfirm
-      testId="template-delete-confirm"
       question={`Delete ${name}?`}
       confirmLabel="Delete template"
       confirmIcon={Trash2}
@@ -163,14 +160,14 @@ export default function TemplatePanel({ templateId, children }: { templateId?: s
       {latest ? "Stacks can no longer add it, and its revisions go with it." : undefined}
     </InlineConfirm>
   ) : remove.refusal === "in-use" ? (
-    <ErrorPanel testId="template-delete-error" title="Can't delete this template">
+    <ErrorPanel title="Can't delete this template">
       A stack still has it installed. Destroy it on that stack, then delete the template.
     </ErrorPanel>
   ) : remove.refusal !== null ? (
-    <ErrorPanel testId="template-delete-error" title="Could not delete this template" details={remove.refusal.message} />
+    <ErrorPanel title="Could not delete this template" details={remove.refusal.message} />
   ) : null;
   const source = (
-    <ul aria-label="Source on GitHub" className="flex min-w-0 flex-wrap items-start gap-x-6 gap-y-2 text-caption" data-testid="template-source">
+    <ul aria-label="Source on GitHub" className="flex min-w-0 flex-wrap items-start gap-x-6 gap-y-2 text-caption">
       <SourceFact icon={BookMarked} term="Repository" href={links.repository}>
         {`${template.repo_owner}/${template.repo_name}`}
       </SourceFact>
@@ -202,12 +199,12 @@ export default function TemplatePanel({ templateId, children }: { templateId?: s
     <>
       {steps}
       {description !== "" ? (
-        <p className="max-w-170 text-meta text-foreground" data-testid="template-description">
+        <p className="max-w-170 text-meta text-foreground">
           {description}
         </p>
       ) : (
         <RequireCapability capability="can_manage_templates">
-          <p className="text-caption text-muted-foreground" data-testid="template-no-description">
+          <p className="text-caption text-muted-foreground">
             No description
           </p>
         </RequireCapability>
@@ -228,7 +225,7 @@ export default function TemplatePanel({ templateId, children }: { templateId?: s
   // mounted when a first sync lands one, and its outcome stays in view.
   return (
     <TemplateContext.Provider value={latest ? { template, revisions, latest } : null}>
-      <div className="flex min-w-0 flex-col" data-testid="template-panel">
+      <div className="flex min-w-0 flex-col">
         <div className={cn("flex flex-col gap-5 px-7 pt-6", latest ? "border-b border-divider" : "pb-7")}>
           {/* The name with Sync on its line, the source line under it, then
               what the template is for. Keyed on the template, so a sync

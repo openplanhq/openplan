@@ -56,18 +56,17 @@ export default function AppShell() {
         </div>
         {/* openplan has one tenant, so the header names no tenant: the
             right side is who you are and the way out (#488). */}
-        <div className="flex min-w-0 items-center gap-3 text-body text-muted-foreground" data-testid="identity-menu">
-          {status === "loading" && <span data-testid="identity-loading">Loading...</span>}
+        <div className="flex min-w-0 items-center gap-3 text-body text-muted-foreground">
+          {status === "loading" && <span>Loading...</span>}
           {me && (
             <>
-              <span className="min-w-0 wrap-anywhere" data-testid="identity-display-name">
+              <span className="min-w-0 wrap-anywhere">
                 {me.display_name}
               </span>
               <Button
                 variant="outline"
                 size="sm"
                 className="pointer-coarse:h-11"
-                data-testid="logout-button"
                 onClick={logout}
               >
                 Log out
@@ -86,26 +85,24 @@ export default function AppShell() {
 
 function DebugPanel() {
   const { me, status } = useAuth();
-  const rows: [label: string, testId: string, value: string][] = [
-    ["Auth status", "debug-auth-status", status],
-    ["User sub", "debug-user-sub", me?.sub ?? "-"],
-    ["Display name", "debug-display-name", me?.display_name ?? "-"],
-    ["Tenant", "debug-tenant", me?.tenant_id ?? "-"],
-    ["can_create_stack", "debug-can-create-stack", me?.global_capabilities.can_create_stack.toString() ?? "-"],
-    ["can_manage_templates", "debug-can-publish-template", me?.global_capabilities.can_manage_templates.toString() ?? "-"],
-    ["can_manage_platform_access", "debug-can-manage-platform-access", me?.global_capabilities.can_manage_platform_access.toString() ?? "-"]
+  const rows: [label: string, value: string][] = [
+    ["Auth status", status],
+    ["User sub", me?.sub ?? "-"],
+    ["Display name", me?.display_name ?? "-"],
+    ["Tenant", me?.tenant_id ?? "-"],
+    ["can_create_stack", me?.global_capabilities.can_create_stack.toString() ?? "-"],
+    ["can_manage_templates", me?.global_capabilities.can_manage_templates.toString() ?? "-"],
+    ["can_manage_platform_access", me?.global_capabilities.can_manage_platform_access.toString() ?? "-"]
   ];
 
   return (
-    <details className="mx-4 my-8 border-t pt-4 font-mono text-caption md:mx-6" data-testid="debug-panel">
+    <details className="mx-4 my-8 border-t pt-4 font-mono text-caption md:mx-6">
       <summary className="cursor-pointer tracking-wide text-muted-foreground uppercase">IDs (debug)</summary>
       <dl className="mt-4 grid gap-2">
-        {rows.map(([label, testId, value]) => (
-          <div key={testId} className="flex gap-4">
+        {rows.map(([label, value]) => (
+          <div key={label} className="flex gap-4">
             <dt className="w-36 shrink-0 text-muted-foreground">{label}</dt>
-            <dd className="min-w-0 wrap-anywhere" data-testid={testId}>
-              {value}
-            </dd>
+            <dd className="min-w-0 wrap-anywhere">{value}</dd>
           </div>
         ))}
       </dl>

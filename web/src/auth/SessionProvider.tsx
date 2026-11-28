@@ -16,12 +16,12 @@ import { CardContent } from "@/components/ui/card";
 const REAUTH_LEAD_MS = 60_000;
 // How often to retry when re-authentication is deferred because work is in
 // flight. Deferral delays re-auth; it never skips it.
-export const REAUTH_RETRY_MS = 5_000;
+const REAUTH_RETRY_MS = 5_000;
 // How long re-authentication may be deferred while work is in flight. Past
 // this, the session is closer to expiring than the deferral is to helping:
 // waiting longer only guarantees the 401 path takes the same navigation with
 // no warning at all.
-export const REAUTH_DEFER_LIMIT_MS = 120_000;
+const REAUTH_DEFER_LIMIT_MS = 120_000;
 
 export default function SessionProvider() {
   const [status, setStatus] = useState<"loading" | "error" | "loop">("loading");
@@ -185,7 +185,7 @@ export default function SessionProvider() {
 
   if (status === "loop") {
     return (
-      <CookiesBlockedCard onRetry={retryLogin} testId="auth-loop-error" retryTestId="auth-loop-retry-button" />
+      <CookiesBlockedCard onRetry={retryLogin} />
     );
   }
 
@@ -193,10 +193,10 @@ export default function SessionProvider() {
 
   if (status === "error") {
     return (
-      <AuthCard data-testid="auth-error">
+      <AuthCard>
         <CardContent className="grid gap-4">
           <p>Authentication failed. The identity service may be unavailable.</p>
-          <Button className="w-full pointer-coarse:h-11" onClick={retryMe} data-testid="auth-retry-button">
+          <Button className="w-full pointer-coarse:h-11" onClick={retryMe}>
             Retry
           </Button>
         </CardContent>

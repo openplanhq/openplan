@@ -17,7 +17,6 @@ import (
 	openfgav1 "github.com/openfga/api/proto/openfga/v1"
 	"github.com/openfga/language/pkg/go/transformer"
 	"github.com/openfga/openfga/pkg/typesystem"
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -52,14 +51,4 @@ func desiredModel() (*openfgav1.AuthorizationModel, error) {
 		return nil, fmt.Errorf("authorization: load model: %w", err)
 	}
 	return proto.Clone(model).(*openfgav1.AuthorizationModel), nil //nolint:forcetypeassert // proto.Clone returns its argument's type
-}
-
-// AuthorizationModelJSON returns the canonical model in OpenFGA's API wire
-// format. The returned slice is a fresh copy the caller may retain.
-func AuthorizationModelJSON() ([]byte, error) {
-	model, err := authorizationModel()
-	if err != nil {
-		return nil, err
-	}
-	return protojson.Marshal(model)
 }

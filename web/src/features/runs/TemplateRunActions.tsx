@@ -55,11 +55,11 @@ export default function TemplateRunActions({ stackId, stackTemplate }: TemplateR
   }
 
   return (
-    <div className="flex flex-col gap-3" data-testid="template-run-actions">
+    <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         {/* Only a lock gets a sentence; free buttons speak for themselves. */}
         {lockReason && (
-          <p className="text-meta text-muted-foreground" data-testid="template-run-actions-note">
+          <p className="text-meta text-muted-foreground">
             {lockReason}
           </p>
         )}
@@ -69,7 +69,6 @@ export default function TemplateRunActions({ stackId, stackTemplate }: TemplateR
           <RequireCapability capability="can_approve" stackId={stackId}>
             <label
               className="flex h-8 cursor-pointer items-center gap-2 px-1 text-meta whitespace-nowrap pointer-coarse:h-11"
-              data-testid="template-run-auto-approve"
             >
               <input className="size-4 accent-primary" type="checkbox" checked={autoApprove} onChange={(event) => setAutoApprove(event.target.checked)} />
               Auto apply

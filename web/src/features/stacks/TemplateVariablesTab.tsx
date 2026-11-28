@@ -71,7 +71,7 @@ export default function TemplateVariablesTab() {
 
   if (variablesQuery.status === "pending") {
     return (
-      <LoadingLine testId="template-variables-loading">Loading variables…</LoadingLine>
+      <LoadingLine>Loading variables…</LoadingLine>
     );
   }
 
@@ -80,14 +80,14 @@ export default function TemplateVariablesTab() {
       return <>{boundary}</>;
     }
     return (
-      <LoadError error={variablesQuery.error} onRetry={() => void variablesQuery.refetch()} testId="template-variables-error" retryTestId="template-variables-retry">
+      <LoadError error={variablesQuery.error} onRetry={() => void variablesQuery.refetch()}>
         Something went wrong while loading the template's variables.
       </LoadError>
     );
   }
 
   return (
-    <div className="flex min-w-0 flex-col gap-3" data-testid="template-variables-tab" data-unsaved={hasUnsavedConfig ? "true" : undefined}>
+    <div className="flex min-w-0 flex-col gap-3" data-unsaved={hasUnsavedConfig ? "true" : undefined}>
       <StackTemplateConfigPanel
         variables={variables}
         variableValues={variableValues}

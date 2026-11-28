@@ -1,4 +1,4 @@
-import type { Stack, StackTemplate, TemplateRevision, TemplateVariable } from "../../api/types";
+import type { StackTemplate, TemplateRevision, TemplateVariable } from "../../api/types";
 
 // No ref suffix: source_ref is part of a template's identity, so it read
 // the same on every install of that template and separated nothing. The ref
@@ -7,7 +7,7 @@ export function stackTemplateLabel(stackTemplate: Pick<StackTemplate, "display_n
   return stackTemplate.display_name || stackTemplate.workspace_name;
 }
 
-export function canChangeStackTemplateRevision(stackTemplate: StackTemplate | null, templateRevision: TemplateRevision | null): boolean {
+function canChangeStackTemplateRevision(stackTemplate: StackTemplate | null, templateRevision: TemplateRevision | null): boolean {
   if (!stackTemplate || !templateRevision || templateRevision.status !== "active") {
     return false;
   }
@@ -17,7 +17,7 @@ export function canChangeStackTemplateRevision(stackTemplate: StackTemplate | nu
   return stackTemplate.template_id === templateRevision.template_id;
 }
 
-export interface RevisionChangeVariablePartition {
+interface RevisionChangeVariablePartition {
   added: TemplateVariable[];
   carried: TemplateVariable[];
   removed: TemplateVariable[];
@@ -109,7 +109,7 @@ export function variableValuesFromConfig(config: Record<string, unknown>, variab
   return values;
 }
 
-export interface EncodedConfig {
+interface EncodedConfig {
   config: Record<string, unknown>;
   /** Field text that isn't valid JSON, by variable name. Such a variable is
       left out of config, so a caller must not send config while this has any. */
@@ -145,17 +145,10 @@ export function configFromVariableValues(variables: TemplateVariable[], values: 
   return { config, errors };
 }
 
-export function upsertStackTemplate(stackTemplates: StackTemplate[], stackTemplate: StackTemplate): StackTemplate[] {
-  if (stackTemplates.some((item) => item.id === stackTemplate.id)) {
-    return stackTemplates.map((item) => item.id === stackTemplate.id ? stackTemplate : item);
-  }
-  return [stackTemplate, ...stackTemplates];
-}
-
 // The five looks a template's state takes; StackTemplateStatusLabel draws each.
 export type StatusTone = "settled" | "progress" | "waiting" | "failed" | "unapplied";
 
-export interface StackTemplateStatus {
+interface StackTemplateStatus {
   label: string;
   tone: StatusTone;
   /** What the state means, for the detail panel. The list row shows only the

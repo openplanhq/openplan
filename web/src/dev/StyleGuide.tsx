@@ -168,7 +168,7 @@ export default function StyleGuide() {
   const fonts = useTokenValues(FONT_TOKENS);
 
   return (
-    <div className="min-h-svh md:flex" data-testid="styleguide">
+    <div className="min-h-svh md:flex">
       <aside className="border-b bg-card p-6 md:sticky md:top-0 md:max-h-svh md:w-60 md:shrink-0 md:self-start md:overflow-y-auto md:border-r md:border-b-0">
         <div className="mb-6 font-heading text-wordmark">
           openplan
@@ -200,7 +200,7 @@ export default function StyleGuide() {
           </p>
         </div>
 
-        <div className="grid gap-10" data-testid="sg-theme">
+        <div className="grid gap-10">
           <Section
             id="theme"
             title="shadcn theme"
@@ -313,7 +313,6 @@ export default function StyleGuide() {
                 icon={SearchX}
                 title="Page not found"
                 description="The page you were looking for doesn't exist."
-                testId="sg-route-message"
               />
             </Specimen>
             <Specimen label="Table" hint="fixed layout: widths in a <colgroup>, one column takes the slack" stack>
@@ -348,7 +347,7 @@ export default function StyleGuide() {
               </div>
             </Specimen>
             <Specimen label="ScrollArea" hint="scrollable run log" stack>
-              <ScrollArea className="max-h-40 w-full max-w-md rounded-lg border bg-foreground" data-testid="styleguide-scroll-area">
+              <ScrollArea className="max-h-40 w-full max-w-md rounded-lg border bg-foreground">
                 <ScrollAreaViewport className="max-h-40 overflow-auto">
                   <ScrollAreaContent className="p-4">
                     <pre className="m-0 font-mono text-caption whitespace-pre-wrap text-background">

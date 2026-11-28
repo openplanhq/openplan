@@ -40,7 +40,7 @@ export default function PlatformAccessScreen() {
   const meIsRoot = me != null && grants.data !== undefined && !grants.data.some((grant) => grant.user_sub === me.sub);
 
   return (
-    <section className="mx-auto max-w-260" data-testid="platform-access-screen">
+    <section className="mx-auto max-w-260">
       {/* Root counts: it is a row on the list. */}
       <PageHeader title="Access" />
       <AccessList

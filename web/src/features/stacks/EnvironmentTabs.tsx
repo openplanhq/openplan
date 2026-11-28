@@ -52,10 +52,10 @@ export default function EnvironmentTabs({ secrets, variables, credentials, loadi
           { value: "variables", label: "Variables" }
         ]}
       />
-      <div hidden={tab !== "secrets"} data-testid="environment-secrets">
+      <div hidden={tab !== "secrets"}>
         <CredentialsPanel kind="secret" {...secrets} credentials={secretEntries} loading={loading} busy={busy} onCreate={onCreate} onDelete={onDelete} />
       </div>
-      <div hidden={tab !== "variables"} data-testid="environment-variables">
+      <div hidden={tab !== "variables"}>
         <CredentialsPanel kind="variable" {...variables} credentials={variableEntries} loading={loading} busy={busy} onCreate={onCreate} onDelete={onDelete} />
       </div>
     </div>

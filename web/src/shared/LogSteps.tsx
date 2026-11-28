@@ -10,7 +10,7 @@ import { ScrollArea, ScrollAreaContent, ScrollAreaScrollbar, ScrollAreaThumb, Sc
 // open and supplies each log, and draws the frame around them. Logs read on
 // the canvas, in the code colour, rather than inverted, and long lines wrap:
 // nothing would show that a clipped line goes on.
-export function LogSteps({ children }: { children: ReactNode }) {
+function LogSteps({ children }: { children: ReactNode }) {
   return <ol className="divide-y divide-divider">{children}</ol>;
 }
 
@@ -62,7 +62,7 @@ export function LogStep({ name, label, meta, open, onOpenChange, children }: Log
         {meta && <span className="ml-auto flex shrink-0 items-center gap-1.5 font-sans text-caption text-muted-foreground tabular-nums">{meta}</span>}
       </CollapsibleTrigger>
       <CollapsibleContent render={<div />} className="border-t border-divider bg-canvas">
-        <ScrollArea data-testid={`log-scroll-area-${name}`} className="max-h-115">
+        <ScrollArea className="max-h-115">
           <ScrollAreaViewport className="max-h-115 overflow-auto">
             <ScrollAreaContent>
               <pre className="m-0 py-3 pr-4 pl-9.5 font-mono text-log whitespace-pre-wrap wrap-anywhere text-code-foreground">{children}</pre>

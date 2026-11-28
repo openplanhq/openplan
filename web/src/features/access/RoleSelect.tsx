@@ -28,7 +28,6 @@ export default function RoleSelect({
   disabled = false,
   pending = false,
   id,
-  testId
 }: {
   roles: readonly RoleDefinition[];
   value: string;
@@ -39,7 +38,6 @@ export default function RoleSelect({
   disabled?: boolean;
   pending?: boolean;
   id?: string;
-  testId?: string;
 }) {
   const current = roleDefinition(roles, value);
   const Icon = pending ? LoaderCircle : current.icon;
@@ -59,7 +57,6 @@ export default function RoleSelect({
         id={id}
         aria-label={`${label}: ${value}`}
         aria-busy={pending || undefined}
-        data-testid={testId}
         className={cn(
           "inline-flex items-center gap-1.75 rounded-lg whitespace-nowrap text-foreground transition-colors outline-none select-none",
           "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent data-popup-open:bg-muted",

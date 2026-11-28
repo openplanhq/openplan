@@ -51,12 +51,6 @@ type TemplateSyncActivities struct {
 
 type TemplateSyncOption func(*TemplateSyncActivities)
 
-func WithTemplateSyncTempRoot(tempRoot string) TemplateSyncOption {
-	return func(activities *TemplateSyncActivities) {
-		activities.tempRoot = tempRoot
-	}
-}
-
 // WithTemplateSyncTokenSource authenticates source fetches against private
 // repositories. Without it, only public repositories can be registered.
 func WithTemplateSyncTokenSource(tokens GitHubTokenSource) TemplateSyncOption {

@@ -35,7 +35,6 @@ export default function TemplatesIndexPanel() {
               </Link>
             )
           }
-          testId="templates-empty"
         />
       </div>
     );

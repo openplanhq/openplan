@@ -190,7 +190,7 @@ export default function RunDetailScreen() {
 
   if (missing) {
     return (
-      <section className="flex min-w-0 flex-col gap-5" data-testid="run-detail-missing">
+      <section className="flex min-w-0 flex-col gap-5">
         {trail}
         <p className="text-meta text-muted-foreground">This template has no run #{runNumber}.</p>
       </section>
@@ -208,8 +208,6 @@ export default function RunDetailScreen() {
         lead={trail}
         error={lookupError ?? runQuery.error}
         onRetry={() => void (lookupError ? byNumberQuery.refetch() : runQuery.refetch())}
-        testId="run-detail-error"
-        retryTestId="run-detail-retry"
       >
         Something went wrong while loading the run.
       </LoadError>
@@ -218,7 +216,7 @@ export default function RunDetailScreen() {
 
   if (runQuery.status === "pending") {
     return (
-      <section className="flex min-w-0 flex-col gap-5" data-testid="run-detail-loading">
+      <section className="flex min-w-0 flex-col gap-5">
         {trail}
         <LoadingLine>Loading run…</LoadingLine>
       </section>
@@ -226,14 +224,14 @@ export default function RunDetailScreen() {
   }
 
   return (
-    <section className="flex min-w-0 flex-col gap-5" data-testid="run-detail-screen">
+    <section className="flex min-w-0 flex-col gap-5">
       {trail}
       {run && (
         <>
           <header className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex min-w-0 flex-wrap items-center gap-3">
               <h3 className="font-heading text-title">Run #{run.run_number}</h3>
-              <StatusLabel indicator={runIndicator(run)} data-testid="run-detail-status" />
+              <StatusLabel indicator={runIndicator(run)} />
             </div>
             {canApprove && (
               // Discard throws the plan away; Approve applies exactly that
@@ -292,7 +290,6 @@ export default function RunDetailScreen() {
               busy={approveRunMutation.isPending}
               onConfirm={() => void confirmThen(handleApprove)}
               onCancel={closeConfirm}
-              testId="run-destroy-confirm"
             >
               Approving this plan destroys these resources. This action cannot be undone.
             </InlineConfirm>
@@ -305,7 +302,6 @@ export default function RunDetailScreen() {
               busy={endRunMutation.isPending}
               onConfirm={() => void confirmThen(handleEnd)}
               onCancel={closeConfirm}
-              testId="run-end-confirm"
             >
               {run.operation === "plan"
                 ? "Only for a run whose workflow is gone; a run still working is refused."
@@ -367,7 +363,6 @@ function CommandErrorPanel({ run, logs }: { run: TemplateRun; logs: TemplateRunL
       details={run.error_summary}
       detailsCollapsed
       live={false}
-      testId="run-detail-command-error"
     />
   );
 }

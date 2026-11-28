@@ -5,11 +5,6 @@ package domain
 // ID is the common storage shape for platform identifiers.
 type ID string
 
-// Valid reports whether the ID is non-empty.
-func (id ID) Valid() bool {
-	return id != ""
-}
-
 type (
 	TenantID           ID
 	UserID             ID

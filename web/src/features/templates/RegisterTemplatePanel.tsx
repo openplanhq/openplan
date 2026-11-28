@@ -107,13 +107,13 @@ export default function RegisterTemplatePanel() {
   }
 
   return (
-    <section className="flex min-w-0 flex-col" data-testid="register-template-panel" data-unsaved={hasUnsaved ? "true" : undefined}>
+    <section className="flex min-w-0 flex-col" data-unsaved={hasUnsaved ? "true" : undefined}>
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b border-divider px-7 py-6">
         <div className="flex min-w-0 flex-col gap-2">
           <h2 className="font-heading text-title">Register template</h2>
           <p className="text-meta text-muted-foreground">from a Git repository</p>
         </div>
-        <Link to="/templates" className={cn(buttonClass("outline", "lg"), "pointer-coarse:h-11")} data-testid="register-template-cancel">
+        <Link to="/templates" className={cn(buttonClass("outline", "lg"), "pointer-coarse:h-11")}>
           Cancel
         </Link>
       </div>
@@ -143,13 +143,13 @@ export default function RegisterTemplatePanel() {
             the button, and the row's top margin stands in for the form's gap,
             so the empty region adds no space. */}
         <div className="flex flex-col">
-          <button type="submit" className={cn(buttonClass("primary"), "self-start pointer-coarse:h-11")} disabled={busy} data-testid="register-template-submit">
+          <button type="submit" className={cn(buttonClass("primary"), "self-start pointer-coarse:h-11")} disabled={busy}>
             <BusyIcon busy={busy} icon={Plus} />
             Register template
           </button>
           <div role="status">
             {busy && (
-              <div className="mt-5 flex items-start gap-3 rounded-lg border px-5 py-4" data-testid="register-template-progress">
+              <div className="mt-5 flex items-start gap-3 rounded-lg border px-5 py-4">
                 <Loader2 aria-hidden="true" className="mt-0.5 size-4 shrink-0 animate-spin text-muted-foreground" />
                 <span className="flex min-w-0 flex-col gap-1">
                   <span className="text-label">
@@ -165,7 +165,6 @@ export default function RegisterTemplatePanel() {
         </div>
         {failure !== "" && !busy && (
           <ErrorPanel
-            testId="register-template-error"
             title={unchecked ? "Could not check on this registration" : "Could not register this template"}
             details={failure}
           >

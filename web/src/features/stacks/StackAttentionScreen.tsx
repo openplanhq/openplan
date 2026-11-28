@@ -33,7 +33,7 @@ export default function StackAttentionScreen() {
 
   if (status === "pending") {
     return (
-      <section data-testid="attention-loading">
+      <section>
         <LoadingLine>Loading…</LoadingLine>
       </section>
     );
@@ -50,8 +50,6 @@ export default function StackAttentionScreen() {
         lead={<PageHeader title="Needs attention" trail={trail} />}
         error={error}
         onRetry={() => void refetch()}
-        testId="attention-error"
-        retryTestId="attention-retry"
       >
         Something went wrong while loading what needs attention.
       </LoadError>
@@ -77,7 +75,6 @@ export default function StackAttentionScreen() {
               Back to stacks
             </Link>
           }
-          testId="attention-empty"
         />
       ) : (
         <div className="flex flex-col gap-7">
@@ -122,7 +119,7 @@ function AttentionGroup({
   children: ReactNode;
 }) {
   return (
-    <section aria-labelledby={`attention-${id}`} className="flex flex-col gap-3" data-testid={`attention-group-${id}`}>
+    <section aria-labelledby={`attention-${id}`} className="flex flex-col gap-3">
       <h2 id={`attention-${id}`} className="flex items-center gap-2 text-section-title">
         <Icon aria-hidden="true" className={cn("size-4", iconClass)} />
         {title}
@@ -157,7 +154,7 @@ function AttentionRow({ item }: { item: AttentionItem }) {
   const templateName = stackTemplateLabel(item.stack_template);
 
   return (
-    <li className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-center md:gap-5" data-testid={`attention-row-${item.stack_template.id}`}>
+    <li className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-center md:gap-5">
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         {/* Named in full, since the separator between the two is hidden. */}
         <Link
@@ -182,7 +179,6 @@ function AttentionRow({ item }: { item: AttentionItem }) {
           <Link
             to={runPath}
             className={cn(buttonClass(waiting ? "primary" : "outline"), "pointer-coarse:h-11")}
-            data-testid={`attention-action-${item.stack_template.id}`}
           >
             {waiting ? "Review plan" : "View run"}
           </Link>

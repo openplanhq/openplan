@@ -5,7 +5,7 @@ const GITHUB = "https://github.com";
 type LinkedRevision = Pick<TemplateRevision, "repo_owner" | "repo_name" | "source_ref" | "root_path" | "resolved_commit_sha">;
 
 /** Where a template revision lives on GitHub, which every repository is cloned from. */
-export interface GitHubLinks {
+interface GitHubLinks {
   repository: string;
   /** The module's folder at the ref; the ref itself for a module at the root. */
   tree: string;

@@ -1,7 +1,7 @@
 import { createContext, useContext } from "react";
 import type { StackTemplate } from "../../api/types";
 
-export interface StackTemplateContextValue {
+interface StackTemplateContextValue {
   stackId: string;
   stackTemplate: StackTemplate;
 }

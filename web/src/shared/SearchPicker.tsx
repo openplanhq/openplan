@@ -12,7 +12,7 @@ type SearchPickerProps<Item> = Pick<Combobox.Root.Props<Item>, "open" | "onOpenC
   query: string;
   onQueryChange: (query: string) => void;
   onPick: (item: Item) => void;
-  input: ComponentProps<typeof Combobox.Input> & { "data-testid"?: string };
+  input: ComponentProps<typeof Combobox.Input>;
   /** What the list says when nothing matches, spaced and coloured by emptyClassName. */
   empty: ReactNode;
   emptyClassName: string;

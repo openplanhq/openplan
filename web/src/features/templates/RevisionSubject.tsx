@@ -9,7 +9,7 @@ export default function RevisionSubject({ subject, className }: { subject: strin
     return null;
   }
   return (
-    <span data-testid="revision-subject" dir="auto" title={subject} className={cn("block min-w-0 truncate font-sans text-meta font-medium text-foreground", className)}>
+    <span dir="auto" title={subject} className={cn("block min-w-0 truncate font-sans text-meta font-medium text-foreground", className)}>
       {subject}
     </span>
   );

@@ -5,9 +5,9 @@ import { CardContent, CardHeader } from "@/components/ui/card";
 // Sign-in worked but the session didn't stick: shown both by SessionProvider,
 // when it sees the login loop, and by SignInScreen, when the loop brings a
 // person back to it. One card so the advice reads the same from either side.
-export default function CookiesBlockedCard({ onRetry, testId, retryTestId }: { onRetry: () => void; testId: string; retryTestId: string }) {
+export default function CookiesBlockedCard({ onRetry }: { onRetry: () => void }) {
   return (
-    <AuthCard data-testid={testId}>
+    <AuthCard>
       <CardHeader>
         <AuthCardTitle>We could not keep you signed in</AuthCardTitle>
       </CardHeader>
@@ -21,7 +21,7 @@ export default function CookiesBlockedCard({ onRetry, testId, retryTestId }: { o
           Allow cookies for this site and try again. If it keeps failing, contact your
           administrator.
         </p>
-        <Button className="w-full pointer-coarse:h-11" onClick={onRetry} data-testid={retryTestId}>
+        <Button className="w-full pointer-coarse:h-11" onClick={onRetry}>
           Try again
         </Button>
       </CardContent>

@@ -43,15 +43,15 @@ export default function StackTemplateList({
   return (
     <div className="flex min-w-0 flex-col">
       <div className="border-b border-divider p-3">
-        <SearchField label="Filter templates" value={filter} onChange={setFilter} testId="stack-templates-filter" />
+        <SearchField label="Filter templates" value={filter} onChange={setFilter} />
       </div>
       <div className="flex flex-col gap-0.5 p-2">
         {templates.length === 0 ? (
-          <p className="p-3 text-meta text-muted-foreground" data-testid="stack-templates-none">
+          <p className="p-3 text-meta text-muted-foreground">
             No templates in this stack yet.
           </p>
         ) : visible.length === 0 ? (
-          <p className="p-3 text-meta text-muted-foreground" data-testid="stack-templates-filter-empty">
+          <p className="p-3 text-meta text-muted-foreground">
             No templates match this filter.
           </p>
         ) : (
@@ -73,7 +73,6 @@ export default function StackTemplateList({
             to={`/stacks/${stackId}/templates/new`}
             aria-current={adding ? "true" : undefined}
             className={cn(listItemClass(adding), "min-h-11 justify-start gap-2 text-label", adding ? "text-primary-strong" : "text-primary")}
-            data-testid="add-stack-template-link"
           >
             <Plus aria-hidden="true" className="size-4 shrink-0" />
             {adding ? "New template" : "Add template"}
@@ -102,7 +101,7 @@ function StackTemplateRow({
   const runFailed = attention?.kind === "run_failed" ? failedOperation(attention) : null;
 
   return (
-    <Link to={to} aria-current={selected ? "true" : undefined} className={listItemClass(selected)} data-testid={`stack-template-link-${stackTemplate.id}`}>
+    <Link to={to} aria-current={selected ? "true" : undefined} className={listItemClass(selected)}>
       <span className="flex min-w-0 flex-col gap-0.5">
         <span className={cn("truncate font-mono text-meta leading-label font-medium", selected && "text-primary-strong")} title={label}>
           {label}

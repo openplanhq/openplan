@@ -8,7 +8,7 @@ import { useStackTemplate } from "./stackTemplateContext";
 export default function TemplateRunsTab() {
   const { stackId, stackTemplate } = useStackTemplate();
   return (
-    <section className="flex min-w-0 flex-col gap-5" data-testid="template-runs-tab">
+    <section className="flex min-w-0 flex-col gap-5">
       <TemplateRunActions stackId={stackId} stackTemplate={stackTemplate} />
       <TemplateRunNotices stackId={stackId} stackTemplate={stackTemplate} />
       <TemplateRunHistory stackId={stackId} stackTemplateId={stackTemplate.id} />

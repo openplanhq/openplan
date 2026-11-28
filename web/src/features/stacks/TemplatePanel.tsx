@@ -46,7 +46,7 @@ export default function TemplatePanel({ stackTemplateId, children }: { stackTemp
 
   if (!stackTemplate) {
     return (
-      <p className="px-7 py-6 text-meta text-muted-foreground" data-testid="stack-template-missing">
+      <p className="px-7 py-6 text-meta text-muted-foreground">
         That template is not installed on this stack.
       </p>
     );
@@ -55,7 +55,7 @@ export default function TemplatePanel({ stackTemplateId, children }: { stackTemp
   const activity = stackTemplateActivity(stackTemplate, attention);
   return (
     <StackTemplateContext.Provider value={{ stackId, stackTemplate }}>
-      <div className="flex min-w-0 flex-col" data-testid="template-panel">
+      <div className="flex min-w-0 flex-col">
         <div className={cn("flex flex-col gap-5 border-b border-divider px-7 pt-6", destroyed && "pb-6")}>
           <div className="flex min-w-0 flex-col gap-2">
             <h2 className="font-heading text-title wrap-anywhere">{stackTemplateLabel(stackTemplate)}</h2>

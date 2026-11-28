@@ -15,7 +15,6 @@ export default function LoadMoreButton({
   failed,
   noun,
   className,
-  testId
 }: {
   onClick: () => void;
   loading: boolean;
@@ -23,7 +22,6 @@ export default function LoadMoreButton({
   // What the list holds, for the failure line: "stacks", "runs".
   noun: string;
   className?: string;
-  testId?: string;
 }) {
   return (
     <div className={cn("flex flex-col items-start gap-2", className)}>
@@ -34,7 +32,6 @@ export default function LoadMoreButton({
         onClick={onClick}
         disabled={loading}
         aria-busy={loading || undefined}
-        data-testid={testId}
       >
         <BusyIcon busy={loading} />
         {loading ? "Loading…" : failed ? "Try again" : "Load more"}

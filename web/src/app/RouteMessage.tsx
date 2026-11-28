@@ -14,15 +14,13 @@ export default function RouteMessage({
   icon: Icon,
   title,
   description,
-  testId
 }: {
   icon: LucideIcon;
   title: string;
   description: string;
-  testId: string;
 }) {
   return (
-    <Empty className="py-16 md:py-24" data-testid={testId}>
+    <Empty className="py-16 md:py-24">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <Icon aria-hidden="true" />
