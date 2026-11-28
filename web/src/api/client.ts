@@ -56,7 +56,6 @@ interface CreateStackRequest {
   name: string;
   slug: string;
   tags: Record<string, string>;
-  default_credential_ids: string[];
 }
 
 interface AddTemplateToStackRequest {

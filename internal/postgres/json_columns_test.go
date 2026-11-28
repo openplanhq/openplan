@@ -23,7 +23,6 @@ func TestEncodeJSONColumnsStoreNoneAsEmpty(t *testing.T) {
 		{"nil array", func() ([]byte, error) { return encodeJSONArray[string](nil) }, "[]"},
 		{"empty array", func() ([]byte, error) { return encodeJSONArray([]string{}) }, "[]"},
 		{"array", func() ([]byte, error) { return encodeJSONArray([]string{"network", "aws"}) }, `["network","aws"]`},
-		{"typed array", func() ([]byte, error) { return encodeJSONArray([]domain.CredentialID{"cred_1"}) }, `["cred_1"]`},
 		{"nil object", func() ([]byte, error) { return encodeJSONObject[string](nil) }, "{}"},
 		{"empty object", func() ([]byte, error) { return encodeJSONObject(map[string]string{}) }, "{}"},
 		{"object", func() ([]byte, error) { return encodeJSONObject(map[string]string{"env": "prod"}) }, `{"env":"prod"}`},
@@ -52,12 +51,7 @@ func TestDecodeJSONColumnsReadNullAsEmpty(t *testing.T) {
 			if err != nil || tags == nil || len(tags) != 0 {
 				t.Fatalf("decodeJSONArray[string](%s) = %#v, %v; want an empty non-nil slice", stored, tags, err)
 			}
-			ids, err := decodeJSONArray[domain.CredentialID]([]byte(stored))
-			if err != nil || ids == nil || len(ids) != 0 {
-				t.Fatalf("decodeJSONArray[CredentialID](%s) = %#v, %v; want an empty non-nil slice", stored, ids, err)
-			}
 			assertServed(t, domain.TemplateRevision{Tags: tags}, `"tags":[]`)
-			assertServed(t, domain.Stack{DefaultCredentialIDs: ids}, `"default_credential_ids":[]`)
 		}
 		if stored != "[]" {
 			tags, err := decodeJSONObject[string]([]byte(stored))
@@ -68,9 +62,9 @@ func TestDecodeJSONColumnsReadNullAsEmpty(t *testing.T) {
 		}
 	}
 
-	ids, err := decodeJSONArray[domain.CredentialID]([]byte(`["cred_1"]`))
-	if err != nil || len(ids) != 1 || ids[0] != "cred_1" {
-		t.Fatalf("decodeJSONArray = %#v, %v; want [cred_1]", ids, err)
+	revisionTags, err := decodeJSONArray[string]([]byte(`["network"]`))
+	if err != nil || len(revisionTags) != 1 || revisionTags[0] != "network" {
+		t.Fatalf("decodeJSONArray = %#v, %v; want [network]", revisionTags, err)
 	}
 	tags, err := decodeJSONObject[string]([]byte(`{"env":"prod"}`))
 	if err != nil || len(tags) != 1 || tags["env"] != "prod" {

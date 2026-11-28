@@ -18,16 +18,14 @@ const (
 
 // Stack is a logical infrastructure composition.
 type Stack struct {
-	ID       StackID           `json:"id"`
-	TenantID TenantID          `json:"tenant_id"`
-	Name     string            `json:"name"`
-	Slug     string            `json:"slug"`
-	Status   StackStatus       `json:"status"`
-	Tags     map[string]string `json:"tags"`
-	// DefaultCredentialIDs is retained for backward-compatible reads; new credentials are scope-owned records.
-	DefaultCredentialIDs []CredentialID `json:"default_credential_ids"`
-	CreatedBy            UserID         `json:"created_by"`
-	CreatedAt            time.Time      `json:"created_at"`
+	ID        StackID           `json:"id"`
+	TenantID  TenantID          `json:"tenant_id"`
+	Name      string            `json:"name"`
+	Slug      string            `json:"slug"`
+	Status    StackStatus       `json:"status"`
+	Tags      map[string]string `json:"tags"`
+	CreatedBy UserID            `json:"created_by"`
+	CreatedAt time.Time         `json:"created_at"`
 }
 
 // StackRun represents a coordinated multi-template operation.

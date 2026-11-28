@@ -493,11 +493,10 @@ type ListTemplateRevisionsForTemplateCommand struct {
 
 // CreateStackCommand asks the app to create a logical infrastructure stack.
 type CreateStackCommand struct {
-	TenantID             domain.TenantID
-	Name                 string
-	Slug                 string
-	Tags                 map[string]string
-	DefaultCredentialIDs []domain.CredentialID
+	TenantID domain.TenantID
+	Name     string
+	Slug     string
+	Tags     map[string]string
 }
 
 // StackView returns one stack with its installed templates.
@@ -873,11 +872,10 @@ func (service *Service) CreateStack(ctx context.Context, command CreateStackComm
 		Slug:     slug,
 		// The owner tuple is written in the same transaction as this row, so a
 		// stack that exists is always one its creator can reach.
-		Status:               domain.StackStatusReady,
-		Tags:                 cloneStringMap(command.Tags),
-		DefaultCredentialIDs: append([]domain.CredentialID(nil), command.DefaultCredentialIDs...),
-		CreatedBy:            actor,
-		CreatedAt:            service.Clock.Now(),
+		Status:    domain.StackStatusReady,
+		Tags:      cloneStringMap(command.Tags),
+		CreatedBy: actor,
+		CreatedAt: service.Clock.Now(),
 	}
 	object, err := authorization.ObjectFromID(authorization.TypeStack, string(stack.ID))
 	if errors.Is(err, authorization.ErrInvalidInput) {
@@ -2644,10 +2642,6 @@ func validateCreateStackCommand(command CreateStackCommand) error {
 	if !validStackTags(command.Tags) {
 		problems = append(problems, fieldError(ErrInvalidCommand, IssueInvalidFormat, "tags are invalid", "tags"))
 	}
-	if !validCredentialIDs(command.DefaultCredentialIDs) {
-		problems = append(problems, fieldError(ErrInvalidCommand, IssueInvalid,
-			"default_credential_ids must not contain an empty id", "default_credential_ids"))
-	}
 	return errors.Join(problems...)
 }
 
@@ -3062,15 +3056,6 @@ func validTagKey(key string) bool {
 func validTagValue(value string) bool {
 	for _, r := range strings.TrimSpace(value) {
 		if r < 0x20 || r == 0x7f {
-			return false
-		}
-	}
-	return true
-}
-
-func validCredentialIDs(ids []domain.CredentialID) bool {
-	for _, id := range ids {
-		if strings.TrimSpace(string(id)) == "" {
 			return false
 		}
 	}

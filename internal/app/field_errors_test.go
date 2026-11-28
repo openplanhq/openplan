@@ -132,16 +132,15 @@ func TestCreateStackReportsEveryInvalidField(t *testing.T) {
 	t.Parallel()
 
 	err := validateCreateStackCommand(CreateStackCommand{
-		TenantID:             "tenant_123",
-		Name:                 " ",
-		Slug:                 "Bad Slug",
-		Tags:                 map[string]string{"bad key": "x"},
-		DefaultCredentialIDs: []domain.CredentialID{""},
+		TenantID: "tenant_123",
+		Name:     " ",
+		Slug:     "Bad Slug",
+		Tags:     map[string]string{"bad key": "x"},
 	})
 	if !errors.Is(err, ErrInvalidCommand) {
 		t.Fatalf("error = %v, want ErrInvalidCommand", err)
 	}
-	assertFieldIssues(t, err, "name required", "slug invalid_format", "tags invalid_format", "default_credential_ids invalid")
+	assertFieldIssues(t, err, "name required", "slug invalid_format", "tags invalid_format")
 }
 
 // With no slug given, a blank name would also fail to derive one; that is the

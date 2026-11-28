@@ -24,7 +24,6 @@ function stackQueryClient(
       name: "Stack",
       slug: "stack",
       tags: {},
-      default_credential_ids: [],
       created_by: "user_123",
       created_at: "2026-07-19T00:00:00Z",
       effective_capabilities: options.capabilities ?? { can_view: true, can_operate: true, can_approve: true, can_manage_access: true }
@@ -137,7 +136,6 @@ describe("routeConfig", () => {
         name: "Payments",
         slug: "payments",
         tags: {},
-        default_credential_ids: [],
         created_by: "user_123",
         created_at: "2026-07-19T00:00:00Z",
         effective_capabilities: { can_view: true, can_operate: false, can_approve: false, can_manage_access: false }
@@ -281,7 +279,6 @@ describe("routeConfig", () => {
         name: "Stack",
         slug: "stack",
         tags: {},
-        default_credential_ids: [],
         created_by: "user_123",
         created_at: "2026-07-19T00:00:00Z",
         effective_capabilities: { can_view: false, can_operate: false, can_approve: false, can_manage_access: false }
@@ -319,7 +316,6 @@ describe("routeConfig", () => {
         name: "Stack",
         slug: "stack",
         tags: {},
-        default_credential_ids: [],
         created_by: "user_123",
         created_at: "2026-07-19T00:00:00Z",
         effective_capabilities: { can_view: true, can_operate: false, can_approve: false, can_manage_access: false }
@@ -404,7 +400,6 @@ describe("routeConfig", () => {
         name: "Payments",
         slug: "payments",
         tags: {},
-        default_credential_ids: [],
         created_by: "user_123",
         created_at: "2026-07-19T00:00:00Z",
         effective_capabilities: { can_view: true, can_operate: true, can_approve: true, can_manage_access: true }
@@ -461,7 +456,6 @@ describe("routeConfig", () => {
         name: "Payments",
         slug: "payments",
         tags: {},
-        default_credential_ids: [],
         created_by: "user_123",
         created_at: "2026-07-19T00:00:00Z",
         effective_capabilities: { can_view: true, can_operate: false, can_approve: false, can_manage_access: false }

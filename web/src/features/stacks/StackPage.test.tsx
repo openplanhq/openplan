@@ -48,7 +48,6 @@ function view(templates: StackTemplate[], capabilities: StackCapabilities = allA
       slug: "payments",
       slug_is_derived: true,
       tags: { env: "production" },
-      default_credential_ids: [],
       created_by: "user_1",
       created_at: "2026-07-19T00:00:00Z",
       effective_capabilities: capabilities

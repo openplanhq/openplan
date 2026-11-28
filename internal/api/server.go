@@ -595,17 +595,11 @@ func (server *Server) handleCreateStack(response http.ResponseWriter, request *h
 		return
 	}
 
-	credentialIDs := make([]domain.CredentialID, 0, len(body.DefaultCredentialIDs))
-	for _, id := range body.DefaultCredentialIDs {
-		credentialIDs = append(credentialIDs, domain.CredentialID(id))
-	}
-
 	stack, err := server.service.CreateStack(request.Context(), app.CreateStackCommand{
-		TenantID:             domain.TenantID(request.PathValue("tenant_id")),
-		Name:                 body.Name,
-		Slug:                 body.Slug,
-		Tags:                 body.Tags,
-		DefaultCredentialIDs: credentialIDs,
+		TenantID: domain.TenantID(request.PathValue("tenant_id")),
+		Name:     body.Name,
+		Slug:     body.Slug,
+		Tags:     body.Tags,
 	})
 	if err != nil {
 		writeAppError(response, err)
@@ -1061,10 +1055,9 @@ type registerTemplateRequest struct {
 }
 
 type createStackRequest struct {
-	Name                 string            `json:"name"`
-	Slug                 string            `json:"slug"`
-	Tags                 map[string]string `json:"tags"`
-	DefaultCredentialIDs []string          `json:"default_credential_ids"`
+	Name string            `json:"name"`
+	Slug string            `json:"slug"`
+	Tags map[string]string `json:"tags"`
 }
 
 type addTemplateToStackRequest struct {
@@ -1128,7 +1121,6 @@ type stackResponse struct {
 	SlugIsDerived         bool                      `json:"slug_is_derived"`
 	Status                string                    `json:"status"`
 	Tags                  map[string]string         `json:"tags"`
-	DefaultCredentialIDs  []string                  `json:"default_credential_ids"`
 	CreatedBy             string                    `json:"created_by"`
 	CreatedAt             string                    `json:"created_at"`
 	EffectiveCapabilities stackCapabilitiesResponse `json:"effective_capabilities"`
@@ -1238,11 +1230,6 @@ func newStackViewResponse(view app.StackView) stackViewResponse {
 }
 
 func newStackResponse(stack domain.Stack, capabilities app.StackCapabilities) stackResponse {
-	credentialIDs := make([]string, 0, len(stack.DefaultCredentialIDs))
-	for _, id := range stack.DefaultCredentialIDs {
-		credentialIDs = append(credentialIDs, string(id))
-	}
-
 	tags := stack.Tags
 	if tags == nil {
 		tags = map[string]string{}
@@ -1263,7 +1250,6 @@ func newStackResponse(stack domain.Stack, capabilities app.StackCapabilities) st
 		SlugIsDerived:         app.SlugIsDerived(stack.Name, stack.Slug),
 		Status:                status,
 		Tags:                  tags,
-		DefaultCredentialIDs:  credentialIDs,
 		CreatedBy:             string(stack.CreatedBy),
 		CreatedAt:             stack.CreatedAt.Format(time.RFC3339Nano),
 		EffectiveCapabilities: stackCapabilitiesResponse(capabilities),

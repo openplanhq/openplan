@@ -416,7 +416,7 @@ describe("mutation hooks", () => {
     const { result } = renderHook(() => useCreateStackMutation("tenant_123"), { wrapper: wrapper(queryClient) });
 
     await act(async () => {
-      await result.current.mutateAsync({ name: "Acme Prod", slug: "", tags: {}, default_credential_ids: [] });
+      await result.current.mutateAsync({ name: "Acme Prod", slug: "", tags: {} });
     });
 
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.stacks("tenant_123") });

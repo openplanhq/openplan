@@ -111,7 +111,6 @@ func TestCreateStackDerivesSlugAndPersistsStack(t *testing.T) {
 		Tags: map[string]string{
 			"env": "prod",
 		},
-		DefaultCredentialIDs: []domain.CredentialID{domain.CredentialID("credential_123")},
 	})
 	if err != nil {
 		t.Fatalf("CreateStack returned error: %v", err)
@@ -134,9 +133,6 @@ func TestCreateStackDerivesSlugAndPersistsStack(t *testing.T) {
 	}
 	if stacks.created.Tags["env"] != "prod" {
 		t.Fatalf("persisted tags = %#v", stacks.created.Tags)
-	}
-	if len(stacks.created.DefaultCredentialIDs) != 1 || stacks.created.DefaultCredentialIDs[0] != domain.CredentialID("credential_123") {
-		t.Fatalf("default credential IDs = %#v", stacks.created.DefaultCredentialIDs)
 	}
 }
 
@@ -215,28 +211,6 @@ func TestCreateStackRejectsInvalidTagKey(t *testing.T) {
 		Name:     "Acme Prod",
 		Tags: map[string]string{
 			"bad key": "prod",
-		},
-	})
-	if !errors.Is(err, ErrInvalidCommand) {
-		t.Fatalf("error = %v, want ErrInvalidCommand", err)
-	}
-}
-
-func TestCreateStackRejectsEmptyDefaultCredentialID(t *testing.T) {
-	t.Parallel()
-
-	service := NewService(Service{
-		Authorization: testPlatformAuthorizer(t),
-		Stacks:        &recordingStackRepository{},
-		Work:          newRecordingWork(&recordingStackRepository{}),
-		StackIDs:      fixedStackIDGenerator{id: domain.StackID("stack_new")},
-	})
-
-	_, err := service.CreateStack(authenticatedContext(), CreateStackCommand{
-		TenantID: domain.TenantID("tenant_123"),
-		Name:     "Acme Prod",
-		DefaultCredentialIDs: []domain.CredentialID{
-			domain.CredentialID(""),
 		},
 	})
 	if !errors.Is(err, ErrInvalidCommand) {

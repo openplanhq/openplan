@@ -175,7 +175,6 @@ export interface Stack {
   // without one; screens show the slug only when someone chose it.
   slug_is_derived: boolean;
   tags: Record<string, string>;
-  default_credential_ids: string[];
   created_by: string;
   created_at: string;
   // Per-stack authorization booleans resolved by the backend for AUTH-017; see auth/types.ts.
